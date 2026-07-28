@@ -4,6 +4,12 @@
 mod property_tests;
 
 #[cfg(test)]
+mod golden_replay;
+
+#[cfg(test)]
+mod statistical_emergence;
+
+#[cfg(test)]
 mod smoke {
     use mindstrata_core::clock::Tick;
     use mindstrata_core::fixed::Fixed;

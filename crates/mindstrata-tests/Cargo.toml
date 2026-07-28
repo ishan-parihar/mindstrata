@@ -10,3 +10,5 @@ mindstrata-core = { workspace = true }
 mindstrata-sim = { workspace = true }
 rand = { workspace = true }
 insta = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

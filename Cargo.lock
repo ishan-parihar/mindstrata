@@ -556,6 +556,8 @@ dependencies = [
  "mindstrata-core",
  "mindstrata-sim",
  "rand",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
