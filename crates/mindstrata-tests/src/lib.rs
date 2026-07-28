@@ -140,4 +140,69 @@ mod smoke {
 
         assert_eq!(hunger1, hunger2, "Same seed should produce same results");
     }
+
+    #[test]
+    fn golden_run_1000_ticks() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 1000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+
+        // Capture snapshots at key ticks
+        let mut snapshots = Vec::new();
+        for tick in 0..1000 {
+            sim.tick();
+            let t = tick + 1;
+            if t == 100 || t == 500 || t == 1000 {
+                snapshots.push(sim.metrics_snapshot());
+            }
+        }
+
+        assert_eq!(snapshots.len(), 3, "Should have 3 snapshots at ticks 100, 500, 1000");
+
+        let s100 = &snapshots[0];
+        let s500 = &snapshots[1];
+        let s1000 = &snapshots[2];
+
+        assert_eq!(s100.tick, 100);
+        assert_eq!(s500.tick, 500);
+        assert_eq!(s1000.tick, 1000);
+
+        // Agents survive — average hunger should stay below critical threshold
+        assert!(s1000.avg_hunger < 0.95, "Agents should not all be starving: avg_hunger={}", s1000.avg_hunger);
+        assert!(s1000.avg_thirst < 0.95, "Agents should not all be dehydrated: avg_thirst={}", s1000.avg_thirst);
+
+        // Resource economy: grain should fluctuate (production via Work, consumption via Eat)
+        assert!(s500.total_grain != s1000.total_grain || s100.total_grain != s1000.total_grain,
+            "Grain should fluctuate: s100={}, s500={}, s1000={}",
+            s100.total_grain, s500.total_grain, s1000.total_grain);
+
+        // Events and journal should accumulate
+        assert!(s1000.event_count > s500.event_count, "Events should accumulate");
+        assert!(s1000.journal_len > s500.journal_len, "Journal should accumulate");
+
+        // Determinism: replay should produce identical results
+        let mut sim2 = Simulation::new(SimConfig {
+            seed: 42,
+            max_ticks: 1000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        });
+        sim2.populate();
+        sim2.run(1000);
+        let s2_final = sim2.metrics_snapshot();
+
+        assert_eq!(s1000.avg_hunger, s2_final.avg_hunger, "Determinism failed for hunger");
+        assert_eq!(s1000.avg_joy, s2_final.avg_joy, "Determinism failed for joy");
+        assert_eq!(s1000.total_grain, s2_final.total_grain, "Determinism failed for grain");
+        assert_eq!(s1000.event_count, s2_final.event_count, "Determinism failed for events");
+    }
 }

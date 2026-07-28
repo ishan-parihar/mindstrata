@@ -287,11 +287,15 @@ impl Simulation {
             // ── 4. Action execution (per-tick effects) ────────────────
             for i in 0..self.agents.len() {
                 if self.agents[i].action_progress == 0 {
+                    let total_grain = ctx.world.total_food();
+                    let total_water = ctx.world.total_water();
                     let action = actions::select_action(
                         &needs[i],
                         &personalities[i],
                         &goals[i],
                         ctx.rng,
+                        total_grain,
+                        total_water,
                     );
                     self.agents[i].current_action = action;
                     self.agents[i].action_progress = action.definition().duration_ticks;
@@ -599,6 +603,43 @@ impl Simulation {
     pub fn total_water(&self) -> Fixed {
         self.world.total_water()
     }
+
+    /// Capture a snapshot of key metrics at the current tick.
+    pub fn metrics_snapshot(&self) -> MetricsSnapshot {
+        let summaries = self.agent_summaries();
+        let n = summaries.len() as f64;
+        MetricsSnapshot {
+            tick: self.current_tick().as_u64(),
+            avg_hunger: summaries.iter().map(|s| s.hunger.to_f64()).sum::<f64>() / n,
+            avg_thirst: summaries.iter().map(|s| s.thirst.to_f64()).sum::<f64>() / n,
+            avg_fatigue: summaries.iter().map(|s| s.fatigue.to_f64()).sum::<f64>() / n,
+            avg_valence: summaries.iter().map(|s| s.valence.to_f64()).sum::<f64>() / n,
+            avg_joy: summaries.iter().map(|s| s.joy.to_f64()).sum::<f64>() / n,
+            avg_fear: summaries.iter().map(|s| s.fear.to_f64()).sum::<f64>() / n,
+            total_grain: self.total_grain().to_f64(),
+            total_water: self.total_water().to_f64(),
+            event_count: self.event_count() as u64,
+            journal_len: self.journal_len() as u64,
+            agent_count: self.agent_count() as u64,
+        }
+    }
+}
+
+/// A snapshot of key simulation metrics at a specific tick.
+#[derive(Debug, Clone)]
+pub struct MetricsSnapshot {
+    pub tick: u64,
+    pub avg_hunger: f64,
+    pub avg_thirst: f64,
+    pub avg_fatigue: f64,
+    pub avg_valence: f64,
+    pub avg_joy: f64,
+    pub avg_fear: f64,
+    pub total_grain: f64,
+    pub total_water: f64,
+    pub event_count: u64,
+    pub journal_len: u64,
+    pub agent_count: u64,
 }
 
 /// A lightweight summary of an agent's state for display.

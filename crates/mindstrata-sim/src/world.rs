@@ -229,11 +229,11 @@ impl World {
     pub fn produce_resource(&mut self, site_idx: usize, resource_id: u64, amount: Fixed) {
         if let Some(site) = self.sites.get_mut(site_idx) {
             if let Some(stock) = site.inventory.iter_mut().find(|s| s.resource_id == resource_id) {
-                stock.quantity = (stock.quantity + amount).clamp_01();
+                stock.quantity += amount;
             } else {
                 site.inventory.push(ResourceStock {
                     resource_id,
-                    quantity: amount.clamp_01(),
+                    quantity: amount,
                     quality: Fixed::from_f64(0.8),
                 });
             }

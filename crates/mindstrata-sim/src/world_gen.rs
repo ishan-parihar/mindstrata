@@ -104,7 +104,11 @@ pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
         name: "Village Well".into(),
         owner: None,
         capacity: 20,
-        inventory: vec![],
+        inventory: vec![ResourceStock {
+            resource_id: 1, // WATER_RESOURCE_ID
+            quantity: Fixed::from_f64(200.0),
+            quality: Fixed::from_f64(1.0),
+        }],
     };
     if place_site(world, center_x, (center_y + 5).min(h - 1), well) {
         site_id += 1;

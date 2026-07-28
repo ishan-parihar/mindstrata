@@ -186,25 +186,43 @@ impl ActionKind {
 }
 
 /// Compute the utility of an action for a given agent state.
+///
+/// Resource scarcity modifier: when grain/water stocks are low,
+/// Eat/Drink get higher utility to create economic pressure.
 pub fn compute_utility(
     action: &ActionDef,
     needs: &NeedState,
     personality: &Personality,
     rng: &mut RngStreams,
+    total_grain: Fixed,
+    total_water: Fixed,
 ) -> Fixed {
     let mut utility = Fixed::ZERO;
 
     if action.hunger_relief > Fixed::ZERO {
-        utility += needs.hunger * action.hunger_relief * Fixed::from_f64(2.0);
+        // Base hunger pressure
+        let mut hunger_util = needs.hunger * action.hunger_relief * Fixed::from_f64(2.0);
+        // Resource scarcity modifier: when grain is low, hunger feels more urgent
+        let scarcity = (Fixed::ONE - total_grain).clamp_01();
+        hunger_util += scarcity * needs.hunger * Fixed::from_f64(0.5);
+        utility += hunger_util;
     }
     if action.thirst_relief > Fixed::ZERO {
-        utility += needs.thirst * action.thirst_relief * Fixed::from_f64(2.5);
+        // Base thirst pressure
+        let mut thirst_util = needs.thirst * action.thirst_relief * Fixed::from_f64(2.5);
+        // Resource scarcity modifier: when water is low, thirst feels more urgent
+        let scarcity = (Fixed::ONE - total_water).clamp_01();
+        thirst_util += scarcity * needs.thirst * Fixed::from_f64(0.5);
+        utility += thirst_util;
     }
     if action.fatigue_relief > Fixed::ZERO {
         utility += needs.fatigue * action.fatigue_relief * Fixed::from_f64(1.5);
     }
     if action.social_value > Fixed::ZERO {
         utility += needs.social * action.social_value * personality.extraversion;
+    }
+    if action.bonus_meaning_relief > Fixed::ZERO {
+        utility += needs.meaning * action.bonus_meaning_relief * Fixed::from_f64(1.2);
     }
 
     utility -= action.energy_cost * Fixed::from_f64(0.5);
@@ -223,6 +241,8 @@ pub fn select_action(
     personality: &Personality,
     active_goals: &[Goal],
     rng: &mut RngStreams,
+    total_grain: Fixed,
+    total_water: Fixed,
 ) -> ActionKind {
     let candidates = [
         ActionKind::Eat,
@@ -240,7 +260,7 @@ pub fn select_action(
 
     for kind in &candidates {
         let def = kind.definition();
-        let mut utility = compute_utility(&def, needs, personality, rng);
+        let mut utility = compute_utility(&def, needs, personality, rng, total_grain, total_water);
 
         for goal in active_goals {
             let goal_aligned = matches!(
@@ -306,24 +326,10 @@ mod tests {
             thirst: Fixed::from_f64(0.1),
             ..Default::default()
         };
+        let personality = make_personality();
 
-        let personality = Personality {
-            openness: Fixed::from_f64(0.5),
-            conscientiousness: Fixed::from_f64(0.5),
-            extraversion: Fixed::from_f64(0.5),
-            agreeableness: Fixed::from_f64(0.5),
-            neuroticism: Fixed::from_f64(0.5),
-            risk_tolerance: Fixed::from_f64(0.5),
-            conformity: Fixed::from_f64(0.5),
-            ambition: Fixed::from_f64(0.5),
-            altruism: Fixed::from_f64(0.5),
-            traditionalism: Fixed::from_f64(0.5),
-            dominance: Fixed::from_f64(0.5),
-            impulsivity: Fixed::from_f64(0.5),
-        };
-
-        let eat_utility = compute_utility(&ActionKind::Eat.definition(), &needs, &personality, &mut rng);
-        let drink_utility = compute_utility(&ActionKind::Drink.definition(), &needs, &personality, &mut rng);
+        let eat_utility = compute_utility(&ActionKind::Eat.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5));
+        let drink_utility = compute_utility(&ActionKind::Drink.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5));
 
         assert!(eat_utility > drink_utility);
     }
@@ -360,6 +366,53 @@ mod tests {
     fn worship_per_tick_effects() {
         let fx = ActionKind::Worship.per_tick_effects();
         assert_eq!(fx.bonus_meaning_relief, Fixed::from_f64(0.1));
+    }
+
+    fn make_personality() -> Personality {
+        Personality {
+            openness: Fixed::from_f64(0.5),
+            conscientiousness: Fixed::from_f64(0.5),
+            extraversion: Fixed::from_f64(0.5),
+            agreeableness: Fixed::from_f64(0.5),
+            neuroticism: Fixed::from_f64(0.5),
+            risk_tolerance: Fixed::from_f64(0.5),
+            conformity: Fixed::from_f64(0.5),
+            ambition: Fixed::from_f64(0.5),
+            altruism: Fixed::from_f64(0.5),
+            traditionalism: Fixed::from_f64(0.5),
+            dominance: Fixed::from_f64(0.5),
+            impulsivity: Fixed::from_f64(0.5),
+        }
+    }
+
+    #[test]
+    fn scarcity_increases_food_utility() {
+        let mut rng = RngStreams::new(42);
+        let needs = NeedState {
+            hunger: Fixed::from_f64(0.5),
+            ..Default::default()
+        };
+        let personality = make_personality();
+
+        let normal = compute_utility(&ActionKind::Eat.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.8));
+        let scarce = compute_utility(&ActionKind::Eat.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.1), Fixed::from_f64(0.8));
+
+        assert!(scarce > normal, "Scarcity should increase food utility: scarce={scarce}, normal={normal}");
+    }
+
+    #[test]
+    fn scarcity_increases_water_utility() {
+        let mut rng = RngStreams::new(42);
+        let needs = NeedState {
+            thirst: Fixed::from_f64(0.5),
+            ..Default::default()
+        };
+        let personality = make_personality();
+
+        let normal = compute_utility(&ActionKind::Drink.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.8));
+        let scarce = compute_utility(&ActionKind::Drink.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.1));
+
+        assert!(scarce > normal, "Scarcity should increase water utility: scarce={scarce}, normal={normal}");
     }
 
     #[test]

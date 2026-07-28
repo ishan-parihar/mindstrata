@@ -122,5 +122,47 @@ pub fn system_goal_generation(
                 created_tick: 0,
             });
         }
+
+        // Social generates socialize goal
+        if need.social > Fixed::from_f64(0.7)
+            && !agent_goals
+                .iter()
+                .any(|g| g.kind == crate::person::GoalKind::Socialize)
+        {
+            agent_goals.push(crate::person::Goal {
+                kind: crate::person::GoalKind::Socialize,
+                priority: need.social,
+                commitment: Fixed::from_f64(0.3),
+                created_tick: 0,
+            });
+        }
+
+        // Meaning generates worship goal
+        if need.meaning > Fixed::from_f64(0.7)
+            && !agent_goals
+                .iter()
+                .any(|g| g.kind == crate::person::GoalKind::Worship)
+        {
+            agent_goals.push(crate::person::Goal {
+                kind: crate::person::GoalKind::Worship,
+                priority: need.meaning,
+                commitment: Fixed::from_f64(0.3),
+                created_tick: 0,
+            });
+        }
+
+        // ── Goal completion: remove goals whose need has dropped below threshold ──
+        agent_goals.retain(|g| {
+            let threshold = Fixed::from_f64(0.3);
+            match g.kind {
+                crate::person::GoalKind::Eat => need.hunger > threshold,
+                crate::person::GoalKind::Drink => need.thirst > threshold,
+                crate::person::GoalKind::Rest => need.fatigue > threshold,
+                crate::person::GoalKind::Work => true, // work goals don't auto-complete
+                crate::person::GoalKind::Socialize => need.social > threshold,
+                crate::person::GoalKind::Worship => need.meaning > threshold,
+                _ => true,
+            }
+        });
     }
 }
