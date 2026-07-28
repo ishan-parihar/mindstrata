@@ -15,6 +15,7 @@ pub mod ecology;
 pub mod factions;
 pub mod gossip;
 pub mod health;
+pub mod logistics;
 pub mod institutions;
 pub mod journal;
 pub mod memory;
