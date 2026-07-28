@@ -941,7 +941,32 @@ impl Simulation {
             {
                 let from_id = *from;
                 let to_id = *to;
-                let punishment = self.norms.check_violation(1, from_id, tick_u64);                    if punishment > Fixed::ZERO {
+
+                // §29.1: Threats can cause injury to the target
+                let is_threat = matches!(
+                    ev,
+                    SimEvent::InteractionOccurred {
+                        kind: mindstrata_core::event::InteractionKind::Threaten, ..
+                    }
+                );
+                if is_threat {
+                    let to_idx = to_id.as_u64() as usize;
+                    if to_idx < self.agents.len() && to_idx < self.agent_diseases.len() {
+                        let fear = self.agents[to_idx].emotions.fear;
+                        let injury_severity = fear * Fixed::from_f64(0.3) + Fixed::from_f64(0.1);
+                        let body = &mut self.agents[to_idx].body;
+                        health::apply_injury(
+                            &mut body.health,
+                            &mut body.energy,
+                            &mut self.agent_diseases[to_idx],
+                            injury_severity,
+                            &self.health_config,
+                        );
+                    }
+                }
+
+                let punishment = self.norms.check_violation(1, from_id, tick_u64);
+                if punishment > Fixed::ZERO {
                         if let Some(rel) = self
                             .relationships
                             .iter_mut()

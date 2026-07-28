@@ -82,7 +82,8 @@ impl ActiveDisease {
         let duration = self.kind.base_duration() as f64;
         let progress = self.ticks_infected as f64 / duration;
         let duration_factor = if progress < 0.33 {
-            Fixed::from_f64(progress * 3.0)
+            // Start with a small initial severity so newly infected agents feel it
+            (Fixed::from_f64(progress * 3.0) + Fixed::from_f64(0.05)).min(Fixed::ONE)
         } else {
             Fixed::ONE - Fixed::from_f64((progress - 0.33) * 1.5).clamp_01()
         };
@@ -179,10 +180,13 @@ pub fn system_health(
     *energy = (*energy - total_severity * Fixed::from_f64(0.005)).max(Fixed::ZERO);
     *health = (*health - total_severity * Fixed::from_f64(0.001)).max(Fixed::ZERO);
 
-    // Natural recovery when healthy and fed
+    // Natural recovery when healthy and fed — scaled by current health
+    // Sick agents recover more slowly (realistic: disease suppresses recovery)
     if hunger < Fixed::from_f64(0.3) && fatigue < Fixed::from_f64(0.5) {
-        *health = (*health + config.recovery_rate).min(Fixed::ONE);
-        *energy = (*energy + config.recovery_rate * Fixed::from_f64(2.0)).min(Fixed::ONE);
+        let health_factor = *health; // lower health = slower recovery
+        let recovery = config.recovery_rate * health_factor;
+        *health = (*health + recovery).min(Fixed::ONE);
+        *energy = (*energy + recovery * Fixed::from_f64(2.0)).min(Fixed::ONE);
     }
 
     // Resolve diseases that have run their course
