@@ -330,4 +330,22 @@ impl World {
                 && self.can_access_resource(*i, WATER_RESOURCE_ID, agent_id)
         }).map(|(i, _)| i)
     }
+
+    /// §19.5.D: Find a site with grain that an agent cannot access (for theft tracking).
+    pub fn inaccessible_farm_with_grain(&self, agent_id: EntityId) -> Option<usize> {
+        self.sites.iter().enumerate().find(|(i, s)| {
+            s.kind == SiteKind::Farm
+                && s.inventory.iter().any(|r| r.resource_id == GRAIN_RESOURCE_ID && r.quantity > Fixed::ZERO)
+                && !self.can_access_resource(*i, GRAIN_RESOURCE_ID, agent_id)
+        }).map(|(i, _)| i)
+    }
+
+    /// §19.5.D: Find a site with water that an agent cannot access (for theft tracking).
+    pub fn inaccessible_well_with_water(&self, agent_id: EntityId) -> Option<usize> {
+        self.sites.iter().enumerate().find(|(i, s)| {
+            s.kind == SiteKind::Well
+                && s.inventory.iter().any(|r| r.resource_id == WATER_RESOURCE_ID && r.quantity > Fixed::ZERO)
+                && !self.can_access_resource(*i, WATER_RESOURCE_ID, agent_id)
+        }).map(|(i, _)| i)
+    }
 }

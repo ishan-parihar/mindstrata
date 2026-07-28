@@ -800,40 +800,24 @@ impl Simulation {
                         self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "grain".into(), amount: taken.to_f64() });
                         taken > Fixed::ZERO
                     } else {
-                        // §19.5.D: Theft detection — no accessible farm, but farms with grain exist?
-                        if let Some(thief_idx) = self.world.farm_with_grain() {
-                            // There IS grain, but this agent can't access it → theft!
-                            let farm_owner;
-                            {
-                                let farm = &self.world.sites[thief_idx];
-                                farm_owner = farm.owner;
-                            }
+                        // §19.5.D: Theft detection — no accessible farm, but inaccessible farms with grain exist?
+                        if let Some(thief_idx) = self.world.inaccessible_farm_with_grain(agent_id) {
+                            let farm_owner = self.world.sites[thief_idx].owner;
                             let taken = self.world.consume_resource(thief_idx, GRAIN_RESOURCE_ID, amount);
-                            // Record theft in journal
-                            self.journal.record(tick_u64, agent_id, JournalEntryKind::TheftDetected { resource: "grain".into(), amount: taken.to_f64(), fine: 0.0 });
-                            // §12.3: Record norm violation ("No Theft" norm id=0)
-                            let _punishment = self.norms.check_violation(0, agent_id, tick_u64);
-                            // §12.4: Council enforcement — fine the thief
-                            for inst in self.institutions.iter_mut() {
-                                if inst.kind == institutions::InstitutionKind::Council {
-                                    let fine = taken * self.market.price(GRAIN_RESOURCE_ID) * Fixed::from_f64(2.0);
-                                    self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - fine).max(Fixed::ZERO);
-                                    // Emit NormViolated event
-                                    self.events.push(SimEvent::NormViolated {
-                                        agent: agent_id,
-                                        norm_id: 0,
-                                        witnesses: Vec::new(),
-                                        tick,
-                                    });
-                                    break;
-                                }
-                            }
-                            // Reduce relationship with farm owner
+                            let fine = taken * self.market.price(GRAIN_RESOURCE_ID) * Fixed::from_f64(2.0);
+                            self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - fine).max(Fixed::ZERO);
+                            self.journal.record(tick_u64, agent_id, JournalEntryKind::TheftDetected { resource: "grain".into(), amount: taken.to_f64(), fine: fine.to_f64() });
+                            self.norms.check_violation(0, agent_id, tick_u64);
+                            self.events.push(SimEvent::NormViolated {
+                                agent: agent_id,
+                                norm_id: 0,
+                                witnesses: Vec::new(),
+                                tick,
+                            });
                             if let Some(owner_id) = farm_owner {
                                 if let Some(rel) = self.relationships.iter_mut().find(|r| r.from == agent_id && r.to == owner_id) {
                                     rel.trust = (rel.trust - Fixed::from_f64(0.2)).max(Fixed::ZERO);
                                 }
-                                // Shame from theft
                                 self.agents[*agent_idx].emotions.shame = (
                                     self.agents[*agent_idx].emotions.shame + Fixed::from_f64(0.1)
                                 ).clamp_01();
@@ -855,29 +839,20 @@ impl Simulation {
                         self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "water".into(), amount: taken.to_f64() });
                         taken > Fixed::ZERO
                     } else {
-                        // §19.5.D: Water theft detection — no accessible well, but wells with water exist?
-                        if let Some(thief_idx) = self.world.well_with_water() {
-                            let well_owner;
-                            {
-                                let well = &self.world.sites[thief_idx];
-                                well_owner = well.owner;
-                            }
+                        // §19.5.D: Water theft detection — no accessible well, but inaccessible wells with water exist?
+                        if let Some(thief_idx) = self.world.inaccessible_well_with_water(agent_id) {
+                            let well_owner = self.world.sites[thief_idx].owner;
                             let taken = self.world.consume_resource(thief_idx, WATER_RESOURCE_ID, amount);
-                            self.journal.record(tick_u64, agent_id, JournalEntryKind::TheftDetected { resource: "water".into(), amount: taken.to_f64(), fine: 0.0 });
-                            let _punishment = self.norms.check_violation(0, agent_id, tick_u64);
-                            for inst in self.institutions.iter_mut() {
-                                if inst.kind == institutions::InstitutionKind::Council {
-                                    let fine = taken * self.market.price(WATER_RESOURCE_ID) * Fixed::from_f64(2.0);
-                                    self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - fine).max(Fixed::ZERO);
-                                    self.events.push(SimEvent::NormViolated {
-                                        agent: agent_id,
-                                        norm_id: 0,
-                                        witnesses: Vec::new(),
-                                        tick,
-                                    });
-                                    break;
-                                }
-                            }
+                            let fine = taken * self.market.price(WATER_RESOURCE_ID) * Fixed::from_f64(2.0);
+                            self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - fine).max(Fixed::ZERO);
+                            self.journal.record(tick_u64, agent_id, JournalEntryKind::TheftDetected { resource: "water".into(), amount: taken.to_f64(), fine: fine.to_f64() });
+                            self.norms.check_violation(0, agent_id, tick_u64);
+                            self.events.push(SimEvent::NormViolated {
+                                agent: agent_id,
+                                norm_id: 0,
+                                witnesses: Vec::new(),
+                                tick,
+                            });
                             if let Some(owner_id) = well_owner {
                                 if let Some(rel) = self.relationships.iter_mut().find(|r| r.from == agent_id && r.to == owner_id) {
                                     rel.trust = (rel.trust - Fixed::from_f64(0.2)).max(Fixed::ZERO);
