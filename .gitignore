@@ -1,0 +1,6 @@
+# Local state
+.hive/
+
+# Backup files
+*.bak
+*.superseded
