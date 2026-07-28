@@ -169,6 +169,41 @@ pub fn choose_interaction(
     }
 }
 
+/// Update witness relationships when an interaction is observed.
+/// Witnesses update their trust in both parties based on what they saw.
+pub fn update_witnesses(
+    interaction: &Interaction,
+    relationships: &mut [Relationship],
+    num_agents: usize,
+    tick: Tick,
+) {
+    for w in 0..num_agents {
+        let witness = AgentId::new(w as u64);
+        if witness == interaction.from || witness == interaction.to {
+            continue;
+        }
+
+        match interaction.kind {
+            // Negative interactions: witnesses reduce trust in perpetrator
+            InteractionKind::Threaten | InteractionKind::Insult => {
+                if let Some(rel) = relationships.iter_mut().find(|r| r.from == witness && r.to == interaction.from) {
+                    rel.trust = (rel.trust - Fixed::from_f64(0.03)).max(Fixed::ZERO);
+                    rel.last_interaction_tick = tick.as_u64();
+                }
+            }
+            // Positive interactions: witnesses increase trust in helper
+            InteractionKind::Help | InteractionKind::Comfort => {
+                if let Some(rel) = relationships.iter_mut().find(|r| r.from == witness && r.to == interaction.from) {
+                    rel.trust = (rel.trust + Fixed::from_f64(0.02)).clamp_01();
+                    rel.last_interaction_tick = tick.as_u64();
+                }
+            }
+            // Neutral interactions: no witness effect
+            _ => {}
+        }
+    }
+}
+
 /// Run the social interaction system for all agents.
 pub fn system_social_interactions(
     agents: &[(AgentId, Fixed, Fixed, Fixed)], // (id, openness, agreeableness, extraversion)
@@ -212,6 +247,9 @@ pub fn system_social_interactions(
                 to: target_id,
                 kind,
             };
+
+            // Update witnesses before processing the interaction
+            update_witnesses(&interaction, relationships, num_agents, tick);
 
             process_interaction(&interaction, relationships, events, tick);
         }

@@ -312,6 +312,16 @@ impl Simulation {
 
             // ── 4. Action execution (per-tick effects) ────────────────
             for i in 0..self.agents.len() {
+                // Action interruption: force address critical needs (> 0.9)
+                if self.agents[i].action_progress > 0 {
+                    let critical = needs[i].hunger > Fixed::from_f64(0.9)
+                        || needs[i].thirst > Fixed::from_f64(0.9)
+                        || needs[i].fatigue > Fixed::from_f64(0.95);
+                    if critical {
+                        self.agents[i].action_progress = 0;
+                    }
+                }
+
                 if self.agents[i].action_progress == 0 {
                     let total_grain = ctx.world.total_food();
                     let total_water = ctx.world.total_water();
