@@ -6,6 +6,8 @@
 //! §19.5.I: "Practices, rituals, symbols, taboos, education,
 //! apprenticeship, innovation, knowledge diffusion, ideological traditions."
 
+#![allow(missing_docs)]
+
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::id::AgentId;
 use serde::{Deserialize, Serialize};

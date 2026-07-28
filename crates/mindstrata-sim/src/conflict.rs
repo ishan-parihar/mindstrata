@@ -61,56 +61,6 @@ impl ConflictKind {
     }
 }
 
-/// A feud between two agents or groups.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Feud {
-    /// The two parties in conflict.
-    pub party_a: AgentId,
-    pub party_b: AgentId,
-    /// Intensity of the feud (0 = dormant, 1 = active).
-    pub intensity: Fixed,
-    /// Number of incidents so far.
-    pub incidents: u32,
-    /// Tick when the feud started.
-    pub started_tick: u64,
-    /// Tick of last incident.
-    pub last_incident_tick: u64,
-    /// Whether the feud has been resolved.
-    pub resolved: bool,
-}
-
-impl Feud {
-    /// Create a new feud.
-    pub fn new(party_a: AgentId, party_b: AgentId, tick: u64) -> Self {
-        Self {
-            party_a,
-            party_b,
-            intensity: Fixed::from_f64(0.5),
-            incidents: 1,
-            started_tick: tick,
-            last_incident_tick: tick,
-            resolved: false,
-        }
-    }
-
-    /// Escalate the feud after an incident.
-    pub fn escalate(&mut self, tick: u64) {
-        self.incidents += 1;
-        self.last_incident_tick = tick;
-        // Intensity grows with incidents but caps at 1.0
-        let escalation = Fixed::from_f64(0.1) / Fixed::from_int(self.incidents as i64);
-        self.intensity = (self.intensity + escalation).clamp_01();
-    }
-
-    /// Decay feud intensity over time without incidents.
-    pub fn decay(&mut self, decay_rate: Fixed) {
-        self.intensity = (self.intensity - decay_rate).max(Fixed::ZERO);
-        if self.intensity <= Fixed::from_f64(0.05) {
-            self.resolved = true;
-        }
-    }
-}
-
 /// Conflict tracking state for an agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConflictState {
@@ -231,25 +181,6 @@ pub fn resolve_conflict(
     }
 }
 
-/// Compute the probability of a conflict occurring based on relationship and context.
-pub fn conflict_probability(
-    trust: Fixed,
-    grievance: Fixed,
-    fear: Fixed,
-    personality_aggression: Fixed,
-) -> Fixed {
-    // Low trust + high grievance + low fear + aggressive personality = high probability
-    let trust_factor = Fixed::ONE - trust;
-    let grievance_factor = grievance;
-    let fear_deterrent = Fixed::ONE - fear * Fixed::from_f64(0.5); // fear deters aggression
-    let personality_factor = personality_aggression;
-
-    (trust_factor * Fixed::from_f64(0.3)
-        + grievance_factor * Fixed::from_f64(0.3)
-        + fear_deterrent * Fixed::from_f64(0.2)
-        + personality_factor * Fixed::from_f64(0.2))
-        .clamp_01()
-}
 
 #[cfg(test)]
 mod tests {
@@ -326,67 +257,6 @@ mod tests {
 
         assert!(r2.trauma_accumulated > r1.trauma_accumulated,
             "Prior trauma should increase new trauma accumulation");
-    }
-
-    #[test]
-    fn feud_escalates() {
-        let a = AgentId::new(0);
-        let b = AgentId::new(1);
-        let mut feud = Feud::new(a, b, 100);
-        let initial_intensity = feud.intensity;
-
-        feud.escalate(200);
-        assert!(feud.intensity > initial_intensity);
-        assert_eq!(feud.incidents, 2);
-    }
-
-    #[test]
-    fn feud_decays() {
-        let a = AgentId::new(0);
-        let b = AgentId::new(1);
-        let mut feud = Feud::new(a, b, 100);
-        feud.intensity = Fixed::from_f64(0.8);
-
-        feud.decay(Fixed::from_f64(0.1));
-        assert!(feud.intensity < Fixed::from_f64(0.8));
-    }
-
-    #[test]
-    fn conflict_probability_increases_with_low_trust() {
-        let p_low_trust = conflict_probability(
-            Fixed::from_f64(0.1), // low trust
-            Fixed::from_f64(0.5),
-            Fixed::ZERO,
-            Fixed::from_f64(0.5),
-        );
-        let p_high_trust = conflict_probability(
-            Fixed::from_f64(0.9), // high trust
-            Fixed::from_f64(0.5),
-            Fixed::ZERO,
-            Fixed::from_f64(0.5),
-        );
-
-        assert!(p_low_trust > p_high_trust,
-            "Low trust should increase conflict probability");
-    }
-
-    #[test]
-    fn fear_deters_conflict() {
-        let p_fearful = conflict_probability(
-            Fixed::from_f64(0.5),
-            Fixed::from_f64(0.5),
-            Fixed::from_f64(0.8), // high fear
-            Fixed::from_f64(0.5),
-        );
-        let p_brave = conflict_probability(
-            Fixed::from_f64(0.5),
-            Fixed::from_f64(0.5),
-            Fixed::ZERO, // no fear
-            Fixed::from_f64(0.5),
-        );
-
-        assert!(p_brave > p_fearful,
-            "Fear should deter conflict");
     }
 
     #[test]

@@ -111,6 +111,22 @@ pub enum SimEvent {
         distortion: Fixed,
         tick: Tick,
     },
+    KnowledgeTransferred {
+        source: AgentId,
+        target: AgentId,
+        knowledge_id: u64,
+        tick: Tick,
+    },
+
+    // ── Conflict ─────────────────────────────────────────────────────
+    ConflictOccurred {
+        aggressor: AgentId,
+        target: AgentId,
+        kind: String,
+        injury: Fixed,
+        fear_induced: Fixed,
+        tick: Tick,
+    },
 
     // ── Movement ─────────────────────────────────────────────────────
     AgentMoved {

@@ -91,40 +91,9 @@ pub fn render_agent_list(agents: &[AgentSummary]) -> String {
     out
 }
 
-/// Render the event log (last n events).
+/// Render the event log (last n events) — delegates to detailed version.
 pub fn render_event_log(events: &[SimEvent], n: usize) -> String {
-    let mut out = String::new();
-    let start = events.len().saturating_sub(n);
-    for (i, ev) in events[start..].iter().enumerate() {
-        let tick = start + i;
-        match ev {
-            SimEvent::AgentAte { agent, .. } => {
-                out.push_str(&format!("[{tick}] Agent {} ate\n", agent.as_u64()));
-            }
-            SimEvent::AgentDrank { agent, .. } => {
-                out.push_str(&format!("[{tick}] Agent {} drank\n", agent.as_u64()));
-            }
-            SimEvent::AgentRested { agent, .. } => {
-                out.push_str(&format!("[{tick}] Agent {} rested\n", agent.as_u64()));
-            }
-            SimEvent::InteractionOccurred { from, to, kind, .. } => {
-                out.push_str(&format!(
-                    "[{tick}] Agent {} {:?} Agent {}\n",
-                    from.as_u64(), kind, to.as_u64()
-                ));
-            }
-            SimEvent::RelationshipChanged { from, to, trust_delta, .. } => {
-                out.push_str(&format!(
-                    "[{tick}] {}→{} trust {:+.3}\n",
-                    from.as_u64(), to.as_u64(), trust_delta.to_f64()
-                ));
-            }
-            _ => {
-                out.push_str(&format!("[{tick}] Event: {:?}\n", ev));
-            }
-        }
-    }
-    out
+    render_event_log_detailed(events, n)
 }
 
 /// §17.1: Render agent inspector — detailed single-agent view.

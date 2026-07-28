@@ -1,7 +1,8 @@
 //! Simulation orchestrator — the fixed-tick loop.
 
 use crate::actions::{self, ActionKind};
-use crate::conflict::{self, ConflictState};
+use crate::conflict::{self, ConflictKind, ConflictState};
+use crate::cultural::{self, CulturalState, Knowledge, KnowledgeCategory};
 use crate::gossip;
 use crate::market::{self, MarketState, WealthState};
 use crate::appraisal::{self, Agency, Appraisal};
@@ -95,6 +96,8 @@ pub struct AgentBundle {
     pub wealth: WealthState,
     /// §19.5.H: Per-agent conflict state — trauma, injuries, combat fatigue.
     pub conflict: ConflictState,
+    /// §19.5.I: Per-agent cultural state — practices, knowledge, ideology.
+    pub cultural: CulturalState,
 }
 
 /// The simulation state.
@@ -127,6 +130,8 @@ pub struct Simulation {
     pub site_work_ticks: Vec<u32>,
     /// §13.3: Market state — prices, inequality, trade volume.
     pub market: MarketState,
+    /// §19.5.I: Cultural knowledge store — all knowledge in the world.
+    pub knowledge_store: Vec<Knowledge>,
 }
 
 impl Simulation {
@@ -155,6 +160,7 @@ impl Simulation {
             agent_diseases: Vec::new(),
             site_work_ticks: Vec::new(),
             market: MarketState::new(),
+            knowledge_store: Vec::new(),
         }
     }
 
@@ -266,6 +272,7 @@ impl Simulation {
                     coin: Fixed::from_f64(populate_rng.random_range(5.0..20.0)),
                 },
                 conflict: ConflictState::default(),
+                cultural: CulturalState::default(),
             });
         }
 
@@ -299,6 +306,35 @@ impl Simulation {
 
         // §12: Create default institutions
         self.institutions = institutions::default_institutions();
+
+        // §19.5.I: Seed cultural knowledge store with initial knowledge
+        self.knowledge_store = vec![
+            Knowledge { id: 0, name: "Crop Rotation".into(), category: KnowledgeCategory::Agricultural, difficulty: Fixed::from_f64(0.3), utility: Fixed::from_f64(0.8), holders: 0, discovered_tick: 0 },
+            Knowledge { id: 1, name: "Well Maintenance".into(), category: KnowledgeCategory::Craft, difficulty: Fixed::from_f64(0.4), utility: Fixed::from_f64(0.6), holders: 0, discovered_tick: 0 },
+            Knowledge { id: 2, name: "Herbal Medicine".into(), category: KnowledgeCategory::Medical, difficulty: Fixed::from_f64(0.7), utility: Fixed::from_f64(0.9), holders: 0, discovered_tick: 0 },
+            Knowledge { id: 3, name: "Harvest Prayer".into(), category: KnowledgeCategory::Philosophical, difficulty: Fixed::from_f64(0.2), utility: Fixed::from_f64(0.4), holders: 0, discovered_tick: 0 },
+            Knowledge { id: 4, name: "Grain Storage".into(), category: KnowledgeCategory::Agricultural, difficulty: Fixed::from_f64(0.3), utility: Fixed::from_f64(0.7), holders: 0, discovered_tick: 0 },
+        ];
+        // Seed agents with initial knowledge based on personality traits
+        for agent in self.agents.iter_mut() {
+            // All agents know Crop Rotation (id=0)
+            agent.cultural.knowledge.push(0);
+            // Traditional agents know Harvest Prayer (id=3)
+            if agent.personality.traditionalism > Fixed::from_f64(0.5) {
+                agent.cultural.knowledge.push(3);
+            }
+            // Conscientious agents know Well Maintenance (id=1) or Grain Storage (id=4)
+            if agent.personality.conscientiousness > Fixed::from_f64(0.5) {
+                agent.cultural.knowledge.push(1);
+            }
+            // Open agents know Herbal Medicine (id=2)
+            if agent.personality.openness > Fixed::from_f64(0.5) {
+                agent.cultural.knowledge.push(2);
+            }
+            if agent.personality.conscientiousness > Fixed::from_f64(0.6) {
+                agent.cultural.knowledge.push(4);
+            }
+        }
 
         // §12: Assign agents to institutional roles based on personality traits
         // Elder: high conscientiousness + high agreeableness
@@ -967,7 +1003,7 @@ impl Simulation {
                 let from_id = *from;
                 let to_id = *to;
 
-                // §29.1: Threats can cause injury to the target
+                // §19.5.H: Route threats through conflict system for trauma, combat fatigue tracking
                 let is_threat = matches!(
                     ev,
                     SimEvent::InteractionOccurred {
@@ -975,18 +1011,40 @@ impl Simulation {
                     }
                 );
                 if is_threat {
+                    let from_idx = from_id.as_u64() as usize;
                     let to_idx = to_id.as_u64() as usize;
-                    if to_idx < self.agents.len() && to_idx < self.agent_diseases.len() {
-                        let fear = self.agents[to_idx].emotions.fear;
-                        let injury_severity = fear * Fixed::from_f64(0.3) + Fixed::from_f64(0.1);
-                        let body = &mut self.agents[to_idx].body;
-                        health::apply_injury(
-                            &mut body.health,
-                            &mut body.energy,
-                            &mut self.agent_diseases[to_idx],
-                            injury_severity,
-                            &self.health_config,
+                    if from_idx < self.agents.len()
+                        && to_idx < self.agents.len()
+                        && to_idx < self.agent_diseases.len()
+                    {
+                        let rng_val = Fixed::from_f64(
+                            self.rng.get_mut(RngStream::Social).random::<f64>()
                         );
+                        let conflict_result = conflict::resolve_conflict(
+                            ConflictKind::Threat,
+                            &self.agents[from_idx].personality,
+                            &self.agents[to_idx].emotions,
+                            self.agents[to_idx].body.health,
+                            &self.agents[to_idx].conflict,
+                            rng_val,
+                        );
+                        if conflict_result.occurred {
+                            // Record conflict state: trauma, combat fatigue
+                            self.agents[to_idx].conflict.record_conflict(ConflictKind::Threat);
+                            // Apply fear induction
+                            self.agents[to_idx].emotions.fear = (
+                                self.agents[to_idx].emotions.fear + conflict_result.fear_induced
+                            ).clamp_01();
+                            // Emit conflict event for observability
+                            self.events.push(SimEvent::ConflictOccurred {
+                                aggressor: from_id,
+                                target: to_id,
+                                kind: format!("{:?}", ConflictKind::Threat),
+                                injury: conflict_result.injury,
+                                fear_induced: conflict_result.fear_induced,
+                                tick,
+                            });
+                        }
                     }
                 }
 
@@ -1066,6 +1124,52 @@ impl Simulation {
                             distortion: (result.mutated_confidence - rumor.confidence).abs(),
                             tick,
                         });
+                    }
+                }
+            }
+        }
+
+        // ── 11c. §19.5.I Knowledge diffusion — cultural knowledge spreads through social networks ──
+        for ev in &self.events[pre_tick_events..].to_vec() {
+            if let SimEvent::InteractionOccurred {
+                from,
+                to,
+                kind: mindstrata_core::event::InteractionKind::Gossip
+                | mindstrata_core::event::InteractionKind::Help
+                | mindstrata_core::event::InteractionKind::Trade,
+                ..
+            } = ev
+            {
+                let from_idx = from.as_u64() as usize;
+                let to_idx = to.as_u64() as usize;
+                if from_idx < self.agents.len() && to_idx < self.agents.len() {
+                    let source_trust = self.relationships
+                        .iter()
+                        .find(|r| r.from == *from && r.to == *to)
+                        .map(|r| r.trust)
+                        .unwrap_or(Fixed::from_f64(0.5));
+                    // Teacher teaches a random piece of knowledge they have
+                    if !self.agents[from_idx].cultural.knowledge.is_empty() {
+                        let pick = self.rng.get_mut(RngStream::Social)
+                            .random_range(0..self.agents[from_idx].cultural.knowledge.len());
+                        let knowledge_id = self.agents[from_idx].cultural.knowledge[pick];
+                        // Simple diffusion: probabilistic transfer based on trust and openness
+                        let trust_factor = source_trust;
+                        let openness = self.agents[to_idx].cultural.openness;
+                        let acceptance = (trust_factor * Fixed::from_f64(0.5)
+                            + openness * Fixed::from_f64(0.5)).clamp_01();
+                        if !self.agents[to_idx].cultural.knowledge.contains(&knowledge_id)
+                            && acceptance > Fixed::from_f64(0.5)
+                        {
+                            self.agents[to_idx].cultural.knowledge.push(knowledge_id);
+                            // Emit knowledge transfer event for observability
+                            self.events.push(SimEvent::KnowledgeTransferred {
+                                source: *from,
+                                target: *to,
+                                knowledge_id,
+                                tick,
+                            });
+                        }
                     }
                 }
             }
