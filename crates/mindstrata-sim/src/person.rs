@@ -304,6 +304,83 @@ impl CognitiveState {
     }
 }
 
+// ── Derived mental states (§22) ──────────────────────────────────────
+
+/// Derived mental states computed from lower-level variables.
+/// §22.1: "Do not simulate everything as direct variables.
+/// Some states should be derived: trauma, depression, ambition, resilience."
+/// These influence traits over time — psychology is plastic.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DerivedMentalState {
+    /// Trauma risk from repeated high-stress events, low coping, low support.
+    pub trauma_risk: Fixed,
+    /// Depression risk from chronic need deficit, low meaning, social isolation.
+    pub depression_risk: Fixed,
+    /// Ambition from repeated success, high energy, competitive environment.
+    pub ambition: Fixed,
+    /// Resilience from social support, high coping, past recovery.
+    pub resilience: Fixed,
+    /// Resentment from perceived injustice, repeated norm violations witnessed.
+    pub resentment: Fixed,
+}
+
+impl Default for DerivedMentalState {
+    fn default() -> Self {
+        Self {
+            trauma_risk: Fixed::ZERO,
+            depression_risk: Fixed::ZERO,
+            ambition: Fixed::from_f64(0.3),
+            resilience: Fixed::from_f64(0.5),
+            resentment: Fixed::ZERO,
+        }
+    }
+}
+
+/// Inputs for derived mental state computation.
+/// Grouped to avoid too-many-arguments clippy lint.
+pub struct MentalStateInput {
+    pub stress: Fixed,
+    pub coping_potential: Fixed,
+    pub social_support: Fixed,
+    pub need_deficit_avg: Fixed,
+    pub meaning: Fixed,
+    pub autonomy: Fixed,
+    pub success_rate: Fixed,
+    pub neuroticism: Fixed,
+    pub justice_perception: Fixed,
+}
+
+impl DerivedMentalState {
+    /// Compute derived mental states from lower-level variables.
+    /// §22.1: These should influence traits over time.
+    pub fn compute(&mut self, input: &MentalStateInput) {
+        // Trauma risk: repeated stress + low coping + low support
+        let stress_factor = input.stress * Fixed::from_f64(0.3);
+        let coping_factor = (Fixed::ONE - input.coping_potential) * Fixed::from_f64(0.3);
+        let support_factor = (Fixed::ONE - input.social_support) * Fixed::from_f64(0.2);
+        let neuroticism_boost = input.neuroticism * Fixed::from_f64(0.2);
+        let trauma_delta = stress_factor + coping_factor + support_factor + neuroticism_boost;
+        self.trauma_risk = (self.trauma_risk * Fixed::from_f64(0.98) + trauma_delta * Fixed::from_f64(0.02)).clamp_01();
+
+        // Depression risk: chronic need deficit + low meaning + low autonomy
+        let deficit_factor = input.need_deficit_avg * Fixed::from_f64(0.3);
+        let meaning_factor = (Fixed::ONE - input.meaning) * Fixed::from_f64(0.25);
+        let autonomy_factor = (Fixed::ONE - input.autonomy) * Fixed::from_f64(0.2);
+        let depression_delta = deficit_factor + meaning_factor + autonomy_factor;
+        self.depression_risk = (self.depression_risk * Fixed::from_f64(0.97) + depression_delta * Fixed::from_f64(0.03)).clamp_01();
+
+        // Ambition: from success and energy
+        self.ambition = (input.success_rate * Fixed::from_f64(0.4) + Fixed::from_f64(0.3)).clamp_01();
+
+        // Resilience: from social support and coping
+        self.resilience = (input.social_support * Fixed::from_f64(0.3) + input.coping_potential * Fixed::from_f64(0.3) + Fixed::from_f64(0.2)).clamp_01();
+
+        // Resentment: from perceived injustice
+        let injustice = (Fixed::ONE - input.justice_perception) * Fixed::from_f64(0.4);
+        self.resentment = (self.resentment * Fixed::from_f64(0.95) + injustice * Fixed::from_f64(0.05)).clamp_01();
+    }
+}
+
 // ── Intention system ───────────────────────────────────────────────────
 
 /// An intention is a committed plan to achieve a goal.

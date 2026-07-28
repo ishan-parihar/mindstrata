@@ -81,12 +81,26 @@ pub struct ResourceDef {
     pub spoilage_rate: Fixed,
 }
 
+/// Access rights for a resource stock.
+/// §19.5.E: Resources need access rights and ownership.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AccessRight {
+    /// Anyone can access this resource (e.g., public well).
+    Public,
+    /// Only the site owner can access.
+    OwnerOnly,
+    /// Members of an institution can access (e.g., temple grain for priests).
+    InstitutionMembers,
+}
+
 /// A stock of a resource at a location.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceStock {
     pub resource_id: u64,
     pub quantity: Fixed,
     pub quality: Fixed,
+    /// Who can access this resource.
+    pub access: AccessRight,
 }
 
 // ── Site ─────────────────────────────────────────────────────────────────
@@ -235,6 +249,7 @@ impl World {
                     resource_id,
                     quantity: amount,
                     quality: Fixed::from_f64(0.8),
+                    access: AccessRight::Public,
                 });
             }
         }
@@ -271,5 +286,45 @@ impl World {
                 fa.cmp(&fb)
             })
             .map(|(i, _)| i)
+    }
+
+    /// §19.5.E: Check if an agent can access a resource at a site.
+    /// Returns true if the agent has access rights.
+    pub fn can_access_resource(&self, site_idx: usize, resource_id: u64, agent_id: EntityId) -> bool {
+        if let Some(site) = self.sites.get(site_idx) {
+            if let Some(stock) = site.inventory.iter().find(|s| s.resource_id == resource_id) {
+                match stock.access {
+                    AccessRight::Public => true,
+                    AccessRight::OwnerOnly => site.owner == Some(agent_id),
+                    AccessRight::InstitutionMembers => {
+                        // For now, any agent can access institution resources.
+                        // TODO: check institutional membership when we have the data.
+                        true
+                    }
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+
+    /// §19.5.E: Find a site with accessible grain for an agent.
+    pub fn accessible_farm_with_grain(&self, agent_id: EntityId) -> Option<usize> {
+        self.sites.iter().enumerate().find(|(i, s)| {
+            s.kind == SiteKind::Farm
+                && s.inventory.iter().any(|r| r.resource_id == GRAIN_RESOURCE_ID && r.quantity > Fixed::ZERO)
+                && self.can_access_resource(*i, GRAIN_RESOURCE_ID, agent_id)
+        }).map(|(i, _)| i)
+    }
+
+    /// §19.5.E: Find a site with accessible water for an agent.
+    pub fn accessible_well_with_water(&self, agent_id: EntityId) -> Option<usize> {
+        self.sites.iter().enumerate().find(|(i, s)| {
+            s.kind == SiteKind::Well
+                && s.inventory.iter().any(|r| r.resource_id == WATER_RESOURCE_ID && r.quantity > Fixed::ZERO)
+                && self.can_access_resource(*i, WATER_RESOURCE_ID, agent_id)
+        }).map(|(i, _)| i)
     }
 }

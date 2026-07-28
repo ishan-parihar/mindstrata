@@ -11,7 +11,7 @@ use crate::institutions::{self, Institution};
 use crate::routines::DailyRoutine;
 pub use crate::attention;
 pub use crate::person::Intention;
-use crate::person::{Affect, BodyState, Belief, CognitiveState, DiscreteEmotions, Goal, GoalKind, IdentityKind, IdentityState, MoralValues, NeedState, Personality, Relationship};
+use crate::person::{Affect, BodyState, Belief, CognitiveState, DerivedMentalState, DiscreteEmotions, Goal, GoalKind, IdentityKind, IdentityState, MoralValues, NeedState, Personality, Relationship};
 use crate::provenance::{CausalProvenance, DecisionFactor, DecisionTrace};
 use crate::scenario::{Scenario, ShockKind};
 use crate::social;
@@ -76,6 +76,11 @@ pub struct AgentBundle {
     pub moral_values: MoralValues,
     /// §22.1: Bounded rationality — stress, fatigue reduce planning and increase heuristic reliance.
     pub cognitive: CognitiveState,
+    /// §22: Derived mental states — trauma, depression, ambition, resilience, resentment.
+    pub derived: DerivedMentalState,
+    /// Track success rate for derived mental state computation.
+    pub recent_successes: u32,
+    pub recent_attempts: u32,
 }
 
 /// The simulation state.
@@ -218,6 +223,9 @@ impl Simulation {
                 routine: DailyRoutine::village_routine(),
                 moral_values: MoralValues::random(&mut populate_rng),
                 cognitive: CognitiveState::default(),
+                derived: DerivedMentalState::default(),
+                recent_successes: 0,
+                recent_attempts: 0,
             });
         }
 
@@ -748,6 +756,11 @@ impl Simulation {
                     intention.record_failure();
                 }
             }
+            // §22: Track success rate for derived mental state computation
+            self.agents[*agent_idx].recent_attempts += 1;
+            if action_succeeded {
+                self.agents[*agent_idx].recent_successes += 1;
+            }
         }
 
         // ── 9. Memory encoding from this tick's events ───────────────
@@ -962,6 +975,31 @@ impl Simulation {
             institution.derive_collective_psychology(&member_morales, &member_trusts);
             // Slow legitimacy decay without reinforcement
             institution.decay_legitimacy(Fixed::from_f64(0.0001));
+        }        // ── 14. Derived mental state computation (§22) ─────────────
+        for agent in self.agents.iter_mut() {
+            let stress = agent.emotions.fear + agent.emotions.anger;
+            let need_deficit_avg = (agent.needs.hunger + agent.needs.thirst + agent.needs.fatigue + agent.needs.safety) * Fixed::from_f64(0.25);
+            let social_support = Fixed::ONE - agent.needs.social;
+            let success_rate = if agent.recent_attempts > 0 {
+                Fixed::from_int(agent.recent_successes as i64) / Fixed::from_int(agent.recent_attempts as i64)
+            } else {
+                Fixed::from_f64(0.5)
+            };
+            let justice_perception = agent.moral_values.fairness;
+            agent.derived.compute(&crate::person::MentalStateInput {
+                stress,
+                coping_potential: agent.personality.conscientiousness,
+                social_support,
+                need_deficit_avg,
+                meaning: agent.needs.meaning,
+                autonomy: agent.needs.autonomy,
+                success_rate,
+                neuroticism: agent.personality.neuroticism,
+                justice_perception,
+            });
+            // Decay success tracking window
+            agent.recent_attempts = agent.recent_attempts.saturating_sub(1);
+            agent.recent_successes = agent.recent_successes.saturating_sub(1);
         }
 
         // ── 13. Belief updates from this tick's social interactions ────

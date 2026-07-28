@@ -1,6 +1,6 @@
 //! World generation — terrain, sites, resources, and agent placement.
 
-use crate::world::{Region, ResourceDef, ResourceStock, Site, SiteKind, Terrain, Tile, World, GRAIN_RESOURCE_ID};
+use crate::world::{AccessRight, Region, ResourceDef, ResourceStock, Site, SiteKind, Terrain, Tile, World, GRAIN_RESOURCE_ID};
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::id::EntityId;
 use mindstrata_core::rng::{RngStreams, RngStream};
@@ -91,6 +91,7 @@ pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
             resource_id: GRAIN_RESOURCE_ID,
             quantity: Fixed::from_f64(100.0),
             quality: Fixed::from_f64(0.8),
+            access: AccessRight::Public,
         }],
     };
     if place_site(world, center_x.saturating_sub(6), center_y, farm) {
@@ -108,6 +109,7 @@ pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
             resource_id: 1, // WATER_RESOURCE_ID
             quantity: Fixed::from_f64(200.0),
             quality: Fixed::from_f64(1.0),
+            access: AccessRight::Public,
         }],
     };
     if place_site(world, center_x, (center_y + 5).min(h - 1), well) {
@@ -126,11 +128,13 @@ pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
                 resource_id: GRAIN_RESOURCE_ID,
                 quantity: Fixed::from_f64(50.0),
                 quality: Fixed::from_f64(0.9),
+                access: AccessRight::Public,
             },
             ResourceStock {
                 resource_id: 1,
                 quantity: Fixed::from_f64(200.0),
                 quality: Fixed::from_f64(1.0),
+                access: AccessRight::Public,
             },
         ],
     };
