@@ -709,7 +709,8 @@ impl Simulation {
             let action_succeeded = match action {
                 ActionKind::Eat => {
                     let amount = Fixed::from_f64(0.1);
-                    if let Some(farm_idx) = self.world.farm_with_grain() {
+                    // §19.5.E: Use access-checking method to enforce resource access rights.
+                    if let Some(farm_idx) = self.world.accessible_farm_with_grain(agent_id) {
                         let taken = self.world.consume_resource(farm_idx, GRAIN_RESOURCE_ID, amount);
                         self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "grain".into(), amount: taken.to_f64() });
                         taken > Fixed::ZERO
@@ -719,7 +720,8 @@ impl Simulation {
                 }
                 ActionKind::Drink => {
                     let amount = Fixed::from_f64(0.15);
-                    if let Some(well_idx) = self.world.well_with_water() {
+                    // §19.5.E: Use access-checking method to enforce resource access rights.
+                    if let Some(well_idx) = self.world.accessible_well_with_water(agent_id) {
                         let taken = self.world.consume_resource(well_idx, WATER_RESOURCE_ID, amount);
                         self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "water".into(), amount: taken.to_f64() });
                         taken > Fixed::ZERO

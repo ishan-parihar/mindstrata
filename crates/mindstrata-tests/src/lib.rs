@@ -405,4 +405,117 @@ mod smoke {
         assert_eq!(s1000.total_grain, s2_final.total_grain, "Determinism failed for grain");
         assert_eq!(s1000.event_count, s2_final.event_count, "Determinism failed for events");
     }
+
+    #[test]
+    fn derived_mental_states_accumulate_under_stress() {
+        use mindstrata_core::fixed::Fixed;
+        use mindstrata_sim::person::{DerivedMentalState, MentalStateInput};
+
+        // Stressed agent: high stress, low coping, low social support
+        let mut stressed = DerivedMentalState::default();
+        let stressed_input = MentalStateInput {
+            stress: Fixed::from_f64(0.8),
+            coping_potential: Fixed::from_f64(0.2),
+            social_support: Fixed::from_f64(0.1),
+            need_deficit_avg: Fixed::from_f64(0.7),
+            meaning: Fixed::from_f64(0.2),
+            autonomy: Fixed::from_f64(0.1),
+            success_rate: Fixed::from_f64(0.1),
+            neuroticism: Fixed::from_f64(0.8),
+            justice_perception: Fixed::from_f64(0.3),
+        };
+
+        // Calm agent: low stress, high coping, high social support
+        let mut calm = DerivedMentalState::default();
+        let calm_input = MentalStateInput {
+            stress: Fixed::from_f64(0.1),
+            coping_potential: Fixed::from_f64(0.8),
+            social_support: Fixed::from_f64(0.9),
+            need_deficit_avg: Fixed::from_f64(0.1),
+            meaning: Fixed::from_f64(0.8),
+            autonomy: Fixed::from_f64(0.9),
+            success_rate: Fixed::from_f64(0.8),
+            neuroticism: Fixed::from_f64(0.2),
+            justice_perception: Fixed::from_f64(0.8),
+        };
+
+        // Simulate 200 ticks — states should accumulate
+        for _ in 0..200 {
+            stressed.compute(&stressed_input);
+            calm.compute(&calm_input);
+        }
+
+        // Stressed agent should have higher trauma and depression risk
+        assert!(stressed.trauma_risk > calm.trauma_risk,
+            "Stressed agent should have higher trauma risk: stressed={:.3}, calm={:.3}",
+            stressed.trauma_risk.to_f64(), calm.trauma_risk.to_f64());
+        assert!(stressed.depression_risk > calm.depression_risk,
+            "Stressed agent should have higher depression risk: stressed={:.3}, calm={:.3}",
+            stressed.depression_risk.to_f64(), calm.depression_risk.to_f64());
+        assert!(stressed.resentment > calm.resentment,
+            "Stressed agent should have higher resentment: stressed={:.3}, calm={:.3}",
+            stressed.resentment.to_f64(), calm.resentment.to_f64());
+        assert!(calm.resilience > stressed.resilience,
+            "Calm agent should have higher resilience: calm={:.3}, stressed={:.3}",
+            calm.resilience.to_f64(), stressed.resilience.to_f64());
+        assert!(calm.ambition > stressed.ambition,
+            "Calm agent should have higher ambition: calm={:.3}, stressed={:.3}",
+            calm.ambition.to_f64(), stressed.ambition.to_f64());
+    }
+
+    #[test]
+    fn resource_access_rights_enforced() {
+        use mindstrata_core::fixed::Fixed;
+        use mindstrata_core::id::EntityId;
+        use mindstrata_sim::world::{AccessRight, ResourceStock, Site, SiteKind, World, GRAIN_RESOURCE_ID};
+
+        let mut world = World::new(4, 4);
+
+        // Create a farm with OwnerOnly grain
+        let owner_id = EntityId::new(1);
+        let stranger_id = EntityId::new(2);
+        let farm = Site {
+            id: EntityId::new(0),
+            kind: SiteKind::Farm,
+            name: "Private Farm".into(),
+            owner: Some(owner_id),
+            capacity: 10,
+            inventory: vec![ResourceStock {
+                resource_id: GRAIN_RESOURCE_ID,
+                quantity: Fixed::from_f64(50.0),
+                quality: Fixed::from_f64(0.8),
+                access: AccessRight::OwnerOnly,
+            }],
+        };
+        world.sites.push(farm);
+
+        // Owner can access
+        assert!(world.can_access_resource(0, GRAIN_RESOURCE_ID, owner_id),
+            "Owner should be able to access their own resources");
+
+        // Stranger cannot access
+        assert!(!world.can_access_resource(0, GRAIN_RESOURCE_ID, stranger_id),
+            "Non-owner should NOT be able to access OwnerOnly resources");
+
+        // Public resources are accessible to everyone
+        let well = Site {
+            id: EntityId::new(1),
+            kind: SiteKind::Well,
+            name: "Public Well".into(),
+            owner: None,
+            capacity: 20,
+            inventory: vec![ResourceStock {
+                resource_id: 1, // WATER_RESOURCE_ID
+                quantity: Fixed::from_f64(100.0),
+                quality: Fixed::from_f64(1.0),
+                access: AccessRight::Public,
+            }],
+        };
+        world.sites.push(well);
+
+        assert!(world.can_access_resource(1, 1, owner_id),
+            "Public resources should be accessible to everyone");
+        assert!(world.can_access_resource(1, 1, stranger_id),
+            "Public resources should be accessible to everyone");
+    }
 }
