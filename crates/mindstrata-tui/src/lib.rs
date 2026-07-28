@@ -9,7 +9,8 @@ use mindstrata_sim::world::{World, Terrain, SiteKind};
 use mindstrata_sim::sim::AgentSummary;
 use mindstrata_sim::person::{Belief, Relationship};
 use mindstrata_sim::market::MarketState;
-use mindstrata_sim::institutions::Institution;
+use mindstrata_sim::institutions::{Institution, InstitutionalRecord};
+use mindstrata_sim::provenance::CausalProvenance;
 
 /// Render the ASCII world map.
 pub fn render_world_map(world: &World) -> String {
@@ -379,6 +380,76 @@ pub fn render_faction_dashboard(institutions: &[Institution]) -> String {
             inst.collective.morale.to_f64(),
             inst.enforcement_capacity.to_f64(),
         ));
+    }
+
+    out
+}
+
+// ── §19.5.J: Observability — Institutional Records ──────────────────
+
+/// §19.5.J: Render institutional records for debugging.
+pub fn render_institutional_records(
+    institution_name: &str,
+    records: &[InstitutionalRecord],
+    n: usize,
+) -> String {
+    let mut out = String::new();
+    out.push_str("╔══════════════════════════════════════════╗\n");
+    out.push_str("║  Institutional Records                   ║\n");
+    out.push_str("╚══════════════════════════════════════════╝\n\n");
+    out.push_str(&format!("Institution: {}\n\n", institution_name));
+
+    if records.is_empty() {
+        out.push_str("  (no records)\n");
+        return out;
+    }
+
+    let start = records.len().saturating_sub(n);
+    for r in &records[start..] {
+        let status = if r.success { "✓" } else { "✗" };
+        out.push_str(&format!(
+            "  [{:>5}] {} {} ({} affected)\n",
+            r.tick, status, r.action, r.affected.len()
+        ));
+    }
+
+    out
+}
+
+// ── §19.5.J: Observability — Decision Traces ──────────────────────────
+
+/// §19.5.J: Render decision traces for a specific agent.
+pub fn render_decision_traces(
+    provenance: &CausalProvenance,
+    agent_id: AgentId,
+    n: usize,
+) -> String {
+    let mut out = String::new();
+    out.push_str("╔══════════════════════════════════════════╗\n");
+    out.push_str("║  Decision Traces                         ║\n");
+    out.push_str("╚══════════════════════════════════════════╝\n\n");
+    out.push_str(&format!("Agent: {}\n\n", agent_id.as_u64()));
+
+    let traces = provenance.decisions_for_agent(agent_id);
+    let start = traces.len().saturating_sub(n);
+    if traces[start..].is_empty() {
+        out.push_str("  (no decision traces)\n");
+        return out;
+    }
+
+    for trace in &traces[start..] {
+        let routine = if trace.from_routine { " [routine]" } else { "" };
+        let interrupted = if trace.interrupted_by_critical_needs { " [interrupted]" } else { "" };
+        out.push_str(&format!(
+            "  [{:>5}] {}{}{}\n",
+            trace.tick, trace.action_name, routine, interrupted
+        ));
+        for factor in &trace.factors {
+            out.push_str(&format!(
+                "        {}: {:.3} — {}\n",
+                factor.kind, factor.magnitude.to_f64(), factor.description
+            ));
+        }
     }
 
     out
