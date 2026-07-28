@@ -4,7 +4,7 @@
 //! emotional relief, social effects, identity congruence, cost, and noise.
 //! This produces bounded rationality — agents are not perfectly optimal.
 
-use crate::person::{BodyState, Goal, GoalKind, NeedState, Personality};
+use crate::person::{BodyState, Goal, GoalKind, IdentityKind, IdentityState, NeedState, Personality};
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::rng::{RngStreams, RngStream};
 use rand::Rng;
@@ -185,10 +185,23 @@ impl ActionKind {
     }
 }
 
+/// Identity-action affinity: which identities prefer which actions.
+fn identity_affinity(action: ActionKind, identity: &IdentityState) -> Fixed {
+    let kind = match action {
+        ActionKind::Work => IdentityKind::Farmer,
+        ActionKind::Worship => IdentityKind::Believer,
+        ActionKind::Socialize => IdentityKind::Parent,
+        ActionKind::Eat | ActionKind::Drink | ActionKind::Rest => IdentityKind::Parent,
+        _ => return Fixed::ZERO,
+    };
+    identity.strength_of(kind) * Fixed::from_f64(0.3)
+}
+
 /// Compute the utility of an action for a given agent state.
 ///
 /// Resource scarcity modifier: when grain/water stocks are low,
 /// Eat/Drink get higher utility to create economic pressure.
+/// Identity-congruent actions get higher utility.
 pub fn compute_utility(
     action: &ActionDef,
     needs: &NeedState,
@@ -196,21 +209,18 @@ pub fn compute_utility(
     rng: &mut RngStreams,
     total_grain: Fixed,
     total_water: Fixed,
+    identity: &IdentityState,
 ) -> Fixed {
     let mut utility = Fixed::ZERO;
 
     if action.hunger_relief > Fixed::ZERO {
-        // Base hunger pressure
         let mut hunger_util = needs.hunger * action.hunger_relief * Fixed::from_f64(2.0);
-        // Resource scarcity modifier: when grain is low, hunger feels more urgent
         let scarcity = (Fixed::ONE - total_grain).clamp_01();
         hunger_util += scarcity * needs.hunger * Fixed::from_f64(0.5);
         utility += hunger_util;
     }
     if action.thirst_relief > Fixed::ZERO {
-        // Base thirst pressure
         let mut thirst_util = needs.thirst * action.thirst_relief * Fixed::from_f64(2.5);
-        // Resource scarcity modifier: when water is low, thirst feels more urgent
         let scarcity = (Fixed::ONE - total_water).clamp_01();
         thirst_util += scarcity * needs.thirst * Fixed::from_f64(0.5);
         utility += thirst_util;
@@ -224,6 +234,9 @@ pub fn compute_utility(
     if action.bonus_meaning_relief > Fixed::ZERO {
         utility += needs.meaning * action.bonus_meaning_relief * Fixed::from_f64(1.2);
     }
+
+    // Identity congruence bonus
+    utility += identity_affinity(action.kind, identity);
 
     utility -= action.energy_cost * Fixed::from_f64(0.5);
 
@@ -243,6 +256,7 @@ pub fn select_action(
     rng: &mut RngStreams,
     total_grain: Fixed,
     total_water: Fixed,
+    identity: &IdentityState,
 ) -> ActionKind {
     let candidates = [
         ActionKind::Eat,
@@ -260,7 +274,7 @@ pub fn select_action(
 
     for kind in &candidates {
         let def = kind.definition();
-        let mut utility = compute_utility(&def, needs, personality, rng, total_grain, total_water);
+        let mut utility = compute_utility(&def, needs, personality, rng, total_grain, total_water, identity);
 
         for goal in active_goals {
             let goal_aligned = matches!(
@@ -327,9 +341,10 @@ mod tests {
             ..Default::default()
         };
         let personality = make_personality();
+        let identity = IdentityState::default();
 
-        let eat_utility = compute_utility(&ActionKind::Eat.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5));
-        let drink_utility = compute_utility(&ActionKind::Drink.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5));
+        let eat_utility = compute_utility(&ActionKind::Eat.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity);
+        let drink_utility = compute_utility(&ActionKind::Drink.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity);
 
         assert!(eat_utility > drink_utility);
     }
@@ -393,9 +408,10 @@ mod tests {
             ..Default::default()
         };
         let personality = make_personality();
+        let identity = IdentityState::default();
 
-        let normal = compute_utility(&ActionKind::Eat.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.8));
-        let scarce = compute_utility(&ActionKind::Eat.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.1), Fixed::from_f64(0.8));
+        let normal = compute_utility(&ActionKind::Eat.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.8), &identity);
+        let scarce = compute_utility(&ActionKind::Eat.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.1), Fixed::from_f64(0.8), &identity);
 
         assert!(scarce > normal, "Scarcity should increase food utility: scarce={scarce}, normal={normal}");
     }
@@ -408,11 +424,32 @@ mod tests {
             ..Default::default()
         };
         let personality = make_personality();
+        let identity = IdentityState::default();
 
-        let normal = compute_utility(&ActionKind::Drink.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.8));
-        let scarce = compute_utility(&ActionKind::Drink.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.1));
+        let normal = compute_utility(&ActionKind::Drink.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.8), &identity);
+        let scarce = compute_utility(&ActionKind::Drink.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.1), &identity);
 
         assert!(scarce > normal, "Scarcity should increase water utility: scarce={scarce}, normal={normal}");
+    }
+
+    #[test]
+    fn farmer_identity_increases_work_utility() {
+        let mut rng = RngStreams::new(42);
+        let needs = NeedState::default();
+        let personality = make_personality();
+
+        let farmer_identity = IdentityState {
+            identities: vec![crate::person::AgentIdentity {
+                kind: IdentityKind::Farmer,
+                strength: Fixed::from_f64(0.8),
+            }],
+        };
+        let no_identity = IdentityState::default();
+
+        let u_farmer = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &farmer_identity);
+        let u_none = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &no_identity);
+
+        assert!(u_farmer > u_none, "Farmer identity should increase Work utility");
     }
 
     #[test]

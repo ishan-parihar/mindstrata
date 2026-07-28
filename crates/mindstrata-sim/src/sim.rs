@@ -5,7 +5,8 @@ use crate::appraisal::{self, Agency, Appraisal};
 use crate::belief_update;
 use crate::journal::{EventJournal, JournalEntryKind};
 use crate::memory::{MemoryKind, MemoryStore, MemoryTag};
-use crate::person::{Affect, BodyState, Belief, DiscreteEmotions, Goal, NeedState, Personality, Relationship};
+use crate::norms::{self, NormRegistry};
+use crate::person::{Affect, BodyState, Belief, DiscreteEmotions, Goal, IdentityKind, IdentityState, NeedState, Personality, Relationship};
 use crate::scenario::{Scenario, ShockKind};
 use crate::social;
 use crate::systems::{self, SystemContext};
@@ -58,6 +59,7 @@ pub struct AgentBundle {
     pub name: String,
     pub home_site: Option<usize>,
     pub memory: MemoryStore,
+    pub identity: IdentityState,
 }
 
 /// The simulation state.
@@ -70,6 +72,7 @@ pub struct Simulation {
     pub relationships: Vec<Relationship>,
     events: Vec<SimEvent>,
     journal: EventJournal,
+    norms: NormRegistry,
     scenario: Option<Scenario>,
 }
 
@@ -88,6 +91,7 @@ impl Simulation {
             relationships: Vec::new(),
             events: Vec::new(),
             journal: EventJournal::new(),
+            norms: NormRegistry::new(),
             scenario: None,
         }
     }
@@ -171,6 +175,18 @@ impl Simulation {
                 name,
                 home_site,
                 memory: MemoryStore::new(200),
+                identity: IdentityState {
+                    identities: vec![
+                        crate::person::AgentIdentity {
+                            kind: IdentityKind::Farmer,
+                            strength: Fixed::from_f64(populate_rng.random_range(0.3..0.8)),
+                        },
+                        crate::person::AgentIdentity {
+                            kind: IdentityKind::Parent,
+                            strength: Fixed::from_f64(populate_rng.random_range(0.0..0.5)),
+                        },
+                    ],
+                },
             });
         }
 
@@ -193,10 +209,16 @@ impl Simulation {
             }
         }
 
+        // Register default norms
+        for norm in norms::default_norms() {
+            self.norms.register(norm);
+        }
+
         tracing::info!(
             agents = self.agents.len(),
             sites = self.world.sites.len(),
             relationships = self.relationships.len(),
+            norms = self.norms.norms().len(),
             "World populated"
         );
     }
@@ -296,6 +318,7 @@ impl Simulation {
                         ctx.rng,
                         total_grain,
                         total_water,
+                        &self.agents[i].identity,
                     );
                     self.agents[i].current_action = action;
                     self.agents[i].action_progress = action.definition().duration_ticks;
@@ -634,6 +657,11 @@ impl Simulation {
     /// Get total water across all wells.
     pub fn total_water(&self) -> Fixed {
         self.world.total_water()
+    }
+
+    /// Get a reference to the norm registry.
+    pub fn norms(&self) -> &NormRegistry {
+        &self.norms
     }
 
     /// Capture a snapshot of key metrics at the current tick.

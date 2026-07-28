@@ -10,6 +10,7 @@ pub mod appraisal;
 pub mod belief_update;
 pub mod journal;
 pub mod memory;
+pub mod norms;
 pub mod person;
 pub mod scenario;
 pub mod sim;

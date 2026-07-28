@@ -186,6 +186,68 @@ pub struct MoralValues {
     pub liberty: Fixed,
 }
 
+// ── Identity system ──────────────────────────────────────────────────────
+
+/// Kinds of personal identity an agent can hold.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum IdentityKind {
+    Farmer,
+    Parent,
+    Believer,
+    Worker,
+    Merchant,
+    Elder,
+    Rebel,
+    Loyalist,
+    Outsider,
+}
+
+impl IdentityKind {
+    /// Human-readable name.
+    pub fn name(self) -> &'static str {
+        match self {
+            IdentityKind::Farmer => "Farmer",
+            IdentityKind::Parent => "Parent",
+            IdentityKind::Believer => "Believer",
+            IdentityKind::Worker => "Worker",
+            IdentityKind::Merchant => "Merchant",
+            IdentityKind::Elder => "Elder",
+            IdentityKind::Rebel => "Rebel",
+            IdentityKind::Loyalist => "Loyalist",
+            IdentityKind::Outsider => "Outsider",
+        }
+    }
+}
+
+/// An agent's identity with its strength (0.0–1.0).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentIdentity {
+    pub kind: IdentityKind,
+    pub strength: Fixed,
+}
+
+/// Identity state for an agent.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct IdentityState {
+    pub identities: Vec<AgentIdentity>,
+}
+
+impl IdentityState {
+    /// Get the strength of a specific identity, or 0.0 if not present.
+    pub fn strength_of(&self, kind: IdentityKind) -> Fixed {
+        self.identities
+            .iter()
+            .find(|i| i.kind == kind)
+            .map(|i| i.strength)
+            .unwrap_or(Fixed::ZERO)
+    }
+
+    /// Check if the agent holds a specific identity above a threshold.
+    pub fn has_identity(&self, kind: IdentityKind, threshold: Fixed) -> bool {
+        self.strength_of(kind) > threshold
+    }
+}
+
 // ── Behavioral substrate ─────────────────────────────────────────────────
 
 /// Current action being executed.
