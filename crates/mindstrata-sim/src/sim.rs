@@ -7,7 +7,6 @@ use crate::journal::{EventJournal, JournalEntryKind};
 use crate::memory::{MemoryKind, MemoryStore, MemoryTag};
 use crate::norms::{self, NormRegistry};
 use crate::attention::AttentionState;
-use crate::faction::Faction;
 use crate::institutions::{self, Institution};
 use crate::routines::DailyRoutine;
 pub use crate::attention;
@@ -87,8 +86,6 @@ pub struct Simulation {
     norms: NormRegistry,
     /// §12: Institutions are first-class entities with legitimacy, roles, and collective psychology.
     pub institutions: Vec<Institution>,
-    /// §26: Factions are emergent political groups with collective identity.
-    pub factions: Vec<Faction>,
     scenario: Option<Scenario>,
 }
 
@@ -109,7 +106,6 @@ impl Simulation {
             journal: EventJournal::new(),
             norms: NormRegistry::new(),
             institutions: Vec::new(),
-            factions: Vec::new(),
             scenario: None,
         }
     }
@@ -427,17 +423,35 @@ impl Simulation {
                         .map(|n| self.norms.compute_pressure(conformity, avg_identity_strength, n.id))
                         .fold(Fixed::ZERO, |a, b| a + b) * enforcement_multiplier;
 
-                    // §10.3: Routine bias — agents follow daily schedules when stable
+                    // §10.3: Routine bias — agents follow daily schedules when stable.
+                    // §24: Personality modulates routine adherence — conscientiousness
+                    // increases it, openness decreases it.
                     let (routine_action, routine_strength) = self.agents[i].routine.preferred_action(tick);
                     let stress = emotions[i].fear + emotions[i].anger;
                     let follow_routine = self.agents[i].routine.should_follow(
                         needs[i].hunger, needs[i].thirst, needs[i].fatigue, stress
                     );
+                    // Personality-modulated routine strength: conscientiousness boosts, openness reduces
+                    let personality_routine_modifier = personalities[i].conscientiousness
+                        * Fixed::from_f64(0.3)
+                        - personalities[i].openness * Fixed::from_f64(0.2);
+                    let effective_routine_strength = (routine_strength + personality_routine_modifier).clamp_01();
 
-                    let action = if follow_routine && routine_strength > Fixed::from_f64(0.5) {
+                    let action = if follow_routine && effective_routine_strength > Fixed::from_f64(0.5) {
                         // §10.3: Routine creates behavioral stability — prefer scheduled action
                         routine_action
                     } else {
+                        // §12.3: Institution collective morale modulates norm compliance.
+                        // Members of institutions with high morale are more norm-compliant.
+                        // Note: norm_pressure is negative = compliant, positive = violating.
+                        let mut adjusted_pressure = norm_pressure;
+                        for inst in &self.institutions {
+                            if inst.has_member(AgentId::new(i as u64)) {
+                                // High morale → more compliant (pressure becomes more negative)
+                                let morale_bonus = inst.collective.morale * Fixed::from_f64(0.1);
+                                adjusted_pressure -= morale_bonus;
+                            }
+                        }
                         actions::select_action(
                             &needs[i],
                             &personalities[i],
@@ -446,7 +460,7 @@ impl Simulation {
                             total_grain,
                             total_water,
                             &self.agents[i].identity,
-                            norm_pressure,
+                            adjusted_pressure,
                         )
                     };
                     self.agents[i].current_action = action;
@@ -862,12 +876,7 @@ impl Simulation {
             institution.decay_legitimacy(Fixed::from_f64(0.0001));
         }
 
-        // ── 13. Faction mobilization derivation ────
-        for faction in self.factions.iter_mut() {
-            faction.derive_mobilization();
-        }
-
-        // ── 14. Belief updates from this tick's social interactions ────
+        // ── 13. Belief updates from this tick's social interactions ────
         for ev in &self.events[pre_tick_events..] {
             if let SimEvent::InteractionOccurred { from, to, .. } = ev {
                 let from_idx = from.as_u64() as usize;
