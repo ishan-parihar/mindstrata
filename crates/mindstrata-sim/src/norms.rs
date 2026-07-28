@@ -37,7 +37,6 @@ pub struct NormViolation {
     pub norm_id: u64,
     pub violator: AgentId,
     pub tick: u64,
-    pub punished: bool,
 }
 
 /// The norm registry for the simulation.
@@ -77,7 +76,6 @@ impl NormRegistry {
             norm_id,
             violator,
             tick,
-            punished: false,
         });
     }
 

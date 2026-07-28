@@ -197,16 +197,7 @@ pub enum IdentityKind {
     Believer,
 }
 
-impl IdentityKind {
-    /// Human-readable name.
-    pub fn name(self) -> &'static str {
-        match self {
-            IdentityKind::Farmer => "Farmer",
-            IdentityKind::Parent => "Parent",
-            IdentityKind::Believer => "Believer",
-        }
-    }
-}
+
 
 /// An agent's identity with its strength (0.0–1.0).
 #[derive(Debug, Clone, Serialize, Deserialize)]
