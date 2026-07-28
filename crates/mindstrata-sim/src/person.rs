@@ -337,7 +337,7 @@ impl Default for DerivedMentalState {
 }
 
 /// Inputs for derived mental state computation.
-/// Grouped to avoid too-many-arguments clippy lint.
+/// Grouped to avoid too-many-arguments clippy lint. Ephemeral per-tick.
 pub struct MentalStateInput {
     pub stress: Fixed,
     pub coping_potential: Fixed,
@@ -360,14 +360,16 @@ impl DerivedMentalState {
         let support_factor = (Fixed::ONE - input.social_support) * Fixed::from_f64(0.2);
         let neuroticism_boost = input.neuroticism * Fixed::from_f64(0.2);
         let trauma_delta = stress_factor + coping_factor + support_factor + neuroticism_boost;
-        self.trauma_risk = (self.trauma_risk * Fixed::from_f64(0.98) + trauma_delta * Fixed::from_f64(0.02)).clamp_01();
+        // Slow accumulation — trauma builds over many ticks, not instantly
+        self.trauma_risk = (self.trauma_risk * Fixed::from_f64(0.995) + trauma_delta * Fixed::from_f64(0.005)).clamp_01();
 
         // Depression risk: chronic need deficit + low meaning + low autonomy
         let deficit_factor = input.need_deficit_avg * Fixed::from_f64(0.3);
         let meaning_factor = (Fixed::ONE - input.meaning) * Fixed::from_f64(0.25);
         let autonomy_factor = (Fixed::ONE - input.autonomy) * Fixed::from_f64(0.2);
         let depression_delta = deficit_factor + meaning_factor + autonomy_factor;
-        self.depression_risk = (self.depression_risk * Fixed::from_f64(0.97) + depression_delta * Fixed::from_f64(0.03)).clamp_01();
+        // Slow accumulation — depression builds from chronic conditions
+        self.depression_risk = (self.depression_risk * Fixed::from_f64(0.995) + depression_delta * Fixed::from_f64(0.005)).clamp_01();
 
         // Ambition: from success and energy
         self.ambition = (input.success_rate * Fixed::from_f64(0.4) + Fixed::from_f64(0.3)).clamp_01();
@@ -377,7 +379,8 @@ impl DerivedMentalState {
 
         // Resentment: from perceived injustice
         let injustice = (Fixed::ONE - input.justice_perception) * Fixed::from_f64(0.4);
-        self.resentment = (self.resentment * Fixed::from_f64(0.95) + injustice * Fixed::from_f64(0.05)).clamp_01();
+        // Slow accumulation — resentment builds from repeated injustice
+        self.resentment = (self.resentment * Fixed::from_f64(0.995) + injustice * Fixed::from_f64(0.005)).clamp_01();
     }
 }
 
