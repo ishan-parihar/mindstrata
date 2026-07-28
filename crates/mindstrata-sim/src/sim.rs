@@ -1060,7 +1060,6 @@ impl Simulation {
                             leader,
                             members.clone(),
                             avg_grievance,
-                            tick_u64,
                         );
 
                         tracing::warn!(
@@ -1121,14 +1120,13 @@ impl Simulation {
                     );
 
                     // Council response
-                    let council_legitimacy = avg_council_legitimacy;
                     let council_enforcement = self.institutions.iter()
                         .filter(|i| i.kind == InstitutionKind::Council)
                         .map(|i| i.enforcement_capacity)
                         .fold(Fixed::ZERO, |a, b| a.max(b));
 
                     let (suppressed, legitimacy_effect) = factions::council_response(
-                        council_legitimacy, council_enforcement, protest_size, total_pop,
+                        council_enforcement, protest_size, total_pop,
                     );
 
                     // Apply legitimacy effect to council

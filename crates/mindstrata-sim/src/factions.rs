@@ -14,8 +14,6 @@
 
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::id::AgentId;
-use serde::{Deserialize, Serialize};
-
 use crate::institutions::{Institution, InstitutionKind, Role};
 
 /// Minimum grievance threshold for an agent to be recruitable into a faction.
@@ -44,23 +42,6 @@ pub const PROTEST_LEGITIMACY_DAMAGE: Fixed = Fixed::from_raw(300); // 0.03
 
 /// How much a successful enforcement response restores legitimacy.
 pub const ENFORCEMENT_LEGITIMACY_GAIN: Fixed = Fixed::from_raw(150); // 0.015
-
-/// Describes the outcome of faction dynamics processing for a tick.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct FactionDynamicsReport {
-    /// Number of factions that existed at start of tick.
-    pub existing_factions: usize,
-    /// Was a new faction formed this tick?
-    pub new_faction_formed: bool,
-    /// Number of agents recruited this tick.
-    pub agents_recruited: usize,
-    /// Did a protest occur?
-    pub protest_occurred: bool,
-    /// Index of the faction that protested (if any).
-    pub protesting_faction: Option<usize>,
-    /// Was the protest suppressed?
-    pub protest_suppressed: bool,
-}
 
 /// Compute an agent's grievance level from their existing derived state.
 ///
@@ -142,7 +123,6 @@ pub fn create_faction(
     leader: AgentId,
     members: Vec<AgentId>,
     grievance_level: Fixed,
-    _tick: u64,
 ) -> Institution {
     let mut faction = Institution::new(id, InstitutionKind::Faction, format!("Faction #{id}"));
 
@@ -204,7 +184,6 @@ pub fn protest_legitimacy_effect(protest_size: usize, total_population: usize) -
 /// Compute how the council responds to a protest.
 /// Returns true if the protest is suppressed (council has enough enforcement capacity).
 pub fn council_response(
-    _council_legitimacy: Fixed,
     council_enforcement: Fixed,
     protest_size: usize,
     total_population: usize,
@@ -304,7 +283,6 @@ mod tests {
             AgentId::new(0),
             vec![AgentId::new(1), AgentId::new(2)],
             Fixed::from_f64(0.7),
-            0,
         );
 
         assert_eq!(faction.kind, InstitutionKind::Faction);
@@ -349,7 +327,6 @@ mod tests {
     fn council_suppression_works() {
         // Strong council, small protest = suppressed
         let (suppressed, _) = council_response(
-            Fixed::from_f64(0.8),
             Fixed::from_f64(0.7),
             2,
             12,
@@ -358,7 +335,6 @@ mod tests {
 
         // Weak council, large protest = not suppressed
         let (suppressed, _) = council_response(
-            Fixed::from_f64(0.3),
             Fixed::from_f64(0.2),
             8,
             12,
