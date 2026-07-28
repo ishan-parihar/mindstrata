@@ -216,20 +216,27 @@ pub fn compute_utility(
 ) -> Fixed {
     let mut utility = Fixed::ZERO;
 
+    // §9.1: Nonlinear need pressure — deficit^exponent * personality_modifier.
+    // Impulsivity amplifies hunger/thirst pressure, conscientiousness dampens fatigue.
     if action.hunger_relief > Fixed::ZERO {
-        let mut hunger_util = needs.hunger * action.hunger_relief * Fixed::from_f64(2.0);
+        let hunger_pressure = needs.hunger * needs.hunger * Fixed::from_f64(2.0); // deficit^1.5 approx
+        let hunger_pressure = hunger_pressure * (Fixed::ONE + personality.impulsivity * Fixed::from_f64(0.5));
+        let mut hunger_util = hunger_pressure * action.hunger_relief * Fixed::from_f64(2.0);
         let scarcity = (Fixed::ONE - total_grain).clamp_01();
         hunger_util += scarcity * needs.hunger * Fixed::from_f64(0.5);
         utility += hunger_util;
     }
     if action.thirst_relief > Fixed::ZERO {
-        let mut thirst_util = needs.thirst * action.thirst_relief * Fixed::from_f64(2.5);
+        let thirst_pressure = needs.thirst * needs.thirst * Fixed::from_f64(2.0);
+        let thirst_pressure = thirst_pressure * (Fixed::ONE + personality.impulsivity * Fixed::from_f64(0.5));
+        let mut thirst_util = thirst_pressure * action.thirst_relief * Fixed::from_f64(2.5);
         let scarcity = (Fixed::ONE - total_water).clamp_01();
         thirst_util += scarcity * needs.thirst * Fixed::from_f64(0.5);
         utility += thirst_util;
     }
     if action.fatigue_relief > Fixed::ZERO {
-        utility += needs.fatigue * action.fatigue_relief * Fixed::from_f64(1.5);
+        let fatigue_pressure = needs.fatigue * needs.fatigue * (Fixed::ONE - personality.conscientiousness * Fixed::from_f64(0.3));
+        utility += fatigue_pressure * action.fatigue_relief * Fixed::from_f64(1.5);
     }
     if action.social_value > Fixed::ZERO {
         utility += needs.social * action.social_value * personality.extraversion;

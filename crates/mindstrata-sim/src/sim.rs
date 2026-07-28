@@ -11,7 +11,7 @@ use crate::institutions::{self, Institution};
 use crate::routines::DailyRoutine;
 pub use crate::attention;
 pub use crate::person::Intention;
-use crate::person::{Affect, BodyState, Belief, DiscreteEmotions, Goal, GoalKind, IdentityKind, IdentityState, NeedState, Personality, Relationship};
+use crate::person::{Affect, BodyState, Belief, CognitiveState, DiscreteEmotions, Goal, GoalKind, IdentityKind, IdentityState, MoralValues, NeedState, Personality, Relationship};
 use crate::provenance::{CausalProvenance, DecisionFactor, DecisionTrace};
 use crate::scenario::{Scenario, ShockKind};
 use crate::social;
@@ -72,6 +72,10 @@ pub struct AgentBundle {
     pub intention: Option<crate::person::Intention>,
     /// §10.3: Daily routine creating behavioral stability.
     pub routine: DailyRoutine,
+    /// §22.1: Moral foundations affecting norm compliance and emotional appraisal.
+    pub moral_values: MoralValues,
+    /// §22.1: Bounded rationality — stress, fatigue reduce planning and increase heuristic reliance.
+    pub cognitive: CognitiveState,
 }
 
 /// The simulation state.
@@ -212,6 +216,8 @@ impl Simulation {
                 attention: AttentionState::default(),
                 intention: None,
                 routine: DailyRoutine::village_routine(),
+                moral_values: MoralValues::random(&mut populate_rng),
+                cognitive: CognitiveState::default(),
             });
         }
 
@@ -367,7 +373,16 @@ impl Simulation {
             let mut emotions: Vec<DiscreteEmotions> =
                 self.agents.iter().map(|a| a.emotions.clone()).collect();
 
-            // ── 1. Need decay ─────────────────────────────────────────
+            // ── 0. Cognitive state update (§22.1) ────────────────────
+            // §22.1: Stress reduces planning horizon, increases heuristic bias.
+            // This must happen before action selection to affect decision-making.
+            for i in 0..self.agents.len() {
+                let stress = emotions[i].fear + emotions[i].anger;
+                let need_fatigue = needs[i].fatigue.max(needs[i].hunger).max(needs[i].thirst);
+                self.agents[i].cognitive.update(stress, need_fatigue);
+            }
+
+            // ── 1. Need decay (nonlinear pressure, §9.1) ────────────────
             tracing::debug!(tick = tick_u64, "systems::need_decay");
             systems::system_need_decay(&mut ctx, &bodies, &mut needs);
 
@@ -429,11 +444,19 @@ impl Simulation {
                         .map(|i| Fixed::ONE + i.enforcement_capacity * Fixed::from_f64(0.5))
                         .fold(Fixed::ONE, |a, b| a.max(b));
 
+                    // §22.1: Moral values modulate norm pressure.
+                    // High fairness/authority → stronger norm compliance.
+                    // High liberty → weaker norm compliance.
+                    let moral_modifier = self.agents[i].moral_values.fairness
+                        * Fixed::from_f64(0.15)
+                        + self.agents[i].moral_values.authority * Fixed::from_f64(0.1)
+                        - self.agents[i].moral_values.liberty * Fixed::from_f64(0.08);
                     let norm_pressure = self.norms
                         .norms()
                         .iter()
                         .map(|n| self.norms.compute_pressure(conformity, avg_identity_strength, n.id))
-                        .fold(Fixed::ZERO, |a, b| a + b) * enforcement_multiplier;
+                        .fold(Fixed::ZERO, |a, b| a + b) * enforcement_multiplier
+                        - moral_modifier;
 
                     // §10.3: Routine bias — agents follow daily schedules when stable.
                     // §24: Personality modulates routine adherence — conscientiousness
@@ -449,7 +472,15 @@ impl Simulation {
                         - personalities[i].openness * Fixed::from_f64(0.2);
                     let effective_routine_strength = (routine_strength + personality_routine_modifier).clamp_01();
 
-                    let action = if follow_routine && effective_routine_strength > Fixed::from_f64(0.5) {
+                    // §22.1: When stressed, agents favor habit/routine over utility.
+                    // High heuristic bias → agents follow routine more readily.
+                    let effective_routine_threshold = if self.agents[i].cognitive.heuristic_bias > Fixed::from_f64(0.5) {
+                        Fixed::from_f64(0.3) // stressed agents follow routine at lower threshold
+                    } else {
+                        Fixed::from_f64(0.5) // normal agents need stronger routine signal
+                    };
+
+                    let action = if follow_routine && effective_routine_strength > effective_routine_threshold {
                         // §10.3: Routine creates behavioral stability — prefer scheduled action
                         routine_action
                     } else {

@@ -192,6 +192,129 @@ impl IdentityState {
     }
 }
 
+// ── Moral foundations (§22.1) ─────────────────────────────────────────
+
+/// Moral values model (Moral Foundations Theory).
+/// These affect norm internalization, emotional response to violation,
+/// political alignment, and factional attraction.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MoralValues {
+    /// Sensitivity to harm and suffering.
+    pub care: Fixed,
+    /// Sensitivity to fairness and justice.
+    pub fairness: Fixed,
+    /// Sensitivity to loyalty and betrayal.
+    pub loyalty: Fixed,
+    /// Sensitivity to authority and subversion.
+    pub authority: Fixed,
+    /// Sensitivity to purity and taboo violation.
+    pub purity: Fixed,
+    /// Sensitivity to liberty and coercion.
+    pub liberty: Fixed,
+}
+
+impl Default for MoralValues {
+    fn default() -> Self {
+        Self {
+            care: Fixed::from_f64(0.5),
+            fairness: Fixed::from_f64(0.5),
+            loyalty: Fixed::from_f64(0.5),
+            authority: Fixed::from_f64(0.5),
+            purity: Fixed::from_f64(0.5),
+            liberty: Fixed::from_f64(0.5),
+        }
+    }
+}
+
+impl MoralValues {
+    /// Generate random moral values.
+    pub fn random(rng: &mut impl Rng) -> Self {
+        Self {
+            care: Fixed::from_f64(rng.random_range(0.2..0.9)),
+            fairness: Fixed::from_f64(rng.random_range(0.2..0.9)),
+            loyalty: Fixed::from_f64(rng.random_range(0.1..0.8)),
+            authority: Fixed::from_f64(rng.random_range(0.1..0.8)),
+            purity: Fixed::from_f64(rng.random_range(0.1..0.7)),
+            liberty: Fixed::from_f64(rng.random_range(0.2..0.9)),
+        }
+    }
+
+    /// Compute moral response to a norm violation.
+    /// Returns an anger/shame multiplier based on which foundations are violated.
+    pub fn norm_violation_response(&self, norm_kind: &str) -> Fixed {
+        match norm_kind {
+            "no_theft" | "no_violence" => self.care * Fixed::from_f64(0.3) + self.fairness * Fixed::from_f64(0.3),
+            "work_duty" | "tax_compliance" => self.authority * Fixed::from_f64(0.4) + self.loyalty * Fixed::from_f64(0.2),
+            "temple_respect" | "ritual_participation" => self.purity * Fixed::from_f64(0.3) + self.authority * Fixed::from_f64(0.2),
+            _ => self.fairness * Fixed::from_f64(0.2),
+        }
+    }
+}
+
+// ── Cognitive state (§22.1) ─────────────────────────────────────────────
+
+/// Bounded rationality parameters.
+/// §22.1: "When stressed, agents should rely on habit, imitate peers,
+/// obey authority, become impulsive, become aggressive or fearful, simplify beliefs."
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CognitiveState {
+    /// Base attention capacity (0..1).
+    pub attention_capacity: Fixed,
+    /// Base executive function capacity (0..1).
+    pub executive_capacity: Fixed,
+    /// Current cognitive fatigue (0 = fresh, 1 = exhausted).
+    pub fatigue: Fixed,
+    /// Current stress level (0 = calm, 1 = panicked).
+    pub stress: Fixed,
+    /// Rumination tendency (0 = moves on, 1 = obsessive).
+    pub rumination: Fixed,
+    /// Effective planning horizon in ticks.
+    pub planning_horizon: u32,
+    /// Heuristic bias: 0 = systematic reasoning, 1 = pure heuristics.
+    pub heuristic_bias: Fixed,
+}
+
+impl Default for CognitiveState {
+    fn default() -> Self {
+        Self {
+            attention_capacity: Fixed::from_f64(0.7),
+            executive_capacity: Fixed::from_f64(0.7),
+            fatigue: Fixed::ZERO,
+            stress: Fixed::ZERO,
+            rumination: Fixed::from_f64(0.3),
+            planning_horizon: 20,
+            heuristic_bias: Fixed::from_f64(0.3),
+        }
+    }
+}
+
+impl CognitiveState {
+    /// Update cognitive state based on current emotions and needs.
+    /// §22.1: Stress reduces planning horizon and increases heuristic bias.
+    pub fn update(&mut self, stress: Fixed, fatigue: Fixed) {
+        self.stress = (self.stress * Fixed::from_f64(0.9) + stress * Fixed::from_f64(0.1)).clamp_01();
+        self.fatigue = (self.fatigue * Fixed::from_f64(0.95) + fatigue * Fixed::from_f64(0.05)).clamp_01();
+
+        // Stress reduces effective planning horizon
+        let stress_factor = Fixed::ONE - self.stress;
+        let fatigue_factor = Fixed::ONE - self.fatigue * Fixed::from_f64(0.3);
+        self.planning_horizon = (20.0 * stress_factor.to_f64() * fatigue_factor.to_f64()) as u32;
+
+        // Stress increases heuristic reliance
+        self.heuristic_bias = (self.stress * Fixed::from_f64(0.6) + self.fatigue * Fixed::from_f64(0.2) + Fixed::from_f64(0.2)).clamp_01();
+    }
+
+    /// Get effective attention capacity (reduced by fatigue and stress).
+    pub fn effective_attention(&self) -> Fixed {
+        self.attention_capacity * (Fixed::ONE - self.fatigue * Fixed::from_f64(0.4)) * (Fixed::ONE - self.stress * Fixed::from_f64(0.3))
+    }
+
+    /// Get effective executive capacity (reduced by stress and fatigue).
+    pub fn effective_executive(&self) -> Fixed {
+        self.executive_capacity * (Fixed::ONE - self.stress * Fixed::from_f64(0.5)) * (Fixed::ONE - self.fatigue * Fixed::from_f64(0.2))
+    }
+}
+
 // ── Intention system ───────────────────────────────────────────────────
 
 /// An intention is a committed plan to achieve a goal.
