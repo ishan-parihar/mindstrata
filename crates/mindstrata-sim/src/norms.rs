@@ -9,18 +9,11 @@ use mindstrata_core::fixed::Fixed;
 use mindstrata_core::id::AgentId;
 use serde::{Deserialize, Serialize};
 
-/// Scope of a norm (who it applies to).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum NormScope {
-    Settlement,
-}
-
 /// A social norm that agents may internalize.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Norm {
     pub id: u64,
     pub name: String,
-    pub scope: NormScope,
     /// How strongly the norm is enforced (0.0–1.0).
     pub strength: Fixed,
     /// How much agents tend to internalize it (0.0–1.0).
@@ -127,7 +120,6 @@ pub fn default_norms() -> Vec<Norm> {
         Norm {
             id: 0,
             name: "No Theft".into(),
-            scope: NormScope::Settlement,
             strength: Fixed::from_f64(0.8),
             internalization: Fixed::from_f64(0.6),
             punishment: Fixed::from_f64(0.5),
@@ -136,7 +128,6 @@ pub fn default_norms() -> Vec<Norm> {
         Norm {
             id: 1,
             name: "Help Neighbors".into(),
-            scope: NormScope::Settlement,
             strength: Fixed::from_f64(0.5),
             internalization: Fixed::from_f64(0.4),
             punishment: Fixed::from_f64(0.1),
@@ -145,7 +136,6 @@ pub fn default_norms() -> Vec<Norm> {
         Norm {
             id: 2,
             name: "Respect Elders".into(),
-            scope: NormScope::Settlement,
             strength: Fixed::from_f64(0.6),
             internalization: Fixed::from_f64(0.5),
             punishment: Fixed::from_f64(0.2),
@@ -154,7 +144,6 @@ pub fn default_norms() -> Vec<Norm> {
         Norm {
             id: 3,
             name: "Obey Ruler".into(),
-            scope: NormScope::Settlement,
             strength: Fixed::from_f64(0.7),
             internalization: Fixed::from_f64(0.4),
             punishment: Fixed::from_f64(0.6),
@@ -173,7 +162,6 @@ mod tests {
         registry.register(Norm {
             id: 0,
             name: "No Theft".into(),
-            scope: NormScope::Settlement,
             strength: Fixed::from_f64(0.8),
             internalization: Fixed::from_f64(0.1),
             punishment: Fixed::from_f64(0.5),
@@ -196,7 +184,6 @@ mod tests {
         registry.register(Norm {
             id: 0,
             name: "Help Neighbors".into(),
-            scope: NormScope::Settlement,
             strength: Fixed::from_f64(0.6),
             internalization: Fixed::from_f64(0.3),
             punishment: Fixed::from_f64(0.2),
@@ -220,7 +207,6 @@ mod tests {
         registry.register(Norm {
             id: 0,
             name: "No Theft".into(),
-            scope: NormScope::Settlement,
             strength: Fixed::from_f64(0.8),
             internalization: Fixed::from_f64(0.6),
             punishment: Fixed::from_f64(0.5),
