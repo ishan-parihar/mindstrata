@@ -1368,11 +1368,11 @@ impl Simulation {
             }
 
             // §19.5.C: Institutional tax collection — all institutions collect taxes
-            if tick_u64 % 100 == 0 && tick_u64 > 0 && !institution.members.is_empty() {
+            if tick_u64 % institutions::TAX_COLLECTION_INTERVAL == 0 && tick_u64 > 0 && !institution.members.is_empty() {
                 let tax_rate = match institution.kind {
-                    institutions::InstitutionKind::Council => Fixed::from_f64(0.05), // 5% tax
-                    institutions::InstitutionKind::Market => Fixed::from_f64(0.03), // 3% merchant fee
-                    institutions::InstitutionKind::Temple => Fixed::from_f64(0.02), // 2% tithe
+                    institutions::InstitutionKind::Council => Fixed::from_f64(institutions::COUNCIL_TAX_RATE),
+                    institutions::InstitutionKind::Market => Fixed::from_f64(institutions::MARKET_FEE_RATE),
+                    institutions::InstitutionKind::Temple => Fixed::from_f64(institutions::TEMPLE_TITHE_RATE),
                     _ => Fixed::ZERO,
                 };
                 if tax_rate > Fixed::ZERO {
@@ -1396,23 +1396,28 @@ impl Simulation {
                     }
                     if collected > Fixed::ZERO {
                         let members = institution.members.clone();
-                        let kind_name = institution.kind.name();
-                        institution.record_action(
-                            tick_u64,
-                            format!("{} tax: {:.1} coins", kind_name, collected.to_f64()),
-                            members,
-                            true,
-                        );
+                        let action_name = match institution.kind {
+                            institutions::InstitutionKind::Temple => {
+                                format!("Temple tithe: {:.1} coins", collected.to_f64())
+                            }
+                            institutions::InstitutionKind::Market => {
+                                format!("Market merchant fee: {:.1} coins", collected.to_f64())
+                            }
+                            _ => {
+                                format!("Council tax: {:.1} coins", collected.to_f64())
+                            }
+                        };
+                        institution.record_action(tick_u64, action_name, members, true);
                     }
                 }
             }
 
-            // §19.5.C: Council pays role holders wages every 500 ticks
+            // §19.5.C: Council pays role holders wages periodically
             if institution.kind == institutions::InstitutionKind::Council
-                && tick_u64 % 500 == 0
+                && tick_u64 % institutions::WAGE_PAYMENT_INTERVAL == 0
                 && tick_u64 > 0
             {
-                let wage = Fixed::from_f64(2.0);
+                let wage = Fixed::from_f64(institutions::BASE_WAGE);
                 let role_holder_count = institution.roles.iter().filter(|r| r.holder.is_some()).count() as i64;
                 let total_wage_cost = wage * Fixed::from_int(role_holder_count);
                 if institution.treasury >= total_wage_cost && role_holder_count > 0 {

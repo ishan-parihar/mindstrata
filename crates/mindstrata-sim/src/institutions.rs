@@ -21,6 +21,16 @@ use serde::{Deserialize, Serialize};
 pub const INITIAL_PROPOSAL_DELAY: u64 = 100;
 pub const POLICY_RECORD_INTERVAL: u64 = 100;
 pub const MAX_RECORDS: usize = 1000;
+/// Tax rates by institution kind.
+pub const COUNCIL_TAX_RATE: f64 = 0.05;
+pub const MARKET_FEE_RATE: f64 = 0.03;
+pub const TEMPLE_TITHE_RATE: f64 = 0.02;
+/// Tax collection interval in ticks.
+pub const TAX_COLLECTION_INTERVAL: u64 = 100;
+/// Wage payment interval in ticks.
+pub const WAGE_PAYMENT_INTERVAL: u64 = 500;
+/// Base wage per role holder.
+pub const BASE_WAGE: f64 = 2.0;
 
 /// Types of institutions that can exist in the world.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
