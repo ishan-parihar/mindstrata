@@ -13,9 +13,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NormScope {
     Settlement,
-    Household,
-    Market,
-    Temple,
 }
 
 /// A social norm that agents may internalize.
@@ -136,7 +133,7 @@ pub fn default_norms() -> Vec<Norm> {
             strength: Fixed::from_f64(0.8),
             internalization: Fixed::from_f64(0.6),
             punishment: Fixed::from_f64(0.5),
-            reinforcing_identity: Some(IdentityKind::Loyalist),
+            reinforcing_identity: Some(IdentityKind::Farmer),
         },
         Norm {
             id: 1,
@@ -154,7 +151,7 @@ pub fn default_norms() -> Vec<Norm> {
             strength: Fixed::from_f64(0.6),
             internalization: Fixed::from_f64(0.5),
             punishment: Fixed::from_f64(0.2),
-            reinforcing_identity: Some(IdentityKind::Elder),
+            reinforcing_identity: None,
         },
         Norm {
             id: 3,
@@ -163,7 +160,7 @@ pub fn default_norms() -> Vec<Norm> {
             strength: Fixed::from_f64(0.7),
             internalization: Fixed::from_f64(0.4),
             punishment: Fixed::from_f64(0.6),
-            reinforcing_identity: Some(IdentityKind::Loyalist),
+            reinforcing_identity: Some(IdentityKind::Believer),
         },
     ]
 }
@@ -200,12 +197,12 @@ mod tests {
         let mut registry = NormRegistry::new();
         registry.register(Norm {
             id: 0,
-            name: "Respect Elders".into(),
+            name: "Help Neighbors".into(),
             scope: NormScope::Settlement,
             strength: Fixed::from_f64(0.6),
             internalization: Fixed::from_f64(0.3),
             punishment: Fixed::from_f64(0.2),
-            reinforcing_identity: Some(IdentityKind::Elder),
+            reinforcing_identity: Some(IdentityKind::Parent),
         });
 
         let conformity = Fixed::from_f64(0.5);

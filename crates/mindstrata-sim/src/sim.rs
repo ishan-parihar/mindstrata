@@ -185,6 +185,10 @@ impl Simulation {
                             kind: IdentityKind::Parent,
                             strength: Fixed::from_f64(populate_rng.random_range(0.0..0.5)),
                         },
+                        crate::person::AgentIdentity {
+                            kind: IdentityKind::Believer,
+                            strength: Fixed::from_f64(populate_rng.random_range(0.2..0.7)),
+                        },
                     ],
                 },
             });
@@ -563,7 +567,40 @@ impl Simulation {
             }
         }
 
-        // ── 11. Belief updates from this tick's social interactions ────
+        // ── 11. Norm evaluation: threats and insults are norm violations ──
+        for ev in &self.events[pre_tick_events..].to_vec() {              if let SimEvent::InteractionOccurred {
+                    from,
+                    to,
+                    kind: mindstrata_core::event::InteractionKind::Threaten
+                    | mindstrata_core::event::InteractionKind::Insult,
+                    ..
+                } = ev
+              {
+                  let from_id = *from;
+                  let to_id = *to;
+                  let punishment = self.norms.check_violation(1, from_id, tick_u64);
+                  if punishment > Fixed::ZERO {
+                      if let Some(rel) = self
+                          .relationships
+                          .iter_mut()
+                          .find(|r| r.from == to_id && r.to == from_id)
+                      {
+                          rel.trust =
+                              (rel.trust - punishment * Fixed::from_f64(0.1)).max(Fixed::ZERO);
+                      }
+                      let from_idx = from_id.as_u64() as usize;
+                      if from_idx < self.agents.len() {
+                          self.agents[from_idx].emotions.shame = (self.agents[from_idx]
+                              .emotions
+                              .shame
+                              + punishment * Fixed::from_f64(0.05))
+                              .clamp_01();
+                      }
+                  }
+              }
+        }
+
+        // ── 12. Belief updates from this tick's social interactions ────
         for ev in &self.events[pre_tick_events..] {
             if let SimEvent::InteractionOccurred { from, to, .. } = ev {
                 let from_idx = from.as_u64() as usize;

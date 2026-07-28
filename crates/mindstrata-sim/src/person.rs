@@ -189,17 +189,12 @@ pub struct MoralValues {
 // ── Identity system ──────────────────────────────────────────────────────
 
 /// Kinds of personal identity an agent can hold.
+/// Only identities that affect action utility are included (YAGNI).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum IdentityKind {
     Farmer,
     Parent,
     Believer,
-    Worker,
-    Merchant,
-    Elder,
-    Rebel,
-    Loyalist,
-    Outsider,
 }
 
 impl IdentityKind {
@@ -209,12 +204,6 @@ impl IdentityKind {
             IdentityKind::Farmer => "Farmer",
             IdentityKind::Parent => "Parent",
             IdentityKind::Believer => "Believer",
-            IdentityKind::Worker => "Worker",
-            IdentityKind::Merchant => "Merchant",
-            IdentityKind::Elder => "Elder",
-            IdentityKind::Rebel => "Rebel",
-            IdentityKind::Loyalist => "Loyalist",
-            IdentityKind::Outsider => "Outsider",
         }
     }
 }
@@ -242,10 +231,7 @@ impl IdentityState {
             .unwrap_or(Fixed::ZERO)
     }
 
-    /// Check if the agent holds a specific identity above a threshold.
-    pub fn has_identity(&self, kind: IdentityKind, threshold: Fixed) -> bool {
-        self.strength_of(kind) > threshold
-    }
+    
 }
 
 // ── Behavioral substrate ─────────────────────────────────────────────────
