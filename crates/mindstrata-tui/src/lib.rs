@@ -61,14 +61,14 @@ pub fn render_world_map(world: &World) -> String {
 pub fn render_agent_list(agents: &[AgentSummary]) -> String {
     let mut out = String::new();
     out.push_str(&format!(
-        "{:<3} {:<8} {:>5} {:>5} {:>5} {:>5} {:>6} {:>6} {:>6} {:<12}\n",
-        "ID", "Name", "H", "T", "F", "HP", "Val", "Joy", "Fear", "Action"
+        "{:<3} {:<8} {:>5} {:>5} {:>5} {:>5} {:>6} {:>6} {:>6} {:<12} {:>5} {:<3}\n",
+        "ID", "Name", "H", "T", "F", "HP", "Val", "Joy", "Fear", "Action", "Attn", "Int"
     ));
-    out.push_str(&format!("{}\n", "─".repeat(72)));
+    out.push_str(&format!("{}\n", "─".repeat(80)));
 
     for s in agents {
         out.push_str(&format!(
-            "{:<3} {:<8} {:>5.2} {:>5.2} {:>5.2} {:>5.2} {:>+5.2} {:>5.2} {:>5.2} {:<12}\n",
+            "{:<3} {:<8} {:>5.2} {:>5.2} {:>5.2} {:>5.2} {:>+5.2} {:>5.2} {:>5.2} {:<12} {:>5.2} {:<3}\n",
             s.index,
             s.name,
             s.hunger.to_f64(),
@@ -79,6 +79,8 @@ pub fn render_agent_list(agents: &[AgentSummary]) -> String {
             s.joy.to_f64(),
             s.fear.to_f64(),
             s.current_action,
+            s.attention_budget.to_f64(),
+            if s.has_intention { "Y" } else { "-" },
         ));
     }
     out

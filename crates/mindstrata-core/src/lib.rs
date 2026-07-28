@@ -7,6 +7,7 @@
 //! - Event system
 //! - Clock and time types
 //! - Error types
+//! - Proposition system for beliefs
 
 #![allow(missing_docs)]
 
@@ -15,10 +16,12 @@ pub mod error;
 pub mod event;
 pub mod fixed;
 pub mod id;
+pub mod proposition;
 pub mod rng;
 
 pub use clock::{Clock, Tick};
 pub use error::{Error, Result};
 pub use fixed::Fixed;
 pub use id::{AgentId, EntityId, ResourceId, SiteId};
+pub use proposition::{Proposition, PropositionBelief};
 pub use rng::RngStreams;

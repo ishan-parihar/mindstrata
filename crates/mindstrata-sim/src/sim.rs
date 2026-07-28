@@ -6,7 +6,10 @@ use crate::belief_update;
 use crate::journal::{EventJournal, JournalEntryKind};
 use crate::memory::{MemoryKind, MemoryStore, MemoryTag};
 use crate::norms::{self, NormRegistry};
-use crate::person::{Affect, BodyState, Belief, DiscreteEmotions, Goal, IdentityKind, IdentityState, NeedState, Personality, Relationship};
+use crate::attention::AttentionState;
+pub use crate::attention;
+pub use crate::person::Intention;
+use crate::person::{Affect, BodyState, Belief, DiscreteEmotions, Goal, GoalKind, IdentityKind, IdentityState, Intention as IntentionType, NeedState, Personality, Relationship};
 use crate::scenario::{Scenario, ShockKind};
 use crate::social;
 use crate::systems::{self, SystemContext};
@@ -60,6 +63,10 @@ pub struct AgentBundle {
     pub home_site: Option<usize>,
     pub memory: MemoryStore,
     pub identity: IdentityState,
+    /// §22.5: Attention controls which events the agent notices.
+    pub attention: AttentionState,
+    /// §24.5: Current intention — a committed plan to achieve a goal.
+    pub intention: Option<IntentionType>,
 }
 
 /// The simulation state.
@@ -191,6 +198,8 @@ impl Simulation {
                         },
                     ],
                 },
+                attention: AttentionState::default(),
+                intention: None,
             });
         }
 
@@ -312,6 +321,20 @@ impl Simulation {
 
             // ── 4. Action execution (per-tick effects) ────────────────
             for i in 0..self.agents.len() {
+                // §24.5: Intention commitment — check if current intention should be abandoned
+                if let Some(ref intention) = self.agents[i].intention {
+                    if intention.completed {
+                        self.agents[i].intention = None;
+                    } else {
+                        let stress = emotions[i].fear + emotions[i].anger;
+                        let emotional_shock = emotions[i].anger > Fixed::from_f64(0.5) || emotions[i].fear > Fixed::from_f64(0.5);
+                        if intention.should_abandon(tick_u64, stress, emotional_shock) {
+                            self.agents[i].intention = None;
+                            self.agents[i].action_progress = 0; // force reselection
+                        }
+                    }
+                }
+
                 // Action interruption: force address critical needs (> 0.9)
                 if self.agents[i].action_progress > 0 {
                     let critical = needs[i].hunger > Fixed::from_f64(0.9)
@@ -319,6 +342,7 @@ impl Simulation {
                         || needs[i].fatigue > Fixed::from_f64(0.95);
                     if critical {
                         self.agents[i].action_progress = 0;
+                        self.agents[i].intention = None; // critical needs override intentions
                     }
                 }
 
@@ -348,6 +372,20 @@ impl Simulation {
                     self.agents[i].current_action = action;
                     self.agents[i].action_progress = action.definition().duration_ticks;
                     action_starts.push((i, action));
+
+                    // §24.5: Create intention for the selected action's goal
+                    let goal_kind = match action {
+                        ActionKind::Eat => GoalKind::Eat,
+                        ActionKind::Drink => GoalKind::Drink,
+                        ActionKind::Rest => GoalKind::Rest,
+                        ActionKind::Work => GoalKind::Work,
+                        ActionKind::Socialize => GoalKind::Socialize,
+                        ActionKind::Worship => GoalKind::Worship,
+                        _ => GoalKind::Eat, // fallback
+                    };
+                    self.agents[i].intention = Some(
+                        crate::person::Intention::new(goal_kind, tick_u64, personalities[i].conscientiousness)
+                    );
 
                     // Push events (no resource ops yet — those happen after ctx drops)
                     let agent_id = AgentId::new(i as u64);
@@ -510,37 +548,34 @@ impl Simulation {
         }
 
         // ── 9. Memory encoding from this tick's events ───────────────
-        // Extract agent state for salience derivation (before mutable borrow)
-        let agent_hunger: Vec<Fixed> = self.agents.iter().map(|a| a.needs.hunger).collect();
-        let agent_arousal: Vec<Fixed> = self.agents.iter().map(|a| a.affect.arousal).collect();
+        // §22.5: Use attention system to compute salience instead of hardcoded values.
+        // Only events that pass the attention threshold are encoded into memory.
         for (i, agent) in self.agents.iter_mut().enumerate() {
             for ev in &self.events[pre_tick_events..] {
-                // Derive salience from event type and agent state
-                let base_salience = match ev {
-                    SimEvent::InteractionOccurred { kind, .. } => match kind {
-                        mindstrata_core::event::InteractionKind::Threaten
-                        | mindstrata_core::event::InteractionKind::Insult => Fixed::from_f64(0.8),
-                        mindstrata_core::event::InteractionKind::Help
-                        | mindstrata_core::event::InteractionKind::Comfort => Fixed::from_f64(0.6),
-                        _ => Fixed::from_f64(0.4),
-                    },
-                    SimEvent::AgentAte { .. } | SimEvent::AgentDrank { .. } => {
-                        // Hungry agents remember food more vividly
-                        Fixed::from_f64(0.3) + agent_hunger[i] * Fixed::from_f64(0.3)
-                    }
-                    _ => Fixed::from_f64(0.3),
-                };
+                // §22.5: Attention computes salience based on intensity, novelty, relevance
+                let salience = agent.attention.compute_salience(
+                    ev,
+                    AgentId::new(i as u64),
+                    &agent.needs,
+                    &agent.affect,
+                );
+
+                // Only encode events that exceed the attention threshold
+                if salience < Fixed::from_f64(0.2) {
+                    continue;
+                }
+
                 // Emotional intensity scales with arousal
-                let emotional = agent_arousal[i] * Fixed::from_f64(0.6) + Fixed::from_f64(0.1);
+                let emotional = agent.affect.arousal * Fixed::from_f64(0.6) + Fixed::from_f64(0.1);
                 match ev {
                     SimEvent::AgentAte { agent: a, .. } if a.as_u64() == i as u64 => {
-                        agent.memory.encode(MemoryKind::Consumption, tick_u64, base_salience, emotional, None, MemoryTag::AteFood);
+                        agent.memory.encode(MemoryKind::Consumption, tick_u64, salience, emotional, None, MemoryTag::AteFood);
                     }
                     SimEvent::AgentDrank { agent: a, .. } if a.as_u64() == i as u64 => {
-                        agent.memory.encode(MemoryKind::Consumption, tick_u64, base_salience, emotional, None, MemoryTag::DrankWater);
+                        agent.memory.encode(MemoryKind::Consumption, tick_u64, salience, emotional, None, MemoryTag::DrankWater);
                     }
                     SimEvent::AgentRested { agent: a, .. } if a.as_u64() == i as u64 => {
-                        agent.memory.encode(MemoryKind::Positive, tick_u64, base_salience, emotional, None, MemoryTag::Rested);
+                        agent.memory.encode(MemoryKind::Positive, tick_u64, salience, emotional, None, MemoryTag::Rested);
                     }
                     SimEvent::InteractionOccurred { from, to, kind, .. } => {
                         if from.as_u64() == i as u64 {
@@ -557,10 +592,10 @@ impl Simulation {
                                 mindstrata_core::event::InteractionKind::Help | mindstrata_core::event::InteractionKind::Comfort => MemoryKind::Positive,
                                 _ => MemoryKind::Social,
                             };
-                            agent.memory.encode(kind, tick_u64, base_salience, emotional, Some(to.as_u64() as u32), tag);
+                            agent.memory.encode(kind, tick_u64, salience, emotional, Some(to.as_u64() as u32), tag);
                         }
                         if to.as_u64() == i as u64 {
-                            agent.memory.encode(MemoryKind::Social, tick_u64, base_salience, emotional, Some(from.as_u64() as u32), MemoryTag::TalkedTo);
+                            agent.memory.encode(MemoryKind::Social, tick_u64, salience, emotional, Some(from.as_u64() as u32), MemoryTag::TalkedTo);
                         }
                     }
                     _ => {}
@@ -572,6 +607,11 @@ impl Simulation {
             }
             // Decay memories
             agent.memory.decay(tick_u64);
+
+            // §22.5: Attention maintenance — decay habituation, replenish budget
+            agent.attention.decay_habituation(Fixed::from_f64(0.005));
+            let stress = agent.emotions.fear + agent.emotions.anger;
+            agent.attention.replenish_budget(stress, agent.needs.fatigue);
         }
 
         // ── 10. Resource spoilage (perishable goods degrade each tick) ──
@@ -751,6 +791,8 @@ impl Simulation {
                 anger: a.emotions.anger,
                 goal_count: a.goals.len(),
                 current_action: format!("{:?}", a.current_action),
+                attention_budget: a.attention.budget,
+                has_intention: a.intention.is_some(),
             })
             .collect()
     }
@@ -834,4 +876,6 @@ pub struct AgentSummary {
     pub anger: Fixed,
     pub goal_count: usize,
     pub current_action: String,
+    pub attention_budget: Fixed,
+    pub has_intention: bool,
 }

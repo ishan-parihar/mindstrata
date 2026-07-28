@@ -190,8 +190,108 @@ impl IdentityState {
             .map(|i| i.strength)
             .unwrap_or(Fixed::ZERO)
     }
+}
 
-    
+// ── Intention system ───────────────────────────────────────────────────
+
+/// An intention is a committed plan to achieve a goal.
+/// §24.5: agents should not abandon intentions too easily.
+/// Abandonment depends on failure, cost escalation, emotional shock,
+/// higher-priority interruption, belief change, and social pressure.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Intention {
+    /// The goal this intention is pursuing.
+    pub goal_kind: GoalKind,
+    /// How committed the agent is to this intention (0..1).
+    /// Higher commitment = harder to abandon.
+    pub commitment: Fixed,
+    /// Tick when this intention was formed.
+    pub formed_tick: u64,
+    /// How many ticks this intention has been active.
+    pub duration_ticks: u32,
+    /// Number of consecutive failures (increases abandonment likelihood).
+    pub consecutive_failures: u32,
+    /// Whether this intention has been successfully completed.
+    pub completed: bool,
+}
+
+impl Intention {
+    /// Create a new intention for a goal.
+    pub fn new(goal_kind: GoalKind, formed_tick: u64, personality_conscientiousness: Fixed) -> Self {
+        // Conscientious agents form stronger commitments
+        let base_commitment = Fixed::from_f64(0.5) + personality_conscientiousness * Fixed::from_f64(0.3);
+        Self {
+            goal_kind,
+            commitment: base_commitment,
+            formed_tick,
+            duration_ticks: 0,
+            consecutive_failures: 0,
+            completed: false,
+        }
+    }
+
+    /// Should this intention be abandoned?
+    /// Returns true if the agent should give up and select a new action.
+    pub fn should_abandon(
+        &self,
+        current_tick: u64,
+        stress: Fixed,
+        emotional_shock: bool,
+    ) -> bool {
+        // Never abandon completed intentions
+        if self.completed {
+            return false;
+        }
+
+        let duration = current_tick.saturating_sub(self.formed_tick);
+
+        // Abandon if too many consecutive failures (commitment threshold)
+        if self.consecutive_failures >= 3 {
+            let fail_threshold = Fixed::ONE - self.commitment;
+            if fail_threshold < Fixed::from_f64(0.3) {
+                return false; // very committed agents persist through failures
+            }
+            return true;
+        }
+
+        // Abandon if intention has lasted too long without success
+        // (commitment determines patience: high commitment = longer patience)
+        let max_duration = (self.commitment * Fixed::from_f64(100.0)).to_raw() as u64;
+        if duration > max_duration && max_duration > 0 {
+            return true;
+        }
+
+        // Abandon on high emotional shock if commitment is low
+        if emotional_shock && self.commitment < Fixed::from_f64(0.4) {
+            return true;
+        }
+
+        // Abandon under extreme stress if commitment is moderate
+        if stress > Fixed::from_f64(0.8) && self.commitment < Fixed::from_f64(0.6) {
+            return true;
+        }
+
+        false
+    }
+
+    /// Record a failure (action didn't achieve the goal).
+    pub fn record_failure(&mut self) {
+        self.consecutive_failures += 1;
+        // Failures weaken commitment slightly
+        self.commitment = (self.commitment - Fixed::from_f64(0.05)).max(Fixed::ZERO);
+    }
+
+    /// Record a success (action achieved the goal).
+    pub fn record_success(&mut self) {
+        self.completed = true;
+        // Success strengthens commitment for future intentions
+        self.commitment = (self.commitment + Fixed::from_f64(0.1)).clamp_01();
+    }
+
+    /// Tick the intention (increment duration).
+    pub fn tick(&mut self) {
+        self.duration_ticks += 1;
+    }
 }
 
 // ── Relational substrate ─────────────────────────────────────────────────
