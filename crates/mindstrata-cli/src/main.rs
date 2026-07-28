@@ -56,6 +56,14 @@ enum Commands {
         /// Show institution/faction dashboard.
         #[arg(long)]
         factions: bool,
+
+        /// Show institutional records for the Council.
+        #[arg(long)]
+        records: bool,
+
+        /// Show decision traces for a specific agent by ID.
+        #[arg(long)]
+        decisions: Option<usize>,
     },
     /// Run a named scenario.
     Scenario {
@@ -88,6 +96,8 @@ fn main() -> Result<()> {
             market,
             beliefs,
             factions,
+            records,
+            decisions,
         } => {
             init_logging(verbose);
 
@@ -181,6 +191,28 @@ fn main() -> Result<()> {
             if factions {
                 println!();
                 println!("{}", mindstrata_tui::render_faction_dashboard(&sim.institutions));
+            }
+
+            // §19.5.J: Institutional records
+            if records {
+                if let Some(council) = sim.institutions.iter().find(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Council) {
+                    println!();
+                    println!("{}", mindstrata_tui::render_institutional_records(
+                        &council.name, &council.records, 20,
+                    ));
+                } else {
+                    eprintln!("No Council institution found.");
+                }
+            }
+
+            // §19.5.J: Decision traces
+            if let Some(id) = decisions {
+                println!();
+                println!("{}", mindstrata_tui::render_decision_traces(
+                    sim.provenance(),
+                    mindstrata_core::id::AgentId::new(id as u64),
+                    20,
+                ));
             }
         }
 
