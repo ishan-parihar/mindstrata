@@ -22,19 +22,6 @@ pub const INITIAL_PROPOSAL_DELAY: u64 = 100;
 pub const POLICY_RECORD_INTERVAL: u64 = 100;
 pub const MAX_RECORDS: usize = 1000;
 
-/// Types of policies an institution can issue.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum PolicyKind {
-    /// Fine for theft or norm violations.
-    FineTheft,
-    /// Tax collection policy.
-    TaxCollection,
-    /// Wage payment policy.
-    WagePayment,
-    /// General policy.
-    General,
-}
-
 /// Types of institutions that can exist in the world.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum InstitutionKind {
@@ -491,5 +478,74 @@ mod tests {
         assert!(institutions.iter().any(|i| i.kind == InstitutionKind::Council));
         assert!(institutions.iter().any(|i| i.kind == InstitutionKind::Temple));
         assert!(institutions.iter().any(|i| i.kind == InstitutionKind::Market));
+    }
+
+    #[test]
+    fn propose_policy_assigns_unique_ids() {
+        let mut inst = Institution::new(0, InstitutionKind::Council, "Test".into());
+        inst.propose_policy("Policy A".into(), Fixed::from_f64(0.1), 0);
+        inst.propose_policy("Policy B".into(), Fixed::from_f64(0.2), 0);
+        assert_eq!(inst.pending_policies.len(), 2);
+        assert_ne!(inst.pending_policies[0].id, inst.pending_policies[1].id);
+        assert_eq!(inst.policy_counter, 2);
+    }
+
+    #[test]
+    fn process_policies_moves_ready_to_active() {
+        let mut inst = Institution::new(0, InstitutionKind::Council, "Test".into());
+        inst.propose_policy("Test".into(), Fixed::from_f64(0.1), 0);
+        // Not ready yet — delay is based on inertia
+        inst.process_policies(0);
+        assert_eq!(inst.pending_policies.len(), 1);
+        assert_eq!(inst.active_policies.len(), 0);
+        // Process far in the future — should be ready
+        inst.process_policies(10000);
+        assert_eq!(inst.pending_policies.len(), 0);
+        assert_eq!(inst.active_policies.len(), 1);
+        assert!(inst.active_policies[0].active);
+    }
+
+    #[test]
+    fn record_action_stores_record() {
+        let mut inst = Institution::new(0, InstitutionKind::Council, "Test".into());
+        inst.record_action(42, "Did something".into(), vec![AgentId::new(0)], true);
+        assert_eq!(inst.records.len(), 1);
+        assert_eq!(inst.records[0].tick, 42);
+        assert!(inst.records[0].success);
+    }
+
+    #[test]
+    fn collect_taxes_deducts_from_members() {
+        let mut inst = Institution::new(0, InstitutionKind::Council, "Test".into());
+        inst.add_member(AgentId::new(0));
+        inst.add_member(AgentId::new(1));
+        let mut wealth = vec![
+            (AgentId::new(0), Fixed::from_f64(100.0)),
+            (AgentId::new(1), Fixed::from_f64(50.0)),
+        ];
+        let collected = inst.collect_taxes(Fixed::from_f64(0.1), &mut wealth);
+        assert!(collected > Fixed::ZERO);
+        assert!(wealth[0].1 < Fixed::from_f64(100.0)); // taxed
+        assert!(wealth[1].1 < Fixed::from_f64(50.0));  // taxed
+        assert_eq!(inst.treasury, collected);
+    }
+
+    #[test]
+    fn pay_wages_adds_to_role_holders() {
+        let mut inst = Institution::new(0, InstitutionKind::Council, "Test".into());
+        inst.add_role(Role {
+            name: "Elder".into(),
+            holder: Some(AgentId::new(0)),
+            authority: Fixed::from_f64(0.8),
+            obligations: vec![],
+        });
+        inst.treasury = Fixed::from_f64(100.0);
+        let mut wealth = vec![
+            (AgentId::new(0), Fixed::from_f64(50.0)),
+        ];
+        let paid = inst.pay_wages(Fixed::from_f64(10.0), &mut wealth);
+        assert!(paid > Fixed::ZERO);
+        assert!(wealth[0].1 > Fixed::from_f64(50.0)); // paid
+        assert!(inst.treasury < Fixed::from_f64(100.0)); // treasury reduced
     }
 }
