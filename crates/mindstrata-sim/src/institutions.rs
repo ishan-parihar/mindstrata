@@ -17,6 +17,24 @@ use mindstrata_core::fixed::Fixed;
 use mindstrata_core::id::AgentId;
 use serde::{Deserialize, Serialize};
 
+/// Named constants for institutional mechanics.
+pub const INITIAL_PROPOSAL_DELAY: u64 = 100;
+pub const POLICY_RECORD_INTERVAL: u64 = 100;
+pub const MAX_RECORDS: usize = 1000;
+
+/// Types of policies an institution can issue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PolicyKind {
+    /// Fine for theft or norm violations.
+    FineTheft,
+    /// Tax collection policy.
+    TaxCollection,
+    /// Wage payment policy.
+    WagePayment,
+    /// General policy.
+    General,
+}
+
 /// Types of institutions that can exist in the world.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum InstitutionKind {
@@ -230,11 +248,14 @@ impl Institution {
     }
 
     /// Collect taxes from members. Returns total collected.
-    pub fn collect_taxes(&mut self, tax_rate: Fixed, member_wealth: &[(AgentId, Fixed)]) -> Fixed {
+    /// Collect taxes from members. Deducts from member wealth and adds to treasury.
+    /// Returns total collected.
+    pub fn collect_taxes(&mut self, tax_rate: Fixed, member_wealth: &mut Vec<(AgentId, Fixed)>) -> Fixed {
         let mut total = Fixed::ZERO;
-        for (agent, wealth) in member_wealth {
+        for (agent, wealth) in member_wealth.iter_mut() {
             if self.has_member(*agent) {
                 let tax = *wealth * tax_rate;
+                *wealth = (*wealth - tax).max(Fixed::ZERO);
                 total = total + tax;
             }
         }
