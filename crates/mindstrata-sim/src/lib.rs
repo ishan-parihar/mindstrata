@@ -11,6 +11,7 @@ pub mod attention;
 pub mod belief_update;
 pub mod demography;
 pub mod conflict;
+pub mod cultural;
 pub mod ecology;
 pub mod factions;
 pub mod gossip;
