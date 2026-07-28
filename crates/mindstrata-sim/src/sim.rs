@@ -3,12 +3,13 @@
 use crate::actions::{self, ActionKind};
 use crate::appraisal::{self, Agency, Appraisal};
 use crate::belief_update;
+use crate::journal::{EventJournal, JournalEntryKind};
 use crate::memory::{MemoryKind, MemoryStore, MemoryTag};
 use crate::person::{Affect, BodyState, Belief, DiscreteEmotions, Goal, NeedState, Personality, Relationship};
 use crate::scenario::{Scenario, ShockKind};
 use crate::social;
 use crate::systems::{self, SystemContext};
-use crate::world::World;
+use crate::world::{GRAIN_RESOURCE_ID, WATER_RESOURCE_ID, World};
 use crate::world_gen;
 use mindstrata_core::clock::{Clock, Tick};
 use mindstrata_core::event::SimEvent;
@@ -68,6 +69,7 @@ pub struct Simulation {
     pub agents: Vec<AgentBundle>,
     pub relationships: Vec<Relationship>,
     events: Vec<SimEvent>,
+    journal: EventJournal,
     scenario: Option<Scenario>,
 }
 
@@ -85,6 +87,7 @@ impl Simulation {
             agents: Vec::new(),
             relationships: Vec::new(),
             events: Vec::new(),
+            journal: EventJournal::new(),
             scenario: None,
         }
     }
@@ -247,6 +250,9 @@ impl Simulation {
         // Capture event count before systems run (before SystemContext borrows self.events)
         let pre_tick_events = self.events.len();
 
+        // Collect action starts to defer resource operations outside the ctx block
+        let mut action_starts: Vec<(usize, ActionKind)> = Vec::new();
+
         // Prepare system context and run systems that need mutable borrow on events/rng
         {
             let mut ctx = SystemContext {
@@ -289,7 +295,9 @@ impl Simulation {
                     );
                     self.agents[i].current_action = action;
                     self.agents[i].action_progress = action.definition().duration_ticks;
+                    action_starts.push((i, action));
 
+                    // Push events (no resource ops yet — those happen after ctx drops)
                     let agent_id = AgentId::new(i as u64);
                     match action {
                         ActionKind::Eat => {
@@ -414,6 +422,41 @@ impl Simulation {
 
         } // ctx is dropped here, releasing mutable borrows on self.events and self.rng
 
+        // ── 4b. Resource operations and journal recording (after ctx drop) ──
+        for (agent_idx, action) in &action_starts {
+            let agent_id = AgentId::new(*agent_idx as u64);
+            match action {
+                ActionKind::Eat => {
+                    let amount = Fixed::from_f64(0.1);
+                    if let Some(farm_idx) = self.world.farm_with_grain() {
+                        let taken = self.world.consume_resource(farm_idx, GRAIN_RESOURCE_ID, amount);
+                        self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "grain".into(), amount: taken.to_f64() });
+                    }
+                }
+                ActionKind::Drink => {
+                    let amount = Fixed::from_f64(0.15);
+                    if let Some(well_idx) = self.world.well_with_water() {
+                        let taken = self.world.consume_resource(well_idx, WATER_RESOURCE_ID, amount);
+                        self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "water".into(), amount: taken.to_f64() });
+                    }
+                }
+                ActionKind::Work => {
+                    let productivity = self.agents[*agent_idx].personality.conscientiousness * Fixed::from_f64(0.05);
+                    if let Some(farm_idx) = self.world.best_farm_for_work() {
+                        self.world.produce_resource(farm_idx, GRAIN_RESOURCE_ID, productivity);
+                        self.journal.record(tick_u64, agent_id, JournalEntryKind::Worked { productivity: productivity.to_f64() });
+                    }
+                }
+                ActionKind::Rest => {
+                    self.journal.record(tick_u64, agent_id, JournalEntryKind::Rested);
+                }
+                ActionKind::Worship => {
+                    self.journal.record(tick_u64, agent_id, JournalEntryKind::Worshiped);
+                }
+                _ => {}
+            }
+        }
+
         // ── 9. Memory encoding from this tick's events ───────────────
         for (i, agent) in self.agents.iter_mut().enumerate() {
             for ev in &self.events[pre_tick_events..] {
@@ -535,6 +578,26 @@ impl Simulation {
                 current_action: format!("{:?}", a.current_action),
             })
             .collect()
+    }
+
+    /// Get a reference to the event journal.
+    pub fn journal(&self) -> &EventJournal {
+        &self.journal
+    }
+
+    /// Get journal entry count.
+    pub fn journal_len(&self) -> usize {
+        self.journal.len()
+    }
+
+    /// Get total grain across all farms.
+    pub fn total_grain(&self) -> Fixed {
+        self.world.total_food()
+    }
+
+    /// Get total water across all wells.
+    pub fn total_water(&self) -> Fixed {
+        self.world.total_water()
     }
 }
 

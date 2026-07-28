@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 /// Resource ID for grain — the primary food resource.
 pub const GRAIN_RESOURCE_ID: u64 = 0;
 
+/// Resource ID for water — the primary hydration resource.
+pub const WATER_RESOURCE_ID: u64 = 1;
+
 // ── Terrain ──────────────────────────────────────────────────────────────
 
 /// Basic terrain types for the initial 2D grid.
@@ -198,5 +201,75 @@ impl World {
             .flat_map(|s| &s.inventory)
             .filter(|r| r.resource_id == GRAIN_RESOURCE_ID)
             .fold(Fixed::ZERO, |acc, r| acc + r.quantity)
+    }
+
+    /// Total water stock across all well sites.
+    pub fn total_water(&self) -> Fixed {
+        self.sites
+            .iter()
+            .filter(|s| s.kind == SiteKind::Well)
+            .flat_map(|s| &s.inventory)
+            .filter(|r| r.resource_id == WATER_RESOURCE_ID)
+            .fold(Fixed::ZERO, |acc, r| acc + r.quantity)
+    }
+
+    /// Consume a quantity of a resource from a site. Returns amount actually taken.
+    pub fn consume_resource(&mut self, site_idx: usize, resource_id: u64, amount: Fixed) -> Fixed {
+        if let Some(site) = self.sites.get_mut(site_idx) {
+            if let Some(stock) = site.inventory.iter_mut().find(|s| s.resource_id == resource_id) {
+                let taken = amount.min(stock.quantity);
+                stock.quantity = (stock.quantity - taken).max(Fixed::ZERO);
+                return taken;
+            }
+        }
+        Fixed::ZERO
+    }
+
+    /// Produce a quantity of a resource at a site (e.g. farming generates grain).
+    pub fn produce_resource(&mut self, site_idx: usize, resource_id: u64, amount: Fixed) {
+        if let Some(site) = self.sites.get_mut(site_idx) {
+            if let Some(stock) = site.inventory.iter_mut().find(|s| s.resource_id == resource_id) {
+                stock.quantity = (stock.quantity + amount).clamp_01();
+            } else {
+                site.inventory.push(ResourceStock {
+                    resource_id,
+                    quantity: amount.clamp_01(),
+                    quality: Fixed::from_f64(0.8),
+                });
+            }
+        }
+    }
+
+    /// Find the nearest site of a given kind to an optional home site.
+    pub fn nearest_site_of_kind(&self, kind: SiteKind, _from_site: Option<usize>) -> Option<usize> {
+        self.sites.iter().position(|s| s.kind == kind)
+    }
+
+    /// Find a farm site with available grain.
+    pub fn farm_with_grain(&self) -> Option<usize> {
+        self.sites.iter().enumerate().find(|(_, s)| {
+            s.kind == SiteKind::Farm && s.inventory.iter().any(|r| r.resource_id == GRAIN_RESOURCE_ID && r.quantity > Fixed::ZERO)
+        }).map(|(i, _)| i)
+    }
+
+    /// Find a well site with available water.
+    pub fn well_with_water(&self) -> Option<usize> {
+        self.sites.iter().enumerate().find(|(_, s)| {
+            s.kind == SiteKind::Well && s.inventory.iter().any(|r| r.resource_id == WATER_RESOURCE_ID && r.quantity > Fixed::ZERO)
+        }).map(|(i, _)| i)
+    }
+
+    /// Find the most productive farm site (highest grain stock) for work.
+    pub fn best_farm_for_work(&self) -> Option<usize> {
+        self.sites.iter().enumerate()
+            .filter(|(_, s)| s.kind == SiteKind::Farm)
+            .max_by(|(_, a), (_, b)| {
+                let fa = a.inventory.iter().find(|r| r.resource_id == GRAIN_RESOURCE_ID)
+                    .map(|r| r.quantity).unwrap_or(Fixed::ZERO);
+                let fb = b.inventory.iter().find(|r| r.resource_id == GRAIN_RESOURCE_ID)
+                    .map(|r| r.quantity).unwrap_or(Fixed::ZERO);
+                fa.cmp(&fb)
+            })
+            .map(|(i, _)| i)
     }
 }
