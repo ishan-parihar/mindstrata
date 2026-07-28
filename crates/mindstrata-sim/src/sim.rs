@@ -1,6 +1,7 @@
 //! Simulation orchestrator — the fixed-tick loop.
 
 use crate::actions::{self, ActionKind};
+use crate::conflict::{self, ConflictState};
 use crate::gossip;
 use crate::market::{self, MarketState, WealthState};
 use crate::appraisal::{self, Agency, Appraisal};
@@ -92,6 +93,8 @@ pub struct AgentBundle {
     pub age: Fixed,
     /// §13.3: Per-agent wealth — coin and economic state.
     pub wealth: WealthState,
+    /// §19.5.H: Per-agent conflict state — trauma, injuries, combat fatigue.
+    pub conflict: ConflictState,
 }
 
 /// The simulation state.
@@ -261,8 +264,8 @@ impl Simulation {
                 age: Fixed::from_f64(populate_rng.random_range(18.0..55.0)),
                 wealth: WealthState {
                     coin: Fixed::from_f64(populate_rng.random_range(5.0..20.0)),
-                    ..Default::default()
                 },
+                conflict: ConflictState::default(),
             });
         }
 
@@ -1345,6 +1348,11 @@ impl Simulation {
                     );
                 }
             }
+        }
+
+        // ── 20. Conflict state update — trauma decay, combat fatigue ──
+        for agent in self.agents.iter_mut() {
+            agent.conflict.update();
         }
 
         // ── 19. Market system: price formation, inequality tracking ──

@@ -10,6 +10,7 @@ pub mod appraisal;
 pub mod attention;
 pub mod belief_update;
 pub mod demography;
+pub mod conflict;
 pub mod ecology;
 pub mod factions;
 pub mod gossip;
