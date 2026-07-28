@@ -9,6 +9,7 @@ use crate::norms::{self, NormRegistry};
 use crate::attention::AttentionState;
 use crate::faction::Faction;
 use crate::institutions::{self, Institution};
+use crate::routines::DailyRoutine;
 pub use crate::attention;
 pub use crate::person::Intention;
 use crate::person::{Affect, BodyState, Belief, DiscreteEmotions, Goal, GoalKind, IdentityKind, IdentityState, NeedState, Personality, Relationship};
@@ -69,6 +70,8 @@ pub struct AgentBundle {
     pub attention: AttentionState,
     /// §24.5: Current intention — a committed plan to achieve a goal.
     pub intention: Option<crate::person::Intention>,
+    /// §10.3: Daily routine creating behavioral stability.
+    pub routine: DailyRoutine,
 }
 
 /// The simulation state.
@@ -208,6 +211,7 @@ impl Simulation {
                 },
                 attention: AttentionState::default(),
                 intention: None,
+                routine: DailyRoutine::village_routine(),
             });
         }
 
@@ -412,7 +416,6 @@ impl Simulation {
                         .max(self.agents[i].identity.strength_of(IdentityKind::Believer));
                     // §12: Institution enforcement amplifies norm pressure.
                     // Council enforcement capacity multiplies the pressure felt by agents.
-                    // Hoisted outside per-agent loop since it's identical for all agents.
                     let enforcement_multiplier = self.institutions.iter()
                         .filter(|i| i.kind == institutions::InstitutionKind::Council)
                         .map(|i| Fixed::ONE + i.enforcement_capacity * Fixed::from_f64(0.5))
@@ -422,17 +425,30 @@ impl Simulation {
                         .norms()
                         .iter()
                         .map(|n| self.norms.compute_pressure(conformity, avg_identity_strength, n.id))
-                        .fold(Fixed::ZERO, |a, b| a + b) * enforcement_multiplier; // Negative = compliant, positive = violating
-                    let action = actions::select_action(
-                        &needs[i],
-                        &personalities[i],
-                        &goals[i],
-                        ctx.rng,
-                        total_grain,
-                        total_water,
-                        &self.agents[i].identity,
-                        norm_pressure,
+                        .fold(Fixed::ZERO, |a, b| a + b) * enforcement_multiplier;
+
+                    // §10.3: Routine bias — agents follow daily schedules when stable
+                    let (routine_action, routine_strength) = self.agents[i].routine.preferred_action(tick);
+                    let stress = emotions[i].fear + emotions[i].anger;
+                    let follow_routine = self.agents[i].routine.should_follow(
+                        needs[i].hunger, needs[i].thirst, needs[i].fatigue, stress
                     );
+
+                    let action = if follow_routine && routine_strength > Fixed::from_f64(0.5) {
+                        // §10.3: Routine creates behavioral stability — prefer scheduled action
+                        routine_action
+                    } else {
+                        actions::select_action(
+                            &needs[i],
+                            &personalities[i],
+                            &goals[i],
+                            ctx.rng,
+                            total_grain,
+                            total_water,
+                            &self.agents[i].identity,
+                            norm_pressure,
+                        )
+                    };
                     self.agents[i].current_action = action;
                     self.agents[i].action_progress = action.definition().duration_ticks;
                     action_starts.push((i, action));

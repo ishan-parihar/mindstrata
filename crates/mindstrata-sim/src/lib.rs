@@ -15,6 +15,7 @@ pub mod journal;
 pub mod memory;
 pub mod norms;
 pub mod person;
+pub mod routines;
 pub mod scenario;
 pub mod sim;
 pub mod social;
