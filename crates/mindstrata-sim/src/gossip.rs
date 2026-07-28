@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 //! Gossip propagation system — §11.2, §13.5 of the architecture spec.
 //!
 //! Gossip should mutate information:
@@ -218,21 +220,7 @@ pub fn apply_gossip(
     }
 }
 
-/// Decay old rumors in a rumor store.
-/// Rumors lose confidence and emotional charge over time.
-pub fn decay_rumors(rumors: &mut Vec<Rumor>, current_tick: u64, decay_rate: Fixed) {
-    rumors.retain_mut(|rumor| {
-        let age = rumor.age(current_tick);
-        let age_factor = Fixed::ONE - decay_rate * Fixed::from_int(age as i64);
-        if age_factor <= Fixed::ZERO {
-            return false; // rumor has fully decayed
-        }
-        rumor.confidence = (rumor.confidence * age_factor).clamp_01();
-        rumor.emotional_charge = (rumor.emotional_charge * age_factor).clamp_01();
-        rumor.hops += 1;
-        true
-    });
-}
+
 
 #[cfg(test)]
 mod tests {
@@ -427,43 +415,6 @@ mod tests {
         apply_gossip(&mut beliefs, &result, 200);
 
         assert_eq!(beliefs[0].confidence, Fixed::from_f64(0.5), "Rejected gossip should not change belief");
-    }
-
-    #[test]
-    fn decay_removes_old_rumors() {
-        let mut rumors = vec![
-            Rumor {
-                proposition_id: 0,
-                confidence: Fixed::from_f64(0.5),
-                hops: 0,
-                origin_tick: 0,
-                last_heard_tick: 0,
-                emotional_charge: Fixed::from_f64(0.3),
-                identity_linkage: Fixed::ZERO,
-                original_resistance: Fixed::from_f64(0.5),
-            },
-            Rumor {
-                proposition_id: 1,
-                confidence: Fixed::from_f64(0.5),
-                hops: 0,
-                origin_tick: 1000,
-                last_heard_tick: 1000,
-                emotional_charge: Fixed::from_f64(0.3),
-                identity_linkage: Fixed::ZERO,
-                original_resistance: Fixed::from_f64(0.5),
-            },
-        ];
-
-        // Use a gentle decay rate so the newer rumor survives
-        decay_rumors(&mut rumors, 2000, Fixed::from_f64(0.0001));
-
-        // At least one rumor should remain
-        assert!(!rumors.is_empty(), "At least one rumor should survive gentle decay");
-        let old_survived = rumors.iter().find(|r| r.proposition_id == 0);
-        let new_survived = rumors.iter().find(|r| r.proposition_id == 1);
-        if let (Some(old), Some(new)) = (old_survived, new_survived) {
-            assert!(old.confidence < new.confidence, "Old rumor should decay more than new");
-        }
     }
 
     #[test]
