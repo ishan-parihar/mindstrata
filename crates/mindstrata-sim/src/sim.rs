@@ -800,7 +800,48 @@ impl Simulation {
                         self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "grain".into(), amount: taken.to_f64() });
                         taken > Fixed::ZERO
                     } else {
-                        false
+                        // §19.5.D: Theft detection — no accessible farm, but farms with grain exist?
+                        if let Some(thief_idx) = self.world.farm_with_grain() {
+                            // There IS grain, but this agent can't access it → theft!
+                            let farm_owner;
+                            {
+                                let farm = &self.world.sites[thief_idx];
+                                farm_owner = farm.owner;
+                            }
+                            let taken = self.world.consume_resource(thief_idx, GRAIN_RESOURCE_ID, amount);
+                            // Record theft in journal
+                            self.journal.record(tick_u64, agent_id, JournalEntryKind::TheftDetected { resource: "grain".into(), amount: taken.to_f64(), fine: 0.0 });
+                            // §12.3: Record norm violation ("No Theft" norm id=0)
+                            let _punishment = self.norms.check_violation(0, agent_id, tick_u64);
+                            // §12.4: Council enforcement — fine the thief
+                            for inst in self.institutions.iter_mut() {
+                                if inst.kind == institutions::InstitutionKind::Council {
+                                    let fine = taken * self.market.price(GRAIN_RESOURCE_ID) * Fixed::from_f64(2.0);
+                                    self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - fine).max(Fixed::ZERO);
+                                    // Emit NormViolated event
+                                    self.events.push(SimEvent::NormViolated {
+                                        agent: agent_id,
+                                        norm_id: 0,
+                                        witnesses: Vec::new(),
+                                        tick,
+                                    });
+                                    break;
+                                }
+                            }
+                            // Reduce relationship with farm owner
+                            if let Some(owner_id) = farm_owner {
+                                if let Some(rel) = self.relationships.iter_mut().find(|r| r.from == agent_id && r.to == owner_id) {
+                                    rel.trust = (rel.trust - Fixed::from_f64(0.2)).max(Fixed::ZERO);
+                                }
+                                // Shame from theft
+                                self.agents[*agent_idx].emotions.shame = (
+                                    self.agents[*agent_idx].emotions.shame + Fixed::from_f64(0.1)
+                                ).clamp_01();
+                            }
+                            taken > Fixed::ZERO
+                        } else {
+                            false
+                        }
                     }
                 }
                 ActionKind::Drink => {

@@ -13,6 +13,7 @@ pub enum JournalEntryKind {
     Worked { productivity: f64 },
     Worshiped,
     Rested,
+    TheftDetected { resource: String, amount: f64, fine: f64 },
 }
 
 /// A single journal entry.

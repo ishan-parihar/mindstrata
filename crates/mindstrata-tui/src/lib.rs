@@ -444,6 +444,25 @@ pub fn render_event_log_detailed(events: &[SimEvent], n: usize) -> String {
                     injury.to_f64(), fear_induced.to_f64()
                 ));
             }
+            SimEvent::NormViolated { agent, norm_id, witnesses, .. } => {
+                out.push_str(&format!(
+                    "  [{tick:>5}] ⚖️ Agent {} violated norm {} ({} witnesses)\n",
+                    agent.as_u64(), norm_id, witnesses.len()
+                ));
+            }
+            SimEvent::AgentSpawned { agent, .. } => {
+                out.push_str(&format!("  [{tick:>5}] 🌱 Agent {} spawned\n", agent.as_u64()));
+            }
+            SimEvent::AgentDied { agent, cause, .. } => {
+                out.push_str(&format!("  [{tick:>5}] 💀 Agent {} died ({:?})\n", agent.as_u64(), cause));
+            }
+            SimEvent::TradeOccurred { buyer, seller, good, quantity, price, .. } => {
+                out.push_str(&format!(
+                    "  [{tick:>5}] 💰 Trade {}→{} good={} qty={:.2} price={:.1}\n",
+                    buyer.as_u64(), seller.as_u64(), good,
+                    quantity.to_f64(), price.to_f64()
+                ));
+            }
             _ => {
                 out.push_str(&format!("  [{tick:>5}] ❓ {:?}\n", ev));
             }
