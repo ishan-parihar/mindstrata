@@ -1,0 +1,12 @@
+[package]
+name = "mindstrata-tests"
+description = "Integration tests and golden-replay validation for Mindstrata"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mindstrata-core = { workspace = true }
+mindstrata-sim = { workspace = true }
+rand = { workspace = true }
+insta = { workspace = true }

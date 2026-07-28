@@ -1,0 +1,19 @@
+[package]
+name = "mindstrata-cli"
+description = "CLI interface for running Mindstrata simulations"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "mindstrata"
+path = "src/main.rs"
+
+[dependencies]
+mindstrata-core = { workspace = true }
+mindstrata-sim = { workspace = true }
+mindstrata-tui = { path = "../mindstrata-tui" }
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }

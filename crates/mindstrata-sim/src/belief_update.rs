@@ -1,0 +1,147 @@
+//! Belief update system — Bayesian-ish updating with psychological bias.
+//!
+//! Agents update beliefs based on evidence, but with psychological
+//! resistance: identity-linked, emotionally charged, and socially
+//! reinforced beliefs resist change.  This produces ideology,
+//! propaganda, rumor, and polarization.
+
+use crate::person::Belief;
+use mindstrata_core::fixed::Fixed;
+
+/// Update a single belief based on new evidence.
+///
+/// Uses a simplified Bayesian update with psychological resistance:
+///
+/// ```text
+/// new_confidence =
+///     old_confidence * resistance
+///   + evidence_strength * source_trust
+///   + emotional_reinforcement
+///   + social_reinforcement
+/// ```
+pub fn update_belief(
+    belief: &mut Belief,
+    evidence_strength: Fixed,
+    source_trust: Fixed,
+    emotional_reinforcement: Fixed,
+    social_reinforcement: Fixed,
+    current_tick: u64,
+) {
+    let resistance = belief.resistance;
+
+    // Base update: weighted combination
+    let base_update = belief.confidence * resistance
+        + evidence_strength * source_trust
+        + emotional_reinforcement
+        + social_reinforcement;
+
+    // Identity protection bias: beliefs with high identity linkage resist change
+    let identity_protection = if belief.identity_linkage > Fixed::from_f64(0.5) {
+        let protection = Fixed::ONE - belief.identity_linkage * Fixed::from_f64(0.3);
+        belief.confidence * (Fixed::ONE - protection) + base_update * protection
+    } else {
+        base_update
+    };
+
+    // Clamp to [0, 1]
+    belief.confidence = identity_protection.clamp_01();
+
+    // Reinforcement decays resistance over time
+    let time_since_reinforce = current_tick.saturating_sub(belief.last_reinforced_tick);
+    if time_since_reinforce > 0 && evidence_strength > Fixed::ZERO {
+        let decay = Fixed::from_f64(0.001) * Fixed::from_int(time_since_reinforce as i64);
+        belief.resistance = (belief.resistance - decay).clamp_01();
+        belief.last_reinforced_tick = current_tick;
+    }
+}
+
+/// Batch update all beliefs for an agent.
+pub fn update_beliefs(
+    beliefs: &mut [Belief],
+    evidence: &[(u64, Fixed, Fixed)], // (proposition_id, evidence_strength, source_trust)
+    emotional_reinforcement: Fixed,
+    social_reinforcement: Fixed,
+    current_tick: u64,
+) {
+    for (prop_id, strength, trust) in evidence {
+        if let Some(belief) = beliefs.iter_mut().find(|b| b.proposition_id == *prop_id) {
+            update_belief(
+                belief,
+                *strength,
+                *trust,
+                emotional_reinforcement,
+                social_reinforcement,
+                current_tick,
+            );
+        }
+    }
+}
+
+/// Decay belief resistance over time (beliefs become slightly easier to update).
+pub fn decay_belief_resistance(beliefs: &mut [Belief], decay_rate: Fixed) {
+    for belief in beliefs.iter_mut() {
+        let baseline = Fixed::from_f64(0.3);
+        if belief.resistance > baseline {
+            belief.resistance = (belief.resistance - decay_rate).clamp_01();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn belief_update_with_strong_evidence() {
+        let mut belief = Belief {
+            proposition_id: 0,
+            confidence: Fixed::from_f64(0.3),
+            emotional_charge: Fixed::ZERO,
+            identity_linkage: Fixed::ZERO,
+            resistance: Fixed::from_f64(0.5),
+            last_reinforced_tick: 0,
+        };
+
+        update_belief(
+            &mut belief,
+            Fixed::from_f64(0.9),
+            Fixed::from_f64(0.8),
+            Fixed::ZERO,
+            Fixed::ZERO,
+            100,
+        );
+
+        assert!(
+            belief.confidence > Fixed::from_f64(0.3),
+            "Confidence should increase with strong evidence"
+        );
+    }
+
+    #[test]
+    fn identity_linked_belief_resists_change() {
+        let mut belief = Belief {
+            proposition_id: 0,
+            confidence: Fixed::from_f64(0.8),
+            emotional_charge: Fixed::from_f64(0.5),
+            identity_linkage: Fixed::from_f64(0.9),
+            resistance: Fixed::from_f64(0.7),
+            last_reinforced_tick: 0,
+        };
+
+        update_belief(
+            &mut belief,
+            Fixed::from_f64(-0.5),
+            Fixed::from_f64(0.8),
+            Fixed::ZERO,
+            Fixed::ZERO,
+            100,
+        );
+
+        // Identity-linked beliefs resist change, but should still move somewhat
+        assert!(
+            belief.confidence > Fixed::from_f64(0.3),
+            "Identity-linked beliefs should resist contradictory evidence, got {}",
+            belief.confidence.to_f64()
+        );
+    }
+}

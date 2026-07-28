@@ -1,0 +1,49 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/mindstrata-core",
+    "crates/mindstrata-sim",
+    "crates/mindstrata-cli",
+    "crates/mindstrata-tui",
+    "crates/mindstrata-tests",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/ishanp/mindstrata"
+
+[workspace.dependencies]
+# Internal crates
+mindstrata-core = { path = "crates/mindstrata-core" }
+mindstrata-sim = { path = "crates/mindstrata-sim" }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+ron = "0.8"
+
+# Randomness (deterministic)
+rand = "0.9"
+rand_chacha = "0.9"
+
+# Logging / Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Graph structures
+petgraph = "0.7"
+
+# TUI
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Testing
+insta = "1"
