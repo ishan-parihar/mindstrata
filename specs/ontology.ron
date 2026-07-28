@@ -1,0 +1,45 @@
+// §45.1 Mindstrata Ontology — entity kinds and ID types.
+// This file defines the simulation's entity and identifier taxonomy.
+// AI agents and the spec linter use this to validate consistency.
+
+Ontology(
+    entity_kinds: [
+        Person,
+        Household,
+        Farm,
+        Market,
+        Well,
+        Temple,
+        Council,
+        Settlement,
+        Faction,
+        Institution,
+    ],
+    id_kinds: [
+        EntityId,
+        EventId,
+        TraceId,
+        PropositionId,
+        BeliefId,
+        MemoryId,
+        NormId,
+        LawId,
+        PolicyId,
+        ActionId,
+        AffordanceId,
+        GoalId,
+        IntentionId,
+        RelationshipId,
+        SocialFactId,
+        RumorId,
+        InstitutionId,
+        OfficeId,
+        RoleId,
+        ResourceId,
+        SiteId,
+        TileId,
+        CulturalTraitId,
+        PracticeId,
+        DiseaseId,
+    ],
+)

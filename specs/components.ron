@@ -1,0 +1,40 @@
+// §45.2 Component schemas — defines which components belong to which entity types.
+// The spec linter validates that all components used in code are declared here.
+
+Components(
+    person: [
+        "Person",
+        "BodyState",
+        "NeedState",
+        "Personality",
+        "Affect",
+        "DiscreteEmotions",
+        "AttentionState",
+        "MemoryStore",
+        "Beliefs",
+        "Goals",
+        "IdentityState",
+        "MoralValues",
+        "CognitiveState",
+        "DerivedMentalState",
+        "ActionState",
+        "Intention",
+        "DailyRoutine",
+    ],
+    institution: [
+        "Institution",
+        "InstitutionKind",
+        "CollectivePsychology",
+        "NormRegistry",
+        "ResourceLedger",
+        "EnforcementCapacity",
+        "LegitimacyState",
+    ],
+    world: [
+        "Tile",
+        "Site",
+        "Region",
+        "ResourceDef",
+        "ResourceStock",
+    ],
+)

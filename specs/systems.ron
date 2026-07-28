@@ -1,0 +1,223 @@
+// §45.3 System order and phase membership.
+// Defines the tick-loop execution order and which systems belong to which phase.
+// The spec linter validates that declared reads/writes don't conflict across phases.
+
+Systems(
+    phases: [
+        Phase(
+            name: "WorldUpdate",
+            systems: [
+                System(
+                    name: "system_ecology",
+                    reads: ["SeasonTracker", "EcologyConfig", "SiteWorkTicks"],
+                    writes: ["TileFertility"],
+                ),
+                System(
+                    name: "system_resource_spoilage",
+                    reads: ["ResourceDefs", "SeasonTracker"],
+                    writes: ["SiteInventory"],
+                ),
+            ],
+        ),
+        Phase(
+            name: "CognitiveUpdate",
+            systems: [
+                System(
+                    name: "cognitive_update",
+                    reads: ["Emotions", "Needs"],
+                    writes: ["CognitiveState"],
+                ),
+            ],
+        ),
+        Phase(
+            name: "NeedDecay",
+            systems: [
+                System(
+                    name: "system_need_decay",
+                    reads: ["BodyState"],
+                    writes: ["NeedState"],
+                ),
+            ],
+        ),
+        Phase(
+            name: "BodyUpdate",
+            systems: [
+                System(
+                    name: "system_body_update",
+                    reads: ["NeedState"],
+                    writes: ["BodyState"],
+                ),
+            ],
+        ),
+        Phase(
+            name: "GoalFormation",
+            systems: [
+                System(
+                    name: "system_goal_generation",
+                    reads: ["Personality", "NeedState"],
+                    writes: ["Goals"],
+                ),
+            ],
+        ),
+        Phase(
+            name: "ActionExecution",
+            systems: [
+                System(
+                    name: "apply_action_tick",
+                    reads: ["ActionKind"],
+                    writes: ["BodyState", "NeedState"],
+                ),
+                System(
+                    name: "apply_intention_tracking",
+                    reads: ["ActionKind", "ResourceOps"],
+                    writes: ["Intention", "RecentSuccesses"],
+                ),
+            ],
+        ),
+        Phase(
+            name: "SocialUpdate",
+            systems: [
+                System(
+                    name: "system_social_interactions",
+                    reads: ["Personality", "AgentInfo"],
+                    writes: ["Relationships", "Events"],
+                ),
+                System(
+                    name: "gossip_propagation",
+                    reads: ["Events", "Beliefs", "Emotions"],
+                    writes: ["Beliefs"],
+                ),
+            ],
+        ),
+        Phase(
+            name: "Appraisal",
+            systems: [
+                System(
+                    name: "appraise",
+                    reads: ["NeedState", "Personality", "CognitiveState"],
+                    writes: ["Emotions", "Affect"],
+                ),
+            ],
+        ),
+        Phase(
+            name: "EmotionDecay",
+            systems: [
+                System(
+                    name: "emotion_decay",
+                    reads: [],
+                    writes: ["Emotions"],
+                ),
+            ],
+        ),
+        Phase(
+            name: "BeliefUpdate",
+            systems: [
+                System(
+                    name: "decay_belief_resistance",
+                    reads: [],
+                    writes: ["Beliefs"],
+                ),
+                System(
+                    name: "update_beliefs_from_interactions",
+                    reads: ["Events", "Relationships"],
+                    writes: ["Beliefs"],
+                ),
+            ],
+        ),
+        Phase(
+            name: "MemoryUpdate",
+            systems: [
+                System(
+                    name: "memory_encoding",
+                    reads: ["Events", "AttentionState", "Needs", "Affect"],
+                    writes: ["MemoryStore"],
+                ),
+                System(
+                    name: "memory_rehearsal",
+                    reads: [],
+                    writes: ["MemoryStore"],
+                ),
+                System(
+                    name: "memory_decay",
+                    reads: [],
+                    writes: ["MemoryStore"],
+                ),
+                System(
+                    name: "attention_maintenance",
+                    reads: ["Emotions", "NeedState"],
+                    writes: ["AttentionState"],
+                ),
+            ],
+        ),
+        Phase(
+            name: "HealthUpdate",
+            systems: [
+                System(
+                    name: "system_health",
+                    reads: ["NeedState", "HealthConfig"],
+                    writes: ["BodyState", "AgentDiseases"],
+                ),
+            ],
+        ),
+        Phase(
+            name: "InstitutionalUpdate",
+            systems: [
+                System(
+                    name: "institutional_collective_psychology",
+                    reads: ["AgentAffect", "AgentEmotions"],
+                    writes: ["InstitutionCollective"],
+                ),
+                System(
+                    name: "norm_evaluation",
+                    reads: ["Events", "NormRegistry", "Institutions"],
+                    writes: ["Relationships", "AgentEmotions", "InstitutionLegitimacy"],
+                ),
+            ],
+        ),
+        Phase(
+            name: "FactionDynamics",
+            systems: [
+                System(
+                    name: "faction_formation",
+                    reads: ["DerivedMentalState", "Emotions", "Needs", "MoralValues", "Institutions"],
+                    writes: ["Institutions"],
+                ),
+                System(
+                    name: "faction_protests",
+                    reads: ["Institutions"],
+                    writes: ["Institutions"],
+                ),
+            ],
+        ),
+        Phase(
+            name: "DerivedMentalState",
+            systems: [
+                System(
+                    name: "derived_mental_states",
+                    reads: ["Emotions", "Needs", "Personality", "MoralValues", "RecentSuccesses"],
+                    writes: ["DerivedMentalState"],
+                ),
+            ],
+        ),
+        Phase(
+            name: "Ecology",
+            systems: [
+                System(
+                    name: "system_ecology_season_advance",
+                    reads: ["SeasonTracker"],
+                    writes: ["SeasonTracker"],
+                ),
+            ],
+        ),
+        Phase(
+            name: "Demography",
+            systems: [
+                System(
+                    name: "system_demography_aging",
+                    reads: ["BodyState", "DemographyConfig"],
+                    writes: ["AgentAge", "AgentRemoval"],
+                ),
+            ],
+        ),
+    ],
+)

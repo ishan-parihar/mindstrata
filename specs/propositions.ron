@@ -1,0 +1,19 @@
+// §45.6 Proposition registry — every proposition that beliefs can reference.
+// The spec linter validates that all proposition_id values in code are registered here.
+
+Propositions(
+    entries: [
+        Proposition(id: 0, label: "market_is_fair", description: "The market treats everyone fairly."),
+        Proposition(id: 1, label: "council_is_legitimate", description: "The council has the right to govern."),
+        Proposition(id: 2, label: "council_is_corrupt", description: "The council is self-serving and unjust."),
+        Proposition(id: 3, label: "neighbor_is_trustworthy", description: "My neighbors can be trusted."),
+        Proposition(id: 4, label: "foreigners_are_dangerous", description: "Outsiders pose a threat to our community."),
+        Proposition(id: 5, label: "harvest_will_fail", description: "This season's harvest will be poor."),
+        Proposition(id: 6, label: "hard_work_leads_to_wealth", description: "Diligent labor is rewarded with prosperity."),
+        Proposition(id: 7, label: "temple_is_corrupt", description: "The temple clergy are hypocritical."),
+        Proposition(id: 8, label: "grain_prices_are_too_high", description: "The market charges unfair prices for grain."),
+        Proposition(id: 9, label: "council_protects_us", description: "The council keeps our settlement safe."),
+        Proposition(id: 10, label: "well_is_contaminated", description: "The well water is unsafe to drink."),
+        Proposition(id: 11, label: "merchant_is_hoarding", description: "The merchants are hoarding resources."),
+    ],
+)

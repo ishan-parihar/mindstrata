@@ -1,0 +1,136 @@
+// §45.4 Action grammar — defines all actions with preconditions, effects, and social meaning.
+// The spec linter validates that every action has both preconditions and effects.
+
+Actions(
+    actions: [
+        Action(
+            id: "eat",
+            category: Consumption,
+            duration_ticks: 3,
+            preconditions: [
+                HasResource("grain", 0.1),
+            ],
+            effects: [
+                ReduceNeed("hunger", 0.15),
+                ConsumeResource("grain", 0.1),
+            ],
+            social_meaning: ["self_sustenance"],
+            norm_relations: [],
+        ),
+        Action(
+            id: "drink",
+            category: Consumption,
+            duration_ticks: 2,
+            preconditions: [
+                HasResource("water", 0.15),
+            ],
+            effects: [
+                ReduceNeed("thirst", 0.2),
+                ConsumeResource("water", 0.15),
+            ],
+            social_meaning: ["self_sustenance"],
+            norm_relations: [],
+        ),
+        Action(
+            id: "rest",
+            category: Recovery,
+            duration_ticks: 8,
+            preconditions: [
+                NotAtCriticalNeed(),
+            ],
+            effects: [
+                ReduceNeed("fatigue", 0.3),
+                IncreaseBody("energy", 0.1),
+            ],
+            social_meaning: ["private"],
+            norm_relations: [],
+        ),
+        Action(
+            id: "work",
+            category: Productive,
+            duration_ticks: 12,
+            preconditions: [
+                AtSite("farm"),
+            ],
+            effects: [
+                ProduceResource("grain", 0.05),
+                IncreaseNeed("fatigue", 0.1),
+            ],
+            social_meaning: ["productive_labor"],
+            norm_relations: [
+                Respects("hard_work_norm"),
+            ],
+        ),
+        Action(
+            id: "socialize",
+            category: Social,
+            duration_ticks: 6,
+            preconditions: [
+                NearAgent(),
+            ],
+            effects: [
+                ReduceNeed("social", 0.15),
+                ModifyRelationship(Trust, +0.01),
+            ],
+            social_meaning: ["community_bonding"],
+            norm_relations: [
+                Respects("community_norm"),
+            ],
+        ),
+        Action(
+            id: "worship",
+            category: Ritual,
+            duration_ticks: 5,
+            preconditions: [
+                AtSite("temple"),
+            ],
+            effects: [
+                ReduceNeed("meaning", 0.1),
+                IncreaseEmotion("trust", 0.02),
+            ],
+            social_meaning: ["religious_practice"],
+            norm_relations: [
+                Respects("religious_norm"),
+            ],
+        ),
+        Action(
+            id: "idle",
+            category: Passive,
+            duration_ticks: 1,
+            preconditions: [],
+            effects: [],
+            social_meaning: [],
+            norm_relations: [],
+        ),
+        Action(
+            id: "wander",
+            category: Passive,
+            duration_ticks: 4,
+            preconditions: [
+                NotAtCriticalNeed(),
+            ],
+            effects: [
+                IncreaseNeed("fatigue", 0.02),
+            ],
+            social_meaning: [],
+            norm_relations: [],
+        ),
+        Action(
+            id: "threaten",
+            category: Aggressive,
+            duration_ticks: 2,
+            preconditions: [
+                NearAgent(),
+            ],
+            effects: [
+                IncreaseEmotion("fear", +0.1),
+                DecreaseRelationship(Trust, -0.05),
+                ApplyInjury(0.1),
+            ],
+            social_meaning: ["aggression", "norm_violation"],
+            norm_relations: [
+                Violates("do_not_threaten"),
+            ],
+        ),
+    ],
+)

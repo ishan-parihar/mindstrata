@@ -27,5 +27,6 @@ pub mod social;
 pub mod systems;
 pub mod world;
 pub mod world_gen;
+pub mod spec_lint;
 
 pub use sim::Simulation;

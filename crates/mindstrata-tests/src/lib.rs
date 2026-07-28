@@ -1,6 +1,9 @@
 //! Integration tests for Mindstrata.
 
 #[cfg(test)]
+mod property_tests;
+
+#[cfg(test)]
 mod smoke {
     use mindstrata_core::clock::Tick;
     use mindstrata_core::fixed::Fixed;
