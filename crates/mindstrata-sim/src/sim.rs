@@ -7,6 +7,8 @@ use crate::journal::{EventJournal, JournalEntryKind};
 use crate::memory::{MemoryKind, MemoryStore, MemoryTag};
 use crate::norms::{self, NormRegistry};
 use crate::attention::AttentionState;
+use crate::faction::Faction;
+use crate::institutions::{self, Institution};
 pub use crate::attention;
 pub use crate::person::Intention;
 use crate::person::{Affect, BodyState, Belief, DiscreteEmotions, Goal, GoalKind, IdentityKind, IdentityState, NeedState, Personality, Relationship};
@@ -80,6 +82,10 @@ pub struct Simulation {
     events: Vec<SimEvent>,
     journal: EventJournal,
     norms: NormRegistry,
+    /// §12: Institutions are first-class entities with legitimacy, roles, and collective psychology.
+    pub institutions: Vec<Institution>,
+    /// §26: Factions are emergent political groups with collective identity.
+    pub factions: Vec<Faction>,
     scenario: Option<Scenario>,
 }
 
@@ -99,6 +105,8 @@ impl Simulation {
             events: Vec::new(),
             journal: EventJournal::new(),
             norms: NormRegistry::new(),
+            institutions: Vec::new(),
+            factions: Vec::new(),
             scenario: None,
         }
     }
@@ -227,11 +235,30 @@ impl Simulation {
             self.norms.register(norm);
         }
 
+        // §12: Create default institutions
+        self.institutions = institutions::default_institutions();
+
+        // Assign some agents to institutional roles
+        if self.agents.len() >= 3 {
+            // Assign an elder to the council
+            if let Some(council) = self.institutions.iter_mut().find(|i| i.kind == institutions::InstitutionKind::Council) {
+                council.assign_role("Elder", AgentId::new(0));
+                council.add_member(AgentId::new(0));
+                council.add_member(AgentId::new(1));
+            }
+            // Assign a priest to the temple
+            if let Some(temple) = self.institutions.iter_mut().find(|i| i.kind == institutions::InstitutionKind::Temple) {
+                temple.assign_role("Priest", AgentId::new(2));
+                temple.add_member(AgentId::new(2));
+            }
+        }
+
         tracing::info!(
             agents = self.agents.len(),
             sites = self.world.sites.len(),
             relationships = self.relationships.len(),
             norms = self.norms.norms().len(),
+            institutions = self.institutions.len(),
             "World populated"
         );
     }
@@ -743,7 +770,44 @@ impl Simulation {
             }
         }
 
-        // ── 12. Belief updates from this tick's social interactions ────
+        // ── 12. Institutional collective psychology derivation ────
+        // §23: Derive collective psychology from member states each tick.
+        for institution in self.institutions.iter_mut() {
+            let member_morales: Vec<Fixed> = institution
+                .members
+                .iter()
+                .filter_map(|m| {
+                    let idx = m.as_u64() as usize;
+                    if idx < self.agents.len() {
+                        Some(self.agents[idx].affect.valence)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            let member_trusts: Vec<Fixed> = institution
+                .members
+                .iter()
+                .filter_map(|m| {
+                    let idx = m.as_u64() as usize;
+                    if idx < self.agents.len() {
+                        Some(self.agents[idx].emotions.trust)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            institution.derive_collective_psychology(&member_morales, &member_trusts);
+            // Slow legitimacy decay without reinforcement
+            institution.decay_legitimacy(Fixed::from_f64(0.0001));
+        }
+
+        // ── 13. Faction mobilization derivation ────
+        for faction in self.factions.iter_mut() {
+            faction.derive_mobilization();
+        }
+
+        // ── 14. Belief updates from this tick's social interactions ────
         for ev in &self.events[pre_tick_events..] {
             if let SimEvent::InteractionOccurred { from, to, .. } = ev {
                 let from_idx = from.as_u64() as usize;

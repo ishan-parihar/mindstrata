@@ -9,6 +9,8 @@ pub mod actions;
 pub mod appraisal;
 pub mod attention;
 pub mod belief_update;
+pub mod faction;
+pub mod institutions;
 pub mod journal;
 pub mod memory;
 pub mod norms;
