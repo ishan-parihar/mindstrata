@@ -2242,15 +2242,11 @@ Use a Cargo workspace.
 project/
   Cargo.toml
   crates/
-    sim-core/
-    sim-world/
-    sim-psych/
-    sim-behavior/
-    sim-social/
-    sim-systems/
-    sim-cli/
-    sim-tui/
-    sim-tests/
+    mindstrata-core/
+    mindstrata-sim/
+    mindstrata-cli/
+    mindstrata-tui/
+    mindstrata-tests/
 ```
 
 ---
@@ -4723,7 +4719,7 @@ Goal:
 Command:
 
 ```bash
-cargo run -p sim-cli -- --seed 42 --ticks 1000
+cargo run -p mindstrata-cli -- sim --seed 42 --ticks 1000
 ```
 
 Acceptance:
@@ -4997,7 +4993,13 @@ Systems:
 - simple ecology
 - simple migration
 
-Do not add factions yet.
+Do not add yet:
+
+- factions
+- full law
+- full tech
+- full climate
+- full warfare
 
 Let factions emerge if possible.
 
@@ -5210,21 +5212,17 @@ Do this exact sequence.
 ```bash
 cargo new mindstrata --workspace
 cd mindstrata
-mkdir crates
+mkdir crates specs tasks golden runs
 ```
 
 Create:
 
 ```text
-crates/sim-core
-crates/sim-world
-crates/sim-psych
-crates/sim-behavior
-crates/sim-social
-crates/sim-systems
-crates/sim-cli
-crates/sim-tui
-crates/sim-tests
+crates/mindstrata-core
+crates/mindstrata-sim
+crates/mindstrata-cli
+crates/mindstrata-tui
+crates/mindstrata-tests
 ```
 
 ---
@@ -5242,7 +5240,7 @@ Requirements:
 Command:
 
 ```bash
-cargo run -p sim-cli -- --seed 42 --ticks 1000
+cargo run -p mindstrata-cli -- sim --seed 42 --ticks 1000
 ```
 
 ---
@@ -6311,3 +6309,102 @@ AI agents can enter loops when they lack a clear oracle.
 - No task is accepted without evidence
 - Evidence is stored in a standard format
 - The agent can always ask "what specifically failed?"
+
+---
+
+# 51. Friction-Reducing Architecture for AI Agents
+
+If you want maximum efficacy with autonomous agents, add these explicitly.
+
+---
+
+## 51.1 Every system must have observable effects
+
+No system should exist unless it changes at least one of:
+
+- metrics
+- events
+- traces
+- agent behavior
+- institutional outcome
+
+This prevents invisible complexity.
+
+---
+
+## 51.2 Every task must be small
+
+A good task usually touches:
+
+- one phase
+- one substrate
+- one component family
+- one scenario effect
+
+Avoid large cross-cutting tasks unless they are integration milestones.
+
+---
+
+## 51.3 Every failure must produce a minimal trace
+
+The system should automatically emit:
+
+- failing tick
+- failing entity
+- failing system
+- relevant inputs
+- relevant beliefs
+- relevant emotions
+- relevant norms
+- relevant causal parents
+
+This makes debugging autonomous.
+
+---
+
+## 51.4 Every scenario must have assertions
+
+No scenario should be only "run and see."
+
+It should include:
+
+- invariant assertions
+- metric assertions
+- statistical assertions
+- trace assertions
+
+---
+
+## 51.5 Every baseline must be reviewable
+
+Golden baselines should be stored as:
+
+```text
+golden/
+  riverford_minor/
+    seed_42/
+      metrics.json
+      replay.hash
+      summary.md
+```
+
+If a baseline changes, the agent must produce a delta report.
+
+---
+
+## 51.6 Add a spec linter
+
+This is highly recommended.
+
+The linter should check:
+
+- every action has preconditions and effects
+- every norm has sanction and scope
+- every proposition is registered
+- every system declares reads/writes
+- every event kind has trace metadata
+- every scenario assertion refers to a known metric
+- every institution has at least one decision procedure
+- every office has authority and obligations
+
+This prevents ontology drift.

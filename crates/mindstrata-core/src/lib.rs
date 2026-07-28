@@ -5,7 +5,6 @@
 //! - Seeded RNG streams
 //! - Entity and resource ID types
 //! - Event system
-//! - Proposition identifiers for beliefs
 //! - Clock and time types
 //! - Error types
 
@@ -16,12 +15,10 @@ pub mod error;
 pub mod event;
 pub mod fixed;
 pub mod id;
-pub mod proposition;
 pub mod rng;
 
 pub use clock::{Clock, Tick};
 pub use error::{Error, Result};
 pub use fixed::Fixed;
 pub use id::{AgentId, EntityId, ResourceId, SiteId};
-pub use proposition::PropositionId;
 pub use rng::RngStreams;

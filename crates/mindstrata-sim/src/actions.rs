@@ -338,6 +338,31 @@ mod tests {
     }
 
     #[test]
+    fn rest_per_tick_effects() {
+        let fx = ActionKind::Rest.per_tick_effects();
+        let def = ActionKind::Rest.definition();
+        let d = Fixed::from_int(def.duration_ticks as i64);
+        // Base fatigue_relief is divided by duration
+        assert_eq!(fx.fatigue_relief, def.fatigue_relief / d);
+        // Bonus fields are NOT divided (they're already per-tick)
+        assert_eq!(fx.bonus_fatigue_relief, def.bonus_fatigue_relief);
+        assert_eq!(fx.bonus_energy_recovery, def.bonus_energy_recovery);
+    }
+
+    #[test]
+    fn socialize_per_tick_effects() {
+        let fx = ActionKind::Socialize.per_tick_effects();
+        assert_eq!(fx.bonus_social_relief, Fixed::from_f64(0.1));
+        assert_eq!(fx.social_value, Fixed::from_f64(0.3)); // social_value is NOT divided
+    }
+
+    #[test]
+    fn worship_per_tick_effects() {
+        let fx = ActionKind::Worship.per_tick_effects();
+        assert_eq!(fx.bonus_meaning_relief, Fixed::from_f64(0.1));
+    }
+
+    #[test]
     fn rest_reduces_fatigue_with_bonus() {
         let mut body = BodyState::default();
         let mut needs = NeedState {

@@ -145,7 +145,13 @@ pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
     };
     // temple is the last site — no need to increment site_id after
     let _ = &mut site_id;
-    let _ = place_site(world, center_x, center_y.saturating_sub(5), temple);
+    // NOTE: debug_assert only fires in debug builds; release silently ignores failure.
+    debug_assert!(
+        place_site(world, center_x, center_y.saturating_sub(5), temple),
+        "Temple placement failed — out of bounds at ({}, {})",
+        center_x,
+        center_y.saturating_sub(5)
+    );
 
     // Add resource definitions
     world.resources.push(ResourceDef {
