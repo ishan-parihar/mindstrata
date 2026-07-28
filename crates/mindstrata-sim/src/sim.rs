@@ -101,8 +101,13 @@ pub struct AgentBundle {
     pub cultural: CulturalState,
     /// §19.5.F: Partner index (if married/partnered).
     pub partner: Option<usize>,
+    /// §19.5.F: Parent indices (for children).
+    pub parent_a: Option<usize>,
+    pub parent_b: Option<usize>,
     /// §19.5.G: Active feuds — set of agent indices this agent is feuding with.
     pub feuds: Vec<usize>,
+    /// §19.5.G: Tick when each feud started (for decay).
+    pub feud_ticks: Vec<u64>,
 }
 
 /// The simulation state.
@@ -279,7 +284,10 @@ impl Simulation {
                 conflict: ConflictState::default(),
                 cultural: CulturalState::default(),
                 partner: None,
+                parent_a: None,
+                parent_b: None,
                 feuds: Vec::new(),
+                feud_ticks: Vec::new(),
             });
         }
 
@@ -1586,7 +1594,9 @@ impl Simulation {
                         let was_new = !self.agents[a_idx].feuds.contains(&t_idx);
                         if was_new {
                             self.agents[a_idx].feuds.push(t_idx);
+                            self.agents[a_idx].feud_ticks.push(tick_u64);
                             self.agents[t_idx].feuds.push(a_idx);
+                            self.agents[t_idx].feud_ticks.push(tick_u64);
                             self.events.push(SimEvent::FeudFormed {
                                 party_a: *aggressor,
                                 party_b: *target,
@@ -1689,15 +1699,16 @@ impl Simulation {
                     let rng_val = Fixed::from_f64(
                         self.rng.get_mut(RngStream::Social).random::<f64>()
                     );
-                    // Count existing children for this couple
+                    // Count existing children for this specific couple
                     let existing_children = self.agents.iter().filter(|a| {
-                        a.partner.is_some() && a.age < Fixed::from_f64(18.0)
+                        (a.parent_a == Some(i) && a.parent_b == Some(partner_idx))
+                            || (a.parent_a == Some(partner_idx) && a.parent_b == Some(i))
                     }).count();
                     let should = demography::should_birth(
                         true, min_health, avg_age, existing_children,
                         &self.demography_config, rng_val,
                     );
-                    if should && n + new_births.len() < 48 { // cap population
+                    if should && n + new_births.len() < crate::population_cap::MAX_POPULATION {
                         new_births.push((i, partner_idx, n + new_births.len()));
                     }
                 }
@@ -1746,10 +1757,11 @@ impl Simulation {
                     conflict: ConflictState::default(),
                     cultural: CulturalState::default(),
                     partner: None,
+                    parent_a: Some(parent_a),
+                    parent_b: Some(parent_b),
                     feuds: Vec::new(),
-                });
-
-                // Add relationships to all existing agents
+                    feud_ticks: Vec::new(),
+                });                // Add relationships to all existing agents
                 for existing_idx in 0..self.agents.len() - 1 {
                     let trust = if existing_idx == parent_a || existing_idx == parent_b {
                         Fixed::from_f64(0.8) // high trust for parents
@@ -1798,9 +1810,21 @@ impl Simulation {
             }
         }
 
-        // ── 20. Conflict state update — trauma decay, combat fatigue ──
+        // ── 20. Conflict state update — trauma decay, combat fatigue, feud decay ──
         for agent in self.agents.iter_mut() {
             agent.conflict.update();
+            // §19.5.G: Feud decay — remove feuds older than 500 ticks
+            let feud_decay_threshold = tick_u64.saturating_sub(500);
+            let mut keep = 0;
+            for j in 0..agent.feuds.len() {
+                if agent.feud_ticks[j] > feud_decay_threshold {
+                    agent.feuds[keep] = agent.feuds[j];
+                    agent.feud_ticks[keep] = agent.feud_ticks[j];
+                    keep += 1;
+                }
+            }
+            agent.feuds.truncate(keep);
+            agent.feud_ticks.truncate(keep);
         }
 
         // ── 21. §19.5.E Carrying cost — heavy loads increase fatigue ──

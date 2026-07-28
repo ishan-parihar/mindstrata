@@ -2,10 +2,10 @@
   "scenario": "riverford_minor",
   "seed": 42,
   "ticks": 1000,
-  "metric_hash": 2269244879635470340,
-  "event_hash": 11654906192368603196,
-  "agent_hash": 15987215304392694151,
-  "agent_count": 48,
-  "total_grain": 39.7669,
-  "total_water": 125.0
+  "metric_hash": 2607911931413525571,
+  "event_hash": 16736813105914984451,
+  "agent_hash": 996717225526506826,
+  "agent_count": 24,
+  "total_grain": 54.2439,
+  "total_water": 170.0
 }
