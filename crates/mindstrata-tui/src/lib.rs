@@ -3,10 +3,13 @@
 //! Provides ASCII world map, agent list, event log, and system dashboard.
 
 use mindstrata_core::event::SimEvent;
+use mindstrata_core::fixed::Fixed;
 use mindstrata_core::id::AgentId;
 use mindstrata_sim::world::{World, Terrain, SiteKind};
 use mindstrata_sim::sim::AgentSummary;
-use mindstrata_sim::person::Relationship;
+use mindstrata_sim::person::{Belief, Relationship};
+use mindstrata_sim::market::MarketState;
+use mindstrata_sim::institutions::Institution;
 
 /// Render the ASCII world map.
 pub fn render_world_map(world: &World) -> String {
@@ -286,4 +289,183 @@ pub fn render_dashboard(
         config.institution_count, config.faction_count,
         config.grain, config.water,
     )
+}
+
+// ── §17.1: Market Dashboard ─────────────────────────────────────────────
+
+/// §17.1: Render market dashboard showing prices, inequality, trade volume.
+pub fn render_market_dashboard(market: &MarketState) -> String {
+    let mut out = String::new();
+    out.push_str("╔══════════════════════════════════════════╗\n");
+    out.push_str("║  Market Dashboard                        ║\n");
+    out.push_str("╚══════════════════════════════════════════╝\n\n");
+
+    for (i, tracker) in market.prices.iter().enumerate() {
+        let resource_name = match i {
+            0 => "Grain",
+            1 => "Water",
+            _ => "Unknown",
+        };
+        let trend = tracker.trend();
+        let trend_char = if trend > Fixed::from_f64(0.1) {
+            "↑"
+        } else if trend < Fixed::from_f64(-0.1) {
+            "↓"
+        } else {
+            "→"
+        };
+        out.push_str(&format!(
+            "  {:<8} Price: {:5.1} {}  Supply: {:5.1}  Demand: {:5.1}\n",
+            resource_name,
+            tracker.price.to_f64(),
+            trend_char,
+            tracker.avg_supply.to_f64(),
+            tracker.avg_demand.to_f64(),
+        ));
+    }
+
+    out.push_str(&format!(
+        "\n  ── Market Metrics ──\n\
+         Inequality (Gini): {:.3}\n\
+         Avg Wealth:        {:.1}\n\
+         Median Wealth:     {:.1}\n\
+         Trade Volume:      {:.1}\n",
+        market.inequality.to_f64(),
+        market.avg_wealth.to_f64(),
+        market.median_wealth.to_f64(),
+        market.volume_this_tick.to_f64(),
+    ));
+
+    out
+}
+
+// ── §17.1: Belief Inspector ────────────────────────────────────────────
+
+/// §17.1: Render an agent's beliefs.
+pub fn render_belief_inspector(
+    agent_name: &str,
+    agent_id: usize,
+    beliefs: &[Belief],
+) -> String {
+    let mut out = String::new();
+    out.push_str("╔══════════════════════════════════════════╗\n");
+    out.push_str("║  Belief Inspector                        ║\n");
+    out.push_str("╚══════════════════════════════════════════╝\n\n");
+    out.push_str(&format!("Agent: {} (ID {})\n\n", agent_name, agent_id));
+
+    if beliefs.is_empty() {
+        out.push_str("  (no beliefs)\n");
+        return out;
+    }
+
+    out.push_str(&format!(
+        "  {:<5} {:<8} {:>8} {:>8} {:>8}\n",
+        "ID", "Prop", "Conf", "Emotion", "Identity"
+    ));
+    out.push_str(&format!("  {}\n", "─".repeat(42)));
+
+    for b in beliefs.iter().take(15) {
+        out.push_str(&format!(
+            "  {:<5} {:<8} {:>8.3} {:>8.3} {:>8.3}\n",
+            b.proposition_id,
+            "prop_{}",
+            b.confidence.to_f64(),
+            b.emotional_charge.to_f64(),
+            b.identity_linkage.to_f64(),
+        ));
+    }
+    if beliefs.len() > 15 {
+        out.push_str(&format!("  ... and {} more\n", beliefs.len() - 15));
+    }
+
+    out
+}
+
+// ── §17.1: Faction Dashboard ────────────────────────────────────────────
+
+/// §17.1: Render faction/institution dashboard.
+pub fn render_faction_dashboard(institutions: &[Institution]) -> String {
+    let mut out = String::new();
+    out.push_str("╔══════════════════════════════════════════╗\n");
+    out.push_str("║  Institution Dashboard                   ║\n");
+    out.push_str("╚══════════════════════════════════════════╝\n\n");
+
+    if institutions.is_empty() {
+        out.push_str("  (no institutions)\n");
+        return out;
+    }
+
+    for inst in institutions {
+        let kind_str = format!("{:?}", inst.kind);
+        out.push_str(&format!(
+            "  {} [{}]\n\
+             │ Legitimacy: {:.3}  Cohesion: {:.3}  Members: {}\n",
+            inst.name, kind_str,
+            inst.legitimacy.to_f64(),
+            inst.collective.unity.to_f64(),
+            inst.members.len(),
+        ));
+        out.push_str(&format!(
+            "  │ Morale: {:.3}  Enforcement: {:.3}\n\n",
+            inst.collective.morale.to_f64(),
+            inst.enforcement_capacity.to_f64(),
+        ));
+    }
+
+    out
+}
+
+// ── §17.1: Provenance Timeline ──────────────────────────────────────────
+
+/// §17.1: Render event log with more detail for debugging.
+pub fn render_event_log_detailed(events: &[SimEvent], n: usize) -> String {
+    let mut out = String::new();
+    let start = events.len().saturating_sub(n);
+    for (i, ev) in events[start..].iter().enumerate() {
+        let tick = start + i;
+        match ev {
+            SimEvent::AgentAte { agent, .. } => {
+                out.push_str(&format!("  [{tick:>5}] 🍞 Agent {} ate\n", agent.as_u64()));
+            }
+            SimEvent::AgentDrank { agent, .. } => {
+                out.push_str(&format!("  [{tick:>5}] 💧 Agent {} drank\n", agent.as_u64()));
+            }
+            SimEvent::AgentRested { agent, .. } => {
+                out.push_str(&format!("  [{tick:>5}] 😴 Agent {} rested\n", agent.as_u64()));
+            }
+            SimEvent::InteractionOccurred { from, to, kind, .. } => {
+                let icon = match kind {
+                    mindstrata_core::event::InteractionKind::Help => "🤝",
+                    mindstrata_core::event::InteractionKind::Threaten => "⚔️",
+                    mindstrata_core::event::InteractionKind::Insult => "💢",
+                    mindstrata_core::event::InteractionKind::Gossip => "💬",
+                    mindstrata_core::event::InteractionKind::Trade => "💰",
+                    mindstrata_core::event::InteractionKind::Comfort => "❤️",
+                    _ => "→",
+                };
+                out.push_str(&format!(
+                    "  [{tick:>5}] {} Agent {} → Agent {}\n",
+                    icon, from.as_u64(), to.as_u64()
+                ));
+            }
+            SimEvent::RelationshipChanged { from, to, trust_delta, affection_delta, .. } => {
+                out.push_str(&format!(
+                    "  [{tick:>5}] 📊 {}→{} trust {:+.3} affection {:+.3}\n",
+                    from.as_u64(), to.as_u64(),
+                    trust_delta.to_f64(), affection_delta.to_f64()
+                ));
+            }
+            SimEvent::RumorSpread { source, target, content_hash, distortion, .. } => {
+                out.push_str(&format!(
+                    "  [{tick:>5}] 🗣️ Rumor {}→{} prop={} distortion={:.3}\n",
+                    source.as_u64(), target.as_u64(),
+                    content_hash, distortion.to_f64()
+                ));
+            }
+            _ => {
+                out.push_str(&format!("  [{tick:>5}] ❓ {:?}\n", ev));
+            }
+        }
+    }
+    out
 }
