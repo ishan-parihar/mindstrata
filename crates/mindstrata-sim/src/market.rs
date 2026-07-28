@@ -114,24 +114,12 @@ impl PriceTracker {
 pub struct WealthState {
     /// Amount of coin the agent possesses.
     pub coin: Fixed,
-    /// Total value of assets (coin + resource value estimates).
-    pub net_worth: Fixed,
-    /// Income received this tick (for trend tracking).
-    pub income_this_tick: Fixed,
-    /// Expenditure this tick.
-    pub expenditure_this_tick: Fixed,
-    /// Running average income (for inequality metrics).
-    pub avg_income: Fixed,
 }
 
 impl Default for WealthState {
     fn default() -> Self {
         Self {
             coin: Fixed::from_f64(10.0), // starting wealth
-            net_worth: Fixed::from_f64(10.0),
-            income_this_tick: Fixed::ZERO,
-            expenditure_this_tick: Fixed::ZERO,
-            avg_income: Fixed::ZERO,
         }
     }
 }
@@ -242,9 +230,7 @@ pub fn execute_trade(
 
     // Execute trade
     buyer_wealth.coin = (buyer_wealth.coin - total_cost).max(Fixed::ZERO);
-    buyer_wealth.expenditure_this_tick = total_cost;
     *seller_stock = (*seller_stock - quantity).max(Fixed::ZERO);
-    buyer_wealth.net_worth = buyer_wealth.coin; // simplified net worth
 
     // Update market volume
     market.volume_this_tick += quantity;
@@ -264,7 +250,6 @@ pub fn execute_trade(
 /// Prices are influenced by the market but can be negotiated via relationship trust.
 pub fn direct_trade(
     buyer_wealth: &mut WealthState,
-    _buyer_needs: &NeedState,
     seller_stock: &mut Fixed,
     resource_id: u64,
     quantity: Fixed,
@@ -290,9 +275,7 @@ pub fn direct_trade(
 
     // Execute direct trade
     buyer_wealth.coin = (buyer_wealth.coin - total_cost).max(Fixed::ZERO);
-    buyer_wealth.expenditure_this_tick += total_cost;
     *seller_stock = (*seller_stock - quantity).max(Fixed::ZERO);
-    buyer_wealth.net_worth = buyer_wealth.coin;
 
     market.volume_this_tick += quantity;
     market.trade_count += 1;
@@ -513,8 +496,8 @@ mod tests {
         let mut stock2 = Fixed::from_f64(10.0);
         let mut market = MarketState::new();
 
-        let r1 = direct_trade(&mut buyer_high_trust, &NeedState::default(), &mut stock1, 0, Fixed::from_f64(1.0), Fixed::from_f64(0.9), &mut market);
-        let r2 = direct_trade(&mut buyer_low_trust, &NeedState::default(), &mut stock2, 0, Fixed::from_f64(1.0), Fixed::from_f64(0.1), &mut market);
+        let r1 = direct_trade(&mut buyer_high_trust, &mut stock1, 0, Fixed::from_f64(1.0), Fixed::from_f64(0.9), &mut market);
+        let r2 = direct_trade(&mut buyer_low_trust, &mut stock2, 0, Fixed::from_f64(1.0), Fixed::from_f64(0.1), &mut market);
 
         match (r1, r2) {
             (TradeResult::Success { total_cost: cost1, .. }, TradeResult::Success { total_cost: cost2, .. }) => {

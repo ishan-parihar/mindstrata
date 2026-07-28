@@ -740,11 +740,7 @@ impl Simulation {
         } // ctx is dropped here, releasing mutable borrows on self.events and self.rng
 
         // ── 4b. Resource operations, journal recording, intention tracking ──
-        // Reset per-tick wealth counters
-        for agent in self.agents.iter_mut() {
-            agent.wealth.income_this_tick = Fixed::ZERO;
-            agent.wealth.expenditure_this_tick = Fixed::ZERO;
-        }
+
         for (agent_idx, action) in &action_starts {
             let agent_id = AgentId::new(*agent_idx as u64);
             // §24.5: Track intention success/failure when action completes.
@@ -760,8 +756,6 @@ impl Simulation {
                         // §13.3: Consumers pay coin for resources consumed
                         let cost = taken * self.market.price(GRAIN_RESOURCE_ID);
                         self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - cost).max(Fixed::ZERO);
-                        self.agents[*agent_idx].wealth.expenditure_this_tick += cost;
-                        self.agents[*agent_idx].wealth.net_worth = self.agents[*agent_idx].wealth.coin;
                         self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "grain".into(), amount: taken.to_f64() });
                         taken > Fixed::ZERO
                     } else {
@@ -776,8 +770,6 @@ impl Simulation {
                         // §13.3: Consumers pay coin for water consumed
                         let cost = taken * self.market.price(WATER_RESOURCE_ID);
                         self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - cost).max(Fixed::ZERO);
-                        self.agents[*agent_idx].wealth.expenditure_this_tick += cost;
-                        self.agents[*agent_idx].wealth.net_worth = self.agents[*agent_idx].wealth.coin;
                         self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "water".into(), amount: taken.to_f64() });
                         taken > Fixed::ZERO
                     } else {
@@ -791,8 +783,7 @@ impl Simulation {
                         // §13.3: Workers earn coin proportional to productivity
                         let wage = productivity * self.market.price(GRAIN_RESOURCE_ID) * Fixed::from_f64(0.3);
                         self.agents[*agent_idx].wealth.coin += wage;
-                        self.agents[*agent_idx].wealth.income_this_tick += wage;
-                        self.agents[*agent_idx].wealth.net_worth = self.agents[*agent_idx].wealth.coin;
+
                         self.journal.record(tick_u64, agent_id, JournalEntryKind::Worked { productivity: productivity.to_f64() });
                         true
                     } else {
