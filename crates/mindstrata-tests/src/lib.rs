@@ -492,7 +492,8 @@ mod smoke {
         let snapshot = sim.save_snapshot();
         assert_eq!(snapshot.version, SNAPSHOT_VERSION);
         assert_eq!(snapshot.tick, 100);
-        assert_eq!(snapshot.agents.len(), 12);
+        // §19.5.F: Population may grow from births during simulation
+        assert!(snapshot.agents.len() >= 12, "Should have at least 12 agents after 100 ticks");
         assert!(!snapshot.events.is_empty(), "Should have events after 100 ticks");
 
         // Serialize to bytes and back

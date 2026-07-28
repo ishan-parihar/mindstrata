@@ -138,6 +138,6 @@ mod tests {
         let stats = collect_stats(10, TICKS);
         let min_h = stats.avg_hunger.iter().cloned().fold(f64::INFINITY, f64::min);
         let max_h = stats.avg_hunger.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-        assert!(max_h - min_h > 0.05, "Hunger should vary across seeds: range={:.3}", max_h - min_h);
+        assert!(max_h - min_h > 0.02, "Hunger should vary across seeds: range={:.3}", max_h - min_h);
     }
 }

@@ -166,6 +166,7 @@ mod tests {
     fn golden_replay_agent_count_stable() {
         let b = run_golden(TEST_SEED, TEST_TICKS);
         assert!(b.agent_count > 0, "Simulation should have agents");
-        assert!(b.agent_count <= 12, "Should not have more agents than initialized");
+        // §19.5.F: Population may grow from births during simulation
+        assert!(b.agent_count <= 48, "Should not exceed population cap of 48");
     }
 }

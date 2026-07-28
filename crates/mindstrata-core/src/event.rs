@@ -127,6 +127,24 @@ pub enum SimEvent {
         fear_induced: Fixed,
         tick: Tick,
     },
+    FeudFormed {
+        party_a: AgentId,
+        party_b: AgentId,
+        tick: Tick,
+    },
+
+    // ── Demographic ─────────────────────────────────────────────────
+    MarriageFormed {
+        spouse_a: AgentId,
+        spouse_b: AgentId,
+        tick: Tick,
+    },
+    ChildBorn {
+        child: AgentId,
+        parent_a: AgentId,
+        parent_b: AgentId,
+        tick: Tick,
+    },
 
     // ── Movement ─────────────────────────────────────────────────────
     AgentMoved {

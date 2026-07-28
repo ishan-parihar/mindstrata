@@ -444,6 +444,24 @@ pub fn render_event_log_detailed(events: &[SimEvent], n: usize) -> String {
                     injury.to_f64(), fear_induced.to_f64()
                 ));
             }
+            SimEvent::FeudFormed { party_a, party_b, .. } => {
+                out.push_str(&format!(
+                    "  [{tick:>5}] 🔥 Feud formed {}↔{}\n",
+                    party_a.as_u64(), party_b.as_u64()
+                ));
+            }
+            SimEvent::MarriageFormed { spouse_a, spouse_b, .. } => {
+                out.push_str(&format!(
+                    "  [{tick:>5}] 💍 Marriage {}↔{}\n",
+                    spouse_a.as_u64(), spouse_b.as_u64()
+                ));
+            }
+            SimEvent::ChildBorn { child, parent_a, parent_b, .. } => {
+                out.push_str(&format!(
+                    "  [{tick:>5}] 👶 Child {} born ({} + {})\n",
+                    child.as_u64(), parent_a.as_u64(), parent_b.as_u64()
+                ));
+            }
             SimEvent::NormViolated { agent, norm_id, witnesses, .. } => {
                 out.push_str(&format!(
                     "  [{tick:>5}] ⚖️ Agent {} violated norm {} ({} witnesses)\n",

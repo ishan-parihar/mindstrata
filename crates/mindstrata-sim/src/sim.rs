@@ -99,6 +99,10 @@ pub struct AgentBundle {
     pub conflict: ConflictState,
     /// §19.5.I: Per-agent cultural state — practices, knowledge, ideology.
     pub cultural: CulturalState,
+    /// §19.5.F: Partner index (if married/partnered).
+    pub partner: Option<usize>,
+    /// §19.5.G: Active feuds — set of agent indices this agent is feuding with.
+    pub feuds: Vec<usize>,
 }
 
 /// The simulation state.
@@ -274,6 +278,8 @@ impl Simulation {
                 },
                 conflict: ConflictState::default(),
                 cultural: CulturalState::default(),
+                partner: None,
+                feuds: Vec::new(),
             });
         }
 
@@ -1118,6 +1124,8 @@ impl Simulation {
                                     });
                                     // §19.5.D: Violence is a severe norm violation
                                     let _ = self.norms.check_violation(4, from_id, tick_u64); // norm id=4: No Violence
+                                    // §19.5.G: Feud tracking is handled in dedicated section 18
+
                                     // Attacker gains shame from violence
                                     self.agents[from_idx].emotions.shame = (
                                         self.agents[from_idx].emotions.shame + Fixed::from_f64(0.15)
@@ -1559,6 +1567,234 @@ impl Simulation {
                         tick_u64,
                     );
                 }
+            }
+        }
+
+        // ── 18. §19.5.G Feud tracking — repeated violence creates persistent feuds ──
+        for ev in &self.events[pre_tick_events..].to_vec() {
+            if let SimEvent::ConflictOccurred {
+                aggressor,
+                target,
+                kind,
+                ..
+            } = ev
+            {
+                if *kind == format!("{:?}", ConflictKind::Violence) {
+                    let a_idx = aggressor.as_u64() as usize;
+                    let t_idx = target.as_u64() as usize;
+                    if a_idx < self.agents.len() && t_idx < self.agents.len() {
+                        let was_new = !self.agents[a_idx].feuds.contains(&t_idx);
+                        if was_new {
+                            self.agents[a_idx].feuds.push(t_idx);
+                            self.agents[t_idx].feuds.push(a_idx);
+                            self.events.push(SimEvent::FeudFormed {
+                                party_a: *aggressor,
+                                party_b: *target,
+                                tick,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── 19. §19.5.F Marriage formation — compatible age + high affection ──
+        {
+            let n = self.agents.len();
+            let mut new_marriages: Vec<(usize, usize)> = Vec::new();
+
+            for i in 0..n {
+                if self.agents[i].partner.is_some() {
+                    continue; // already partnered
+                }
+                if self.agents[i].age < Fixed::from_f64(18.0) {
+                    continue; // too young
+                }
+
+                // Find candidate: compatible age, high affection, no partner
+                for j in (i + 1)..n {
+                    if self.agents[j].partner.is_some() {
+                        continue;
+                    }
+                    if self.agents[j].age < Fixed::from_f64(18.0) {
+                        continue;
+                    }
+                    // Check age compatibility (within 15 years)
+                    let age_diff = (self.agents[i].age - self.agents[j].age).abs();
+                    if age_diff > Fixed::from_f64(15.0) {
+                        continue;
+                    }
+                    // Check relationship affection
+                    let affection = self.relationships.iter()
+                        .find(|r| r.from == AgentId::new(i as u64) && r.to == AgentId::new(j as u64))
+                        .map(|r| r.affection)
+                        .unwrap_or(Fixed::ZERO);
+                    // Marriage probability: affection * trust * health
+                    let health = (self.agents[i].body.health + self.agents[j].body.health) * Fixed::from_f64(0.5);
+                    let marriage_chance = affection * health * Fixed::from_f64(0.001); // low per-tick chance
+                    let rng_val = Fixed::from_f64(
+                        self.rng.get_mut(RngStream::Social).random::<f64>()
+                    );
+                    if rng_val < marriage_chance {
+                        new_marriages.push((i, j));
+                        break; // only one marriage per agent per tick
+                    }
+                }
+            }
+
+            for (a, b) in new_marriages {
+                self.agents[a].partner = Some(b);
+                self.agents[b].partner = Some(a);
+                self.events.push(SimEvent::MarriageFormed {
+                    spouse_a: AgentId::new(a as u64),
+                    spouse_b: AgentId::new(b as u64),
+                    tick,
+                });
+                // Marriage boosts trust and affection
+                if let Some(rel) = self.relationships.iter_mut()
+                    .find(|r| r.from == AgentId::new(a as u64) && r.to == AgentId::new(b as u64))
+                {
+                    rel.trust = (rel.trust + Fixed::from_f64(0.2)).clamp_01();
+                    rel.affection = (rel.affection + Fixed::from_f64(0.3)).clamp_01();
+                }
+                if let Some(rel) = self.relationships.iter_mut()
+                    .find(|r| r.from == AgentId::new(b as u64) && r.to == AgentId::new(a as u64))
+                {
+                    rel.trust = (rel.trust + Fixed::from_f64(0.2)).clamp_01();
+                    rel.affection = (rel.affection + Fixed::from_f64(0.3)).clamp_01();
+                }
+                tracing::info!(
+                    spouse_a = a, spouse_b = b, tick = tick_u64,
+                    "Marriage formed"
+                );
+            }
+        }
+
+        // ── 19b. §19.5.F Birth mechanics — new agents from partnered couples ──
+        {
+            let n = self.agents.len();
+            let mut new_births: Vec<(usize, usize, usize)> = Vec::new(); // (parent_a, parent_b, child_idx)
+
+            for i in 0..n {
+                if let Some(partner_idx) = self.agents[i].partner {
+                    if partner_idx <= i {
+                        continue; // only process each couple once
+                    }
+                    let age_a = self.agents[i].age.to_f64();
+                    let age_b = self.agents[partner_idx].age.to_f64();
+                    let avg_age = (age_a + age_b) * 0.5;
+                    let health_a = self.agents[i].body.health;
+                    let health_b = self.agents[partner_idx].body.health;
+                    let min_health = health_a.min(health_b);
+                    let rng_val = Fixed::from_f64(
+                        self.rng.get_mut(RngStream::Social).random::<f64>()
+                    );
+                    // Count existing children for this couple
+                    let existing_children = self.agents.iter().filter(|a| {
+                        a.partner.is_some() && a.age < Fixed::from_f64(18.0)
+                    }).count();
+                    let should = demography::should_birth(
+                        true, min_health, avg_age, existing_children,
+                        &self.demography_config, rng_val,
+                    );
+                    if should && n + new_births.len() < 48 { // cap population
+                        new_births.push((i, partner_idx, n + new_births.len()));
+                    }
+                }
+            }
+
+            for (parent_a, parent_b, child_idx) in new_births {
+                let child_name = format!("Child_{}", child_idx);
+                // Inherit personality traits with noise
+                let mut child_rng = rand_chacha::ChaCha8Rng::seed_from_u64(
+                    self.config.seed.wrapping_add(tick_u64).wrapping_add(child_idx as u64)
+                );
+                let child_personality = Personality::random(&mut child_rng);
+                let child_age = Fixed::from_f64(0.0); // newborn
+
+                // Allocate home site
+                let home_site = self.agents[parent_a].home_site;
+
+                let agent_id = AgentId::new(child_idx as u64);
+
+                self.agents.push(AgentBundle {
+                    body: BodyState::default(),
+                    needs: NeedState::default(),
+                    personality: child_personality,
+                    goals: Vec::new(),
+                    beliefs: Vec::new(),
+                    affect: Affect::default(),
+                    emotions: DiscreteEmotions::default(),
+                    current_action: ActionKind::Idle,
+                    action_progress: 0,
+                    name: child_name,
+                    home_site,
+                    memory: MemoryStore::new(200),
+                    identity: IdentityState {
+                        identities: vec![],
+                    },
+                    attention: AttentionState::default(),
+                    intention: None,
+                    routine: DailyRoutine::village_routine(),
+                    moral_values: MoralValues::random(&mut child_rng),
+                    cognitive: CognitiveState::default(),
+                    derived: DerivedMentalState::default(),
+                    recent_successes: 0,
+                    recent_attempts: 0,
+                    age: child_age,
+                    wealth: WealthState { coin: Fixed::from_f64(1.0) },
+                    conflict: ConflictState::default(),
+                    cultural: CulturalState::default(),
+                    partner: None,
+                    feuds: Vec::new(),
+                });
+
+                // Add relationships to all existing agents
+                for existing_idx in 0..self.agents.len() - 1 {
+                    let trust = if existing_idx == parent_a || existing_idx == parent_b {
+                        Fixed::from_f64(0.8) // high trust for parents
+                    } else {
+                        Fixed::from_f64(0.4) // moderate trust for others
+                    };
+                    self.relationships.push(Relationship {
+                        from: agent_id,
+                        to: AgentId::new(existing_idx as u64),
+                        trust,
+                        affection: trust * Fixed::from_f64(0.8),
+                        respect: Fixed::from_f64(0.3),
+                        fear: Fixed::ZERO,
+                        obligation: Fixed::ZERO,
+                        last_interaction_tick: tick_u64,
+                    });
+                    self.relationships.push(Relationship {
+                        from: AgentId::new(existing_idx as u64),
+                        to: agent_id,
+                        trust,
+                        affection: trust * Fixed::from_f64(0.5),
+                        respect: Fixed::ZERO,
+                        fear: Fixed::ZERO,
+                        obligation: Fixed::ZERO,
+                        last_interaction_tick: tick_u64,
+                    });
+                }
+
+                // Disease tracking for new agent
+                self.agent_diseases.push(Vec::new());
+
+                self.events.push(SimEvent::ChildBorn {
+                    child: agent_id,
+                    parent_a: AgentId::new(parent_a as u64),
+                    parent_b: AgentId::new(parent_b as u64),
+                    tick,
+                });
+
+                tracing::info!(
+                    child = child_idx,
+                    parent_a = parent_a,
+                    parent_b = parent_b,
+                    tick = tick_u64,
+                    "Child born"
+                );
             }
         }
 
