@@ -67,7 +67,7 @@ impl Rumor {
 
     /// Compute how salient this rumor is to an agent.
     /// High emotional charge and low hop count = more salient.
-    pub fn salience(&self, current_tick: u64) -> Fixed {
+    pub fn salience(&self, _current_tick: u64) -> Fixed {
         // Telephone game: each hop reduces accuracy significantly
         let age_penalty = Fixed::from_f64(0.85).powi(self.hops);
         let emotional_boost = self.emotional_charge * Fixed::from_f64(0.3);
@@ -97,7 +97,7 @@ pub struct GossipResult {
 /// * transmission_fidelity * emotional_salience_bias * identity_bias"
 pub fn mutate_rumor(
     rumor: &Rumor,
-    source_trust: Fixed,
+    _source_trust: Fixed,
     spreader_emotions: &DiscreteEmotions,
     spreader_personality: &Personality,
     listener_personality: &Personality,

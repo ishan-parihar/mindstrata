@@ -2,7 +2,8 @@
 
 use crate::actions::{self, ActionKind};
 use crate::conflict::{self, ConflictKind, ConflictState};
-use crate::cultural::{self, CulturalState, Knowledge, KnowledgeCategory};
+use crate::cultural::{CulturalState, Knowledge, KnowledgeCategory};
+use crate::logistics;
 use crate::gossip;
 use crate::market::{self, MarketState, WealthState};
 use crate::appraisal::{self, Agency, Appraisal};
@@ -1162,6 +1163,10 @@ impl Simulation {
                             && acceptance > Fixed::from_f64(0.5)
                         {
                             self.agents[to_idx].cultural.knowledge.push(knowledge_id);
+                            // §19.5.I: Update holder count in knowledge store
+                            if let Some(k) = self.knowledge_store.iter_mut().find(|k| k.id == knowledge_id) {
+                                k.holders += 1;
+                            }
                             // Emit knowledge transfer event for observability
                             self.events.push(SimEvent::KnowledgeTransferred {
                                 source: *from,
@@ -1457,6 +1462,23 @@ impl Simulation {
         // ── 20. Conflict state update — trauma decay, combat fatigue ──
         for agent in self.agents.iter_mut() {
             agent.conflict.update();
+        }
+
+        // ── 21. §19.5.E Carrying cost — heavy loads increase fatigue ──
+        // Agents who performed physical actions (Work) incur carrying cost based on load.
+        // Since agents don't carry items yet, this serves as a workload fatigue modifier.
+        for i in 0..self.agents.len() {
+            if self.agents[i].current_action == ActionKind::Work {
+                let load_ratio = Fixed::from_f64(0.4); // moderate load for work
+                let fatigue_cost = logistics::carrying_cost(
+                    load_ratio,
+                    Fixed::from_f64(1.0),
+                    self.agents[i].needs.fatigue,
+                );
+                self.agents[i].needs.fatigue = (
+                    self.agents[i].needs.fatigue + fatigue_cost
+                ).clamp_01();
+            }
         }
 
         // ── 19. Market system: price formation, inequality tracking ──

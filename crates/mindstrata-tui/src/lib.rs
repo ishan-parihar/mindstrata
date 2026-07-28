@@ -431,6 +431,19 @@ pub fn render_event_log_detailed(events: &[SimEvent], n: usize) -> String {
                     content_hash, distortion.to_f64()
                 ));
             }
+            SimEvent::KnowledgeTransferred { source, target, knowledge_id, .. } => {
+                out.push_str(&format!(
+                    "  [{tick:>5}] 📚 Knowledge {}→{} id={}\n",
+                    source.as_u64(), target.as_u64(), knowledge_id
+                ));
+            }
+            SimEvent::ConflictOccurred { aggressor, target, kind, injury, fear_induced, .. } => {
+                out.push_str(&format!(
+                    "  [{tick:>5}] ⚔️ Conflict {}→{} {} injury={:.3} fear={:.3}\n",
+                    aggressor.as_u64(), target.as_u64(), kind,
+                    injury.to_f64(), fear_induced.to_f64()
+                ));
+            }
             _ => {
                 out.push_str(&format!("  [{tick:>5}] ❓ {:?}\n", ev));
             }

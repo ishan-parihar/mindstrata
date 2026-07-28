@@ -9,7 +9,6 @@
 #![allow(missing_docs)]
 
 use mindstrata_core::fixed::Fixed;
-use mindstrata_core::id::AgentId;
 use serde::{Deserialize, Serialize};
 
 /// A cultural practice that agents can participate in.

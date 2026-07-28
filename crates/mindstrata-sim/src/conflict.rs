@@ -8,7 +8,6 @@
 
 use crate::person::{DiscreteEmotions, Personality};
 use mindstrata_core::fixed::Fixed;
-use mindstrata_core::id::AgentId;
 use serde::{Deserialize, Serialize};
 
 /// Types of conflict interactions.

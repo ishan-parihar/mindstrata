@@ -7,9 +7,8 @@
 //! storage, spoilage, transport cost, carrying capacity, access rights,
 //! ownership, local scarcity, site inventory."
 
-use crate::world::{Site, SiteKind, ResourceStock};
+use crate::world::ResourceStock;
 use mindstrata_core::fixed::Fixed;
-use mindstrata_core::id::AgentId;
 use serde::{Deserialize, Serialize};
 
 /// Transport cost between two sites (in coin per unit of resource).

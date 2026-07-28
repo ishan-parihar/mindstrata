@@ -44,6 +44,18 @@ enum Commands {
         /// Show relationship between two agents (format: from,to).
         #[arg(long)]
         show_relationships: Option<String>,
+
+        /// Show market dashboard (prices, inequality, trade volume).
+        #[arg(long)]
+        market: bool,
+
+        /// Show beliefs for a specific agent by ID.
+        #[arg(long)]
+        beliefs: Option<usize>,
+
+        /// Show institution/faction dashboard.
+        #[arg(long)]
+        factions: bool,
     },
     /// Run a named scenario.
     Scenario {
@@ -73,6 +85,9 @@ fn main() -> Result<()> {
             map,
             inspect_agent,
             show_relationships,
+            market,
+            beliefs,
+            factions,
         } => {
             init_logging(verbose);
 
@@ -140,6 +155,32 @@ fn main() -> Result<()> {
                 } else {
                     eprintln!("Invalid format. Use: --show-relationships from,to");
                 }
+            }
+
+            // §17.1: Market dashboard
+            if market {
+                println!();
+                println!("{}", mindstrata_tui::render_market_dashboard(&sim.market));
+            }
+
+            // §17.1: Belief inspector
+            if let Some(id) = beliefs {
+                let summaries = sim.agent_summaries();
+                if let Some(summary) = summaries.iter().find(|s| s.index == id) {
+                    println!();
+                    println!("{}", mindstrata_tui::render_belief_inspector(
+                        &summary.name, summary.index,
+                        &sim.agents[id].beliefs,
+                    ));
+                } else {
+                    eprintln!("Agent {} not found.", id);
+                }
+            }
+
+            // §17.1: Institution/faction dashboard
+            if factions {
+                println!();
+                println!("{}", mindstrata_tui::render_faction_dashboard(&sim.institutions));
             }
         }
 
