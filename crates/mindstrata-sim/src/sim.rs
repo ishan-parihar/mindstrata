@@ -7,7 +7,8 @@ use crate::journal::{EventJournal, JournalEntryKind};
 use crate::memory::{MemoryKind, MemoryStore, MemoryTag};
 use crate::norms::{self, NormRegistry};
 use crate::attention::AttentionState;
-use crate::institutions::{self, Institution};
+use crate::factions;
+use crate::institutions::{self, Institution, InstitutionKind};
 use crate::routines::DailyRoutine;
 pub use crate::attention;
 pub use crate::person::Intention;
@@ -978,7 +979,205 @@ impl Simulation {
             institution.derive_collective_psychology(&member_morales, &member_trusts);
             // Slow legitimacy decay without reinforcement
             institution.decay_legitimacy(Fixed::from_f64(0.0001));
-        }        // ── 14. Derived mental state computation (§22) ─────────────
+        }        // ── 15. Faction dynamics — grievance, formation, recruitment, protests (Phase 8) ──
+        // §29.2: Factions emerge from collective grievance. §Phase 8: legitimacy crisis → rebellion or reform.
+        {
+            let faction_count = self.institutions.iter()
+                .filter(|i| i.kind == InstitutionKind::Faction)
+                .count();
+
+            // Compute grievance for each agent
+            let grievances: Vec<(AgentId, Fixed)> = self.agents.iter().enumerate()
+                .map(|(i, agent)| {
+                    let g = factions::compute_grievance(
+                        agent.derived.resentment,
+                        agent.emotions.fear,
+                        agent.emotions.anger,
+                        agent.needs.autonomy,
+                        agent.needs.meaning,
+                        agent.moral_values.fairness,
+                    );
+                    (AgentId::new(i as u64), g)
+                })
+                .collect();
+
+            // Find council legitimacy (average across councils)
+            let avg_council_legitimacy: Fixed = {
+                let councils: Vec<_> = self.institutions.iter()
+                    .filter(|i| i.kind == InstitutionKind::Council)
+                    .collect();
+                if councils.is_empty() {
+                    Fixed::from_f64(0.5)
+                } else {
+                    let sum: Fixed = councils.iter().map(|c| c.legitimacy).fold(Fixed::ZERO, |a, b| a + b);
+                    sum / Fixed::from_int(councils.len() as i64)
+                }
+            };
+
+            // Faction formation: when grievance is high and council legitimacy is low
+            let should_form = faction_count < factions::MAX_FACTIONS
+                && avg_council_legitimacy < Fixed::from_f64(0.5)
+                && tick_u64 > factions::FORMATION_COOLDOWN;
+
+            if should_form {
+                let recruitable = factions::find_recruitable_agents(
+                    &grievances, factions::RECRUITMENT_GRIEVANCE_THRESHOLD,
+                );
+
+                let avg_grievance = if recruitable.is_empty() {
+                    Fixed::ZERO
+                } else {
+                    let sum: Fixed = recruitable.iter().map(|(_, g)| *g).fold(Fixed::ZERO, |a, b| a + b);
+                    sum / Fixed::from_int(recruitable.len() as i64)
+                };
+
+                if avg_grievance >= factions::FORMATION_GRIEVANCE_THRESHOLD && recruitable.len() >= 2 {
+                    // Find leader candidates: high ambition, high dominance, low anger
+                    let leader_candidates: Vec<_> = recruitable.iter()
+                        .filter_map(|(id, _)| {
+                            let idx = id.as_u64() as usize;
+                            if idx < self.agents.len() {
+                                let a = &self.agents[idx];
+                                if a.personality.ambition >= factions::LEADER_AMBITION_THRESHOLD {
+                                    Some((*id, a.personality.ambition, a.personality.dominance,
+                                          a.personality.extraversion, a.emotions.anger))
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+
+                    if let Some(leader) = factions::select_leader(&leader_candidates) {
+                        let members: Vec<AgentId> = recruitable.iter()
+                            .map(|(id, _)| *id)
+                            .collect();
+
+                        let new_faction = factions::create_faction(
+                            1000 + faction_count as u64,
+                            leader,
+                            members.clone(),
+                            avg_grievance,
+                            tick_u64,
+                        );
+
+                        tracing::warn!(
+                            leader = leader.as_u64(),
+                            members = members.len(),
+                            grievance = avg_grievance.to_f64(),
+                            tick = tick_u64,
+                            "Faction formed"
+                        );
+
+                        // Record in provenance
+                        self.provenance.record_decision(crate::provenance::DecisionTrace {
+                            agent: leader,
+                            tick: tick_u64,
+                            action_name: "FactionFormation".into(),
+                            factors: vec![
+                                crate::provenance::DecisionFactor {
+                                    kind: "grievance".into(),
+                                    magnitude: avg_grievance,
+                                    description: format!("Avg grievance: {:.2}", avg_grievance.to_f64()),
+                                },
+                                crate::provenance::DecisionFactor {
+                                    kind: "council_legitimacy".into(),
+                                    magnitude: avg_council_legitimacy,
+                                    description: format!("Council legitimacy: {:.2}", avg_council_legitimacy.to_f64()),
+                                },
+                            ],
+                            from_routine: false,
+                            interrupted_by_critical_needs: false,
+                            intention_abandoned: false,
+                        });
+
+                        self.institutions.push(new_faction);
+                    }
+                }
+            }
+
+            // Faction dynamics: check for protests from existing factions
+            for inst_idx in 0..self.institutions.len() {
+                if self.institutions[inst_idx].kind != InstitutionKind::Faction {
+                    continue;
+                }
+
+                let faction_grievance = self.institutions[inst_idx].collective.morale;
+                let faction_cohesion = self.institutions[inst_idx].collective.unity;
+
+                if factions::should_protest(faction_grievance, faction_cohesion, tick_u64) {
+                    let protest_size = self.institutions[inst_idx].members.len();
+                    let total_pop = self.agents.len();
+
+                    tracing::warn!(
+                        faction = self.institutions[inst_idx].name.as_str(),
+                        protest_size,
+                        total_pop,
+                        grievance = faction_grievance.to_f64(),
+                        tick = tick_u64,
+                        "Protest occurred"
+                    );
+
+                    // Council response
+                    let council_legitimacy = avg_council_legitimacy;
+                    let council_enforcement = self.institutions.iter()
+                        .filter(|i| i.kind == InstitutionKind::Council)
+                        .map(|i| i.enforcement_capacity)
+                        .fold(Fixed::ZERO, |a, b| a.max(b));
+
+                    let (suppressed, legitimacy_effect) = factions::council_response(
+                        council_legitimacy, council_enforcement, protest_size, total_pop,
+                    );
+
+                    // Apply legitimacy effect to council
+                    for inst in self.institutions.iter_mut() {
+                        if inst.kind == InstitutionKind::Council {
+                            if legitimacy_effect > Fixed::ZERO {
+                                inst.increase_legitimacy(legitimacy_effect);
+                            } else {
+                                inst.decay_legitimacy(-legitimacy_effect);
+                            }
+                        }
+                    }
+
+                    // If not suppressed, faction gains legitimacy and morale boost
+                    if !suppressed {
+                        if let Some(faction) = self.institutions.get_mut(inst_idx) {
+                            faction.increase_legitimacy(Fixed::from_f64(0.02));
+                            faction.collective.morale = (faction.collective.morale + Fixed::from_f64(0.05)).clamp_01();
+                        }
+                    }
+
+                    // Record in provenance (use leader of the protesting faction)
+                    let protest_agent = self.institutions[inst_idx].get_role_holder("Leader")
+                        .unwrap_or(AgentId::new(0));
+                    self.provenance.record_decision(crate::provenance::DecisionTrace {
+                        agent: protest_agent,
+                        tick: tick_u64,
+                        action_name: "Protest".into(),
+                        factors: vec![
+                            crate::provenance::DecisionFactor {
+                                kind: "protest_size".into(),
+                                magnitude: Fixed::from_int(protest_size as i64),
+                                description: format!("Protest size: {protest_size}"),
+                            },
+                            crate::provenance::DecisionFactor {
+                                kind: "suppressed".into(),
+                                magnitude: if suppressed { Fixed::ONE } else { Fixed::ZERO },
+                                description: format!("Suppressed: {suppressed}"),
+                            },
+                        ],
+                        from_routine: false,
+                        interrupted_by_critical_needs: false,
+                        intention_abandoned: false,
+                    });
+                }
+            }
+        }
+
+        // ── 14. Derived mental state computation (§22) ─────────────
         for agent in self.agents.iter_mut() {
             let stress = agent.emotions.fear + agent.emotions.anger;
             let need_deficit_avg = (agent.needs.hunger + agent.needs.thirst + agent.needs.fatigue + agent.needs.safety) * Fixed::from_f64(0.25);
