@@ -84,9 +84,6 @@ pub struct Institution {
     /// Norms enforced by this institution.
     pub norm_ids: Vec<u64>,
     /// Legitimacy: do people believe this institution has the right to govern?
-    /// §12.4: legitimacy = procedural_fairness + outcome_satisfaction +
-    ///         traditional_authority + charismatic_authority + institutional_memory
-    ///         - corruption - repression - unmet_expectations
     pub legitimacy: Fixed,
     /// Cohesion: how well do members work together?
     pub cohesion: Fixed,
@@ -98,6 +95,49 @@ pub struct Institution {
     pub communication_capacity: Fixed,
     /// Collective psychology — derived from member states each tick.
     pub collective: CollectivePsychology,
+    // ── §19.5.C: Institutional Decision Layer ─────────────────────────
+    /// Pending policies awaiting implementation.
+    pub pending_policies: Vec<Policy>,
+    /// Implemented policies currently active.
+    pub active_policies: Vec<Policy>,
+    /// Official record of institutional actions.
+    pub records: Vec<InstitutionalRecord>,
+    /// Treasury balance (coin held by institution).
+    pub treasury: Fixed,
+    /// Bureaucratic inertia: delays policy implementation.
+    pub inertia: Fixed,
+    /// Information quality: how accurate is the institution's information?
+    pub information_quality: Fixed,
+}
+
+/// §19.5.C: A policy issued by an institution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Policy {
+    /// Unique policy identifier.
+    pub id: u64,
+    /// Human-readable name.
+    pub name: String,
+    /// Tick when the policy was proposed.
+    pub proposed_tick: u64,
+    /// Tick when the policy will be implemented (delayed by inertia).
+    pub implement_tick: u64,
+    /// Whether the policy is currently active.
+    pub active: bool,
+    /// Effect strength of the policy (e.g., tax rate, fine amount).
+    pub effect: Fixed,
+}
+
+/// §19.5.C: A record of an institutional action.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstitutionalRecord {
+    /// Tick when the action occurred.
+    pub tick: u64,
+    /// Description of the action.
+    pub action: String,
+    /// Agent(s) affected by the action.
+    pub affected: Vec<AgentId>,
+    /// Whether the action was successful.
+    pub success: bool,
 }
 
 /// Derived collective psychology of an institution.
@@ -137,7 +177,82 @@ impl Institution {
             enforcement_capacity: Fixed::from_f64(0.3),
             communication_capacity: Fixed::from_f64(0.5),
             collective: CollectivePsychology::default(),
+            pending_policies: Vec::new(),
+            active_policies: Vec::new(),
+            records: Vec::new(),
+            treasury: Fixed::ZERO,
+            inertia: Fixed::from_f64(0.3),
+            information_quality: Fixed::from_f64(0.6),
         }
+    }
+
+    // ── §19.5.C: Institutional Decision Methods ───────────────────────
+
+    /// Propose a new policy. It will be implemented after a delay.
+    pub fn propose_policy(&mut self, name: String, effect: Fixed, current_tick: u64) {
+        let delay = (self.inertia * Fixed::from_f64(100.0)).to_raw() as u64;
+        self.pending_policies.push(Policy {
+            id: self.records.len() as u64 + self.pending_policies.len() as u64,
+            name,
+            proposed_tick: current_tick,
+            implement_tick: current_tick + delay.max(1),
+            active: false,
+            effect,
+        });
+    }
+
+    /// Process pending policies — move ready ones to active.
+    pub fn process_policies(&mut self, current_tick: u64) {
+        let mut still_pending = Vec::new();
+        for policy in self.pending_policies.drain(..) {
+            if current_tick >= policy.implement_tick {
+                self.active_policies.push(Policy {
+                    active: true,
+                    ..policy
+                });
+            } else {
+                still_pending.push(policy);
+            }
+        }
+        self.pending_policies = still_pending;
+    }
+
+    /// Record an institutional action.
+    pub fn record_action(&mut self, tick: u64, action: String, affected: Vec<AgentId>, success: bool) {
+        self.records.push(InstitutionalRecord {
+            tick,
+            action,
+            affected,
+            success,
+        });
+    }
+
+    /// Collect taxes from members. Returns total collected.
+    pub fn collect_taxes(&mut self, tax_rate: Fixed, member_wealth: &[(AgentId, Fixed)]) -> Fixed {
+        let mut total = Fixed::ZERO;
+        for (agent, wealth) in member_wealth {
+            if self.has_member(*agent) {
+                let tax = *wealth * tax_rate;
+                total = total + tax;
+            }
+        }
+        self.treasury = self.treasury + total;
+        total
+    }
+
+    /// Pay wages to role holders. Returns total paid.
+    pub fn pay_wages(&mut self, wage: Fixed, member_wealth: &mut Vec<(AgentId, Fixed)>) -> Fixed {
+        let mut total = Fixed::ZERO;
+        for role in &self.roles {
+            if let Some(holder) = role.holder {
+                if let Some(entry) = member_wealth.iter_mut().find(|(a, _)| *a == holder) {
+                    entry.1 = entry.1 + wage;
+                    total = total + wage;
+                }
+            }
+        }
+        self.treasury = (self.treasury - total).max(Fixed::ZERO);
+        total
     }
 
     /// Add a member to this institution.
