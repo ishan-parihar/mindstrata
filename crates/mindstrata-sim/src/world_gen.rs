@@ -1,6 +1,6 @@
 //! World generation — terrain, sites, resources, and agent placement.
 
-use crate::world::{AccessRight, Region, ResourceDef, ResourceStock, Site, SiteKind, Terrain, Tile, World, GRAIN_RESOURCE_ID};
+use crate::world::{AccessRight, Region, ResourceDef, ResourceStock, Site, SiteKind, Terrain, Tile, World, GRAIN_RESOURCE_ID, COIN_RESOURCE_ID};
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::id::EntityId;
 use mindstrata_core::rng::{RngStreams, RngStream};
@@ -136,6 +136,12 @@ pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
                 quality: Fixed::from_f64(1.0),
                 access: AccessRight::Public,
             },
+            ResourceStock {
+                resource_id: COIN_RESOURCE_ID,
+                quantity: Fixed::from_f64(500.0),
+                quality: Fixed::ONE,
+                access: AccessRight::Public,
+            },
         ],
     };
     if place_site(world, (center_x + 5).min(w - 1), center_y, market) {
@@ -171,6 +177,12 @@ pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
     world.resources.push(ResourceDef {
         id: 1,
         name: "Water".into(),
+        perishable: false,
+        spoilage_rate: Fixed::ZERO,
+    });
+    world.resources.push(ResourceDef {
+        id: COIN_RESOURCE_ID,
+        name: "Coin".into(),
         perishable: false,
         spoilage_rate: Fixed::ZERO,
     });

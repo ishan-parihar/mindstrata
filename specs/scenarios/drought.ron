@@ -1,0 +1,24 @@
+// §46 Scenario DSL — Drought Scenario
+// Extends riverford with a drought shock at tick 500.
+
+Scenario(
+    name: "Drought",
+    description: "Riverford under drought conditions. Tests resource scarcity, legitimacy crisis, and social tension.",
+    seed: 42,
+    ticks: 4320,
+    world_width: 16,
+    world_height: 16,
+    num_agents: 12,
+    shocks: [
+        Shock(
+            at_tick: 200,
+            kind: Festival,
+            magnitude: 0.3,
+        ),
+        Shock(
+            at_tick: 500,
+            kind: Drought,
+            magnitude: 0.7,
+        ),
+    ],
+)

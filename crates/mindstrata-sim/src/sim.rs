@@ -1,6 +1,7 @@
 //! Simulation orchestrator — the fixed-tick loop.
 
 use crate::actions::{self, ActionKind};
+use crate::market::{self, MarketState, WealthState};
 use crate::appraisal::{self, Agency, Appraisal};
 use crate::belief_update;
 use crate::journal::{EventJournal, JournalEntryKind};
@@ -88,6 +89,8 @@ pub struct AgentBundle {
     pub recent_attempts: u32,
     /// §31: Agent age in years.
     pub age: Fixed,
+    /// §13.3: Per-agent wealth — coin and economic state.
+    pub wealth: WealthState,
 }
 
 /// The simulation state.
@@ -118,6 +121,8 @@ pub struct Simulation {
     pub agent_diseases: Vec<Vec<health::ActiveDisease>>,
     /// Track work ticks per site for ecology (overfarming).
     pub site_work_ticks: Vec<u32>,
+    /// §13.3: Market state — prices, inequality, trade volume.
+    pub market: MarketState,
 }
 
 impl Simulation {
@@ -145,6 +150,7 @@ impl Simulation {
             demography_config: demography::DemographyConfig::default(),
             agent_diseases: Vec::new(),
             site_work_ticks: Vec::new(),
+            market: MarketState::new(),
         }
     }
 
@@ -252,6 +258,10 @@ impl Simulation {
                 recent_successes: 0,
                 recent_attempts: 0,
                 age: Fixed::from_f64(populate_rng.random_range(18.0..55.0)),
+                wealth: WealthState {
+                    coin: Fixed::from_f64(populate_rng.random_range(5.0..20.0)),
+                    ..Default::default()
+                },
             });
         }
 
@@ -730,6 +740,11 @@ impl Simulation {
         } // ctx is dropped here, releasing mutable borrows on self.events and self.rng
 
         // ── 4b. Resource operations, journal recording, intention tracking ──
+        // Reset per-tick wealth counters
+        for agent in self.agents.iter_mut() {
+            agent.wealth.income_this_tick = Fixed::ZERO;
+            agent.wealth.expenditure_this_tick = Fixed::ZERO;
+        }
         for (agent_idx, action) in &action_starts {
             let agent_id = AgentId::new(*agent_idx as u64);
             // §24.5: Track intention success/failure when action completes.
@@ -742,6 +757,11 @@ impl Simulation {
                     // §19.5.E: Use access-checking method to enforce resource access rights.
                     if let Some(farm_idx) = self.world.accessible_farm_with_grain(agent_id) {
                         let taken = self.world.consume_resource(farm_idx, GRAIN_RESOURCE_ID, amount);
+                        // §13.3: Consumers pay coin for resources consumed
+                        let cost = taken * self.market.price(GRAIN_RESOURCE_ID);
+                        self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - cost).max(Fixed::ZERO);
+                        self.agents[*agent_idx].wealth.expenditure_this_tick += cost;
+                        self.agents[*agent_idx].wealth.net_worth = self.agents[*agent_idx].wealth.coin;
                         self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "grain".into(), amount: taken.to_f64() });
                         taken > Fixed::ZERO
                     } else {
@@ -753,6 +773,11 @@ impl Simulation {
                     // §19.5.E: Use access-checking method to enforce resource access rights.
                     if let Some(well_idx) = self.world.accessible_well_with_water(agent_id) {
                         let taken = self.world.consume_resource(well_idx, WATER_RESOURCE_ID, amount);
+                        // §13.3: Consumers pay coin for water consumed
+                        let cost = taken * self.market.price(WATER_RESOURCE_ID);
+                        self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - cost).max(Fixed::ZERO);
+                        self.agents[*agent_idx].wealth.expenditure_this_tick += cost;
+                        self.agents[*agent_idx].wealth.net_worth = self.agents[*agent_idx].wealth.coin;
                         self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "water".into(), amount: taken.to_f64() });
                         taken > Fixed::ZERO
                     } else {
@@ -763,6 +788,11 @@ impl Simulation {
                     let productivity = self.agents[*agent_idx].personality.conscientiousness * Fixed::from_f64(0.05);
                     if let Some(farm_idx) = self.world.best_farm_for_work() {
                         self.world.produce_resource(farm_idx, GRAIN_RESOURCE_ID, productivity);
+                        // §13.3: Workers earn coin proportional to productivity
+                        let wage = productivity * self.market.price(GRAIN_RESOURCE_ID) * Fixed::from_f64(0.3);
+                        self.agents[*agent_idx].wealth.coin += wage;
+                        self.agents[*agent_idx].wealth.income_this_tick += wage;
+                        self.agents[*agent_idx].wealth.net_worth = self.agents[*agent_idx].wealth.coin;
                         self.journal.record(tick_u64, agent_id, JournalEntryKind::Worked { productivity: productivity.to_f64() });
                         true
                     } else {
@@ -1332,6 +1362,14 @@ impl Simulation {
                     );
                 }
             }
+        }
+
+        // ── 19. Market system: price formation, inequality tracking ──
+        {
+            let agent_economic_state: Vec<_> = self.agents.iter()
+                .map(|a| (a.needs.clone(), a.wealth.clone()))
+                .collect();
+            market::system_market(&self.world, &agent_economic_state, &mut self.market, tick_u64);
         }
 
         // ── 18. Demography: aging and mortality ──

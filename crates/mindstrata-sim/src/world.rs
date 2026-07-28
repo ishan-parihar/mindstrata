@@ -10,6 +10,9 @@ pub const GRAIN_RESOURCE_ID: u64 = 0;
 /// Resource ID for water — the primary hydration resource.
 pub const WATER_RESOURCE_ID: u64 = 1;
 
+/// Resource ID for coin — the medium of exchange.
+pub const COIN_RESOURCE_ID: u64 = 2;
+
 // ── Terrain ──────────────────────────────────────────────────────────────
 
 /// Basic terrain types for the initial 2D grid.

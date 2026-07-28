@@ -101,6 +101,13 @@ impl Scenario {
     pub fn from_ron(s: &str) -> Result<Self, String> {
         ron::from_str(s).map_err(|e| e.to_string())
     }
+
+    /// Load a scenario from a RON file.
+    pub fn from_file(path: impl AsRef<std::path::Path>) -> Result<Self, String> {
+        let content = std::fs::read_to_string(path.as_ref())
+            .map_err(|e| format!("Failed to read {}: {}", path.as_ref().display(), e))?;
+        Self::from_ron(&content)
+    }
 }
 
 #[cfg(test)]
