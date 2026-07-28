@@ -1329,6 +1329,43 @@ impl Simulation {
             institution.derive_collective_psychology(&member_morales, &member_trusts);
             // Slow legitimacy decay without reinforcement
             institution.decay_legitimacy(Fixed::from_f64(0.0001));
+
+            // §19.5.C: Process pending policies — move ready ones to active
+            institution.process_policies(tick_u64);
+
+            // §19.5.C: Council auto-proposes 'Fine Theft' policy when legitimacy is high
+            // and enforcement capacity is moderate.
+            if institution.kind == institutions::InstitutionKind::Council
+                && institution.legitimacy > Fixed::from_f64(0.5)
+                && institution.active_policies.is_empty()
+                && institution.pending_policies.is_empty()
+                && tick_u64 > 100 // delay initial proposal
+            {
+                institution.propose_policy(
+                    "Fine Theft Policy".into(),
+                    Fixed::from_f64(0.1), // tax effect
+                    tick_u64,
+                );
+            }
+
+            // §19.5.C: Record active policy effects (check name first to avoid borrow conflict)
+            let has_fine_theft = institution.active_policies.iter()
+                .any(|p| p.name == "Fine Theft Policy");
+            if has_fine_theft && tick_u64 % 100 == 0 {
+                let members = institution.members.clone();
+                institution.record_action(
+                    tick_u64,
+                    "Fine Theft Policy enacted".into(),
+                    members,
+                    true,
+                );
+            }
+
+            // Trim old records to prevent unbounded growth (keep last 1000)
+            if institution.records.len() > 1000 {
+                let drain_count = institution.records.len() - 1000;
+                institution.records.drain(..drain_count);
+            }
         }        // ── 15. Faction dynamics — grievance, formation, recruitment, protests (Phase 8) ──
         // §29.2: Factions emerge from collective grievance. §Phase 8: legitimacy crisis → rebellion or reform.
         {

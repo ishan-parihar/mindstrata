@@ -106,8 +106,8 @@ pub struct Institution {
     pub treasury: Fixed,
     /// Bureaucratic inertia: delays policy implementation.
     pub inertia: Fixed,
-    /// Information quality: how accurate is the institution's information?
-    pub information_quality: Fixed,
+    /// Monotonic counter for unique policy IDs.
+    pub policy_counter: u64,
 }
 
 /// §19.5.C: A policy issued by an institution.
@@ -182,7 +182,7 @@ impl Institution {
             records: Vec::new(),
             treasury: Fixed::ZERO,
             inertia: Fixed::from_f64(0.3),
-            information_quality: Fixed::from_f64(0.6),
+            policy_counter: 0,
         }
     }
 
@@ -190,9 +190,11 @@ impl Institution {
 
     /// Propose a new policy. It will be implemented after a delay.
     pub fn propose_policy(&mut self, name: String, effect: Fixed, current_tick: u64) {
-        let delay = (self.inertia * Fixed::from_f64(100.0)).to_raw() as u64;
+        let delay = (self.inertia * Fixed::from_f64(100.0)).to_f64() as u64;
+        let id = self.policy_counter;
+        self.policy_counter += 1;
         self.pending_policies.push(Policy {
-            id: self.records.len() as u64 + self.pending_policies.len() as u64,
+            id,
             name,
             proposed_tick: current_tick,
             implement_tick: current_tick + delay.max(1),
