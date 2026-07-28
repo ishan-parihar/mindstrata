@@ -7,7 +7,10 @@ use crate::journal::{EventJournal, JournalEntryKind};
 use crate::memory::{MemoryKind, MemoryStore, MemoryTag};
 use crate::norms::{self, NormRegistry};
 use crate::attention::AttentionState;
+use crate::demography;
+use crate::ecology;
 use crate::factions;
+use crate::health;
 use crate::institutions::{self, Institution, InstitutionKind};
 use crate::routines::DailyRoutine;
 pub use crate::attention;
@@ -83,6 +86,8 @@ pub struct AgentBundle {
     /// Track success rate for derived mental state computation.
     pub recent_successes: u32,
     pub recent_attempts: u32,
+    /// §31: Agent age in years.
+    pub age: Fixed,
 }
 
 /// The simulation state.
@@ -101,6 +106,18 @@ pub struct Simulation {
     /// §34: Causal provenance — tracks decision traces and event causality chains.
     provenance: CausalProvenance,
     scenario: Option<Scenario>,
+    /// §28: Season tracker for ecology.
+    pub season: ecology::SeasonTracker,
+    /// §28: Ecology configuration.
+    pub ecology_config: ecology::EcologyConfig,
+    /// §9: Health configuration.
+    pub health_config: health::HealthConfig,
+    /// §31: Demography configuration.
+    pub demography_config: demography::DemographyConfig,
+    /// §32: Active diseases per agent (parallel to agents vec).
+    pub agent_diseases: Vec<Vec<health::ActiveDisease>>,
+    /// Track work ticks per site for ecology (overfarming).
+    pub site_work_ticks: Vec<u32>,
 }
 
 impl Simulation {
@@ -122,6 +139,12 @@ impl Simulation {
             institutions: Vec::new(),
             provenance: CausalProvenance::new(),
             scenario: None,
+            season: ecology::SeasonTracker::new(8760),
+            ecology_config: ecology::EcologyConfig::default(),
+            health_config: health::HealthConfig::default(),
+            demography_config: demography::DemographyConfig::default(),
+            agent_diseases: Vec::new(),
+            site_work_ticks: Vec::new(),
         }
     }
 
@@ -228,6 +251,7 @@ impl Simulation {
                 derived: DerivedMentalState::default(),
                 recent_successes: 0,
                 recent_attempts: 0,
+                age: Fixed::from_f64(populate_rng.random_range(18.0..55.0)),
             });
         }
 
@@ -249,6 +273,10 @@ impl Simulation {
                 }
             }
         }
+
+        // Initialize disease tracking
+        self.agent_diseases = vec![Vec::new(); self.agents.len()];
+        self.site_work_ticks = vec![0; self.world.tiles.len()];
 
         // Register default norms
         for norm in norms::default_norms() {
@@ -834,14 +862,67 @@ impl Simulation {
             agent.attention.replenish_budget(stress, agent.needs.fatigue);
         }
 
+        // ── 16. Ecology: season advance and fertility dynamics ──
+        let new_season = self.season.advance();
+        if new_season {
+            tracing::info!(
+                season = self.season.current.name(),
+                year = self.season.year,
+                "New season"
+            );
+        }
+        // Reset work ticks tracker for this tick
+        for tick in self.site_work_ticks.iter_mut() {
+            *tick = 0;
+        }
+        // Count work actions per site this tick
+        for (_agent_idx, action) in &action_starts {
+            if let ActionKind::Work = action {
+                if let Some(farm_idx) = self.world.best_farm_for_work() {
+                    if farm_idx < self.site_work_ticks.len() {
+                        self.site_work_ticks[farm_idx] += 1;
+                    }
+                }
+            }
+        }
+        // Apply ecology system to tile fertility
+        let mut fertilities: Vec<Fixed> = self.world.tiles.iter().map(|t| t.fertility).collect();
+        ecology::system_ecology(&self.season, &mut fertilities, &self.site_work_ticks, &self.ecology_config);
+        for (i, tile) in self.world.tiles.iter_mut().enumerate() {
+            if i < fertilities.len() {
+                tile.fertility = fertilities[i];
+            }
+        }
+
+        // ── 17. Health: disease effects on agents ──
+        {
+            let health_cfg = self.health_config.clone();
+            let n = self.agents.len();
+            for i in 0..n {
+                let hunger = self.agents[i].needs.hunger;
+                let fatigue = self.agents[i].needs.fatigue;
+                let body = &mut self.agents[i].body;
+                health::system_health(
+                    &mut body.health,
+                    &mut body.energy,
+                    &mut self.agent_diseases[i],
+                    hunger,
+                    fatigue,
+                    &health_cfg,
+                );
+            }
+        }
+
         // ── 10. Resource spoilage (perishable goods degrade each tick) ──
+        // Apply season spoilage modifier
+        let spoilage_modifier = self.season.current.spoilage_modifier();
         // Extract resources ref before mutable borrow of sites (split borrowing)
         let resource_defs = &self.world.resources;
         for site in self.world.sites.iter_mut() {
             for stock in site.inventory.iter_mut() {
                 if let Some(res_def) = resource_defs.iter().find(|r| r.id == stock.resource_id) {
                     if res_def.perishable && res_def.spoilage_rate > Fixed::ZERO {
-                        let spoilage = stock.quantity * res_def.spoilage_rate;
+                        let spoilage = stock.quantity * res_def.spoilage_rate * spoilage_modifier;
                         stock.quantity = (stock.quantity - spoilage).max(Fixed::ZERO);
                     }
                 }
@@ -1224,6 +1305,41 @@ impl Simulation {
                         Fixed::ZERO,
                         tick_u64,
                     );
+                }
+            }
+        }
+
+        // ── 18. Demography: aging and mortality ──
+        if tick_u64.is_multiple_of(10) { // process demography every 10 ticks to reduce overhead
+            let mut deaths = Vec::new();
+            for i in 0..self.agents.len() {
+                let (new_age, died) = demography::age_agent(
+                    self.agents[i].age,
+                    self.agents[i].body.health,
+                    self.agents[i].body.energy,
+                    &self.demography_config,
+                );
+                self.agents[i].age = new_age;
+                if died {
+                    deaths.push(i);
+                }
+            }
+            // Remove dead agents (in reverse order to preserve indices)
+            for &idx in deaths.iter().rev() {
+                let agent_id = AgentId::new(idx as u64);
+                tracing::warn!(
+                    agent = self.agents[idx].name.as_str(),
+                    age = self.agents[idx].age.to_f64(),
+                    tick = tick_u64,
+                    "Agent died"
+                );
+                self.agents.remove(idx);
+                self.agent_diseases.remove(idx);
+                // Remove from relationships
+                self.relationships.retain(|r| r.from != agent_id && r.to != agent_id);
+                // Remove from institutions
+                for inst in self.institutions.iter_mut() {
+                    inst.remove_member(agent_id);
                 }
             }
         }
