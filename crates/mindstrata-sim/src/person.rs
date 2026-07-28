@@ -1,29 +1,9 @@
 //! Person entity and its component bundles.
 
 use mindstrata_core::fixed::Fixed;
-use mindstrata_core::id::{AgentId, EntityId};
+use mindstrata_core::id::AgentId;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-
-// ── Core identity ────────────────────────────────────────────────────────
-
-/// Biological sex.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Sex {
-    Male,
-    Female,
-}
-
-/// The core identity of a person.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Person {
-    pub id: AgentId,
-    pub name: String,
-    pub age: Fixed,
-    pub sex: Sex,
-    pub birth_tick: u64,
-    pub household: Option<EntityId>,
-}
 
 // ── Psychological substrate ─────────────────────────────────────────────
 
@@ -175,17 +155,6 @@ pub enum GoalKind {
     Migrate,
 }
 
-/// Moral values (Moral Foundations Theory, abbreviated).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MoralValues {
-    pub care: Fixed,
-    pub fairness: Fixed,
-    pub loyalty: Fixed,
-    pub authority: Fixed,
-    pub purity: Fixed,
-    pub liberty: Fixed,
-}
-
 // ── Identity system ──────────────────────────────────────────────────────
 
 /// Kinds of personal identity an agent can hold.
@@ -223,16 +192,6 @@ impl IdentityState {
     }
 
     
-}
-
-// ── Behavioral substrate ─────────────────────────────────────────────────
-
-/// Current action being executed.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ActionState {
-    pub current_action: Option<u64>,
-    pub progress: Fixed,
-    pub interrupted: bool,
 }
 
 // ── Relational substrate ─────────────────────────────────────────────────

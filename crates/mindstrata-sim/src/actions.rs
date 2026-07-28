@@ -241,13 +241,15 @@ pub fn compute_utility(
     // Identity congruence bonus
     utility += identity_affinity(action.kind, identity);
 
-    // Normative component: norm-compliant actions get bonus, antisocial get penalty
+    // Normative component: negative pressure = compliant (bonus for prosocial), positive = violating (bonus for antisocial)
     let normative = match action.kind {
-        ActionKind::Work => norm_pressure * personality.conformity * Fixed::from_f64(0.15),
-        ActionKind::Socialize => norm_pressure * personality.conformity * Fixed::from_f64(0.10),
-        ActionKind::Worship => norm_pressure * personality.conformity * Fixed::from_f64(0.12),
-        ActionKind::Wander => -(norm_pressure * personality.conformity * Fixed::from_f64(0.05)),
-        ActionKind::Idle => -(norm_pressure * personality.conformity * Fixed::from_f64(0.08)),
+        // Prosocial actions: negate pressure so compliant agents (negative pressure) get bonus
+        ActionKind::Work => -norm_pressure * personality.conformity * Fixed::from_f64(0.15),
+        ActionKind::Socialize => -norm_pressure * personality.conformity * Fixed::from_f64(0.10),
+        ActionKind::Worship => -norm_pressure * personality.conformity * Fixed::from_f64(0.12),
+        // Antisocial actions: positive pressure = violating agents prefer these
+        ActionKind::Wander => norm_pressure * personality.conformity * Fixed::from_f64(0.05),
+        ActionKind::Idle => norm_pressure * personality.conformity * Fixed::from_f64(0.08),
         _ => Fixed::ZERO,
     };
     utility += normative;
@@ -469,29 +471,45 @@ mod tests {
     }
 
     #[test]
-    fn norm_pressure_increases_work_utility() {
+    fn compliant_pressure_increases_work_utility() {
         let mut rng = RngStreams::new(42);
         let needs = NeedState::default();
         let personality = make_personality();
         let identity = IdentityState::default();
 
+        // Negative pressure = compliant agent (compute_pressure returns negative for compliant)
         let no_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO);
-        let high_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::from_f64(0.8));
+        let compliant_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, -Fixed::from_f64(0.5));
 
-        assert!(high_pressure > no_pressure, "High norm pressure should increase Work utility for conformist agents");
+        assert!(compliant_pressure > no_pressure, "Compliant (negative) pressure should increase Work utility");
     }
 
     #[test]
-    fn norm_pressure_decreases_idle_utility() {
+    fn violating_pressure_decreases_work_utility() {
         let mut rng = RngStreams::new(42);
         let needs = NeedState::default();
         let personality = make_personality();
         let identity = IdentityState::default();
 
-        let no_pressure = compute_utility(&ActionKind::Idle.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO);
-        let high_pressure = compute_utility(&ActionKind::Idle.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::from_f64(0.8));
+        // Positive pressure = violating agent
+        let no_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO);
+        let violating_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::from_f64(0.5));
 
-        assert!(high_pressure < no_pressure, "High norm pressure should decrease Idle utility for conformist agents");
+        assert!(violating_pressure < no_pressure, "Violating (positive) pressure should decrease Work utility");
+    }
+
+    #[test]
+    fn violating_pressure_increases_idle_utility() {
+        let mut rng = RngStreams::new(42);
+        let needs = NeedState::default();
+        let personality = make_personality();
+        let identity = IdentityState::default();
+
+        // Positive pressure = violating agent prefers idle
+        let no_pressure = compute_utility(&ActionKind::Idle.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO);
+        let violating_pressure = compute_utility(&ActionKind::Idle.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::from_f64(0.5));
+
+        assert!(violating_pressure > no_pressure, "Violating (positive) pressure should increase Idle utility");
     }
 
     #[test]

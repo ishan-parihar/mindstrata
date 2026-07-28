@@ -324,8 +324,7 @@ impl Simulation {
                         .norms()
                         .iter()
                         .map(|n| self.norms.compute_pressure(conformity, avg_identity_strength, n.id))
-                        .fold(Fixed::ZERO, |a, b| a + b)
-                        .max(Fixed::ZERO); // Clamp: only positive = violating tendency
+                        .fold(Fixed::ZERO, |a, b| a + b); // Negative = compliant, positive = violating
                     let action = actions::select_action(
                         &needs[i],
                         &personalities[i],

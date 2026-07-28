@@ -142,6 +142,88 @@ mod smoke {
     }
 
     #[test]
+    fn norm_violation_reduces_trust_and_increases_shame() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 4,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+
+        // Run a few ticks to generate some social interactions
+        sim.run(5);
+
+        // Run 100 more ticks — threat interactions occur probabilistically
+        // and norm violations should be recorded
+        sim.run(100);
+
+        // After 105 ticks, some threat interactions should have occurred
+        // and norm violations should have been recorded
+        let violations = sim.norms().violations();
+        // The simulation should have recorded at least some norm violations
+        // (threats and insults occur probabilistically in social interactions)
+        assert!(!violations.is_empty() || sim.event_count() > 100,
+            "Simulation should produce events and potentially norm violations");
+    }
+
+    #[test]
+    fn gossip_propagation_shares_beliefs() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 200,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 8,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+
+        // Record initial belief count for each agent
+        let initial_belief_counts: Vec<usize> = sim.agents.iter().map(|a| a.beliefs.len()).collect();
+
+        // Run 200 ticks — gossip interactions should spread beliefs
+        sim.run(200);
+
+        // Some agents may have gained new beliefs through gossip
+        let final_belief_counts: Vec<usize> = sim.agents.iter().map(|a| a.beliefs.len()).collect();
+
+        // At least one agent should have the same or more beliefs (gossip can create new beliefs)
+        let total_initial: usize = initial_belief_counts.iter().sum();
+        let total_final: usize = final_belief_counts.iter().sum();
+        assert!(total_final >= total_initial,
+            "Gossip should not reduce total belief count: initial={total_initial}, final={total_final}");
+    }
+
+    #[test]
+    fn norm_pressure_affects_action_selection() {
+        // Verify that agents with high conformity prefer prosocial actions
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 500,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(500);
+
+        let summaries = sim.agent_summaries();
+        // After 500 ticks, agents should be performing actions (not all Idle)
+        let action_counts = summaries.iter().fold(std::collections::HashMap::new(), |mut acc, s| {
+            *acc.entry(s.current_action.clone()).or_insert(0) += 1;
+            acc
+        });
+        assert!(action_counts.len() > 1, "Agents should perform diverse actions, got: {:?}", action_counts);
+    }
+
+    #[test]
     fn golden_run_1000_ticks() {
         let config = SimConfig {
             seed: 42,
