@@ -1366,6 +1366,82 @@ impl Simulation {
                 let drain_count = institution.records.len() - institutions::MAX_RECORDS;
                 institution.records.drain(..drain_count);
             }
+
+            // §19.5.C: Council collects taxes from members every 100 ticks
+            if institution.kind == institutions::InstitutionKind::Council
+                && tick_u64 % 100 == 0
+                && tick_u64 > 0
+                && !institution.members.is_empty()
+            {
+                let mut member_wealth: Vec<(AgentId, Fixed)> = institution.members.iter()
+                    .filter_map(|m| {
+                        let idx = m.as_u64() as usize;
+                        if idx < self.agents.len() {
+                            Some((*m, self.agents[idx].wealth.coin))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                let collected = institution.collect_taxes(Fixed::from_f64(0.05), &mut member_wealth);
+                // Write back tax deductions using AgentId-as-index (AgentId::new(i) == index i)
+                for (agent_id, new_wealth) in &member_wealth {
+                    let idx = agent_id.as_u64() as usize;
+                    if idx < self.agents.len() {
+                        self.agents[idx].wealth.coin = *new_wealth;
+                    }
+                }
+                if collected > Fixed::ZERO {
+                    let members = institution.members.clone();
+                    institution.record_action(
+                        tick_u64,
+                        format!("Tax collection: {:.1} coins", collected.to_f64()),
+                        members,
+                        true,
+                    );
+                }
+            }
+
+            // §19.5.C: Council pays role holders wages every 500 ticks
+            if institution.kind == institutions::InstitutionKind::Council
+                && tick_u64 % 500 == 0
+                && tick_u64 > 0
+            {
+                let wage = Fixed::from_f64(2.0);
+                let role_holder_count = institution.roles.iter().filter(|r| r.holder.is_some()).count() as i64;
+                let total_wage_cost = wage * Fixed::from_int(role_holder_count);
+                // Only pay if treasury can cover total wages
+                if institution.treasury >= total_wage_cost && role_holder_count > 0 {
+                    let mut member_wealth: Vec<(AgentId, Fixed)> = institution.roles.iter()
+                        .filter_map(|r| r.holder.map(|h| {
+                            let idx = h.as_u64() as usize;
+                            let wealth = if idx < self.agents.len() {
+                                self.agents[idx].wealth.coin
+                            } else {
+                                Fixed::ZERO
+                            };
+                            (h, wealth)
+                        }))
+                        .collect();
+                    let paid = institution.pay_wages(wage, &mut member_wealth);
+                    // Write back wage additions using AgentId-as-index
+                    for (agent_id, new_wealth) in &member_wealth {
+                        let idx = agent_id.as_u64() as usize;
+                        if idx < self.agents.len() {
+                            self.agents[idx].wealth.coin = *new_wealth;
+                        }
+                    }
+                    if paid > Fixed::ZERO {
+                        let members = institution.members.clone();
+                        institution.record_action(
+                            tick_u64,
+                            format!("Wage payment: {:.1} coins", paid.to_f64()),
+                            members,
+                            true,
+                        );
+                    }
+                }
+            }
         }        // ── 15. Faction dynamics — grievance, formation, recruitment, protests (Phase 8) ──
         // §29.2: Factions emerge from collective grievance. §Phase 8: legitimacy crisis → rebellion or reform.
         {
