@@ -1,6 +1,7 @@
 //! Simulation orchestrator — the fixed-tick loop.
 
 use crate::actions::{self, ActionKind};
+use crate::gossip;
 use crate::market::{self, MarketState, WealthState};
 use crate::appraisal::{self, Agency, Appraisal};
 use crate::belief_update;
@@ -1019,7 +1020,7 @@ impl Simulation {
             }
         }
 
-        // ── 11b. Gossip propagation: when agents gossip, share a random belief ──
+        // ── 11b. §11.2 Gossip propagation with mutation ──
         for ev in &self.events[pre_tick_events..].to_vec() {
             if let SimEvent::InteractionOccurred {
                 from,
@@ -1031,46 +1032,37 @@ impl Simulation {
                 let from_idx = from.as_u64() as usize;
                 let to_idx = to.as_u64() as usize;
                 if from_idx < self.agents.len() && to_idx < self.agents.len() {
-                    // Extract data from source to avoid borrow conflicts
-                    let shared = {
-                        let from_beliefs = &self.agents[from_idx].beliefs;
-                        if from_beliefs.is_empty() {
-                            None
-                        } else {
-                            let pick = self.rng.get_mut(RngStream::Social).random_range(0..from_beliefs.len());
-                            let b = &from_beliefs[pick];
-                            let source_trust = self.relationships
-                                .iter()
-                                .find(|r| r.from == *from && r.to == *to)
-                                .map(|r| r.trust)
-                                .unwrap_or(Fixed::from_f64(0.5));
-                            // Use discrete emotions for stronger emotional distortion
-                            let anger_bias = self.agents[from_idx].emotions.anger * Fixed::from_f64(0.2);
-                            let joy_bias = self.agents[from_idx].emotions.joy * Fixed::from_f64(0.15);
-                            let emotional_bias = joy_bias - anger_bias;
-                            let mutated_confidence = (b.confidence * source_trust + emotional_bias).clamp_01();
-                            Some((b.proposition_id, mutated_confidence, b.emotional_charge, b.identity_linkage, b.resistance))
-                        }
-                    };
-                    // Now apply to listener (immutable borrow on source is dropped)
-                    if let Some((prop_id, mutated_conf, e_charge, i_linkage, res)) = shared {
-                        // Weight by resistance: high-resistance beliefs barely change
-                        let weight = Fixed::ONE - res;
-                        if let Some(existing) = self.agents[to_idx].beliefs.iter_mut()
-                            .find(|b| b.proposition_id == prop_id)
-                        {
-                            existing.confidence = (existing.confidence * res + mutated_conf * weight).clamp_01();
-                            existing.last_reinforced_tick = tick_u64;
-                        } else {
-                            self.agents[to_idx].beliefs.push(Belief {
-                                proposition_id: prop_id,
-                                confidence: mutated_conf,
-                                emotional_charge: e_charge,
-                                identity_linkage: i_linkage,
-                                resistance: res,
-                                last_reinforced_tick: tick_u64,
-                            });
-                        }
+                    let from_beliefs = &self.agents[from_idx].beliefs;
+                    if from_beliefs.is_empty() {
+                        continue;
+                    }
+                    let pick = self.rng.get_mut(RngStream::Social).random_range(0..from_beliefs.len());
+                    let source_trust = self.relationships
+                        .iter()
+                        .find(|r| r.from == *from && r.to == *to)
+                        .map(|r| r.trust)
+                        .unwrap_or(Fixed::from_f64(0.5));
+                    let rumor = gossip::Rumor::from_belief(&from_beliefs[pick], tick_u64);
+                    let listener_beliefs = self.agents[to_idx].beliefs.clone();
+                    let result = gossip::process_gossip(
+                        &rumor,
+                        source_trust,
+                        &self.agents[from_idx].emotions,
+                        &self.agents[from_idx].personality,
+                        &self.agents[to_idx].personality,
+                        &listener_beliefs,
+                        tick_u64,
+                    );
+                    gossip::apply_gossip(&mut self.agents[to_idx].beliefs, &result, tick_u64);
+                    if result.accepted {
+                        // Emit RumorSpread event for memory encoding
+                        self.events.push(SimEvent::RumorSpread {
+                            source: *from,
+                            target: *to,
+                            content_hash: result.proposition_id,
+                            distortion: (result.mutated_confidence - rumor.confidence).abs(),
+                            tick,
+                        });
                     }
                 }
             }

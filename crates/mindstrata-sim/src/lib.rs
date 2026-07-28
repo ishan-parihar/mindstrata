@@ -12,6 +12,7 @@ pub mod belief_update;
 pub mod demography;
 pub mod ecology;
 pub mod factions;
+pub mod gossip;
 pub mod health;
 pub mod institutions;
 pub mod journal;
