@@ -238,18 +238,47 @@ impl Simulation {
         // §12: Create default institutions
         self.institutions = institutions::default_institutions();
 
-        // Assign some agents to institutional roles
+        // §12: Assign agents to institutional roles based on personality traits
+        // Elder: high conscientiousness + high agreeableness
+        // Priest: high traditionalism + high agreeableness
         if self.agents.len() >= 3 {
-            // Assign an elder to the council
-            if let Some(council) = self.institutions.iter_mut().find(|i| i.kind == institutions::InstitutionKind::Council) {
-                council.assign_role("Elder", AgentId::new(0));
-                council.add_member(AgentId::new(0));
-                council.add_member(AgentId::new(1));
+            // Find best Elder candidate (highest conscientiousness + agreeableness)
+            let elder_candidate = self.agents.iter().enumerate()
+                .max_by_key(|(_, a)| {
+                    let score = a.personality.conscientiousness + a.personality.agreeableness;
+                    score.to_raw() as u64
+                })
+                .map(|(i, _)| i);
+
+            // Find best Priest candidate (highest traditionalism + agreeableness, not already elder)
+            let priest_candidate = self.agents.iter().enumerate()
+                .filter(|(i, _)| Some(*i) != elder_candidate)
+                .max_by_key(|(_, a)| {
+                    let score = a.personality.traditionalism + a.personality.agreeableness;
+                    score.to_raw() as u64
+                })
+                .map(|(i, _)| i);
+
+            if let Some(elder_idx) = elder_candidate {
+                if let Some(council) = self.institutions.iter_mut().find(|i| i.kind == institutions::InstitutionKind::Council) {
+                    council.assign_role("Elder", AgentId::new(elder_idx as u64));
+                    council.add_member(AgentId::new(elder_idx as u64));
+                    // Add a second member (next highest score)
+                    let second = self.agents.iter().enumerate()
+                        .filter(|(i, _)| *i != elder_idx)
+                        .max_by_key(|(_, a)| (a.personality.conscientiousness + a.personality.agreeableness).to_raw() as u64)
+                        .map(|(i, _)| i);
+                    if let Some(second_idx) = second {
+                        council.add_member(AgentId::new(second_idx as u64));
+                    }
+                }
             }
-            // Assign a priest to the temple
-            if let Some(temple) = self.institutions.iter_mut().find(|i| i.kind == institutions::InstitutionKind::Temple) {
-                temple.assign_role("Priest", AgentId::new(2));
-                temple.add_member(AgentId::new(2));
+
+            if let Some(priest_idx) = priest_candidate {
+                if let Some(temple) = self.institutions.iter_mut().find(|i| i.kind == institutions::InstitutionKind::Temple) {
+                    temple.assign_role("Priest", AgentId::new(priest_idx as u64));
+                    temple.add_member(AgentId::new(priest_idx as u64));
+                }
             }
         }
 
@@ -381,11 +410,17 @@ impl Simulation {
                     let avg_identity_strength = self.agents[i].identity.strength_of(IdentityKind::Farmer)
                         .max(self.agents[i].identity.strength_of(IdentityKind::Parent))
                         .max(self.agents[i].identity.strength_of(IdentityKind::Believer));
+                    // §12: Institution enforcement amplifies norm pressure.
+                    // Council enforcement capacity multiplies the pressure felt by agents.
+                    let enforcement_multiplier = self.institutions.iter()
+                        .filter(|i| i.kind == institutions::InstitutionKind::Council)
+                        .map(|i| Fixed::ONE + i.enforcement_capacity * Fixed::from_f64(0.5))
+                        .fold(Fixed::ONE, |a, b| a.max(b));
                     let norm_pressure = self.norms
                         .norms()
                         .iter()
                         .map(|n| self.norms.compute_pressure(conformity, avg_identity_strength, n.id))
-                        .fold(Fixed::ZERO, |a, b| a + b); // Negative = compliant, positive = violating
+                        .fold(Fixed::ZERO, |a, b| a + b) * enforcement_multiplier; // Negative = compliant, positive = violating
                     let action = actions::select_action(
                         &needs[i],
                         &personalities[i],
@@ -691,25 +726,30 @@ impl Simulation {
             {
                 let from_id = *from;
                 let to_id = *to;
-                let punishment = self.norms.check_violation(1, from_id, tick_u64);
-                if punishment > Fixed::ZERO {
-                    if let Some(rel) = self
-                        .relationships
-                        .iter_mut()
-                        .find(|r| r.from == to_id && r.to == from_id)
-                    {
-                        rel.trust =
-                            (rel.trust - punishment * Fixed::from_f64(0.15)).max(Fixed::ZERO);
+                let punishment = self.norms.check_violation(1, from_id, tick_u64);                    if punishment > Fixed::ZERO {
+                        if let Some(rel) = self
+                            .relationships
+                            .iter_mut()
+                            .find(|r| r.from == to_id && r.to == from_id)
+                        {
+                            rel.trust =
+                                (rel.trust - punishment * Fixed::from_f64(0.15)).max(Fixed::ZERO);
+                        }
+                        let from_idx = from_id.as_u64() as usize;
+                        if from_idx < self.agents.len() {
+                            self.agents[from_idx].emotions.shame = (self.agents[from_idx]
+                                .emotions
+                                .shame
+                                + punishment * Fixed::from_f64(0.10))
+                                .clamp_01();
+                        }
+                        // §12.4: Successful norm enforcement increases institutional legitimacy
+                        for inst in self.institutions.iter_mut() {
+                            if inst.kind == institutions::InstitutionKind::Council {
+                                inst.increase_legitimacy(Fixed::from_f64(0.005));
+                            }
+                        }
                     }
-                    let from_idx = from_id.as_u64() as usize;
-                    if from_idx < self.agents.len() {
-                        self.agents[from_idx].emotions.shame = (self.agents[from_idx]
-                            .emotions
-                            .shame
-                            + punishment * Fixed::from_f64(0.10))
-                            .clamp_01();
-                    }
-                }
             }
         }
 
