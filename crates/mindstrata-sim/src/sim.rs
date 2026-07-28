@@ -854,10 +854,13 @@ impl Simulation {
                         }
                         let from_idx = from_id.as_u64() as usize;
                         if from_idx < self.agents.len() {
+                            // §22.1: Moral outrage modulated by moral foundations.
+                            // High care/fairness → more shame from own violations.
+                            let outrage = self.agents[from_idx].moral_values.moral_outrage(punishment);
                             self.agents[from_idx].emotions.shame = (self.agents[from_idx]
                                 .emotions
                                 .shame
-                                + punishment * Fixed::from_f64(0.10))
+                                + outrage * Fixed::from_f64(0.10))
                                 .clamp_01();
                         }
                         // §12.4: Successful norm enforcement increases institutional legitimacy

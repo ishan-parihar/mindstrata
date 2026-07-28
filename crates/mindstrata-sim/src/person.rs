@@ -239,15 +239,16 @@ impl MoralValues {
         }
     }
 
-    /// Compute moral response to a norm violation.
-    /// Returns an anger/shame multiplier based on which foundations are violated.
-    pub fn norm_violation_response(&self, norm_kind: &str) -> Fixed {
-        match norm_kind {
-            "no_theft" | "no_violence" => self.care * Fixed::from_f64(0.3) + self.fairness * Fixed::from_f64(0.3),
-            "work_duty" | "tax_compliance" => self.authority * Fixed::from_f64(0.4) + self.loyalty * Fixed::from_f64(0.2),
-            "temple_respect" | "ritual_participation" => self.purity * Fixed::from_f64(0.3) + self.authority * Fixed::from_f64(0.2),
-            _ => self.fairness * Fixed::from_f64(0.2),
-        }
+    /// Compute how much moral outrage a norm violation causes.
+    /// Higher values = more anger/shame when the agent witnesses a violation.
+    pub fn moral_outrage(&self, violation_severity: Fixed) -> Fixed {
+        // High care + high fairness → strong outrage at any violation
+        // High authority → outrage at subversion
+        // High liberty → less outrage (tolerance for rule-breaking)
+        let base = (self.care + self.fairness) * Fixed::from_f64(0.3);
+        let authority_boost = self.authority * Fixed::from_f64(0.2);
+        let liberty_dampen = self.liberty * Fixed::from_f64(0.15);
+        ((base + authority_boost - liberty_dampen) * violation_severity).clamp_01()
     }
 }
 
@@ -266,8 +267,7 @@ pub struct CognitiveState {
     pub fatigue: Fixed,
     /// Current stress level (0 = calm, 1 = panicked).
     pub stress: Fixed,
-    /// Rumination tendency (0 = moves on, 1 = obsessive).
-    pub rumination: Fixed,
+
     /// Effective planning horizon in ticks.
     pub planning_horizon: u32,
     /// Heuristic bias: 0 = systematic reasoning, 1 = pure heuristics.
@@ -281,7 +281,6 @@ impl Default for CognitiveState {
             executive_capacity: Fixed::from_f64(0.7),
             fatigue: Fixed::ZERO,
             stress: Fixed::ZERO,
-            rumination: Fixed::from_f64(0.3),
             planning_horizon: 20,
             heuristic_bias: Fixed::from_f64(0.3),
         }
@@ -302,16 +301,6 @@ impl CognitiveState {
 
         // Stress increases heuristic reliance
         self.heuristic_bias = (self.stress * Fixed::from_f64(0.6) + self.fatigue * Fixed::from_f64(0.2) + Fixed::from_f64(0.2)).clamp_01();
-    }
-
-    /// Get effective attention capacity (reduced by fatigue and stress).
-    pub fn effective_attention(&self) -> Fixed {
-        self.attention_capacity * (Fixed::ONE - self.fatigue * Fixed::from_f64(0.4)) * (Fixed::ONE - self.stress * Fixed::from_f64(0.3))
-    }
-
-    /// Get effective executive capacity (reduced by stress and fatigue).
-    pub fn effective_executive(&self) -> Fixed {
-        self.executive_capacity * (Fixed::ONE - self.stress * Fixed::from_f64(0.5)) * (Fixed::ONE - self.fatigue * Fixed::from_f64(0.2))
     }
 }
 
