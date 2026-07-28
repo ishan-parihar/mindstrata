@@ -12,6 +12,7 @@ use crate::routines::DailyRoutine;
 pub use crate::attention;
 pub use crate::person::Intention;
 use crate::person::{Affect, BodyState, Belief, DiscreteEmotions, Goal, GoalKind, IdentityKind, IdentityState, NeedState, Personality, Relationship};
+use crate::provenance::{CausalProvenance, DecisionFactor, DecisionTrace};
 use crate::scenario::{Scenario, ShockKind};
 use crate::social;
 use crate::systems::{self, SystemContext};
@@ -86,6 +87,8 @@ pub struct Simulation {
     norms: NormRegistry,
     /// §12: Institutions are first-class entities with legitimacy, roles, and collective psychology.
     pub institutions: Vec<Institution>,
+    /// §34: Causal provenance — tracks decision traces and event causality chains.
+    provenance: CausalProvenance,
     scenario: Option<Scenario>,
 }
 
@@ -106,6 +109,7 @@ impl Simulation {
             journal: EventJournal::new(),
             norms: NormRegistry::new(),
             institutions: Vec::new(),
+            provenance: CausalProvenance::new(),
             scenario: None,
         }
     }
@@ -377,16 +381,22 @@ impl Simulation {
 
             // ── 4. Action execution (per-tick effects) ────────────────
             for i in 0..self.agents.len() {
+                // Track causal provenance flags per agent per tick
+                let mut was_interrupted_by_critical_needs = false;
+                let mut intention_abandoned_this_tick = false;
+
                 // §24.5: Intention commitment — check if current intention should be abandoned
                 if let Some(ref intention) = self.agents[i].intention {
                     if intention.completed {
                         self.agents[i].intention = None;
+                        intention_abandoned_this_tick = true;
                     } else {
                         let stress = emotions[i].fear + emotions[i].anger;
                         let emotional_shock = emotions[i].anger > Fixed::from_f64(0.5) || emotions[i].fear > Fixed::from_f64(0.5);
                         if intention.should_abandon(tick_u64, stress, emotional_shock) {
                             self.agents[i].intention = None;
                             self.agents[i].action_progress = 0; // force reselection
+                            intention_abandoned_this_tick = true;
                         }
                     }
                 }
@@ -399,6 +409,8 @@ impl Simulation {
                     if critical {
                         self.agents[i].action_progress = 0;
                         self.agents[i].intention = None; // critical needs override intentions
+                        was_interrupted_by_critical_needs = true;
+                        intention_abandoned_this_tick = true;
                     }
                 }
 
@@ -467,6 +479,49 @@ impl Simulation {
                     self.agents[i].action_progress = action.definition().duration_ticks;
                     action_starts.push((i, action));
 
+                    let agent_id = AgentId::new(i as u64);
+
+                    // §34: Record decision trace for causal provenance
+                    {
+                        let mut factors = Vec::new();
+                        factors.push(DecisionFactor {
+                            kind: "need_hunger".into(),
+                            magnitude: needs[i].hunger,
+                            description: format!("Hunger: {:.2}", needs[i].hunger.to_f64()),
+                        });
+                        factors.push(DecisionFactor {
+                            kind: "need_thirst".into(),
+                            magnitude: needs[i].thirst,
+                            description: format!("Thirst: {:.2}", needs[i].thirst.to_f64()),
+                        });
+                        factors.push(DecisionFactor {
+                            kind: "need_fatigue".into(),
+                            magnitude: needs[i].fatigue,
+                            description: format!("Fatigue: {:.2}", needs[i].fatigue.to_f64()),
+                        });
+                        factors.push(DecisionFactor {
+                            kind: "norm_pressure".into(),
+                            magnitude: norm_pressure,
+                            description: format!("Norm pressure: {:.2}", norm_pressure.to_f64()),
+                        });
+                        if follow_routine && effective_routine_strength > Fixed::from_f64(0.5) {
+                            factors.push(DecisionFactor {
+                                kind: "routine".into(),
+                                magnitude: effective_routine_strength,
+                                description: format!("Routine strength: {:.2}", effective_routine_strength.to_f64()),
+                            });
+                        }
+                        self.provenance.record_decision(DecisionTrace {
+                            agent: agent_id,
+                            tick: tick_u64,
+                            action_name: format!("{:?}", action),
+                            factors,
+                            from_routine: follow_routine && effective_routine_strength > Fixed::from_f64(0.5),
+                            interrupted_by_critical_needs: was_interrupted_by_critical_needs,
+                            intention_abandoned: intention_abandoned_this_tick,
+                        });
+                    }
+
                     // §24.5: Create intention for the selected action's goal
                     let goal_kind = match action {
                         ActionKind::Eat => GoalKind::Eat,
@@ -482,7 +537,6 @@ impl Simulation {
                     );
 
                     // Push events (no resource ops yet — those happen after ctx drops)
-                    let agent_id = AgentId::new(i as u64);
                     match action {
                         ActionKind::Eat => {
                             ctx.events.push(SimEvent::AgentAte {
@@ -977,6 +1031,11 @@ impl Simulation {
     /// Get a reference to the norm registry.
     pub fn norms(&self) -> &NormRegistry {
         &self.norms
+    }
+
+    /// §34: Get a reference to the causal provenance store.
+    pub fn provenance(&self) -> &CausalProvenance {
+        &self.provenance
     }
 
     /// Capture a snapshot of key metrics at the current tick.
