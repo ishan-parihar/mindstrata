@@ -315,6 +315,17 @@ impl Simulation {
                 if self.agents[i].action_progress == 0 {
                     let total_grain = ctx.world.total_food();
                     let total_water = ctx.world.total_water();
+                    // Compute norm pressure using the registry's formula (identity-aware)
+                    let conformity = personalities[i].conformity;
+                    let avg_identity_strength = self.agents[i].identity.strength_of(IdentityKind::Farmer)
+                        .max(self.agents[i].identity.strength_of(IdentityKind::Parent))
+                        .max(self.agents[i].identity.strength_of(IdentityKind::Believer));
+                    let norm_pressure = self.norms
+                        .norms()
+                        .iter()
+                        .map(|n| self.norms.compute_pressure(conformity, avg_identity_strength, n.id))
+                        .fold(Fixed::ZERO, |a, b| a + b)
+                        .max(Fixed::ZERO); // Clamp: only positive = violating tendency
                     let action = actions::select_action(
                         &needs[i],
                         &personalities[i],
@@ -323,6 +334,7 @@ impl Simulation {
                         total_grain,
                         total_water,
                         &self.agents[i].identity,
+                        norm_pressure,
                     );
                     self.agents[i].current_action = action;
                     self.agents[i].action_progress = action.definition().duration_ticks;
@@ -568,36 +580,94 @@ impl Simulation {
         }
 
         // ── 11. Norm evaluation: threats and insults are norm violations ──
-        for ev in &self.events[pre_tick_events..].to_vec() {              if let SimEvent::InteractionOccurred {
-                    from,
-                    to,
-                    kind: mindstrata_core::event::InteractionKind::Threaten
-                    | mindstrata_core::event::InteractionKind::Insult,
-                    ..
-                } = ev
-              {
-                  let from_id = *from;
-                  let to_id = *to;
-                  let punishment = self.norms.check_violation(1, from_id, tick_u64);
-                  if punishment > Fixed::ZERO {
-                      if let Some(rel) = self
-                          .relationships
-                          .iter_mut()
-                          .find(|r| r.from == to_id && r.to == from_id)
-                      {
-                          rel.trust =
-                              (rel.trust - punishment * Fixed::from_f64(0.1)).max(Fixed::ZERO);
-                      }
-                      let from_idx = from_id.as_u64() as usize;
-                      if from_idx < self.agents.len() {
-                          self.agents[from_idx].emotions.shame = (self.agents[from_idx]
-                              .emotions
-                              .shame
-                              + punishment * Fixed::from_f64(0.05))
-                              .clamp_01();
-                      }
-                  }
-              }
+        for ev in &self.events[pre_tick_events..].to_vec() {
+            if let SimEvent::InteractionOccurred {
+                from,
+                to,
+                kind: mindstrata_core::event::InteractionKind::Threaten
+                | mindstrata_core::event::InteractionKind::Insult,
+                ..
+            } = ev
+            {
+                let from_id = *from;
+                let to_id = *to;
+                let punishment = self.norms.check_violation(1, from_id, tick_u64);
+                if punishment > Fixed::ZERO {
+                    if let Some(rel) = self
+                        .relationships
+                        .iter_mut()
+                        .find(|r| r.from == to_id && r.to == from_id)
+                    {
+                        rel.trust =
+                            (rel.trust - punishment * Fixed::from_f64(0.15)).max(Fixed::ZERO);
+                    }
+                    let from_idx = from_id.as_u64() as usize;
+                    if from_idx < self.agents.len() {
+                        self.agents[from_idx].emotions.shame = (self.agents[from_idx]
+                            .emotions
+                            .shame
+                            + punishment * Fixed::from_f64(0.10))
+                            .clamp_01();
+                    }
+                }
+            }
+        }
+
+        // ── 11b. Gossip propagation: when agents gossip, share a random belief ──
+        for ev in &self.events[pre_tick_events..].to_vec() {
+            if let SimEvent::InteractionOccurred {
+                from,
+                to,
+                kind: mindstrata_core::event::InteractionKind::Gossip,
+                ..
+            } = ev
+            {
+                let from_idx = from.as_u64() as usize;
+                let to_idx = to.as_u64() as usize;
+                if from_idx < self.agents.len() && to_idx < self.agents.len() {
+                    // Extract data from source to avoid borrow conflicts
+                    let shared = {
+                        let from_beliefs = &self.agents[from_idx].beliefs;
+                        if from_beliefs.is_empty() {
+                            None
+                        } else {
+                            let pick = self.rng.get_mut(RngStream::Social).random_range(0..from_beliefs.len());
+                            let b = &from_beliefs[pick];
+                            let source_trust = self.relationships
+                                .iter()
+                                .find(|r| r.from == *from && r.to == *to)
+                                .map(|r| r.trust)
+                                .unwrap_or(Fixed::from_f64(0.5));
+                            // Use discrete emotions for stronger emotional distortion
+                            let anger_bias = self.agents[from_idx].emotions.anger * Fixed::from_f64(0.2);
+                            let joy_bias = self.agents[from_idx].emotions.joy * Fixed::from_f64(0.15);
+                            let emotional_bias = joy_bias - anger_bias;
+                            let mutated_confidence = (b.confidence * source_trust + emotional_bias).clamp_01();
+                            Some((b.proposition_id, mutated_confidence, b.emotional_charge, b.identity_linkage, b.resistance))
+                        }
+                    };
+                    // Now apply to listener (immutable borrow on source is dropped)
+                    if let Some((prop_id, mutated_conf, e_charge, i_linkage, res)) = shared {
+                        // Weight by resistance: high-resistance beliefs barely change
+                        let weight = Fixed::ONE - res;
+                        if let Some(existing) = self.agents[to_idx].beliefs.iter_mut()
+                            .find(|b| b.proposition_id == prop_id)
+                        {
+                            existing.confidence = (existing.confidence * res + mutated_conf * weight).clamp_01();
+                            existing.last_reinforced_tick = tick_u64;
+                        } else {
+                            self.agents[to_idx].beliefs.push(Belief {
+                                proposition_id: prop_id,
+                                confidence: mutated_conf,
+                                emotional_charge: e_charge,
+                                identity_linkage: i_linkage,
+                                resistance: res,
+                                last_reinforced_tick: tick_u64,
+                            });
+                        }
+                    }
+                }
+            }
         }
 
         // ── 12. Belief updates from this tick's social interactions ────

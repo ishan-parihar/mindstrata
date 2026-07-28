@@ -202,6 +202,8 @@ fn identity_affinity(action: ActionKind, identity: &IdentityState) -> Fixed {
 /// Resource scarcity modifier: when grain/water stocks are low,
 /// Eat/Drink get higher utility to create economic pressure.
 /// Identity-congruent actions get higher utility.
+/// Norm-compliant actions get bonus; antisocial actions get penalty.
+#[expect(clippy::too_many_arguments)]
 pub fn compute_utility(
     action: &ActionDef,
     needs: &NeedState,
@@ -210,6 +212,7 @@ pub fn compute_utility(
     total_grain: Fixed,
     total_water: Fixed,
     identity: &IdentityState,
+    norm_pressure: Fixed,
 ) -> Fixed {
     let mut utility = Fixed::ZERO;
 
@@ -238,6 +241,17 @@ pub fn compute_utility(
     // Identity congruence bonus
     utility += identity_affinity(action.kind, identity);
 
+    // Normative component: norm-compliant actions get bonus, antisocial get penalty
+    let normative = match action.kind {
+        ActionKind::Work => norm_pressure * personality.conformity * Fixed::from_f64(0.15),
+        ActionKind::Socialize => norm_pressure * personality.conformity * Fixed::from_f64(0.10),
+        ActionKind::Worship => norm_pressure * personality.conformity * Fixed::from_f64(0.12),
+        ActionKind::Wander => -(norm_pressure * personality.conformity * Fixed::from_f64(0.05)),
+        ActionKind::Idle => -(norm_pressure * personality.conformity * Fixed::from_f64(0.08)),
+        _ => Fixed::ZERO,
+    };
+    utility += normative;
+
     utility -= action.energy_cost * Fixed::from_f64(0.5);
 
     let noise_roll: f64 = rng
@@ -249,6 +263,7 @@ pub fn compute_utility(
 }
 
 /// Select the best action for an agent based on utility.
+#[expect(clippy::too_many_arguments)]
 pub fn select_action(
     needs: &NeedState,
     personality: &Personality,
@@ -257,6 +272,7 @@ pub fn select_action(
     total_grain: Fixed,
     total_water: Fixed,
     identity: &IdentityState,
+    norm_pressure: Fixed,
 ) -> ActionKind {
     let candidates = [
         ActionKind::Eat,
@@ -274,7 +290,7 @@ pub fn select_action(
 
     for kind in &candidates {
         let def = kind.definition();
-        let mut utility = compute_utility(&def, needs, personality, rng, total_grain, total_water, identity);
+        let mut utility = compute_utility(&def, needs, personality, rng, total_grain, total_water, identity, norm_pressure);
 
         for goal in active_goals {
             let goal_aligned = matches!(
@@ -343,8 +359,8 @@ mod tests {
         let personality = make_personality();
         let identity = IdentityState::default();
 
-        let eat_utility = compute_utility(&ActionKind::Eat.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity);
-        let drink_utility = compute_utility(&ActionKind::Drink.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity);
+        let eat_utility = compute_utility(&ActionKind::Eat.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO);
+        let drink_utility = compute_utility(&ActionKind::Drink.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO);
 
         assert!(eat_utility > drink_utility);
     }
@@ -410,8 +426,8 @@ mod tests {
         let personality = make_personality();
         let identity = IdentityState::default();
 
-        let normal = compute_utility(&ActionKind::Eat.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.8), &identity);
-        let scarce = compute_utility(&ActionKind::Eat.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.1), Fixed::from_f64(0.8), &identity);
+        let normal = compute_utility(&ActionKind::Eat.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.8), &identity, Fixed::ZERO);
+        let scarce = compute_utility(&ActionKind::Eat.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.1), Fixed::from_f64(0.8), &identity, Fixed::ZERO);
 
         assert!(scarce > normal, "Scarcity should increase food utility: scarce={scarce}, normal={normal}");
     }
@@ -426,8 +442,8 @@ mod tests {
         let personality = make_personality();
         let identity = IdentityState::default();
 
-        let normal = compute_utility(&ActionKind::Drink.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.8), &identity);
-        let scarce = compute_utility(&ActionKind::Drink.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.1), &identity);
+        let normal = compute_utility(&ActionKind::Drink.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.8), &identity, Fixed::ZERO);
+        let scarce = compute_utility(&ActionKind::Drink.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.1), &identity, Fixed::ZERO);
 
         assert!(scarce > normal, "Scarcity should increase water utility: scarce={scarce}, normal={normal}");
     }
@@ -446,10 +462,36 @@ mod tests {
         };
         let no_identity = IdentityState::default();
 
-        let u_farmer = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &farmer_identity);
-        let u_none = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &no_identity);
+        let u_farmer = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &farmer_identity, Fixed::ZERO);
+        let u_none = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &no_identity, Fixed::ZERO);
 
         assert!(u_farmer > u_none, "Farmer identity should increase Work utility");
+    }
+
+    #[test]
+    fn norm_pressure_increases_work_utility() {
+        let mut rng = RngStreams::new(42);
+        let needs = NeedState::default();
+        let personality = make_personality();
+        let identity = IdentityState::default();
+
+        let no_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO);
+        let high_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::from_f64(0.8));
+
+        assert!(high_pressure > no_pressure, "High norm pressure should increase Work utility for conformist agents");
+    }
+
+    #[test]
+    fn norm_pressure_decreases_idle_utility() {
+        let mut rng = RngStreams::new(42);
+        let needs = NeedState::default();
+        let personality = make_personality();
+        let identity = IdentityState::default();
+
+        let no_pressure = compute_utility(&ActionKind::Idle.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO);
+        let high_pressure = compute_utility(&ActionKind::Idle.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::from_f64(0.8));
+
+        assert!(high_pressure < no_pressure, "High norm pressure should decrease Idle utility for conformist agents");
     }
 
     #[test]
