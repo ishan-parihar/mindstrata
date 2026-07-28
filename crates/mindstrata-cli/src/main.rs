@@ -162,14 +162,30 @@ fn init_logging(verbose: bool) {
 }
 
 fn print_results(sim: &Simulation, elapsed: std::time::Duration) {
+    let metrics = sim.metrics_snapshot();
+
     println!();
     println!("╔══════════════════════════════════════════════╗");
     println!("║  Final State                                 ║");
     println!("╚══════════════════════════════════════════════╝");
-    println!("  Ticks completed: {}", sim.current_tick().as_u64());
-    println!("  Agents:          {}", sim.agent_count());
-    println!("  Events:          {}", sim.event_count());
+    println!("  Ticks completed: {}", metrics.tick);
+    println!("  Agents:          {}", metrics.agent_count);
+    println!("  Events:          {}", metrics.event_count);
+    println!("  Journal entries: {}", metrics.journal_len);
     println!("  Time elapsed:    {:.2?}", elapsed);
+    println!();
+
+    println!("╔══════════════════════════════════════════════╗");
+    println!("║  Metrics Summary                             ║");
+    println!("╚══════════════════════════════════════════════╝");
+    println!("  Avg Hunger:    {:.3}", metrics.avg_hunger);
+    println!("  Avg Thirst:    {:.3}", metrics.avg_thirst);
+    println!("  Avg Fatigue:   {:.3}", metrics.avg_fatigue);
+    println!("  Avg Valence:   {:.3}", metrics.avg_valence);
+    println!("  Avg Joy:       {:.3}", metrics.avg_joy);
+    println!("  Avg Fear:      {:.3}", metrics.avg_fear);
+    println!("  Total Grain:   {:.1}", metrics.total_grain);
+    println!("  Total Water:   {:.1}", metrics.total_water);
     println!();
 
     println!("{}", mindstrata_tui::render_agent_list(&sim.agent_summaries()));

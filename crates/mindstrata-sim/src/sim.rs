@@ -462,19 +462,37 @@ impl Simulation {
         }
 
         // ── 9. Memory encoding from this tick's events ───────────────
+        // Extract agent state for salience derivation (before mutable borrow)
+        let agent_hunger: Vec<Fixed> = self.agents.iter().map(|a| a.needs.hunger).collect();
+        let agent_arousal: Vec<Fixed> = self.agents.iter().map(|a| a.affect.arousal).collect();
         for (i, agent) in self.agents.iter_mut().enumerate() {
             for ev in &self.events[pre_tick_events..] {
-                let salience = Fixed::from_f64(0.5);
-                let emotional = Fixed::from_f64(0.3);
+                // Derive salience from event type and agent state
+                let base_salience = match ev {
+                    SimEvent::InteractionOccurred { kind, .. } => match kind {
+                        mindstrata_core::event::InteractionKind::Threaten
+                        | mindstrata_core::event::InteractionKind::Insult => Fixed::from_f64(0.8),
+                        mindstrata_core::event::InteractionKind::Help
+                        | mindstrata_core::event::InteractionKind::Comfort => Fixed::from_f64(0.6),
+                        _ => Fixed::from_f64(0.4),
+                    },
+                    SimEvent::AgentAte { .. } | SimEvent::AgentDrank { .. } => {
+                        // Hungry agents remember food more vividly
+                        Fixed::from_f64(0.3) + agent_hunger[i] * Fixed::from_f64(0.3)
+                    }
+                    _ => Fixed::from_f64(0.3),
+                };
+                // Emotional intensity scales with arousal
+                let emotional = agent_arousal[i] * Fixed::from_f64(0.6) + Fixed::from_f64(0.1);
                 match ev {
                     SimEvent::AgentAte { agent: a, .. } if a.as_u64() == i as u64 => {
-                        agent.memory.encode(MemoryKind::Consumption, tick_u64, salience, emotional, None, MemoryTag::AteFood);
+                        agent.memory.encode(MemoryKind::Consumption, tick_u64, base_salience, emotional, None, MemoryTag::AteFood);
                     }
                     SimEvent::AgentDrank { agent: a, .. } if a.as_u64() == i as u64 => {
-                        agent.memory.encode(MemoryKind::Consumption, tick_u64, salience, emotional, None, MemoryTag::DrankWater);
+                        agent.memory.encode(MemoryKind::Consumption, tick_u64, base_salience, emotional, None, MemoryTag::DrankWater);
                     }
                     SimEvent::AgentRested { agent: a, .. } if a.as_u64() == i as u64 => {
-                        agent.memory.encode(MemoryKind::Positive, tick_u64, Fixed::from_f64(0.3), Fixed::from_f64(0.2), None, MemoryTag::Rested);
+                        agent.memory.encode(MemoryKind::Positive, tick_u64, base_salience, emotional, None, MemoryTag::Rested);
                     }
                     SimEvent::InteractionOccurred { from, to, kind, .. } => {
                         if from.as_u64() == i as u64 {
@@ -491,10 +509,10 @@ impl Simulation {
                                 mindstrata_core::event::InteractionKind::Help | mindstrata_core::event::InteractionKind::Comfort => MemoryKind::Positive,
                                 _ => MemoryKind::Social,
                             };
-                            agent.memory.encode(kind, tick_u64, salience, emotional, Some(to.as_u64() as u32), tag);
+                            agent.memory.encode(kind, tick_u64, base_salience, emotional, Some(to.as_u64() as u32), tag);
                         }
                         if to.as_u64() == i as u64 {
-                            agent.memory.encode(MemoryKind::Social, tick_u64, salience, emotional, Some(from.as_u64() as u32), MemoryTag::TalkedTo);
+                            agent.memory.encode(MemoryKind::Social, tick_u64, base_salience, emotional, Some(from.as_u64() as u32), MemoryTag::TalkedTo);
                         }
                     }
                     _ => {}
@@ -508,7 +526,21 @@ impl Simulation {
             agent.memory.decay(tick_u64);
         }
 
-        // ── 10. Belief updates from this tick's social interactions ────
+        // ── 10. Resource spoilage (perishable goods degrade each tick) ──
+        // Extract resources ref before mutable borrow of sites (split borrowing)
+        let resource_defs = &self.world.resources;
+        for site in self.world.sites.iter_mut() {
+            for stock in site.inventory.iter_mut() {
+                if let Some(res_def) = resource_defs.iter().find(|r| r.id == stock.resource_id) {
+                    if res_def.perishable && res_def.spoilage_rate > Fixed::ZERO {
+                        let spoilage = stock.quantity * res_def.spoilage_rate;
+                        stock.quantity = (stock.quantity - spoilage).max(Fixed::ZERO);
+                    }
+                }
+            }
+        }
+
+        // ── 11. Belief updates from this tick's social interactions ────
         for ev in &self.events[pre_tick_events..] {
             if let SimEvent::InteractionOccurred { from, to, .. } = ev {
                 let from_idx = from.as_u64() as usize;
