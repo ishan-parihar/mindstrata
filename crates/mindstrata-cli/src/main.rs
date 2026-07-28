@@ -195,6 +195,14 @@ fn print_results(sim: &Simulation, elapsed: std::time::Duration) {
         &sim.agent_summaries(),
         sim.event_count(),
         sim.current_tick().as_u64(),
+        &mindstrata_tui::DashboardConfig {
+            season: sim.season.current.name().to_string(),
+            year: sim.season.year,
+            grain: sim.total_grain().to_f64(),
+            water: sim.total_water().to_f64(),
+            institution_count: sim.institutions.len(),
+            faction_count: sim.institutions.iter().filter(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Faction).count(),
+        },
     ));
 
     // Show last 10 events
