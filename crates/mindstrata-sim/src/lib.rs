@@ -8,6 +8,7 @@
 pub mod actions;
 pub mod appraisal;
 pub mod belief_update;
+pub mod memory;
 pub mod person;
 pub mod scenario;
 pub mod sim;
