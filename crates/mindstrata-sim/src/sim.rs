@@ -9,7 +9,7 @@ use crate::norms::{self, NormRegistry};
 use crate::attention::AttentionState;
 pub use crate::attention;
 pub use crate::person::Intention;
-use crate::person::{Affect, BodyState, Belief, DiscreteEmotions, Goal, GoalKind, IdentityKind, IdentityState, Intention as IntentionType, NeedState, Personality, Relationship};
+use crate::person::{Affect, BodyState, Belief, DiscreteEmotions, Goal, GoalKind, IdentityKind, IdentityState, NeedState, Personality, Relationship};
 use crate::scenario::{Scenario, ShockKind};
 use crate::social;
 use crate::systems::{self, SystemContext};
@@ -66,7 +66,7 @@ pub struct AgentBundle {
     /// §22.5: Attention controls which events the agent notices.
     pub attention: AttentionState,
     /// §24.5: Current intention — a committed plan to achieve a goal.
-    pub intention: Option<IntentionType>,
+    pub intention: Option<crate::person::Intention>,
 }
 
 /// The simulation state.
@@ -512,15 +512,22 @@ impl Simulation {
 
         } // ctx is dropped here, releasing mutable borrows on self.events and self.rng
 
-        // ── 4b. Resource operations and journal recording (after ctx drop) ──
+        // ── 4b. Resource operations, journal recording, intention tracking ──
         for (agent_idx, action) in &action_starts {
             let agent_id = AgentId::new(*agent_idx as u64);
-            match action {
+            // §24.5: Track intention success/failure when action completes.
+            // The resource operation outcome (e.g., Eat failing because no grain)
+            // is known here, so we record intention success/failure based on
+            // the actual resource operation result.
+            let action_succeeded = match action {
                 ActionKind::Eat => {
                     let amount = Fixed::from_f64(0.1);
                     if let Some(farm_idx) = self.world.farm_with_grain() {
                         let taken = self.world.consume_resource(farm_idx, GRAIN_RESOURCE_ID, amount);
                         self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "grain".into(), amount: taken.to_f64() });
+                        taken > Fixed::ZERO
+                    } else {
+                        false
                     }
                 }
                 ActionKind::Drink => {
@@ -528,6 +535,9 @@ impl Simulation {
                     if let Some(well_idx) = self.world.well_with_water() {
                         let taken = self.world.consume_resource(well_idx, WATER_RESOURCE_ID, amount);
                         self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "water".into(), amount: taken.to_f64() });
+                        taken > Fixed::ZERO
+                    } else {
+                        false
                     }
                 }
                 ActionKind::Work => {
@@ -535,15 +545,29 @@ impl Simulation {
                     if let Some(farm_idx) = self.world.best_farm_for_work() {
                         self.world.produce_resource(farm_idx, GRAIN_RESOURCE_ID, productivity);
                         self.journal.record(tick_u64, agent_id, JournalEntryKind::Worked { productivity: productivity.to_f64() });
+                        true
+                    } else {
+                        false
                     }
                 }
                 ActionKind::Rest => {
                     self.journal.record(tick_u64, agent_id, JournalEntryKind::Rested);
+                    true
                 }
                 ActionKind::Worship => {
                     self.journal.record(tick_u64, agent_id, JournalEntryKind::Worshiped);
+                    true
                 }
-                _ => {}
+                _ => false,
+            };
+
+            // Record intention success/failure based on actual resource outcome
+            if let Some(ref mut intention) = self.agents[*agent_idx].intention {
+                if action_succeeded {
+                    intention.record_success();
+                } else {
+                    intention.record_failure();
+                }
             }
         }
 

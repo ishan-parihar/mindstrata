@@ -105,11 +105,8 @@ impl MemoryStore {
         other_agent: Option<u32>,
         tag: MemoryTag,
     ) {
-        // Encoding threshold — only salient events get stored
-        let threshold = Fixed::from_f64(0.15);
-        if salience < threshold {
-            return;
-        }
+        // Note: salience threshold is now handled by AttentionState in sim.rs
+        // (threshold 0.2). This method trusts that the caller has already filtered.
 
         let memory = Memory {
             kind,
@@ -214,10 +211,17 @@ mod tests {
     }
 
     #[test]
-    fn low_salience_not_stored() {
+    fn low_salience_stored_but_likely_evicted() {
+        // After removing the internal threshold, encode() stores any salience.
+        // Low-salience memories are stored but will be evicted quickly by decay.
         let mut store = MemoryStore::new(100);
         store.encode(MemoryKind::Social, 10, Fixed::from_f64(0.05), Fixed::ZERO, None, MemoryTag::TalkedTo);
-        assert_eq!(store.count(), 0);
+        assert_eq!(store.count(), 1, "Low-salience memory should be stored (threshold moved to attention system)");
+        // After heavy decay, it should be evicted
+        for _ in 0..5000 {
+            store.decay(1000);
+        }
+        assert_eq!(store.count(), 0, "Low-salience memory should be evicted after decay");
     }
 
     #[test]
