@@ -1055,6 +1055,99 @@ impl Simulation {
                                 fear_induced: conflict_result.fear_induced,
                                 tick,
                             });
+
+                            // §19.5.H: Violence escalation — when threat fails to deter
+                            // (target fear remains low after threat), aggressive aggressors
+                            // escalate to physical violence with real injury.
+                            let target_fear_after = self.agents[to_idx].emotions.fear;
+                            let threat_failed = target_fear_after < Fixed::from_f64(0.3);
+                            let aggressor_aggression = self.agents[from_idx].personality.dominance
+                                + self.agents[from_idx].personality.risk_tolerance;
+                            let escalate = threat_failed
+                                && aggressor_aggression > Fixed::from_f64(1.2)
+                                && self.rng.get_mut(RngStream::Social).random::<f64>() < 0.3; // probabilistic
+
+                            if escalate {
+                                let violence_result = conflict::resolve_conflict(
+                                    ConflictKind::Violence,
+                                    &self.agents[from_idx].personality,
+                                    &self.agents[to_idx].emotions,
+                                    self.agents[to_idx].body.health,
+                                    &self.agents[to_idx].conflict,
+                                    rng_val,
+                                );
+                                if violence_result.occurred {
+                                    self.agents[to_idx].conflict.record_conflict(ConflictKind::Violence);
+                                    self.agents[to_idx].emotions.fear = (
+                                        self.agents[to_idx].emotions.fear + violence_result.fear_induced
+                                    ).clamp_01();
+                                    // Apply injury to target's health
+                                    self.agents[to_idx].body.health = (
+                                        self.agents[to_idx].body.health - violence_result.injury
+                                    ).max(Fixed::ZERO);
+                                    // Record injury
+                                    self.agents[to_idx].conflict.record_injury();
+                                    // Attacker accumulates trauma too
+                                    self.agents[from_idx].conflict.record_conflict(ConflictKind::Violence);
+                                    // Reduce trust and affection between the two
+                                    if let Some(rel) = self.relationships.iter_mut()
+                                        .find(|r| r.from == from_id && r.to == to_id)
+                                    {
+                                        rel.trust = (rel.trust - Fixed::from_f64(0.3)).max(Fixed::ZERO);
+                                        rel.affection = (rel.affection - Fixed::from_f64(0.2)).max(Fixed::ZERO);
+                                    }
+                                    if let Some(rel) = self.relationships.iter_mut()
+                                        .find(|r| r.from == to_id && r.to == from_id)
+                                    {
+                                        rel.trust = (rel.trust - Fixed::from_f64(0.3)).max(Fixed::ZERO);
+                                        rel.affection = (rel.affection - Fixed::from_f64(0.2)).max(Fixed::ZERO);
+                                    }
+                                    // Record in journal
+                                    self.journal.record(tick_u64, from_id, JournalEntryKind::CommittedViolence {
+                                        target: to_id.as_u64(),
+                                        injury: violence_result.injury.to_f64(),
+                                    });
+                                    // Emit violence event
+                                    self.events.push(SimEvent::ConflictOccurred {
+                                        aggressor: from_id,
+                                        target: to_id,
+                                        kind: format!("{:?}", ConflictKind::Violence),
+                                        injury: violence_result.injury,
+                                        fear_induced: violence_result.fear_induced,
+                                        tick,
+                                    });
+                                    // §19.5.D: Violence is a severe norm violation
+                                    let _ = self.norms.check_violation(4, from_id, tick_u64); // norm id=4: No Violence
+                                    // Attacker gains shame from violence
+                                    self.agents[from_idx].emotions.shame = (
+                                        self.agents[from_idx].emotions.shame + Fixed::from_f64(0.15)
+                                    ).clamp_01();
+
+                                    // §19.5.H: Check if violence was lethal
+                                    if self.agents[to_idx].body.health <= Fixed::ZERO {
+                                        self.agents[to_idx].conflict.record_casualty();
+                                        self.events.push(SimEvent::AgentDied {
+                                            agent: to_id,
+                                            cause: mindstrata_core::event::DeathCause::Violence,
+                                            tick,
+                                        });
+                                        tracing::warn!(
+                                            agent = to_id.as_u64(),
+                                            attacker = from_id.as_u64(),
+                                            tick = tick_u64,
+                                            "Agent killed by violence"
+                                        );
+                                    }
+
+                                    tracing::warn!(
+                                        aggressor = from_id.as_u64(),
+                                        target = to_id.as_u64(),
+                                        injury = violence_result.injury.to_f64(),
+                                        tick = tick_u64,
+                                        "Violence escalated from failed threat"
+                                    );
+                                }
+                            }
                         }
                     }
                 }

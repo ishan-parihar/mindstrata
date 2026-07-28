@@ -14,6 +14,7 @@ pub enum JournalEntryKind {
     Worshiped,
     Rested,
     TheftDetected { resource: String, amount: f64, fine: f64 },
+    CommittedViolence { target: u64, injury: f64 },
 }
 
 /// A single journal entry.

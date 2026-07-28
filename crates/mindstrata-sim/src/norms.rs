@@ -149,6 +149,14 @@ pub fn default_norms() -> Vec<Norm> {
             punishment: Fixed::from_f64(0.6),
             reinforcing_identity: Some(IdentityKind::Believer),
         },
+        Norm {
+            id: 4,
+            name: "No Violence".into(),
+            strength: Fixed::from_f64(0.9),
+            internalization: Fixed::from_f64(0.7),
+            punishment: Fixed::from_f64(0.8),
+            reinforcing_identity: None,
+        },
     ]
 }
 
