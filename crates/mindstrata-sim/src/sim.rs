@@ -412,10 +412,12 @@ impl Simulation {
                         .max(self.agents[i].identity.strength_of(IdentityKind::Believer));
                     // §12: Institution enforcement amplifies norm pressure.
                     // Council enforcement capacity multiplies the pressure felt by agents.
+                    // Hoisted outside per-agent loop since it's identical for all agents.
                     let enforcement_multiplier = self.institutions.iter()
                         .filter(|i| i.kind == institutions::InstitutionKind::Council)
                         .map(|i| Fixed::ONE + i.enforcement_capacity * Fixed::from_f64(0.5))
                         .fold(Fixed::ONE, |a, b| a.max(b));
+
                     let norm_pressure = self.norms
                         .norms()
                         .iter()
@@ -744,9 +746,11 @@ impl Simulation {
                                 .clamp_01();
                         }
                         // §12.4: Successful norm enforcement increases institutional legitimacy
+                        // Modulated by enforcement_capacity — low-capacity councils gain less.
                         for inst in self.institutions.iter_mut() {
                             if inst.kind == institutions::InstitutionKind::Council {
-                                inst.increase_legitimacy(Fixed::from_f64(0.005));
+                                let legitimacy_gain = inst.enforcement_capacity * Fixed::from_f64(0.005);
+                                inst.increase_legitimacy(legitimacy_gain);
                             }
                         }
                     }
