@@ -1367,38 +1367,43 @@ impl Simulation {
                 institution.records.drain(..drain_count);
             }
 
-            // §19.5.C: Council collects taxes from members every 100 ticks
-            if institution.kind == institutions::InstitutionKind::Council
-                && tick_u64 % 100 == 0
-                && tick_u64 > 0
-                && !institution.members.is_empty()
-            {
-                let mut member_wealth: Vec<(AgentId, Fixed)> = institution.members.iter()
-                    .filter_map(|m| {
-                        let idx = m.as_u64() as usize;
+            // §19.5.C: Institutional tax collection — all institutions collect taxes
+            if tick_u64 % 100 == 0 && tick_u64 > 0 && !institution.members.is_empty() {
+                let tax_rate = match institution.kind {
+                    institutions::InstitutionKind::Council => Fixed::from_f64(0.05), // 5% tax
+                    institutions::InstitutionKind::Market => Fixed::from_f64(0.03), // 3% merchant fee
+                    institutions::InstitutionKind::Temple => Fixed::from_f64(0.02), // 2% tithe
+                    _ => Fixed::ZERO,
+                };
+                if tax_rate > Fixed::ZERO {
+                    let mut member_wealth: Vec<(AgentId, Fixed)> = institution.members.iter()
+                        .filter_map(|m| {
+                            let idx = m.as_u64() as usize;
+                            if idx < self.agents.len() {
+                                Some((*m, self.agents[idx].wealth.coin))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    let collected = institution.collect_taxes(tax_rate, &mut member_wealth);
+                    // Write back tax deductions (AgentId::new(i) == index i)
+                    for (agent_id, new_wealth) in &member_wealth {
+                        let idx = agent_id.as_u64() as usize;
                         if idx < self.agents.len() {
-                            Some((*m, self.agents[idx].wealth.coin))
-                        } else {
-                            None
+                            self.agents[idx].wealth.coin = *new_wealth;
                         }
-                    })
-                    .collect();
-                let collected = institution.collect_taxes(Fixed::from_f64(0.05), &mut member_wealth);
-                // Write back tax deductions using AgentId-as-index (AgentId::new(i) == index i)
-                for (agent_id, new_wealth) in &member_wealth {
-                    let idx = agent_id.as_u64() as usize;
-                    if idx < self.agents.len() {
-                        self.agents[idx].wealth.coin = *new_wealth;
                     }
-                }
-                if collected > Fixed::ZERO {
-                    let members = institution.members.clone();
-                    institution.record_action(
-                        tick_u64,
-                        format!("Tax collection: {:.1} coins", collected.to_f64()),
-                        members,
-                        true,
-                    );
+                    if collected > Fixed::ZERO {
+                        let members = institution.members.clone();
+                        let kind_name = institution.kind.name();
+                        institution.record_action(
+                            tick_u64,
+                            format!("{} tax: {:.1} coins", kind_name, collected.to_f64()),
+                            members,
+                            true,
+                        );
+                    }
                 }
             }
 
@@ -1410,7 +1415,6 @@ impl Simulation {
                 let wage = Fixed::from_f64(2.0);
                 let role_holder_count = institution.roles.iter().filter(|r| r.holder.is_some()).count() as i64;
                 let total_wage_cost = wage * Fixed::from_int(role_holder_count);
-                // Only pay if treasury can cover total wages
                 if institution.treasury >= total_wage_cost && role_holder_count > 0 {
                     let mut member_wealth: Vec<(AgentId, Fixed)> = institution.roles.iter()
                         .filter_map(|r| r.holder.map(|h| {
@@ -1424,7 +1428,6 @@ impl Simulation {
                         }))
                         .collect();
                     let paid = institution.pay_wages(wage, &mut member_wealth);
-                    // Write back wage additions using AgentId-as-index
                     for (agent_id, new_wealth) in &member_wealth {
                         let idx = agent_id.as_u64() as usize;
                         if idx < self.agents.len() {
