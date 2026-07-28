@@ -280,6 +280,73 @@ mod smoke {
     }
 
     #[test]
+    fn institutions_created_with_roles() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 100,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+
+        // Verify institutions are created
+        assert!(!sim.institutions.is_empty(), "Institutions should be created during populate");
+        assert!(sim.institutions.len() >= 3, "Should have at least 3 institutions (Council, Temple, Market)");
+
+        // Verify Council has Elder role assigned by personality
+        {
+            let council = sim.institutions.iter().find(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Council).unwrap();
+            assert!(council.get_role_holder("Elder").is_some(), "Council should have an Elder assigned");
+            assert!(council.members.len() >= 2, "Council should have at least 2 members");
+
+            // Verify Temple has Priest role assigned by personality
+            let temple = sim.institutions.iter().find(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Temple).unwrap();
+            assert!(temple.get_role_holder("Priest").is_some(), "Temple should have a Priest assigned");
+        }
+
+        // Run 200 ticks — collective psychology should be derived
+        sim.run(200);
+
+        // Verify collective psychology was derived (morale should be non-zero)
+        let council = sim.institutions.iter().find(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Council).unwrap();
+        assert!(council.collective.morale > mindstrata_core::fixed::Fixed::ZERO,
+            "Council morale should be derived from member states");
+        assert!(council.collective.unity > mindstrata_core::fixed::Fixed::ZERO,
+            "Council unity should be derived from member trust distribution");
+    }
+
+    #[test]
+    fn routines_stabilize_behavior() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 500,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+
+        // All agents should have village routines
+        for agent in &sim.agents {
+            assert!(agent.routine.preferred_action(mindstrata_core::clock::Tick::new(36)).0 != mindstrata_sim::actions::ActionKind::Idle,
+                "Agents should have active routines that prefer Work during work hours");
+        }
+
+        // Run 500 ticks — routines should create behavioral patterns
+        sim.run(500);
+
+        // Agents should be alive and functional
+        let summaries = sim.agent_summaries();
+        let avg_hunger: f64 = summaries.iter().map(|s| s.hunger.to_f64()).sum::<f64>() / summaries.len() as f64;
+        assert!(avg_hunger < 0.9, "Routines should help agents manage needs: avg_hunger={avg_hunger}");
+    }
+
+    #[test]
     fn golden_run_1000_ticks() {
         let config = SimConfig {
             seed: 42,
