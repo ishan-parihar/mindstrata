@@ -36,8 +36,15 @@ enum Commands {
         /// Show world map after simulation.
         #[arg(long)]
         map: bool,
-    },
 
+        /// Inspect a specific agent by ID after simulation.
+        #[arg(long)]
+        inspect_agent: Option<usize>,
+
+        /// Show relationship between two agents (format: from,to).
+        #[arg(long)]
+        show_relationships: Option<String>,
+    },
     /// Run a named scenario.
     Scenario {
         /// Scenario name (e.g. "riverford").
@@ -64,6 +71,8 @@ fn main() -> Result<()> {
             agents,
             verbose,
             map,
+            inspect_agent,
+            show_relationships,
         } => {
             init_logging(verbose);
 
@@ -99,6 +108,38 @@ fn main() -> Result<()> {
             if map {
                 println!();
                 println!("{}", mindstrata_tui::render_world_map(sim.world()));
+            }
+
+            // §17.1: Agent inspector
+            if let Some(id) = inspect_agent {
+                let summaries = sim.agent_summaries();
+                if let Some(summary) = summaries.iter().find(|s| s.index == id) {
+                    println!();
+                    println!("{}", mindstrata_tui::render_agent_inspector(summary, sim.relationships()));
+                } else {
+                    eprintln!("Agent {} not found.", id);
+                }
+            }
+
+            // §17.1: Relationship view
+            if let Some(ref spec) = show_relationships {
+                let parts: Vec<&str> = spec.split(',').collect();
+                if parts.len() == 2 {
+                    if let (Ok(from), Ok(to)) = (parts[0].parse::<usize>(), parts[1].parse::<usize>()) {
+                        let summaries = sim.agent_summaries();
+                        println!();
+                        println!("{}", mindstrata_tui::render_relationship_view(
+                            mindstrata_core::id::AgentId::new(from as u64),
+                            mindstrata_core::id::AgentId::new(to as u64),
+                            sim.relationships(),
+                            &summaries,
+                        ));
+                    } else {
+                        eprintln!("Invalid format. Use: --show-relationships from,to");
+                    }
+                } else {
+                    eprintln!("Invalid format. Use: --show-relationships from,to");
+                }
             }
         }
 

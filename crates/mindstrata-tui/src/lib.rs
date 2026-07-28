@@ -125,8 +125,8 @@ pub fn render_event_log(events: &[SimEvent], n: usize) -> String {
 }
 
 /// §17.1: Render agent inspector — detailed single-agent view.
-pub fn render_agent_inspector(summary: &AgentSummary, relationships: &[Relationship], agent_id: AgentId) -> String {
-    let idx = summary.index;
+pub fn render_agent_inspector(summary: &AgentSummary, relationships: &[Relationship]) -> String {
+    let agent_id = AgentId::new(summary.index as u64);
     let mut out = String::new();
     out.push_str(&format!(
         "╔══════════════════════════════════════════╗\n\
@@ -146,7 +146,7 @@ pub fn render_agent_inspector(summary: &AgentSummary, relationships: &[Relations
          Intention: {}
 \
          Attention: {:5.2}\n",
-        summary.name, idx,
+        summary.name, summary.index,
         summary.health.to_f64(), summary.energy.to_f64(),
         summary.hunger.to_f64(), summary.thirst.to_f64(),
         summary.fatigue.to_f64(),
@@ -182,12 +182,12 @@ pub fn render_relationship_view(
     from_id: AgentId,
     to_id: AgentId,
     relationships: &[Relationship],
-    agent_names: &[String],
+    agents: &[AgentSummary],
 ) -> String {
-    let from_name = agent_names.get(from_id.as_u64() as usize)
-        .map(|s| s.as_str()).unwrap_or("?");
-    let to_name = agent_names.get(to_id.as_u64() as usize)
-        .map(|s| s.as_str()).unwrap_or("?");
+    let from_name = agents.get(from_id.as_u64() as usize)
+        .map(|s| s.name.as_str()).unwrap_or("?");
+    let to_name = agents.get(to_id.as_u64() as usize)
+        .map(|s| s.name.as_str()).unwrap_or("?");
 
     let forward = relationships.iter().find(|r| r.from == from_id && r.to == to_id);
     let backward = relationships.iter().find(|r| r.from == to_id && r.to == from_id);

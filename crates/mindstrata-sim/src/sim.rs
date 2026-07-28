@@ -1390,6 +1390,11 @@ impl Simulation {
         &self.world
     }
 
+    /// Get a reference to all relationships.
+    pub fn relationships(&self) -> &[Relationship] {
+        &self.relationships
+    }
+
     /// Get recent events (last n).
     pub fn recent_events(&self, n: usize) -> &[SimEvent] {
         let start = self.events.len().saturating_sub(n);
