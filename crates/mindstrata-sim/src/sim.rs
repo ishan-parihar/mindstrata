@@ -1339,7 +1339,7 @@ impl Simulation {
                 && institution.legitimacy > Fixed::from_f64(0.5)
                 && institution.active_policies.is_empty()
                 && institution.pending_policies.is_empty()
-                && tick_u64 > 100 // delay initial proposal
+                && tick_u64 > institutions::INITIAL_PROPOSAL_DELAY
             {
                 institution.propose_policy(
                     "Fine Theft Policy".into(),
@@ -1351,7 +1351,7 @@ impl Simulation {
             // §19.5.C: Record active policy effects (check name first to avoid borrow conflict)
             let has_fine_theft = institution.active_policies.iter()
                 .any(|p| p.name == "Fine Theft Policy");
-            if has_fine_theft && tick_u64 % 100 == 0 {
+            if has_fine_theft && tick_u64 % institutions::POLICY_RECORD_INTERVAL == 0 {
                 let members = institution.members.clone();
                 institution.record_action(
                     tick_u64,
@@ -1362,8 +1362,8 @@ impl Simulation {
             }
 
             // Trim old records to prevent unbounded growth (keep last 1000)
-            if institution.records.len() > 1000 {
-                let drain_count = institution.records.len() - 1000;
+            if institution.records.len() > institutions::MAX_RECORDS {
+                let drain_count = institution.records.len() - institutions::MAX_RECORDS;
                 institution.records.drain(..drain_count);
             }
         }        // ── 15. Faction dynamics — grievance, formation, recruitment, protests (Phase 8) ──
