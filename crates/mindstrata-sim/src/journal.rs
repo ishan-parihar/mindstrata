@@ -24,7 +24,7 @@ pub struct JournalEntry {
 }
 
 /// Append-only event journal.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct EventJournal {
     entries: Vec<JournalEntry>,
 }

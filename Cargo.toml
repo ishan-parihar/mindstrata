@@ -22,6 +22,7 @@ mindstrata-sim = { path = "crates/mindstrata-sim" }
 # Serialization
 serde = { version = "1", features = ["derive"] }
 ron = "0.8"
+postcard = { version = "1", features = ["alloc"] }
 
 # Randomness (deterministic)
 rand = "0.9"

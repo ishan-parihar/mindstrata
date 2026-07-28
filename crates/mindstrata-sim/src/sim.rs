@@ -14,6 +14,7 @@ pub use crate::person::Intention;
 use crate::person::{Affect, BodyState, Belief, CognitiveState, DerivedMentalState, DiscreteEmotions, Goal, GoalKind, IdentityKind, IdentityState, MoralValues, NeedState, Personality, Relationship};
 use crate::provenance::{CausalProvenance, DecisionFactor, DecisionTrace};
 use crate::scenario::{Scenario, ShockKind};
+use crate::snapshot::Snapshot;
 use crate::social;
 use crate::systems::{self, SystemContext};
 use crate::world::{GRAIN_RESOURCE_ID, WATER_RESOURCE_ID, World};
@@ -1110,6 +1111,24 @@ impl Simulation {
     /// §34: Get a reference to the causal provenance store.
     pub fn provenance(&self) -> &CausalProvenance {
         &self.provenance
+    }
+
+    /// §16.1: Capture a full deterministic snapshot of the simulation state.
+    /// RNG streams are not serialized — only the master seed is stored.
+    pub fn save_snapshot(&self) -> Snapshot {
+        Snapshot::capture(
+            &self.config,
+            self.clock.tick(),
+            self.config.seed,
+            &self.world,
+            &self.agents,
+            &self.relationships,
+            &self.events,
+            &self.journal,
+            &self.norms,
+            &self.institutions,
+            &self.provenance,
+        )
     }
 
     /// Capture a snapshot of key metrics at the current tick.

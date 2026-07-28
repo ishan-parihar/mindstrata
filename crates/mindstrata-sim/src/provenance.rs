@@ -64,7 +64,7 @@ pub struct EventProvenance {
 }
 
 /// The Causal Provenance Store — tracks causality across the simulation.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CausalProvenance {
     /// Decision traces indexed by (tick, agent).
     decisions: Vec<DecisionTrace>,

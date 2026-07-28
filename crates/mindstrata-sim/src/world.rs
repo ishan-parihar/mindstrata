@@ -164,7 +164,7 @@ pub struct Region {
 // ── World ────────────────────────────────────────────────────────────────
 
 /// The complete world state.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct World {
     pub width: u32,
     pub height: u32,

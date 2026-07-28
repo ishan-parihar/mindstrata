@@ -33,7 +33,7 @@ pub struct NormViolation {
 }
 
 /// The norm registry for the simulation.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct NormRegistry {
     norms: Vec<Norm>,
     violations: Vec<NormViolation>,

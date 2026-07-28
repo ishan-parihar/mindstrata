@@ -464,6 +464,45 @@ mod smoke {
     }
 
     #[test]
+    fn snapshot_roundtrip_with_simulation() {
+        use mindstrata_sim::sim::{Simulation, SimConfig};
+        use mindstrata_sim::snapshot::{Snapshot, SNAPSHOT_VERSION};
+
+        let mut sim = Simulation::new(SimConfig {
+            seed: 42,
+            max_ticks: 1000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        });
+        sim.populate();
+        sim.run(100);
+
+        // Capture snapshot at tick 100
+        let snapshot = sim.save_snapshot();
+        assert_eq!(snapshot.version, SNAPSHOT_VERSION);
+        assert_eq!(snapshot.tick, 100);
+        assert_eq!(snapshot.agents.len(), 12);
+        assert!(!snapshot.events.is_empty(), "Should have events after 100 ticks");
+
+        // Serialize to bytes and back
+        let bytes = snapshot.to_bytes().expect("Failed to serialize snapshot");
+        let restored = Snapshot::from_bytes(&bytes).expect("Failed to deserialize snapshot");
+
+        // Verify key state matches
+        assert_eq!(restored.tick, snapshot.tick);
+        assert_eq!(restored.agents.len(), snapshot.agents.len());
+        assert_eq!(restored.config.seed, snapshot.config.seed);
+        assert_eq!(restored.event_count(), snapshot.event_count());
+
+        // Verify determinism — same seed produces same hash
+        let hash1 = snapshot.deterministic_hash().expect("Failed to hash");
+        let hash2 = restored.deterministic_hash().expect("Failed to hash");
+        assert_eq!(hash1, hash2, "Snapshot hash should be deterministic");
+    }
+
+    #[test]
     fn resource_access_rights_enforced() {
         use mindstrata_core::fixed::Fixed;
         use mindstrata_core::id::EntityId;
