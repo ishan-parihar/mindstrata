@@ -1049,6 +1049,13 @@ impl Simulation {
                         self.agents[i].position.x = (self.agents[i].position.x + dx).clamp(0, world_w - 1);
                         self.agents[i].position.y = (self.agents[i].position.y + dy).clamp(0, world_h - 1);
                     }
+                    ActionKind::Move { target_x, target_y } => {
+                        // §6: Move one step toward target (Manhattan pathfinding)
+                        let dx = (target_x - self.agents[i].position.x).clamp(-1, 1);
+                        let dy = (target_y - self.agents[i].position.y).clamp(-1, 1);
+                        self.agents[i].position.x = (self.agents[i].position.x + dx).clamp(0, world_w - 1);
+                        self.agents[i].position.y = (self.agents[i].position.y + dy).clamp(0, world_h - 1);
+                    }
                     _ => {}
                 }
             }

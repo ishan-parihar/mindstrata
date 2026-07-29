@@ -49,6 +49,8 @@ pub enum ActionKind {
     Socialize,
     Worship,
     Wander,
+    /// §6: Move toward a specific target position (Manhattan distance).
+    Move { target_x: i32, target_y: i32 },
     /// §13.3: Trade goods with another agent at the market.
     Trade,
     Idle,
@@ -144,6 +146,20 @@ impl ActionKind {
                 fatigue_relief: Fixed::ZERO,
                 social_value: Fixed::ZERO,
                 energy_cost: Fixed::from_f64(0.02),
+                bonus_fatigue_relief: Fixed::ZERO,
+                bonus_energy_recovery: Fixed::ZERO,
+                bonus_social_relief: Fixed::ZERO,
+                bonus_meaning_relief: Fixed::ZERO,
+            },
+            // §6: Move duration = 1 tick per 2 Manhattan distance units
+            ActionKind::Move { .. } => ActionDef {
+                kind: self,
+                duration_ticks: 1, // actual ticks set dynamically in sim.rs
+                hunger_relief: Fixed::ZERO,
+                thirst_relief: Fixed::ZERO,
+                fatigue_relief: Fixed::ZERO,
+                social_value: Fixed::ZERO,
+                energy_cost: Fixed::from_f64(0.01),
                 bonus_fatigue_relief: Fixed::ZERO,
                 bonus_energy_recovery: Fixed::ZERO,
                 bonus_social_relief: Fixed::ZERO,
