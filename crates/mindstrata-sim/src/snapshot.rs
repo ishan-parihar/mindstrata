@@ -310,6 +310,17 @@ mod tests {
             norms: NormRegistry::new(),
             institutions: vec![],
             provenance: CausalProvenance::new(),
+            season: crate::ecology::SeasonTracker::new(8760),
+            ecology_config: crate::ecology::EcologyConfig::default(),
+            health_config: crate::health::HealthConfig::default(),
+            demography_config: crate::demography::DemographyConfig::default(),
+            agent_diseases: vec![],
+            market: crate::market::MarketState::new(),
+            knowledge_store: vec![],
+            metric_history: vec![],
+            last_revolution_tick: 0,
+            black_market: crate::black_market::BlackMarketState::default(),
+            site_work_ticks: vec![],
         }
     }
 
