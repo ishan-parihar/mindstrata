@@ -145,21 +145,21 @@ pub fn system_goal_generation(
         }
 
         // ── Safety goal from high fear (§24 emotional modulation) ──
-        // High fear generates SeekSafety goal — this was missing before.
-        // We check via a synthetic "safety" pressure derived from fear.
+        // Uses upsert pattern consistent with need-driven and identity-driven goals.
         if i < personalities.len() {
             let fear_pressure = need.safety; // safety need grows when afraid
-            if fear_pressure > Fixed::from_f64(0.6)
-                && !agent_goals.iter().any(|g| g.kind == crate::person::GoalKind::SeekSafety)
-            {
-                agent_goals.push(crate::person::Goal {
-                    kind: crate::person::GoalKind::SeekSafety,
-                    priority: fear_pressure,
-                    commitment: Fixed::from_f64(0.6),
-                    created_tick: tick,
-                    source: crate::person::GoalSource::Emotion,
-
-                });
+            if fear_pressure > Fixed::from_f64(0.6) {
+                if let Some(existing) = agent_goals.iter_mut().find(|g| g.kind == crate::person::GoalKind::SeekSafety) {
+                    existing.priority = existing.priority.max(fear_pressure);
+                } else {
+                    agent_goals.push(crate::person::Goal {
+                        kind: crate::person::GoalKind::SeekSafety,
+                        priority: fear_pressure,
+                        commitment: Fixed::from_f64(0.6),
+                        created_tick: tick,
+                        source: crate::person::GoalSource::Emotion,
+                    });
+                }
             }
         }
 
