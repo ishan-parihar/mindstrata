@@ -65,6 +65,10 @@ enum Commands {
         #[arg(long)]
         decisions: Option<usize>,
 
+        /// Show full psychology pipeline for a specific agent by ID.
+        #[arg(long)]
+        psychology: Option<usize>,
+
         /// Show chronological event timeline after simulation.
         #[arg(long)]
         timeline: Option<usize>,
@@ -110,6 +114,7 @@ fn main() -> Result<()> {
             factions,
             records,
             decisions,
+            psychology,
             timeline,
             save_snapshot,
             load_snapshot,
@@ -259,6 +264,20 @@ fn main() -> Result<()> {
                     mindstrata_core::id::AgentId::new(id as u64),
                     20,
                 ));
+            }
+
+            // §22: Full psychology pipeline inspector
+            if let Some(id) = psychology {
+                if id < sim.agents.len() {
+                    println!();
+                    println!("{}", mindstrata_tui::render_psychology_inspector(
+                        id,
+                        &sim.agents[id].name,
+                        &sim.agents[id],
+                    ));
+                } else {
+                    eprintln!("Agent {} not found.", id);
+                }
             }
 
             // §6.3: Event timeline view

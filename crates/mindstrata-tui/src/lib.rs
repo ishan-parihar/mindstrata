@@ -591,3 +591,226 @@ pub fn render_event_log_detailed(events: &[SimEvent], n: usize) -> String {
     }
     out
 }
+
+// ── §22: Full Agent Psychology Inspector ────────────────────────────────
+
+/// Full cognitive pipeline state for an agent — needs, emotions, beliefs,
+/// identity, moral values, cognitive state, derived mental states, skills,
+/// current intention, and active goals.
+pub fn render_psychology_inspector(
+    agent_index: usize,
+    agent_name: &str,
+    agent: &mindstrata_sim::sim::AgentBundle,
+) -> String {
+    use mindstrata_sim::person::{IdentityKind, GoalSource};
+    let mut out = String::new();
+    out.push_str("╔══════════════════════════════════════════════════════════╗\n");
+    out.push_str("║  Psychology Inspector — Full Cognitive Pipeline          ║\n");
+    out.push_str("╚══════════════════════════════════════════════════════════╝\n\n");
+    out.push_str(&format!("Agent: {} (ID {})\n\n", agent_name, agent_index));
+
+    // ── Body ──
+    out.push_str("── §22.1: Body State ──\n\n");
+    out.push_str(&format!("  Health:      {:5.2}   Energy:    {:5.2}\n", agent.body.health.to_f64(), agent.body.energy.to_f64()));
+    out.push_str(&format!("  Age:         {:5.1} years\n\n", agent.age.to_f64()));
+
+    // ── Needs (nonlinear pressure) ──
+    out.push_str("── §9.1: Need State (nonlinear pressure) ──\n\n");
+    let needs = [
+        ("Hunger", agent.needs.hunger),
+        ("Thirst", agent.needs.thirst),
+        ("Fatigue", agent.needs.fatigue),
+        ("Safety", agent.needs.safety),
+        ("Social", agent.needs.social),
+        ("Esteem", agent.needs.esteem),
+        ("Autonomy", agent.needs.autonomy),
+        ("Meaning", agent.needs.meaning),
+    ];
+    for (name, val) in &needs {
+        let bar_len = (val.to_f64() * 20.0) as usize;
+        let bar: String = "█".repeat(bar_len.min(20)) + &"░".repeat(20 - bar_len.min(20));
+        out.push_str(&format!("  {:<10} {:5.2} [{}]\n", name, val.to_f64(), bar));
+    }
+    out.push('\n');
+
+    // ── Personality ──
+    out.push_str("── §22.1: Personality Traits ──\n\n");
+    let traits = [
+        ("Openness", agent.personality.openness),
+        ("Conscien.", agent.personality.conscientiousness),
+        ("Extraver.", agent.personality.extraversion),
+        ("Agreeab.", agent.personality.agreeableness),
+        ("Neurotic.", agent.personality.neuroticism),
+        ("Risk Tol.", agent.personality.risk_tolerance),
+        ("Conformity", agent.personality.conformity),
+        ("Ambition", agent.personality.ambition),
+        ("Altruism", agent.personality.altruism),
+        ("Tradition", agent.personality.traditionalism),
+        ("Dominance", agent.personality.dominance),
+        ("Impulsiv.", agent.personality.impulsivity),
+    ];
+    for (name, val) in &traits {
+        let bar_len = (val.to_f64() * 20.0) as usize;
+        let bar: String = "█".repeat(bar_len.min(20)) + &"░".repeat(20 - bar_len.min(20));
+        out.push_str(&format!("  {:<12} {:5.2} [{}]\n", name, val.to_f64(), bar));
+    }
+    out.push('\n');
+
+    // ── Dimensional Emotion (Affect) ──
+    out.push_str("── §22.2: Dimensional Emotion (Affect) ──\n\n");
+    out.push_str(&format!("  Valence:   {:+5.2}   (positive=joy, negative=sadness/fear)\n", agent.affect.valence.to_f64()));
+    out.push_str(&format!("  Arousal:    {:5.2}   (high=activated, low=calm)\n", agent.affect.arousal.to_f64()));
+    out.push_str(&format!("  Control:    {:5.2}   (high=in control, low=helpless)\n\n", agent.affect.control.to_f64()));
+
+    // ── Discrete Emotions ──
+    out.push_str("── §22.2: Discrete Emotions ──\n\n");
+    let emotions = [
+        ("Fear", agent.emotions.fear),
+        ("Anger", agent.emotions.anger),
+        ("Joy", agent.emotions.joy),
+        ("Sadness", agent.emotions.sadness),
+        ("Shame", agent.emotions.shame),
+        ("Pride", agent.emotions.pride),
+        ("Guilt", agent.emotions.guilt),
+        ("Trust", agent.emotions.trust),
+    ];
+    for (name, val) in &emotions {
+        let bar_len = (val.to_f64() * 20.0) as usize;
+        let bar: String = "█".repeat(bar_len.min(20)) + &"░".repeat(20 - bar_len.min(20));
+        out.push_str(&format!("  {:<10} {:5.2} [{}]\n", name, val.to_f64(), bar));
+    }
+    out.push('\n');
+
+    // ── Cognitive State (Bounded Rationality) ──
+    out.push_str("── §22.1: Cognitive State (Bounded Rationality) ──\n\n");
+    out.push_str(&format!("  Attention Cap:  {:5.2}\n", agent.cognitive.attention_capacity.to_f64()));
+    out.push_str(&format!("  Executive Cap:  {:5.2}\n", agent.cognitive.executive_capacity.to_f64()));
+    out.push_str(&format!("  Stress:         {:5.2}\n", agent.cognitive.stress.to_f64()));
+    out.push_str(&format!("  Planning Horiz: {} ticks\n", agent.cognitive.planning_horizon));
+    out.push_str(&format!("  Heuristic Bias: {:5.2}   (high=uses shortcuts)\n\n", agent.cognitive.heuristic_bias.to_f64()));
+
+    // ── Moral Values (§22.1) ──
+    out.push_str("── §22.1: Moral Values (Moral Foundations) ──\n\n");
+    let morals = [
+        ("Care", agent.moral_values.care),
+        ("Fairness", agent.moral_values.fairness),
+        ("Loyalty", agent.moral_values.loyalty),
+        ("Authority", agent.moral_values.authority),
+        ("Purity", agent.moral_values.purity),
+        ("Liberty", agent.moral_values.liberty),
+    ];
+    for (name, val) in &morals {
+        let bar_len = (val.to_f64() * 20.0) as usize;
+        let bar: String = "█".repeat(bar_len.min(20)) + &"░".repeat(20 - bar_len.min(20));
+        out.push_str(&format!("  {:<12} {:5.2} [{}]\n", name, val.to_f64(), bar));
+    }
+    out.push('\n');
+
+    // ── Identity State ──
+    out.push_str("── §22: Identity State ──\n\n");
+    for identity in &agent.identity.identities {
+        let kind_str = match identity.kind {
+            IdentityKind::Farmer => "Farmer",
+            IdentityKind::Parent => "Parent",
+            IdentityKind::Believer => "Believer",
+        };
+        let bar_len = (identity.strength.to_f64() * 20.0) as usize;
+        let bar: String = "█".repeat(bar_len.min(20)) + &"░".repeat(20 - bar_len.min(20));
+        out.push_str(&format!("  {:<12} {:5.2} [{}]\n", kind_str, identity.strength.to_f64(), bar));
+    }
+    out.push('\n');
+
+    // ── Derived Mental States ──
+    out.push_str("── §22: Derived Mental States ──\n\n");
+    out.push_str(&format!("  Trauma Risk:  {:5.2}\n", agent.derived.trauma_risk.to_f64()));
+    out.push_str(&format!("  Depress Risk: {:5.2}\n", agent.derived.depression_risk.to_f64()));
+    out.push_str(&format!("  Resilience:   {:5.2}\n", agent.derived.resilience.to_f64()));
+    out.push_str(&format!("  Ambition:     {:5.2}\n", agent.derived.ambition.to_f64()));
+    out.push_str(&format!("  Resentment:   {:5.2}\n\n", agent.derived.resentment.to_f64()));
+
+    // ── Status ──
+    out.push_str("── §19.5.G: Status ──\n\n");
+    out.push_str(&format!("  Wealth:       {:5.2}  (coins: {})\n", agent.status.wealth_status.to_f64(), agent.wealth.coin.to_f64()));
+    out.push_str(&format!("  Social:       {:5.2}\n", agent.status.social_status.to_f64()));
+    out.push_str(&format!("  Role:         {:5.2}\n\n", agent.status.role_status.to_f64()));
+
+    // ── Skills ──
+    out.push_str("── §4.2: Skills ──\n\n");
+    let skills = [
+        ("Farming", agent.skills.farming),
+        ("Trading", agent.skills.trading),
+        ("Social", agent.skills.social),
+    ];
+    for (name, val) in &skills {
+        let bar_len = (val.to_f64() * 20.0) as usize;
+        let bar: String = "█".repeat(bar_len.min(20)) + &"░".repeat(20 - bar_len.min(20));
+        out.push_str(&format!("  {:<12} {:5.2} [{}]\n", name, val.to_f64(), bar));
+    }
+    out.push('\n');
+
+    // ── Beliefs ──
+    out.push_str("── §19.5.A: Beliefs ──\n\n");
+    if agent.beliefs.is_empty() {
+        out.push_str("  (no beliefs)\n\n");
+    } else {
+        for belief in &agent.beliefs {
+            out.push_str(&format!("  Proposition {}: conf={:.2} charge={:.2} resist={:.2} linkage={:.2}\n",
+                belief.proposition_id, belief.confidence.to_f64(),
+                belief.emotional_charge.to_f64(), belief.resistance.to_f64(),
+                belief.identity_linkage.to_f64()));
+        }
+        out.push('\n');
+    }
+
+    // ── Intention ──
+    out.push_str("── §24.5: Current Intention ──\n\n");
+    if let Some(ref intention) = agent.intention {
+        out.push_str(&format!("  Goal:      {:?}\n", intention.goal_kind));
+        out.push_str(&format!("  Formed:    tick {}\n", intention.formed_tick));
+        out.push_str(&format!("  Commit:    {:5.2}\n", intention.commitment.to_f64()));
+        out.push_str(&format!("  Duration:  {} ticks\n", intention.duration_ticks));
+        out.push_str(&format!("  Failures:  {}\n", intention.consecutive_failures));
+        out.push_str(&format!("  Status:    {}\n\n", if intention.completed { "COMPLETED" } else { "in progress" }));
+    } else {
+        out.push_str("  (no active intention)\n\n");
+    }
+
+    // ── Active Goals ──
+    out.push_str("── §3: Active Goals ──\n\n");
+    if agent.goals.is_empty() {
+        out.push_str("  (no active goals)\n\n");
+    } else {
+        for goal in agent.goals.iter().take(5) {
+            let source_str = match goal.source {
+                GoalSource::Need => "need",
+                GoalSource::Identity => "identity",
+                GoalSource::Emotion => "emotion",
+            };
+            out.push_str(&format!("  {:?}  priority={:.2}  source={}\n", goal.kind, goal.priority.to_f64(), source_str));
+        }
+        if agent.goals.len() > 5 {
+            out.push_str(&format!("  ... and {} more\n", agent.goals.len() - 5));
+        }
+        out.push('\n');
+    }
+
+    // ── Conflict State ──
+    out.push_str("── §19.5.H: Conflict State ──\n\n");
+    out.push_str(&format!("  Trauma:           {:5.2}\n", agent.conflict.trauma.to_f64()));
+    out.push_str(&format!("  Combat fatigue:   {:5.2}\n", agent.conflict.combat_fatigue.to_f64()));
+    out.push_str(&format!("  Conflicts:        {}\n", agent.conflict.conflict_count));
+    out.push_str(&format!("  Injuries:         {}\n", agent.conflict.injuries_received));
+    out.push_str(&format!("  Active feuds:     {}\n\n", agent.feuds.len()));
+
+    // ── Cultural Knowledge ──
+    out.push_str("── §19.5.I: Cultural Knowledge ──\n\n");
+    out.push_str(&format!("  Knowledge count:  {}\n", agent.cultural.knowledge.len()));
+    out.push_str(&format!("  Openness:         {:5.2}\n\n", agent.cultural.openness.to_f64()));
+
+    // ── Memory ──
+    out.push_str("── §22.5: Memory ──\n\n");
+    out.push_str(&format!("  Total memories:   {}\n", agent.memory.episodes.len()));
+    out.push_str(&format!("  Capacity:         {}\n\n", agent.memory.capacity));
+
+    out
+}
