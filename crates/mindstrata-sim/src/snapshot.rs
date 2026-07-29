@@ -10,12 +10,18 @@
 //! /saves/world_seed_123_tick_10000.snapshot
 //! ```
 
-use crate::sim::{AgentBundle, SimConfig};
+use crate::black_market::BlackMarketState;
+use crate::cultural::Knowledge;
+use crate::demography::DemographyConfig;
+use crate::ecology::{EcologyConfig, SeasonTracker};
+use crate::health::{ActiveDisease, HealthConfig};
 use crate::institutions::Institution;
 use crate::journal::EventJournal;
+use crate::market::MarketState;
 use crate::norms::NormRegistry;
 use crate::person::Relationship;
 use crate::provenance::CausalProvenance;
+use crate::sim::{AgentBundle, MetricsSnapshot, SimConfig};
 use crate::world::World;
 use mindstrata_core::clock::Tick;
 use serde::{Deserialize, Serialize};
@@ -50,15 +56,38 @@ pub struct Snapshot {
     pub institutions: Vec<Institution>,
     /// Causal provenance store.
     pub provenance: CausalProvenance,
+    /// §28: Season tracker.
+    pub season: SeasonTracker,
+    /// §28: Ecology config.
+    pub ecology_config: EcologyConfig,
+    /// §9: Health config.
+    pub health_config: HealthConfig,
+    /// §31: Demography config.
+    pub demography_config: DemographyConfig,
+    /// §32: Active diseases per agent.
+    pub agent_diseases: Vec<Vec<ActiveDisease>>,
+    /// §13.3: Market state.
+    pub market: MarketState,
+    /// §19.5.I: Cultural knowledge store.
+    pub knowledge_store: Vec<Knowledge>,
+    /// §6.5: Metric history for observability.
+    pub metric_history: Vec<MetricsSnapshot>,
+    /// §7.3: Last revolution tick.
+    pub last_revolution_tick: u64,
+    /// §4.4: Black market state.
+    pub black_market: BlackMarketState,
+    /// §19.5.E: Site work ticks.
+    pub site_work_ticks: Vec<u32>,
 }
 
 /// Version of the snapshot format.
-pub const SNAPSHOT_VERSION: u32 = 1;
+pub const SNAPSHOT_VERSION: u32 = 2;
 
 impl Snapshot {
     /// Create a snapshot from the current simulation state.
     /// This captures all deterministic state needed for replay.
     #[expect(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     pub fn capture(
         config: &SimConfig,
         tick: Tick,
@@ -71,6 +100,17 @@ impl Snapshot {
         norms: &NormRegistry,
         institutions: &[Institution],
         provenance: &CausalProvenance,
+        season: &SeasonTracker,
+        ecology_config: &EcologyConfig,
+        health_config: &HealthConfig,
+        demography_config: &DemographyConfig,
+        agent_diseases: &[Vec<ActiveDisease>],
+        market: &MarketState,
+        knowledge_store: &[Knowledge],
+        metric_history: &[MetricsSnapshot],
+        last_revolution_tick: u64,
+        black_market: &BlackMarketState,
+        site_work_ticks: &[u32],
     ) -> Self {
         Self {
             version: SNAPSHOT_VERSION,
@@ -86,6 +126,17 @@ impl Snapshot {
             norms: norms.clone(),
             institutions: institutions.to_vec(),
             provenance: provenance.clone(),
+            season: season.clone(),
+            ecology_config: ecology_config.clone(),
+            health_config: health_config.clone(),
+            demography_config: demography_config.clone(),
+            agent_diseases: agent_diseases.to_vec(),
+            market: market.clone(),
+            knowledge_store: knowledge_store.to_vec(),
+            metric_history: metric_history.to_vec(),
+            last_revolution_tick,
+            black_market: black_market.clone(),
+            site_work_ticks: site_work_ticks.to_vec(),
         }
     }
 

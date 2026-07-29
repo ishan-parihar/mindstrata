@@ -241,10 +241,6 @@ impl Simulation {
 
     /// §16.1: Restore from a snapshot (deterministic replay).
     pub fn from_snapshot(snapshot: crate::snapshot::Snapshot) -> Self {
-        // Compute sizes before moves
-        let agents_len = snapshot.agents.len();
-        let tiles_len = snapshot.world.tiles.len();
-
         let mut clock = Clock::new();
         clock.set(snapshot.clock_tick);
         let rng = RngStreams::new(snapshot.master_seed);
@@ -261,17 +257,17 @@ impl Simulation {
             institutions: snapshot.institutions,
             provenance: snapshot.provenance,
             scenario: None,
-            season: ecology::SeasonTracker::new(8760),
-            ecology_config: ecology::EcologyConfig::default(),
-            health_config: health::HealthConfig::default(),
-            demography_config: demography::DemographyConfig::default(),
-            agent_diseases: vec![Vec::new(); agents_len],
-            site_work_ticks: vec![0; tiles_len],
-            market: MarketState::new(),
-            knowledge_store: Vec::new(),
-            metric_history: Vec::new(),
-            last_revolution_tick: 0,
-            black_market: crate::black_market::BlackMarketState::default(),
+            season: snapshot.season,
+            ecology_config: snapshot.ecology_config,
+            health_config: snapshot.health_config,
+            demography_config: snapshot.demography_config,
+            agent_diseases: snapshot.agent_diseases,
+            site_work_ticks: snapshot.site_work_ticks,
+            market: snapshot.market,
+            knowledge_store: snapshot.knowledge_store,
+            metric_history: snapshot.metric_history,
+            last_revolution_tick: snapshot.last_revolution_tick,
+            black_market: snapshot.black_market,
         }
     }
 
@@ -289,6 +285,17 @@ impl Simulation {
             &self.norms,
             &self.institutions,
             &self.provenance,
+            &self.season,
+            &self.ecology_config,
+            &self.health_config,
+            &self.demography_config,
+            &self.agent_diseases,
+            &self.market,
+            &self.knowledge_store,
+            &self.metric_history,
+            self.last_revolution_tick,
+            &self.black_market,
+            &self.site_work_ticks,
         )
     }
 
@@ -3128,20 +3135,9 @@ impl Simulation {
 
     /// §16.1: Capture a full deterministic snapshot of the simulation state.
     /// RNG streams are not serialized — only the master seed is stored.
+    /// §16.1: Convenience alias — delegates to capture_snapshot.
     pub fn save_snapshot(&self) -> Snapshot {
-        Snapshot::capture(
-            &self.config,
-            self.clock.tick(),
-            self.config.seed,
-            &self.world,
-            &self.agents,
-            &self.relationships,
-            &self.events,
-            &self.journal,
-            &self.norms,
-            &self.institutions,
-            &self.provenance,
-        )
+        self.capture_snapshot()
     }
 
     /// Capture a snapshot of key metrics at the current tick.
