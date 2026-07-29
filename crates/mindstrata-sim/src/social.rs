@@ -271,6 +271,10 @@ mod tests {
             fear: Fixed::ZERO,
             obligation: Fixed::ZERO,
             last_interaction_tick: 0,
+            kind: crate::person::RelationshipKind::Stranger,
+            interaction_count: 0,
+            last_positive_tick: 0,
+            last_negative_tick: 0,
         }];
         let mut events = Vec::new();
 
@@ -297,6 +301,10 @@ mod tests {
             fear: Fixed::ZERO,
             obligation: Fixed::ZERO,
             last_interaction_tick: 0,
+            kind: crate::person::RelationshipKind::Stranger,
+            interaction_count: 0,
+            last_positive_tick: 0,
+            last_negative_tick: 0,
         }];
         let mut events = Vec::new();
 

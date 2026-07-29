@@ -20,7 +20,7 @@ use crate::institutions::{self, Institution, InstitutionKind};
 use crate::routines::DailyRoutine;
 pub use crate::attention;
 pub use crate::person::Intention;
-use crate::person::{Affect, BodyState, Belief, CognitiveState, DerivedMentalState, DiscreteEmotions, Goal, GoalKind, IdentityKind, IdentityState, MoralValues, NeedState, Personality, Relationship};
+use crate::person::{Affect, BodyState, Belief, CognitiveState, DerivedMentalState, DiscreteEmotions, Goal, GoalKind, IdentityKind, IdentityState, MoralValues, NeedState, Personality, Relationship, RelationshipKind, StatusState};
 use crate::provenance::{CausalProvenance, DecisionFactor, DecisionTrace};
 use crate::scenario::{Scenario, ShockKind};
 use crate::snapshot::Snapshot;
@@ -128,6 +128,8 @@ pub struct AgentBundle {
     pub feuds: Vec<usize>,
     /// §19.5.G: Tick when each feud started (for decay).
     pub feud_ticks: Vec<u64>,
+    /// §19.5.G: Per-agent status — derived from wealth, role, social connections.
+    pub status: StatusState,
     /// §6: Target site index for spatial movement (agent travels here before acting).
     pub target_site: Option<usize>,
     /// §6: Target position for free movement (used by Wander/Move).
@@ -328,6 +330,7 @@ impl Simulation {
                 parent_b: None,
                 feuds: Vec::new(),
                 feud_ticks: Vec::new(),
+                status: StatusState::default(),
                 target_site: None,
                 target_pos: None,
             });
@@ -347,6 +350,10 @@ impl Simulation {
                         fear: Fixed::ZERO,
                         obligation: Fixed::ZERO,
                         last_interaction_tick: 0,
+                        kind: RelationshipKind::Stranger,
+                        interaction_count: 0,
+                        last_positive_tick: 0,
+                        last_negative_tick: 0,
                     });
                 }
             }
@@ -463,6 +470,16 @@ impl Simulation {
                 if let Some(council) = self.institutions.iter_mut().find(|i| i.kind == institutions::InstitutionKind::Council) {
                     council.assign_role("Guard Captain", AgentId::new(guard_idx as u64));
                     council.add_member(AgentId::new(guard_idx as u64));
+                }
+            }
+
+            // §19.5.G: Set role_status for agents with institutional roles
+            for (i, agent) in self.agents.iter_mut().enumerate() {
+                let agent_id = AgentId::new(i as u64);
+                let has_role = self.institutions.iter().any(|inst| inst.has_member(agent_id));
+                if has_role {
+                    agent.status.role_status = Fixed::from_f64(0.6);
+                    agent.status.recompute();
                 }
             }
         }
@@ -1026,10 +1043,8 @@ impl Simulation {
                 ActionKind::Worship => {
                     self.journal.record(tick_u64, agent_id, JournalEntryKind::Worshiped);
                     true
-                }
-                ActionKind::Trade => {
+                }                    ActionKind::Trade => {
                     // §13.3: Agent-to-agent trade — find a nearby seller at a market site
-                    let _agent_pos_x = self.agents[*agent_idx].position.x;
                     let buyer_coin = self.agents[*agent_idx].wealth.coin;
                     // Find a seller: nearby agent who owns a farm with grain
                     let seller_info = self.agents.iter().enumerate()
@@ -1198,6 +1213,10 @@ impl Simulation {
             agent.attention.decay_habituation(Fixed::from_f64(0.005));
             let stress = agent.emotions.fear + agent.emotions.anger;
             agent.attention.replenish_budget(stress, agent.needs.fatigue);
+
+            // §19.5.G: Update status from current wealth
+            agent.status.wealth_status = (agent.wealth.coin / Fixed::from_f64(20.0)).clamp_01();
+            agent.status.recompute();
         }
 
         // ── 16. Ecology: season advance and fertility dynamics ──
@@ -2382,6 +2401,7 @@ impl Simulation {
                     parent_b: Some(parent_b),
                     feuds: Vec::new(),
                     feud_ticks: Vec::new(),
+                    status: StatusState::default(),
                     target_site: None,
                     target_pos: None,
                 });                // Add relationships to all existing agents
@@ -2400,6 +2420,10 @@ impl Simulation {
                         fear: Fixed::ZERO,
                         obligation: Fixed::ZERO,
                         last_interaction_tick: tick_u64,
+                        kind: RelationshipKind::Kin,
+                        interaction_count: 1,
+                        last_positive_tick: tick_u64,
+                        last_negative_tick: 0,
                     });
                     self.relationships.push(Relationship {
                         from: AgentId::new(existing_idx as u64),
@@ -2410,6 +2434,10 @@ impl Simulation {
                         fear: Fixed::ZERO,
                         obligation: Fixed::ZERO,
                         last_interaction_tick: tick_u64,
+                        kind: RelationshipKind::Stranger,
+                        interaction_count: 0,
+                        last_positive_tick: 0,
+                        last_negative_tick: 0,
                     });
                 }
 
