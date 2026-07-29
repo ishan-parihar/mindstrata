@@ -33,6 +33,7 @@ pub mod systems;
 pub mod world;
 pub mod world_gen;
 pub mod market;
+pub mod black_market;
 pub mod spec_lint;
 
 pub use sim::Simulation;
