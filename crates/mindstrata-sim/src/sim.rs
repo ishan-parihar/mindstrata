@@ -2207,7 +2207,107 @@ impl Simulation {
             }
         }
 
-        // ── 14. Derived mental state computation (§22) ─────────────
+        // ── 14. §7.2: Moral panic detection — rumor cascades collapse institutional trust ──
+        // Check if gossip about institutions has accumulated enough emotional charge
+        // to trigger a moral panic. This happens when many agents hold high-emotion
+        // beliefs about an institution, causing sudden legitimacy collapse.
+        {
+            // Check propositions 0 ("the_market_is_fair") and 1 ("the_council_protects_us")
+            let belief_refs: Vec<&Vec<Belief>> = self.agents.iter().map(|a| &a.beliefs).collect();
+            for prop_id in 0..=1 {
+                let panic_result = gossip::detect_moral_panic(&belief_refs, prop_id);
+                if panic_result.triggered {
+                    tracing::warn!(
+                        proposition = prop_id,
+                        avg_charge = panic_result.avg_charge.to_f64(),
+                        tick = tick_u64,
+                        "§7.2: Moral panic triggered!"
+                    );
+                    // Apply legitimacy damage to all matching institutions
+                    for inst in self.institutions.iter_mut() {
+                        let inst_prop = match inst.kind {
+                            InstitutionKind::Council => Some(1u64),  // council → proposition 1
+                            InstitutionKind::Market => Some(0u64),   // market → proposition 0
+                            _ => None,
+                        };
+                        if inst_prop == Some(prop_id) {
+                            inst.legitimacy = (inst.legitimacy - panic_result.legitimacy_damage).max(Fixed::ZERO);
+                        }
+                    }
+                    // Boost faction grievance from panic
+                    for inst in self.institutions.iter_mut() {
+                        if inst.kind == InstitutionKind::Faction {
+                            inst.collective.morale = (inst.collective.morale + panic_result.grievance_boost).clamp_01();
+                        }
+                    }
+                    self.events.push(SimEvent::ConflictOccurred {
+                        aggressor: AgentId::new(0),
+                        target: AgentId::new(0),
+                        kind: "MoralPanic".into(),
+                        injury: Fixed::ZERO,
+                        fear_induced: panic_result.avg_charge,
+                        tick,
+                    });
+                }
+            }
+        }
+
+        // ── 14b. §7.3: Revolution mechanism — faction seizes control ──
+        // When a faction has enough grievance, membership, and the council's
+        // legitimacy is critically low, the faction stages a revolution.
+        {
+            let council_legitimacy: Fixed = self.institutions.iter()
+                .filter(|i| i.kind == InstitutionKind::Council)
+                .map(|i| i.legitimacy)
+                .fold(Fixed::ZERO, |a, b| a.max(b));
+
+            for inst_idx in 0..self.institutions.len() {
+                if self.institutions[inst_idx].kind != InstitutionKind::Faction {
+                    continue;
+                }
+                let faction = &self.institutions[inst_idx];
+                let faction_grievance = faction.collective.morale;
+                let faction_size = faction.members.len();
+                let total_pop = self.agents.len();
+
+                // Revolution threshold: high grievance + large faction + weak council
+                let revolution_score = faction_grievance * Fixed::from_f64(0.4)
+                    + Fixed::from_int(faction_size as i64) / Fixed::from_int(total_pop.max(1) as i64) * Fixed::from_f64(0.3)
+                    + (Fixed::ONE - council_legitimacy) * Fixed::from_f64(0.3);
+
+                if revolution_score >= Fixed::from_f64(0.6) && tick_u64 > 500 {
+                    tracing::warn!(
+                        faction = inst_idx,
+                        score = revolution_score.to_f64(),
+                        council_legitimacy = council_legitimacy.to_f64(),
+                        tick = tick_u64,
+                        "§7.3: Revolution! Faction seizes control"
+                    );
+                    // Council loses all legitimacy
+                    for inst in self.institutions.iter_mut() {
+                        if inst.kind == InstitutionKind::Council {
+                            inst.legitimacy = Fixed::ZERO;
+                            inst.collective.morale = Fixed::from_f64(0.1);
+                        }
+                    }
+                    // Faction gains legitimacy
+                    self.institutions[inst_idx].legitimacy = Fixed::from_f64(0.6);
+                    self.institutions[inst_idx].collective.morale = Fixed::from_f64(0.8);
+                    // Record revolution event
+                    self.events.push(SimEvent::ConflictOccurred {
+                        aggressor: self.institutions[inst_idx].get_role_holder("Leader").unwrap_or(AgentId::new(0)),
+                        target: AgentId::new(0),
+                        kind: "Revolution".into(),
+                        injury: Fixed::ZERO,
+                        fear_induced: Fixed::from_f64(0.5),
+                        tick,
+                    });
+                    break; // only one revolution per tick
+                }
+            }
+        }
+
+        // ── 15. Derived mental state computation (§22) ─────────────
         for agent in self.agents.iter_mut() {
             let stress = agent.emotions.fear + agent.emotions.anger;
             let need_deficit_avg = (agent.needs.hunger + agent.needs.thirst + agent.needs.fatigue + agent.needs.safety) * Fixed::from_f64(0.25);

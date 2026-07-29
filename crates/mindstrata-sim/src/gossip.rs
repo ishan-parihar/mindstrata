@@ -227,6 +227,90 @@ pub fn apply_gossip(
     }
 }
 
+// ── §7.2: Moral Panic / Rumor Cascade ──────────────────────────────────
+
+/// Threshold of average emotional charge across all rumors about an institution
+/// that triggers a moral panic event.
+pub const MORAL_PANIC_CHARGE_THRESHOLD: Fixed = Fixed::from_raw(5500); // 0.55
+
+/// Moral panic result — what happens when gossip accumulates enough emotional charge.
+#[derive(Debug, Clone)]
+pub struct MoralPanicResult {
+    /// Whether a moral panic was triggered.
+    pub triggered: bool,
+    /// The proposition_id of the institution being gossiped about.
+    pub proposition_id: u64,
+    /// The average emotional charge that triggered the panic.
+    pub avg_charge: Fixed,
+    /// How much institutional legitimacy should drop.
+    pub legitimacy_damage: Fixed,
+    /// How much faction grievance should increase.
+    pub grievance_boost: Fixed,
+}
+
+/// Analyze accumulated beliefs for signs of moral panic.
+///
+/// When enough agents hold high-emotional-charge beliefs about an institution,
+/// it can trigger a sudden collapse in trust — a moral panic.
+/// This implements §7.2: "Gossip about institutions spreads through the
+/// social graph. Distorted rumors can create moral panics."
+pub fn detect_moral_panic(
+    beliefs: &[&Vec<Belief>],
+    proposition_id: u64,
+) -> MoralPanicResult {
+    // Collect emotional charges from all agents' beliefs about this proposition
+    let charges: Vec<Fixed> = beliefs.iter()
+        .filter_map(|agent_beliefs| {
+            agent_beliefs.iter()
+                .find(|b| b.proposition_id == proposition_id)
+                .map(|b| b.emotional_charge)
+        })
+        .collect();
+
+    if charges.is_empty() {
+        return MoralPanicResult {
+            triggered: false,
+            proposition_id,
+            avg_charge: Fixed::ZERO,
+            legitimacy_damage: Fixed::ZERO,
+            grievance_boost: Fixed::ZERO,
+        };
+    }
+
+    let avg_charge = charges.iter().fold(Fixed::ZERO, |a, b| a + *b)
+        / Fixed::from_int(charges.len() as i64);
+
+    // Also check: how many agents have HIGH emotional charge (> 0.4)?
+    let high_charge_count = charges.iter().filter(|c| **c > Fixed::from_f64(0.4)).count();
+    let panic_ratio = Fixed::from_int(high_charge_count as i64) / Fixed::from_int(charges.len() as i64);
+
+    // Moral panic requires: high average charge AND widespread fear (many agents affected)
+    let triggered = avg_charge >= MORAL_PANIC_CHARGE_THRESHOLD
+        && panic_ratio >= Fixed::from_f64(0.3); // at least 30% of agents are emotionally charged
+
+    let legitimacy_damage = if triggered {
+        // Damage scales with how intense the panic is
+        (avg_charge * Fixed::from_f64(0.4) + panic_ratio * Fixed::from_f64(0.3)).clamp_01()
+    } else {
+        Fixed::ZERO
+    };
+
+    let grievance_boost = if triggered {
+        // Panic increases grievance proportionally
+        (avg_charge * Fixed::from_f64(0.2)).clamp_01()
+    } else {
+        Fixed::ZERO
+    };
+
+    MoralPanicResult {
+        triggered,
+        proposition_id,
+        avg_charge,
+        legitimacy_damage,
+        grievance_boost,
+    }
+}
+
 
 
 #[cfg(test)]
