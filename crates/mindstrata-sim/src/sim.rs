@@ -801,8 +801,12 @@ impl Simulation {
                         && needs[i].hunger < Fixed::from_f64(0.85)
                         && needs[i].thirst < Fixed::from_f64(0.85)
                     {
-                        // §19.5.G: Angry feuding agents wander aggressively, but NOT when critical needs demand attention
-                        ActionKind::Wander
+                        // §19.5.G: Angry feuding agents Move toward their feud target, NOT when critical needs demand attention
+                        let feud_target = self.agents[i].feuds[0];
+                        ActionKind::Move {
+                            target_x: self.agents[feud_target].position.x,
+                            target_y: self.agents[feud_target].position.y,
+                        }
                     } else {
                         // §12.3: Institution collective morale modulates norm compliance.
                         // Members of institutions with high morale are more norm-compliant.
@@ -1055,6 +1059,10 @@ impl Simulation {
                         let dy = (target_y - self.agents[i].position.y).clamp(-1, 1);
                         self.agents[i].position.x = (self.agents[i].position.x + dx).clamp(0, world_w - 1);
                         self.agents[i].position.y = (self.agents[i].position.y + dy).clamp(0, world_h - 1);
+                        // §6: Completion detection — finish action when at target
+                        if self.agents[i].position.x == target_x && self.agents[i].position.y == target_y {
+                            self.agents[i].action_progress = 0;
+                        }
                     }
                     _ => {}
                 }
