@@ -186,6 +186,21 @@ impl Default for Belief {
     }
 }
 
+/// §24: Source of a goal — determines how it was triggered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GoalSource {
+    /// Goal generated from a pressing need deficit.
+    Need,
+    /// Goal driven by an identity (e.g., Farmer → Work).
+    Identity,
+    /// Goal driven by emotional state (e.g., fear → SeekSafety).
+    Emotion,
+    /// Goal driven by social pressure or norm compliance.
+    Social,
+    /// Goal driven by a belief (e.g., belief in divine punishment → Worship).
+    Belief,
+}
+
 /// Goal priority and source.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Goal {
@@ -193,6 +208,10 @@ pub struct Goal {
     pub priority: Fixed,
     pub commitment: Fixed,
     pub created_tick: u64,
+    /// §24: What triggered this goal — affects abandonment thresholds.
+    pub source: GoalSource,
+    /// §24: Number of times this goal was rejected (deprioritized).
+    pub rejection_count: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

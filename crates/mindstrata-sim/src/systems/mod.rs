@@ -44,6 +44,12 @@ pub fn system_need_decay(
         need.hunger = (need.hunger + decay_rate).clamp_01();
         need.thirst = (need.thirst + decay_rate * Fixed::from_int(2)).clamp_01();
         need.fatigue = (need.fatigue + decay_rate * Fixed::from_f64(0.5)).clamp_01();
+        // §9.1: Higher-order needs grow slowly — safety, social, meaning
+        need.safety = (need.safety + decay_rate * Fixed::from_f64(0.3)).clamp_01();
+        need.social = (need.social + decay_rate * Fixed::from_f64(0.2)).clamp_01();
+        need.meaning = (need.meaning + decay_rate * Fixed::from_f64(0.15)).clamp_01();
+        need.esteem = (need.esteem + decay_rate * Fixed::from_f64(0.1)).clamp_01();
+        need.autonomy = (need.autonomy + decay_rate * Fixed::from_f64(0.1)).clamp_01();
     }
 }
 
@@ -75,94 +81,131 @@ pub fn system_body_update(_ctx: &mut SystemContext, bodies: &mut [BodyState], ne
 
 // ── Goal generation system ───────────────────────────────────────────────
 
-/// Generate goals based on need pressure.
+/// Generate goals based on need pressure, emotional state, and identity.
+/// §24: Goals now carry source tracking and support emotional/identity modulation.
 pub fn system_goal_generation(
-    _ctx: &mut SystemContext,
-    _personalities: &[crate::person::Personality],
+    ctx: &mut SystemContext,
+    personalities: &[crate::person::Personality],
     needs: &[NeedState],
     goals: &mut [Vec<crate::person::Goal>],
 ) {
-    for (need, agent_goals) in needs.iter().zip(goals.iter_mut()) {
-        // Hunger generates eat goal
-        if need.hunger > Fixed::from_f64(0.5)
-            && !agent_goals
-                .iter()
-                .any(|g| g.kind == crate::person::GoalKind::Eat)
-        {
-            agent_goals.push(crate::person::Goal {
-                kind: crate::person::GoalKind::Eat,
-                priority: need.hunger,
-                commitment: Fixed::from_f64(0.5),
-                created_tick: 0,
-            });
-        }
-        // Thirst generates drink goal
-        if need.thirst > Fixed::from_f64(0.5)
-            && !agent_goals
-                .iter()
-                .any(|g| g.kind == crate::person::GoalKind::Drink)
-        {
-            agent_goals.push(crate::person::Goal {
-                kind: crate::person::GoalKind::Drink,
-                priority: need.thirst,
-                commitment: Fixed::from_f64(0.5),
-                created_tick: 0,
-            });
-        }
-        // Fatigue generates rest goal
-        if need.fatigue > Fixed::from_f64(0.6)
-            && !agent_goals
-                .iter()
-                .any(|g| g.kind == crate::person::GoalKind::Rest)
-        {
-            agent_goals.push(crate::person::Goal {
-                kind: crate::person::GoalKind::Rest,
-                priority: need.fatigue,
-                commitment: Fixed::from_f64(0.4),
-                created_tick: 0,
-            });
+    let tick = ctx.tick;
+    for (i, (need, agent_goals)) in needs.iter().zip(goals.iter_mut()).enumerate() {
+        // ── Goal decay: reduce priority of old goals over time ──
+        // §24: Goals that aren't addressed gradually lose priority.
+        for goal in agent_goals.iter_mut() {
+            let age = tick.saturating_sub(goal.created_tick) as f64;
+            let decay = Fixed::from_f64(age * 0.001); // slow decay
+            goal.priority = (goal.priority - decay).max(Fixed::ZERO);
         }
 
-        // Social generates socialize goal
-        if need.social > Fixed::from_f64(0.7)
-            && !agent_goals
-                .iter()
-                .any(|g| g.kind == crate::person::GoalKind::Socialize)
-        {
-            agent_goals.push(crate::person::Goal {
-                kind: crate::person::GoalKind::Socialize,
-                priority: need.social,
-                commitment: Fixed::from_f64(0.3),
-                created_tick: 0,
-            });
-        }
-
-        // Meaning generates worship goal
-        if need.meaning > Fixed::from_f64(0.7)
-            && !agent_goals
-                .iter()
-                .any(|g| g.kind == crate::person::GoalKind::Worship)
-        {
-            agent_goals.push(crate::person::Goal {
-                kind: crate::person::GoalKind::Worship,
-                priority: need.meaning,
-                commitment: Fixed::from_f64(0.3),
-                created_tick: 0,
-            });
-        }
-
-        // ── Goal completion: remove goals whose need has dropped below threshold ──
+        // ── Remove goals whose need has dropped below threshold OR priority decayed to zero ──
         agent_goals.retain(|g| {
+            // Goals that decayed to zero priority are removed
+            if g.priority <= Fixed::ZERO {
+                return false;
+            }
             let threshold = Fixed::from_f64(0.3);
             match g.kind {
                 crate::person::GoalKind::Eat => need.hunger > threshold,
                 crate::person::GoalKind::Drink => need.thirst > threshold,
                 crate::person::GoalKind::Rest => need.fatigue > threshold,
-                crate::person::GoalKind::Work => true, // work goals don't auto-complete
+                crate::person::GoalKind::Work => true,
                 crate::person::GoalKind::Socialize => need.social > threshold,
                 crate::person::GoalKind::Worship => need.meaning > threshold,
                 _ => true,
             }
         });
+
+        // ── Need-driven goals (§24 primary source) ──
+        let need_goals: &[(crate::person::GoalKind, Fixed, Fixed)] = &[
+            (crate::person::GoalKind::Eat, need.hunger, Fixed::from_f64(0.5)),
+            (crate::person::GoalKind::Drink, need.thirst, Fixed::from_f64(0.5)),
+            (crate::person::GoalKind::Rest, need.fatigue, Fixed::from_f64(0.6)),
+            (crate::person::GoalKind::Socialize, need.social, Fixed::from_f64(0.7)),
+            (crate::person::GoalKind::Worship, need.meaning, Fixed::from_f64(0.7)),
+        ];
+        for (kind, pressure, threshold) in need_goals {
+            if *pressure > *threshold
+                && !agent_goals.iter().any(|g| g.kind == *kind)
+            {
+                agent_goals.push(crate::person::Goal {
+                    kind: *kind,
+                    priority: *pressure,
+                    commitment: Fixed::from_f64(0.5),
+                    created_tick: tick,
+                    source: crate::person::GoalSource::Need,
+                    rejection_count: 0,
+                });
+            }
+        }
+
+        // ── Safety goal from high fear (§24 emotional modulation) ──
+        // High fear generates SeekSafety goal — this was missing before.
+        // We check via a synthetic "safety" pressure derived from fear.
+        if i < personalities.len() {
+            let fear_pressure = need.safety; // safety need grows when afraid
+            if fear_pressure > Fixed::from_f64(0.6)
+                && !agent_goals.iter().any(|g| g.kind == crate::person::GoalKind::SeekSafety)
+            {
+                agent_goals.push(crate::person::Goal {
+                    kind: crate::person::GoalKind::SeekSafety,
+                    priority: fear_pressure,
+                    commitment: Fixed::from_f64(0.6),
+                    created_tick: tick,
+                    source: crate::person::GoalSource::Emotion,
+                    rejection_count: 0,
+                });
+            }
+        }
+
+        // ── Identity-driven goals (§24 identity modulation) ──
+        // High-identity agents generate goals aligned with their identity.
+        // E.g., strong Farmer identity → Work goal; strong Believer → Worship.
+        if i < personalities.len() {
+            let personality = &personalities[i];
+            // Ambitious agents generate Work goals even without pressing need
+            if personality.ambition > Fixed::from_f64(0.6)
+                && need.fatigue < Fixed::from_f64(0.5)
+                && !agent_goals.iter().any(|g| g.kind == crate::person::GoalKind::Work)
+            {
+                agent_goals.push(crate::person::Goal {
+                    kind: crate::person::GoalKind::Work,
+                    priority: personality.ambition * Fixed::from_f64(0.4),
+                    commitment: personality.conscientiousness * Fixed::from_f64(0.7),
+                    created_tick: tick,
+                    source: crate::person::GoalSource::Identity,
+                    rejection_count: 0,
+                });
+            }
+            // Traditional agents generate Worship goals even with moderate meaning
+            if personality.traditionalism > Fixed::from_f64(0.6)
+                && need.meaning > Fixed::from_f64(0.4)
+                && !agent_goals.iter().any(|g| g.kind == crate::person::GoalKind::Worship)
+            {
+                agent_goals.push(crate::person::Goal {
+                    kind: crate::person::GoalKind::Worship,
+                    priority: personality.traditionalism * Fixed::from_f64(0.3),
+                    commitment: Fixed::from_f64(0.4),
+                    created_tick: tick,
+                    source: crate::person::GoalSource::Identity,
+                    rejection_count: 0,
+                });
+            }
+            // Extraverted agents generate Socialize goals more readily
+            if personality.extraversion > Fixed::from_f64(0.6)
+                && need.social > Fixed::from_f64(0.4)
+                && !agent_goals.iter().any(|g| g.kind == crate::person::GoalKind::Socialize)
+            {
+                agent_goals.push(crate::person::Goal {
+                    kind: crate::person::GoalKind::Socialize,
+                    priority: personality.extraversion * Fixed::from_f64(0.3),
+                    commitment: Fixed::from_f64(0.3),
+                    created_tick: tick,
+                    source: crate::person::GoalSource::Identity,
+                    rejection_count: 0,
+                });
+            }
+        }
     }
 }
