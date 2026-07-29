@@ -80,6 +80,10 @@ enum Commands {
         /// Load a snapshot from disk and resume simulation for N more ticks.
         #[arg(long)]
         load_snapshot: Option<String>,
+
+        /// Export metric history to CSV file.
+        #[arg(long)]
+        export_metrics: Option<String>,
     },
     /// Run a named scenario.
     Scenario {
@@ -118,6 +122,7 @@ fn main() -> Result<()> {
             timeline,
             save_snapshot,
             load_snapshot,
+            export_metrics,
         } => {
             init_logging(verbose);
 
@@ -292,6 +297,27 @@ fn main() -> Result<()> {
                         println!("{}", mindstrata_tui::render_event_log(events, count));
                     } else {
                         println!("No events recorded.");
+                    }
+                }
+            }
+
+            // §6.5: Export metric history to CSV
+            if let Some(ref path) = export_metrics {
+                let metrics = &sim.metric_history;
+                if metrics.is_empty() {
+                    eprintln!("No metric history to export.");
+                } else {
+                    let mut csv = String::from("tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count\n");
+                    for m in metrics {
+                        csv.push_str(&format!("{},{},{},{},{},{},{},{},{},{},{},{}\n",
+                            m.tick, m.avg_hunger, m.avg_thirst, m.avg_fatigue,
+                            m.avg_valence, m.avg_joy, m.avg_fear,
+                            m.total_grain, m.total_water,
+                            m.event_count, m.journal_len, m.agent_count));
+                    }
+                    match std::fs::write(path, &csv) {
+                        Ok(()) => println!("\n  Metrics exported to: {path} ({} rows)", metrics.len()),
+                        Err(e) => eprintln!("\n  Failed to export metrics: {e}"),
                     }
                 }
             }
