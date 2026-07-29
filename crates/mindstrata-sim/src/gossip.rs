@@ -540,4 +540,72 @@ mod tests {
         assert!(result.belief_delta.abs() < Fixed::from_f64(0.1),
             "High resistance belief should barely change from gossip, delta={}", result.belief_delta.to_f64());
     }
+
+    #[test]
+    fn moral_panic_triggers_with_high_charge() {
+        // Create beliefs with high emotional charge across multiple agents
+        let b1 = {
+            let mut b = make_belief(1, 0.8);
+            b.emotional_charge = Fixed::from_f64(0.7); // well above 0.55 threshold
+            vec![b]
+        };
+        let b2 = {
+            let mut b = make_belief(1, 0.8);
+            b.emotional_charge = Fixed::from_f64(0.7);
+            vec![b]
+        };
+        let b3 = {
+            let mut b = make_belief(1, 0.8);
+            b.emotional_charge = Fixed::from_f64(0.7);
+            vec![b]
+        };
+        let beliefs: Vec<&Vec<Belief>> = vec![&b1, &b2, &b3];
+
+        let result = detect_moral_panic(&beliefs, 1);
+        assert!(result.triggered, "Moral panic should trigger with high emotional charge");
+        assert!(result.legitimacy_damage > Fixed::ZERO);
+        assert!(result.grievance_boost > Fixed::ZERO);
+    }
+
+    #[test]
+    fn moral_panic_does_not_trigger_with_low_charge() {
+        let b1 = {
+            let mut b = make_belief(1, 0.5);
+            b.emotional_charge = Fixed::from_f64(0.2); // well below 0.55 threshold
+            vec![b]
+        };
+        let beliefs: Vec<&Vec<Belief>> = vec![&b1];
+
+        let result = detect_moral_panic(&beliefs, 1);
+        assert!(!result.triggered, "Moral panic should not trigger with low emotional charge");
+        assert_eq!(result.legitimacy_damage, Fixed::ZERO);
+        assert_eq!(result.grievance_boost, Fixed::ZERO);
+    }
+
+    #[test]
+    fn moral_panic_no_beliefs_returns_no_trigger() {
+        let empty_beliefs: Vec<&Vec<Belief>> = vec![];
+        let result = detect_moral_panic(&empty_beliefs, 1);
+        assert!(!result.triggered);
+        assert_eq!(result.avg_charge, Fixed::ZERO);
+    }
+
+    #[test]
+    fn moral_panic_boundary_high_charge_low_ratio() {
+        // avg_charge >= 0.55 but panic_ratio < 0.3 (only 1 of 5 agents affected)
+        let mut high_charge = make_belief(1, 0.8);
+        high_charge.emotional_charge = Fixed::from_f64(0.7);
+        let low_charge = make_belief(1, 0.5); // default emotional_charge = 0.3
+
+        let b1 = vec![high_charge];
+        let b2 = vec![low_charge.clone()];
+        let b3 = vec![low_charge.clone()];
+        let b4 = vec![low_charge.clone()];
+        let b5 = vec![low_charge];
+        let beliefs: Vec<&Vec<Belief>> = vec![&b1, &b2, &b3, &b4, &b5];
+
+        let result = detect_moral_panic(&beliefs, 1);
+        // avg_charge = (0.7 + 0.3 + 0.3 + 0.3 + 0.3) / 5 = 0.38 — below 0.55 threshold
+        assert!(!result.triggered, "Should NOT trigger when avg charge is below threshold even with one high agent");
+    }
 }
