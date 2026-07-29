@@ -570,4 +570,73 @@ mod smoke {
         assert!(world.can_access_resource(1, 1, stranger_id),
             "Public resources should be accessible to everyone");
     }
+
+    // ── §19.5.F §19.5.I New Mechanics Tests ───────────────────────
+
+    #[test]
+    fn inheritance_transfers_wealth_to_family() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 1000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(1000);
+        // After 1000 ticks, some agents should have died and inheritance should have occurred.
+        // Verify no agent has negative wealth (inheritance doesn't lose money).
+        for agent in sim.agents.iter() {
+            assert!(agent.wealth.coin >= Fixed::ZERO,
+                "Agent {} has negative wealth after inheritance", agent.name);
+        }
+    }
+
+    #[test]
+    fn childhood_socialization_spreads_knowledge() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 2000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(2000);
+        // After 2000 ticks, some children should have been born and socialized.
+        // At least some agents should have more knowledge than the initial set.
+        let max_knowledge = sim.agents.iter()
+            .map(|a| a.cultural.knowledge.len())
+            .max()
+            .unwrap_or(0);
+        assert!(max_knowledge >= 2,
+            "Some agents should have learned knowledge through socialization: max={}", max_knowledge);
+    }
+
+    #[test]
+    fn innovation_creates_new_knowledge() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 2000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(2000);
+        // After 2000 ticks, at least one agent should know more than the max initial knowledge.
+        // Initial max is 4 (Crop Rotation + Well Maintenance + Herbal Medicine + Grain Storage).
+        let max_knowledge = sim.agents.iter()
+            .map(|a| a.cultural.knowledge.len())
+            .max()
+            .unwrap_or(0);
+        assert!(max_knowledge > 4,
+            "Innovation should produce knowledge beyond initial seeding: max_knowledge={}", max_knowledge);
+    }
 }

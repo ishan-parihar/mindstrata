@@ -300,8 +300,8 @@ impl World {
                     AccessRight::Public => true,
                     AccessRight::OwnerOnly => site.owner == Some(agent_id),
                     AccessRight::InstitutionMembers => {
-                        // For now, any agent can access institution resources.
-                        // TODO: check institutional membership when we have the data.
+                        // §19.5.E: Institution membership check requires Simulation-level data.
+                        // Currently no sites use this variant; all use Public or OwnerOnly.
                         true
                     }
                 }
