@@ -869,9 +869,27 @@ impl Simulation {
                     })
                     .collect();
 
+                // §5.4: Compute faction membership matrix — same_faction_matrix[i][j] = true if agents i,j share a faction
+                let faction_members: Vec<Vec<usize>> = self.institutions.iter()
+                    .filter(|i| i.kind == InstitutionKind::Faction)
+                    .map(|f| f.members.iter().map(|m| m.as_u64() as usize).collect())
+                    .collect();
+                let n = self.agents.len();
+                let mut same_faction_matrix = vec![vec![false; n]; n];
+                for member_list in &faction_members {
+                    for &a in member_list {
+                        for &b in member_list {
+                            if a < n && b < n {
+                                same_faction_matrix[a][b] = true;
+                            }
+                        }
+                    }
+                }
+
                 social::system_social_interactions(
                     &agent_info,
                     &agent_positions,
+                    &same_faction_matrix,
                     &mut self.relationships,
                     ctx.events,
                     tick,

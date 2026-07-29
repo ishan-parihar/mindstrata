@@ -311,9 +311,11 @@ fn evolve_relationship_kind(rel: &mut Relationship) {
 ///
 /// §2.4: Social interactions are proximity-based — agents within perception
 /// radius can interact, creating natural neighborhoods and social clusters.
+/// §5.4: Faction in-group bias — members of the same faction get trust bonuses.
 pub fn system_social_interactions(
     agents: &[(AgentId, Fixed, Fixed, Fixed)], // (id, openness, agreeableness, extraversion)
     agent_positions: &[(i32, i32)],            // §2.4: agent (x, y) positions
+    same_faction_matrix: &[Vec<bool>],         // §5.4: same_faction_matrix[i][j] = true if agents i,j share a faction
     relationships: &mut [Relationship],
     events: &mut Vec<SimEvent>,
     tick: Tick,
@@ -348,7 +350,7 @@ pub fn system_social_interactions(
                 .unwrap_or(Fixed::from_f64(0.3));
 
             // §5.4: In-group/out-group — check if both agents share a faction
-            let same_faction = false; // placeholder — faction check happens in caller
+            let same_faction = same_faction_matrix[i][target_idx];
             let kind = choose_interaction(trust, affection, *openness, *agreeableness, same_faction, rng);
 
             let interaction = Interaction {
