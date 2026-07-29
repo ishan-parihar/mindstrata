@@ -165,50 +165,59 @@ pub fn system_goal_generation(
 
         // ── Identity-driven goals (§24 identity modulation) ──
         // High-identity agents generate goals aligned with their identity.
-        // E.g., strong Farmer identity → Work goal; strong Believer → Worship.
+        // Uses same upsert pattern as need-driven goals for consistency.
         if i < personalities.len() {
             let personality = &personalities[i];
             // Ambitious agents generate Work goals even without pressing need
             if personality.ambition > Fixed::from_f64(0.6)
                 && need.fatigue < Fixed::from_f64(0.5)
-                && !agent_goals.iter().any(|g| g.kind == crate::person::GoalKind::Work)
             {
-                agent_goals.push(crate::person::Goal {
-                    kind: crate::person::GoalKind::Work,
-                    priority: personality.ambition * Fixed::from_f64(0.4),
-                    commitment: personality.conscientiousness * Fixed::from_f64(0.7),
-                    created_tick: tick,
-                    source: crate::person::GoalSource::Identity,
-
-                });
+                let id_priority = personality.ambition * Fixed::from_f64(0.4);
+                if let Some(existing) = agent_goals.iter_mut().find(|g| g.kind == crate::person::GoalKind::Work) {
+                    existing.priority = existing.priority.max(id_priority);
+                } else {
+                    agent_goals.push(crate::person::Goal {
+                        kind: crate::person::GoalKind::Work,
+                        priority: id_priority,
+                        commitment: personality.conscientiousness * Fixed::from_f64(0.7),
+                        created_tick: tick,
+                        source: crate::person::GoalSource::Identity,
+                    });
+                }
             }
             // Traditional agents generate Worship goals even with moderate meaning
             if personality.traditionalism > Fixed::from_f64(0.6)
                 && need.meaning > Fixed::from_f64(0.4)
-                && !agent_goals.iter().any(|g| g.kind == crate::person::GoalKind::Worship)
             {
-                agent_goals.push(crate::person::Goal {
-                    kind: crate::person::GoalKind::Worship,
-                    priority: personality.traditionalism * Fixed::from_f64(0.3),
-                    commitment: Fixed::from_f64(0.4),
-                    created_tick: tick,
-                    source: crate::person::GoalSource::Identity,
-
-                });
+                let id_priority = personality.traditionalism * Fixed::from_f64(0.3);
+                if let Some(existing) = agent_goals.iter_mut().find(|g| g.kind == crate::person::GoalKind::Worship) {
+                    existing.priority = existing.priority.max(id_priority);
+                } else {
+                    agent_goals.push(crate::person::Goal {
+                        kind: crate::person::GoalKind::Worship,
+                        priority: id_priority,
+                        commitment: Fixed::from_f64(0.4),
+                        created_tick: tick,
+                        source: crate::person::GoalSource::Identity,
+                    });
+                }
             }
             // Extraverted agents generate Socialize goals more readily
             if personality.extraversion > Fixed::from_f64(0.6)
                 && need.social > Fixed::from_f64(0.4)
-                && !agent_goals.iter().any(|g| g.kind == crate::person::GoalKind::Socialize)
             {
-                agent_goals.push(crate::person::Goal {
-                    kind: crate::person::GoalKind::Socialize,
-                    priority: personality.extraversion * Fixed::from_f64(0.3),
-                    commitment: Fixed::from_f64(0.3),
-                    created_tick: tick,
-                    source: crate::person::GoalSource::Identity,
-
-                });
+                let id_priority = personality.extraversion * Fixed::from_f64(0.3);
+                if let Some(existing) = agent_goals.iter_mut().find(|g| g.kind == crate::person::GoalKind::Socialize) {
+                    existing.priority = existing.priority.max(id_priority);
+                } else {
+                    agent_goals.push(crate::person::Goal {
+                        kind: crate::person::GoalKind::Socialize,
+                        priority: id_priority,
+                        commitment: Fixed::from_f64(0.3),
+                        created_tick: tick,
+                        source: crate::person::GoalSource::Identity,
+                    });
+                }
             }
         }
     }

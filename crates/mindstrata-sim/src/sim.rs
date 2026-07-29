@@ -1214,8 +1214,19 @@ impl Simulation {
             let stress = agent.emotions.fear + agent.emotions.anger;
             agent.attention.replenish_budget(stress, agent.needs.fatigue);
 
-            // §19.5.G: Update status from current wealth
+            // §19.5.G: Update status from current wealth and social connections
             agent.status.wealth_status = (agent.wealth.coin / Fixed::from_f64(20.0)).clamp_01();
+            // Social status: ratio of positive relationships (trust > 0.6) to total relationships
+            let agent_id = AgentId::new(i as u64);
+            let positive_rels = self.relationships.iter()
+                .filter(|r| r.from == agent_id && r.trust > Fixed::from_f64(0.6))
+                .count();
+            let total_rels = self.relationships.iter()
+                .filter(|r| r.from == agent_id)
+                .count();
+            if total_rels > 0 {
+                agent.status.social_status = Fixed::from_f64(positive_rels as f64 / total_rels as f64);
+            }
             agent.status.recompute();
 
             // §22: Memory reconsolidation — current emotions bias recalled memories
