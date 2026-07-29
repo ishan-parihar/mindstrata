@@ -31,7 +31,7 @@ use crate::world_gen;
 use mindstrata_core::clock::{Clock, Tick};
 use mindstrata_core::event::SimEvent;
 use mindstrata_core::fixed::Fixed;
-use mindstrata_core::id::{AgentId, EntityId};
+use mindstrata_core::id::{AgentId, EntityId, ResourceId};
 use mindstrata_core::rng::{RngStream, RngStreams};
 use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
@@ -1026,6 +1026,94 @@ impl Simulation {
                 ActionKind::Worship => {
                     self.journal.record(tick_u64, agent_id, JournalEntryKind::Worshiped);
                     true
+                }
+                ActionKind::Trade => {
+                    // §13.3: Agent-to-agent trade — find a nearby seller at a market site
+                    let _agent_pos_x = self.agents[*agent_idx].position.x;
+                    let buyer_coin = self.agents[*agent_idx].wealth.coin;
+                    // Find a seller: nearby agent who owns a farm with grain
+                    let seller_info = self.agents.iter().enumerate()
+                        .find(|(j, a)| {
+                            *j != *agent_idx
+                                && Position::manhattan_distance(&self.agents[*agent_idx].position, &a.position) <= 3
+                                && a.home_site.is_some() // seller has a home/owned site
+                        })
+                        .and_then(|(j, a)| {
+                            // Check if seller's home is a farm with grain
+                            a.home_site.and_then(|hs| {
+                                if hs < self.world.sites.len()
+                                    && self.world.sites[hs].kind == crate::world::SiteKind::Farm
+                                {
+                                    let grain = self.world.sites[hs].inventory.iter()
+                                        .find(|s| s.resource_id == GRAIN_RESOURCE_ID)
+                                        .map(|s| s.quantity)
+                                        .unwrap_or(Fixed::ZERO);
+                                    if grain > Fixed::ZERO {
+                                        Some((j, hs, grain))
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
+                            })
+                        });
+                    if let Some((seller, farm_idx, _available)) = seller_info {
+                        let trust = self.relationships.iter()
+                            .find(|r| r.from == AgentId::new(*agent_idx as u64) && r.to == AgentId::new(seller as u64))
+                            .map(|r| r.trust)
+                            .unwrap_or(Fixed::from_f64(0.5));
+                        let quantity = Fixed::from_f64(0.1);
+                        // §13.3: Execute trade — buyer pays coin, seller's farm provides grain
+                        let base_price = self.market.price(GRAIN_RESOURCE_ID);
+                        // Trust discount: high trust → lower price
+                        let trust_modifier = Fixed::from_f64(1.0) - trust * Fixed::from_f64(0.2) + (Fixed::ONE - trust) * Fixed::from_f64(0.1);
+                        let price = (base_price * trust_modifier).max(Fixed::from_f64(1.0));
+                        let cost = price * quantity;
+                        if buyer_coin >= cost {
+                            let taken = self.world.consume_resource(farm_idx, GRAIN_RESOURCE_ID, quantity);
+                            if taken > Fixed::ZERO {
+                                let actual_cost = price * taken;
+                                // Buyer pays coin to seller (farm owner)
+                                self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - actual_cost).max(Fixed::ZERO);
+                                self.agents[seller].wealth.coin += actual_cost;
+                                self.events.push(SimEvent::TradeOccurred {
+                                    buyer: AgentId::new(*agent_idx as u64),
+                                    seller: AgentId::new(seller as u64),
+                                    good: ResourceId::new(GRAIN_RESOURCE_ID),
+                                    quantity: taken,
+                                    price,
+                                    tick,
+                                });
+                                self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "grain_via_trade".into(), amount: taken.to_f64() });
+                                // §19.5.J: Record relationship trace — trade builds trust
+                                if let Some(rel) = self.relationships.iter_mut()
+                                    .find(|r| r.from == AgentId::new(*agent_idx as u64) && r.to == AgentId::new(seller as u64))
+                                {
+                                    let old_trust = rel.trust;
+                                    rel.trust = (rel.trust + Fixed::from_f64(0.02)).clamp_01();
+                                    self.provenance.record_relationship(crate::provenance::RelationshipTrace {
+                                        from: AgentId::new(*agent_idx as u64),
+                                        to: AgentId::new(seller as u64),
+                                        tick: tick_u64,
+                                        cause: "trade".into(),
+                                        old_trust,
+                                        new_trust: rel.trust,
+                                        old_affection: rel.affection,
+                                        new_affection: rel.affection,
+                                        description: format!("Trade built trust ({} -> {})", old_trust.to_f64(), rel.trust.to_f64()),
+                                    });
+                                }
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false // insufficient funds
+                        }
+                    } else {
+                        false // no nearby seller with grain
+                    }
                 }
                 _ => false,
             };

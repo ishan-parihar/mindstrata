@@ -51,6 +51,8 @@ pub enum ActionKind {
     Wander,
     /// §6: Movement toward a target position (site or random destination).
     Move,
+    /// §13.3: Trade goods with another agent at the market.
+    Trade,
     Idle,
 }
 
@@ -162,6 +164,19 @@ impl ActionKind {
                 bonus_social_relief: Fixed::ZERO,
                 bonus_meaning_relief: Fixed::ZERO,
             },
+            ActionKind::Trade => ActionDef {
+                kind: self,
+                duration_ticks: 3,
+                hunger_relief: Fixed::from_f64(0.3), // grain trade relieves hunger
+                thirst_relief: Fixed::ZERO,
+                fatigue_relief: Fixed::ZERO,
+                social_value: Fixed::from_f64(0.2),
+                energy_cost: Fixed::from_f64(0.02),
+                bonus_fatigue_relief: Fixed::ZERO,
+                bonus_energy_recovery: Fixed::ZERO,
+                bonus_social_relief: Fixed::from_f64(0.05),
+                bonus_meaning_relief: Fixed::ZERO,
+            },
             ActionKind::Idle => ActionDef {
                 kind: self,
                 duration_ticks: 1,
@@ -205,7 +220,7 @@ fn identity_affinity(action: ActionKind, identity: &IdentityState) -> Fixed {
     let kind = match action {
         ActionKind::Work => IdentityKind::Farmer,
         ActionKind::Worship => IdentityKind::Believer,
-        ActionKind::Socialize => IdentityKind::Parent,
+        ActionKind::Socialize | ActionKind::Trade => IdentityKind::Parent,
         ActionKind::Eat | ActionKind::Drink | ActionKind::Rest => IdentityKind::Parent,
         _ => return Fixed::ZERO,
     };
@@ -272,9 +287,20 @@ pub fn compute_utility(
         // Antisocial actions: positive pressure = violating agents prefer these
         ActionKind::Wander => norm_pressure * personality.conformity * Fixed::from_f64(0.05),
         ActionKind::Idle => norm_pressure * personality.conformity * Fixed::from_f64(0.08),
+        // §13.3: Trade is prosocial — compliant agents prefer it
+        ActionKind::Trade => -norm_pressure * personality.conformity * Fixed::from_f64(0.08),
         _ => Fixed::ZERO,
     };
     utility += normative;
+
+    // §13.3: Trade utility — agents benefit from trade when they have coin and pressing needs
+    if action.kind == ActionKind::Trade {
+        // Trade is more useful when agent has coin to spend and needs are pressing
+        let coin_pressure = (needs.hunger + needs.thirst) * Fixed::from_f64(0.5);
+        let coin_utility = personality.ambition * Fixed::from_f64(0.3);
+        let need_pressure_bonus = coin_pressure * Fixed::from_f64(0.4);
+        utility += coin_utility + need_pressure_bonus;
+    }
 
     utility -= action.energy_cost * Fixed::from_f64(0.5);
 
@@ -305,6 +331,7 @@ pub fn select_action(
         ActionKind::Work,
         ActionKind::Socialize,
         ActionKind::Worship,
+        ActionKind::Trade,
         ActionKind::Wander,
         ActionKind::Idle,
     ];
