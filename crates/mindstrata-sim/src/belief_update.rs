@@ -24,16 +24,25 @@ pub fn update_belief(
     evidence_strength: Fixed,
     source_trust: Fixed,
     emotional_reinforcement: Fixed,
-    social_reinforcement: Fixed,
+    social_reinforcement_delta: Fixed,
     current_tick: u64,
 ) {
     let resistance = belief.resistance;
 
+    // §19.5.A: Blend explicit source_trust with belief's source base_trust.
+    // This means the evidence source of the belief itself modulates trust.
+    let blended_trust = (source_trust + belief.source.base_trust()) * Fixed::from_f64(0.5);
+
+    // §19.5.A: Track social reinforcement count when social evidence confirms belief.
+    if social_reinforcement_delta > Fixed::ZERO {
+        belief.social_reinforcement = belief.social_reinforcement.saturating_add(1);
+    }
+
     // Base update: weighted combination
     let base_update = belief.confidence * resistance
-        + evidence_strength * source_trust
+        + evidence_strength * blended_trust
         + emotional_reinforcement
-        + social_reinforcement;
+        + social_reinforcement_delta;
 
     // Identity protection bias: beliefs with high identity linkage resist change
     let identity_protection = if belief.identity_linkage > Fixed::from_f64(0.5) {

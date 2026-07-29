@@ -170,6 +170,22 @@ pub struct Belief {
     pub is_accurate: bool,
 }
 
+impl Default for Belief {
+    fn default() -> Self {
+        Self {
+            proposition_id: 0,
+            confidence: Fixed::from_f64(0.5),
+            emotional_charge: Fixed::ZERO,
+            identity_linkage: Fixed::ZERO,
+            resistance: Fixed::from_f64(0.5),
+            last_reinforced_tick: 0,
+            source: EvidenceSource::PersonalExperience,
+            social_reinforcement: 0,
+            is_accurate: true,
+        }
+    }
+}
+
 /// Goal priority and source.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Goal {

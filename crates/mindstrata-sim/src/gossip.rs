@@ -209,6 +209,10 @@ pub fn apply_gossip(
         existing.last_reinforced_tick = tick;
     } else {
         // Create new belief from rumor
+        // §19.5.A: Accuracy depends on how distorted the mutation was.
+        // Compare mutated confidence against 0.5 (neutral) as proxy for wild distortion.
+        let distortion = (result.mutated_confidence - Fixed::from_f64(0.5)).abs();
+        let is_accurate = distortion < Fixed::from_f64(0.3);
         listener_beliefs.push(Belief {
             proposition_id: result.proposition_id,
             confidence: result.mutated_confidence,
@@ -218,7 +222,7 @@ pub fn apply_gossip(
             last_reinforced_tick: tick,
             source: crate::person::EvidenceSource::Hearsay,
             social_reinforcement: 0,
-            is_accurate: false, // rumors from gossip are not verified
+            is_accurate,
         });
     }
 }
