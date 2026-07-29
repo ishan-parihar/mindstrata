@@ -20,7 +20,7 @@ use crate::institutions::{self, Institution, InstitutionKind};
 use crate::routines::DailyRoutine;
 pub use crate::attention;
 pub use crate::person::Intention;
-use crate::person::{Affect, BodyState, Belief, CognitiveState, DerivedMentalState, DiscreteEmotions, Goal, GoalKind, IdentityKind, IdentityState, MoralValues, NeedState, Personality, Relationship, RelationshipKind, StatusState};
+use crate::person::{Affect, BodyState, Belief, CognitiveState, DerivedMentalState, DiscreteEmotions, Goal, GoalKind, GoalSource, IdentityKind, IdentityState, MoralValues, NeedState, Personality, Relationship, RelationshipKind, StatusState};
 use crate::provenance::{CausalProvenance, DecisionFactor, DecisionTrace};
 use crate::scenario::{Scenario, ShockKind};
 use crate::snapshot::Snapshot;
@@ -607,12 +607,36 @@ impl Simulation {
                 // §24.5: Intention commitment — check if current intention should be abandoned
                 if let Some(ref intention) = self.agents[i].intention {
                     if intention.completed {
+                        // §3.2: Goal completed — move to completed list for learning
+                        let completed_goal = Goal {
+                            kind: intention.goal_kind,
+                            priority: Fixed::from_f64(0.5),
+                            commitment: Fixed::ONE,
+                            created_tick: intention.formed_tick,
+                            source: GoalSource::Identity, // default source for completed goals
+                        };
+                        self.agents[i].completed_goals.push(completed_goal);
+                        if self.agents[i].completed_goals.len() > 50 {
+                            self.agents[i].completed_goals.remove(0);
+                        }
                         self.agents[i].intention = None;
                         intention_abandoned_this_tick = true;
                     } else {
                         let stress = emotions[i].fear + emotions[i].anger;
                         let emotional_shock = emotions[i].anger > Fixed::from_f64(0.5) || emotions[i].fear > Fixed::from_f64(0.5);
                         if intention.should_abandon(tick_u64, stress, emotional_shock) {
+                            // §3.2: Goal abandoned — move to rejected list for learning
+                            let rejected_goal = Goal {
+                                kind: intention.goal_kind,
+                                priority: Fixed::from_f64(0.5),
+                                commitment: Fixed::ZERO,
+                                created_tick: intention.formed_tick,
+                                source: GoalSource::Identity,
+                            };
+                            self.agents[i].rejected_goals.push(rejected_goal);
+                            if self.agents[i].rejected_goals.len() > 50 {
+                                self.agents[i].rejected_goals.remove(0);
+                            }
                             self.agents[i].intention = None;
                             self.agents[i].action_progress = 0; // force reselection
                             intention_abandoned_this_tick = true;
@@ -626,6 +650,20 @@ impl Simulation {
                         || needs[i].thirst > Fixed::from_f64(0.9)
                         || needs[i].fatigue > Fixed::from_f64(0.95);
                     if critical {
+                        // §3.2: Goal interrupted by critical needs — move to rejected list
+                        if let Some(ref intention) = self.agents[i].intention {
+                            let rejected_goal = Goal {
+                                kind: intention.goal_kind,
+                                priority: Fixed::from_f64(0.5),
+                                commitment: Fixed::ZERO,
+                                created_tick: intention.formed_tick,
+                                source: GoalSource::Identity,
+                            };
+                            self.agents[i].rejected_goals.push(rejected_goal);
+                            if self.agents[i].rejected_goals.len() > 50 {
+                                self.agents[i].rejected_goals.remove(0);
+                            }
+                        }
                         self.agents[i].action_progress = 0;
                         self.agents[i].intention = None; // critical needs override intentions
                         was_interrupted_by_critical_needs = true;
