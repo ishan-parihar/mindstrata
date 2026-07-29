@@ -64,6 +64,10 @@ enum Commands {
         /// Show decision traces for a specific agent by ID.
         #[arg(long)]
         decisions: Option<usize>,
+
+        /// Show chronological event timeline after simulation.
+        #[arg(long, default_value_t = 30)]
+        timeline: usize,
     },
     /// Run a named scenario.
     Scenario {
@@ -98,6 +102,7 @@ fn main() -> Result<()> {
             factions,
             records,
             decisions,
+            timeline,
         } => {
             init_logging(verbose);
 
@@ -222,6 +227,20 @@ fn main() -> Result<()> {
                     mindstrata_core::id::AgentId::new(id as u64),
                     20,
                 ));
+            }
+
+            // §6.3: Event timeline view
+            if timeline > 0 {
+                println!();
+                let events = sim.recent_events(timeline);
+                if !events.is_empty() {
+                    println!("╔══════════════════════════════════════════════╗");
+                    println!("║  Event Timeline (last {timeline})                       ║");
+                    println!("╚══════════════════════════════════════════════╝");
+                    println!("{}", mindstrata_tui::render_event_log(events, timeline));
+                } else {
+                    println!("No events recorded.");
+                }
             }
         }
 
