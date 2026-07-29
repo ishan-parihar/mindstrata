@@ -83,11 +83,13 @@ pub fn system_body_update(_ctx: &mut SystemContext, bodies: &mut [BodyState], ne
 
 /// Generate goals based on need pressure, emotional state, and identity.
 /// §24: Goals now carry source tracking and support emotional/identity modulation.
+/// §3.4: Emotional goal modulation — anger, fear, and joy drive goal generation.
 pub fn system_goal_generation(
     ctx: &mut SystemContext,
     personalities: &[crate::person::Personality],
     needs: &[NeedState],
     goals: &mut [Vec<crate::person::Goal>],
+    emotions: &[crate::person::DiscreteEmotions],
 ) {
     let tick = ctx.tick;
     for (i, (need, agent_goals)) in needs.iter().zip(goals.iter_mut()).enumerate() {
@@ -144,18 +146,53 @@ pub fn system_goal_generation(
             }
         }
 
-        // ── Safety goal from high fear (§24 emotional modulation) ──
-        // Uses upsert pattern consistent with need-driven and identity-driven goals.
-        if i < personalities.len() {
-            let fear_pressure = need.safety; // safety need grows when afraid
-            if fear_pressure > Fixed::from_f64(0.6) {
+        // ── Emotional goal modulation (§3.4) ──
+        // §3.4: High anger → Work harder (atone/express), high fear → SeekSafety, high joy → Socialize
+        if i < emotions.len() {
+            let emo = &emotions[i];
+
+            // Fear → SeekSafety goal
+            if emo.fear > Fixed::from_f64(0.5) {
+                let fear_prio = emo.fear * Fixed::from_f64(0.8);
                 if let Some(existing) = agent_goals.iter_mut().find(|g| g.kind == crate::person::GoalKind::SeekSafety) {
-                    existing.priority = existing.priority.max(fear_pressure);
+                    existing.priority = existing.priority.max(fear_prio);
                 } else {
                     agent_goals.push(crate::person::Goal {
                         kind: crate::person::GoalKind::SeekSafety,
-                        priority: fear_pressure,
+                        priority: fear_prio,
                         commitment: Fixed::from_f64(0.6),
+                        created_tick: tick,
+                        source: crate::person::GoalSource::Emotion,
+                    });
+                }
+            }
+
+            // High anger → Work (aggressive productivity) when hunger is manageable
+            if emo.anger > Fixed::from_f64(0.5) && need.hunger < Fixed::from_f64(0.8) {
+                let anger_prio = emo.anger * Fixed::from_f64(0.3);
+                if let Some(existing) = agent_goals.iter_mut().find(|g| g.kind == crate::person::GoalKind::Work) {
+                    existing.priority = existing.priority.max(anger_prio);
+                } else {
+                    agent_goals.push(crate::person::Goal {
+                        kind: crate::person::GoalKind::Work,
+                        priority: anger_prio,
+                        commitment: Fixed::from_f64(0.4),
+                        created_tick: tick,
+                        source: crate::person::GoalSource::Emotion,
+                    });
+                }
+            }
+
+            // High joy → Socialize goal
+            if emo.joy > Fixed::from_f64(0.5) && need.social > Fixed::from_f64(0.3) {
+                let joy_prio = emo.joy * Fixed::from_f64(0.4);
+                if let Some(existing) = agent_goals.iter_mut().find(|g| g.kind == crate::person::GoalKind::Socialize) {
+                    existing.priority = existing.priority.max(joy_prio);
+                } else {
+                    agent_goals.push(crate::person::Goal {
+                        kind: crate::person::GoalKind::Socialize,
+                        priority: joy_prio,
+                        commitment: Fixed::from_f64(0.3),
                         created_tick: tick,
                         source: crate::person::GoalSource::Emotion,
                     });

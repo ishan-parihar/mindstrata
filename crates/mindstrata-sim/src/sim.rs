@@ -130,10 +130,7 @@ pub struct AgentBundle {
     pub feud_ticks: Vec<u64>,
     /// §19.5.G: Per-agent status — derived from wealth, role, social connections.
     pub status: StatusState,
-    /// §6: Target site index for spatial movement (agent travels here before acting).
-    pub target_site: Option<usize>,
-    /// §6: Target position for free movement (used by Wander/Move).
-    pub target_pos: Option<Position>,
+
 }
 
 /// The simulation state.
@@ -331,8 +328,7 @@ impl Simulation {
                 feuds: Vec::new(),
                 feud_ticks: Vec::new(),
                 status: StatusState::default(),
-                target_site: None,
-                target_pos: None,
+
             });
         }
 
@@ -589,7 +585,7 @@ impl Simulation {
 
             // ── 3. Goal generation ────────────────────────────────────
             tracing::debug!(tick = tick_u64, "systems::goal_generation");
-            systems::system_goal_generation(&mut ctx, &personalities, &needs, &mut goals);
+            systems::system_goal_generation(&mut ctx, &personalities, &needs, &mut goals, &emotions);
 
             // ── 4. Action execution (per-tick effects) ────────────────
             for i in 0..self.agents.len() {
@@ -909,29 +905,6 @@ impl Simulation {
                         let dy: i32 = self.rng.get_mut(RngStream::Behavior).random_range(-1..=1);
                         self.agents[i].position.x = (self.agents[i].position.x + dx).clamp(0, world_w - 1);
                         self.agents[i].position.y = (self.agents[i].position.y + dy).clamp(0, world_h - 1);
-                    }
-                    ActionKind::Move => {
-                        // Extract target coords to avoid borrow conflict with self.agents[i]
-                        let target_xy = self.agents[i].target_pos.as_ref().map(|t| (t.x, t.y));
-                        if let Some((tx, ty)) = target_xy {
-                            let px = self.agents[i].position.x;
-                            let py = self.agents[i].position.y;
-                            let dx = (tx - px).signum();
-                            let dy = (ty - py).signum();
-                            let dist_x = (tx - px).abs();
-                            let dist_y = (ty - py).abs();
-                            if dist_x >= dist_y {
-                                self.agents[i].position.x = (px + dx).clamp(0, world_w - 1);
-                            } else {
-                                self.agents[i].position.y = (py + dy).clamp(0, world_h - 1);
-                            }
-                            // If arrived at target, clear and force reselection
-                            if self.agents[i].position.x == tx && self.agents[i].position.y == ty {
-                                self.agents[i].target_pos = None;
-                                self.agents[i].target_site = None;
-                                self.agents[i].action_progress = 0;
-                            }
-                        }
                     }
                     _ => {}
                 }
@@ -1281,6 +1254,29 @@ impl Simulation {
                     fatigue,
                     &health_cfg,
                 );
+            }
+        }
+
+        // ── 17b. §Phase 1.5: Ecology migration pressure ──
+        // Agents under high resource scarcity may migrate to a different site.
+        {
+            let total_grain = self.world.total_food();
+            let local_scarcity = (Fixed::ONE - total_grain).clamp_01();
+            let season = self.season.current;
+            for i in 0..self.agents.len() {
+                let has_shelter = self.agents[i].home_site.is_some();
+                let pressure = ecology::migration_pressure(local_scarcity, season, has_shelter);
+                if pressure > Fixed::from_f64(0.7) {
+                    // Agent migrates — teleport to a random site (simplified)
+                    if let Some(farm_idx) = self.world.best_farm_for_work() {
+                        if farm_idx < self.world.sites.len() {
+                            let pos = self.world.site_position(farm_idx)
+                                .map(|(x, y)| crate::sim::Position::new(x, y))
+                                .unwrap_or(crate::sim::Position::new(8, 8));
+                            self.agents[i].position = pos;
+                        }
+                    }
+                }
             }
         }
 
@@ -2416,8 +2412,6 @@ impl Simulation {
                     feuds: Vec::new(),
                     feud_ticks: Vec::new(),
                     status: StatusState::default(),
-                    target_site: None,
-                    target_pos: None,
                 });                // Add relationships to all existing agents
                 for existing_idx in 0..self.agents.len() - 1 {
                     let trust = if existing_idx == parent_a || existing_idx == parent_b {

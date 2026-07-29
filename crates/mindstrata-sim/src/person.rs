@@ -217,9 +217,6 @@ pub enum GoalKind {
     Socialize,
     Worship,
     SeekSafety,
-    GainStatus,
-    HelpOther,
-    Migrate,
 }
 
 // ── Identity system ──────────────────────────────────────────────────────

@@ -49,8 +49,6 @@ pub enum ActionKind {
     Socialize,
     Worship,
     Wander,
-    /// §6: Movement toward a target position (site or random destination).
-    Move,
     /// §13.3: Trade goods with another agent at the market.
     Trade,
     Idle,
@@ -146,19 +144,6 @@ impl ActionKind {
                 fatigue_relief: Fixed::ZERO,
                 social_value: Fixed::ZERO,
                 energy_cost: Fixed::from_f64(0.02),
-                bonus_fatigue_relief: Fixed::ZERO,
-                bonus_energy_recovery: Fixed::ZERO,
-                bonus_social_relief: Fixed::ZERO,
-                bonus_meaning_relief: Fixed::ZERO,
-            },
-            ActionKind::Move => ActionDef {
-                kind: self,
-                duration_ticks: 1,
-                hunger_relief: Fixed::ZERO,
-                thirst_relief: Fixed::ZERO,
-                fatigue_relief: Fixed::ZERO,
-                social_value: Fixed::ZERO,
-                energy_cost: Fixed::from_f64(0.01),
                 bonus_fatigue_relief: Fixed::ZERO,
                 bonus_energy_recovery: Fixed::ZERO,
                 bonus_social_relief: Fixed::ZERO,
