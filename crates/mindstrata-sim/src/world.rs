@@ -258,6 +258,21 @@ impl World {
         }
     }
 
+    /// §6: Get the (x, y) coordinates of a site by index.
+    /// Sites are stored in a flat list; we reverse-lookup from the tile grid.
+    pub fn site_position(&self, site_idx: usize) -> Option<(i32, i32)> {
+        let site = self.sites.get(site_idx)?;
+        let site_id = site.id;
+        for (tile_idx, tile) in self.tiles.iter().enumerate() {
+            if tile.site == Some(site_id) {
+                let x = (tile_idx as u32 % self.width) as i32;
+                let y = (tile_idx as u32 / self.width) as i32;
+                return Some((x, y));
+            }
+        }
+        None
+    }
+
     /// Find the nearest site of a given kind to an optional home site.
     pub fn nearest_site_of_kind(&self, kind: SiteKind, _from_site: Option<usize>) -> Option<usize> {
         self.sites.iter().position(|s| s.kind == kind)
@@ -300,8 +315,9 @@ impl World {
                     AccessRight::Public => true,
                     AccessRight::OwnerOnly => site.owner == Some(agent_id),
                     AccessRight::InstitutionMembers => {
-                        // §19.5.E: Institution membership check requires Simulation-level data.
-                        // Currently no sites use this variant; all use Public or OwnerOnly.
+                        // §19.5.E: Institution membership check — currently returns true as
+                        // a placeholder. Full implementation requires passing institution data.
+                        // TODO: wire institution membership check when needed.
                         true
                     }
                 }

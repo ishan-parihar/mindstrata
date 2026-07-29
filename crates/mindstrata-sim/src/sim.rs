@@ -60,6 +60,24 @@ impl Default for SimConfig {
     }
 }
 
+/// §6: Agent's spatial position in the world grid.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Position {
+    pub x: i32,
+    pub y: i32,
+}
+
+impl Position {
+    pub fn new(x: i32, y: i32) -> Self {
+        Self { x, y }
+    }
+
+    /// Manhattan distance to another position.
+    pub fn manhattan_distance(&self, other: &Position) -> i32 {
+        (self.x - other.x).abs() + (self.y - other.y).abs()
+    }
+}
+
 /// An agent's full state bundle.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentBundle {
@@ -74,6 +92,8 @@ pub struct AgentBundle {
     pub action_progress: u32,
     pub name: String,
     pub home_site: Option<usize>,
+    /// §6: Agent's spatial position in the world grid.
+    pub position: Position,
     pub memory: MemoryStore,
     pub identity: IdentityState,
     /// §22.5: Attention controls which events the agent notices.
@@ -246,6 +266,15 @@ impl Simulation {
                 },
             ];
 
+            // §6: Initialize agent position from home site coordinates.
+            let position = if let Some(site_idx) = home_site {
+                self.world.site_position(site_idx)
+                    .map(|(x, y)| Position::new(x, y))
+                    .unwrap_or_else(|| Position::new(8, 8)) // center fallback
+            } else {
+                Position::new(8, 8) // center of 16x16 world
+            };
+
             self.agents.push(AgentBundle {
                 body,
                 needs,
@@ -258,6 +287,7 @@ impl Simulation {
                 action_progress: 0,
                 name,
                 home_site,
+                position,
                 memory: MemoryStore::new(200),
                 identity: IdentityState {
                     identities: vec![
@@ -805,8 +835,10 @@ impl Simulation {
             }
 
             // ── 7. Emotion decay ──────────────────────────────────────
+            // §22.1: Emotions decay slowly — 0.002/tick ≈ full decay in ~500 ticks.
+            // This allows emotions to accumulate and create meaningful dynamics.
             for emotion in emotions.iter_mut() {
-                let decay = Fixed::from_f64(0.01);
+                let decay = Fixed::from_f64(0.002);
                 emotion.fear = (emotion.fear - decay).clamp_01();
                 emotion.anger = (emotion.anger - decay).clamp_01();
                 emotion.joy = (emotion.joy - decay).clamp_01();
@@ -2185,6 +2217,7 @@ impl Simulation {
                     current_action: ActionKind::Idle,
                     action_progress: 0,
                     name: child_name,
+                    position: self.agents[parent_a].position.clone(),
                     home_site,
                     memory: MemoryStore::new(200),
                     identity: IdentityState {
