@@ -3,7 +3,7 @@
 //! This is the social layer.  Interactions between agents update
 //! relationships, spread information, and generate social events.
 
-use crate::person::Relationship;
+use crate::person::{Relationship, RelationshipKind};
 use mindstrata_core::clock::Tick;
 use mindstrata_core::event::{InteractionKind, SimEvent};
 use mindstrata_core::fixed::Fixed;
@@ -66,6 +66,10 @@ pub fn process_interaction(
         }
     }
 
+    let tick_u64 = tick.as_u64();
+    let is_positive = trust_delta > Fixed::ZERO;
+    let is_negative = trust_delta < Fixed::ZERO;
+
     // Update the relationship from → to
     if let Some(rel) = relationships
         .iter_mut()
@@ -73,7 +77,16 @@ pub fn process_interaction(
     {
         rel.trust = (rel.trust + trust_delta).clamp_01();
         rel.affection = (rel.affection + affection_delta).clamp_01();
-        rel.last_interaction_tick = tick.as_u64();
+        rel.last_interaction_tick = tick_u64;
+        rel.interaction_count += 1;
+        if is_positive {
+            rel.last_positive_tick = tick_u64;
+        }
+        if is_negative {
+            rel.last_negative_tick = tick_u64;
+        }
+        // §19.5.G: Relationship evolution — evolve kind based on interaction history
+        evolve_relationship_kind(rel);
     }
 
     // Reciprocal relationship update (weaker)
@@ -83,7 +96,15 @@ pub fn process_interaction(
     {
         rel.trust = (rel.trust + trust_delta * Fixed::from_f64(0.3)).clamp_01();
         rel.affection = (rel.affection + affection_delta * Fixed::from_f64(0.3)).clamp_01();
-        rel.last_interaction_tick = tick.as_u64();
+        rel.last_interaction_tick = tick_u64;
+        rel.interaction_count += 1;
+        if is_positive {
+            rel.last_positive_tick = tick_u64;
+        }
+        if is_negative {
+            rel.last_negative_tick = tick_u64;
+        }
+        evolve_relationship_kind(rel);
     }
 
     // Generate event
@@ -201,6 +222,43 @@ pub fn update_witnesses(
             // Neutral interactions: no witness effect
             _ => {}
         }
+    }
+}
+
+/// §19.5.G: Evolve relationship kind based on accumulated interactions.
+/// Stranger → Neighbor (5+ interactions) → Friend (high trust+affection) or Rival (low trust).
+fn evolve_relationship_kind(rel: &mut Relationship) {
+    // Don't evolve if already a special kind
+    if matches!(rel.kind, RelationshipKind::Kin) {
+        return;
+    }
+
+    let count = rel.interaction_count;
+    let trust = rel.trust;
+    let affection = rel.affection;
+
+    // Upgrade from Stranger to Neighbor after 5 interactions
+    if rel.kind == RelationshipKind::Stranger && count >= 5 {
+        rel.kind = RelationshipKind::Neighbor;
+    }
+
+    // Upgrade from Neighbor to Friend or Rival based on trust/affection
+    if rel.kind == RelationshipKind::Neighbor {
+        if trust > Fixed::from_f64(0.7) && affection > Fixed::from_f64(0.5) {
+            rel.kind = RelationshipKind::Friend;
+        } else if trust < Fixed::from_f64(0.2) {
+            rel.kind = RelationshipKind::Rival;
+        }
+    }
+
+    // Friend can downgrade to Neighbor if trust drops
+    if rel.kind == RelationshipKind::Friend && trust < Fixed::from_f64(0.4) {
+        rel.kind = RelationshipKind::Neighbor;
+    }
+
+    // Rival can be repaired if trust recovers
+    if rel.kind == RelationshipKind::Rival && trust > Fixed::from_f64(0.5) {
+        rel.kind = RelationshipKind::Neighbor;
     }
 }
 

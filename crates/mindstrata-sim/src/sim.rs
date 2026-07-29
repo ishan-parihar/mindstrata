@@ -1050,7 +1050,7 @@ impl Simulation {
                     let seller_info = self.agents.iter().enumerate()
                         .find(|(j, a)| {
                             *j != *agent_idx
-                                && Position::manhattan_distance(&self.agents[*agent_idx].position, &a.position) <= 3
+                                && self.agents[*agent_idx].position.manhattan_distance(&a.position) <= 3
                                 && a.home_site.is_some() // seller has a home/owned site
                         })
                         .and_then(|(j, a)| {

@@ -118,6 +118,7 @@ pub fn system_goal_generation(
         });
 
         // ── Need-driven goals (§24 primary source) ──
+        // §24: Only one goal per GoalKind — update priority if goal already exists
         let need_goals: &[(crate::person::GoalKind, Fixed, Fixed)] = &[
             (crate::person::GoalKind::Eat, need.hunger, Fixed::from_f64(0.5)),
             (crate::person::GoalKind::Drink, need.thirst, Fixed::from_f64(0.5)),
@@ -126,17 +127,20 @@ pub fn system_goal_generation(
             (crate::person::GoalKind::Worship, need.meaning, Fixed::from_f64(0.7)),
         ];
         for (kind, pressure, threshold) in need_goals {
-            if *pressure > *threshold
-                && !agent_goals.iter().any(|g| g.kind == *kind)
-            {
-                agent_goals.push(crate::person::Goal {
-                    kind: *kind,
-                    priority: *pressure,
-                    commitment: Fixed::from_f64(0.5),
-                    created_tick: tick,
-                    source: crate::person::GoalSource::Need,
-
-                });
+            if *pressure > *threshold {
+                // If goal already exists, refresh its priority and commitment
+                if let Some(existing) = agent_goals.iter_mut().find(|g| g.kind == *kind) {
+                    existing.priority = existing.priority.max(*pressure);
+                    existing.commitment = (existing.commitment + Fixed::from_f64(0.01)).clamp_01();
+                } else {
+                    agent_goals.push(crate::person::Goal {
+                        kind: *kind,
+                        priority: *pressure,
+                        commitment: Fixed::from_f64(0.5),
+                        created_tick: tick,
+                        source: crate::person::GoalSource::Need,
+                    });
+                }
             }
         }
 
