@@ -195,10 +195,6 @@ pub enum GoalSource {
     Identity,
     /// Goal driven by emotional state (e.g., fear → SeekSafety).
     Emotion,
-    /// Goal driven by social pressure or norm compliance.
-    Social,
-    /// Goal driven by a belief (e.g., belief in divine punishment → Worship).
-    Belief,
 }
 
 /// Goal priority and source.
@@ -210,8 +206,6 @@ pub struct Goal {
     pub created_tick: u64,
     /// §24: What triggered this goal — affects abandonment thresholds.
     pub source: GoalSource,
-    /// §24: Number of times this goal was rejected (deprioritized).
-    pub rejection_count: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -135,7 +135,7 @@ pub fn system_goal_generation(
                     commitment: Fixed::from_f64(0.5),
                     created_tick: tick,
                     source: crate::person::GoalSource::Need,
-                    rejection_count: 0,
+
                 });
             }
         }
@@ -154,7 +154,7 @@ pub fn system_goal_generation(
                     commitment: Fixed::from_f64(0.6),
                     created_tick: tick,
                     source: crate::person::GoalSource::Emotion,
-                    rejection_count: 0,
+
                 });
             }
         }
@@ -175,7 +175,7 @@ pub fn system_goal_generation(
                     commitment: personality.conscientiousness * Fixed::from_f64(0.7),
                     created_tick: tick,
                     source: crate::person::GoalSource::Identity,
-                    rejection_count: 0,
+
                 });
             }
             // Traditional agents generate Worship goals even with moderate meaning
@@ -189,7 +189,7 @@ pub fn system_goal_generation(
                     commitment: Fixed::from_f64(0.4),
                     created_tick: tick,
                     source: crate::person::GoalSource::Identity,
-                    rejection_count: 0,
+
                 });
             }
             // Extraverted agents generate Socialize goals more readily
@@ -203,7 +203,7 @@ pub fn system_goal_generation(
                     commitment: Fixed::from_f64(0.3),
                     created_tick: tick,
                     source: crate::person::GoalSource::Identity,
-                    rejection_count: 0,
+
                 });
             }
         }
