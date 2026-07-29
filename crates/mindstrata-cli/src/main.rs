@@ -76,10 +76,6 @@ enum Commands {
         /// Load a snapshot from disk and resume simulation for N more ticks.
         #[arg(long)]
         load_snapshot: Option<String>,
-
-        /// Save a snapshot every N ticks during simulation.
-        #[arg(long)]
-        snapshot_interval: Option<u64>,
     },
     /// Run a named scenario.
     Scenario {
@@ -117,7 +113,6 @@ fn main() -> Result<()> {
             timeline,
             save_snapshot,
             load_snapshot,
-            snapshot_interval,
         } => {
             init_logging(verbose);
 
