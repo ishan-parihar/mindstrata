@@ -162,6 +162,16 @@ fn main() -> Result<()> {
 
             print_results(&sim, elapsed);
 
+            // §16.1: Save snapshot to disk if requested
+            if let Some(ref path) = save_snapshot {
+                let snapshot = sim.capture_snapshot();
+                let save_path = std::path::Path::new(path);
+                match snapshot.save(save_path) {
+                    Ok(()) => println!("\n  Snapshot saved to: {path}"),
+                    Err(e) => eprintln!("\n  Failed to save snapshot: {e}"),
+                }
+            }
+
             if map {
                 println!();
                 let markers: Vec<mindstrata_tui::AgentMarker> = sim.agents.iter().enumerate().map(|(i, a)| {
