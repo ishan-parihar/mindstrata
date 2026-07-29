@@ -2112,6 +2112,10 @@ impl Simulation {
     fn enforce_theft(&mut self, agent_idx: usize, agent_id: AgentId, site_idx: usize, resource_id: u64, amount: Fixed, tick_u64: u64, tick: Tick) -> bool {
         let owner = self.world.sites[site_idx].owner;
         let taken = self.world.consume_resource(site_idx, resource_id, amount);
+        // Early return if nothing was actually taken — don't run enforcement for zero-resource thefts
+        if taken <= Fixed::ZERO {
+            return false;
+        }
         let resource_name = if resource_id == GRAIN_RESOURCE_ID { "grain" } else { "water" };
 
         // §19.5.D: Compute enforcement capacity from Council's enforcement capacity
