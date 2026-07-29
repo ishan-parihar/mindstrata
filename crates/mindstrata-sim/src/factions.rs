@@ -57,6 +57,7 @@ pub fn compute_grievance(
     autonomy_deficit: Fixed,
     meaning_deficit: Fixed,
     justice_perception: Fixed,
+    wealth_inequality: Fixed, // §4.3: Gini coefficient drives fairness grievance
 ) -> Fixed {
     // Resentment is the primary driver
     let base = resentment;
@@ -70,7 +71,10 @@ pub fn compute_grievance(
     // Low justice perception (high fairness need but low fairness experienced)
     let justice_factor = (Fixed::ONE - justice_perception) * Fixed::from_f64(0.1);
 
-    (base + emotional + need_factor + justice_factor).clamp_01()
+    // §4.3: Wealth inequality amplifies grievance — high Gini means unfair distribution
+    let inequality_factor = wealth_inequality * Fixed::from_f64(0.15);
+
+    (base + emotional + need_factor + justice_factor + inequality_factor).clamp_01()
 }
 
 /// Find agents who are potential faction members (high grievance).
@@ -227,8 +231,9 @@ mod tests {
             Fixed::from_f64(0.1), // autonomy deficit
             Fixed::from_f64(0.2), // meaning deficit
             Fixed::from_f64(0.5), // justice perception
+            Fixed::from_f64(0.3), // wealth inequality (Gini)
         );
-        // resentment (0.8) + emotional (0.2*0.2=0.04) + need (0.3*0.15=0.045) + justice (0.5*0.1=0.05) = ~0.935
+        // resentment (0.8) + emotional (0.2*0.2=0.04) + need (0.3*0.15=0.045) + justice (0.5*0.1=0.05) + inequality (0.3*0.15=0.045) = ~0.98
         assert!(g > Fixed::from_f64(0.8));
         assert!(g <= Fixed::ONE);
     }
@@ -242,6 +247,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ONE, // perfect justice
+            Fixed::ZERO, // no inequality
         );
         assert!(g == Fixed::ZERO);
     }

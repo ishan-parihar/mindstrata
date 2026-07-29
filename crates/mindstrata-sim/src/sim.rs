@@ -165,6 +165,8 @@ pub struct Simulation {
     pub market: MarketState,
     /// §19.5.I: Cultural knowledge store — all knowledge in the world.
     pub knowledge_store: Vec<Knowledge>,
+    /// §6.5: Per-tick metric history for observability and CSV export.
+    pub metric_history: Vec<MetricsSnapshot>,
 }
 
 impl Simulation {
@@ -194,6 +196,7 @@ impl Simulation {
             site_work_ticks: Vec::new(),
             market: MarketState::new(),
             knowledge_store: Vec::new(),
+            metric_history: Vec::new(),
         }
     }
 
@@ -1257,7 +1260,62 @@ impl Simulation {
             }
         }
 
-        // ── 17b. §Phase 1.5: Ecology migration pressure ──
+        // ── 17b. §7.5: Epidemic disease spread — proximity-based contagion ──
+        // Contagious diseases (Cold, Fever, Epidemic) spread to nearby agents.
+        // Uses Manhattan distance ≤ 2 as "close contact" radius.
+        {
+            let n = self.agents.len();
+            let mut new_infections: Vec<(usize, health::DiseaseKind)> = Vec::new();
+            for i in 0..n {
+                if self.agent_diseases[i].is_empty() {
+                    continue;
+                }
+                for disease in &self.agent_diseases[i] {
+                    let rate = disease.kind.transmission_rate();
+                    if rate <= Fixed::ZERO {
+                        continue; // not contagious
+                    }
+                    // Check proximity to all other agents
+                    for j in 0..n {
+                        if i == j || j >= self.agents.len() {
+                            continue;
+                        }
+                        let dist = self.agents[i].position.manhattan_distance(&self.agents[j].position);
+                        if dist > 2 {
+                            continue; // too far
+                        }
+                        // Already infected with this kind?
+                        let already_infected = self.agent_diseases[j].iter().any(|d| d.kind == disease.kind);
+                        if already_infected {
+                            continue;
+                        }
+                        // Probability check — reduced by distance and target health
+                        let distance_factor = Fixed::from_f64(1.0) - Fixed::from_f64(dist as f64) * Fixed::from_f64(0.25);
+                        let health_factor = self.agents[j].body.health;
+                        let transmission_prob = rate * distance_factor * (Fixed::ONE - health_factor * Fixed::from_f64(0.5));
+                        let roll = Fixed::from_f64(
+                            self.rng.get_mut(RngStream::Social).random::<f64>()
+                        );
+                        if roll < transmission_prob {
+                            new_infections.push((j, disease.kind));
+                        }
+                    }
+                }
+            }
+            // Apply new infections
+            for (agent_idx, kind) in new_infections {
+                if agent_idx < self.agent_diseases.len() {
+                    self.agent_diseases[agent_idx].push(health::ActiveDisease::new(kind));
+                    tracing::debug!(
+                        agent = agent_idx,
+                        disease = ?kind,
+                        "Epidemic: disease transmitted"
+                    );
+                }
+            }
+        }
+
+        // ── 17c. §Phase 1.5: Ecology migration pressure ──
         // Agents under high resource scarcity may migrate to a different site.
         {
             let total_grain = self.world.total_food();
@@ -1959,6 +2017,7 @@ impl Simulation {
                 .count();
 
             // Compute grievance for each agent
+            let market_gini = self.market.inequality;
             let grievances: Vec<(AgentId, Fixed)> = self.agents.iter().enumerate()
                 .map(|(i, agent)| {
                     let g = factions::compute_grievance(
@@ -1968,6 +2027,7 @@ impl Simulation {
                         agent.needs.autonomy,
                         agent.needs.meaning,
                         agent.moral_values.fairness,
+                        market_gini,
                     );
                     (AgentId::new(i as u64), g)
                 })
@@ -2581,6 +2641,17 @@ impl Simulation {
 
         // §19.5.J: Trim provenance traces to prevent unbounded growth
         self.provenance.trim(institutions::MAX_PROVENANCE_RECORDS);
+
+        // ── 19. §6.5: Record metric history for observability ──
+        // Every 10 ticks, snapshot key metrics for CSV export and analysis.
+        // Cap at 500 entries (last 5000 ticks) to prevent unbounded growth.
+        if tick_u64.is_multiple_of(10) {
+            let snapshot = self.metrics_snapshot();
+            self.metric_history.push(snapshot);
+            if self.metric_history.len() > 500 {
+                self.metric_history.remove(0);
+            }
+        }
     }
 
     /// Access the current tick.
