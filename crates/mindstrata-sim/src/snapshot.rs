@@ -176,6 +176,32 @@ impl Snapshot {
     pub fn filename(&self) -> String {
         format!("world_seed_{}_tick_{}.snapshot", self.config.seed, self.tick)
     }
+
+    /// Save this snapshot to a file using postcard binary format.
+    pub fn save(&self, path: &std::path::Path) -> Result<(), String> {
+        let bytes = self.to_bytes().map_err(|e| format!("Serialization failed: {e}"))?;
+        std::fs::write(path, &bytes).map_err(|e| format!("File write failed: {e}"))?;
+        tracing::info!(
+            path = %path.display(),
+            bytes = bytes.len(),
+            tick = self.tick,
+            "Snapshot saved"
+        );
+        Ok(())
+    }
+
+    /// Load a snapshot from a file using postcard binary format.
+    pub fn load(path: &std::path::Path) -> Result<Self, String> {
+        let bytes = std::fs::read(path).map_err(|e| format!("File read failed: {e}"))?;
+        let snapshot = Self::from_bytes(&bytes).map_err(|e| format!("Deserialization failed: {e}"))?;
+        tracing::info!(
+            path = %path.display(),
+            tick = snapshot.tick,
+            agents = snapshot.agents.len(),
+            "Snapshot loaded"
+        );
+        Ok(snapshot)
+    }
 }
 
 /// A summary of a snapshot for display purposes.
