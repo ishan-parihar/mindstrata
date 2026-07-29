@@ -1350,6 +1350,17 @@ impl Simulation {
                                 knowledge_id,
                                 tick,
                             });
+                            // §19.5.B: Record knowledge transfer in provenance
+                            self.provenance.record_institutional(
+                                crate::provenance::InstitutionalTrace {
+                                    institution_name: "Community".into(),
+                                    tick: tick_u64,
+                                    decision_kind: "knowledge_transfer".into(),
+                                    description: format!("Agent {} taught knowledge {} to Agent {}", from.as_u64(), knowledge_id, to.as_u64()),
+                                    affected: vec![*from, *to],
+                                    success: true,
+                                },
+                            );
                         }
                     }
                 }
@@ -2202,6 +2213,17 @@ impl Simulation {
                 fine: fine.to_f64(),
             });
             self.events.push(SimEvent::NormViolated { agent: agent_id, norm_id: 0, witnesses: Vec::new(), tick });
+            // §19.5.B: Record institutional enforcement provenance
+            self.provenance.record_institutional(
+                crate::provenance::InstitutionalTrace {
+                    institution_name: "Council".into(),
+                    tick: tick_u64,
+                    decision_kind: "theft_enforcement".into(),
+                    description: format!("{} stolen {} ({:.1} coins fine)", agent_id.as_u64(), resource_name, fine.to_f64()),
+                    affected: vec![agent_id],
+                    success: true,
+                },
+            );
             if let Some(owner_id) = owner {
                 if let Some(rel) = self.relationships.iter_mut().find(|r| r.from == agent_id && r.to == owner_id) {
                     rel.trust = (rel.trust - Fixed::from_f64(0.2)).max(Fixed::ZERO);
