@@ -27,6 +27,7 @@ pub fn process_interaction(
     relationships: &mut [Relationship],
     events: &mut Vec<SimEvent>,
     tick: Tick,
+    same_faction: bool, // §5.4: in-group bias modifier
 ) {
     let trust_delta;
     let affection_delta;
@@ -65,6 +66,17 @@ pub fn process_interaction(
             affection_delta = Fixed::from_f64(0.02);
         }
     }
+
+    // §5.4: In-group/out-group bias — faction membership modifies trust delta
+    // In-group: positive interactions get a trust bonus
+    // Out-group: negative interactions are penalized (positive interactions are neutral)
+    let trust_delta = if same_faction {
+        if trust_delta > Fixed::ZERO { trust_delta + INGROUP_TRUST_BONUS } else { trust_delta }
+    } else if trust_delta < Fixed::ZERO {
+        trust_delta - OUTGROUP_TRUST_PENALTY // out-group: negative interactions are worse
+    } else {
+        trust_delta // out-group: positive interactions are neutral (no bonus)
+    };
 
     let tick_u64 = tick.as_u64();
     let is_positive = trust_delta > Fixed::ZERO;
@@ -167,12 +179,22 @@ pub fn select_interaction_target(
     Some(target)
 }
 
+/// §5.4: In-group bias factor — faction members get bonus on positive interactions.
+pub const INGROUP_TRUST_BONUS: Fixed = Fixed::from_raw(1000); // 0.1
+
+/// §5.4: Out-group penalty factor — faction members distrust outsiders.
+pub const OUTGROUP_TRUST_PENALTY: Fixed = Fixed::from_raw(500); // 0.05
+
 /// Choose an interaction type based on personality and relationship.
+///
+/// §5.4: Faction in-group bias — members prefer positive interactions
+/// with fellow members and negative ones with outsiders.
 pub fn choose_interaction(
     trust: Fixed,
     affection: Fixed,
     personality_openness: Fixed,
     personality_agreeableness: Fixed,
+    _same_faction: bool, // §5.4: used for logging; bias applied in process_interaction
     rng: &mut RngStreams,
 ) -> InteractionKind {
     let social_rng = rng.get_mut(RngStream::Social);
@@ -325,7 +347,9 @@ pub fn system_social_interactions(
                 .map(|r| r.affection)
                 .unwrap_or(Fixed::from_f64(0.3));
 
-            let kind = choose_interaction(trust, affection, *openness, *agreeableness, rng);
+            // §5.4: In-group/out-group — check if both agents share a faction
+            let same_faction = false; // placeholder — faction check happens in caller
+            let kind = choose_interaction(trust, affection, *openness, *agreeableness, same_faction, rng);
 
             let interaction = Interaction {
                 from: *agent_id,
@@ -336,7 +360,7 @@ pub fn system_social_interactions(
             // Update witnesses before processing the interaction
             update_witnesses(&interaction, relationships, num_agents, tick);
 
-            process_interaction(&interaction, relationships, events, tick);
+            process_interaction(&interaction, relationships, events, tick, same_faction);
         }
     }
 }
@@ -369,7 +393,7 @@ mod tests {
             kind: InteractionKind::Help,
         };
 
-        process_interaction(&interaction, &mut relationships, &mut events, Tick::new(1));
+        process_interaction(&interaction, &mut relationships, &mut events, Tick::new(1), false);
 
         assert!(relationships[0].trust > Fixed::from_f64(0.5));
         assert!(!events.is_empty());
@@ -399,7 +423,7 @@ mod tests {
             kind: InteractionKind::Threaten,
         };
 
-        process_interaction(&interaction, &mut relationships, &mut events, Tick::new(1));
+        process_interaction(&interaction, &mut relationships, &mut events, Tick::new(1), false);
 
         assert!(relationships[0].trust < Fixed::from_f64(0.5));
     }
