@@ -3028,8 +3028,13 @@ impl Simulation {
         );
 
         if was_caught {
-            // Theft was detected — apply fine and consequences
-            let fine = taken * self.market.price(resource_id) * Fixed::from_f64(2.0);
+            // Theft was detected — apply fine (black market goods priced at premium)
+            let base_price = if agent_can_black_market {
+                self.black_market.black_market_price(self.market.price(resource_id))
+            } else {
+                self.market.price(resource_id)
+            };
+            let fine = taken * base_price * Fixed::from_f64(2.0);
             self.agents[agent_idx].wealth.coin = (self.agents[agent_idx].wealth.coin - fine).max(Fixed::ZERO);
             self.journal.record(tick_u64, agent_id, JournalEntryKind::TheftDetected {
                 resource: resource_name.into(),
