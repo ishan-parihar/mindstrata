@@ -350,8 +350,21 @@ pub fn render_belief_inspector(
 
     for b in beliefs.iter().take(15) {
         let prop_name = match b.proposition_id {
-            0 => "crops_grow",
-            1 => "council_protects",
+            0 => "market_fair",
+            1 => "ruler_legit",
+            2 => "neighbor_trust",
+            3 => "foreigners_danger",
+            4 => "hard_work_wealth",
+            5 => "harvest_fail",
+            6 => "temple_corrupt",
+            7 => "council_protect",
+            8 => "grain_price_high",
+            9 => "guards_unjust",
+            10 => "violence_necessary",
+            11 => "sharing_duty",
+            12 => "community_strong",
+            13 => "strangers_honest",
+            14 => "well_water_safe",
             _ => "unknown",
         };
         out.push_str(&format!(
