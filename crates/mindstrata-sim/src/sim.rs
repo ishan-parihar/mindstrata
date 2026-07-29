@@ -2644,11 +2644,11 @@ impl Simulation {
 
         // ── 19. §6.5: Record metric history for observability ──
         // Every 10 ticks, snapshot key metrics for CSV export and analysis.
-        // Cap at 500 entries (last 5000 ticks) to prevent unbounded growth.
+        // Cap at MAX_METRIC_HISTORY entries to prevent unbounded growth.
         if tick_u64.is_multiple_of(10) {
             let snapshot = self.metrics_snapshot();
             self.metric_history.push(snapshot);
-            if self.metric_history.len() > 500 {
+            if self.metric_history.len() > MAX_METRIC_HISTORY {
                 self.metric_history.remove(0);
             }
         }
@@ -2841,8 +2841,11 @@ impl Simulation {
     }
 }
 
+/// Maximum number of metric snapshots to retain (last MAX_METRIC_HISTORY * 10 ticks).
+const MAX_METRIC_HISTORY: usize = 500;
+
 /// A snapshot of key simulation metrics at a specific tick.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetricsSnapshot {
     pub tick: u64,
     pub avg_hunger: f64,
