@@ -37,6 +37,14 @@ use mindstrata_core::rng::{RngStream, RngStreams};
 use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 
+// ── Named constants for magic numbers ──────────────────────────────
+/// Expected grain capacity per agent — used for scarcity normalization.
+pub const EXPECTED_GRAIN_PER_AGENT: u32 = 10;
+/// Skill improvement per tick of practice.
+pub const SKILL_GAIN_PER_TICK: Fixed = Fixed::from_raw(10); // 0.001
+/// Belief resistance decay rate per tick.
+pub const BELIEF_RESISTANCE_DECAY: Fixed = Fixed::from_raw(10); // 0.001
+
 /// Configuration for a simulation run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimConfig {
@@ -1025,7 +1033,7 @@ impl Simulation {
             for agent_beliefs in self.agents.iter_mut() {
                 belief_update::decay_belief_resistance(
                     &mut agent_beliefs.beliefs,
-                    Fixed::from_f64(0.001),
+                    BELIEF_RESISTANCE_DECAY,
                 );
             }
 
@@ -1367,7 +1375,7 @@ impl Simulation {
 
             // §4.2: Skill improvement — agents improve skills through repeated practice.
             // Small increments per tick; skills cap at 1.0.
-            let skill_gain = Fixed::from_f64(0.001);
+            let skill_gain = SKILL_GAIN_PER_TICK;
             match agent.current_action {
                 crate::actions::ActionKind::Work => {
                     agent.skills.farming = (agent.skills.farming + skill_gain).clamp_01();
@@ -2855,7 +2863,7 @@ impl Simulation {
             // §4.4: Update black market state based on current scarcity and enforcement
             // Scarcity is normalized: 0 = abundant, 1 = critically scarce
             let total_grain = self.world.total_food();
-            let expected_capacity = Fixed::from_int(self.agents.len() as i64) * Fixed::from_f64(10.0);
+            let expected_capacity = Fixed::from_int(self.agents.len() as i64) * Fixed::from_int(EXPECTED_GRAIN_PER_AGENT as i64);
             let scarcity = if expected_capacity > Fixed::ZERO {
                 (Fixed::ONE - total_grain / expected_capacity).clamp_01()
             } else {
