@@ -3009,6 +3009,14 @@ impl Simulation {
             .fold(Fixed::ZERO, |a, b| a + b)
             .min(Fixed::ONE);
 
+        // §4.4: Black market reduces detection probability for qualifying agents
+        let agent_can_black_market = self.black_market.can_participate(&self.agents[agent_idx].personality);
+        let effective_enforcement = if agent_can_black_market {
+            (enforcement * Fixed::from_f64(0.5)).max(Fixed::ZERO) // black market halves enforcement
+        } else {
+            enforcement
+        };
+
         // Generate detection roll
         let detection_roll = Fixed::from_f64(
             self.rng.get_mut(RngStream::Social).random::<f64>()
@@ -3016,7 +3024,7 @@ impl Simulation {
 
         // §19.5.D: Apply enforcement probability — not all thefts are caught
         let (_punishment, was_caught) = self.norms.check_violation_with_enforcement(
-            0, agent_id, tick_u64, enforcement, detection_roll
+            0, agent_id, tick_u64, effective_enforcement, detection_roll
         );
 
         if was_caught {
@@ -3047,6 +3055,12 @@ impl Simulation {
                 self.agents[agent_idx].emotions.shame = (self.agents[agent_idx].emotions.shame + Fixed::from_f64(0.1)).clamp_01();
             }
         }
+
+        // §4.4: Track black market transaction volume
+        if agent_can_black_market {
+            self.black_market.transactions_this_tick += 1;
+        }
+
         // §19.5.D: Theft succeeds regardless of detection — resource is consumed
         // But consequences only apply if caught
         taken > Fixed::ZERO
