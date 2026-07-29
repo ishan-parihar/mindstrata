@@ -61,7 +61,7 @@ impl Default for SimConfig {
 }
 
 /// §6: Agent's spatial position in the world grid.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Position {
     pub x: i32,
     pub y: i32,
