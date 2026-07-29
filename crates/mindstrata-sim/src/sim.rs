@@ -1270,8 +1270,29 @@ impl Simulation {
                         &listener_beliefs,
                         tick_u64,
                     );
+                    // §19.5.B: Capture old confidence before gossip update for provenance trace
+                    let old_conf = self.agents[to_idx].beliefs.iter()
+                        .find(|b| b.proposition_id == result.proposition_id)
+                        .map(|b| b.confidence)
+                        .unwrap_or(Fixed::from_f64(0.5));
                     gossip::apply_gossip(&mut self.agents[to_idx].beliefs, &result, tick_u64);
                     if result.accepted {
+                        // §19.5.B: Record belief update trace for provenance
+                        let new_conf = self.agents[to_idx].beliefs.iter()
+                            .find(|b| b.proposition_id == result.proposition_id)
+                            .map(|b| b.confidence)
+                            .unwrap_or(result.mutated_confidence);
+                        self.provenance.record_belief_update(
+                            crate::provenance::BeliefUpdateTrace {
+                                agent: *to,
+                                tick: tick_u64,
+                                proposition_id: result.proposition_id,
+                                old_confidence: old_conf,
+                                new_confidence: new_conf,
+                                cause: "gossip".into(),
+                                delta: (new_conf - old_conf),
+                            },
+                        );
                         // Emit RumorSpread event for memory encoding
                         self.events.push(SimEvent::RumorSpread {
                             source: *from,
@@ -1392,8 +1413,19 @@ impl Simulation {
                 institution.record_action(
                     tick_u64,
                     "Fine Theft Policy enacted".into(),
-                    members,
+                    members.clone(),
                     true,
+                );
+                // §19.5.B: Record institutional provenance trace
+                self.provenance.record_institutional(
+                    crate::provenance::InstitutionalTrace {
+                        institution_name: institution.kind.name().into(),
+                        tick: tick_u64,
+                        decision_kind: "policy_enacted".into(),
+                        description: "Fine Theft Policy enacted".into(),
+                        affected: members,
+                        success: true,
+                    },
                 );
             }
 
@@ -1443,7 +1475,19 @@ impl Simulation {
                                 format!("Council tax: {:.1} coins", collected.to_f64())
                             }
                         };
-                        institution.record_action(tick_u64, action_name, members, true);
+                        let inst_name = institution.kind.name().to_string();
+                        institution.record_action(tick_u64, action_name.clone(), members.clone(), true);
+                        // §19.5.B: Record institutional provenance trace for tax collection
+                        self.provenance.record_institutional(
+                            crate::provenance::InstitutionalTrace {
+                                institution_name: inst_name,
+                                tick: tick_u64,
+                                decision_kind: "tax_collection".into(),
+                                description: action_name,
+                                affected: members,
+                                success: true,
+                            },
+                        );
                     }
                 }
             }
@@ -1478,12 +1522,19 @@ impl Simulation {
                             .filter(|r| r.holder.is_some())
                             .map(|r| r.name.as_str())
                             .collect();
-                        let kind_name = institution.kind.name();
-                        institution.record_action(
-                            tick_u64,
-                            format!("{} wage payment: {:.1} coins to {}", kind_name, paid.to_f64(), role_names.join(", ")),
-                            members,
-                            true,
+                        let kind_name = institution.kind.name().to_string();
+                        let wage_msg = format!("{} wage payment: {:.1} coins to {}", kind_name, paid.to_f64(), role_names.join(", "));
+                        institution.record_action(tick_u64, wage_msg.clone(), members.clone(), true);
+                        // §19.5.B: Record institutional provenance trace for wage payment
+                        self.provenance.record_institutional(
+                            crate::provenance::InstitutionalTrace {
+                                institution_name: kind_name,
+                                tick: tick_u64,
+                                decision_kind: "wage_payment".into(),
+                                description: wage_msg,
+                                affected: members,
+                                success: true,
+                            },
                         );
                     }
                 }
