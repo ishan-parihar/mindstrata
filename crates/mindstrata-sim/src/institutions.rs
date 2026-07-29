@@ -244,9 +244,11 @@ impl Institution {
         });
     }
 
-    /// Collect taxes from members. Returns total collected.
     /// Collect taxes from members. Deducts from member wealth and adds to treasury.
     /// Returns total collected.
+    ///
+    /// INVARIANT: AgentId::new(i) == index i. The member_wealth vec must be built
+    /// from institution.members using agent_id.as_u64() as the index.
     pub fn collect_taxes(&mut self, tax_rate: Fixed, member_wealth: &mut Vec<(AgentId, Fixed)>) -> Fixed {
         let mut total = Fixed::ZERO;
         for (agent, wealth) in member_wealth.iter_mut() {
@@ -262,6 +264,9 @@ impl Institution {
 
     /// Pay wages to role holders. Returns total paid.
     /// Only pays if treasury can cover ALL wages. Returns ZERO if insolvent.
+    ///
+    /// INVARIANT: AgentId::new(i) == index i. The member_wealth vec must be built
+    /// from institution.members using agent_id.as_u64() as the index.
     pub fn pay_wages(&mut self, wage: Fixed, member_wealth: &mut Vec<(AgentId, Fixed)>) -> Fixed {
         // Count how many role holders will receive wages
         let role_holder_count = self.roles.iter().filter(|r| r.holder.is_some()).count();
@@ -609,6 +614,7 @@ mod tests {
         ];
         let paid = inst.pay_wages(Fixed::from_f64(5.0), &mut wealth);
         assert_eq!(paid, Fixed::ZERO); // can't afford
+        assert_eq!(wealth[0].1, Fixed::from_f64(50.0)); // wealth unchanged
     }
 
     #[test]
