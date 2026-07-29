@@ -273,30 +273,30 @@ impl Simulation {
 
     /// §16.1: Capture a snapshot of the current simulation state.
     pub fn capture_snapshot(&self) -> crate::snapshot::Snapshot {
-        crate::snapshot::Snapshot::capture(
-            &self.config,
-            self.clock.tick(),
-            self.config.seed,
-            &self.world,
-            &self.agents,
-            &self.relationships,
-            &self.events,
-            &self.journal,
-            &self.norms,
-            &self.institutions,
-            &self.provenance,
-            &self.season,
-            &self.ecology_config,
-            &self.health_config,
-            &self.demography_config,
-            &self.agent_diseases,
-            &self.market,
-            &self.knowledge_store,
-            &self.metric_history,
-            self.last_revolution_tick,
-            &self.black_market,
-            &self.site_work_ticks,
-        )
+        crate::snapshot::Snapshot::capture(&crate::snapshot::CaptureContext {
+            config: &self.config,
+            tick: self.clock.tick(),
+            master_seed: self.config.seed,
+            world: &self.world,
+            agents: &self.agents,
+            relationships: &self.relationships,
+            events: &self.events,
+            journal: &self.journal,
+            norms: &self.norms,
+            institutions: &self.institutions,
+            provenance: &self.provenance,
+            season: &self.season,
+            ecology_config: &self.ecology_config,
+            health_config: &self.health_config,
+            demography_config: &self.demography_config,
+            agent_diseases: &self.agent_diseases,
+            market: &self.market,
+            knowledge_store: &self.knowledge_store,
+            metric_history: &self.metric_history,
+            last_revolution_tick: self.last_revolution_tick,
+            black_market: &self.black_market,
+            site_work_ticks: &self.site_work_ticks,
+        })
     }
 
     /// Populate the world with terrain, sites, and agents.
