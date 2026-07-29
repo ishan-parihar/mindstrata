@@ -132,7 +132,16 @@ fn main() -> Result<()> {
 
             if map {
                 println!();
-                println!("{}", mindstrata_tui::render_world_map(sim.world()));
+                let markers: Vec<mindstrata_tui::AgentMarker> = sim.agents.iter().enumerate().map(|(i, a)| {
+                    let name_char = a.name.chars().next().unwrap_or('?');
+                    mindstrata_tui::AgentMarker {
+                        index: i,
+                        x: a.position.x,
+                        y: a.position.y,
+                        name: name_char,
+                    }
+                }).collect();
+                println!("{}", mindstrata_tui::render_world_map(sim.world(), &markers));
             }
 
             // §17.1: Agent inspector
@@ -253,7 +262,16 @@ fn main() -> Result<()> {
 
             if map {
                 println!();
-                println!("{}", mindstrata_tui::render_world_map(sim.world()));
+                let markers: Vec<mindstrata_tui::AgentMarker> = sim.agents.iter().enumerate().map(|(i, a)| {
+                    let name_char = a.name.chars().next().unwrap_or('?');
+                    mindstrata_tui::AgentMarker {
+                        index: i,
+                        x: a.position.x,
+                        y: a.position.y,
+                        name: name_char,
+                    }
+                }).collect();
+                println!("{}", mindstrata_tui::render_world_map(sim.world(), &markers));
             }
         }
     }

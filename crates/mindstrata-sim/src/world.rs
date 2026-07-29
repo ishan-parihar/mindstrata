@@ -278,6 +278,47 @@ impl World {
         self.sites.iter().position(|s| s.kind == kind)
     }
 
+    /// §6: Find the nearest site of a given kind to a position (by Manhattan distance).
+    pub fn nearest_site_of_kind_to_pos(&self, kind: SiteKind, pos_x: i32, pos_y: i32) -> Option<usize> {
+        let mut best: Option<(usize, i32)> = None;
+        for (i, site) in self.sites.iter().enumerate() {
+            if site.kind == kind {
+                if let Some((sx, sy)) = self.site_position(i) {
+                    let dist = (sx - pos_x).abs() + (sy - pos_y).abs();
+                    match best {
+                        None => best = Some((i, dist)),
+                        Some((_, best_dist)) if dist < best_dist => best = Some((i, dist)),
+                        _ => {}
+                    }
+                }
+            }
+        }
+        best.map(|(i, _)| i)
+    }
+
+    /// §6: Find the nearest site of any of the given kinds to a position.
+    pub fn nearest_site_of_kinds_to_pos(&self, kinds: &[SiteKind], pos_x: i32, pos_y: i32) -> Option<usize> {
+        let mut best: Option<(usize, i32)> = None;
+        for (i, site) in self.sites.iter().enumerate() {
+            if kinds.contains(&site.kind) {
+                if let Some((sx, sy)) = self.site_position(i) {
+                    let dist = (sx - pos_x).abs() + (sy - pos_y).abs();
+                    match best {
+                        None => best = Some((i, dist)),
+                        Some((_, best_dist)) if dist < best_dist => best = Some((i, dist)),
+                        _ => {}
+                    }
+                }
+            }
+        }
+        best.map(|(i, _)| i)
+    }
+
+    /// §6: Manhattan distance between two grid positions.
+    pub fn manhattan_distance(x1: i32, y1: i32, x2: i32, y2: i32) -> i32 {
+        (x1 - x2).abs() + (y1 - y2).abs()
+    }
+
     /// Find a farm site with available grain.
     pub fn farm_with_grain(&self) -> Option<usize> {
         self.sites.iter().enumerate().find(|(_, s)| {

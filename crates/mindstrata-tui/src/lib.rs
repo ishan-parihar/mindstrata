@@ -12,8 +12,16 @@ use mindstrata_sim::market::MarketState;
 use mindstrata_sim::institutions::{Institution, InstitutionalRecord};
 use mindstrata_sim::provenance::CausalProvenance;
 
-/// Render the ASCII world map.
-pub fn render_world_map(world: &World) -> String {
+/// §6: Agent position marker for map rendering.
+pub struct AgentMarker {
+    pub index: usize,
+    pub x: i32,
+    pub y: i32,
+    pub name: char,
+}
+
+/// Render the ASCII world map with optional agent markers.
+pub fn render_world_map(world: &World, agent_markers: &[AgentMarker]) -> String {
     let mut out = String::new();
     out.push_str("  ");
     for x in 0..world.width {
@@ -24,7 +32,13 @@ pub fn render_world_map(world: &World) -> String {
     for y in 0..world.height {
         out.push_str(&format!("{:1} ", y % 10));
         for x in 0..world.width {
-            if let Some(tile) = world.tile(x as i32, y as i32) {
+            // Check if an agent is at this position
+            let agent_at_pos: Option<&AgentMarker> = agent_markers.iter()
+                .find(|m| m.x == x as i32 && m.y == y as i32);
+
+            if let Some(marker) = agent_at_pos {
+                out.push(marker.name);
+            } else if let Some(tile) = world.tile(x as i32, y as i32) {
                 let ch = if tile.site.is_some() {
                     // Find site kind
                     world.sites.iter()

@@ -128,6 +128,10 @@ pub struct AgentBundle {
     pub feuds: Vec<usize>,
     /// §19.5.G: Tick when each feud started (for decay).
     pub feud_ticks: Vec<u64>,
+    /// §6: Target site index for spatial movement (agent travels here before acting).
+    pub target_site: Option<usize>,
+    /// §6: Target position for free movement (used by Wander/Move).
+    pub target_pos: Option<Position>,
 }
 
 /// The simulation state.
@@ -324,6 +328,8 @@ impl Simulation {
                 parent_b: None,
                 feuds: Vec::new(),
                 feud_ticks: Vec::new(),
+                target_site: None,
+                target_pos: None,
             });
         }
 
@@ -657,6 +663,13 @@ impl Simulation {
                     let action = if follow_routine && effective_routine_strength > effective_routine_threshold {
                         // §10.3: Routine creates behavioral stability — prefer scheduled action
                         routine_action
+                    } else if !self.agents[i].feuds.is_empty()
+                        && self.agents[i].emotions.anger > Fixed::from_f64(0.4)
+                        && needs[i].hunger < Fixed::from_f64(0.85)
+                        && needs[i].thirst < Fixed::from_f64(0.85)
+                    {
+                        // §19.5.G: Angry feuding agents wander aggressively, but NOT when critical needs demand attention
+                        ActionKind::Wander
                     } else {
                         // §12.3: Institution collective morale modulates norm compliance.
                         // Members of institutions with high morale are more norm-compliant.
@@ -866,6 +879,47 @@ impl Simulation {
             }
 
         } // ctx is dropped here, releasing mutable borrows on self.events and self.rng
+
+        // §6: Spatial movement — update agent positions AFTER ctx drops (no borrow conflicts)
+        {
+            let world_w = self.world.width as i32;
+            let world_h = self.world.height as i32;
+            for i in 0..self.agents.len() {
+                let action = self.agents[i].current_action;
+                match action {
+                    ActionKind::Wander => {
+                        let dx: i32 = self.rng.get_mut(RngStream::Behavior).random_range(-1..=1);
+                        let dy: i32 = self.rng.get_mut(RngStream::Behavior).random_range(-1..=1);
+                        self.agents[i].position.x = (self.agents[i].position.x + dx).clamp(0, world_w - 1);
+                        self.agents[i].position.y = (self.agents[i].position.y + dy).clamp(0, world_h - 1);
+                    }
+                    ActionKind::Move => {
+                        // Extract target coords to avoid borrow conflict with self.agents[i]
+                        let target_xy = self.agents[i].target_pos.as_ref().map(|t| (t.x, t.y));
+                        if let Some((tx, ty)) = target_xy {
+                            let px = self.agents[i].position.x;
+                            let py = self.agents[i].position.y;
+                            let dx = (tx - px).signum();
+                            let dy = (ty - py).signum();
+                            let dist_x = (tx - px).abs();
+                            let dist_y = (ty - py).abs();
+                            if dist_x >= dist_y {
+                                self.agents[i].position.x = (px + dx).clamp(0, world_w - 1);
+                            } else {
+                                self.agents[i].position.y = (py + dy).clamp(0, world_h - 1);
+                            }
+                            // If arrived at target, clear and force reselection
+                            if self.agents[i].position.x == tx && self.agents[i].position.y == ty {
+                                self.agents[i].target_pos = None;
+                                self.agents[i].target_site = None;
+                                self.agents[i].action_progress = 0;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
 
         // §19.5.J: Record relationship traces for any changes from social interactions
         // This must happen after ctx is dropped so we can read self.events.
@@ -2240,6 +2294,8 @@ impl Simulation {
                     parent_b: Some(parent_b),
                     feuds: Vec::new(),
                     feud_ticks: Vec::new(),
+                    target_site: None,
+                    target_pos: None,
                 });                // Add relationships to all existing agents
                 for existing_idx in 0..self.agents.len() - 1 {
                     let trust = if existing_idx == parent_a || existing_idx == parent_b {
