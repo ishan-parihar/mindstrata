@@ -63,6 +63,42 @@ pub struct EventProvenance {
     pub outcome: String,
 }
 
+/// §19.5.B: Record of how a belief was updated — source, evidence, outcome.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BeliefUpdateTrace {
+    /// Which agent's belief was updated.
+    pub agent: AgentId,
+    /// Tick when the update occurred.
+    pub tick: u64,
+    /// Which proposition was affected.
+    pub proposition_id: u64,
+    /// Confidence before the update.
+    pub old_confidence: Fixed,
+    /// Confidence after the update.
+    pub new_confidence: Fixed,
+    /// What caused the update (e.g., "gossip", "direct_experience", "institutional_record").
+    pub cause: String,
+    /// How much the belief changed (delta).
+    pub delta: Fixed,
+}
+
+/// §19.5.B: Record of an institutional decision — policy, enforcement, tax collection.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstitutionalTrace {
+    /// Which institution made this decision.
+    pub institution_name: String,
+    /// Tick when the decision was made.
+    pub tick: u64,
+    /// What kind of decision (e.g., "tax_collection", "wage_payment", "policy_enacted").
+    pub decision_kind: String,
+    /// Description of what happened.
+    pub description: String,
+    /// Affected agents (if any).
+    pub affected: Vec<AgentId>,
+    /// Outcome success.
+    pub success: bool,
+}
+
 /// The Causal Provenance Store — tracks causality across the simulation.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CausalProvenance {
@@ -70,6 +106,10 @@ pub struct CausalProvenance {
     decisions: Vec<DecisionTrace>,
     /// Event provenance indexed by tick.
     events: Vec<EventProvenance>,
+    /// §19.5.B: Belief update traces for debugging information propagation.
+    belief_updates: Vec<BeliefUpdateTrace>,
+    /// §19.5.B: Institutional decision traces for debugging systemic causality.
+    institutional: Vec<InstitutionalTrace>,
 }
 
 impl CausalProvenance {
@@ -78,6 +118,8 @@ impl CausalProvenance {
         Self {
             decisions: Vec::new(),
             events: Vec::new(),
+            belief_updates: Vec::new(),
+            institutional: Vec::new(),
         }
     }
 
@@ -89,6 +131,16 @@ impl CausalProvenance {
     /// Record event provenance.
     pub fn record_event(&mut self, provenance: EventProvenance) {
         self.events.push(provenance);
+    }
+
+    /// §19.5.B: Record a belief update trace.
+    pub fn record_belief_update(&mut self, trace: BeliefUpdateTrace) {
+        self.belief_updates.push(trace);
+    }
+
+    /// §19.5.B: Record an institutional decision trace.
+    pub fn record_institutional(&mut self, trace: InstitutionalTrace) {
+        self.institutional.push(trace);
     }
 
     /// Get all decisions made by a specific agent.
@@ -118,6 +170,28 @@ impl CausalProvenance {
         &self.events[start..]
     }
 
+    /// §19.5.B: Get belief update traces for a specific agent.
+    pub fn belief_updates_for_agent(&self, agent: AgentId) -> Vec<&BeliefUpdateTrace> {
+        self.belief_updates.iter().filter(|b| b.agent == agent).collect()
+    }
+
+    /// §19.5.B: Get institutional traces for a specific institution.
+    pub fn institutional_for(&self, name: &str) -> Vec<&InstitutionalTrace> {
+        self.institutional.iter().filter(|i| i.institution_name == name).collect()
+    }
+
+    /// §19.5.B: Get the last N belief update traces.
+    pub fn recent_belief_updates(&self, n: usize) -> &[BeliefUpdateTrace] {
+        let start = self.belief_updates.len().saturating_sub(n);
+        &self.belief_updates[start..]
+    }
+
+    /// §19.5.B: Get the last N institutional traces.
+    pub fn recent_institutional(&self, n: usize) -> &[InstitutionalTrace] {
+        let start = self.institutional.len().saturating_sub(n);
+        &self.institutional[start..]
+    }
+
     /// Total number of decision traces.
     pub fn decision_count(&self) -> usize {
         self.decisions.len()
@@ -126,6 +200,16 @@ impl CausalProvenance {
     /// Total number of event provenances.
     pub fn event_count(&self) -> usize {
         self.events.len()
+    }
+
+    /// §19.5.B: Total number of belief update traces.
+    pub fn belief_update_count(&self) -> usize {
+        self.belief_updates.len()
+    }
+
+    /// §19.5.B: Total number of institutional traces.
+    pub fn institutional_count(&self) -> usize {
+        self.institutional.len()
     }
 }
 
@@ -210,5 +294,92 @@ mod tests {
         assert_eq!(recent[0].action_name, "Action7");
     }
 
+    // ── §19.5.B: Belief Update Trace Tests ────────────────────────────
 
+    #[test]
+    fn belief_update_trace_recorded() {
+        let mut store = CausalProvenance::new();
+        store.record_belief_update(BeliefUpdateTrace {
+            agent: AgentId::new(2),
+            tick: 100,
+            proposition_id: 0,
+            old_confidence: Fixed::from_f64(0.3),
+            new_confidence: Fixed::from_f64(0.7),
+            cause: "gossip".into(),
+            delta: Fixed::from_f64(0.4),
+        });
+        assert_eq!(store.belief_update_count(), 1);
+        let updates = store.recent_belief_updates(10);
+        assert_eq!(updates[0].cause, "gossip");
+        assert_eq!(updates[0].agent, AgentId::new(2));
+    }
+
+    #[test]
+    fn belief_updates_for_agent_filter() {
+        let mut store = CausalProvenance::new();
+        store.record_belief_update(BeliefUpdateTrace {
+            agent: AgentId::new(0),
+            tick: 100,
+            proposition_id: 0,
+            old_confidence: Fixed::from_f64(0.3),
+            new_confidence: Fixed::from_f64(0.7),
+            cause: "gossip".into(),
+            delta: Fixed::from_f64(0.4),
+        });
+        store.record_belief_update(BeliefUpdateTrace {
+            agent: AgentId::new(1),
+            tick: 100,
+            proposition_id: 1,
+            old_confidence: Fixed::from_f64(0.6),
+            new_confidence: Fixed::from_f64(0.2),
+            cause: "direct_experience".into(),
+            delta: Fixed::from_f64(-0.4),
+        });
+        let agent0 = store.belief_updates_for_agent(AgentId::new(0));
+        assert_eq!(agent0.len(), 1);
+        assert_eq!(agent0[0].cause, "gossip");
+    }
+
+    // ── §19.5.B: Institutional Trace Tests ────────────────────────────
+
+    #[test]
+    fn institutional_trace_recorded() {
+        let mut store = CausalProvenance::new();
+        store.record_institutional(InstitutionalTrace {
+            institution_name: "Council".into(),
+            tick: 100,
+            decision_kind: "tax_collection".into(),
+            description: "Collected 5.0 coins from 3 members".into(),
+            affected: vec![AgentId::new(0), AgentId::new(1), AgentId::new(2)],
+            success: true,
+        });
+        assert_eq!(store.institutional_count(), 1);
+        let traces = store.recent_institutional(10);
+        assert_eq!(traces[0].institution_name, "Council");
+        assert_eq!(traces[0].affected.len(), 3);
+    }
+
+    #[test]
+    fn institutional_for_filter() {
+        let mut store = CausalProvenance::new();
+        store.record_institutional(InstitutionalTrace {
+            institution_name: "Council".into(),
+            tick: 100,
+            decision_kind: "tax_collection".into(),
+            description: "Tax collected".into(),
+            affected: vec![],
+            success: true,
+        });
+        store.record_institutional(InstitutionalTrace {
+            institution_name: "Temple".into(),
+            tick: 100,
+            decision_kind: "tithe_collection".into(),
+            description: "Tithe collected".into(),
+            affected: vec![],
+            success: true,
+        });
+        let council = store.institutional_for("Council");
+        assert_eq!(council.len(), 1);
+        assert_eq!(council[0].decision_kind, "tax_collection");
+    }
 }
