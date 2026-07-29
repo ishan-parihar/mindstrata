@@ -10,6 +10,9 @@ mod golden_replay;
 mod statistical_emergence;
 
 #[cfg(test)]
+mod comparison;
+
+#[cfg(test)]
 mod smoke {
     use mindstrata_core::clock::Tick;
     use mindstrata_core::fixed::Fixed;
