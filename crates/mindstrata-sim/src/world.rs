@@ -1,7 +1,8 @@
 //! World model — tiles, regions, sites, resources.
 
+use crate::institutions::Institution;
 use mindstrata_core::fixed::Fixed;
-use mindstrata_core::id::EntityId;
+use mindstrata_core::id::{AgentId, EntityId};
 use serde::{Deserialize, Serialize};
 
 /// Resource ID for grain — the primary food resource.
@@ -349,17 +350,21 @@ impl World {
 
     /// §19.5.E: Check if an agent can access a resource at a site.
     /// Returns true if the agent has access rights.
-    pub fn can_access_resource(&self, site_idx: usize, resource_id: u64, agent_id: EntityId) -> bool {
+    pub fn can_access_resource(
+        &self,
+        site_idx: usize,
+        resource_id: u64,
+        agent_id: EntityId,
+        institutions: &[Institution],
+    ) -> bool {
         if let Some(site) = self.sites.get(site_idx) {
             if let Some(stock) = site.inventory.iter().find(|s| s.resource_id == resource_id) {
                 match stock.access {
                     AccessRight::Public => true,
                     AccessRight::OwnerOnly => site.owner == Some(agent_id),
                     AccessRight::InstitutionMembers => {
-                        // §19.5.E: Institution membership check — currently returns true as
-                        // a placeholder. Full implementation requires passing institution data.
-                        // TODO: wire institution membership check when needed.
-                        true
+                        // §19.5.E: Check if agent is a member of any institution that controls this site.
+                        institutions.iter().any(|inst| inst.has_member(agent_id))
                     }
                 }
             } else {
@@ -371,38 +376,38 @@ impl World {
     }
 
     /// §19.5.E: Find a site with accessible grain for an agent.
-    pub fn accessible_farm_with_grain(&self, agent_id: EntityId) -> Option<usize> {
+    pub fn accessible_farm_with_grain(&self, agent_id: EntityId, institutions: &[Institution]) -> Option<usize> {
         self.sites.iter().enumerate().find(|(i, s)| {
             s.kind == SiteKind::Farm
                 && s.inventory.iter().any(|r| r.resource_id == GRAIN_RESOURCE_ID && r.quantity > Fixed::ZERO)
-                && self.can_access_resource(*i, GRAIN_RESOURCE_ID, agent_id)
+                && self.can_access_resource(*i, GRAIN_RESOURCE_ID, agent_id, institutions)
         }).map(|(i, _)| i)
     }
 
     /// §19.5.E: Find a site with accessible water for an agent.
-    pub fn accessible_well_with_water(&self, agent_id: EntityId) -> Option<usize> {
+    pub fn accessible_well_with_water(&self, agent_id: EntityId, institutions: &[Institution]) -> Option<usize> {
         self.sites.iter().enumerate().find(|(i, s)| {
             s.kind == SiteKind::Well
                 && s.inventory.iter().any(|r| r.resource_id == WATER_RESOURCE_ID && r.quantity > Fixed::ZERO)
-                && self.can_access_resource(*i, WATER_RESOURCE_ID, agent_id)
+                && self.can_access_resource(*i, WATER_RESOURCE_ID, agent_id, institutions)
         }).map(|(i, _)| i)
     }
 
     /// §19.5.D: Find a site with grain that an agent cannot access (for theft tracking).
-    pub fn inaccessible_farm_with_grain(&self, agent_id: EntityId) -> Option<usize> {
+    pub fn inaccessible_farm_with_grain(&self, agent_id: EntityId, institutions: &[Institution]) -> Option<usize> {
         self.sites.iter().enumerate().find(|(i, s)| {
             s.kind == SiteKind::Farm
                 && s.inventory.iter().any(|r| r.resource_id == GRAIN_RESOURCE_ID && r.quantity > Fixed::ZERO)
-                && !self.can_access_resource(*i, GRAIN_RESOURCE_ID, agent_id)
+                && !self.can_access_resource(*i, GRAIN_RESOURCE_ID, agent_id, institutions)
         }).map(|(i, _)| i)
     }
 
     /// §19.5.D: Find a site with water that an agent cannot access (for theft tracking).
-    pub fn inaccessible_well_with_water(&self, agent_id: EntityId) -> Option<usize> {
+    pub fn inaccessible_well_with_water(&self, agent_id: EntityId, institutions: &[Institution]) -> Option<usize> {
         self.sites.iter().enumerate().find(|(i, s)| {
             s.kind == SiteKind::Well
                 && s.inventory.iter().any(|r| r.resource_id == WATER_RESOURCE_ID && r.quantity > Fixed::ZERO)
-                && !self.can_access_resource(*i, WATER_RESOURCE_ID, agent_id)
+                && !self.can_access_resource(*i, WATER_RESOURCE_ID, agent_id, institutions)
         }).map(|(i, _)| i)
     }
 }

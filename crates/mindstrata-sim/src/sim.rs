@@ -1126,7 +1126,7 @@ impl Simulation {
                 ActionKind::Eat => {
                     let amount = Fixed::from_f64(0.1);
                     // §19.5.E: Use access-checking method to enforce resource access rights.
-                    if let Some(farm_idx) = self.world.accessible_farm_with_grain(agent_id) {
+                    if let Some(farm_idx) = self.world.accessible_farm_with_grain(agent_id, &self.institutions) {
                         let taken = self.world.consume_resource(farm_idx, GRAIN_RESOURCE_ID, amount);
                         // §13.3: Consumers pay coin for resources consumed
                         let cost = taken * self.market.price(GRAIN_RESOURCE_ID);
@@ -1135,7 +1135,7 @@ impl Simulation {
                         taken > Fixed::ZERO
                     } else {
                         // §19.5.D: Theft detection — no accessible farm, but inaccessible farms with grain exist?
-                        if let Some(thief_idx) = self.world.inaccessible_farm_with_grain(agent_id) {
+                        if let Some(thief_idx) = self.world.inaccessible_farm_with_grain(agent_id, &self.institutions) {
                             self.enforce_theft(*agent_idx, agent_id, thief_idx, GRAIN_RESOURCE_ID, amount, tick_u64, tick)
                         } else {
                             false
@@ -1145,7 +1145,7 @@ impl Simulation {
                 ActionKind::Drink => {
                     let amount = Fixed::from_f64(0.15);
                     // §19.5.E: Use access-checking method to enforce resource access rights.
-                    if let Some(well_idx) = self.world.accessible_well_with_water(agent_id) {
+                    if let Some(well_idx) = self.world.accessible_well_with_water(agent_id, &self.institutions) {
                         let taken = self.world.consume_resource(well_idx, WATER_RESOURCE_ID, amount);
                         // §13.3: Consumers pay coin for water consumed
                         let cost = taken * self.market.price(WATER_RESOURCE_ID);
@@ -1154,7 +1154,7 @@ impl Simulation {
                         taken > Fixed::ZERO
                     } else {
                         // §19.5.D: Water theft detection — no accessible well, but inaccessible wells with water exist?
-                        if let Some(thief_idx) = self.world.inaccessible_well_with_water(agent_id) {
+                        if let Some(thief_idx) = self.world.inaccessible_well_with_water(agent_id, &self.institutions) {
                             self.enforce_theft(*agent_idx, agent_id, thief_idx, WATER_RESOURCE_ID, amount, tick_u64, tick)
                         } else {
                             false

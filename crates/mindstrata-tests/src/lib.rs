@@ -541,12 +541,13 @@ mod smoke {
         };
         world.sites.push(farm);
 
-        // Owner can access
-        assert!(world.can_access_resource(0, GRAIN_RESOURCE_ID, owner_id),
+        // Owner can access (pass empty institutions for access check)
+        let empty_institutions: Vec<mindstrata_sim::institutions::Institution> = Vec::new();
+        assert!(world.can_access_resource(0, GRAIN_RESOURCE_ID, owner_id, &empty_institutions),
             "Owner should be able to access their own resources");
 
         // Stranger cannot access
-        assert!(!world.can_access_resource(0, GRAIN_RESOURCE_ID, stranger_id),
+        assert!(!world.can_access_resource(0, GRAIN_RESOURCE_ID, stranger_id, &empty_institutions),
             "Non-owner should NOT be able to access OwnerOnly resources");
 
         // Public resources are accessible to everyone
@@ -565,9 +566,9 @@ mod smoke {
         };
         world.sites.push(well);
 
-        assert!(world.can_access_resource(1, 1, owner_id),
+        assert!(world.can_access_resource(1, 1, owner_id, &empty_institutions),
             "Public resources should be accessible to everyone");
-        assert!(world.can_access_resource(1, 1, stranger_id),
+        assert!(world.can_access_resource(1, 1, stranger_id, &empty_institutions),
             "Public resources should be accessible to everyone");
     }
 
