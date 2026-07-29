@@ -130,7 +130,10 @@ pub struct AgentBundle {
     pub feud_ticks: Vec<u64>,
     /// §19.5.G: Per-agent status — derived from wealth, role, social connections.
     pub status: StatusState,
-
+    /// §3.2: Goals abandoned due to critical need override or timeout.
+    pub rejected_goals: Vec<Goal>,
+    /// §3.2: Goals successfully completed.
+    pub completed_goals: Vec<Goal>,
 }
 
 /// The simulation state.
@@ -334,6 +337,8 @@ impl Simulation {
                 feuds: Vec::new(),
                 feud_ticks: Vec::new(),
                 status: StatusState::default(),
+                rejected_goals: Vec::new(),
+                completed_goals: Vec::new(),
 
             });
         }
@@ -2581,6 +2586,8 @@ impl Simulation {
                     feuds: Vec::new(),
                     feud_ticks: Vec::new(),
                     status: StatusState::default(),
+                    rejected_goals: Vec::new(),
+                    completed_goals: Vec::new(),
                 });                // Add relationships to all existing agents
                 for existing_idx in 0..self.agents.len() - 1 {
                     let trust = if existing_idx == parent_a || existing_idx == parent_b {
