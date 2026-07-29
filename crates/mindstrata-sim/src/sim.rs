@@ -134,6 +134,19 @@ pub struct AgentBundle {
     pub rejected_goals: Vec<Goal>,
     /// §3.2: Goals successfully completed.
     pub completed_goals: Vec<Goal>,
+    /// §4.2: Per-agent skill levels — improve with repeated actions.
+    pub skills: AgentSkills,
+}
+
+/// §4.2: Skill levels that improve through repeated practice.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AgentSkills {
+    /// Farming skill — increases productivity when working.
+    pub farming: Fixed,
+    /// Trading skill — improves trade prices and success rate.
+    pub trading: Fixed,
+    /// Social skill — improves relationship gains from interactions.
+    pub social: Fixed,
 }
 
 /// The simulation state.
@@ -339,6 +352,7 @@ impl Simulation {
                 status: StatusState::default(),
                 rejected_goals: Vec::new(),
                 completed_goals: Vec::new(),
+                skills: AgentSkills::default(),
 
             });
         }
@@ -1068,7 +1082,9 @@ impl Simulation {
                     }
                 }
                 ActionKind::Work => {
-                    let productivity = self.agents[*agent_idx].personality.conscientiousness * Fixed::from_f64(0.05);
+                    // §4.2: Productivity = base (conscientiousness) + skill bonus
+                    let skill_bonus = self.agents[*agent_idx].skills.farming * Fixed::from_f64(0.02);
+                    let productivity = (self.agents[*agent_idx].personality.conscientiousness * Fixed::from_f64(0.05) + skill_bonus).clamp_01();
                     if let Some(farm_idx) = self.world.best_farm_for_work() {
                         self.world.produce_resource(farm_idx, GRAIN_RESOURCE_ID, productivity);
                         // §13.3: Workers earn coin proportional to productivity
@@ -1276,6 +1292,22 @@ impl Simulation {
 
             // §22: Memory reconsolidation — current emotions bias recalled memories
             agent.memory.reconsolidate(agent.emotions.anger, agent.emotions.joy);
+
+            // §4.2: Skill improvement — agents improve skills through repeated practice.
+            // Small increments per tick; skills cap at 1.0.
+            let skill_gain = Fixed::from_f64(0.001);
+            match agent.current_action {
+                crate::actions::ActionKind::Work => {
+                    agent.skills.farming = (agent.skills.farming + skill_gain).clamp_01();
+                }
+                crate::actions::ActionKind::Trade => {
+                    agent.skills.trading = (agent.skills.trading + skill_gain).clamp_01();
+                }
+                crate::actions::ActionKind::Socialize | crate::actions::ActionKind::Worship => {
+                    agent.skills.social = (agent.skills.social + skill_gain).clamp_01();
+                }
+                _ => {}
+            }
         }
 
         // ── 16. Ecology: season advance and fertility dynamics ──
@@ -2649,6 +2681,7 @@ impl Simulation {
                     status: StatusState::default(),
                     rejected_goals: Vec::new(),
                     completed_goals: Vec::new(),
+                    skills: AgentSkills::default(),
                 });                // Add relationships to all existing agents
                 for existing_idx in 0..self.agents.len() - 1 {
                     let trust = if existing_idx == parent_a || existing_idx == parent_b {
