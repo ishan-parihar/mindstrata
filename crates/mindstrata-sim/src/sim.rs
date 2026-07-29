@@ -231,6 +231,59 @@ impl Simulation {
         sim
     }
 
+    /// §16.1: Restore from a snapshot (deterministic replay).
+    pub fn from_snapshot(snapshot: crate::snapshot::Snapshot) -> Self {
+        // Compute sizes before moves
+        let agents_len = snapshot.agents.len();
+        let tiles_len = snapshot.world.tiles.len();
+
+        let mut clock = Clock::new();
+        clock.set(snapshot.clock_tick);
+        let rng = RngStreams::new(snapshot.master_seed);
+        Self {
+            config: snapshot.config,
+            clock,
+            rng,
+            world: snapshot.world,
+            agents: snapshot.agents,
+            relationships: snapshot.relationships,
+            events: snapshot.events,
+            journal: snapshot.journal,
+            norms: snapshot.norms,
+            institutions: snapshot.institutions,
+            provenance: snapshot.provenance,
+            scenario: None,
+            season: ecology::SeasonTracker::new(8760),
+            ecology_config: ecology::EcologyConfig::default(),
+            health_config: health::HealthConfig::default(),
+            demography_config: demography::DemographyConfig::default(),
+            agent_diseases: vec![Vec::new(); agents_len],
+            site_work_ticks: vec![0; tiles_len],
+            market: MarketState::new(),
+            knowledge_store: Vec::new(),
+            metric_history: Vec::new(),
+            last_revolution_tick: 0,
+            black_market: crate::black_market::BlackMarketState::default(),
+        }
+    }
+
+    /// §16.1: Capture a snapshot of the current simulation state.
+    pub fn capture_snapshot(&self) -> crate::snapshot::Snapshot {
+        crate::snapshot::Snapshot::capture(
+            &self.config,
+            self.clock.tick(),
+            self.config.seed,
+            &self.world,
+            &self.agents,
+            &self.relationships,
+            &self.events,
+            &self.journal,
+            &self.norms,
+            &self.institutions,
+            &self.provenance,
+        )
+    }
+
     /// Populate the world with terrain, sites, and agents.
     pub fn populate(&mut self) {
         world_gen::generate_village(&mut self.world, &mut self.rng);

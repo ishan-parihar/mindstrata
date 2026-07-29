@@ -68,6 +68,18 @@ enum Commands {
         /// Show chronological event timeline after simulation.
         #[arg(long)]
         timeline: Option<usize>,
+
+        /// Save a snapshot to disk after simulation (path to .snapshot file).
+        #[arg(long)]
+        save_snapshot: Option<String>,
+
+        /// Load a snapshot from disk and resume simulation for N more ticks.
+        #[arg(long)]
+        load_snapshot: Option<String>,
+
+        /// Save a snapshot every N ticks during simulation.
+        #[arg(long)]
+        snapshot_interval: Option<u64>,
     },
     /// Run a named scenario.
     Scenario {
@@ -103,6 +115,9 @@ fn main() -> Result<()> {
             records,
             decisions,
             timeline,
+            save_snapshot,
+            load_snapshot,
+            snapshot_interval,
         } => {
             init_logging(verbose);
 
@@ -125,8 +140,20 @@ fn main() -> Result<()> {
             println!("  Agents:  {agents}");
             println!();
 
-            let mut sim = Simulation::new(config);
-            sim.populate();
+            // §16.1: Snapshot loading — restore from disk if requested
+            let mut sim = if let Some(ref path) = load_snapshot {
+                let snapshot = mindstrata_sim::snapshot::Snapshot::load(std::path::Path::new(path))
+                    .unwrap_or_else(|e| {
+                        eprintln!("Failed to load snapshot: {e}");
+                        std::process::exit(1);
+                    });
+                println!("  Loaded snapshot from tick {}", snapshot.tick);
+                Simulation::from_snapshot(snapshot)
+            } else {
+                let mut s = Simulation::new(config);
+                s.populate();
+                s
+            };
 
             println!("Running {ticks} ticks...");
             let start = std::time::Instant::now();
