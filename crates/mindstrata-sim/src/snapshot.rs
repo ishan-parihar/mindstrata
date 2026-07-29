@@ -165,7 +165,15 @@ impl Snapshot {
 
     /// Deserialize a snapshot from a JSON string.
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
-        serde_json::from_str(json)
+        let snapshot: Self = serde_json::from_str(json)?;
+        if snapshot.version != SNAPSHOT_VERSION {
+            tracing::warn!(
+                expected = SNAPSHOT_VERSION,
+                got = snapshot.version,
+                "Incompatible snapshot JSON version"
+            );
+        }
+        Ok(snapshot)
     }
 
     /// Compute a deterministic hash of the snapshot for verification.
