@@ -2,7 +2,7 @@
 
 use crate::institutions::Institution;
 use mindstrata_core::fixed::Fixed;
-use mindstrata_core::id::{AgentId, EntityId};
+use mindstrata_core::id::EntityId;
 use serde::{Deserialize, Serialize};
 
 /// Resource ID for grain — the primary food resource.
