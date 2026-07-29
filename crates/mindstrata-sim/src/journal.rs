@@ -19,6 +19,8 @@ pub enum JournalEntryKind {
     Inheritance { heir_count: u64, amount: f64 },
     /// §19.5.I: Knowledge discovered through work or exploration.
     KnowledgeDiscovered { knowledge_id: u64, name: String },
+    /// §19.5.F: Knowledge learned from parent through childhood socialization.
+    KnowledgeSocialized { knowledge_id: u64 },
 }
 
 /// A single journal entry.

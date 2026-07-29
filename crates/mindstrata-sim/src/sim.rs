@@ -1479,6 +1479,9 @@ impl Simulation {
                 if let Some(k) = self.knowledge_store.iter_mut().find(|k| k.id == knowledge_id) {
                     k.holders += 1;
                 }
+                // §19.5.F: Record socialization in journal for observability
+                self.journal.record(tick_u64, AgentId::new(ci as u64),
+                    JournalEntryKind::KnowledgeSocialized { knowledge_id });
             }
         }
 
@@ -2318,20 +2321,19 @@ impl Simulation {
                     age = self.agents[idx].age.to_f64(),
                     tick = tick_u64,
                     "Agent died"
-                );
-                // §19.5.F: Inheritance — transfer wealth to spouse and children
+                );                    // §19.5.F: Inheritance — transfer wealth to spouse and children
                 let inherited_wealth = self.agents[idx].wealth.coin;
                 if inherited_wealth > Fixed::ZERO {
                     let mut heirs: Vec<usize> = Vec::new();
-                    // Spouse inherits first
+                    // Spouse inherits first — but only if not also dying this tick
                     if let Some(spouse_idx) = self.agents[idx].partner {
-                        if spouse_idx < self.agents.len() {
+                        if spouse_idx < self.agents.len() && !deaths.contains(&spouse_idx) {
                             heirs.push(spouse_idx);
                         }
                     }
-                    // Children inherit second
+                    // Children inherit second — skip if also dying
                     for child_idx in 0..self.agents.len() {
-                        if child_idx != idx {
+                        if child_idx != idx && !deaths.contains(&child_idx) {
                             let is_child = self.agents[child_idx].parent_a == Some(idx)
                                 || self.agents[child_idx].parent_b == Some(idx);
                             if is_child {
