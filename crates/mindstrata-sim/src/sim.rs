@@ -1,6 +1,7 @@
 //! Simulation orchestrator — the fixed-tick loop.
 
 use crate::actions::{self, ActionKind};
+use crate::black_market;
 use crate::conflict::{self, ConflictKind, ConflictState};
 use crate::cultural::{CulturalState, Knowledge, KnowledgeCategory};
 use crate::logistics;
@@ -185,6 +186,8 @@ pub struct Simulation {
     pub metric_history: Vec<MetricsSnapshot>,
     /// §7.3: Tick when last revolution occurred (for cooldown tracking).
     last_revolution_tick: u64,
+    /// §4.4: Black market state — activates under scarcity with weak enforcement.
+    pub black_market: crate::black_market::BlackMarketState,
 }
 
 impl Simulation {
@@ -216,6 +219,7 @@ impl Simulation {
             knowledge_store: Vec::new(),
             metric_history: Vec::new(),
             last_revolution_tick: 0,
+            black_market: crate::black_market::BlackMarketState::default(),
         }
     }
 
@@ -2779,6 +2783,21 @@ impl Simulation {
                 .map(|a| (a.needs.clone(), a.wealth.clone()))
                 .collect();
             market::system_market(&self.world, &agent_economic_state, &mut self.market, tick_u64);
+
+            // §4.4: Update black market state based on current scarcity and enforcement
+            // Scarcity is normalized: 0 = abundant, 1 = critically scarce
+            let total_grain = self.world.total_food();
+            let expected_capacity = Fixed::from_int(self.agents.len() as i64) * Fixed::from_f64(10.0);
+            let scarcity = if expected_capacity > Fixed::ZERO {
+                (Fixed::ONE - total_grain / expected_capacity).clamp_01()
+            } else {
+                Fixed::ZERO
+            };
+            let council_enforcement = self.institutions.iter()
+                .filter(|i| i.kind == InstitutionKind::Council)
+                .map(|i| i.enforcement_capacity)
+                .fold(Fixed::ZERO, |a, b| a.max(b));
+            self.black_market.update(scarcity, council_enforcement);
         }
 
         // ── 18. Demography: aging and mortality ──
