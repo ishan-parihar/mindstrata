@@ -490,6 +490,11 @@ impl Simulation {
         // Capture event count before systems run (before SystemContext borrows self.events)
         let pre_tick_events = self.events.len();
 
+        // §19.5.J: Capture relationship snapshot before any systems modify relationships
+        let rel_snapshot: Vec<(AgentId, AgentId, Fixed, Fixed)> = self.relationships.iter()
+            .map(|r| (r.from, r.to, r.trust, r.affection))
+            .collect();
+
         // Collect action starts to defer resource operations outside the ctx block
         let mut action_starts: Vec<(usize, ActionKind)> = Vec::new();
 
@@ -830,6 +835,43 @@ impl Simulation {
 
         } // ctx is dropped here, releasing mutable borrows on self.events and self.rng
 
+        // §19.5.J: Record relationship traces for any changes from social interactions
+        // This must happen after ctx is dropped so we can read self.events.
+        for (i, rel) in self.relationships.iter().enumerate() {
+            if i < rel_snapshot.len() {
+                let (from, to, old_trust, old_affection) = rel_snapshot[i];
+                let trust_changed = (rel.trust - old_trust).abs() > Fixed::from_f64(0.001);
+                let affection_changed = (rel.affection - old_affection).abs() > Fixed::from_f64(0.001);
+                if trust_changed || affection_changed {
+                    let cause = self.events[pre_tick_events..].iter()
+                        .find_map(|ev| {
+                            if let SimEvent::InteractionOccurred { from: ef, to: et, kind, .. } = ev {
+                                if *ef == from && *et == to {
+                                    Some(format!("{:?}", kind))
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or_else(|| "social_interaction".into());
+                    self.provenance.record_relationship(crate::provenance::RelationshipTrace {
+                        from,
+                        to,
+                        tick: tick_u64,
+                        cause,
+                        old_trust,
+                        new_trust: rel.trust,
+                        old_affection,
+                        new_affection: rel.affection,
+                        description: format!("Social interaction changed trust {}->{}, affection {}->{}",
+                            old_trust.to_f64(), rel.trust.to_f64(), old_affection.to_f64(), rel.affection.to_f64()),
+                    });
+                }
+            }
+        }
+
         // ── 4b. Resource operations, journal recording, intention tracking ──
 
         for (agent_idx, action) in &action_starts {
@@ -1140,17 +1182,44 @@ impl Simulation {
                                     // Attacker accumulates trauma too
                                     self.agents[from_idx].conflict.record_conflict(ConflictKind::Violence);
                                     // Reduce trust and affection between the two
+                                    // §19.5.J: Record relationship trace for provenance
                                     if let Some(rel) = self.relationships.iter_mut()
                                         .find(|r| r.from == from_id && r.to == to_id)
                                     {
+                                        let old_trust = rel.trust;
+                                        let old_affection = rel.affection;
                                         rel.trust = (rel.trust - Fixed::from_f64(0.3)).max(Fixed::ZERO);
                                         rel.affection = (rel.affection - Fixed::from_f64(0.2)).max(Fixed::ZERO);
+                                        self.provenance.record_relationship(crate::provenance::RelationshipTrace {
+                                            from: from_id,
+                                            to: to_id,
+                                            tick: tick_u64,
+                                            cause: "violence".into(),
+                                            old_trust,
+                                            new_trust: rel.trust,
+                                            old_affection,
+                                            new_affection: rel.affection,
+                                            description: format!("Violence destroyed trust ({} -> {})", old_trust.to_f64(), rel.trust.to_f64()),
+                                        });
                                     }
                                     if let Some(rel) = self.relationships.iter_mut()
                                         .find(|r| r.from == to_id && r.to == from_id)
                                     {
+                                        let old_trust = rel.trust;
+                                        let old_affection = rel.affection;
                                         rel.trust = (rel.trust - Fixed::from_f64(0.3)).max(Fixed::ZERO);
                                         rel.affection = (rel.affection - Fixed::from_f64(0.2)).max(Fixed::ZERO);
+                                        self.provenance.record_relationship(crate::provenance::RelationshipTrace {
+                                            from: to_id,
+                                            to: from_id,
+                                            tick: tick_u64,
+                                            cause: "violence".into(),
+                                            old_trust,
+                                            new_trust: rel.trust,
+                                            old_affection,
+                                            new_affection: rel.affection,
+                                            description: format!("Fear response — trust dropped ({} -> {})", old_trust.to_f64(), rel.trust.to_f64()),
+                                        });
                                     }
                                     // Record in journal
                                     self.journal.record(tick_u64, from_id, JournalEntryKind::CommittedViolence {
@@ -1211,8 +1280,21 @@ impl Simulation {
                             .iter_mut()
                             .find(|r| r.from == to_id && r.to == from_id)
                         {
+                            let old_trust = rel.trust;
                             rel.trust =
                                 (rel.trust - punishment * Fixed::from_f64(0.15)).max(Fixed::ZERO);
+                            // §19.5.J: Record norm violation relationship trace
+                            self.provenance.record_relationship(crate::provenance::RelationshipTrace {
+                                from: to_id,
+                                to: from_id,
+                                tick: tick_u64,
+                                cause: "norm_violation".into(),
+                                old_trust,
+                                new_trust: rel.trust,
+                                old_affection: rel.affection,
+                                new_affection: rel.affection,
+                                description: format!("Trust eroded by norm violation ({} -> {})", old_trust.to_f64(), rel.trust.to_f64()),
+                            });
                         }
                         let from_idx = from_id.as_u64() as usize;
                         if from_idx < self.agents.len() {
@@ -1916,17 +1998,44 @@ impl Simulation {
                     tick,
                 });
                 // Marriage boosts trust and affection
+                // §19.5.J: Record marriage relationship traces
                 if let Some(rel) = self.relationships.iter_mut()
                     .find(|r| r.from == AgentId::new(a as u64) && r.to == AgentId::new(b as u64))
                 {
+                    let old_trust = rel.trust;
+                    let old_affection = rel.affection;
                     rel.trust = (rel.trust + Fixed::from_f64(0.2)).clamp_01();
                     rel.affection = (rel.affection + Fixed::from_f64(0.3)).clamp_01();
+                    self.provenance.record_relationship(crate::provenance::RelationshipTrace {
+                        from: AgentId::new(a as u64),
+                        to: AgentId::new(b as u64),
+                        tick: tick_u64,
+                        cause: "marriage".into(),
+                        old_trust,
+                        new_trust: rel.trust,
+                        old_affection,
+                        new_affection: rel.affection,
+                        description: format!("Marriage bond formed (trust {} -> {}, affection {} -> {})", old_trust.to_f64(), rel.trust.to_f64(), old_affection.to_f64(), rel.affection.to_f64()),
+                    });
                 }
                 if let Some(rel) = self.relationships.iter_mut()
                     .find(|r| r.from == AgentId::new(b as u64) && r.to == AgentId::new(a as u64))
                 {
+                    let old_trust = rel.trust;
+                    let old_affection = rel.affection;
                     rel.trust = (rel.trust + Fixed::from_f64(0.2)).clamp_01();
                     rel.affection = (rel.affection + Fixed::from_f64(0.3)).clamp_01();
+                    self.provenance.record_relationship(crate::provenance::RelationshipTrace {
+                        from: AgentId::new(b as u64),
+                        to: AgentId::new(a as u64),
+                        tick: tick_u64,
+                        cause: "marriage".into(),
+                        old_trust,
+                        new_trust: rel.trust,
+                        old_affection,
+                        new_affection: rel.affection,
+                        description: format!("Marriage bond formed (trust {} -> {}, affection {} -> {})", old_trust.to_f64(), rel.trust.to_f64(), old_affection.to_f64(), rel.affection.to_f64()),
+                    });
                 }
                 tracing::info!(
                     spouse_a = a, spouse_b = b, tick = tick_u64,
@@ -2141,6 +2250,9 @@ impl Simulation {
                 }
             }
         }
+
+        // §19.5.J: Trim provenance traces to prevent unbounded growth
+        self.provenance.trim(institutions::MAX_PROVENANCE_RECORDS);
     }
 
     /// Access the current tick.

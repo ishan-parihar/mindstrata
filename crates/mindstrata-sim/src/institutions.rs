@@ -21,6 +21,8 @@ use serde::{Deserialize, Serialize};
 pub const INITIAL_PROPOSAL_DELAY: u64 = 100;
 pub const POLICY_RECORD_INTERVAL: u64 = 100;
 pub const MAX_RECORDS: usize = 1000;
+/// §19.5.J: Maximum provenance trace records per vector before trimming.
+pub const MAX_PROVENANCE_RECORDS: usize = 5000;
 /// Tax rates by institution kind.
 pub const COUNCIL_TAX_RATE: f64 = 0.05;
 pub const MARKET_FEE_RATE: f64 = 0.03;

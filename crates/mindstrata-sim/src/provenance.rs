@@ -99,6 +99,29 @@ pub struct InstitutionalTrace {
     pub success: bool,
 }
 
+/// §19.5.J: Record of a relationship change — trust, affection, fear changes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelationshipTrace {
+    /// Source agent.
+    pub from: AgentId,
+    /// Target agent.
+    pub to: AgentId,
+    /// Tick when the change occurred.
+    pub tick: u64,
+    /// What caused the change (e.g., "social_interaction", "violence", "norm_violation", "gossip").
+    pub cause: String,
+    /// Trust before the change.
+    pub old_trust: Fixed,
+    /// Trust after the change.
+    pub new_trust: Fixed,
+    /// Affection before the change.
+    pub old_affection: Fixed,
+    /// Affection after the change.
+    pub new_affection: Fixed,
+    /// Brief description.
+    pub description: String,
+}
+
 /// The Causal Provenance Store — tracks causality across the simulation.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CausalProvenance {
@@ -110,6 +133,8 @@ pub struct CausalProvenance {
     belief_updates: Vec<BeliefUpdateTrace>,
     /// §19.5.B: Institutional decision traces for debugging systemic causality.
     institutional: Vec<InstitutionalTrace>,
+    /// §19.5.J: Relationship change traces for debugging social dynamics.
+    relationships: Vec<RelationshipTrace>,
 }
 
 impl CausalProvenance {
@@ -120,6 +145,7 @@ impl CausalProvenance {
             events: Vec::new(),
             belief_updates: Vec::new(),
             institutional: Vec::new(),
+            relationships: Vec::new(),
         }
     }
 
@@ -141,6 +167,11 @@ impl CausalProvenance {
     /// §19.5.B: Record an institutional decision trace.
     pub fn record_institutional(&mut self, trace: InstitutionalTrace) {
         self.institutional.push(trace);
+    }
+
+    /// §19.5.J: Record a relationship change trace.
+    pub fn record_relationship(&mut self, trace: RelationshipTrace) {
+        self.relationships.push(trace);
     }
 
     /// Get all decisions made by a specific agent.
@@ -210,6 +241,50 @@ impl CausalProvenance {
     /// §19.5.B: Total number of institutional traces.
     pub fn institutional_count(&self) -> usize {
         self.institutional.len()
+    }
+
+    /// §19.5.J: Get relationship traces for a specific agent (as source or target).
+    pub fn relationships_for_agent(&self, agent: AgentId) -> Vec<&RelationshipTrace> {
+        self.relationships.iter()
+            .filter(|r| r.from == agent || r.to == agent)
+            .collect()
+    }
+
+    /// §19.5.J: Get relationship traces between two specific agents.
+    pub fn relationships_between(&self, from: AgentId, to: AgentId) -> Vec<&RelationshipTrace> {
+        self.relationships.iter()
+            .filter(|r| r.from == from && r.to == to)
+            .collect()
+    }
+
+    /// §19.5.J: Get the last N relationship traces.
+    pub fn recent_relationships(&self, n: usize) -> &[RelationshipTrace] {
+        let start = self.relationships.len().saturating_sub(n);
+        &self.relationships[start..]
+    }
+
+    /// §19.5.J: Total number of relationship traces.
+    pub fn relationship_count(&self) -> usize {
+        self.relationships.len()
+    }
+
+    /// Trim all trace vectors to at most `max` entries each, keeping the most recent.
+    pub fn trim(&mut self, max: usize) {
+        if self.decisions.len() > max {
+            self.decisions.drain(..self.decisions.len() - max);
+        }
+        if self.events.len() > max {
+            self.events.drain(..self.events.len() - max);
+        }
+        if self.belief_updates.len() > max {
+            self.belief_updates.drain(..self.belief_updates.len() - max);
+        }
+        if self.institutional.len() > max {
+            self.institutional.drain(..self.institutional.len() - max);
+        }
+        if self.relationships.len() > max {
+            self.relationships.drain(..self.relationships.len() - max);
+        }
     }
 }
 
@@ -381,5 +456,89 @@ mod tests {
         let council = store.institutional_for("Council");
         assert_eq!(council.len(), 1);
         assert_eq!(council[0].decision_kind, "tax_collection");
+    }
+
+    // ── §19.5.J: Relationship Trace Tests ────────────────────────────
+
+    #[test]
+    fn relationship_trace_recorded() {
+        let mut store = CausalProvenance::new();
+        store.record_relationship(RelationshipTrace {
+            from: AgentId::new(0),
+            to: AgentId::new(1),
+            tick: 100,
+            cause: "social_interaction".into(),
+            old_trust: Fixed::from_f64(0.5),
+            new_trust: Fixed::from_f64(0.6),
+            old_affection: Fixed::from_f64(0.3),
+            new_affection: Fixed::from_f64(0.4),
+            description: "Trust increased after friendly interaction".into(),
+        });
+        assert_eq!(store.relationship_count(), 1);
+        let traces = store.recent_relationships(10);
+        assert_eq!(traces[0].cause, "social_interaction");
+        assert_eq!(traces[0].from, AgentId::new(0));
+        assert_eq!(traces[0].to, AgentId::new(1));
+    }
+
+    #[test]
+    fn relationships_for_agent_filter() {
+        let mut store = CausalProvenance::new();
+        store.record_relationship(RelationshipTrace {
+            from: AgentId::new(0),
+            to: AgentId::new(1),
+            tick: 100,
+            cause: "social_interaction".into(),
+            old_trust: Fixed::from_f64(0.5),
+            new_trust: Fixed::from_f64(0.6),
+            old_affection: Fixed::from_f64(0.3),
+            new_affection: Fixed::from_f64(0.4),
+            description: "Trust increased".into(),
+        });
+        store.record_relationship(RelationshipTrace {
+            from: AgentId::new(2),
+            to: AgentId::new(3),
+            tick: 100,
+            cause: "violence".into(),
+            old_trust: Fixed::from_f64(0.8),
+            new_trust: Fixed::from_f64(0.2),
+            old_affection: Fixed::from_f64(0.7),
+            new_affection: Fixed::from_f64(0.1),
+            description: "Trust destroyed by violence".into(),
+        });
+        let agent0 = store.relationships_for_agent(AgentId::new(0));
+        assert_eq!(agent0.len(), 1);
+        assert_eq!(agent0[0].cause, "social_interaction");
+    }
+
+    #[test]
+    fn relationships_between_filter() {
+        let mut store = CausalProvenance::new();
+        store.record_relationship(RelationshipTrace {
+            from: AgentId::new(0),
+            to: AgentId::new(1),
+            tick: 100,
+            cause: "social_interaction".into(),
+            old_trust: Fixed::from_f64(0.5),
+            new_trust: Fixed::from_f64(0.6),
+            old_affection: Fixed::from_f64(0.3),
+            new_affection: Fixed::from_f64(0.4),
+            description: "Trust increased".into(),
+        });
+        store.record_relationship(RelationshipTrace {
+            from: AgentId::new(0),
+            to: AgentId::new(1),
+            tick: 105,
+            cause: "violence".into(),
+            old_trust: Fixed::from_f64(0.6),
+            new_trust: Fixed::from_f64(0.1),
+            old_affection: Fixed::from_f64(0.4),
+            new_affection: Fixed::from_f64(0.0),
+            description: "Trust destroyed".into(),
+        });
+        let traces = store.relationships_between(AgentId::new(0), AgentId::new(1));
+        assert_eq!(traces.len(), 2);
+        assert_eq!(traces[0].cause, "social_interaction");
+        assert_eq!(traces[1].cause, "violence");
     }
 }
