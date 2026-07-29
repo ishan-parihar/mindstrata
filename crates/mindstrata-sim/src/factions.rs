@@ -43,6 +43,24 @@ pub const PROTEST_LEGITIMACY_DAMAGE: Fixed = Fixed::from_raw(300); // 0.03
 /// How much a successful enforcement response restores legitimacy.
 pub const ENFORCEMENT_LEGITIMACY_GAIN: Fixed = Fixed::from_raw(150); // 0.015
 
+/// §7.3: Minimum tick interval between revolutions from the same faction.
+pub const REVOLUTION_COOLDOWN: u64 = 200;
+
+/// §7.3: Revolution score threshold — when exceeded, faction seizes control.
+pub const REVOLUTION_SCORE_THRESHOLD: Fixed = Fixed::from_raw(6000); // 0.6
+
+/// §7.3: Minimum tick before any revolution can occur (allows settlement to stabilize).
+pub const REVOLUTION_MIN_TICK: u64 = 500;
+
+/// §7.3: Weight of faction grievance in revolution score.
+pub const REVOLUTION_GRIEVANCE_WEIGHT: Fixed = Fixed::from_raw(4000); // 0.4
+
+/// §7.3: Weight of faction size ratio in revolution score.
+pub const REVOLUTION_SIZE_WEIGHT: Fixed = Fixed::from_raw(3000); // 0.3
+
+/// §7.3: Weight of council illegitimacy in revolution score.
+pub const REVOLUTION_LEGITIMACY_WEIGHT: Fixed = Fixed::from_raw(3000); // 0.3
+
 /// Compute an agent's grievance level from their existing derived state.
 ///
 /// Grievance combines:

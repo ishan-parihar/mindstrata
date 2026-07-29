@@ -66,8 +66,8 @@ enum Commands {
         decisions: Option<usize>,
 
         /// Show chronological event timeline after simulation.
-        #[arg(long, default_value_t = 30)]
-        timeline: usize,
+        #[arg(long)]
+        timeline: Option<usize>,
     },
     /// Run a named scenario.
     Scenario {
@@ -230,16 +230,18 @@ fn main() -> Result<()> {
             }
 
             // §6.3: Event timeline view
-            if timeline > 0 {
-                println!();
-                let events = sim.recent_events(timeline);
-                if !events.is_empty() {
-                    println!("╔══════════════════════════════════════════════╗");
-                    println!("║  Event Timeline (last {timeline})                       ║");
-                    println!("╚══════════════════════════════════════════════╝");
-                    println!("{}", mindstrata_tui::render_event_log(events, timeline));
-                } else {
-                    println!("No events recorded.");
+            if let Some(count) = timeline {
+                if count > 0 {
+                    println!();
+                    let events = sim.recent_events(count);
+                    if !events.is_empty() {
+                        println!("╔══════════════════════════════════════════════╗");
+                        println!("║  Event Timeline (last {count})                       ║");
+                        println!("╚══════════════════════════════════════════════╝");
+                        println!("{}", mindstrata_tui::render_event_log(events, count));
+                    } else {
+                        println!("No events recorded.");
+                    }
                 }
             }
         }

@@ -167,6 +167,8 @@ pub struct Simulation {
     pub knowledge_store: Vec<Knowledge>,
     /// §6.5: Per-tick metric history for observability and CSV export.
     pub metric_history: Vec<MetricsSnapshot>,
+    /// §7.3: Tick when last revolution occurred (for cooldown tracking).
+    last_revolution_tick: u64,
 }
 
 impl Simulation {
@@ -197,6 +199,7 @@ impl Simulation {
             market: MarketState::new(),
             knowledge_store: Vec::new(),
             metric_history: Vec::new(),
+            last_revolution_tick: 0,
         }
     }
 
@@ -2270,12 +2273,16 @@ impl Simulation {
                 let faction_size = faction.members.len();
                 let total_pop = self.agents.len();
 
-                // Revolution threshold: high grievance + large faction + weak council
-                let revolution_score = faction_grievance * Fixed::from_f64(0.4)
-                    + Fixed::from_int(faction_size as i64) / Fixed::from_int(total_pop.max(1) as i64) * Fixed::from_f64(0.3)
-                    + (Fixed::ONE - council_legitimacy) * Fixed::from_f64(0.3);
+                // Revolution score: weighted combination of grievance, size, and council weakness
+                let revolution_score = faction_grievance * factions::REVOLUTION_GRIEVANCE_WEIGHT
+                    + Fixed::from_int(faction_size as i64) / Fixed::from_int(total_pop.max(1) as i64) * factions::REVOLUTION_SIZE_WEIGHT
+                    + (Fixed::ONE - council_legitimacy) * factions::REVOLUTION_LEGITIMACY_WEIGHT;
 
-                if revolution_score >= Fixed::from_f64(0.6) && tick_u64 > 500 {
+                let revolution_cooldown_ok = tick_u64.saturating_sub(self.last_revolution_tick) >= factions::REVOLUTION_COOLDOWN;
+                if revolution_score >= factions::REVOLUTION_SCORE_THRESHOLD
+                    && tick_u64 > factions::REVOLUTION_MIN_TICK
+                    && revolution_cooldown_ok
+                {
                     tracing::warn!(
                         faction = inst_idx,
                         score = revolution_score.to_f64(),
@@ -2293,6 +2300,8 @@ impl Simulation {
                     // Faction gains legitimacy
                     self.institutions[inst_idx].legitimacy = Fixed::from_f64(0.6);
                     self.institutions[inst_idx].collective.morale = Fixed::from_f64(0.8);
+                    // Track revolution tick for cooldown
+                    self.last_revolution_tick = tick_u64;
                     // Record revolution event
                     self.events.push(SimEvent::ConflictOccurred {
                         aggressor: self.institutions[inst_idx].get_role_holder("Leader").unwrap_or(AgentId::new(0)),
