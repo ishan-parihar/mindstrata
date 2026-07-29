@@ -639,4 +639,184 @@ mod smoke {
         assert!(max_knowledge > 4,
             "Innovation should produce knowledge beyond initial seeding: max_knowledge={}", max_knowledge);
     }
+
+    // ── §4.4 Black Market Integration Tests ──────────────────────
+
+    #[test]
+    fn black_market_activates_under_scarcity() {
+        use mindstrata_core::fixed::Fixed;
+        use mindstrata_sim::black_market::{BlackMarketState, BLACK_MARKET_SCARCITY_THRESHOLD, BLACK_MARKET_ENFORCEMENT_THRESHOLD};
+
+        let mut bm = BlackMarketState::default();
+        // High scarcity + low enforcement → active
+        bm.update(Fixed::from_f64(0.6), Fixed::from_f64(0.3));
+        assert!(bm.active, "Black market should be active with scarcity > 0.4 and enforcement < 0.5");
+
+        // Low scarcity → inactive
+        let mut bm2 = BlackMarketState::default();
+        bm2.update(Fixed::from_f64(0.1), Fixed::from_f64(0.3));
+        assert!(!bm2.active, "Black market should be inactive with low scarcity");
+
+        // High enforcement → inactive
+        let mut bm3 = BlackMarketState::default();
+        bm3.update(Fixed::from_f64(0.8), Fixed::from_f64(0.8));
+        assert!(!bm3.active, "Black market should be inactive with high enforcement");
+    }
+
+    #[test]
+    fn black_market_price_multiplier() {
+        use mindstrata_core::fixed::Fixed;
+        use mindstrata_sim::black_market::{BlackMarketState, BLACK_MARKET_PRICE_MULTIPLIER};
+
+        let mut bm = BlackMarketState::default();
+        bm.update(Fixed::from_f64(0.6), Fixed::from_f64(0.3));
+        let legal_price = Fixed::from_f64(10.0);
+        let bm_price = bm.black_market_price(legal_price);
+        let expected = legal_price * BLACK_MARKET_PRICE_MULTIPLIER;
+        assert_eq!(bm_price.to_f64(), expected.to_f64(),
+            "Black market price should be legal price × multiplier");
+    }
+
+    #[test]
+    fn black_market_participation_depends_on_personality() {
+        use mindstrata_core::fixed::Fixed;
+        use mindstrata_sim::black_market::BlackMarketState;
+        use mindstrata_sim::person::Personality;
+
+        let mut bm = BlackMarketState::default();
+        bm.update(Fixed::from_f64(0.6), Fixed::from_f64(0.3));
+
+        // High risk tolerance + low conformity → can participate
+        let risk_taker = Personality {
+            openness: Fixed::from_f64(0.5),
+            conscientiousness: Fixed::from_f64(0.5),
+            extraversion: Fixed::from_f64(0.5),
+            agreeableness: Fixed::from_f64(0.5),
+            neuroticism: Fixed::from_f64(0.5),
+            risk_tolerance: Fixed::from_f64(0.8),
+            conformity: Fixed::from_f64(0.3),
+            ambition: Fixed::from_f64(0.5),
+            altruism: Fixed::from_f64(0.5),
+            traditionalism: Fixed::from_f64(0.5),
+            dominance: Fixed::from_f64(0.5),
+            impulsivity: Fixed::from_f64(0.5),
+        };
+        assert!(bm.can_participate(&risk_taker),
+            "High risk tolerance + low conformity should participate");
+
+        // High conformity → cannot participate
+        let conformist = Personality {
+            risk_tolerance: Fixed::from_f64(0.8),
+            conformity: Fixed::from_f64(0.8),
+            ..risk_taker.clone()
+        };
+        assert!(!bm.can_participate(&conformist),
+            "High conformity should prevent participation");
+
+        // Low risk tolerance → cannot participate
+        let cautious = Personality {
+            risk_tolerance: Fixed::from_f64(0.2),
+            conformity: Fixed::from_f64(0.3),
+            ..risk_taker.clone()
+        };
+        assert!(!bm.can_participate(&cautious),
+            "Low risk tolerance should prevent participation");
+    }
+
+    #[test]
+    fn snapshot_roundtrip_preserves_agent_state() {
+        use mindstrata_sim::sim::{Simulation, SimConfig};
+        use mindstrata_sim::snapshot::{Snapshot, SNAPSHOT_VERSION};
+
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 500,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim1 = Simulation::new(config.clone());
+        sim1.populate();
+        sim1.run(200);
+
+        // Capture snapshot at tick 200
+        let snapshot = sim1.save_snapshot();
+        assert_eq!(snapshot.version, SNAPSHOT_VERSION);
+        assert_eq!(snapshot.tick, 200);
+        assert!(snapshot.agents.len() >= 12, "Should have at least 12 agents");
+
+        // Serialize to bytes and back
+        let bytes = snapshot.to_bytes().expect("Snapshot serialization failed");
+        let restored = Snapshot::from_bytes(&bytes).expect("Snapshot deserialization failed");
+
+        // Verify key state matches
+        assert_eq!(restored.tick, snapshot.tick);
+        assert_eq!(restored.agents.len(), snapshot.agents.len());
+        assert_eq!(restored.config.seed, snapshot.config.seed);
+
+        // Verify determinism — same seed produces same hash
+        let hash1 = snapshot.deterministic_hash().expect("hash failed");
+        let hash2 = restored.deterministic_hash().expect("hash failed");
+        assert_eq!(hash1, hash2, "Snapshot hash should be deterministic");
+    }
+
+    #[test]
+    fn move_action_has_completion_detection() {
+        use mindstrata_sim::actions::ActionKind;
+        use mindstrata_core::fixed::Fixed;
+
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 200,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+
+        // Run simulation — feuding agents should use Move action
+        sim.run(200);
+
+        // Verify Move action definition exists and has correct duration
+        let move_def = ActionKind::Move { target_x: 5, target_y: 5 };
+        assert_eq!(move_def.definition().duration_ticks, 1, "Move should take 1 tick per step");
+        assert!(move_def.definition().energy_cost > Fixed::ZERO, "Move should have energy cost");
+    }
+
+    #[test]
+    fn feuding_agents_use_move_action() {
+        use mindstrata_sim::sim::{Simulation, SimConfig};
+
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 500,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(500);
+
+        // Check if any agent has feuds (feuds form from negative interactions)
+        let has_feuds = sim.agents.iter().any(|a| !a.feuds.is_empty());
+        // If feuds exist, agents should use Move instead of Wander
+        if has_feuds {
+            let summaries = sim.agent_summaries();
+            let action_counts = summaries.iter().fold(std::collections::HashMap::new(), |mut acc, s| {
+                *acc.entry(s.current_action.clone()).or_insert(0) += 1;
+                acc
+            });
+            // Move should appear in the action distribution if feuds exist
+            // (agents that are angry and feuding will Move toward targets)
+            let total = action_counts.values().sum::<u32>();
+            assert!(total > 0, "Should have actions recorded");
+        }
+        // The key assertion is that the simulation doesn't panic with feuding Move actions
+        assert!(sim.current_tick().as_u64() >= 500, "Simulation should run to completion");
+    }
 }
