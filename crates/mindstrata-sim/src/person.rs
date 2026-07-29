@@ -121,6 +121,37 @@ pub struct DiscreteEmotions {
     pub guilt: Fixed,
 }
 
+/// §19.5.A: How information was acquired — determines source trust weighting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EvidenceSource {
+    /// Direct personal experience (highest trust).
+    PersonalExperience,
+    /// Heard from a trusted friend/family member.
+    TrustedPeer,
+    /// Heard from a known community member.
+    CommunityMember,
+    /// Heard via gossip from an unknown source.
+    Hearsay,
+    /// Official institutional record/announcement.
+    InstitutionalRecord,
+    /// Learned through education/teaching.
+    Education,
+}
+
+impl EvidenceSource {
+    /// Base trust value for this source type (0.0–1.0).
+    pub fn base_trust(&self) -> Fixed {
+        match self {
+            EvidenceSource::PersonalExperience => Fixed::from_f64(0.95),
+            EvidenceSource::TrustedPeer => Fixed::from_f64(0.8),
+            EvidenceSource::CommunityMember => Fixed::from_f64(0.6),
+            EvidenceSource::Hearsay => Fixed::from_f64(0.3),
+            EvidenceSource::InstitutionalRecord => Fixed::from_f64(0.7),
+            EvidenceSource::Education => Fixed::from_f64(0.85),
+        }
+    }
+}
+
 /// Belief about a proposition.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Belief {
@@ -130,6 +161,13 @@ pub struct Belief {
     pub identity_linkage: Fixed,
     pub resistance: Fixed,
     pub last_reinforced_tick: u64,
+    /// §19.5.A: How this belief was originally acquired.
+    pub source: EvidenceSource,
+    /// §19.5.A: Number of times confirmed by social contacts.
+    pub social_reinforcement: u32,
+    /// §19.5.A: Whether this belief is based on accurate information.
+    /// If false, it is misinformation that persists due to identity linkage.
+    pub is_accurate: bool,
 }
 
 /// Goal priority and source.

@@ -216,6 +216,9 @@ pub fn apply_gossip(
             identity_linkage: Fixed::from_f64(0.2), // rumors start with low identity linkage
             resistance: Fixed::from_f64(0.3),       // rumors are initially easy to update
             last_reinforced_tick: tick,
+            source: crate::person::EvidenceSource::Hearsay,
+            social_reinforcement: 0,
+            is_accurate: false, // rumors from gossip are not verified
         });
     }
 }
@@ -234,6 +237,9 @@ mod tests {
             identity_linkage: Fixed::from_f64(0.4),
             resistance: Fixed::from_f64(0.5),
             last_reinforced_tick: 0,
+            source: crate::person::EvidenceSource::PersonalExperience,
+            social_reinforcement: 0,
+            is_accurate: true,
         }
     }
 
@@ -427,6 +433,9 @@ mod tests {
             identity_linkage: Fixed::from_f64(0.8),
             resistance: Fixed::from_f64(0.9), // very resistant
             last_reinforced_tick: 0,
+            source: crate::person::EvidenceSource::PersonalExperience,
+            social_reinforcement: 0,
+            is_accurate: true,
         };
 
         let result = process_gossip(

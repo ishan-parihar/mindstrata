@@ -229,6 +229,9 @@ impl Simulation {
                     identity_linkage: Fixed::from_f64(0.3),
                     resistance: Fixed::from_f64(0.5),
                     last_reinforced_tick: 0,
+                    source: crate::person::EvidenceSource::PersonalExperience,
+                    social_reinforcement: 0,
+                    is_accurate: true,
                 },
                 Belief {
                     proposition_id: 1,
@@ -237,6 +240,9 @@ impl Simulation {
                     identity_linkage: Fixed::from_f64(0.2),
                     resistance: Fixed::from_f64(0.4),
                     last_reinforced_tick: 0,
+                    source: crate::person::EvidenceSource::InstitutionalRecord,
+                    social_reinforcement: 0,
+                    is_accurate: true,
                 },
             ];
 

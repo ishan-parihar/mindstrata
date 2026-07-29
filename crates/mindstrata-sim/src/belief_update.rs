@@ -100,6 +100,9 @@ mod tests {
             identity_linkage: Fixed::ZERO,
             resistance: Fixed::from_f64(0.5),
             last_reinforced_tick: 0,
+            source: crate::person::EvidenceSource::PersonalExperience,
+            social_reinforcement: 0,
+            is_accurate: true,
         };
 
         update_belief(
@@ -126,6 +129,9 @@ mod tests {
             identity_linkage: Fixed::from_f64(0.9),
             resistance: Fixed::from_f64(0.7),
             last_reinforced_tick: 0,
+            source: crate::person::EvidenceSource::PersonalExperience,
+            social_reinforcement: 0,
+            is_accurate: true,
         };
 
         update_belief(
