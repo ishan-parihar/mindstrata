@@ -1419,7 +1419,7 @@ impl Simulation {
             // §19.5.C: Record active policy effects (check name first to avoid borrow conflict)
             let has_fine_theft = institution.active_policies.iter()
                 .any(|p| p.name == "Fine Theft Policy");
-            if has_fine_theft && tick_u64 % institutions::POLICY_RECORD_INTERVAL == 0 {
+            if has_fine_theft && tick_u64.is_multiple_of(institutions::POLICY_RECORD_INTERVAL) {
                 let members = institution.members.clone();
                 institution.record_action(
                     tick_u64,
@@ -1447,7 +1447,7 @@ impl Simulation {
             }
 
             // §19.5.C: Institutional tax collection — all institutions collect taxes
-            if tick_u64 % institutions::TAX_COLLECTION_INTERVAL == 0 && tick_u64 > 0 && !institution.members.is_empty() {
+            if tick_u64.is_multiple_of(institutions::TAX_COLLECTION_INTERVAL) && tick_u64 > 0 && !institution.members.is_empty() {
                 let tax_rate = match institution.kind {
                     institutions::InstitutionKind::Council => Fixed::from_f64(institutions::COUNCIL_TAX_RATE),
                     institutions::InstitutionKind::Market => Fixed::from_f64(institutions::MARKET_FEE_RATE),
@@ -1504,7 +1504,7 @@ impl Simulation {
             }
 
             // §19.5.C: All institutions pay role holders wages periodically
-            if tick_u64 % institutions::WAGE_PAYMENT_INTERVAL == 0 && tick_u64 > 0 {
+            if tick_u64.is_multiple_of(institutions::WAGE_PAYMENT_INTERVAL) && tick_u64 > 0 {
                 let wage = Fixed::from_f64(institutions::BASE_WAGE);
                 let role_holder_count = institution.roles.iter().filter(|r| r.holder.is_some()).count() as i64;
                 let total_wage_cost = wage * Fixed::from_int(role_holder_count);
@@ -1555,7 +1555,7 @@ impl Simulation {
             // and high tax rates periodically erode institutional legitimacy.
             // NOTE: The per-tick decay_legitimacy(0.0001) above is a slow continuous baseline;
             // this tax-rate erosion is an additional periodic penalty applied only on collection ticks.
-            if tick_u64 % institutions::TAX_COLLECTION_INTERVAL == 0 && tick_u64 > 0 && !institution.members.is_empty() {
+            if tick_u64.is_multiple_of(institutions::TAX_COLLECTION_INTERVAL) && tick_u64 > 0 && !institution.members.is_empty() {
                 // Tax burden affects legitimacy: higher tax rate → faster legitimacy decay
                 let tax_rate = match institution.kind {
                     institutions::InstitutionKind::Council => institutions::COUNCIL_TAX_RATE,

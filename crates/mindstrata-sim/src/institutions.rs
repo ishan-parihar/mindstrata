@@ -255,10 +255,10 @@ impl Institution {
             if self.has_member(*agent) {
                 let tax = *wealth * tax_rate;
                 *wealth = (*wealth - tax).max(Fixed::ZERO);
-                total = total + tax;
+                total += tax;
             }
         }
-        self.treasury = self.treasury + total;
+        self.treasury += total;
         total
     }
 
@@ -279,12 +279,12 @@ impl Institution {
         for role in &self.roles {
             if let Some(holder) = role.holder {
                 if let Some(entry) = member_wealth.iter_mut().find(|(a, _)| *a == holder) {
-                    entry.1 = entry.1 + wage;
-                    total = total + wage;
+                    entry.1 += wage;
+                    total += wage;
                 }
             }
         }
-        self.treasury = self.treasury - total;
+        self.treasury -= total;
         total
     }
 

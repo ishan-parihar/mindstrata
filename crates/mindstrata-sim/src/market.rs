@@ -354,7 +354,7 @@ pub fn compute_median(wealths: &mut [Fixed]) -> Fixed {
     }
     wealths.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let mid = wealths.len() / 2;
-    if wealths.len() % 2 == 0 {
+    if wealths.len().is_multiple_of(2) {
         (wealths[mid - 1] + wealths[mid]) / Fixed::from_f64(2.0)
     } else {
         wealths[mid]
