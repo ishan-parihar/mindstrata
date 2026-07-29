@@ -194,7 +194,6 @@ pub fn choose_interaction(
     affection: Fixed,
     personality_openness: Fixed,
     personality_agreeableness: Fixed,
-    _same_faction: bool, // §5.4: used for logging; bias applied in process_interaction
     rng: &mut RngStreams,
 ) -> InteractionKind {
     let social_rng = rng.get_mut(RngStream::Social);
@@ -351,7 +350,7 @@ pub fn system_social_interactions(
 
             // §5.4: In-group/out-group — check if both agents share a faction
             let same_faction = same_faction_matrix[i][target_idx];
-            let kind = choose_interaction(trust, affection, *openness, *agreeableness, same_faction, rng);
+            let kind = choose_interaction(trust, affection, *openness, *agreeableness, rng);
 
             let interaction = Interaction {
                 from: *agent_id,
