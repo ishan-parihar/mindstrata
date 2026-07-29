@@ -125,22 +125,45 @@ pub fn process_interaction(
     });
 }
 
-/// Select a random nearby agent for interaction.
+/// §2.4: Default perception radius — agents can only interact within this Manhattan distance.
+pub const DEFAULT_PERCEPTION_RADIUS: i32 = 5;
+
+/// Select a random nearby agent for interaction, respecting perception radius.
+///
+/// §2.4: "Agents only perceive events within a radius (e.g., 5 tiles).
+/// Social interactions only possible between agents within perception radius.
+/// This creates natural neighborhoods and social clusters."
 pub fn select_interaction_target(
     agent_idx: usize,
     num_agents: usize,
+    agent_positions: &[(i32, i32)], // agent (x, y) positions
+    perception_radius: i32,
     rng: &mut RngStreams,
 ) -> Option<usize> {
     if num_agents <= 1 {
         return None;
     }
+
+    // Filter to agents within perception radius
+    let ax = agent_positions[agent_idx].0;
+    let ay = agent_positions[agent_idx].1;
+    let nearby: Vec<usize> = (0..num_agents)
+        .filter(|&t| {
+            if t == agent_idx {
+                return false;
+            }
+            let dx = (agent_positions[t].0 - ax).abs();
+            let dy = (agent_positions[t].1 - ay).abs();
+            (dx + dy) <= perception_radius
+        })
+        .collect();
+
+    if nearby.is_empty() {
+        return None;
+    }
+
     let social_rng = rng.get_mut(RngStream::Social);
-    let target = loop {
-        let t: usize = social_rng.random_range(0..num_agents);
-        if t != agent_idx {
-            break t;
-        }
-    };
+    let target = nearby[social_rng.random_range(0..nearby.len())];
     Some(target)
 }
 
@@ -263,8 +286,12 @@ fn evolve_relationship_kind(rel: &mut Relationship) {
 }
 
 /// Run the social interaction system for all agents.
+///
+/// §2.4: Social interactions are proximity-based — agents within perception
+/// radius can interact, creating natural neighborhoods and social clusters.
 pub fn system_social_interactions(
     agents: &[(AgentId, Fixed, Fixed, Fixed)], // (id, openness, agreeableness, extraversion)
+    agent_positions: &[(i32, i32)],            // §2.4: agent (x, y) positions
     relationships: &mut [Relationship],
     events: &mut Vec<SimEvent>,
     tick: Tick,
@@ -281,8 +308,8 @@ pub fn system_social_interactions(
             continue;
         }
 
-        // Select target
-        if let Some(target_idx) = select_interaction_target(i, num_agents, rng) {
+        // §2.4: Select target within perception radius
+        if let Some(target_idx) = select_interaction_target(i, num_agents, agent_positions, DEFAULT_PERCEPTION_RADIUS, rng) {
             let target_id = agents[target_idx].0;
 
             // Find existing relationship or create default

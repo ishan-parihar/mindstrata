@@ -851,6 +851,10 @@ impl Simulation {
 
             // ── 5. Social interactions ────────────────────────────────
             {
+                // §2.4: Pass agent positions for proximity-based social interactions
+                let agent_positions: Vec<(i32, i32)> = self.agents.iter()
+                    .map(|a| (a.position.x, a.position.y))
+                    .collect();
                 let agent_info: Vec<_> = self
                     .agents
                     .iter()
@@ -867,6 +871,7 @@ impl Simulation {
 
                 social::system_social_interactions(
                     &agent_info,
+                    &agent_positions,
                     &mut self.relationships,
                     ctx.events,
                     tick,
