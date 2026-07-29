@@ -393,6 +393,36 @@ impl Simulation {
                     temple.add_member(AgentId::new(priest_idx as u64));
                 }
             }
+
+            // §19.5.C: Assign Merchant to Market — high ambition + high dominance
+            let merchant_candidate = self.agents.iter().enumerate()
+                .filter(|(i, _)| Some(*i) != elder_candidate && Some(*i) != priest_candidate)
+                .max_by_key(|(_, a)| {
+                    let score = a.personality.ambition + a.personality.dominance;
+                    score.to_raw() as u64
+                })
+                .map(|(i, _)| i);
+            if let Some(merchant_idx) = merchant_candidate {
+                if let Some(market) = self.institutions.iter_mut().find(|i| i.kind == institutions::InstitutionKind::Market) {
+                    market.assign_role("Merchant", AgentId::new(merchant_idx as u64));
+                    market.add_member(AgentId::new(merchant_idx as u64));
+                }
+            }
+
+            // §12: Assign Guard Captain to Council — high dominance + high conscientiousness
+            let guard_candidate = self.agents.iter().enumerate()
+                .filter(|(i, _)| Some(*i) != elder_candidate && Some(*i) != priest_candidate && Some(*i) != merchant_candidate)
+                .max_by_key(|(_, a)| {
+                    let score = a.personality.dominance + a.personality.conscientiousness;
+                    score.to_raw() as u64
+                })
+                .map(|(i, _)| i);
+            if let Some(guard_idx) = guard_candidate {
+                if let Some(council) = self.institutions.iter_mut().find(|i| i.kind == institutions::InstitutionKind::Council) {
+                    council.assign_role("Guard Captain", AgentId::new(guard_idx as u64));
+                    council.add_member(AgentId::new(guard_idx as u64));
+                }
+            }
         }
 
         tracing::info!(
@@ -1412,11 +1442,8 @@ impl Simulation {
                 }
             }
 
-            // §19.5.C: Council pays role holders wages periodically
-            if institution.kind == institutions::InstitutionKind::Council
-                && tick_u64 % institutions::WAGE_PAYMENT_INTERVAL == 0
-                && tick_u64 > 0
-            {
+            // §19.5.C: All institutions pay role holders wages periodically
+            if tick_u64 % institutions::WAGE_PAYMENT_INTERVAL == 0 && tick_u64 > 0 {
                 let wage = Fixed::from_f64(institutions::BASE_WAGE);
                 let role_holder_count = institution.roles.iter().filter(|r| r.holder.is_some()).count() as i64;
                 let total_wage_cost = wage * Fixed::from_int(role_holder_count);
@@ -1441,12 +1468,51 @@ impl Simulation {
                     }
                     if paid > Fixed::ZERO {
                         let members = institution.members.clone();
+                        let role_names: Vec<&str> = institution.roles.iter()
+                            .filter(|r| r.holder.is_some())
+                            .map(|r| r.name.as_str())
+                            .collect();
+                        let kind_name = institution.kind.name();
                         institution.record_action(
                             tick_u64,
-                            format!("Wage payment: {:.1} coins", paid.to_f64()),
+                            format!("{} wage payment: {:.1} coins to {}", kind_name, paid.to_f64(), role_names.join(", ")),
                             members,
                             true,
                         );
+                    }
+                }
+            }
+
+            // §19.5.C: Taxation legitimacy feedback — taxed agents accumulate anger,
+            // and high tax rates periodically erode institutional legitimacy.
+            // NOTE: The per-tick decay_legitimacy(0.0001) above is a slow continuous baseline;
+            // this tax-rate erosion is an additional periodic penalty applied only on collection ticks.
+            if tick_u64 % institutions::TAX_COLLECTION_INTERVAL == 0 && tick_u64 > 0 && !institution.members.is_empty() {
+                // Tax burden affects legitimacy: higher tax rate → faster legitimacy decay
+                let tax_rate = match institution.kind {
+                    institutions::InstitutionKind::Council => institutions::COUNCIL_TAX_RATE,
+                    institutions::InstitutionKind::Market => institutions::MARKET_FEE_RATE,
+                    institutions::InstitutionKind::Temple => institutions::TEMPLE_TITHE_RATE,
+                    _ => 0.0,
+                };
+                if tax_rate > 0.0 {
+                    // Legitimacy erodes proportional to tax rate (taxation is a cost to subjects)
+                    let legitimacy_erosion = Fixed::from_f64(tax_rate * 0.01);
+                    institution.decay_legitimacy(legitimacy_erosion);
+
+                    // Each taxed agent loses a tiny amount of trust/affection toward the institution
+                    for m in &institution.members {
+                        let idx = m.as_u64() as usize;
+                        if idx < self.agents.len() {
+                            // Tax burden → anger if agent is already unhappy, shame if compliant
+                            let tax_fatigue = self.agents[idx].wealth.coin * Fixed::from_f64(tax_rate);
+                            if tax_fatigue > Fixed::from_f64(1.0) {
+                                // Heavy taxation → anger
+                                self.agents[idx].emotions.anger = (
+                                    self.agents[idx].emotions.anger + tax_fatigue * Fixed::from_f64(0.01)
+                                ).clamp_01();
+                            }
+                        }
                     }
                 }
             }

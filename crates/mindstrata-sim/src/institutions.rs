@@ -261,7 +261,15 @@ impl Institution {
     }
 
     /// Pay wages to role holders. Returns total paid.
+    /// Only pays if treasury can cover ALL wages. Returns ZERO if insolvent.
     pub fn pay_wages(&mut self, wage: Fixed, member_wealth: &mut Vec<(AgentId, Fixed)>) -> Fixed {
+        // Count how many role holders will receive wages
+        let role_holder_count = self.roles.iter().filter(|r| r.holder.is_some()).count();
+        let total_wage_cost = wage * Fixed::from_int(role_holder_count as i64);
+        // Treasury solvency check: must cover ALL wages before paying any
+        if self.treasury < total_wage_cost {
+            return Fixed::ZERO;
+        }
         let mut total = Fixed::ZERO;
         for role in &self.roles {
             if let Some(holder) = role.holder {
@@ -271,7 +279,7 @@ impl Institution {
                 }
             }
         }
-        self.treasury = (self.treasury - total).max(Fixed::ZERO);
+        self.treasury = self.treasury - total;
         total
     }
 
@@ -557,5 +565,97 @@ mod tests {
         assert!(paid > Fixed::ZERO);
         assert!(wealth[0].1 > Fixed::from_f64(50.0)); // paid
         assert!(inst.treasury < Fixed::from_f64(100.0)); // treasury reduced
+    }
+
+    #[test]
+    fn pay_wages_multiple_role_holders() {
+        let mut inst = Institution::new(0, InstitutionKind::Council, "Test".into());
+        inst.add_role(Role {
+            name: "Elder".into(),
+            holder: Some(AgentId::new(0)),
+            authority: Fixed::from_f64(0.8),
+            obligations: vec![],
+        });
+        inst.add_role(Role {
+            name: "Guard Captain".into(),
+            holder: Some(AgentId::new(1)),
+            authority: Fixed::from_f64(0.6),
+            obligations: vec![],
+        });
+        inst.treasury = Fixed::from_f64(100.0);
+        let mut wealth = vec![
+            (AgentId::new(0), Fixed::from_f64(50.0)),
+            (AgentId::new(1), Fixed::from_f64(30.0)),
+        ];
+        let paid = inst.pay_wages(Fixed::from_f64(5.0), &mut wealth);
+        assert_eq!(paid, Fixed::from_f64(10.0)); // 2 holders × 5.0
+        assert!(wealth[0].1 > Fixed::from_f64(50.0));
+        assert!(wealth[1].1 > Fixed::from_f64(30.0));
+        assert!(inst.treasury < Fixed::from_f64(100.0));
+    }
+
+    #[test]
+    fn pay_wages_skips_empty_treasury() {
+        let mut inst = Institution::new(0, InstitutionKind::Council, "Test".into());
+        inst.add_role(Role {
+            name: "Elder".into(),
+            holder: Some(AgentId::new(0)),
+            authority: Fixed::from_f64(0.8),
+            obligations: vec![],
+        });
+        inst.treasury = Fixed::from_f64(1.0); // not enough for wage of 5.0
+        let mut wealth = vec![
+            (AgentId::new(0), Fixed::from_f64(50.0)),
+        ];
+        let paid = inst.pay_wages(Fixed::from_f64(5.0), &mut wealth);
+        assert_eq!(paid, Fixed::ZERO); // can't afford
+    }
+
+    #[test]
+    fn collect_taxes_with_different_rates() {
+        let mut council = Institution::new(0, InstitutionKind::Council, "Council".into());
+        council.add_member(AgentId::new(0));
+        let mut wealth = vec![(AgentId::new(0), Fixed::from_f64(100.0))];
+        let collected = council.collect_taxes(Fixed::from_f64(COUNCIL_TAX_RATE), &mut wealth);
+        // 5% of 100 = 5.0
+        assert!((collected.to_f64() - 5.0).abs() < 0.1);
+        assert!((wealth[0].1.to_f64() - 95.0).abs() < 0.1);
+
+        let mut market = Institution::new(1, InstitutionKind::Market, "Market".into());
+        market.add_member(AgentId::new(0));
+        let mut wealth2 = vec![(AgentId::new(0), Fixed::from_f64(100.0))];
+        let collected2 = market.collect_taxes(Fixed::from_f64(MARKET_FEE_RATE), &mut wealth2);
+        // 3% of 100 = 3.0
+        assert!((collected2.to_f64() - 3.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn treasury_accumulates_from_taxes_then_pays_wages() {
+        let mut inst = Institution::new(0, InstitutionKind::Council, "Test".into());
+        inst.add_member(AgentId::new(0));
+        inst.add_role(Role {
+            name: "Elder".into(),
+            holder: Some(AgentId::new(0)),
+            authority: Fixed::from_f64(0.8),
+            obligations: vec![],
+        });
+        // Collect taxes first
+        let mut wealth = vec![(AgentId::new(0), Fixed::from_f64(100.0))];
+        let _ = inst.collect_taxes(Fixed::from_f64(0.1), &mut wealth);
+        assert!(inst.treasury > Fixed::ZERO); // 10.0
+        // Then pay wages from treasury
+        let paid = inst.pay_wages(Fixed::from_f64(5.0), &mut wealth);
+        assert_eq!(paid, Fixed::from_f64(5.0));
+        assert!((inst.treasury.to_f64() - 5.0).abs() < 0.1); // 10.0 - 5.0
+    }
+
+    #[test]
+    fn tax_rate_constants_are_consistent() {
+        assert!((COUNCIL_TAX_RATE - 0.05).abs() < f64::EPSILON);
+        assert!((MARKET_FEE_RATE - 0.03).abs() < f64::EPSILON);
+        assert!((TEMPLE_TITHE_RATE - 0.02).abs() < f64::EPSILON);
+        assert_eq!(TAX_COLLECTION_INTERVAL, 100);
+        assert_eq!(WAGE_PAYMENT_INTERVAL, 500);
+        assert!((BASE_WAGE - 2.0).abs() < f64::EPSILON);
     }
 }
