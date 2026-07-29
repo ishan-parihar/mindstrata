@@ -15,6 +15,10 @@ pub enum JournalEntryKind {
     Rested,
     TheftDetected { resource: String, amount: f64, fine: f64 },
     CommittedViolence { target: u64, injury: f64 },
+    /// §19.5.F: Wealth inherited from a deceased agent.
+    Inheritance { heir_count: u64, amount: f64 },
+    /// §19.5.I: Knowledge discovered through work or exploration.
+    KnowledgeDiscovered { knowledge_id: u64, name: String },
 }
 
 /// A single journal entry.

@@ -1449,6 +1449,85 @@ impl Simulation {
             }
         }
 
+        // ── 11d. §19.5.F Childhood socialization — children learn from parents ──
+        {
+            let mut socialization_updates: Vec<(usize, u64)> = Vec::new();
+            for i in 0..self.agents.len() {
+                let a = &self.agents[i];
+                if a.age >= Fixed::from_f64(18.0) {
+                    continue;
+                }
+                // Pick the first available parent to learn from
+                let parent_idx = a.parent_a.or(a.parent_b);
+                if let Some(pi) = parent_idx {
+                    if pi < self.agents.len() && !self.agents[pi].cultural.knowledge.is_empty() {
+                        let pick = self.rng.get_mut(RngStream::Social)
+                            .random_range(0..self.agents[pi].cultural.knowledge.len());
+                        let knowledge_id = self.agents[pi].cultural.knowledge[pick];
+                        if !self.agents[i].cultural.knowledge.contains(&knowledge_id) {
+                            let acceptance = (self.agents[i].cultural.openness * Fixed::from_f64(0.6)
+                                + Fixed::from_f64(0.4)).clamp_01();
+                            if acceptance > Fixed::from_f64(0.3) {
+                                socialization_updates.push((i, knowledge_id));
+                            }
+                        }
+                    }
+                }
+            }
+            for (ci, knowledge_id) in socialization_updates {
+                self.agents[ci].cultural.knowledge.push(knowledge_id);
+                if let Some(k) = self.knowledge_store.iter_mut().find(|k| k.id == knowledge_id) {
+                    k.holders += 1;
+                }
+            }
+        }
+
+        // ── 11e. §19.5.I Innovation — agents discover new knowledge through work ──
+        {
+            let work_agents: Vec<usize> = self.agents.iter().enumerate()
+                .filter(|(_, a)| matches!(a.current_action, crate::actions::ActionKind::Work))
+                .map(|(i, _)| i)
+                .collect();
+            let mut innovations: Vec<(usize, u64, String)> = Vec::new();
+            for idx in work_agents {
+                // Discovery chance based on openness and conscientiousness
+                let discovery_chance = (self.agents[idx].personality.openness * Fixed::from_f64(0.3)
+                    + self.agents[idx].personality.conscientiousness * Fixed::from_f64(0.2)
+                    + Fixed::from_f64(0.01)).clamp_01();
+                let roll = Fixed::from_f64(
+                    self.rng.get_mut(RngStream::Social).random::<f64>()
+                );
+                if roll < discovery_chance {
+                    // Try to discover a knowledge item not yet known by this agent
+                    for k in &self.knowledge_store {
+                        if !self.agents[idx].cultural.knowledge.contains(&k.id)
+                            && k.difficulty < self.agents[idx].personality.openness
+                        {
+                            innovations.push((idx, k.id, k.name.clone()));
+                            break; // one discovery per tick per agent
+                        }
+                    }
+                }
+            }
+            for (agent_idx, knowledge_id, name) in innovations {
+                self.agents[agent_idx].cultural.knowledge.push(knowledge_id);
+                if let Some(ks) = self.knowledge_store.iter_mut().find(|ks| ks.id == knowledge_id) {
+                    ks.holders += 1;
+                }
+                self.journal.record(tick_u64, AgentId::new(agent_idx as u64),
+                    JournalEntryKind::KnowledgeDiscovered {
+                        knowledge_id,
+                        name,
+                    });
+                self.events.push(SimEvent::KnowledgeTransferred {
+                    source: AgentId::new(agent_idx as u64),
+                    target: AgentId::new(agent_idx as u64),
+                    knowledge_id,
+                    tick,
+                });
+            }
+        }
+
         // ── 12. Institutional collective psychology derivation ────
         // §23: Derive collective psychology from member states each tick.
         for institution in self.institutions.iter_mut() {
@@ -2240,6 +2319,40 @@ impl Simulation {
                     tick = tick_u64,
                     "Agent died"
                 );
+                // §19.5.F: Inheritance — transfer wealth to spouse and children
+                let inherited_wealth = self.agents[idx].wealth.coin;
+                if inherited_wealth > Fixed::ZERO {
+                    let mut heirs: Vec<usize> = Vec::new();
+                    // Spouse inherits first
+                    if let Some(spouse_idx) = self.agents[idx].partner {
+                        if spouse_idx < self.agents.len() {
+                            heirs.push(spouse_idx);
+                        }
+                    }
+                    // Children inherit second
+                    for child_idx in 0..self.agents.len() {
+                        if child_idx != idx {
+                            let is_child = self.agents[child_idx].parent_a == Some(idx)
+                                || self.agents[child_idx].parent_b == Some(idx);
+                            if is_child {
+                                heirs.push(child_idx);
+                            }
+                        }
+                    }
+                    // Split wealth among heirs (or give to a random agent if no heirs)
+                    if !heirs.is_empty() {
+                        let share = inherited_wealth / Fixed::from_f64(heirs.len() as f64);
+                        for &heir_idx in &heirs {
+                            if heir_idx < self.agents.len() {
+                                self.agents[heir_idx].wealth.coin += share;
+                            }
+                        }
+                    }
+                    self.journal.record(tick_u64, agent_id, JournalEntryKind::Inheritance {
+                        heir_count: heirs.len() as u64,
+                        amount: inherited_wealth.to_f64(),
+                    });
+                }
                 self.agents.remove(idx);
                 self.agent_diseases.remove(idx);
                 // Remove from relationships
