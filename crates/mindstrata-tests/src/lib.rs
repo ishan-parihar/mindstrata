@@ -516,6 +516,46 @@ mod smoke {
     }
 
     #[test]
+    fn snapshot_deterministic_roundtrip() {
+        use mindstrata_sim::sim::{Simulation, SimConfig};
+        use mindstrata_sim::snapshot::Snapshot;
+
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 500,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+
+        // Create a fresh simulation and save snapshot at tick 0 (before any ticks)
+        let mut sim1 = Simulation::new(config.clone());
+        sim1.populate();
+        let snapshot = sim1.save_snapshot();
+        let bytes = snapshot.to_bytes().expect("Snapshot serialization failed");
+
+        // Load snapshot into a fresh simulation — both start from identical RNG state
+        let loaded = Snapshot::from_bytes(&bytes).expect("Snapshot deserialization failed");
+        let mut sim2 = Simulation::from_snapshot(loaded);
+
+        // Run both simulations for 100 ticks — should produce identical results
+        sim1.run(100);
+        sim2.run(100);
+
+        // Verify determinism: same seed + same ticks = same final state
+        let s1 = sim1.metrics_snapshot();
+        let s2 = sim2.metrics_snapshot();
+
+        assert_eq!(s1.tick, s2.tick, "Tick mismatch after roundtrip");
+        assert_eq!(s1.avg_hunger, s2.avg_hunger, "Hunger mismatch after roundtrip");
+        assert_eq!(s1.avg_joy, s2.avg_joy, "Joy mismatch after roundtrip");
+        assert_eq!(s1.total_grain, s2.total_grain, "Grain mismatch after roundtrip");
+        assert_eq!(s1.event_count, s2.event_count, "Event count mismatch after roundtrip");
+        assert_eq!(s1.agent_count, s2.agent_count, "Agent count mismatch after roundtrip");
+    }
+
+    #[test]
     fn resource_access_rights_enforced() {
         use mindstrata_core::fixed::Fixed;
         use mindstrata_core::id::EntityId;
