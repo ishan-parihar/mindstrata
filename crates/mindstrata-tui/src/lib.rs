@@ -349,10 +349,15 @@ pub fn render_belief_inspector(
     out.push_str(&format!("  {}\n", "─".repeat(42)));
 
     for b in beliefs.iter().take(15) {
+        let prop_name = match b.proposition_id {
+            0 => "crops_grow",
+            1 => "council_protects",
+            _ => "unknown",
+        };
         out.push_str(&format!(
             "  {:<5} {:<8} {:>8.3} {:>8.3} {:>8.3}\n",
             b.proposition_id,
-            "prop_{}",
+            prop_name,
             b.confidence.to_f64(),
             b.emotional_charge.to_f64(),
             b.identity_linkage.to_f64(),

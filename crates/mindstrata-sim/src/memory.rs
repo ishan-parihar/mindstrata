@@ -177,6 +177,29 @@ impl MemoryStore {
         self.episodes.len()
     }
 
+    /// §22: Memory reconsolidation — recall biases memories toward current emotional state.
+    /// Angry agents remember events as more negative; joyful agents remember more positively.
+    pub fn reconsolidate(&mut self, anger: Fixed, joy: Fixed) {
+        let bias_strength = Fixed::from_f64(0.003); // subtle per-tick reconsolidation
+        for mem in self.episodes.iter_mut() {
+            match mem.kind {
+                MemoryKind::Negative => {
+                    // Anger amplifies negative memories
+                    let amplifier = anger * bias_strength;
+                    mem.emotional_intensity = (mem.emotional_intensity + amplifier).clamp_01();
+                    mem.strength = (mem.strength + amplifier * Fixed::from_f64(0.5)).clamp_01();
+                }
+                MemoryKind::Positive => {
+                    // Joy amplifies positive memories
+                    let amplifier = joy * bias_strength;
+                    mem.emotional_intensity = (mem.emotional_intensity + amplifier).clamp_01();
+                    mem.strength = (mem.strength + amplifier * Fixed::from_f64(0.5)).clamp_01();
+                }
+                _ => {}
+            }
+        }
+    }
+
     fn evict_weakest(&mut self) {
         if let Some(min_idx) = self
             .episodes

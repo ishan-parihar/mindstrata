@@ -1217,6 +1217,9 @@ impl Simulation {
             // §19.5.G: Update status from current wealth
             agent.status.wealth_status = (agent.wealth.coin / Fixed::from_f64(20.0)).clamp_01();
             agent.status.recompute();
+
+            // §22: Memory reconsolidation — current emotions bias recalled memories
+            agent.memory.reconsolidate(agent.emotions.anger, agent.emotions.joy);
         }
 
         // ── 16. Ecology: season advance and fertility dynamics ──
