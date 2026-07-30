@@ -523,6 +523,35 @@ impl Simulation {
             }
         }
 
+        // Architecture-plan-2 §10.2: Initialize RelationshipV2 for each directed pair.
+        // Each agent gets a Vec<RelationshipV2> containing enriched relationships to all others.
+        // Relationships are pushed in the same order as self.relationships, so we can use
+        // index arithmetic for O(1) lookup instead of linear search.
+        let n_agents = self.agents.len();
+        for i in 0..n_agents {
+            let mut v2s = Vec::with_capacity(n_agents.saturating_sub(1));
+            for j in 0..n_agents {
+                if i != j {
+                    let mut rv2 = RelationshipV2::new(AgentId::new(i as u64), AgentId::new(j as u64));
+                    // O(1) lookup: relationships are pushed as (0,1),(0,2),...,(0,N-1),(1,0),(1,2),...
+                    let rel_idx = i * (n_agents - 1) + if j > i { j - 1 } else { j };
+                    if rel_idx < self.relationships.len() {
+                        rv2.trust = self.relationships[rel_idx].trust;
+                        rv2.affection = self.relationships[rel_idx].affection;
+                    }
+                    // Advance stage based on initial trust
+                    if rv2.trust > Fixed::from_f64(0.5) {
+                        rv2.stage = crate::relationship_v2::RelationshipStage::Acquaintance;
+                    }
+                    if rv2.trust > Fixed::from_f64(0.6) {
+                        rv2.stage = crate::relationship_v2::RelationshipStage::Familiar;
+                    }
+                    v2s.push(rv2);
+                }
+            }
+            self.agents[i].relationship_v2s = v2s;
+        }
+
         // Initialize disease tracking
         self.agent_diseases = vec![Vec::new(); self.agents.len()];
         self.site_work_ticks = vec![0; self.world.tiles.len()];
@@ -771,9 +800,11 @@ impl Simulation {
 
             }
 
-            // §8.1.4: Collect regulation deltas from step 0b, applied after appraisal in step 6.
-            let mut reg_valence_deltas: Vec<Fixed> = Vec::with_capacity(self.agents.len());
-            let mut reg_arousal_deltas: Vec<Fixed> = Vec::with_capacity(self.agents.len());
+            // §8.1.4: Collect regulation strategies from step 0b, applied after appraisal in step 6.
+            // Pre-allocated Vec avoids repeated allocation; capacity matches agent count.
+            let num_agents = self.agents.len();
+            let mut reg_strategies: Vec<crate::psychology::emotion_regulation::RegulationStrategy> =
+                Vec::with_capacity(num_agents);
 
             // ── 0b. Cognitive state update (§22.1) ────────────────────
             // §22.1: Stress reduces planning horizon, increases heuristic bias.
@@ -816,15 +847,10 @@ impl Simulation {
                     social_support,
                     personalities[i].extraversion,
                 );
-                // §8.1.4: Compute regulation deltas — applied AFTER appraisal (step 6)
-                // to avoid being overwritten by the appraisal-derived affect computation.
-                let (reg_valence_delta, reg_arousal_delta) = self.agents[i].emotion_regulation.apply_strategy(
-                    regulation_strategy,
-                    affects[i].valence,
-                    affects[i].arousal,
-                );
-                reg_valence_deltas.push(reg_valence_delta);
-                reg_arousal_deltas.push(reg_arousal_delta);
+                // §8.1.4: Store regulation strategy for post-appraisal application.
+                // The actual apply_strategy() call happens after appraisal (step 6)
+                // so the skill-scaled boost uses the fresh, appraisal-derived affect values.
+                reg_strategies.push(regulation_strategy);
                 self.agents[i].emotion_regulation.update_capacity(
                     stress, need_fatigue, social_support,
                 );
@@ -923,6 +949,46 @@ impl Simulation {
                 self.agents[i].psych_skills.update_automaticity(stress, need_fatigue);
                 if tick_u64 % 100 == 0 {
                     self.agents[i].psych_skills.decay_habits(tick_u64);
+                }
+            }
+
+            // Compute avg_wealth once before status updates (O(N) instead of O(N²))
+            let avg_wealth: Fixed = if self.agents.is_empty() {
+                Fixed::ZERO
+            } else {
+                self.agents.iter().map(|a| a.wealth.coin).fold(Fixed::ZERO, |acc, c| acc + c)
+                    / Fixed::from_int(self.agents.len() as i64)
+            };
+
+            for i in 0..self.agents.len() {
+                // Architecture-plan-2 §11.1: Status dimensions update.
+                // Decay shame and honor gradually; update wealth_rank from relative wealth.
+                self.agents[i].status_v2.decay();
+                // Sync authority from existing institutional role_status
+                self.agents[i].status_v2.authority = self.agents[i].status.role_status;
+                if avg_wealth > Fixed::ZERO {
+                    self.agents[i].status_v2.wealth_rank =
+                        (self.agents[i].wealth.coin / avg_wealth * Fixed::from_f64(0.5)).clamp_01();
+                }
+                // Update moral_reputation from moral pride and gratitude (weighted average)
+                self.agents[i].status_v2.moral_reputation =
+                    (self.agents[i].moral_cognition.moral_emotions.pride * Fixed::from_f64(0.5)
+                        + self.agents[i].moral_cognition.moral_emotions.gratitude * Fixed::from_f64(0.5))
+                    .clamp_01();
+                // Update prestige from relationship count (social connections)
+                let num_connections = self.agents[i].relationship_v2s.len() as i64;
+                if num_connections > 0 {
+                    let avg_quality: Fixed = self.agents[i].relationship_v2s.iter()
+                        .map(|r| r.quality())
+                        .fold(Fixed::ZERO, |acc, q| acc + q)
+                        / Fixed::from_int(num_connections);
+                    self.agents[i].status_v2.network_centrality = avg_quality;
+                }
+
+                // Architecture-plan-2 §10.2: RelationshipV2 decay.
+                // Decay all relationship V2s once per tick.
+                for rv2 in &mut self.agents[i].relationship_v2s {
+                    rv2.decay(1);
                 }
             }
 
@@ -1275,9 +1341,17 @@ impl Simulation {
                 affects[i].arousal = (emotions[i].fear + emotions[i].anger + emotions[i].joy)
                     * Fixed::from_f64(0.5);
                 // §8.1.4: Apply emotion regulation AFTER appraisal.
-                // Regulation is top-down modulation applied on top of bottom-up appraisal-derived affect.
-                affects[i].valence = (affects[i].valence + reg_valence_deltas[i]).clamp_01();
-                affects[i].arousal = (affects[i].arousal + reg_arousal_deltas[i]).clamp_01();
+                // Now apply_strategy() uses the fresh, appraisal-derived affect values
+                // as input — the skill-scaled boost is computed from the correct target state.
+                if i < reg_strategies.len() {
+                    let (reg_vd, reg_ad) = self.agents[i].emotion_regulation.apply_strategy(
+                        reg_strategies[i],
+                        affects[i].valence,
+                        affects[i].arousal,
+                    );
+                    affects[i].valence = (affects[i].valence + reg_vd).clamp_01();
+                    affects[i].arousal = (affects[i].arousal + reg_ad).clamp_01();
+                }
             }
 
             // ── 7. Emotion decay ──────────────────────────────────────
