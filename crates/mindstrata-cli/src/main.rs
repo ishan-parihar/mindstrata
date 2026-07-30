@@ -1,6 +1,5 @@
 //! Mindstrata CLI — run headless simulations.
 
-use anyhow::Result;
 use clap::{Parser, Subcommand};
 use mindstrata_sim::{Simulation, sim::SimConfig};
 use mindstrata_sim::scenario::Scenario;
@@ -101,7 +100,7 @@ enum Commands {
     },
 }
 
-fn main() -> Result<()> {
+fn main() {
     let cli = Cli::parse();
 
     match cli.command {
@@ -373,8 +372,6 @@ fn main() -> Result<()> {
             }
         }
     }
-
-    Ok(())
 }
 
 fn init_logging(verbose: bool) {

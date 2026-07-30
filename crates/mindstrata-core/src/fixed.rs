@@ -21,6 +21,7 @@ pub const ONE: i64 = SCALE;
 ///
 /// Internally stored as `i64` with 4 decimal places of precision.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[allow(clippy::cast_sign_loss, clippy::float_cmp, clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 pub struct Fixed(i64);
 
 impl Default for Fixed {

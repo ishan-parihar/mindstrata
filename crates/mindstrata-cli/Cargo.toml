@@ -16,7 +16,6 @@ mindstrata-tui = { path = "../mindstrata-tui" }
 clap = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-anyhow = { workspace = true }
 
 [lints]
 workspace = true
