@@ -166,58 +166,19 @@ impl From<&EmbodiedState> for crate::person::BodyState {
     }
 }
 
-/// Convert legacy BodyState fields into EmbodiedState for migration.
-/// Note: Sex and age cannot be recovered from BodyState; defaults are used.
-/// Callers should override genome.sex and age after migration if known.
-impl From<&crate::person::BodyState> for EmbodiedState {
-    fn from(body: &crate::person::BodyState) -> Self {
-        Self {
-            genome: Genome {
-                sex: genome::Sex::Male, // TODO: sex not stored in BodyState; override after migration
-                trait_predispositions: genome::TraitPredispositions::default(),
-                health_predispositions: genome::HealthPredispositions::default(),
-                metabolic_predispositions: genome::MetabolicPredispositions::default(),
-                physical_potential: genome::PhysicalPotential::default(),
-                fertility_predispositions: genome::FertilityPredispositions::default(),
-            },
-            endocrine: EndocrineState::default(),
-            nervous: NervousSystemState::default(),
-            health: body.health,
-            energy: body.energy,
-            hunger: body.hunger,
-            thirst: body.thirst,
-            fatigue: body.fatigue,
-            sickness: body.sickness,
-            injury: body.injury,
-            fertility: body.fertility,
-            age: Fixed::from_f64(25.0), // TODO: age not stored in BodyState; override after migration
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use rand::SeedableRng;
 
     #[test]
-    fn embodied_state_facade_matches_body_state() {
+    fn derived_health_matches_body_state_fields() {
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
         let embodied = EmbodiedState::random(Fixed::from_f64(25.0), &mut rng);
         let body: crate::person::BodyState = (&embodied).into();
         assert_eq!(body.hunger, embodied.hunger);
         assert_eq!(body.thirst, embodied.thirst);
         assert_eq!(body.injury, embodied.injury);
-    }
-
-    #[test]
-    fn body_state_migration_roundtrip() {
-        let original = crate::person::BodyState::default();
-        let embodied: EmbodiedState = (&original).into();
-        let migrated: crate::person::BodyState = (&embodied).into();
-        // Core fields should survive migration
-        assert_eq!(original.hunger, migrated.hunger);
-        assert_eq!(original.thirst, migrated.thirst);
     }
 
     #[test]

@@ -22,6 +22,8 @@ pub use crate::attention;
 pub use crate::person::Intention;
 use crate::person::{Affect, BodyState, Belief, CognitiveState, DerivedMentalState, DiscreteEmotions, Goal, GoalKind, GoalSource, IdentityKind, IdentityState, MoralValues, NeedState, Personality, Relationship, RelationshipKind, StatusState};
 use crate::biology::EmbodiedState;
+use crate::psychology::InteroceptiveState;
+use crate::psychology::SelfModel;
 use crate::provenance::{CausalProvenance, DecisionFactor, DecisionTrace};
 use crate::scenario::{Scenario, ShockKind};
 use crate::snapshot::Snapshot;
@@ -148,6 +150,10 @@ pub struct AgentBundle {
     /// Architecture-plan-2 §7.4: Rich biological substrate.
     /// Provides genome, endocrine axes, nervous system alongside legacy BodyState.
     pub embodied: EmbodiedState,
+    /// Architecture-plan-2 §8.1.1: Translates body signals into felt experience.
+    pub interoception: InteroceptiveState,
+    /// Architecture-plan-2 §8.1.7: Internal self-model with identity, roles, values.
+    pub self_model: SelfModel,
 }
 
 /// §4.2: Skill levels that improve through repeated practice.
@@ -327,6 +333,8 @@ impl Simulation {
         for i in 0..self.config.num_agents {
             let needs = NeedState::default();
             let personality = Personality::random(&mut populate_rng);
+            let neuroticism = personality.neuroticism;
+            let openness = personality.openness;
             let name = names[i as usize % names.len()].to_string();
             // Architecture-plan-2 §7.4: Generate rich biological substrate
             let agent_age = Fixed::from_f64(populate_rng.random_range(18.0..55.0));
@@ -429,6 +437,12 @@ impl Simulation {
                 completed_goals: Vec::new(),
                 skills: AgentSkills::default(),
                 embodied,
+                interoception: {
+                    let mut inter = crate::psychology::InteroceptiveState::default();
+                    inter.initialize_from_personality(neuroticism, openness, Fixed::ZERO);
+                    inter
+                },
+                self_model: crate::psychology::SelfModel::default(),
             });
         }
 
@@ -669,6 +683,7 @@ impl Simulation {
 
             // ── 0. Biological update (architecture-plan-2 §7) ──────────
             // Tick the rich biological substrate before cognitive processing.
+            // Uses previous tick's emotions — biology reacts to current felt state.
             // EmbodiedState feeds endocrine/nervous signals into the legacy BodyState.
             for i in 0..self.agents.len() {
                 let threat_level = emotions[i].fear + emotions[i].anger;
@@ -677,12 +692,15 @@ impl Simulation {
                 self.agents[i].embodied.tick_update(threat_level, social_safety, is_sleeping);
                 // Sync derived body fields from EmbodiedState back to legacy BodyState.
                 // Compute values first to avoid borrow conflicts between embodied and body.
+                // Boundary: hunger/thirst/sickness/injury are managed by health.rs and
+                // routines.rs, not synced from embodied — they operate on separate tracks.
                 let derived_health = self.agents[i].embodied.derived_health();
                 let derived_energy = self.agents[i].embodied.derived_energy();
                 let derived_fatigue = self.agents[i].embodied.derived_fatigue();
                 self.agents[i].body.health = derived_health;
                 self.agents[i].body.energy = derived_energy;
                 self.agents[i].body.fatigue = derived_fatigue;
+
             }
 
             // ── 0b. Cognitive state update (§22.1) ────────────────────
@@ -2745,6 +2763,8 @@ impl Simulation {
                 let agent_id = AgentId::new(child_idx as u64);
 
                 let child_embodied = EmbodiedState::random(child_age, &mut child_rng);
+                let child_neuroticism = child_personality.neuroticism;
+                let child_openness = child_personality.openness;
                 self.agents.push(AgentBundle {
                     body: BodyState::from(&child_embodied),
                     needs: NeedState::default(),
@@ -2784,6 +2804,12 @@ impl Simulation {
                     completed_goals: Vec::new(),
                     skills: AgentSkills::default(),
                     embodied: child_embodied,
+                    interoception: {
+                        let mut inter = crate::psychology::InteroceptiveState::default();
+                        inter.initialize_from_personality(child_neuroticism, child_openness, Fixed::ZERO);
+                        inter
+                    },
+                    self_model: crate::psychology::SelfModel::default(),
                 });                // Add relationships to all existing agents
                 for existing_idx in 0..self.agents.len() - 1 {
                     let trust = if existing_idx == parent_a || existing_idx == parent_b {
