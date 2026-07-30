@@ -769,6 +769,27 @@ impl Simulation {
             let mut emotions: Vec<DiscreteEmotions> =
                 self.agents.iter_mut().map(|a| std::mem::take(&mut a.emotions)).collect();
 
+            // Architecture-plan-2 §8.2: Epistemic reset and trust sync.
+            // Reset per-tick processing counters and sync trust network from relationships.
+            for agent in &mut self.agents {
+                agent.epistemic.reset_tick();
+            }
+            // Sync TrustNetwork from existing relationship trust values.
+            // This bridges the social interaction system's trust with the epistemic layer.
+            for i in 0..self.agents.len() {
+                let agent_id = AgentId::new(i as u64);
+                for rel in &self.relationships {
+                    if rel.from == agent_id {
+                        let target_id = rel.to.as_u64();
+                        // Sync trust: update epistemic trust network from relationship trust.
+                        // Use a small delta to avoid overwriting — trust evolves gradually.
+                        let current_trust = self.agents[i].epistemic.trust_network.trust_for_agent(target_id);
+                        let delta = (rel.trust - current_trust) * Fixed::from_f64(0.1);
+                        self.agents[i].epistemic.trust_network.update_agent_trust(target_id, delta);
+                    }
+                }
+            }
+
             // ── 0. Biological update (architecture-plan-2 §7) ──────────
             // Tick the rich biological substrate before cognitive processing.
             // Uses previous tick's emotions — biology reacts to current felt state.
