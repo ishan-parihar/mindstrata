@@ -770,23 +770,32 @@ impl Simulation {
                 self.agents.iter_mut().map(|a| std::mem::take(&mut a.emotions)).collect();
 
             // Architecture-plan-2 §8.2: Epistemic reset and trust sync.
-            // Reset per-tick processing counters and sync trust network from relationships.
+            // §8.2: Reset per-tick processing counters and sync trust network from relationships.
+            // Trust sync convergence rate: ~63% aligned after 10 ticks, ~86% after 20 ticks.
+            // §8.2: Trust sync convergence rate: ~63% aligned after 10 ticks, ~86% after 20 ticks.
+            let trust_sync_rate = Fixed::from_f64(0.1);
             for agent in &mut self.agents {
                 agent.epistemic.reset_tick();
             }
             // Sync TrustNetwork from existing relationship trust values.
+            // O(N) pre-computation: build a per-agent trust delta map from relationships.
             // This bridges the social interaction system's trust with the epistemic layer.
+            let mut trust_deltas: Vec<Vec<(u64, Fixed)>> = Vec::with_capacity(self.agents.len());
+            for _ in 0..self.agents.len() {
+                trust_deltas.push(Vec::new());
+            }
+            for rel in &self.relationships {
+                let from_idx = rel.from.as_u64() as usize;
+                if from_idx < trust_deltas.len() {
+                    let target_id = rel.to.as_u64();
+                    trust_deltas[from_idx].push((target_id, rel.trust));
+                }
+            }
             for i in 0..self.agents.len() {
-                let agent_id = AgentId::new(i as u64);
-                for rel in &self.relationships {
-                    if rel.from == agent_id {
-                        let target_id = rel.to.as_u64();
-                        // Sync trust: update epistemic trust network from relationship trust.
-                        // Use a small delta to avoid overwriting — trust evolves gradually.
-                        let current_trust = self.agents[i].epistemic.trust_network.trust_for_agent(target_id);
-                        let delta = (rel.trust - current_trust) * Fixed::from_f64(0.1);
-                        self.agents[i].epistemic.trust_network.update_agent_trust(target_id, delta);
-                    }
+                for &(target_id, rel_trust) in &trust_deltas[i] {
+                    let current_trust = self.agents[i].epistemic.trust_network.trust_for_agent(target_id);
+                    let delta = (rel_trust - current_trust) * trust_sync_rate;
+                    self.agents[i].epistemic.trust_network.update_agent_trust(target_id, delta);
                 }
             }
 
