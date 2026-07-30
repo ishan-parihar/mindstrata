@@ -21,6 +21,7 @@ use crate::routines::DailyRoutine;
 pub use crate::attention;
 pub use crate::person::Intention;
 use crate::person::{Affect, BodyState, Belief, CognitiveState, DerivedMentalState, DiscreteEmotions, Goal, GoalKind, GoalSource, IdentityKind, IdentityState, MoralValues, NeedState, Personality, Relationship, RelationshipKind, StatusState};
+use crate::biology::EmbodiedState;
 use crate::provenance::{CausalProvenance, DecisionFactor, DecisionTrace};
 use crate::scenario::{Scenario, ShockKind};
 use crate::snapshot::Snapshot;
@@ -144,6 +145,9 @@ pub struct AgentBundle {
     pub completed_goals: Vec<Goal>,
     /// §4.2: Per-agent skill levels — improve with repeated actions.
     pub skills: AgentSkills,
+    /// Architecture-plan-2 §7.4: Rich biological substrate.
+    /// Provides genome, endocrine axes, nervous system alongside legacy BodyState.
+    pub embodied: EmbodiedState,
 }
 
 /// §4.2: Skill levels that improve through repeated practice.
@@ -321,10 +325,12 @@ impl Simulation {
             .collect();
 
         for i in 0..self.config.num_agents {
-            let body = BodyState::default();
             let needs = NeedState::default();
             let personality = Personality::random(&mut populate_rng);
             let name = names[i as usize % names.len()].to_string();
+            // Architecture-plan-2 §7.4: Generate rich biological substrate
+            let agent_age = Fixed::from_f64(populate_rng.random_range(18.0..55.0));
+            let embodied = EmbodiedState::random(agent_age, &mut populate_rng);
 
             let home_site = if house_indices.is_empty() {
                 None
@@ -370,7 +376,7 @@ impl Simulation {
             };
 
             self.agents.push(AgentBundle {
-                body,
+                body: BodyState::from(&embodied),
                 needs,
                 personality,
                 goals: Vec::new(),
@@ -407,7 +413,7 @@ impl Simulation {
                 derived: DerivedMentalState::default(),
                 recent_successes: 0,
                 recent_attempts: 0,
-                age: Fixed::from_f64(populate_rng.random_range(18.0..55.0)),
+                age: agent_age,
                 wealth: WealthState {
                     coin: Fixed::from_f64(populate_rng.random_range(5.0..20.0)),
                 },
@@ -422,7 +428,7 @@ impl Simulation {
                 rejected_goals: Vec::new(),
                 completed_goals: Vec::new(),
                 skills: AgentSkills::default(),
-
+                embodied,
             });
         }
 
@@ -661,7 +667,25 @@ impl Simulation {
             let mut emotions: Vec<DiscreteEmotions> =
                 self.agents.iter_mut().map(|a| std::mem::take(&mut a.emotions)).collect();
 
-            // ── 0. Cognitive state update (§22.1) ────────────────────
+            // ── 0. Biological update (architecture-plan-2 §7) ──────────
+            // Tick the rich biological substrate before cognitive processing.
+            // EmbodiedState feeds endocrine/nervous signals into the legacy BodyState.
+            for i in 0..self.agents.len() {
+                let threat_level = emotions[i].fear + emotions[i].anger;
+                let social_safety = Fixed::ONE - threat_level;
+                let is_sleeping = matches!(self.agents[i].current_action, ActionKind::Rest);
+                self.agents[i].embodied.tick_update(threat_level, social_safety, is_sleeping);
+                // Sync derived body fields from EmbodiedState back to legacy BodyState.
+                // Compute values first to avoid borrow conflicts between embodied and body.
+                let derived_health = self.agents[i].embodied.derived_health();
+                let derived_energy = self.agents[i].embodied.derived_energy();
+                let derived_fatigue = self.agents[i].embodied.derived_fatigue();
+                self.agents[i].body.health = derived_health;
+                self.agents[i].body.energy = derived_energy;
+                self.agents[i].body.fatigue = derived_fatigue;
+            }
+
+            // ── 0b. Cognitive state update (§22.1) ────────────────────
             // §22.1: Stress reduces planning horizon, increases heuristic bias.
             // This must happen before action selection to affect decision-making.
             for i in 0..self.agents.len() {
@@ -2720,8 +2744,9 @@ impl Simulation {
 
                 let agent_id = AgentId::new(child_idx as u64);
 
+                let child_embodied = EmbodiedState::random(child_age, &mut child_rng);
                 self.agents.push(AgentBundle {
-                    body: BodyState::default(),
+                    body: BodyState::from(&child_embodied),
                     needs: NeedState::default(),
                     personality: child_personality,
                     goals: Vec::new(),
@@ -2758,6 +2783,7 @@ impl Simulation {
                     rejected_goals: Vec::new(),
                     completed_goals: Vec::new(),
                     skills: AgentSkills::default(),
+                    embodied: child_embodied,
                 });                // Add relationships to all existing agents
                 for existing_idx in 0..self.agents.len() - 1 {
                     let trust = if existing_idx == parent_a || existing_idx == parent_b {
