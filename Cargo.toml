@@ -47,6 +47,13 @@ option_if_let_else = "allow"
 items_after_statements = "allow"
 default_trait_access = "allow"
 bool_to_int_with_if = "allow"
+match_same_arms = "allow"
+redundant_field_names = "allow"
+needless_pass_by_value = "allow"
+unreadable_literal = "allow"
+return_self_not_must_use = "allow"
+unnecessary_wraps = "allow"
+manual_let_else = "allow"
 
 [workspace.dependencies]
 # Internal crates
