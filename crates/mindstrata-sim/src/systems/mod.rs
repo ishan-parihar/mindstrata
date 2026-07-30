@@ -30,6 +30,18 @@ pub struct SystemContext<'a> {
     pub events: &'a mut Vec<mindstrata_core::event::SimEvent>,
 }
 
+impl<'a> SystemContext<'a> {
+    /// Create a new system context from borrowed fields.
+    pub fn new(
+        tick: u64,
+        rng: &'a mut RngStreams,
+        world: &'a mut World,
+        events: &'a mut Vec<mindstrata_core::event::SimEvent>,
+    ) -> Self {
+        Self { tick, rng, world, events }
+    }
+}
+
 // ── Need decay system ────────────────────────────────────────────────────
 
 /// Decay needs each tick: deficits grow over time.
