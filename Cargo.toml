@@ -51,6 +51,8 @@ match_same_arms = "allow"
 redundant_field_names = "allow"
 unreadable_literal = "allow"
 manual_let_else = "allow"
+format_push_string = "allow"
+unnecessary_wraps = "allow"
 
 [workspace.dependencies]
 # Internal crates

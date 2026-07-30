@@ -159,7 +159,7 @@ mod tests {
 
     #[test]
     fn goal_congruent_produces_joy() {
-        let mut rng = RngStreams::new(42);
+        let _rng = RngStreams::new(42);
         let appraisal = Appraisal {
             goal_relevance: Fixed::from_f64(0.8),
             goal_congruence: Fixed::from_f64(0.7),
@@ -177,7 +177,7 @@ mod tests {
 
     #[test]
     fn unfair_other_action_produces_anger() {
-        let mut rng = RngStreams::new(42);
+        let _rng = RngStreams::new(42);
         let appraisal = Appraisal {
             goal_relevance: Fixed::from_f64(0.8),
             goal_congruence: Fixed::from_f64(-0.5),
@@ -197,7 +197,7 @@ mod tests {
 
     #[test]
     fn low_coping_increases_fear() {
-        let mut rng = RngStreams::new(42);
+        let _rng = RngStreams::new(42);
         let appraisal = Appraisal {
             goal_relevance: Fixed::from_f64(0.6),
             goal_congruence: Fixed::from_f64(-0.3),

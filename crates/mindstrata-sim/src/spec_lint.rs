@@ -378,7 +378,7 @@ mod tests {
             .iter()
             .filter(|i| i.severity == LintSeverity::Error)
             .collect();
-        assert!(errors.is_empty(), "Spec lint errors found:\n{}", format_report(&issues))
+        assert!(errors.is_empty(), "Spec lint errors found:\n{}", format_report(&issues));
     }
 
     #[test]

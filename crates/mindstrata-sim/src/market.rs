@@ -462,7 +462,7 @@ mod tests {
 
     #[test]
     fn trade_reduces_buyer_coin() {
-        let mut buyer = WealthState { coin: Fixed::from_f64(20.0), ..Default::default() };
+        let mut buyer = WealthState { coin: Fixed::from_f64(20.0) };
         let mut seller_stock = Fixed::from_f64(5.0);
         let mut market = MarketState::new();
 
@@ -478,7 +478,7 @@ mod tests {
 
     #[test]
     fn trade_fails_with_insufficient_funds() {
-        let mut buyer = WealthState { coin: Fixed::from_f64(1.0), ..Default::default() };
+        let mut buyer = WealthState { coin: Fixed::from_f64(1.0) };
         let mut seller_stock = Fixed::from_f64(5.0);
         let mut market = MarketState::new();
 
@@ -488,8 +488,8 @@ mod tests {
 
     #[test]
     fn direct_trade_respects_trust() {
-        let mut buyer_high_trust = WealthState { coin: Fixed::from_f64(100.0), ..Default::default() };
-        let mut buyer_low_trust = WealthState { coin: Fixed::from_f64(100.0), ..Default::default() };
+        let mut buyer_high_trust = WealthState { coin: Fixed::from_f64(100.0) };
+        let mut buyer_low_trust = WealthState { coin: Fixed::from_f64(100.0) };
         let mut stock1 = Fixed::from_f64(10.0);
         let mut stock2 = Fixed::from_f64(10.0);
         let mut market = MarketState::new();

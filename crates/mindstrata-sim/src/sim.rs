@@ -650,15 +650,16 @@ impl Simulation {
                 events: &mut self.events,
             };
 
-            // Extract agent data for systems
-            let mut bodies: Vec<BodyState> = self.agents.iter().map(|a| a.body.clone()).collect();
-            let mut needs: Vec<NeedState> = self.agents.iter().map(|a| a.needs.clone()).collect();
+            // Extract agent data for systems (std::mem::take avoids cloning for mutable fields;
+            // personality is read-only so we keep .clone())
+            let mut bodies: Vec<BodyState> = self.agents.iter_mut().map(|a| std::mem::take(&mut a.body)).collect();
+            let mut needs: Vec<NeedState> = self.agents.iter_mut().map(|a| std::mem::take(&mut a.needs)).collect();
             let personalities: Vec<Personality> =
                 self.agents.iter().map(|a| a.personality.clone()).collect();
-            let mut goals: Vec<Vec<Goal>> = self.agents.iter().map(|a| a.goals.clone()).collect();
-            let mut affects: Vec<Affect> = self.agents.iter().map(|a| a.affect.clone()).collect();
+            let mut goals: Vec<Vec<Goal>> = self.agents.iter_mut().map(|a| std::mem::take(&mut a.goals)).collect();
+            let mut affects: Vec<Affect> = self.agents.iter_mut().map(|a| std::mem::take(&mut a.affect)).collect();
             let mut emotions: Vec<DiscreteEmotions> =
-                self.agents.iter().map(|a| a.emotions.clone()).collect();
+                self.agents.iter_mut().map(|a| std::mem::take(&mut a.emotions)).collect();
 
             // ── 0. Cognitive state update (§22.1) ────────────────────
             // §22.1: Stress reduces planning horizon, increases heuristic bias.
@@ -809,7 +810,7 @@ impl Simulation {
                         // §10.3: Routine creates behavioral stability — prefer scheduled action
                         routine_action
                     } else if !self.agents[i].feuds.is_empty()
-                        && self.agents[i].emotions.anger > Fixed::from_f64(0.4)
+                        && emotions[i].anger > Fixed::from_f64(0.4)
                         && needs[i].hunger < Fixed::from_f64(0.85)
                         && needs[i].thirst < Fixed::from_f64(0.85)
                     {
@@ -993,7 +994,7 @@ impl Simulation {
                     } else {
                         Fixed::from_f64(-0.3)
                     },
-                    coping_potential: self.agents[i].personality.conscientiousness,
+                    coping_potential: personalities[i].conscientiousness,
                     expectedness: Fixed::from_f64(0.5),
                     fairness: Fixed::from_f64(0.5),
                     agency: Agency::Circumstance,
@@ -1041,13 +1042,13 @@ impl Simulation {
                 );
             }
 
-            // ── Write back ────────────────────────────────────────────
+            // ── Write back (std::mem::take avoids cloning) ────────────
             for (i, agent) in self.agents.iter_mut().enumerate() {
-                agent.body = bodies[i].clone();
-                agent.needs = needs[i].clone();
-                agent.goals = goals[i].clone();
-                agent.affect = affects[i].clone();
-                agent.emotions = emotions[i].clone();
+                agent.body = std::mem::take(&mut bodies[i]);
+                agent.needs = std::mem::take(&mut needs[i]);
+                agent.goals = std::mem::take(&mut goals[i]);
+                agent.affect = std::mem::take(&mut affects[i]);
+                agent.emotions = std::mem::take(&mut emotions[i]);
             }
 
         } // ctx is dropped here, releasing mutable borrows on self.events and self.rng
