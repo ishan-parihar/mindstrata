@@ -214,8 +214,10 @@ mod tests {
 
     #[test]
     fn pain_decays_without_input() {
-        let mut pain = PainState::default();
-        pain.acute = Fixed::from_f64(0.8);
+        let mut pain = PainState {
+            acute: Fixed::from_f64(0.8),
+            ..PainState::default()
+        };
         pain.update(Fixed::ZERO);
         assert!(pain.acute < Fixed::from_f64(0.8));
     }
@@ -230,7 +232,6 @@ mod tests {
     #[test]
     fn trauma_accumulates_from_sustained_arousal() {
         let mut ns = NervousSystemState::default();
-        // Run 100 ticks with high threat
         for _ in 0..100 {
             ns.update(Fixed::from_f64(0.9), Fixed::ZERO, Fixed::ZERO, false);
         }
@@ -239,10 +240,11 @@ mod tests {
 
     #[test]
     fn parasympathetic_recoveres_in_safety() {
-        let mut ns = NervousSystemState::default();
-        ns.parasympathetic_tone = Fixed::from_f64(0.1);
-        ns.sympathetic_arousal = Fixed::from_f64(0.8);
-        // Run 50 ticks in safety
+        let mut ns = NervousSystemState {
+            parasympathetic_tone: Fixed::from_f64(0.1),
+            sympathetic_arousal: Fixed::from_f64(0.8),
+            ..NervousSystemState::default()
+        };
         for _ in 0..50 {
             ns.update(Fixed::ZERO, Fixed::from_f64(0.8), Fixed::ZERO, false);
         }
@@ -251,10 +253,15 @@ mod tests {
 
     #[test]
     fn social_engagement_requires_parasympathetic() {
-        let mut ns = NervousSystemState::default();
-        ns.parasympathetic_tone = Fixed::from_f64(0.8);
-        assert!(ns.social_engagement_capacity() > Fixed::from_f64(0.5));
-        ns.parasympathetic_tone = Fixed::from_f64(0.1);
-        assert!(ns.social_engagement_capacity() < Fixed::from_f64(0.3));
+        let ns_high = NervousSystemState {
+            parasympathetic_tone: Fixed::from_f64(0.8),
+            ..NervousSystemState::default()
+        };
+        assert!(ns_high.social_engagement_capacity() > Fixed::from_f64(0.5));
+        let ns_low = NervousSystemState {
+            parasympathetic_tone: Fixed::from_f64(0.1),
+            ..NervousSystemState::default()
+        };
+        assert!(ns_low.social_engagement_capacity() < Fixed::from_f64(0.3));
     }
 }

@@ -243,8 +243,10 @@ mod tests {
 
     #[test]
     fn threaten_identity_reduces_security() {
-        let mut model = SelfModel::default();
-        model.security = Fixed::from_f64(0.8);
+        let mut model = SelfModel {
+            security: Fixed::from_f64(0.8),
+            ..SelfModel::default()
+        };
         model.claims.push(IdentityClaim {
             claim: "I am a protector".into(),
             strength: Fixed::from_f64(0.9),

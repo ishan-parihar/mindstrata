@@ -271,8 +271,10 @@ mod tests {
 
     #[test]
     fn stress_axis_recovers() {
-        let mut axis = StressAxis::default();
-        axis.level = Fixed::from_f64(0.8);
+        let mut axis = StressAxis {
+            level: Fixed::from_f64(0.8),
+            ..StressAxis::default()
+        };
         let tone = Fixed::from_f64(0.5);
         // Acute input 0, so only recovery happens
         axis.update(Fixed::ZERO, tone);
@@ -281,8 +283,10 @@ mod tests {
 
     #[test]
     fn stress_axis_increases_with_input() {
-        let mut axis = StressAxis::default();
-        axis.level = Fixed::from_f64(0.2);
+        let mut axis = StressAxis {
+            level: Fixed::from_f64(0.2),
+            ..StressAxis::default()
+        };
         let tone = Fixed::from_f64(0.5);
         axis.update(Fixed::from_f64(0.8), tone);
         assert!(axis.level > Fixed::from_f64(0.2));
@@ -290,8 +294,13 @@ mod tests {
 
     #[test]
     fn parasympathetic_tone_inversely_relates_to_stress() {
-        let mut endo = EndocrineState::default();
-        endo.stress.level = Fixed::from_f64(0.1);
+        let mut endo = EndocrineState {
+            stress: StressAxis {
+                level: Fixed::from_f64(0.1),
+                ..StressAxis::default()
+            },
+            ..EndocrineState::default()
+        };
         let calm_tone = endo.parasympathetic_tone();
         endo.stress.level = Fixed::from_f64(0.9);
         let stressed_tone = endo.parasympathetic_tone();

@@ -79,11 +79,11 @@ impl EmbodiedState {
     // from the richer EmbodiedState without modification.
 
     /// Derived health from biological subsystems.
-    /// immune_strength ranges 0–1, so we map it to 0.4–1.0 range to avoid
-    /// penalizing agents with default genome.
+    /// Maps immune_strength to 0.7–1.0 range so default genome (0.6) → 0.88.
+    /// This ensures default agents start near full health like the legacy BodyState.
     pub fn derived_health(&self) -> Fixed {
         let base = self.health;
-        let immune_modifier = Fixed::from_f64(0.4) + self.genome.health_predispositions.immune_strength * Fixed::from_f64(0.6);
+        let immune_modifier = Fixed::from_f64(0.7) + self.genome.health_predispositions.immune_strength * Fixed::from_f64(0.3);
         let stress_penalty = self.endocrine.stress.level * Fixed::from_f64(0.2);
         let pain_penalty = self.nervous.pain.effective_pain() * Fixed::from_f64(0.1);
         (base * immune_modifier - stress_penalty - pain_penalty).clamp_01()

@@ -92,9 +92,10 @@ impl InteroceptiveState {
         tone.clamp_01()
     }
 
-    /// Update interoceptive state based on personality and experience.
-    /// Neuroticism increases negative bias, openness increases sensitivity.
-    pub fn update_from_personality(
+    /// Initialize interoceptive state from personality traits and trauma history.
+    /// Should be called once at agent creation, not per tick, since personality
+    /// traits are static and trauma_load changes slowly.
+    pub fn initialize_from_personality(
         &mut self,
         neuroticism: Fixed,
         openness: Fixed,
@@ -118,8 +119,10 @@ mod tests {
 
     #[test]
     fn felt_hunger_amplified_by_awareness() {
-        let mut state = InteroceptiveState::default();
-        state.hunger_awareness = Fixed::from_f64(0.8);
+        let state = InteroceptiveState {
+            hunger_awareness: Fixed::from_f64(0.8),
+            ..InteroceptiveState::default()
+        };
         let felt = state.felt_hunger(Fixed::from_f64(0.5));
         assert!(felt > Fixed::from_f64(0.3));
     }
@@ -142,7 +145,7 @@ mod tests {
     #[test]
     fn neuroticism_increases_negative_bias() {
         let mut state = InteroceptiveState::default();
-        state.update_from_personality(
+        state.initialize_from_personality(
             Fixed::from_f64(0.8),
             Fixed::from_f64(0.5),
             Fixed::ZERO,

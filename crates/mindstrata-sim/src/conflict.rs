@@ -234,8 +234,10 @@ mod tests {
         let personality = make_personality();
         let emotions = make_emotions();
         let state_no_trauma = ConflictState::default();
-        let mut state_with_trauma = ConflictState::default();
-        state_with_trauma.trauma = Fixed::from_f64(0.5);
+        let state_with_trauma = ConflictState {
+            trauma: Fixed::from_f64(0.5),
+            ..ConflictState::default()
+        };
 
         let r1 = resolve_conflict(
             ConflictKind::Violence,
@@ -304,9 +306,11 @@ mod tests {
 
     #[test]
     fn combat_fatigue_decays_when_not_in_combat() {
-        let mut state = ConflictState::default();
-        state.combat_fatigue = Fixed::from_f64(0.5);
-        state.in_combat = false;
+        let mut state = ConflictState {
+            combat_fatigue: Fixed::from_f64(0.5),
+            in_combat: false,
+            ..ConflictState::default()
+        };
 
         state.update();
         assert!(state.combat_fatigue < Fixed::from_f64(0.5));
