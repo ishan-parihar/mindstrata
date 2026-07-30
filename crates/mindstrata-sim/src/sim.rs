@@ -24,6 +24,17 @@ use crate::person::{Affect, BodyState, Belief, CognitiveState, DerivedMentalStat
 use crate::biology::EmbodiedState;
 use crate::psychology::InteroceptiveState;
 use crate::psychology::SelfModel;
+use crate::psychology::AttachmentSystem;
+use crate::psychology::EmotionRegulationState;
+use crate::psychology::MoralCognition;
+use crate::psychology::ProspectionState;
+use crate::psychology::NarrativeIdentity;
+use crate::psychology::DevelopmentalPsychState;
+use crate::psychology::PsychopathologyState;
+use crate::psychology::SkillState as PsychSkillState;
+use crate::relationship_v2::RelationshipV2;
+use crate::attraction::AttractionModel;
+use crate::status_dims::StatusDimensions;
 use crate::provenance::{CausalProvenance, DecisionFactor, DecisionTrace};
 use crate::scenario::{Scenario, ShockKind};
 use crate::snapshot::Snapshot;
@@ -154,6 +165,28 @@ pub struct AgentBundle {
     pub interoception: InteroceptiveState,
     /// Architecture-plan-2 §8.1.7: Internal self-model with identity, roles, values.
     pub self_model: SelfModel,
+    /// Architecture-plan-2 §8.1.14: Attachment style and security.
+    pub attachment: AttachmentSystem,
+    /// Architecture-plan-2 §8.1.4: Emotion regulation strategies.
+    pub emotion_regulation: EmotionRegulationState,
+    /// Architecture-plan-2 §8.1.10: Moral foundations and norm internalization.
+    pub moral_cognition: MoralCognition,
+    /// Architecture-plan-2 §8.1.16: Prospection and mental simulation.
+    pub prospection: ProspectionState,
+    /// Architecture-plan-2 §8.1.17: Life narrative and meaning-making.
+    pub narrative: NarrativeIdentity,
+    /// Architecture-plan-2 §8.1.13: Developmental psychology.
+    pub developmental: DevelopmentalPsychState,
+    /// Architecture-plan-2 §8.1.15: Mental health risk dynamics.
+    pub psychopathology: PsychopathologyState,
+    /// Architecture-plan-2 §8.1.19: Skills and habits.
+    pub psych_skills: PsychSkillState,
+    /// Architecture-plan-2 §10.2: Enriched relationship model.
+    pub relationship_v2s: Vec<RelationshipV2>,
+    /// Architecture-plan-2 §10.4: Attraction model for potential partners.
+    pub attraction: AttractionModel,
+    /// Architecture-plan-2 §11.1: Multi-dimensional status.
+    pub status_v2: StatusDimensions,
 }
 
 /// §4.2: Skill levels that improve through repeated practice.
@@ -339,6 +372,8 @@ impl Simulation {
             // Architecture-plan-2 §7.4: Generate rich biological substrate
             let agent_age = Fixed::from_f64(populate_rng.random_range(18.0..55.0));
             let embodied = EmbodiedState::random(agent_age, &mut populate_rng);
+            // Extract genome values before embodied is moved into AgentBundle
+            let attachment_vulnerability = embodied.genome.trait_predispositions.attachment_vulnerability;
 
             let home_site = if house_indices.is_empty() {
                 None
@@ -443,6 +478,25 @@ impl Simulation {
                     inter
                 },
                 self_model: crate::psychology::SelfModel::default(),
+                attachment: {
+                    let mut att = crate::psychology::AttachmentSystem::default();
+                    att.initialize(
+                        Fixed::from_f64(populate_rng.random_range(0.3..0.8)), // caregiver security
+                        Fixed::from_f64(populate_rng.random_range(0.0..0.3)), // trauma history
+                        attachment_vulnerability,
+                    );
+                    att
+                },
+                emotion_regulation: crate::psychology::EmotionRegulationState::default(),
+                moral_cognition: crate::psychology::MoralCognition::default(),
+                prospection: crate::psychology::ProspectionState::default(),
+                narrative: crate::psychology::NarrativeIdentity::default(),
+                developmental: crate::psychology::DevelopmentalPsychState::default(),
+                psychopathology: crate::psychology::PsychopathologyState::default(),
+                psych_skills: crate::psychology::SkillState::default(),
+                relationship_v2s: Vec::new(), // populated after agents are created
+                attraction: crate::attraction::AttractionModel::default(),
+                status_v2: crate::status_dims::StatusDimensions::default(),
             });
         }
 
@@ -717,6 +771,10 @@ impl Simulation {
 
             }
 
+            // §8.1.4: Collect regulation deltas from step 0b, applied after appraisal in step 6.
+            let mut reg_valence_deltas: Vec<Fixed> = Vec::with_capacity(self.agents.len());
+            let mut reg_arousal_deltas: Vec<Fixed> = Vec::with_capacity(self.agents.len());
+
             // ── 0b. Cognitive state update (§22.1) ────────────────────
             // §22.1: Stress reduces planning horizon, increases heuristic bias.
             // This must happen before action selection to affect decision-making.
@@ -724,6 +782,148 @@ impl Simulation {
                 let stress = emotions[i].fear + emotions[i].anger;
                 let need_fatigue = needs[i].fatigue.max(needs[i].hunger).max(needs[i].thirst);
                 self.agents[i].cognitive.update(stress, need_fatigue);
+
+                // Architecture-plan-2 §8.1.4: Emotion regulation
+                // Compute social support from relationships (average trust of top-3 closest agents)
+                // Uses a fixed-size stack array to avoid heap allocation per agent per tick.
+                let social_support = {
+                    let mut top3: [Fixed; 3] = [Fixed::ZERO; 3];
+                    let mut count: usize = 0;
+                    for r in self.relationships.iter() {
+                        if r.from == AgentId::new(i as u64) {
+                            // Insert into sorted top-3 (descending)
+                            let pos = top3.iter().position(|t| r.trust > *t);
+                            if let Some(p) = pos {
+                                // Shift smaller values right, insert at p
+                                for j in (p + 1..3).rev() {
+                                    top3[j] = top3[j - 1];
+                                }
+                                top3[p] = r.trust;
+                            }
+                            count += 1;
+                        }
+                    }
+                    if count > 0 {
+                        let n = count.min(3);
+                        let sum: Fixed = top3[..n].iter().fold(Fixed::ZERO, |acc, t| acc + *t);
+                        sum / Fixed::from_int(n as i64)
+                    } else {
+                        Fixed::from_f64(0.3) // baseline when no relationships
+                    }
+                };
+                let regulation_strategy = self.agents[i].emotion_regulation.select_strategy(
+                    stress,
+                    social_support,
+                    personalities[i].extraversion,
+                );
+                // §8.1.4: Compute regulation deltas — applied AFTER appraisal (step 6)
+                // to avoid being overwritten by the appraisal-derived affect computation.
+                let (reg_valence_delta, reg_arousal_delta) = self.agents[i].emotion_regulation.apply_strategy(
+                    regulation_strategy,
+                    affects[i].valence,
+                    affects[i].arousal,
+                );
+                reg_valence_deltas.push(reg_valence_delta);
+                reg_arousal_deltas.push(reg_arousal_delta);
+                self.agents[i].emotion_regulation.update_capacity(
+                    stress, need_fatigue, social_support,
+                );
+
+                // Architecture-plan-2 §8.1.10: Moral cognition update
+                // §8.1.10: Compute witnessed violations from this tick's negative interactions.
+                // High anger = agent perceived a norm violation; threat/insult events contribute.
+                // Witnessed violations: anger signals perceived norm violation; fear of injustice adds
+                let witnessed_violations = (emotions[i].anger * Fixed::from_f64(0.6)
+                    + emotions[i].fear * Fixed::from_f64(0.2))
+                    .clamp_01();
+                // Personal violations: agent's own guilt/shame signal
+                let personal_violations = (emotions[i].guilt * Fixed::from_f64(0.4)
+                    + emotions[i].shame * Fixed::from_f64(0.3))
+                    .clamp_01();
+                // Moral achievements: pride and gratitude from prosocial interactions
+                let moral_achievements = (emotions[i].pride * Fixed::from_f64(0.3)
+                    + emotions[i].trust * Fixed::from_f64(0.2))
+                    .clamp_01();
+                self.agents[i].moral_cognition.update_moral_emotions(
+                    witnessed_violations,
+                    personal_violations,
+                    moral_achievements,
+                );
+
+                // Architecture-plan-2 §8.1.16: Prospection update
+                let agent_fear = emotions[i].fear;
+                let agent_ambition = self.agents[i].personality.ambition;
+                let agent_trauma = self.agents[i].embodied.nervous.trauma_load;
+                let agent_depression = self.agents[i].psychopathology.depression_risk;
+                self.agents[i].prospection.update(
+                    agent_fear, agent_ambition, agent_trauma, agent_depression,
+                );
+
+                // Architecture-plan-2 §8.1.17: Narrative update
+                // §8.1.17: Feed actual emotional events into narrative identity.
+                // Positive events increase redemption_script; negative events increase victimhood/contamination.
+                let positive_event_magnitude = if emotions[i].joy > Fixed::from_f64(0.3) {
+                    emotions[i].joy * Fixed::from_f64(0.1)
+                } else {
+                    Fixed::ZERO
+                };
+                let negative_events = if emotions[i].fear + emotions[i].sadness > Fixed::from_f64(0.3) {
+                    (emotions[i].fear + emotions[i].sadness) * Fixed::from_f64(0.1)
+                } else {
+                    Fixed::ZERO
+                };
+                if negative_events > Fixed::ZERO {
+                    self.agents[i].narrative.interpret_negative_event(
+                        negative_events,
+                        social_support,
+                        emotions[i].anger > Fixed::from_f64(0.3), // has_blame_target if angry
+                    );
+                }
+                if positive_event_magnitude > Fixed::ZERO {
+                    self.agents[i].narrative.interpret_positive_event(
+                        positive_event_magnitude,
+                        social_support, // social_recognition tied to social support
+                    );
+                }
+                self.agents[i].narrative.update_theme();
+
+                // Architecture-plan-2 §8.1.13: Developmental update
+                // §8.1.13: Only tick developmental psychology every 100 ticks (≈daily).
+                // Identity formation, moral development, and socialization are slow processes.
+                if tick_u64 % 100 == 0 {
+                    let agent_age = self.agents[i].age;
+                    self.agents[i].developmental.tick_update(
+                        agent_age,
+                        social_support,
+                        Fixed::from_f64(0.5), // education quality placeholder
+                    );
+                }
+
+                // Architecture-plan-2 §8.1.15: Psychopathology update
+                let chronic_stress = self.agents[i].embodied.endocrine.stress.chronic_load;
+                let trauma_load = self.agents[i].embodied.nervous.trauma_load;
+                let chronic_pain = self.agents[i].embodied.nervous.pain.chronic;
+                let sleep_debt = self.agents[i].embodied.circadian.sleep_debt;
+                let depression_vuln = self.agents[i].embodied.genome.trait_predispositions.depression_vulnerability;
+                let addiction_risk = self.agents[i].embodied.genome.trait_predispositions.addiction_risk;
+                // §8.1.15: Compute social isolation from relationship quality
+                let social_isolation = (Fixed::ONE - social_support).max(Fixed::ZERO);
+                self.agents[i].psychopathology.tick_update(
+                    chronic_stress, trauma_load,
+                    social_isolation,
+                    Fixed::ZERO, // humiliation_recent — TODO: detect from interactions
+                    negative_events,
+                    Fixed::ZERO, // moral_injury — TODO: detect from moral_cognition
+                    chronic_pain, sleep_debt,
+                    depression_vuln, addiction_risk,
+                    social_support,
+                );
+
+                // Architecture-plan-2 §8.1.19: Skill/habit update
+                self.agents[i].psych_skills.update_automaticity(stress, need_fatigue);
+                if tick_u64 % 100 == 0 {
+                    self.agents[i].psych_skills.decay_habits(tick_u64);
+                }
             }
 
             // ── 1. Need decay (nonlinear pressure, §9.1) ────────────────
@@ -1074,6 +1274,10 @@ impl Simulation {
                     .clamp_01();
                 affects[i].arousal = (emotions[i].fear + emotions[i].anger + emotions[i].joy)
                     * Fixed::from_f64(0.5);
+                // §8.1.4: Apply emotion regulation AFTER appraisal.
+                // Regulation is top-down modulation applied on top of bottom-up appraisal-derived affect.
+                affects[i].valence = (affects[i].valence + reg_valence_deltas[i]).clamp_01();
+                affects[i].arousal = (affects[i].arousal + reg_arousal_deltas[i]).clamp_01();
             }
 
             // ── 7. Emotion decay ──────────────────────────────────────
@@ -2824,6 +3028,17 @@ impl Simulation {
                         inter
                     },
                     self_model: crate::psychology::SelfModel::default(),
+                    attachment: crate::psychology::AttachmentSystem::default(),
+                    emotion_regulation: crate::psychology::EmotionRegulationState::default(),
+                    moral_cognition: crate::psychology::MoralCognition::default(),
+                    prospection: crate::psychology::ProspectionState::default(),
+                    narrative: crate::psychology::NarrativeIdentity::default(),
+                    developmental: crate::psychology::DevelopmentalPsychState::default(),
+                    psychopathology: crate::psychology::PsychopathologyState::default(),
+                    psych_skills: crate::psychology::SkillState::default(),
+                    relationship_v2s: Vec::new(),
+                    attraction: crate::attraction::AttractionModel::default(),
+                    status_v2: crate::status_dims::StatusDimensions::default(),
                 });                // Add relationships to all existing agents
                 for existing_idx in 0..self.agents.len() - 1 {
                     let trust = if existing_idx == parent_a || existing_idx == parent_b {
