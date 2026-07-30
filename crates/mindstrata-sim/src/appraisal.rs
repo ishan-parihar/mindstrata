@@ -7,7 +7,6 @@
 use mindstrata_core::clock::Tick;
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::id::AgentId;
-use mindstrata_core::rng::RngStreams;
 use serde::{Deserialize, Serialize};
 
 /// Who or what caused the event.
@@ -94,7 +93,7 @@ impl EmotionDelta {
 ///
 /// This implements the cognitive appraisal → emotion mapping from
 /// the architecture spec's Section 9.2.
-pub fn appraise(appraisal: &Appraisal, _rng: &RngStreams, _tick: Tick) -> EmotionDelta {
+pub fn appraise(appraisal: &Appraisal, _tick: Tick) -> EmotionDelta {
     let mut delta = EmotionDelta::default();
 
     if appraisal.goal_relevance > Fixed::from_f64(0.3) {
@@ -171,7 +170,7 @@ mod tests {
             social_visibility: Fixed::ZERO,
             identity_relevance: Fixed::ZERO,
         };
-        let delta = appraise(&appraisal, &mut rng, Tick::new(0));
+        let delta = appraise(&appraisal, Tick::new(0));
         assert!(delta.joy > Fixed::ZERO, "Should produce joy");
         assert_eq!(delta.anger, Fixed::ZERO, "Should not produce anger");
     }
@@ -189,7 +188,7 @@ mod tests {
             social_visibility: Fixed::ZERO,
             identity_relevance: Fixed::ZERO,
         };
-        let delta = appraise(&appraisal, &mut rng, Tick::new(0));
+        let delta = appraise(&appraisal, Tick::new(0));
         assert!(
             delta.anger > Fixed::from_f64(0.3),
             "Should produce significant anger"
@@ -209,7 +208,7 @@ mod tests {
             social_visibility: Fixed::ZERO,
             identity_relevance: Fixed::ZERO,
         };
-        let delta = appraise(&appraisal, &mut rng, Tick::new(0));
+        let delta = appraise(&appraisal, Tick::new(0));
         assert!(
             delta.fear > Fixed::ZERO,
             "Low coping should increase fear"

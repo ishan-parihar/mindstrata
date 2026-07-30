@@ -83,7 +83,7 @@ fn golden_path(scenario: &str, seed: u64) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../golden")
         .join(scenario)
-        .join(format!("seed_{}", seed))
+        .join(format!("seed_{seed}"))
         .join("baseline.json")
 }
 
@@ -139,7 +139,7 @@ mod tests {
             }
             let json = serde_json::to_string_pretty(&stored).unwrap();
             std::fs::write(&path, &json).unwrap();
-            eprintln!("Golden baseline generated at {:?}", path);
+            eprintln!("Golden baseline generated at {path:?}");
             eprintln!("  metric_hash: {:016x}", b.metric_hash);
             return;
         }

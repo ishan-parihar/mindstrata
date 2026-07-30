@@ -47,7 +47,7 @@ pub fn render_world_map(world: &World, agent_markers: &[AgentMarker]) -> String 
                     // Find site kind
                     world.sites.iter()
                         .find(|s| tile.site == Some(s.id))
-                        .map(|s| match s.kind {
+                        .map_or('?', |s| match s.kind {
                             SiteKind::House => 'H',
                             SiteKind::Farm => 'F',
                             SiteKind::Well => 'W',
@@ -59,7 +59,6 @@ pub fn render_world_map(world: &World, agent_markers: &[AgentMarker]) -> String 
                             SiteKind::Prison => 'P',
                             SiteKind::School => 'L',
                         })
-                        .unwrap_or('?')
                 } else {
                     match tile.terrain {
                         Terrain::Grassland => '.',
@@ -176,9 +175,9 @@ pub fn render_relationship_view(
     agents: &[AgentSummary],
 ) -> String {
     let from_name = agents.get(from_id.as_u64() as usize)
-        .map(|s| s.name.as_str()).unwrap_or("?");
+        .map_or("?", |s| s.name.as_str());
     let to_name = agents.get(to_id.as_u64() as usize)
-        .map(|s| s.name.as_str()).unwrap_or("?");
+        .map_or("?", |s| s.name.as_str());
 
     let forward = relationships.iter().find(|r| r.from == from_id && r.to == to_id);
     let backward = relationships.iter().find(|r| r.from == to_id && r.to == from_id);
@@ -188,8 +187,7 @@ pub fn render_relationship_view(
         "╔══════════════════════════════════════════╗\n\
          ║  Relationship View                      ║\n\
          ╚══════════════════════════════════════════╝\n\
-         {} → {}\n",
-        from_name, to_name
+         {from_name} → {to_name}\n"
     ));
 
     if let Some(r) = forward {
@@ -205,7 +203,7 @@ pub fn render_relationship_view(
         out.push_str("  (no relationship)\n");
     }
 
-    out.push_str(&format!("\n  {} → {}\n", to_name, from_name));
+    out.push_str(&format!("\n  {to_name} → {from_name}\n"));
     if let Some(r) = backward {
         out.push_str(&format!(
             "  trust:      {:.2}\n\
@@ -345,7 +343,7 @@ pub fn render_belief_inspector(
     out.push_str("╔══════════════════════════════════════════╗\n");
     out.push_str("║  Belief Inspector                        ║\n");
     out.push_str("╚══════════════════════════════════════════╝\n\n");
-    out.push_str(&format!("Agent: {} (ID {})\n\n", agent_name, agent_id));
+    out.push_str(&format!("Agent: {agent_name} (ID {agent_id})\n\n"));
 
     if beliefs.is_empty() {
         out.push_str("  (no beliefs)\n");
@@ -439,7 +437,7 @@ pub fn render_institutional_records(
     out.push_str("╔══════════════════════════════════════════╗\n");
     out.push_str("║  Institutional Records                   ║\n");
     out.push_str("╚══════════════════════════════════════════╝\n\n");
-    out.push_str(&format!("Institution: {}\n\n", institution_name));
+    out.push_str(&format!("Institution: {institution_name}\n\n"));
 
     if records.is_empty() {
         out.push_str("  (no records)\n");
@@ -595,7 +593,7 @@ pub fn render_event_log_detailed(events: &[SimEvent], n: usize) -> String {
                 ));
             }
             _ => {
-                out.push_str(&format!("  [{tick:>5}] ❓ {:?}\n", ev));
+                out.push_str(&format!("  [{tick:>5}] ❓ {ev:?}\n"));
             }
         }
     }
@@ -617,7 +615,7 @@ pub fn render_psychology_inspector(
     out.push_str("╔══════════════════════════════════════════════════════════╗\n");
     out.push_str("║  Psychology Inspector — Full Cognitive Pipeline          ║\n");
     out.push_str("╚══════════════════════════════════════════════════════════╝\n\n");
-    out.push_str(&format!("Agent: {} (ID {})\n\n", agent_name, agent_index));
+    out.push_str(&format!("Agent: {agent_name} (ID {agent_index})\n\n"));
 
     // ── Body ──
     out.push_str("── §22.1: Body State ──\n\n");

@@ -52,17 +52,14 @@ fn net_depth(line: &str) -> i32 {
 fn lint_actions(specs_dir: &Path) -> Vec<LintIssue> {
     let mut issues = Vec::new();
     let path = specs_dir.join("actions.ron");
-    let content = match std::fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(_) => {
-            issues.push(LintIssue {
-                severity: LintSeverity::Warning,
-                spec_file: "actions.ron".into(),
-                spec_id: "N/A".into(),
-                message: "Could not read specs/actions.ron".into(),
-            });
-            return issues;
-        }
+    let content = if let Ok(c) = std::fs::read_to_string(&path) { c } else {
+        issues.push(LintIssue {
+            severity: LintSeverity::Warning,
+            spec_file: "actions.ron".into(),
+            spec_id: "N/A".into(),
+            message: "Could not read specs/actions.ron".into(),
+        });
+        return issues;
     };
 
     // Strategy: strip the outer wrapper, then parse items at depth 0.
@@ -78,7 +75,7 @@ fn lint_actions(specs_dir: &Path) -> Vec<LintIssue> {
                 severity: LintSeverity::Error,
                 spec_file: "actions.ron".into(),
                 spec_id: id.clone(),
-                message: format!("Action '{}' has preconditions but no effects", id),
+                message: format!("Action '{id}' has preconditions but no effects"),
             });
         } else if !has_preconditions && has_effects {
             issues.push(LintIssue {
@@ -98,17 +95,14 @@ fn lint_actions(specs_dir: &Path) -> Vec<LintIssue> {
 fn lint_norms(specs_dir: &Path) -> Vec<LintIssue> {
     let mut issues = Vec::new();
     let path = specs_dir.join("norms.ron");
-    let content = match std::fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(_) => {
-            issues.push(LintIssue {
-                severity: LintSeverity::Warning,
-                spec_file: "norms.ron".into(),
-                spec_id: "N/A".into(),
-                message: "Could not read specs/norms.ron".into(),
-            });
-            return issues;
-        }
+    let content = if let Ok(c) = std::fs::read_to_string(&path) { c } else {
+        issues.push(LintIssue {
+            severity: LintSeverity::Warning,
+            spec_file: "norms.ron".into(),
+            spec_id: "N/A".into(),
+            message: "Could not read specs/norms.ron".into(),
+        });
+        return issues;
     };
 
     let inner = strip_outer_wrapper(&content);
@@ -123,7 +117,7 @@ fn lint_norms(specs_dir: &Path) -> Vec<LintIssue> {
                 severity: LintSeverity::Error,
                 spec_file: "norms.ron".into(),
                 spec_id: id.clone(),
-                message: format!("Norm '{}' has no scope", id),
+                message: format!("Norm '{id}' has no scope"),
             });
         }
         if !has_sanction {
@@ -143,17 +137,14 @@ fn lint_norms(specs_dir: &Path) -> Vec<LintIssue> {
 fn lint_propositions(specs_dir: &Path) -> Vec<LintIssue> {
     let mut issues = Vec::new();
     let path = specs_dir.join("propositions.ron");
-    let content = match std::fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(_) => {
-            issues.push(LintIssue {
-                severity: LintSeverity::Warning,
-                spec_file: "propositions.ron".into(),
-                spec_id: "N/A".into(),
-                message: "Could not read specs/propositions.ron".into(),
-            });
-            return issues;
-        }
+    let content = if let Ok(c) = std::fs::read_to_string(&path) { c } else {
+        issues.push(LintIssue {
+            severity: LintSeverity::Warning,
+            spec_file: "propositions.ron".into(),
+            spec_id: "N/A".into(),
+            message: "Could not read specs/propositions.ron".into(),
+        });
+        return issues;
     };
 
     let mut seen_ids = HashSet::new();
@@ -170,8 +161,8 @@ fn lint_propositions(specs_dir: &Path) -> Vec<LintIssue> {
                             issues.push(LintIssue {
                                 severity: LintSeverity::Error,
                                 spec_file: "propositions.ron".into(),
-                                spec_id: format!("proposition_{}", id),
-                                message: format!("Duplicate proposition ID: {}", id),
+                                spec_id: format!("proposition_{id}"),
+                                message: format!("Duplicate proposition ID: {id}"),
                             });
                         }
                     }
@@ -187,17 +178,14 @@ fn lint_propositions(specs_dir: &Path) -> Vec<LintIssue> {
 fn lint_systems(specs_dir: &Path) -> Vec<LintIssue> {
     let mut issues = Vec::new();
     let path = specs_dir.join("systems.ron");
-    let content = match std::fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(_) => {
-            issues.push(LintIssue {
-                severity: LintSeverity::Warning,
-                spec_file: "systems.ron".into(),
-                spec_id: "N/A".into(),
-                message: "Could not read specs/systems.ron".into(),
-            });
-            return issues;
-        }
+    let content = if let Ok(c) = std::fs::read_to_string(&path) { c } else {
+        issues.push(LintIssue {
+            severity: LintSeverity::Warning,
+            spec_file: "systems.ron".into(),
+            spec_id: "N/A".into(),
+            message: "Could not read specs/systems.ron".into(),
+        });
+        return issues;
     };
 
     // Find all System( blocks directly in the full content
@@ -355,8 +343,7 @@ pub fn format_report(issues: &[LintIssue]) -> String {
         .filter(|i| i.severity == LintSeverity::Warning)
         .count();
     out.push_str(&format!(
-        "Spec Lint Report: {} errors, {} warnings\n\n",
-        errors, warnings
+        "Spec Lint Report: {errors} errors, {warnings} warnings\n\n"
     ));
 
     for issue in issues {
@@ -382,8 +369,7 @@ mod tests {
         let specs_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../specs");
         if !specs_dir.exists() {
             eprintln!(
-                "Skipping spec lint test — specs/ directory not found at {:?}",
-                specs_dir
+                "Skipping spec lint test — specs/ directory not found at {specs_dir:?}"
             );
             return;
         }
@@ -392,9 +378,7 @@ mod tests {
             .iter()
             .filter(|i| i.severity == LintSeverity::Error)
             .collect();
-        if !errors.is_empty() {
-            panic!("Spec lint errors found:\n{}", format_report(&issues));
-        }
+        assert!(errors.is_empty(), "Spec lint errors found:\n{}", format_report(&issues))
     }
 
     #[test]

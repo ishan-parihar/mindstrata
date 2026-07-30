@@ -233,10 +233,10 @@ mod smoke {
             acc
         });
         // Agents should perform diverse actions (not all Idle)
-        assert!(action_counts.len() > 1, "Agents should perform diverse actions, got: {:?}", action_counts);
+        assert!(action_counts.len() > 1, "Agents should perform diverse actions, got: {action_counts:?}");
         // Work should appear (norm pressure rewards it for conformist farmers)
         assert!(action_counts.contains_key("Work"),
-            "Work should appear in action distribution: {:?}", action_counts);
+            "Work should appear in action distribution: {action_counts:?}");
     }
 
     #[test]
@@ -530,7 +530,7 @@ mod smoke {
         };
 
         // Create a fresh simulation and save snapshot at tick 0 (before any ticks)
-        let mut sim1 = Simulation::new(config.clone());
+        let mut sim1 = Simulation::new(config);
         sim1.populate();
         let snapshot = sim1.save_snapshot();
         let bytes = snapshot.to_bytes().expect("Snapshot serialization failed");
@@ -629,7 +629,7 @@ mod smoke {
         sim.run(1000);
         // After 1000 ticks, some agents should have died and inheritance should have occurred.
         // Verify no agent has negative wealth (inheritance doesn't lose money).
-        for agent in sim.agents.iter() {
+        for agent in &sim.agents {
             assert!(agent.wealth.coin >= Fixed::ZERO,
                 "Agent {} has negative wealth after inheritance", agent.name);
         }
@@ -655,7 +655,7 @@ mod smoke {
             .max()
             .unwrap_or(0);
         assert!(max_knowledge >= 2,
-            "Some agents should have learned knowledge through socialization: max={}", max_knowledge);
+            "Some agents should have learned knowledge through socialization: max={max_knowledge}");
     }
 
     #[test]
@@ -678,7 +678,7 @@ mod smoke {
             .max()
             .unwrap_or(0);
         assert!(max_knowledge > 4,
-            "Innovation should produce knowledge beyond initial seeding: max_knowledge={}", max_knowledge);
+            "Innovation should produce knowledge beyond initial seeding: max_knowledge={max_knowledge}");
     }
 
     // ── §4.4 Black Market Integration Tests ──────────────────────
@@ -686,7 +686,7 @@ mod smoke {
     #[test]
     fn black_market_activates_under_scarcity() {
         use mindstrata_core::fixed::Fixed;
-        use mindstrata_sim::black_market::{BlackMarketState, BLACK_MARKET_SCARCITY_THRESHOLD, BLACK_MARKET_ENFORCEMENT_THRESHOLD};
+        use mindstrata_sim::black_market::BlackMarketState;
 
         let mut bm = BlackMarketState::default();
         // High scarcity + low enforcement → active
@@ -749,7 +749,7 @@ mod smoke {
         let conformist = Personality {
             risk_tolerance: Fixed::from_f64(0.8),
             conformity: Fixed::from_f64(0.8),
-            ..risk_taker.clone()
+            ..risk_taker
         };
         assert!(!bm.can_participate(&conformist),
             "High conformity should prevent participation");
@@ -758,7 +758,7 @@ mod smoke {
         let cautious = Personality {
             risk_tolerance: Fixed::from_f64(0.2),
             conformity: Fixed::from_f64(0.3),
-            ..risk_taker.clone()
+            ..risk_taker
         };
         assert!(!bm.can_participate(&cautious),
             "Low risk tolerance should prevent participation");
@@ -777,7 +777,7 @@ mod smoke {
             num_agents: 12,
             snapshot_interval: None,
         };
-        let mut sim1 = Simulation::new(config.clone());
+        let mut sim1 = Simulation::new(config);
         sim1.populate();
         sim1.run(200);
 

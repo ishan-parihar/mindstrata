@@ -91,13 +91,11 @@ mod tests {
         let avg_thirst = mean(&stats.avg_thirst);
         assert!(
             avg_hunger < 0.7,
-            "Average hunger should be < 0.7 after {} ticks, got {:.3}",
-            TICKS, avg_hunger
+            "Average hunger should be < 0.7 after {TICKS} ticks, got {avg_hunger:.3}"
         );
         assert!(
             avg_thirst < 0.7,
-            "Average thirst should be < 0.7 after {} ticks, got {:.3}",
-            TICKS, avg_thirst
+            "Average thirst should be < 0.7 after {TICKS} ticks, got {avg_thirst:.3}"
         );
     }
 
@@ -109,8 +107,7 @@ mod tests {
         let events_per_tick = avg_events / TICKS as f64;
         assert!(
             events_per_tick > 0.05,
-            "Events per tick should be > 0.05, got {:.4}",
-            events_per_tick
+            "Events per tick should be > 0.05, got {events_per_tick:.4}"
         );
     }
 
@@ -120,8 +117,8 @@ mod tests {
         let stats = collect_stats(NUM_SEEDS, TICKS);
         let avg_grain = mean(&stats.total_grain);
         let avg_water = mean(&stats.total_water);
-        assert!(avg_grain > 0.0, "Average grain should be > 0, got {:.3}", avg_grain);
-        assert!(avg_water > 0.0, "Average water should be > 0, got {:.3}", avg_water);
+        assert!(avg_grain > 0.0, "Average grain should be > 0, got {avg_grain:.3}");
+        assert!(avg_water > 0.0, "Average water should be > 0, got {avg_water:.3}");
     }
 
     #[test]
@@ -129,15 +126,15 @@ mod tests {
         // §11: Social interactions should occur
         let stats = collect_stats(NUM_SEEDS, TICKS);
         let avg_events = mean_u64(&stats.event_count);
-        assert!(avg_events > 12.0, "Average event count should exceed agent count, got {:.0}", avg_events);
+        assert!(avg_events > 12.0, "Average event count should exceed agent count, got {avg_events:.0}");
     }
 
     #[test]
     fn emergent_behavior_varies_by_seed() {
         // Different seeds should produce meaningfully different outcomes
         let stats = collect_stats(10, TICKS);
-        let min_h = stats.avg_hunger.iter().cloned().fold(f64::INFINITY, f64::min);
-        let max_h = stats.avg_hunger.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let min_h = stats.avg_hunger.iter().copied().fold(f64::INFINITY, f64::min);
+        let max_h = stats.avg_hunger.iter().copied().fold(f64::NEG_INFINITY, f64::max);
         // §9.1: Goal deduplication and routine bias reduce cross-seed variance.
         // Allow a lower threshold — the important thing is non-zero variance.
         assert!(max_h - min_h > 0.005, "Hunger should vary across seeds: range={:.4}", max_h - min_h);

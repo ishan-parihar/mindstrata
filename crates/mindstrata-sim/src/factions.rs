@@ -103,7 +103,7 @@ pub fn find_recruitable_agents(
     grievances
         .iter()
         .filter(|(_, g)| *g >= threshold)
-        .cloned()
+        .copied()
         .collect()
 }
 

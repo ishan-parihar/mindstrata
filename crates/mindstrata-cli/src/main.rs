@@ -198,7 +198,7 @@ fn main() -> Result<()> {
                     println!();
                     println!("{}", mindstrata_tui::render_agent_inspector(summary, sim.relationships()));
                 } else {
-                    eprintln!("Agent {} not found.", id);
+                    eprintln!("Agent {id} not found.");
                 }
             }
 
@@ -239,7 +239,7 @@ fn main() -> Result<()> {
                         &sim.agents[id].beliefs,
                     ));
                 } else {
-                    eprintln!("Agent {} not found.", id);
+                    eprintln!("Agent {id} not found.");
                 }
             }
 
@@ -281,7 +281,7 @@ fn main() -> Result<()> {
                         &sim.agents[id],
                     ));
                 } else {
-                    eprintln!("Agent {} not found.", id);
+                    eprintln!("Agent {id} not found.");
                 }
             }
 

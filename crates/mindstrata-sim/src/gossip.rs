@@ -385,7 +385,7 @@ mod tests {
         };
         let salience_new = rumor.salience(100);
 
-        let mut old_rumor = rumor.clone();
+        let mut old_rumor = rumor;
         old_rumor.hops = 5;
         let salience_old = old_rumor.salience(100);
 

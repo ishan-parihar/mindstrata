@@ -174,16 +174,14 @@ impl MarketState {
     pub fn price(&self, resource_id: u64) -> Fixed {
         self.prices
             .get(resource_id as usize)
-            .map(|p| p.price)
-            .unwrap_or(Fixed::from_f64(10.0))
+            .map_or(Fixed::from_f64(10.0), |p| p.price)
     }
 
     /// Get price trend for a resource.
     pub fn price_trend(&self, resource_id: u64) -> Fixed {
         self.prices
             .get(resource_id as usize)
-            .map(|p| p.trend())
-            .unwrap_or(Fixed::ZERO)
+            .map_or(Fixed::ZERO, PriceTracker::trend)
     }
 }
 
@@ -261,7 +259,7 @@ pub fn direct_trade(
     // Trust discount: high trust → lower price, low trust → higher price
     // Trust 1.0 → 80% of base price, Trust 0.0 → 120% of base price
     let trust_modifier = Fixed::from_f64(1.0) - trust * Fixed::from_f64(0.2) + (Fixed::ONE - trust) * Fixed::from_f64(0.2);
-    let price = (base_price * trust_modifier).max(market.prices.get(resource_id as usize).map(|p| p.price_floor).unwrap_or(Fixed::ONE));
+    let price = (base_price * trust_modifier).max(market.prices.get(resource_id as usize).map_or(Fixed::ONE, |p| p.price_floor));
 
     let total_cost = price * quantity;
 

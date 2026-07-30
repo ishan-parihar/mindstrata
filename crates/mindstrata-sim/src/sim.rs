@@ -364,9 +364,7 @@ impl Simulation {
 
             // §6: Initialize agent position from home site coordinates.
             let position = if let Some(site_idx) = home_site {
-                self.world.site_position(site_idx)
-                    .map(|(x, y)| Position::new(x, y))
-                    .unwrap_or_else(|| Position::new(8, 8)) // center fallback
+                self.world.site_position(site_idx).map_or_else(|| Position::new(8, 8), |(x, y)| Position::new(x, y)) // center fallback
             } else {
                 Position::new(8, 8) // center of 16x16 world
             };
@@ -472,7 +470,7 @@ impl Simulation {
             Knowledge { id: 4, name: "Grain Storage".into(), category: KnowledgeCategory::Agricultural, difficulty: Fixed::from_f64(0.3), utility: Fixed::from_f64(0.7), holders: 0, discovered_tick: 0 },
         ];
         // Seed agents with initial knowledge based on personality traits
-        for agent in self.agents.iter_mut() {
+        for agent in &mut self.agents {
             // All agents know Crop Rotation (id=0)
             agent.cultural.knowledge.push(0);
             // Traditional agents know Harvest Prayer (id=3)
@@ -611,8 +609,8 @@ impl Simulation {
                 );
                 match shock.kind {
                     ShockKind::Drought => {
-                        for site in self.world.sites.iter_mut() {
-                            for stock in site.inventory.iter_mut() {
+                        for site in &mut self.world.sites {
+                            for stock in &mut site.inventory {
                                 if stock.resource_id == 0 {
                                     stock.quantity =
                                         (stock.quantity - shock.magnitude * Fixed::from_f64(10.0))
@@ -622,7 +620,7 @@ impl Simulation {
                         }
                     }
                     ShockKind::Festival => {
-                        for agent in self.agents.iter_mut() {
+                        for agent in &mut self.agents {
                             agent.emotions.joy =
                                 (agent.emotions.joy + shock.magnitude * Fixed::from_f64(0.3))
                                     .clamp_01();
@@ -769,7 +767,7 @@ impl Simulation {
                     let enforcement_multiplier = self.institutions.iter()
                         .filter(|i| i.kind == institutions::InstitutionKind::Council)
                         .map(|i| Fixed::ONE + i.enforcement_capacity * Fixed::from_f64(0.5))
-                        .fold(Fixed::ONE, |a, b| a.max(b));
+                        .fold(Fixed::ONE, std::cmp::Ord::max);
 
                     // §22.1: Moral values modulate norm pressure.
                     // High fairness/authority → stronger norm compliance.
@@ -883,7 +881,7 @@ impl Simulation {
                         self.provenance.record_decision(DecisionTrace {
                             agent: agent_id,
                             tick: tick_u64,
-                            action_name: format!("{:?}", action),
+                            action_name: format!("{action:?}"),
                             factors,
                             from_routine: follow_routine && effective_routine_strength > Fixed::from_f64(0.5),
                             interrupted_by_critical_needs: was_interrupted_by_critical_needs,
@@ -1003,7 +1001,7 @@ impl Simulation {
                     identity_relevance: Fixed::from_f64(0.2),
                 };
 
-                let delta = appraisal::appraise(&appraisal, ctx.rng, tick);
+                let delta = appraisal::appraise(&appraisal, tick);
 
                 emotions[i].fear = (emotions[i].fear + delta.fear).clamp_01();
                 emotions[i].anger = (emotions[i].anger + delta.anger).clamp_01();
@@ -1024,7 +1022,7 @@ impl Simulation {
             // ── 7. Emotion decay ──────────────────────────────────────
             // §22.1: Emotions decay slowly — 0.002/tick ≈ full decay in ~500 ticks.
             // This allows emotions to accumulate and create meaningful dynamics.
-            for emotion in emotions.iter_mut() {
+            for emotion in &mut emotions {
                 let decay = Fixed::from_f64(0.002);
                 emotion.fear = (emotion.fear - decay).clamp_01();
                 emotion.anger = (emotion.anger - decay).clamp_01();
@@ -1036,7 +1034,7 @@ impl Simulation {
             }
 
             // ── 8. Belief resistance decay ────────────────────────────
-            for agent_beliefs in self.agents.iter_mut() {
+            for agent_beliefs in &mut self.agents {
                 belief_update::decay_belief_resistance(
                     &mut agent_beliefs.beliefs,
                     BELIEF_RESISTANCE_DECAY,
@@ -1095,7 +1093,7 @@ impl Simulation {
                         .find_map(|ev| {
                             if let SimEvent::InteractionOccurred { from: ef, to: et, kind, .. } = ev {
                                 if *ef == from && *et == to {
-                                    Some(format!("{:?}", kind))
+                                    Some(format!("{kind:?}"))
                                 } else {
                                     None
                                 }
@@ -1208,8 +1206,7 @@ impl Simulation {
                                 {
                                     let grain = self.world.sites[hs].inventory.iter()
                                         .find(|s| s.resource_id == GRAIN_RESOURCE_ID)
-                                        .map(|s| s.quantity)
-                                        .unwrap_or(Fixed::ZERO);
+                                        .map_or(Fixed::ZERO, |s| s.quantity);
                                     if grain > Fixed::ZERO {
                                         Some((j, hs, grain))
                                     } else {
@@ -1223,8 +1220,7 @@ impl Simulation {
                     if let Some((seller, farm_idx, _available)) = seller_info {
                         let trust = self.relationships.iter()
                             .find(|r| r.from == AgentId::new(*agent_idx as u64) && r.to == AgentId::new(seller as u64))
-                            .map(|r| r.trust)
-                            .unwrap_or(Fixed::from_f64(0.5));
+                            .map_or(Fixed::from_f64(0.5), |r| r.trust);
                         let quantity = Fixed::from_f64(0.1);
                         // §13.3: Execute trade — buyer pays coin, seller's farm provides grain
                         let base_price = self.market.price(GRAIN_RESOURCE_ID);
@@ -1406,7 +1402,7 @@ impl Simulation {
             );
         }
         // Reset work ticks tracker for this tick
-        for tick in self.site_work_ticks.iter_mut() {
+        for tick in &mut self.site_work_ticks {
             *tick = 0;
         }
         // Count work actions per site this tick
@@ -1516,8 +1512,7 @@ impl Simulation {
                     if let Some(farm_idx) = self.world.best_farm_for_work() {
                         if farm_idx < self.world.sites.len() {
                             let pos = self.world.site_position(farm_idx)
-                                .map(|(x, y)| crate::sim::Position::new(x, y))
-                                .unwrap_or(crate::sim::Position::new(8, 8));
+                                .map_or(crate::sim::Position::new(8, 8), |(x, y)| crate::sim::Position::new(x, y));
                             self.agents[i].position = pos;
                         }
                     }
@@ -1530,8 +1525,8 @@ impl Simulation {
         let spoilage_modifier = self.season.current.spoilage_modifier();
         // Extract resources ref before mutable borrow of sites (split borrowing)
         let resource_defs = &self.world.resources;
-        for site in self.world.sites.iter_mut() {
-            for stock in site.inventory.iter_mut() {
+        for site in &mut self.world.sites {
+            for stock in &mut site.inventory {
                 if let Some(res_def) = resource_defs.iter().find(|r| r.id == stock.resource_id) {
                     if res_def.perishable && res_def.spoilage_rate > Fixed::ZERO {
                         let spoilage = stock.quantity * res_def.spoilage_rate * spoilage_modifier;
@@ -1757,7 +1752,7 @@ impl Simulation {
                         }
                         // §12.4: Successful norm enforcement increases institutional legitimacy
                         // Modulated by enforcement_capacity — low-capacity councils gain less.
-                        for inst in self.institutions.iter_mut() {
+                        for inst in &mut self.institutions {
                             if inst.kind == institutions::InstitutionKind::Council {
                                 let legitimacy_gain = inst.enforcement_capacity * Fixed::from_f64(0.005);
                                 inst.increase_legitimacy(legitimacy_gain);
@@ -1787,8 +1782,7 @@ impl Simulation {
                     let source_trust = self.relationships
                         .iter()
                         .find(|r| r.from == *from && r.to == *to)
-                        .map(|r| r.trust)
-                        .unwrap_or(Fixed::from_f64(0.5));
+                        .map_or(Fixed::from_f64(0.5), |r| r.trust);
                     let rumor = gossip::Rumor::from_belief(&from_beliefs[pick], tick_u64);
                     let listener_beliefs = self.agents[to_idx].beliefs.clone();
                     let result = gossip::process_gossip(
@@ -1803,15 +1797,13 @@ impl Simulation {
                     // §19.5.B: Capture old confidence before gossip update for provenance trace
                     let old_conf = self.agents[to_idx].beliefs.iter()
                         .find(|b| b.proposition_id == result.proposition_id)
-                        .map(|b| b.confidence)
-                        .unwrap_or(Fixed::from_f64(0.5));
+                        .map_or(Fixed::from_f64(0.5), |b| b.confidence);
                     gossip::apply_gossip(&mut self.agents[to_idx].beliefs, &result, tick_u64);
                     if result.accepted {
                         // §19.5.B: Record belief update trace for provenance
                         let new_conf = self.agents[to_idx].beliefs.iter()
                             .find(|b| b.proposition_id == result.proposition_id)
-                            .map(|b| b.confidence)
-                            .unwrap_or(result.mutated_confidence);
+                            .map_or(result.mutated_confidence, |b| b.confidence);
                         self.provenance.record_belief_update(
                             crate::provenance::BeliefUpdateTrace {
                                 agent: *to,
@@ -1853,8 +1845,7 @@ impl Simulation {
                     let source_trust = self.relationships
                         .iter()
                         .find(|r| r.from == *from && r.to == *to)
-                        .map(|r| r.trust)
-                        .unwrap_or(Fixed::from_f64(0.5));
+                        .map_or(Fixed::from_f64(0.5), |r| r.trust);
                     // Teacher teaches a random piece of knowledge they have
                     if !self.agents[from_idx].cultural.knowledge.is_empty() {
                         let pick = self.rng.get_mut(RngStream::Social)
@@ -1981,7 +1972,7 @@ impl Simulation {
 
         // ── 12. Institutional collective psychology derivation ────
         // §23: Derive collective psychology from member states each tick.
-        for institution in self.institutions.iter_mut() {
+        for institution in &mut self.institutions {
             let member_morales: Vec<Fixed> = institution
                 .members
                 .iter()
@@ -2342,14 +2333,14 @@ impl Simulation {
                     let council_enforcement = self.institutions.iter()
                         .filter(|i| i.kind == InstitutionKind::Council)
                         .map(|i| i.enforcement_capacity)
-                        .fold(Fixed::ZERO, |a, b| a.max(b));
+                        .fold(Fixed::ZERO, std::cmp::Ord::max);
 
                     let (suppressed, legitimacy_effect) = factions::council_response(
                         council_enforcement, protest_size, total_pop,
                     );
 
                     // Apply legitimacy effect to council
-                    for inst in self.institutions.iter_mut() {
+                    for inst in &mut self.institutions {
                         if inst.kind == InstitutionKind::Council {
                             if legitimacy_effect > Fixed::ZERO {
                                 inst.increase_legitimacy(legitimacy_effect);
@@ -2411,7 +2402,7 @@ impl Simulation {
                         "§7.2: Moral panic triggered!"
                     );
                     // Apply legitimacy damage to all matching institutions
-                    for inst in self.institutions.iter_mut() {
+                    for inst in &mut self.institutions {
                         let inst_prop = match inst.kind {
                             InstitutionKind::Council => Some(1u64),  // council → proposition 1
                             InstitutionKind::Market => Some(0u64),   // market → proposition 0
@@ -2422,7 +2413,7 @@ impl Simulation {
                         }
                     }
                     // Boost faction grievance from panic
-                    for inst in self.institutions.iter_mut() {
+                    for inst in &mut self.institutions {
                         if inst.kind == InstitutionKind::Faction {
                             inst.collective.morale = (inst.collective.morale + panic_result.grievance_boost).clamp_01();
                         }
@@ -2446,7 +2437,7 @@ impl Simulation {
             let council_legitimacy: Fixed = self.institutions.iter()
                 .filter(|i| i.kind == InstitutionKind::Council)
                 .map(|i| i.legitimacy)
-                .fold(Fixed::ZERO, |a, b| a.max(b));
+                .fold(Fixed::ZERO, std::cmp::Ord::max);
 
             for inst_idx in 0..self.institutions.len() {
                 if self.institutions[inst_idx].kind != InstitutionKind::Faction {
@@ -2475,7 +2466,7 @@ impl Simulation {
                         "§7.3: Revolution! Faction seizes control"
                     );
                     // Council loses all legitimacy
-                    for inst in self.institutions.iter_mut() {
+                    for inst in &mut self.institutions {
                         if inst.kind == InstitutionKind::Council {
                             inst.legitimacy = Fixed::ZERO;
                             inst.collective.morale = Fixed::from_f64(0.1);
@@ -2501,7 +2492,7 @@ impl Simulation {
         }
 
         // ── 15. Derived mental state computation (§22) ─────────────
-        for agent in self.agents.iter_mut() {
+        for agent in &mut self.agents {
             let stress = agent.emotions.fear + agent.emotions.anger;
             let need_deficit_avg = (agent.needs.hunger + agent.needs.thirst + agent.needs.fatigue + agent.needs.safety) * Fixed::from_f64(0.25);
             let social_support = Fixed::ONE - agent.needs.social;
@@ -2536,8 +2527,7 @@ impl Simulation {
                     let trust = self.relationships
                         .iter()
                         .find(|r| r.from == *from && r.to == *to)
-                        .map(|r| r.trust)
-                        .unwrap_or(Fixed::from_f64(0.5));
+                        .map_or(Fixed::from_f64(0.5), |r| r.trust);
 
                     let evidence_strength = trust - Fixed::from_f64(0.5);
                     let source_trust = Fixed::from_f64(0.6);
@@ -2612,8 +2602,7 @@ impl Simulation {
                     // Check relationship affection
                     let affection = self.relationships.iter()
                         .find(|r| r.from == AgentId::new(i as u64) && r.to == AgentId::new(j as u64))
-                        .map(|r| r.affection)
-                        .unwrap_or(Fixed::ZERO);
+                        .map_or(Fixed::ZERO, |r| r.affection);
                     // Marriage probability: affection * trust * health
                     let health = (self.agents[i].body.health + self.agents[j].body.health) * Fixed::from_f64(0.5);
                     let marriage_chance = affection * health * Fixed::from_f64(0.001); // low per-tick chance
@@ -2717,7 +2706,7 @@ impl Simulation {
             }
 
             for (parent_a, parent_b, child_idx) in new_births {
-                let child_name = format!("Child_{}", child_idx);
+                let child_name = format!("Child_{child_idx}");
                 // Inherit personality traits with noise
                 let mut child_rng = rand_chacha::ChaCha8Rng::seed_from_u64(
                     self.config.seed.wrapping_add(tick_u64).wrapping_add(child_idx as u64)
@@ -2741,7 +2730,7 @@ impl Simulation {
                     current_action: ActionKind::Idle,
                     action_progress: 0,
                     name: child_name,
-                    position: self.agents[parent_a].position.clone(),
+                    position: self.agents[parent_a].position,
                     home_site,
                     memory: MemoryStore::new(200),
                     identity: IdentityState {
@@ -2826,7 +2815,7 @@ impl Simulation {
         }
 
         // ── 20. Conflict state update — trauma decay, combat fatigue, feud decay ──
-        for agent in self.agents.iter_mut() {
+        for agent in &mut self.agents {
             agent.conflict.update();
             // §19.5.G: Feud decay — remove feuds older than 500 ticks
             let feud_decay_threshold = tick_u64.saturating_sub(500);
@@ -2878,7 +2867,7 @@ impl Simulation {
             let council_enforcement = self.institutions.iter()
                 .filter(|i| i.kind == InstitutionKind::Council)
                 .map(|i| i.enforcement_capacity)
-                .fold(Fixed::ZERO, |a, b| a.max(b));
+                .fold(Fixed::ZERO, std::cmp::Ord::max);
             self.black_market.update(scarcity, council_enforcement);
         }
 
@@ -2944,7 +2933,7 @@ impl Simulation {
                 // Remove from relationships
                 self.relationships.retain(|r| r.from != agent_id && r.to != agent_id);
                 // Remove from institutions
-                for inst in self.institutions.iter_mut() {
+                for inst in &mut self.institutions {
                     inst.remove_member(agent_id);
                 }
             }

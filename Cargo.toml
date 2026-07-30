@@ -15,6 +15,8 @@ license = "MIT"
 repository = "https://github.com/ishanp/mindstrata"
 
 [workspace.lints.rust]
+# Forbid unsafe: the simulation must be memory-safe and deterministic.
+# If a specific block ever needs unsafe, use #[allow(unsafe_code)] on that item.
 unsafe_code = "forbid"
 missing_docs = "warn"
 dead_code = "warn"

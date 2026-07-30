@@ -131,7 +131,7 @@ impl MemoryStore {
     pub fn decay(&mut self, current_tick: u64) {
         let age_weight = Fixed::from_f64(0.0003);
 
-        for mem in self.episodes.iter_mut() {
+        for mem in &mut self.episodes {
             let age = current_tick.saturating_sub(mem.tick) as i64;
             let age_factor = Fixed::from_int(age) * age_weight;
             let rehearsal_bonus = Fixed::from_f64(mem.rehearsal_count as f64 * 0.02);
@@ -160,7 +160,7 @@ impl MemoryStore {
 
         let roll: f64 = rng.random_range(0.0..total_strength);
         let mut cumulative = 0.0;
-        for mem in self.episodes.iter_mut() {
+        for mem in &mut self.episodes {
             cumulative += mem.strength.to_f64();
             if cumulative >= roll {
                 mem.rehearsal_count += 1;
@@ -181,7 +181,7 @@ impl MemoryStore {
     /// Angry agents remember events as more negative; joyful agents remember more positively.
     pub fn reconsolidate(&mut self, anger: Fixed, joy: Fixed) {
         let bias_strength = Fixed::from_f64(0.003); // subtle per-tick reconsolidation
-        for mem in self.episodes.iter_mut() {
+        for mem in &mut self.episodes {
             match mem.kind {
                 MemoryKind::Negative => {
                     // Anger amplifies negative memories

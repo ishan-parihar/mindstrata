@@ -340,9 +340,9 @@ impl World {
             .filter(|(_, s)| s.kind == SiteKind::Farm)
             .max_by(|(_, a), (_, b)| {
                 let fa = a.inventory.iter().find(|r| r.resource_id == GRAIN_RESOURCE_ID)
-                    .map(|r| r.quantity).unwrap_or(Fixed::ZERO);
+                    .map_or(Fixed::ZERO, |r| r.quantity);
                 let fb = b.inventory.iter().find(|r| r.resource_id == GRAIN_RESOURCE_ID)
-                    .map(|r| r.quantity).unwrap_or(Fixed::ZERO);
+                    .map_or(Fixed::ZERO, |r| r.quantity);
                 fa.cmp(&fb)
             })
             .map(|(i, _)| i)

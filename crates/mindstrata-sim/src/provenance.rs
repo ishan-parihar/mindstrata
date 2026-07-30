@@ -357,7 +357,7 @@ mod tests {
             store.record_decision(DecisionTrace {
                 agent: AgentId::new(0),
                 tick: i,
-                action_name: format!("Action{}", i),
+                action_name: format!("Action{i}"),
                 factors: vec![],
                 from_routine: false,
                 interrupted_by_critical_needs: false,

@@ -339,14 +339,12 @@ pub fn system_social_interactions(
             let trust = relationships
                 .iter()
                 .find(|r| r.from == *agent_id && r.to == target_id)
-                .map(|r| r.trust)
-                .unwrap_or(Fixed::from_f64(0.5));
+                .map_or(Fixed::from_f64(0.5), |r| r.trust);
 
             let affection = relationships
                 .iter()
                 .find(|r| r.from == *agent_id && r.to == target_id)
-                .map(|r| r.affection)
-                .unwrap_or(Fixed::from_f64(0.3));
+                .map_or(Fixed::from_f64(0.3), |r| r.affection);
 
             // §5.4: In-group/out-group — check if both agents share a faction
             let same_faction = same_faction_matrix[i][target_idx];

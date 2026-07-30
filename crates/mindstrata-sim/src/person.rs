@@ -251,8 +251,7 @@ impl IdentityState {
         self.identities
             .iter()
             .find(|i| i.kind == kind)
-            .map(|i| i.strength)
-            .unwrap_or(Fixed::ZERO)
+            .map_or(Fixed::ZERO, |i| i.strength)
     }
 }
 

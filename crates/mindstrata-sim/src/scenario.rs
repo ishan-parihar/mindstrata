@@ -94,7 +94,7 @@ impl Scenario {
 
     /// Serialize to RON format.
     pub fn to_ron(&self) -> String {
-        ron::to_string(self).unwrap_or_else(|_| format!("{:#?}", self))
+        ron::to_string(self).unwrap_or_else(|_| format!("{self:#?}"))
     }
 
     /// Deserialize from RON format.

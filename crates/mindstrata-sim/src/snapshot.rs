@@ -308,7 +308,7 @@ mod tests {
         };
         Snapshot {
             version: SNAPSHOT_VERSION,
-            config: config.clone(),
+            config: config,
             tick: 100,
             clock_tick: Tick::new(100),
             master_seed: 42,
