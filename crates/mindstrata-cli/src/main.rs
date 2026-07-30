@@ -309,11 +309,12 @@ fn main() -> Result<()> {
                 } else {
                     let mut csv = String::from("tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count\n");
                     for m in metrics {
-                        csv.push_str(&format!("{},{},{},{},{},{},{},{},{},{},{},{}\n",
+                        use std::fmt::Write;
+                        let _ = writeln!(csv, "{},{},{},{},{},{},{},{},{},{},{},{}",
                             m.tick, m.avg_hunger, m.avg_thirst, m.avg_fatigue,
                             m.avg_valence, m.avg_joy, m.avg_fear,
                             m.total_grain, m.total_water,
-                            m.event_count, m.journal_len, m.agent_count));
+                            m.event_count, m.journal_len, m.agent_count);
                     }
                     match std::fs::write(path, &csv) {
                         Ok(()) => println!("\n  Metrics exported to: {path} ({} rows)", metrics.len()),
@@ -326,13 +327,12 @@ fn main() -> Result<()> {
         Commands::Scenario { name, verbose, map } => {
             init_logging(verbose);
 
-            let scenario = match name.as_str() {
-                "riverford" => Scenario::riverford(),
-                _ => {
-                    eprintln!("Unknown scenario: {name}");
-                    eprintln!("Available: riverford");
-                    std::process::exit(1);
-                }
+            let scenario = if name.as_str() == "riverford" {
+                Scenario::riverford()
+            } else {
+                eprintln!("Unknown scenario: {name}");
+                eprintln!("Available: riverford");
+                std::process::exit(1);
             };
 
             println!("╔══════════════════════════════════════════════╗");
@@ -402,7 +402,7 @@ fn print_results(sim: &Simulation, elapsed: std::time::Duration) {
     println!("  Agents:          {}", metrics.agent_count);
     println!("  Events:          {}", metrics.event_count);
     println!("  Journal entries: {}", metrics.journal_len);
-    println!("  Time elapsed:    {:.2?}", elapsed);
+    println!("  Time elapsed:    {elapsed:.2?}");
     println!();
 
     println!("╔══════════════════════════════════════════════╗");

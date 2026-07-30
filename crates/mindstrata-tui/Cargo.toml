@@ -11,3 +11,6 @@ mindstrata-sim = { workspace = true }
 ratatui = { workspace = true }
 crossterm = { workspace = true }
 tracing = { workspace = true }
+
+[lints]
+workspace = true

@@ -14,9 +14,13 @@ use mindstrata_sim::provenance::CausalProvenance;
 
 /// §6: Agent position marker for map rendering.
 pub struct AgentMarker {
+    /// Index of the agent in the simulation's agent list.
     pub index: usize,
+    /// X coordinate on the world grid.
     pub x: i32,
+    /// Y coordinate on the world grid.
     pub y: i32,
+    /// Single character used to represent the agent on the map.
     pub name: char,
 }
 
@@ -220,11 +224,17 @@ pub fn render_relationship_view(
 
 /// Dashboard configuration for the render_dashboard function.
 pub struct DashboardConfig {
+    /// Current season name (e.g. "Spring").
     pub season: String,
+    /// Current year of the simulation.
     pub year: u64,
+    /// Total grain in the world.
     pub grain: f64,
+    /// Total water in the world.
     pub water: f64,
+    /// Number of active institutions.
     pub institution_count: usize,
+    /// Number of active factions.
     pub faction_count: usize,
 }
 
