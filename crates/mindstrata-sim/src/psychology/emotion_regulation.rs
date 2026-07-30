@@ -9,9 +9,10 @@ use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 
 /// Available emotion regulation strategies.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum RegulationStrategy {
     /// Reframe the situation to change its emotional meaning.
+    #[default]
     Reappraisal,
     /// Hide emotional expression without changing the feeling.
     Suppression,
@@ -37,11 +38,6 @@ pub enum RegulationStrategy {
     Caregiving,
 }
 
-impl Default for RegulationStrategy {
-    fn default() -> Self {
-        Self::Reappraisal
-    }
-}
 
 /// Agent's emotion regulation profile and current state.
 #[derive(Debug, Clone, Serialize, Deserialize)]

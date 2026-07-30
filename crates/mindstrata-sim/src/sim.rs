@@ -2938,9 +2938,29 @@ impl Simulation {
                     let affection = self.relationships.iter()
                         .find(|r| r.from == AgentId::new(i as u64) && r.to == AgentId::new(j as u64))
                         .map_or(Fixed::ZERO, |r| r.affection);
-                    // Marriage probability: affection * trust * health
+                    // Architecture-plan-2 §10.4: Compute attraction score.
+                    // Personality compatibility (agreeableness similarity), physical proximity,
+                    // and social approval feed into the AttractionModel.
+                    let personality_compat = Fixed::ONE - (self.agents[i].personality.agreeableness
+                        - self.agents[j].personality.agreeableness).abs();
+                    let pos_i = self.agents[i].position;
+                    let pos_j = self.agents[j].position;
+                    let distance = Fixed::from_int(pos_i.manhattan_distance(&pos_j) as i64);
+                    // Architecture-plan-2 §10.4: Max distance for marriage proximity scoring.
+                    const MAX_MARRIAGE_DISTANCE: f64 = 20.0;
+                    let proximity = (Fixed::ONE - distance / Fixed::from_f64(MAX_MARRIAGE_DISTANCE)).max(Fixed::ZERO);
+                    let mut att = crate::attraction::AttractionModel::default();
+                    att.personality_attraction = personality_compat;
+                    att.familiarity = affection;
+                    att.physical_attraction = proximity;
+                    att.reciprocity = affection; // reciprocity from mutual affection
+                    let attraction_score = att.total_attraction();
+                    // Marriage probability: attraction * health * trust
                     let health = (self.agents[i].body.health + self.agents[j].body.health) * Fixed::from_f64(0.5);
-                    let marriage_chance = affection * health * Fixed::from_f64(0.001); // low per-tick chance
+                    let trust = self.relationships.iter()
+                        .find(|r| r.from == AgentId::new(i as u64) && r.to == AgentId::new(j as u64))
+                        .map_or(Fixed::ZERO, |r| r.trust);
+                    let marriage_chance = attraction_score * health * trust * Fixed::from_f64(0.001);
                     let rng_val = Fixed::from_f64(
                         self.rng.get_mut(RngStream::Social).random::<f64>()
                     );

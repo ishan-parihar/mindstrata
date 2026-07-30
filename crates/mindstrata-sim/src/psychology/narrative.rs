@@ -14,9 +14,10 @@ use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 
 /// Life narrative theme — the dominant story the agent tells about their life.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum LifeTheme {
     /// Life is a journey of growth and learning.
+    #[default]
     Growth,
     /// Life is a struggle against adversity.
     Struggle,
@@ -30,12 +31,6 @@ pub enum LifeTheme {
     Punishment,
     /// Life is a mission with purpose.
     Mission,
-}
-
-impl Default for LifeTheme {
-    fn default() -> Self {
-        Self::Growth
-    }
 }
 
 /// Narrative identity — the story the agent tells about themselves.

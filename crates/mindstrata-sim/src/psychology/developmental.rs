@@ -8,9 +8,10 @@ use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 
 /// Socialization style received during upbringing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum SocializationStyle {
     /// Authoritative: warm but structured.
+    #[default]
     Authoritative,
     /// Authoritarian: strict, low warmth.
     Authoritarian,
@@ -18,12 +19,6 @@ pub enum SocializationStyle {
     Permissive,
     /// Neglectful: low warmth, low structure.
     Neglectful,
-}
-
-impl Default for SocializationStyle {
-    fn default() -> Self {
-        Self::Authoritative
-    }
 }
 
 /// Educational event — a learning experience.

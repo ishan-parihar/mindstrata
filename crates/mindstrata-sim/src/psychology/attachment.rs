@@ -13,9 +13,10 @@ use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 
 /// Attachment style classification.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum AttachmentStyle {
     /// Trusting, comfortable with intimacy and independence.
+    #[default]
     Secure,
     /// Craves closeness, fears abandonment, hypervigilant to rejection.
     Anxious,
@@ -25,16 +26,11 @@ pub enum AttachmentStyle {
     Disorganized,
 }
 
-impl Default for AttachmentStyle {
-    fn default() -> Self {
-        Self::Secure
-    }
-}
-
 /// Caregiving style — how the agent nurtures others.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum CaregivingStyle {
     /// Responsive, sensitive, attuned.
+    #[default]
     Sensitive,
     /// Anxious, intrusive, inconsistent.
     Intrusive,
@@ -42,12 +38,6 @@ pub enum CaregivingStyle {
     Dismissive,
     /// Frightening, unpredictable.
     Frightening,
-}
-
-impl Default for CaregivingStyle {
-    fn default() -> Self {
-        Self::Sensitive
-    }
 }
 
 /// Attachment system state for an agent.

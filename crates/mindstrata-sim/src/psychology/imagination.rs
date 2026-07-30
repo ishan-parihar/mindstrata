@@ -118,11 +118,11 @@ impl ProspectionState {
         for scenario in &self.scenarios {
             let weight = scenario.probability * scenario.vividness;
             if scenario.expected_valence > Fixed::ZERO {
-                total_hope = total_hope + weight * scenario.expected_valence;
+                total_hope += weight * scenario.expected_valence;
             } else {
-                total_dread = total_dread + weight * scenario.expected_valence.abs();
+                total_dread += weight * scenario.expected_valence.abs();
             }
-            count = count + Fixed::ONE;
+            count += Fixed::ONE;
         }
 
         if count > Fixed::ZERO {

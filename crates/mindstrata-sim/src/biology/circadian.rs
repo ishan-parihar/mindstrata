@@ -56,10 +56,10 @@ impl CircadianState {
     pub fn tick_update(&mut self, ticks_per_day: u64, is_sleeping: bool) {
         // Advance phase (one tick = 1/ticks_per_day of a full cycle)
         let phase_increment = Fixed::from_f64(1.0) / Fixed::from_f64(ticks_per_day as f64);
-        self.phase = self.phase + phase_increment;
+        self.phase += phase_increment;
         // Wrap at 1.0 (modular arithmetic)
         if self.phase >= Fixed::ONE {
-            self.phase = self.phase - Fixed::ONE;
+            self.phase -= Fixed::ONE;
         }
 
         // Sleep pressure builds during waking hours

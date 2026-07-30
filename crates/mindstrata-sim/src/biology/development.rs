@@ -143,7 +143,7 @@ impl Default for DevelopmentalState {
 impl DevelopmentalState {
     /// Advance age by one tick (called once per day or per appropriate timescale).
     pub fn advance_age(&mut self, years_per_tick: Fixed) {
-        self.age = self.age + years_per_tick; // age is in years, not 0-1
+        self.age += years_per_tick; // age is in years, not 0-1
         let new_stage = LifeStage::from_age(self.age);
         if new_stage != self.life_stage {
             self.life_stage = new_stage;
