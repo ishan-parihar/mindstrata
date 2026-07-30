@@ -1,0 +1,228 @@
+//! Attachment system — attachment styles, security, anxiety, avoidance.
+//!
+//! Attachment is central to relationships. It affects friendship, romance,
+//! marriage, parenting, faction loyalty, religious devotion, and leader dependence.
+//!
+//! Under threat:
+//! - secure agents seek support and recover,
+//! - anxious agents cling and demand reassurance,
+//! - avoidant agents withdraw and self-regulate,
+//! - disorganized agents oscillate or freeze.
+
+use mindstrata_core::fixed::Fixed;
+use serde::{Deserialize, Serialize};
+
+/// Attachment style classification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AttachmentStyle {
+    /// Trusting, comfortable with intimacy and independence.
+    Secure,
+    /// Craves closeness, fears abandonment, hypervigilant to rejection.
+    Anxious,
+    /// Values independence, uncomfortable with closeness, self-reliant.
+    Avoidant,
+    /// Oscillates between craving and fearing closeness.
+    Disorganized,
+}
+
+impl Default for AttachmentStyle {
+    fn default() -> Self {
+        Self::Secure
+    }
+}
+
+/// Caregiving style — how the agent nurtures others.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CaregivingStyle {
+    /// Responsive, sensitive, attuned.
+    Sensitive,
+    /// Anxious, intrusive, inconsistent.
+    Intrusive,
+    /// Dismissive, unavailable.
+    Dismissive,
+    /// Frightening, unpredictable.
+    Frightening,
+}
+
+impl Default for CaregivingStyle {
+    fn default() -> Self {
+        Self::Sensitive
+    }
+}
+
+/// Attachment system state for an agent.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AttachmentSystem {
+    /// Current attachment style.
+    pub style: AttachmentStyle,
+    /// Attachment security (0 = insecure, 1 = fully secure).
+    pub security: Fixed,
+    /// Attachment anxiety (0 = low, 1 = high).
+    pub anxiety: Fixed,
+    /// Attachment avoidance (0 = low, 1 = high).
+    pub avoidance: Fixed,
+    /// Threshold for protest behavior (separation distress).
+    pub protest_threshold: Fixed,
+    /// Receptivity to soothing from others.
+    pub soothing_receptivity: Fixed,
+    /// Level of distress when separated from attachment figure.
+    pub separation_distress: Fixed,
+    /// How the agent cares for others.
+    pub caregiving_style: CaregivingStyle,
+}
+
+impl Default for AttachmentSystem {
+    fn default() -> Self {
+        Self {
+            style: AttachmentStyle::Secure,
+            security: Fixed::from_f64(0.6),
+            anxiety: Fixed::from_f64(0.2),
+            avoidance: Fixed::from_f64(0.2),
+            protest_threshold: Fixed::from_f64(0.5),
+            soothing_receptivity: Fixed::from_f64(0.6),
+            separation_distress: Fixed::ZERO,
+            caregiving_style: CaregivingStyle::Sensitive,
+        }
+    }
+}
+
+impl AttachmentSystem {
+    /// Initialize attachment style from developmental history and genetic predisposition.
+    pub fn initialize(
+        &mut self,
+        caregiver_security: Fixed,
+        trauma_history: Fixed,
+        attachment_vulnerability: Fixed,
+    ) {
+        // Secure caregiving → secure attachment
+        // Trauma → insecure attachment
+        // Genetic vulnerability amplifies the effect
+        let insecurity = trauma_history * Fixed::from_f64(0.4)
+            + (Fixed::ONE - caregiver_security) * Fixed::from_f64(0.3)
+            + attachment_vulnerability * Fixed::from_f64(0.3);
+
+        if insecurity < Fixed::from_f64(0.3) {
+            self.style = AttachmentStyle::Secure;
+            self.security = (Fixed::ONE - insecurity).clamp_01();
+            self.anxiety = insecurity * Fixed::from_f64(0.3);
+            self.avoidance = insecurity * Fixed::from_f64(0.2);
+        } else if insecurity < Fixed::from_f64(0.6) {
+            // Split between anxious and avoidant based on caregiver consistency
+            if caregiver_security > Fixed::from_f64(0.5) {
+                self.style = AttachmentStyle::Anxious;
+                self.anxiety = insecurity;
+                self.avoidance = Fixed::from_f64(0.2);
+            } else {
+                self.style = AttachmentStyle::Avoidant;
+                self.anxiety = Fixed::from_f64(0.2);
+                self.avoidance = insecurity;
+            }
+            self.security = (Fixed::ONE - insecurity).clamp_01();
+        } else {
+            self.style = AttachmentStyle::Disorganized;
+            self.security = Fixed::from_f64(0.1);
+            self.anxiety = insecurity;
+            self.avoidance = insecurity * Fixed::from_f64(0.7);
+        }
+
+        self.protest_threshold = (Fixed::ONE - self.security) * Fixed::from_f64(0.5);
+        self.soothing_receptivity = self.security * Fixed::from_f64(0.8);
+    }
+
+    /// React to separation from an attachment figure.
+    pub fn on_separation(&mut self, closeness: Fixed) {
+        let distress = closeness * self.anxiety * Fixed::from_f64(0.3);
+        self.separation_distress = (self.separation_distress + distress).clamp_01();
+    }
+
+    /// React to reunion with an attachment figure.
+    pub fn on_reunion(&mut self) {
+        match self.style {
+            AttachmentStyle::Secure => {
+                // Quick recovery
+                self.separation_distress = (self.separation_distress * Fixed::from_f64(0.3)).clamp_01();
+                self.security = (self.security + Fixed::from_f64(0.01)).clamp_01();
+            }
+            AttachmentStyle::Anxious => {
+                // Slow recovery, may be angry
+                self.separation_distress = (self.separation_distress * Fixed::from_f64(0.6)).clamp_01();
+            }
+            AttachmentStyle::Avoidant => {
+                // Appears to recover quickly but internally stressed
+                self.separation_distress = (self.separation_distress * Fixed::from_f64(0.4)).clamp_01();
+            }
+            AttachmentStyle::Disorganized => {
+                // Unpredictable — may oscillate
+                self.separation_distress = (self.separation_distress * Fixed::from_f64(0.5)).clamp_01();
+            }
+        }
+    }
+
+    /// Receive comfort from an attachment figure.
+    pub fn receive_comfort(&mut self, comfort_quality: Fixed) {
+        let effectiveness = self.soothing_receptivity * comfort_quality;
+        match self.style {
+            AttachmentStyle::Secure => {
+                self.separation_distress = (self.separation_distress - effectiveness * Fixed::from_f64(0.3)).max(Fixed::ZERO);
+                self.security = (self.security + effectiveness * Fixed::from_f64(0.005)).clamp_01();
+            }
+            AttachmentStyle::Anxious => {
+                // Partially soothed but anxiety remains
+                self.separation_distress = (self.separation_distress - effectiveness * Fixed::from_f64(0.15)).max(Fixed::ZERO);
+            }
+            AttachmentStyle::Avoidant => {
+                // May reject comfort, but still benefits slightly
+                self.separation_distress = (self.separation_distress - effectiveness * Fixed::from_f64(0.1)).max(Fixed::ZERO);
+            }
+            AttachmentStyle::Disorganized => {
+                // Unpredictable response
+                self.separation_distress = (self.separation_distress - effectiveness * Fixed::from_f64(0.2)).max(Fixed::ZERO);
+            }
+        }
+    }
+
+    /// Compute attachment activation level (how much attachment concerns are salient).
+    pub fn activation_level(&self) -> Fixed {
+        (self.anxiety + self.separation_distress + (Fixed::ONE - self.security) * Fixed::from_f64(0.3))
+            .clamp_01()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn secure_caregiving_creates_secure_attachment() {
+        let mut att = AttachmentSystem::default();
+        att.initialize(Fixed::from_f64(0.8), Fixed::ZERO, Fixed::from_f64(0.3));
+        assert_eq!(att.style, AttachmentStyle::Secure);
+        assert!(att.security > Fixed::from_f64(0.5));
+    }
+
+    #[test]
+    fn trauma_creates_insecure_attachment() {
+        let mut att = AttachmentSystem::default();
+        att.initialize(Fixed::from_f64(0.3), Fixed::from_f64(0.8), Fixed::from_f64(0.7));
+        assert_ne!(att.style, AttachmentStyle::Secure);
+        assert!(att.security < Fixed::from_f64(0.5));
+    }
+
+    #[test]
+    fn separation_increases_distress() {
+        let mut att = AttachmentSystem::default();
+        att.security = Fixed::from_f64(0.8);
+        att.anxiety = Fixed::from_f64(0.5);
+        att.on_separation(Fixed::from_f64(0.7));
+        assert!(att.separation_distress > Fixed::ZERO);
+    }
+
+    #[test]
+    fn reunion_reduces_distress_for_secure() {
+        let mut att = AttachmentSystem::default();
+        att.style = AttachmentStyle::Secure;
+        att.separation_distress = Fixed::from_f64(0.5);
+        att.on_reunion();
+        assert!(att.separation_distress < Fixed::from_f64(0.5));
+    }
+}

@@ -689,7 +689,21 @@ impl Simulation {
                 let threat_level = emotions[i].fear + emotions[i].anger;
                 let social_safety = Fixed::ONE - threat_level;
                 let is_sleeping = matches!(self.agents[i].current_action, ActionKind::Rest);
-                self.agents[i].embodied.tick_update(threat_level, social_safety, is_sleeping);
+                // Compute activity level from current action
+                let activity_level = match self.agents[i].current_action {
+                    ActionKind::Work => Fixed::from_f64(0.8),
+                    ActionKind::Wander | ActionKind::Move { .. } => Fixed::from_f64(0.4),
+                    ActionKind::Trade => Fixed::from_f64(0.3),
+                    ActionKind::Socialize | ActionKind::Worship => Fixed::from_f64(0.2),
+                    _ => Fixed::from_f64(0.1),
+                };
+                let ambient_temperature = Fixed::from_f64(0.5); // temperate default
+                let crowding = Fixed::from_f64(0.3); // village-level crowding
+                let hygiene = Fixed::from_f64(0.6); // moderate hygiene
+                self.agents[i].embodied.tick_update(
+                    threat_level, social_safety, is_sleeping,
+                    activity_level, ambient_temperature, crowding, hygiene,
+                );
                 // Sync derived body fields from EmbodiedState back to legacy BodyState.
                 // Compute values first to avoid borrow conflicts between embodied and body.
                 // Boundary: hunger/thirst/sickness/injury are managed by health.rs and

@@ -1,0 +1,223 @@
+//! Moral cognition system — moral foundations, internalized norms, moral emotions.
+//!
+//! Moral foundations: care/harm, fairness/cheating, loyalty/betrayal,
+//! authority/subversion, purity/degradation, liberty/oppression.
+//!
+//! Emergent effects: moral outrage, scapegoating, martyrdom, reform movements,
+//! religious schisms, honor feuds.
+
+use mindstrata_core::fixed::Fixed;
+use serde::{Deserialize, Serialize};
+
+/// Moral Foundations Theory — six moral dimensions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MoralFoundations {
+    /// Sensitivity to harm and suffering.
+    pub care: Fixed,
+    /// Sensitivity to fairness and justice.
+    pub fairness: Fixed,
+    /// Sensitivity to loyalty and betrayal.
+    pub loyalty: Fixed,
+    /// Sensitivity to authority and subversion.
+    pub authority: Fixed,
+    /// Sensitivity to purity and taboo violation.
+    pub purity: Fixed,
+    /// Sensitivity to liberty and coercion.
+    pub liberty: Fixed,
+}
+
+impl Default for MoralFoundations {
+    fn default() -> Self {
+        Self {
+            care: Fixed::from_f64(0.5),
+            fairness: Fixed::from_f64(0.5),
+            loyalty: Fixed::from_f64(0.5),
+            authority: Fixed::from_f64(0.5),
+            purity: Fixed::from_f64(0.5),
+            liberty: Fixed::from_f64(0.5),
+        }
+    }
+}
+
+/// An internalized norm — a moral rule the agent has adopted.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InternalizedNorm {
+    /// What the norm prohibits or requires.
+    pub description: String,
+    /// How strongly the agent holds this norm (0–1).
+    pub strength: Fixed,
+    /// Emotional charge when violated (0–1).
+    pub emotional_charge: Fixed,
+    /// Whether this norm is identity-linked (resists change).
+    pub identity_linked: bool,
+    /// Number of times the agent has witnessed enforcement.
+    pub enforcement_count: u32,
+}
+
+/// Moral emotions — emotions specifically tied to moral evaluation.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MoralEmotions {
+    /// Moral outrage at witnessed injustice.
+    pub outrage: Fixed,
+    /// Shame from personal moral failure.
+    pub shame: Fixed,
+    /// Guilt from harming others.
+    pub guilt: Fixed,
+    /// Pride from moral achievement.
+    pub pride: Fixed,
+    /// Contempt for moral violators.
+    pub contempt: Fixed,
+    /// Gratitude for moral gifts.
+    pub gratitude: Fixed,
+}
+
+/// Complete moral cognition state.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MoralCognition {
+    /// Moral foundations profile.
+    pub foundations: MoralFoundations,
+    /// Internalized norms.
+    pub internalized_norms: Vec<InternalizedNorm>,
+    /// Current moral emotions.
+    pub moral_emotions: MoralEmotions,
+    /// How central morality is to identity (0–1).
+    pub moral_identity: Fixed,
+    /// Sensitivity to hypocrisy (own and others').
+    pub hypocrisy_sensitivity: Fixed,
+    /// Sensitivity to purity violations.
+    pub purity_sensitivity: Fixed,
+    /// Sensitivity to fairness violations.
+    pub fairness_sensitivity: Fixed,
+    /// Sensitivity to loyalty violations.
+    pub loyalty_sensitivity: Fixed,
+    /// Sensitivity to authority violations.
+    pub authority_sensitivity: Fixed,
+}
+
+impl Default for MoralCognition {
+    fn default() -> Self {
+        Self {
+            foundations: MoralFoundations::default(),
+            internalized_norms: Vec::new(),
+            moral_emotions: MoralEmotions::default(),
+            moral_identity: Fixed::from_f64(0.5),
+            hypocrisy_sensitivity: Fixed::from_f64(0.5),
+            purity_sensitivity: Fixed::from_f64(0.3),
+            fairness_sensitivity: Fixed::from_f64(0.5),
+            loyalty_sensitivity: Fixed::from_f64(0.4),
+            authority_sensitivity: Fixed::from_f64(0.4),
+        }
+    }
+}
+
+impl MoralCognition {
+    /// Compute moral outrage from a witnessed norm violation.
+    pub fn compute_outrage(
+        &self,
+        violation_severity: Fixed,
+        violator_is_in_group: bool,
+    ) -> Fixed {
+        let care_outrage = self.foundations.care * violation_severity * Fixed::from_f64(0.3);
+        let fairness_outrage = self.foundations.fairness * violation_severity * Fixed::from_f64(0.25);
+        let loyalty_outrage = if violator_is_in_group {
+            self.foundations.loyalty * violation_severity * Fixed::from_f64(0.2)
+        } else {
+            Fixed::ZERO
+        };
+        let authority_outrage = self.foundations.authority * violation_severity * Fixed::from_f64(0.15);
+        let purity_outrage = self.purity_sensitivity * violation_severity * Fixed::from_f64(0.1);
+
+        (care_outrage + fairness_outrage + loyalty_outrage + authority_outrage + purity_outrage)
+            .clamp_01()
+    }
+
+    /// Internalize a new norm through repeated exposure and enforcement.
+    pub fn internalize_norm(&mut self, description: String, strength: Fixed) {
+        // Check if already internalized
+        if self.internalized_norms.iter().any(|n| n.description == description) {
+            return;
+        }
+        self.internalized_norms.push(InternalizedNorm {
+            description,
+            strength,
+            emotional_charge: strength * Fixed::from_f64(0.5),
+            identity_linked: strength > Fixed::from_f64(0.7),
+            enforcement_count: 0,
+        });
+    }
+
+    /// Update moral emotions based on recent events.
+    pub fn update_moral_emotions(
+        &mut self,
+        witnessed_violations: Fixed,
+        personal_violations: Fixed,
+        moral_achievements: Fixed,
+    ) {
+        // Outrage builds from witnessed violations
+        self.moral_emotions.outrage = (self.moral_emotions.outrage
+            + witnessed_violations * self.foundations.fairness * Fixed::from_f64(0.05))
+            .clamp_01();
+        // Shame from personal violations
+        self.moral_emotions.shame = (self.moral_emotions.shame
+            + personal_violations * self.moral_identity * Fixed::from_f64(0.05))
+            .clamp_01();
+        // Pride from moral achievements
+        self.moral_emotions.pride = (self.moral_emotions.pride
+            + moral_achievements * self.moral_identity * Fixed::from_f64(0.03))
+            .clamp_01();
+
+        // Decay all moral emotions
+        let decay = Fixed::from_f64(0.003);
+        self.moral_emotions.outrage = (self.moral_emotions.outrage - decay).max(Fixed::ZERO);
+        self.moral_emotions.shame = (self.moral_emotions.shame - decay).max(Fixed::ZERO);
+        self.moral_emotions.pride = (self.moral_emotions.pride - decay).max(Fixed::ZERO);
+        self.moral_emotions.contempt = (self.moral_emotions.contempt - decay).max(Fixed::ZERO);
+        self.moral_emotions.gratitude = (self.moral_emotions.gratitude - decay).max(Fixed::ZERO);
+    }
+
+    /// Check if a proposed action would violate any internalized norm.
+    /// Returns the strength of norm resistance (0 = no resistance, 1 = strong resistance).
+    pub fn norm_resistance(&self, action_description: &str) -> Fixed {
+        let mut max_resistance = Fixed::ZERO;
+        for norm in &self.internalized_norms {
+            if norm.description == action_description {
+                max_resistance = max_resistance.max(norm.strength);
+            }
+        }
+        max_resistance
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn outrage_from_fairness_violation() {
+        let mc = MoralCognition {
+            foundations: MoralFoundations {
+                fairness: Fixed::from_f64(0.9),
+                ..MoralFoundations::default()
+            },
+            ..MoralCognition::default()
+        };
+        let outrage = mc.compute_outrage(Fixed::from_f64(0.8), false);
+        assert!(outrage > Fixed::ZERO);
+    }
+
+    #[test]
+    fn internalize_norm_prevents_duplicates() {
+        let mut mc = MoralCognition::default();
+        mc.internalize_norm("no_theft".into(), Fixed::from_f64(0.7));
+        mc.internalize_norm("no_theft".into(), Fixed::from_f64(0.9));
+        assert_eq!(mc.internalized_norms.len(), 1);
+    }
+
+    #[test]
+    fn norm_resistance_returns_strength() {
+        let mut mc = MoralCognition::default();
+        mc.internalize_norm("no_theft".into(), Fixed::from_f64(0.8));
+        let resistance = mc.norm_resistance("no_theft");
+        assert_eq!(resistance, Fixed::from_f64(0.8));
+    }
+}

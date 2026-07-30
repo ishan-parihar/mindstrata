@@ -8,24 +8,62 @@
 //! Genome → Endocrine Axes → Nervous System → Interoception → Emotion
 //!         Metabolic → Energy → Cognition
 //!         Growth → Developmental Stage → Trait Expression
+//!         Cardiovascular → Stamina → Physical Agency
+//!         Immune → Disease Resistance → Recovery
+//!         Respiratory → Exertion Limits → Endurance
+//!         Musculoskeletal → Strength → Labor Capacity
+//!         Reproductive → Fertility → Pair-Bonding → Kinship
+//!         Circadian → Sleep/Wake → Alertness → Rhythm
+//!         Development → Life Stage → Aging → Milestones
 //! ```
 
+pub mod cardiovascular;
+pub mod circadian;
+pub mod development;
 pub mod endocrine;
 pub mod genome;
+pub mod immune;
+pub mod metabolism;
+pub mod musculoskeletal;
 pub mod nervous;
+pub mod reproductive;
+pub mod respiratory;
 
 use mindstrata_core::fixed::Fixed;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
+pub use cardiovascular::CardiovascularState;
+pub use circadian::CircadianState;
+pub use development::DevelopmentalState;
 pub use endocrine::EndocrineState;
 pub use genome::Genome;
+pub use immune::ImmuneState;
+pub use metabolism::MetabolicState;
+pub use musculoskeletal::MuscularState;
 pub use nervous::NervousSystemState;
+pub use reproductive::ReproductiveState;
+pub use respiratory::RespiratoryState;
 
 /// EmbodiedState — the full biological substrate of an agent.
 ///
 /// Replaces the abstract `BodyState` with richer biological modeling.
 /// Provides a compatibility facade so existing systems keep working.
+///
+/// The subsystems interact:
+/// ```text
+/// Genome → predispositions for all subsystems
+/// Endocrine → modulates psychology via hormone axes
+/// Nervous → arousal, pain, trauma → feeds interoception
+/// Metabolic → energy, hunger, thermoregulation
+/// Cardiovascular → stamina, shock risk, fitness
+/// Respiratory → exertion limits, disease vulnerability
+/// Immune → disease resistance, inflammation
+/// Musculoskeletal → strength, fatigue, conditioning
+/// Reproductive → fertility, puberty, pregnancy
+/// Circadian → sleep/wake cycle, alertness
+/// Development → life stage, aging, milestones
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbodiedState {
     /// Heritable genome.
@@ -34,6 +72,22 @@ pub struct EmbodiedState {
     pub endocrine: EndocrineState,
     /// Nervous system — arousal, pain, trauma.
     pub nervous: NervousSystemState,
+    /// Metabolic system — energy, hunger, thermoregulation.
+    pub metabolic: MetabolicState,
+    /// Cardiovascular system — stamina, shock, fitness.
+    pub cardiovascular: CardiovascularState,
+    /// Respiratory system — exertion, disease vulnerability.
+    pub respiratory: RespiratoryState,
+    /// Immune system — disease resistance, inflammation.
+    pub immune: ImmuneState,
+    /// Musculoskeletal system — strength, fatigue, conditioning.
+    pub muscular: MuscularState,
+    /// Reproductive system — fertility, puberty, pregnancy.
+    pub reproductive: ReproductiveState,
+    /// Circadian system — sleep/wake cycle, alertness.
+    pub circadian: CircadianState,
+    /// Developmental system — life stage, aging, milestones.
+    pub development: DevelopmentalState,
     /// Current health (0–1).
     pub health: Fixed,
     /// Current energy (0–1).
@@ -58,9 +112,27 @@ impl EmbodiedState {
     /// Generate a random embodied state for a new agent.
     pub fn random(age: Fixed, rng: &mut impl Rng) -> Self {
         let genome = Genome::random(rng);
+        let mut development = DevelopmentalState::default();
+        development.age = age;
+        development.life_stage = crate::biology::development::LifeStage::from_age(age);
+
         Self {
             endocrine: EndocrineState::random(rng),
             nervous: NervousSystemState::default(),
+            metabolic: MetabolicState::default(),
+            cardiovascular: CardiovascularState::default(),
+            respiratory: RespiratoryState::default(),
+            immune: ImmuneState::default(),
+            muscular: MuscularState::default(),
+            reproductive: ReproductiveState {
+                sex: match genome.sex {
+                    genome::Sex::Male => reproductive::BiologicalSex::Male,
+                    genome::Sex::Female => reproductive::BiologicalSex::Female,
+                },
+                ..ReproductiveState::default()
+            },
+            circadian: CircadianState::default(),
+            development,
             health: Fixed::from_f64(0.9) + Fixed::from_f64(rng.random_range(0.0..0.1)),
             energy: Fixed::from_f64(0.7) + Fixed::from_f64(rng.random_range(0.0..0.2)),
             hunger: Fixed::from_f64(0.2),
@@ -83,70 +155,161 @@ impl EmbodiedState {
     /// This ensures default agents start near full health like the legacy BodyState.
     pub fn derived_health(&self) -> Fixed {
         let base = self.health;
-        let immune_modifier = Fixed::from_f64(0.7) + self.genome.health_predispositions.immune_strength * Fixed::from_f64(0.3);
+        let immune_modifier = Fixed::from_f64(0.7)
+            + self.genome.health_predispositions.immune_strength * Fixed::from_f64(0.3);
         let stress_penalty = self.endocrine.stress.level * Fixed::from_f64(0.2);
         let pain_penalty = self.nervous.pain.effective_pain() * Fixed::from_f64(0.1);
-        (base * immune_modifier - stress_penalty - pain_penalty).clamp_01()
+        let sickness_penalty = self.immune.sickness_level() * Fixed::from_f64(0.15);
+        let shock_penalty = self.cardiovascular.shock_risk * Fixed::from_f64(0.1);
+        (base * immune_modifier - stress_penalty - pain_penalty - sickness_penalty - shock_penalty)
+            .clamp_01()
     }
 
-    /// Derived energy from metabolic and sleep state.
+    /// Derived energy from metabolic, cardiovascular, and sleep state.
     pub fn derived_energy(&self) -> Fixed {
         let base = self.energy;
         let sleep_penalty = self.nervous.sleep_pressure * Fixed::from_f64(0.3);
         let stress_penalty = self.endocrine.stress.level * Fixed::from_f64(0.1);
         let metabolic_boost = self.endocrine.metabolic.energy * Fixed::from_f64(0.2);
-        (base - sleep_penalty - stress_penalty + metabolic_boost).clamp_01()
+        let cardio_boost = self.cardiovascular.effective_stamina() * Fixed::from_f64(0.1);
+        let fatigue_penalty = self.muscular.fatigue * Fixed::from_f64(0.15);
+        (base - sleep_penalty - stress_penalty + metabolic_boost + cardio_boost - fatigue_penalty)
+            .clamp_01()
     }
 
     /// Derived hunger from metabolic predispositions.
     pub fn derived_hunger(&self) -> Fixed {
         let base = self.hunger;
         let sensitivity = self.genome.metabolic_predispositions.hunger_sensitivity;
-        (base * sensitivity).clamp_01()
+        let satiety_reduce = self.metabolic.satiety * Fixed::from_f64(0.3);
+        ((base * sensitivity - satiety_reduce).max(Fixed::ZERO)).clamp_01()
     }
 
-    /// Derived fatigue from sleep pressure and energy.
+    /// Derived fatigue from sleep pressure, muscular fatigue, and energy.
     pub fn derived_fatigue(&self) -> Fixed {
         let base = self.fatigue;
         let sleep_factor = self.nervous.sleep_pressure * Fixed::from_f64(0.4);
         let energy_factor = (Fixed::ONE - self.energy) * Fixed::from_f64(0.3);
-        (base + sleep_factor + energy_factor).clamp_01()
+        let muscular_factor = self.muscular.fatigue * Fixed::from_f64(0.2);
+        (base + sleep_factor + energy_factor + muscular_factor).clamp_01()
     }
 
-    /// Update biological systems each tick.
+    /// Update all biological systems each tick.
+    ///
+    /// This is the main biological update loop. It updates subsystems in causal order:
+    /// 1. Circadian (time of day)
+    /// 2. Nervous (arousal, pain, trauma)
+    /// 3. Endocrine (hormonal axes)
+    /// 4. Metabolic (energy, hunger, thermoregulation)
+    /// 5. Cardiovascular (fitness, shock)
+    /// 6. Respiratory (exertion, disease)
+    /// 7. Immune (infection, inflammation)
+    /// 8. Musculoskeletal (strength, fatigue)
+    /// 9. Reproductive (fertility, pregnancy)
+    /// 10. Development (aging, milestones)
     pub fn tick_update(
         &mut self,
         threat_level: Fixed,
         social_safety: Fixed,
         is_sleeping: bool,
+        activity_level: Fixed,
+        ambient_temperature: Fixed,
+        crowding: Fixed,
+        hygiene: Fixed,
     ) {
-        // Update nervous system
-        self.nervous.update(
-            threat_level,
-            social_safety,
-            self.injury,
-            is_sleeping,
-        );
+        // 1. Circadian — advances time of day
+        self.circadian.tick_update(144, is_sleeping); // 144 ticks per day
 
-        // Update endocrine stress axis
+        // 2. Nervous — arousal, pain, trauma
+        self.nervous.update(threat_level, social_safety, self.injury, is_sleeping);
+
+        // 3. Endocrine — hormonal axes
         let parasympathetic = self.nervous.parasympathetic_tone;
         let acute_stress = self.nervous.pain.effective_pain()
             + self.hunger * Fixed::from_f64(0.3)
             + self.thirst * Fixed::from_f64(0.2);
         self.endocrine.stress.update(acute_stress, parasympathetic);
-
-        // Update metabolic axis
         self.endocrine.metabolic.energy = self.energy;
         self.endocrine.metabolic.appetite = self.hunger;
         self.endocrine.metabolic.satiety = Fixed::ONE - self.hunger;
-
-        // Update arousal from stress
         self.endocrine.arousal.update(self.endocrine.stress.level);
+
+        // 4. Metabolic — energy, hunger, thermoregulation
+        self.metabolic.tick_update(activity_level, ambient_temperature);
+
+        // 5. Cardiovascular — fitness, shock
+        let age_modifier = self.development.physical_modifier();
+        self.cardiovascular.tick_update(
+            activity_level,
+            self.injury,
+            self.endocrine.stress.level,
+            Fixed::from_f64(0.6), // nutrition quality placeholder
+            age_modifier,
+        );
+
+        // 6. Respiratory — exertion, disease
+        self.respiratory.tick_update(
+            activity_level,
+            self.metabolic.cold_stress,
+            Fixed::ZERO, // smoke exposure (placeholder)
+            Fixed::ZERO, // damp housing (placeholder)
+            age_modifier,
+        );
+
+        // 7. Immune — infection, inflammation
+        let sleep_quality = if is_sleeping {
+            Fixed::from_f64(0.8)
+        } else {
+            Fixed::from_f64(0.3)
+        };
+        self.immune.tick_update(
+            Fixed::from_f64(0.6), // nutrition quality placeholder
+            self.endocrine.stress.level,
+            sleep_quality,
+            self.injury,
+            crowding,
+            hygiene,
+            age_modifier,
+        );
+
+        // 8. Musculoskeletal — strength, fatigue
+        self.muscular.tick_update(
+            activity_level,
+            Fixed::from_f64(0.6), // nutrition quality placeholder
+            if is_sleeping { Fixed::ONE } else { Fixed::from_f64(0.2) },
+            age_modifier,
+        );
+
+        // 9. Reproductive — fertility, pregnancy
+        let bonding = self.endocrine.bonding.level;
+        self.reproductive.tick_update(
+            self.age,
+            self.derived_health(),
+            self.endocrine.stress.level,
+            bonding,
+            Fixed::from_f64(0.6), // nutrition placeholder
+        );
+
+        // 10. Development — aging (advance age every 144 ticks = 1 day)
+        // Note: age advancement is handled externally by the simulation tick loop
+        // to avoid double-counting. Development only updates environment quality here.
+        self.development.update_environment(
+            Fixed::from_f64(0.6), // nutrition
+            social_safety,
+            social_safety, // social support ≈ social safety for now
+        );
 
         // Sleep pressure management
         if is_sleeping {
-            self.nervous.sleep_pressure = (self.nervous.sleep_pressure - Fixed::from_f64(0.05)).max(Fixed::ZERO);
+            self.nervous.sleep_pressure = (self.nervous.sleep_pressure - Fixed::from_f64(0.05))
+                .max(Fixed::ZERO);
         }
+
+        // Sync derived fields back to legacy fields
+        self.health = self.derived_health();
+        self.energy = self.derived_energy();
+        self.fatigue = self.derived_fatigue();
+        self.sickness = self.immune.sickness_level();
     }
 }
 
@@ -189,5 +352,44 @@ mod tests {
         embodied.endocrine.stress.level = Fixed::from_f64(0.9);
         let stressed_health = embodied.derived_health();
         assert!(calm_health > stressed_health);
+    }
+
+    #[test]
+    fn tick_update_runs_all_subsystems() {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let mut embodied = EmbodiedState::random(Fixed::from_f64(25.0), &mut rng);
+        embodied.tick_update(
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.7),
+            false,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.7),
+        );
+        // Should not panic and values should remain in range
+        assert!(derived_health_in_range(&embodied));
+    }
+
+    #[test]
+    fn tick_update_sleep_reduces_pressure() {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let mut embodied = EmbodiedState::random(Fixed::from_f64(25.0), &mut rng);
+        embodied.nervous.sleep_pressure = Fixed::from_f64(0.8);
+        embodied.tick_update(
+            Fixed::ZERO,
+            Fixed::ONE,
+            true,
+            Fixed::ZERO,
+            Fixed::from_f64(0.5),
+            Fixed::ZERO,
+            Fixed::ONE,
+        );
+        assert!(embodied.nervous.sleep_pressure < Fixed::from_f64(0.8));
+    }
+
+    fn derived_health_in_range(e: &EmbodiedState) -> bool {
+        let h = e.derived_health();
+        h >= Fixed::ZERO && h <= Fixed::ONE
     }
 }

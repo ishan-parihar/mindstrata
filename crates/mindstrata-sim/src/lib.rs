@@ -37,5 +37,8 @@ pub mod world_gen;
 pub mod market;
 pub mod black_market;
 pub mod spec_lint;
+pub mod relationship_v2;
+pub mod attraction;
+pub mod status_dims;
 
 pub use sim::Simulation;
