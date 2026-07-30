@@ -19,6 +19,7 @@ pub enum Season {
 
 impl Season {
     /// Get the next season.
+    #[must_use]
     pub fn next(self) -> Self {
         match self {
             Season::Spring => Season::Summer,

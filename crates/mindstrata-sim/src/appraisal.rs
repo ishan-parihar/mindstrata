@@ -75,6 +75,7 @@ pub struct EmotionDelta {
 
 impl EmotionDelta {
     /// Combine two deltas additively.
+    #[must_use]
     pub fn combine(self, other: &EmotionDelta) -> Self {
         Self {
             fear: (self.fear + other.fear).clamp_01(),

@@ -53,6 +53,7 @@ unreadable_literal = "allow"
 manual_let_else = "allow"
 format_push_string = "allow"
 unnecessary_wraps = "allow"
+float_cmp = "allow"
 
 [workspace.dependencies]
 # Internal crates

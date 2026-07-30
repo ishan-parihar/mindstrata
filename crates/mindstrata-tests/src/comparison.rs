@@ -65,12 +65,14 @@ pub struct MetricDivergence {
 
 /// Result of comparing two simulation runs.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ComparisonResult {
     pub divergences: Vec<MetricDivergence>,
     pub divergent_metrics: Vec<String>,
 }
 
 /// Compare two simulation configs and report metric divergences.
+#[allow(dead_code)]
 pub fn compare_configs(
     config_a: &SimConfig,
     config_b: &SimConfig,
