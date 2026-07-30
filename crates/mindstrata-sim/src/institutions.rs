@@ -251,7 +251,7 @@ impl Institution {
     ///
     /// INVARIANT: AgentId::new(i) == index i. The member_wealth vec must be built
     /// from institution.members using agent_id.as_u64() as the index.
-    pub fn collect_taxes(&mut self, tax_rate: Fixed, member_wealth: &mut Vec<(AgentId, Fixed)>) -> Fixed {
+    pub fn collect_taxes(&mut self, tax_rate: Fixed, member_wealth: &mut [(AgentId, Fixed)]) -> Fixed {
         let mut total = Fixed::ZERO;
         for (agent, wealth) in member_wealth.iter_mut() {
             if self.has_member(*agent) {
@@ -269,7 +269,7 @@ impl Institution {
     ///
     /// INVARIANT: AgentId::new(i) == index i. The member_wealth vec must be built
     /// from institution.members using agent_id.as_u64() as the index.
-    pub fn pay_wages(&mut self, wage: Fixed, member_wealth: &mut Vec<(AgentId, Fixed)>) -> Fixed {
+    pub fn pay_wages(&mut self, wage: Fixed, member_wealth: &mut [(AgentId, Fixed)]) -> Fixed {
         // Count how many role holders will receive wages
         let role_holder_count = self.roles.iter().filter(|r| r.holder.is_some()).count();
         let total_wage_cost = wage * Fixed::from_int(role_holder_count as i64);
