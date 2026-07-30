@@ -187,6 +187,9 @@ pub struct AgentBundle {
     pub attraction: AttractionModel,
     /// Architecture-plan-2 §11.1: Multi-dimensional status.
     pub status_v2: StatusDimensions,
+    /// Architecture-plan-2 §8.2: Epistemic/informational substrate.
+    /// Agents have partial, distorted, local knowledge.
+    pub epistemic: crate::epistemic::EpistemicState,
 }
 
 /// §4.2: Skill levels that improve through repeated practice.
@@ -418,6 +421,7 @@ impl Simulation {
                 Position::new(8, 8) // center of 16x16 world
             };
 
+            let epistemic_state = crate::epistemic::EpistemicState::from_personality(&personality);
             self.agents.push(AgentBundle {
                 body: BodyState::from(&embodied),
                 needs,
@@ -497,6 +501,7 @@ impl Simulation {
                 relationship_v2s: Vec::new(), // populated after agents are created
                 attraction: crate::attraction::AttractionModel::default(),
                 status_v2: crate::status_dims::StatusDimensions::default(),
+                epistemic: epistemic_state,
             });
         }
 
@@ -3133,6 +3138,7 @@ impl Simulation {
                     relationship_v2s: Vec::new(),
                     attraction: crate::attraction::AttractionModel::default(),
                     status_v2: crate::status_dims::StatusDimensions::default(),
+                    epistemic: crate::epistemic::EpistemicState::default(),
                 });                // Add relationships to all existing agents
                 for existing_idx in 0..self.agents.len() - 1 {
                     let trust = if existing_idx == parent_a || existing_idx == parent_b {

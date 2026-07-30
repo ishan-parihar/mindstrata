@@ -42,3 +42,4 @@ pub mod attraction;
 pub mod status_dims;
 
 pub use sim::Simulation;
+pub mod epistemic;
