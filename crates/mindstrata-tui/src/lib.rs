@@ -709,10 +709,12 @@ pub fn render_psychology_inspector(
     // ── Identity State ──
     out.push_str("── §22: Identity State ──\n\n");
     for identity in &agent.identity.identities {
+        #[allow(unreachable_patterns)]
         let kind_str = match identity.kind {
             IdentityKind::Farmer => "Farmer",
             IdentityKind::Parent => "Parent",
             IdentityKind::Believer => "Believer",
+            _ => "Other",
         };
         let bar_len = (identity.strength.to_f64() * 20.0) as usize;
         let bar: String = "█".repeat(bar_len.min(20)) + &"░".repeat(20 - bar_len.min(20));
