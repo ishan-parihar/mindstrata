@@ -81,12 +81,14 @@ impl Fixed {
 
     /// Clamp to `0.0 ..= 1.0`.
     #[inline]
+    #[must_use]
     pub fn clamp_01(self) -> Self {
         Self(self.0.clamp(0, SCALE))
     }
 
     /// Clamp to an arbitrary range.
     #[inline]
+    #[must_use]
     pub fn clamp(self, min: Self, max: Self) -> Self {
         Self(self.0.clamp(min.0, max.0))
     }
@@ -101,6 +103,7 @@ impl Fixed {
 
     /// Power via repeated multiplication (integer exponent).
     /// For fractional exponents use `powf`.
+    #[must_use]
     pub fn powi(self, exp: u32) -> Self {
         if exp == 0 {
             return Self::ONE;
@@ -113,23 +116,27 @@ impl Fixed {
     }
 
     /// Raise to a floating-point power (approximate, via `f64` conversion).
+    #[must_use]
     pub fn powf(self, exp: f64) -> Self {
         Self::from_f64(self.to_f64().powf(exp))
     }
 
     /// Linear interpolation between `self` and `target` by factor `t` in [0, 1].
+    #[must_use]
     pub fn lerp(self, target: Self, t: Fixed) -> Self {
         self + (target - self) * t
     }
 
     /// Absolute value.
     #[inline]
+    #[must_use]
     pub fn abs(self) -> Self {
         Self(self.0.abs())
     }
 
     /// Returns `self` rounded down to the nearest integer.
     #[inline]
+    #[must_use]
     pub fn floor(self) -> Self {
         Self((self.0 / SCALE) * SCALE)
     }

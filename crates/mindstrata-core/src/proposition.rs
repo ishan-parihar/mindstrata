@@ -95,66 +95,49 @@ impl Proposition {
 
     /// Get the base emotional charge for believing this proposition.
     /// Positive = emotionally positive belief, negative = negative.
+    #[must_use]
     pub fn base_emotional_charge(&self) -> Fixed {
         match self {
             Proposition::MarketIsFair => Fixed::from_f64(0.2),
-            Proposition::RulerIsLegitimate => Fixed::from_f64(0.1),
+            Proposition::RulerIsLegitimate | Proposition::StrangersHonest => Fixed::from_f64(0.1),
             Proposition::NeighborTrustworthy { .. } => Fixed::from_f64(0.3),
-            Proposition::ForeignersDangerous => Fixed::from_f64(-0.4),
+            Proposition::ForeignersDangerous | Proposition::GuardsUnjust => Fixed::from_f64(-0.4),
             Proposition::HardWorkLeadsToWealth => Fixed::from_f64(0.3),
             Proposition::HarvestWillFail => Fixed::from_f64(-0.5),
             Proposition::TempleIsCorrupt => Fixed::from_f64(-0.3),
-            Proposition::CouncilProtectsUs => Fixed::from_f64(0.2),
+            Proposition::CouncilProtectsUs | Proposition::SharingIsDuty => Fixed::from_f64(0.2),
             Proposition::GrainPricesTooHigh => Fixed::from_f64(-0.2),
-            Proposition::GuardsUnjust => Fixed::from_f64(-0.4),
             Proposition::ViolenceNecessary => Fixed::from_f64(-0.1),
-            Proposition::SharingIsDuty => Fixed::from_f64(0.2),
             Proposition::CommunityStrong => Fixed::from_f64(0.4),
-            Proposition::StrangersHonest => Fixed::from_f64(0.1),
             Proposition::WellWaterSafe => Fixed::from_f64(0.1),
         }
     }
 
     /// Get the base identity linkage for this proposition.
     /// High identity linkage = beliefs resist change (§22.9).
+    #[must_use]
     pub fn base_identity_linkage(&self) -> Fixed {
         match self {
             Proposition::MarketIsFair => Fixed::from_f64(0.3),
-            Proposition::RulerIsLegitimate => Fixed::from_f64(0.5),
-            Proposition::NeighborTrustworthy { .. } => Fixed::from_f64(0.2),
+            Proposition::RulerIsLegitimate | Proposition::TempleIsCorrupt | Proposition::ViolenceNecessary | Proposition::CommunityStrong => Fixed::from_f64(0.5),
+            Proposition::NeighborTrustworthy { .. } | Proposition::GrainPricesTooHigh | Proposition::StrangersHonest => Fixed::from_f64(0.2),
             Proposition::ForeignersDangerous => Fixed::from_f64(0.6),
-            Proposition::HardWorkLeadsToWealth => Fixed::from_f64(0.4),
-            Proposition::HarvestWillFail => Fixed::from_f64(0.1),
-            Proposition::TempleIsCorrupt => Fixed::from_f64(0.5),
-            Proposition::CouncilProtectsUs => Fixed::from_f64(0.4),
-            Proposition::GrainPricesTooHigh => Fixed::from_f64(0.2),
+            Proposition::HardWorkLeadsToWealth | Proposition::CouncilProtectsUs | Proposition::SharingIsDuty => Fixed::from_f64(0.4),
+            Proposition::HarvestWillFail | Proposition::WellWaterSafe => Fixed::from_f64(0.1),
             Proposition::GuardsUnjust => Fixed::from_f64(0.3),
-            Proposition::ViolenceNecessary => Fixed::from_f64(0.5),
-            Proposition::SharingIsDuty => Fixed::from_f64(0.4),
-            Proposition::CommunityStrong => Fixed::from_f64(0.5),
-            Proposition::StrangersHonest => Fixed::from_f64(0.2),
-            Proposition::WellWaterSafe => Fixed::from_f64(0.1),
         }
     }
 
     /// Get the base resistance to change for this proposition.
+    #[must_use]
     pub fn base_resistance(&self) -> Fixed {
         match self {
-            Proposition::MarketIsFair => Fixed::from_f64(0.5),
-            Proposition::RulerIsLegitimate => Fixed::from_f64(0.6),
-            Proposition::NeighborTrustworthy { .. } => Fixed::from_f64(0.3),
-            Proposition::ForeignersDangerous => Fixed::from_f64(0.7),
-            Proposition::HardWorkLeadsToWealth => Fixed::from_f64(0.5),
-            Proposition::HarvestWillFail => Fixed::from_f64(0.2),
-            Proposition::TempleIsCorrupt => Fixed::from_f64(0.6),
-            Proposition::CouncilProtectsUs => Fixed::from_f64(0.5),
-            Proposition::GrainPricesTooHigh => Fixed::from_f64(0.3),
+            Proposition::MarketIsFair | Proposition::HardWorkLeadsToWealth | Proposition::CouncilProtectsUs | Proposition::SharingIsDuty => Fixed::from_f64(0.5),
+            Proposition::RulerIsLegitimate | Proposition::TempleIsCorrupt | Proposition::CommunityStrong => Fixed::from_f64(0.6),
+            Proposition::NeighborTrustworthy { .. } | Proposition::GrainPricesTooHigh | Proposition::StrangersHonest => Fixed::from_f64(0.3),
+            Proposition::ForeignersDangerous | Proposition::ViolenceNecessary => Fixed::from_f64(0.7),
+            Proposition::HarvestWillFail | Proposition::WellWaterSafe => Fixed::from_f64(0.2),
             Proposition::GuardsUnjust => Fixed::from_f64(0.4),
-            Proposition::ViolenceNecessary => Fixed::from_f64(0.7),
-            Proposition::SharingIsDuty => Fixed::from_f64(0.5),
-            Proposition::CommunityStrong => Fixed::from_f64(0.6),
-            Proposition::StrangersHonest => Fixed::from_f64(0.3),
-            Proposition::WellWaterSafe => Fixed::from_f64(0.2),
         }
     }
 
@@ -238,8 +221,8 @@ mod tests {
     #[test]
     fn proposition_ids_are_unique() {
         let props = Proposition::all_generic();
-        let mut ids: Vec<u64> = props.iter().map(|p| p.id()).collect();
-        ids.sort();
+        let mut ids: Vec<u64> = props.iter().map(Proposition::id).collect();
+        ids.sort_unstable();
         ids.dedup();
         assert_eq!(ids.len(), props.len(), "All proposition IDs should be unique");
     }

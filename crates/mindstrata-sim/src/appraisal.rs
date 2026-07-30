@@ -94,7 +94,7 @@ impl EmotionDelta {
 ///
 /// This implements the cognitive appraisal → emotion mapping from
 /// the architecture spec's Section 9.2.
-pub fn appraise(appraisal: &Appraisal, _rng: &mut RngStreams, _tick: Tick) -> EmotionDelta {
+pub fn appraise(appraisal: &Appraisal, _rng: &RngStreams, _tick: Tick) -> EmotionDelta {
     let mut delta = EmotionDelta::default();
 
     if appraisal.goal_relevance > Fixed::from_f64(0.3) {
