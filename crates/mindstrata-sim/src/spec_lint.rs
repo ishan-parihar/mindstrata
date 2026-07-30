@@ -374,11 +374,8 @@ mod tests {
             return;
         }
         let issues = lint_all(&specs_dir);
-        let errors: Vec<_> = issues
-            .iter()
-            .filter(|i| i.severity == LintSeverity::Error)
-            .collect();
-        assert!(errors.is_empty(), "Spec lint errors found:\n{}", format_report(&issues));
+        let has_errors = issues.iter().any(|i| i.severity == LintSeverity::Error);
+        assert!(!has_errors, "Spec lint errors found:\n{}", format_report(&issues));
     }
 
     #[test]

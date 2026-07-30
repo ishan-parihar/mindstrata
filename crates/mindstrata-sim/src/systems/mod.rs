@@ -127,7 +127,7 @@ pub fn system_goal_generation(
                 crate::person::GoalKind::Work => true,
                 crate::person::GoalKind::Socialize => need.social > threshold,
                 crate::person::GoalKind::Worship => need.meaning > threshold,
-                _ => true,
+                crate::person::GoalKind::SeekSafety => true,
             }
         });
 
