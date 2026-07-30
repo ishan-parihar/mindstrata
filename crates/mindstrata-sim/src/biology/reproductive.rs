@@ -163,7 +163,6 @@ impl ReproductiveState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::SeedableRng;
 
     #[test]
     fn prepubescent_has_no_fertility() {

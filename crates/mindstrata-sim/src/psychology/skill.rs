@@ -84,7 +84,7 @@ impl Default for SkillState {
 impl SkillState {
     /// Practice a skill, improving proficiency.
     pub fn practice(&mut self, skill_id: SkillId, tick: u64, neuroplasticity: Fixed) {
-        let skill = self.skills.entry(skill_id).or_insert_with(SkillLevel::new);
+        let skill = self.skills.entry(skill_id).or_default();
         // Proficiency gain depends on current level (harder to improve at high levels)
         let difficulty_modifier = Fixed::ONE - skill.proficiency * Fixed::from_f64(0.5);
         let gain = difficulty_modifier * neuroplasticity * Fixed::from_f64(0.001);

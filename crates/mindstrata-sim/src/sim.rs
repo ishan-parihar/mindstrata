@@ -916,7 +916,7 @@ impl Simulation {
                 // Architecture-plan-2 §8.1.13: Developmental update
                 // §8.1.13: Only tick developmental psychology every 100 ticks (≈daily).
                 // Identity formation, moral development, and socialization are slow processes.
-                if tick_u64 % 100 == 0 {
+                if tick_u64.is_multiple_of(100) {
                     let agent_age = self.agents[i].age;
                     self.agents[i].developmental.tick_update(
                         agent_age,
@@ -947,7 +947,7 @@ impl Simulation {
 
                 // Architecture-plan-2 §8.1.19: Skill/habit update
                 self.agents[i].psych_skills.update_automaticity(stress, need_fatigue);
-                if tick_u64 % 100 == 0 {
+                if tick_u64.is_multiple_of(100) {
                     self.agents[i].psych_skills.decay_habits(tick_u64);
                 }
             }
@@ -979,7 +979,7 @@ impl Simulation {
                 let num_connections = self.agents[i].relationship_v2s.len() as i64;
                 if num_connections > 0 {
                     let avg_quality: Fixed = self.agents[i].relationship_v2s.iter()
-                        .map(|r| r.quality())
+                        .map(crate::relationship_v2::RelationshipV2::quality)
                         .fold(Fixed::ZERO, |acc, q| acc + q)
                         / Fixed::from_int(num_connections);
                     self.agents[i].status_v2.network_centrality = avg_quality;
