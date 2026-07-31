@@ -2302,6 +2302,30 @@ impl Simulation {
                             distortion: (result.mutated_confidence - rumor.confidence).abs(),
                             tick,
                         });
+
+                        // Architecture-plan-2 §13.1: Meme transmission during gossip.
+                        // Sample up to 3 active memes without replacement, check transmission.
+                        // Pre-compute active IDs once to avoid per-gossip heap allocation.
+                        let listener_susceptibility = Fixed::from_f64(0.5);
+                        let listener_skepticism = Fixed::from_f64(0.2);
+                        let novelty_boost = Fixed::from_f64(0.05);
+                        let sample_limit = 3;
+                        let mut sampled = 0u32;
+                        for meme in &mut self.meme_registry.memes {
+                            if !meme.active || sampled >= sample_limit {
+                                break;
+                            }
+                            let chance = meme.transmission_chance(
+                                source_trust, listener_susceptibility, listener_skepticism,
+                            );
+                            let roll = self.rng.get_mut(RngStream::Social)
+                                .random_range(0.0f64..1.0);
+                            if Fixed::from_f64(roll) < chance {
+                                meme.host_count = meme.host_count.saturating_add(1);
+                                meme.novelty = (meme.novelty + novelty_boost).clamp_01();
+                                sampled += 1;
+                            }
+                        }
                     }
                 }
             }
