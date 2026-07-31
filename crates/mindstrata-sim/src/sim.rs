@@ -2591,6 +2591,20 @@ impl Simulation {
                     institution.enforcement_capacity,
                     Fixed::from_f64(0.3), // narrative strength placeholder
                 );
+
+                // §16.1: Record ritual provenance trace
+                if ritual_strength > Fixed::ZERO {
+                    for &member in &institution.members {
+                        self.provenance.record_system(crate::provenance::SystemTrace {
+                            agent: member,
+                            tick: tick_u64,
+                            category: crate::provenance::ProvenanceCategory::Ritual,
+                            description: format!("Ritual participation in {}", institution.name),
+                            magnitude: ritual_strength.min(Fixed::ONE),
+                            cause: "hierarchy_stabilization".into(),
+                        });
+                    }
+                }
             }
 
             // §11.3: Leadership challenges — elections and coups

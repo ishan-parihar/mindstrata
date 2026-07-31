@@ -122,6 +122,77 @@ pub struct RelationshipTrace {
     pub description: String,
 }
 
+impl std::fmt::Display for ProvenanceCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Biological => write!(f, "biological"),
+            Self::Hormonal => write!(f, "hormonal"),
+            Self::Attachment => write!(f, "attachment"),
+            Self::IdentityThreat => write!(f, "identity_threat"),
+            Self::Meme => write!(f, "meme"),
+            Self::Propaganda => write!(f, "propaganda"),
+            Self::Relationship => write!(f, "relationship"),
+            Self::Status => write!(f, "status"),
+            Self::Group => write!(f, "group"),
+            Self::Ritual => write!(f, "ritual"),
+            Self::Belief => write!(f, "belief"),
+            Self::Trauma => write!(f, "trauma"),
+            Self::Reproductive => write!(f, "reproductive"),
+        }
+    }
+}
+
+/// §16.1: Cross-system provenance category — tracks which subsystems influenced an event.
+///
+/// Every new system must produce debug traces. This enum classifies the
+/// causal origin of events across the full substrate stack.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ProvenanceCategory {
+    /// Biological cause — genome, metabolism, immune, cardiovascular.
+    Biological,
+    /// Hormonal modulation — endocrine axes (cortisol, oxytocin, testosterone, etc.).
+    Hormonal,
+    /// Attachment trigger — attachment style influenced behavior.
+    Attachment,
+    /// Identity threat — self-model or group identity was challenged.
+    IdentityThreat,
+    /// Meme exposure — agent was exposed to a cultural meme.
+    Meme,
+    /// Propaganda exposure — institutional narrative campaign.
+    Propaganda,
+    /// Relationship transition — trust/affection stage changed.
+    Relationship,
+    /// Status change — wealth, role, or social status shifted.
+    Status,
+    /// Group formation — faction, household, or kinship group created.
+    Group,
+    /// Ritual effect — ritual participation altered state.
+    Ritual,
+    /// Belief mutation — belief confidence changed significantly.
+    Belief,
+    /// Trauma trigger — traumatic event occurred.
+    Trauma,
+    /// Reproductive event — conception, birth, or pregnancy milestone.
+    Reproductive,
+}
+
+/// §16.1: A cross-system provenance trace — records which subsystems influenced an event.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SystemTrace {
+    /// Agent this trace applies to.
+    pub agent: AgentId,
+    /// Tick when the trace was recorded.
+    pub tick: u64,
+    /// Which subsystem caused this event.
+    pub category: ProvenanceCategory,
+    /// Human-readable description of what happened.
+    pub description: String,
+    /// Quantitative magnitude of the effect (0-1 scale).
+    pub magnitude: Fixed,
+    /// Optional causal parent description.
+    pub cause: String,
+}
+
 /// The Causal Provenance Store — tracks causality across the simulation.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CausalProvenance {
@@ -135,6 +206,8 @@ pub struct CausalProvenance {
     institutional: Vec<InstitutionalTrace>,
     /// §19.5.J: Relationship change traces for debugging social dynamics.
     relationships: Vec<RelationshipTrace>,
+    /// §16.1: Cross-system provenance traces for explainability.
+    system_traces: Vec<SystemTrace>,
 }
 
 impl CausalProvenance {
@@ -146,6 +219,7 @@ impl CausalProvenance {
             belief_updates: Vec::new(),
             institutional: Vec::new(),
             relationships: Vec::new(),
+            system_traces: Vec::new(),
         }
     }
 
@@ -268,6 +342,34 @@ impl CausalProvenance {
         self.relationships.len()
     }
 
+    // ── §16.1: Cross-system provenance ─────────────────────────────
+
+    /// §16.1: Record a cross-system provenance trace.
+    pub fn record_system(&mut self, trace: SystemTrace) {
+        self.system_traces.push(trace);
+    }
+
+    /// §16.1: Get system traces for a specific agent.
+    pub fn system_traces_for_agent(&self, agent: AgentId) -> Vec<&SystemTrace> {
+        self.system_traces.iter().filter(|t| t.agent == agent).collect()
+    }
+
+    /// §16.1: Get system traces for a specific category.
+    pub fn system_traces_by_category(&self, category: ProvenanceCategory) -> Vec<&SystemTrace> {
+        self.system_traces.iter().filter(|t| t.category == category).collect()
+    }
+
+    /// §16.1: Get the last N system traces.
+    pub fn recent_system_traces(&self, n: usize) -> &[SystemTrace] {
+        let start = self.system_traces.len().saturating_sub(n);
+        &self.system_traces[start..]
+    }
+
+    /// §16.1: Total number of system traces.
+    pub fn system_trace_count(&self) -> usize {
+        self.system_traces.len()
+    }
+
     /// Trim all trace vectors to at most `max` entries each, keeping the most recent.
     pub fn trim(&mut self, max: usize) {
         if self.decisions.len() > max {
@@ -284,6 +386,9 @@ impl CausalProvenance {
         }
         if self.relationships.len() > max {
             self.relationships.drain(..self.relationships.len() - max);
+        }
+        if self.system_traces.len() > max {
+            self.system_traces.drain(..self.system_traces.len() - max);
         }
     }
 }
@@ -540,5 +645,110 @@ mod tests {
         assert_eq!(traces.len(), 2);
         assert_eq!(traces[0].cause, "social_interaction");
         assert_eq!(traces[1].cause, "violence");
+    }
+
+    // ── §16.1: Cross-system provenance tests ───────────────────────
+
+    #[test]
+    fn system_trace_recorded() {
+        let mut store = CausalProvenance::new();
+        store.record_system(SystemTrace {
+            agent: AgentId::new(0),
+            tick: 500,
+            category: ProvenanceCategory::Hormonal,
+            description: "Cortisol spike from sleep deprivation".into(),
+            magnitude: Fixed::from_f64(0.72),
+            cause: "circadian_disruption".into(),
+        });
+        assert_eq!(store.system_trace_count(), 1);
+        let traces = store.recent_system_traces(10);
+        assert_eq!(traces[0].category, ProvenanceCategory::Hormonal);
+    }
+
+    #[test]
+    fn system_traces_for_agent_filter() {
+        let mut store = CausalProvenance::new();
+        store.record_system(SystemTrace {
+            agent: AgentId::new(0),
+            tick: 100,
+            category: ProvenanceCategory::Attachment,
+            description: "Anxious attachment triggered clinginess".into(),
+            magnitude: Fixed::from_f64(0.5),
+            cause: "partner_absence".into(),
+        });
+        store.record_system(SystemTrace {
+            agent: AgentId::new(1),
+            tick: 100,
+            category: ProvenanceCategory::Trauma,
+            description: "Flashback from childhood abuse".into(),
+            magnitude: Fixed::from_f64(0.9),
+            cause: "loud_noise".into(),
+        });
+        let agent0 = store.system_traces_for_agent(AgentId::new(0));
+        assert_eq!(agent0.len(), 1);
+        assert_eq!(agent0[0].category, ProvenanceCategory::Attachment);
+    }
+
+    #[test]
+    fn system_traces_by_category_filter() {
+        let mut store = CausalProvenance::new();
+        store.record_system(SystemTrace {
+            agent: AgentId::new(0),
+            tick: 100,
+            category: ProvenanceCategory::Meme,
+            description: "Heard rumor about neighbor".into(),
+            magnitude: Fixed::from_f64(0.6),
+            cause: "gossip".into(),
+        });
+        store.record_system(SystemTrace {
+            agent: AgentId::new(1),
+            tick: 100,
+            category: ProvenanceCategory::Propaganda,
+            description: "Council edict about taxation".into(),
+            magnitude: Fixed::from_f64(0.8),
+            cause: "institutional_broadcast".into(),
+        });
+        let meme_traces = store.system_traces_by_category(ProvenanceCategory::Meme);
+        assert_eq!(meme_traces.len(), 1);
+        assert_eq!(meme_traces[0].agent, AgentId::new(0));
+    }
+
+    #[test]
+    fn trim_includes_system_traces() {
+        let mut store = CausalProvenance::new();
+        for i in 0..10 {
+            store.record_system(SystemTrace {
+                agent: AgentId::new(0),
+                tick: i,
+                category: ProvenanceCategory::Biological,
+                description: format!("bio_event_{i}"),
+                magnitude: Fixed::from_f64(0.5),
+                cause: "test".into(),
+            });
+        }
+        assert_eq!(store.system_trace_count(), 10);
+        store.trim(3);
+        assert_eq!(store.system_trace_count(), 3);
+    }
+
+    #[test]
+    fn provenance_category_count_matches_spec() {
+        // §16.1 defines exactly 13 cross-system provenance categories
+        let cats = [
+            ProvenanceCategory::Biological,
+            ProvenanceCategory::Hormonal,
+            ProvenanceCategory::Attachment,
+            ProvenanceCategory::IdentityThreat,
+            ProvenanceCategory::Meme,
+            ProvenanceCategory::Propaganda,
+            ProvenanceCategory::Relationship,
+            ProvenanceCategory::Status,
+            ProvenanceCategory::Group,
+            ProvenanceCategory::Ritual,
+            ProvenanceCategory::Belief,
+            ProvenanceCategory::Trauma,
+            ProvenanceCategory::Reproductive,
+        ];
+        assert_eq!(cats.len(), 13);
     }
 }
