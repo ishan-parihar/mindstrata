@@ -3822,6 +3822,9 @@ impl Simulation {
                     self.echo_chamber.compute_polarization();
                 }
             }
+            // Architecture-plan-2 §10.8: Clan daily update.
+            // Decay grievance, adjust cohesion, decay myth belief.
+            self.clan_registry.daily_update();
         }
 
         // Architecture-plan-2 §12.5: Execute due rituals every 12 ticks (~2 hours).

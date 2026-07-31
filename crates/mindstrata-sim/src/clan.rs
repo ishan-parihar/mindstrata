@@ -173,9 +173,10 @@ impl Clan {
     }
 
     /// Compute clan power — combination of prestige, cohesion, and household count.
+    /// Household contribution is normalized to [0, 1] before weighting.
     pub fn power(&self) -> Fixed {
-        let household_factor = Fixed::from_f64(0.1)
-            * Fixed::from_int(self.core_households.len() as i64).min(Fixed::from_f64(10.0));
+        let raw_count = Fixed::from_int(self.core_households.len() as i64);
+        let household_factor = (raw_count * Fixed::from_f64(0.1)).min(Fixed::ONE);
         self.prestige * Fixed::from_f64(0.4)
             + self.cohesion * Fixed::from_f64(0.3)
             + household_factor * Fixed::from_f64(0.3)
