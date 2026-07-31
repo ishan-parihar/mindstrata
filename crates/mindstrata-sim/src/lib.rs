@@ -15,6 +15,7 @@ pub mod conflict;
 pub mod culture;
 pub mod ecology;
 pub mod factions;
+pub mod hierarchy;
 pub mod gossip;
 pub mod health;
 pub mod logistics;

@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 /// All fields are either references (borrowed from agent/world state) or
 /// `Copy` scalars (emotional readings, moral values, resource levels).
 /// The `rng` field is kept separate because it requires `&mut` access.
+#[derive(Debug)]
 pub struct DecisionContext<'a> {
     /// Agent's current need deficits.
     pub needs: &'a NeedState,

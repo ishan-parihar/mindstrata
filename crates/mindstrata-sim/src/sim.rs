@@ -2558,6 +2558,102 @@ impl Simulation {
                     }
                 }
             }
+
+            // §11.3: Hierarchy destabilization — corruption/low legitimacy erodes cohesion
+            // Gated to every 100 ticks for performance (slow process).
+            if tick_u64.is_multiple_of(100) {
+                let destabilization = crate::hierarchy::destabilization_pressure(
+                    institution.legitimacy,
+                    institution.corruption,
+                    institution.cohesion,
+                    institution.collective.morale,
+                    institution.collective.fear,
+                    institution.treasury,
+                );
+                if destabilization > Fixed::from_f64(0.5) {
+                    institution.cohesion = (institution.cohesion - destabilization * Fixed::from_f64(0.01)).max(Fixed::ZERO);
+                    institution.legitimacy = (institution.legitimacy - destabilization * Fixed::from_f64(0.005)).max(Fixed::ZERO);
+                }
+
+                // §11.3: Hierarchy stabilization — ritual participation builds legitimacy
+                let ritual_strength = self.ritual_registry.rituals.iter()
+                    .filter(|r| r.sponsor == institution.id as usize)
+                    .map(|r| r.synchrony)
+                    .fold(Fixed::ZERO, |a, b| a + b);
+                crate::hierarchy::stabilize_hierarchy(
+                    institution,
+                    ritual_strength.min(Fixed::ONE),
+                    institution.enforcement_capacity,
+                    Fixed::from_f64(0.3), // narrative strength placeholder
+                );
+            }
+
+            // §11.3: Leadership challenges — elections and coups
+            // Gated to every 500 ticks for performance.
+            if tick_u64 > 1000 && tick_u64.is_multiple_of(500) && institution.kind == InstitutionKind::Council {
+                // Find current leader
+                let current_leader = institution.roles.iter()
+                    .find(|r| r.name == "Leader")
+                    .and_then(|r| r.holder);
+                if let Some(leader_id) = current_leader {
+                    let leader_idx = leader_id.as_u64() as usize;
+                    if leader_idx < self.agents.len() {
+                        let leader_score = crate::hierarchy::leadership_score(
+                            self.agents[leader_idx].personality.ambition,
+                            self.agents[leader_idx].personality.dominance,
+                            self.agents[leader_idx].personality.extraversion,
+                            self.agents[leader_idx].personality.conscientiousness,
+                            self.agents[leader_idx].age,
+                            self.agents[leader_idx].wealth.coin,
+                            self.agents[leader_idx].status_v2.network_centrality,
+                            self.agents[leader_idx].status_v2.moral_reputation,
+                            self.agents[leader_idx].embodied.nervous.trauma_load,
+                        );
+
+                        // Find best challenger among members (non-leader)
+                        let mut best_challenger: Option<(AgentId, Fixed)> = None;
+                        for member_id in &institution.members {
+                            let mid = member_id.as_u64() as usize;
+                            if mid < self.agents.len() && mid != leader_idx {
+                                let score = crate::hierarchy::leadership_score(
+                                    self.agents[mid].personality.ambition,
+                                    self.agents[mid].personality.dominance,
+                                    self.agents[mid].personality.extraversion,
+                                    self.agents[mid].personality.conscientiousness,
+                                    self.agents[mid].age,
+                                    self.agents[mid].wealth.coin,
+                                    self.agents[mid].status_v2.network_centrality,
+                                    self.agents[mid].status_v2.moral_reputation,
+                                    self.agents[mid].embodied.nervous.trauma_load,
+                                );
+                                if best_challenger.map_or(true, |(_, s)| score > s) {
+                                    best_challenger = Some((*member_id, score));
+                                }
+                            }
+                        }
+
+                        if let Some((challenger_id, challenger_score)) = best_challenger {
+                            if crate::hierarchy::should_challenge(
+                                institution, challenger_score, leader_score, tick_u64, self.last_revolution_tick,
+                            ) {
+                                let result = crate::hierarchy::attempt_challenge(
+                                    institution, leader_id, challenger_id,
+                                    challenger_score, leader_score, institution.corruption,
+                                );
+                                match &result {
+                                    crate::hierarchy::ChallengeResult::Election { .. } => {
+                                        tracing::warn!(tick = tick_u64, "Leadership election occurred");
+                                    }
+                                    crate::hierarchy::ChallengeResult::Coup { .. } => {
+                                        tracing::warn!(tick = tick_u64, "Leadership coup attempted");
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }        // ── 15. Faction dynamics — grievance, formation, recruitment, protests (Phase 8) ──
     }
 
