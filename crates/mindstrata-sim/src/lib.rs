@@ -26,6 +26,7 @@ pub mod norms;
 pub mod person;
 pub mod provenance;
 pub mod psychology;
+pub mod scheduler;
 pub mod routines;
 pub mod scenario;
 pub mod sim;

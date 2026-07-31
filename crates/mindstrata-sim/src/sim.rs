@@ -833,8 +833,8 @@ impl Simulation {
     pub fn tick(&mut self) {
         let tick = self.clock.advance();
         let tick_u64 = tick.as_u64();
-
-
+        // §6: Compute multi-timescale phase flags once per tick.
+        let phases = crate::scheduler::TickPhases::compute(tick_u64);
 
         // Check for scenario shocks
         if let Some(ref scenario) = self.scenario {
@@ -1935,8 +1935,9 @@ impl Simulation {
         // ── 19b. Birth mechanics (extracted) ──
         self.tick_birth_mechanics(tick_u64, tick);
 
-        // ── Kinship & Household daily update (extracted) ──
-        self.tick_kinship_household_daily(tick_u64);
+        // ── §6 + §10.6/§10.7: Kinship & Household daily update ──
+        let phases = crate::scheduler::TickPhases::compute(tick_u64);
+        self.tick_kinship_household_daily(tick_u64, phases);
 
 
         // ── Architecture-plan-2 §8.1.5: Motivation relieve() calls ──
@@ -3210,12 +3211,11 @@ impl Simulation {
 
     }
 
-    /// Kinship & Household daily update.
-    fn tick_kinship_household_daily(&mut self, tick_u64: u64) {
-        // ── Architecture-plan-2 §10.6/§10.7: Kinship & Household daily update ──
-        // §10.6: Decay kinship edges daily (every 144 ticks = 1 day).
+    /// §6 + §10.6/§10.7: Kinship & Household daily update.
+    fn tick_kinship_household_daily(&mut self, tick_u64: u64, phases: crate::scheduler::TickPhases) {
+        // §10.6: Decay kinship edges daily.
         // §10.7: Tick household dynamics (cohesion, conflict, reputation).
-        if tick_u64.is_multiple_of(144) {
+        if phases.is_daily {
             self.kinship_graph.decay_daily();
             for household in &mut self.households {
                 household.tick_update();
