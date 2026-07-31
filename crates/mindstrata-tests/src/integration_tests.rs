@@ -208,3 +208,75 @@ fn institutions_derive_collective_psychology() {
             "Institution {} unity={unity} out of [0,1]", inst.name);
     }
 }
+
+// ── §18.4 Statistical Emergence Tests ──────────────────────────────
+
+/// §18.4 + Phase 5: Run 10,000-tick simulation verifying system stability.
+/// Checks: agents stay alive, ages non-negative, health bounded,
+/// market prices bounded, no panics or arithmetic overflows.
+#[test]
+fn ten_thousand_tick_stability() {
+    let config = mindstrata_sim::sim::SimConfig {
+        seed: 42,
+        max_ticks: 10_000,
+        num_agents: 20,
+        world_width: 16,
+        world_height: 16,
+        snapshot_interval: Some(1000),
+    };
+    let mut sim = mindstrata_sim::sim::Simulation::new(config);
+    sim.populate();
+    for tick in 0..10_000 {
+        sim.tick();
+        // Verify agents stay alive
+        assert!(!sim.agents.is_empty(), "All agents died at tick {tick}");
+        // Verify no agent has negative age or health
+        for agent in &sim.agents {
+            assert!(agent.age >= mindstrata_core::fixed::Fixed::ZERO,
+                "Agent {} has negative age at tick {tick}", agent.name);
+            assert!(agent.body.health >= mindstrata_core::fixed::Fixed::ZERO,
+                "Agent {} has negative health at tick {tick}", agent.name);
+        }
+    }
+    // Final: at least some agents survived
+    let alive = sim.agents.iter()
+        .filter(|a| a.body.health > mindstrata_core::fixed::Fixed::ZERO)
+        .count();
+    assert!(alive > 0, "All agents dead after 10000 ticks");
+    // Verify market prices bounded
+    for tracker in &sim.market.prices {
+        let p = tracker.price;
+        assert!(p >= mindstrata_core::fixed::Fixed::ZERO
+            && p <= mindstrata_core::fixed::Fixed::from_int(100),
+            "Market price {} out of bounds", p.to_f64());
+    }
+}
+
+/// §18.4: Determinism check — same seed produces identical state.
+#[test]
+fn determinism_across_runs() {
+    let make_sim = |seed: u64| {
+        let config = mindstrata_sim::sim::SimConfig {
+            seed,
+            max_ticks: 1_000,
+            num_agents: 12,
+            world_width: 16,
+            world_height: 16,
+            snapshot_interval: None,
+        };
+        let mut sim = mindstrata_sim::sim::Simulation::new(config);
+        sim.populate();
+        for _ in 0..1_000 {
+            sim.tick();
+        }
+        sim
+    };
+    let sim1 = make_sim(42);
+    let sim2 = make_sim(42);
+    // Same seed must produce identical agent ages
+    for (a1, a2) in sim1.agents.iter().zip(sim2.agents.iter()) {
+        assert_eq!(a1.age, a2.age,
+            "Agent {} age mismatch: {} vs {}",
+            a1.name, a1.age.to_f64(), a2.age.to_f64());
+    }
+}

@@ -146,9 +146,12 @@ pub fn system_ecology(
     let growth = season.current.growth_modifier();
     let n = site_fertilities.len();
 
+    debug_assert_eq!(site_fertilities.len(), site_work_ticks.len(),
+        "ecology: site_fertilities and site_work_ticks length mismatch");
     for i in 0..n {
         // Overfarming decay: more work = more decay
-        let work_pressure = if site_work_ticks[i] > 0 {
+        // Guard against mismatched site_work_ticks length (e.g. empty world)
+        let work_pressure = if i < site_work_ticks.len() && site_work_ticks[i] > 0 {
             Fixed::from_int(site_work_ticks[i] as i64) * config.overfarming_decay_rate
         } else {
             Fixed::ZERO
