@@ -181,6 +181,8 @@ pub struct AgentBundle {
     pub psychopathology: PsychopathologyState,
     /// Architecture-plan-2 §8.1.9: Theory of Mind — models of other agents' minds.
     pub mind_models: crate::psychology::theory_of_mind::MindModels,
+    /// Architecture-plan-2 §8.1.18: Cultural categories, taboos, honor codes.
+    pub cultural_cognition: crate::psychology::CulturalCognition,
     /// Architecture-plan-2 §8.1.19: Skills and habits.
     pub psych_skills: PsychSkillState,
     /// Architecture-plan-2 §10.2: Enriched relationship model.
@@ -552,6 +554,7 @@ impl Simulation {
                 developmental: crate::psychology::DevelopmentalPsychState::default(),
                 psychopathology: crate::psychology::PsychopathologyState::default(),
                 mind_models: crate::psychology::theory_of_mind::MindModels::default(),
+                cultural_cognition: crate::psychology::CulturalCognition::default(),
                 psych_skills: crate::psychology::SkillState::default(),
                 relationship_v2s: Vec::new(), // populated after agents are created
                 attraction: crate::attraction::AttractionModel::default(),
@@ -1111,6 +1114,14 @@ impl Simulation {
                     depression_vuln, addiction_risk,
                     social_support,
                 );
+
+                // Architecture-plan-2 §8.1.18: Cultural cognition daily update.
+                // Conservatism shifts slowly based on positive cultural exposure.
+                if tick_u64.is_multiple_of(144) {
+                    let positive_exposure = social_support * Fixed::from_f64(0.5);
+                    let negative_exposure = stress * Fixed::from_f64(0.3);
+                    self.agents[i].cultural_cognition.tick_update(positive_exposure, negative_exposure);
+                }
 
                 // Architecture-plan-2 §8.1.19: Skill/habit update
                 self.agents[i].psych_skills.update_automaticity(stress, need_fatigue);

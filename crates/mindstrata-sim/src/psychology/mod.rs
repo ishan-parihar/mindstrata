@@ -33,6 +33,7 @@
 
 pub mod attachment;
 pub mod cognitive_runtime;
+pub mod cultural_cognition;
 pub mod developmental;
 pub mod emotion_regulation;
 pub mod imagination;
@@ -47,6 +48,7 @@ pub mod theory_of_mind;
 
 pub use attachment::AttachmentSystem;
 pub use cognitive_runtime::CognitiveRuntime;
+pub use cultural_cognition::CulturalCognition;
 pub use developmental::DevelopmentalPsychState;
 pub use emotion_regulation::{EmotionRegulationState, RegulationStrategy};
 pub use imagination::ProspectionState;
