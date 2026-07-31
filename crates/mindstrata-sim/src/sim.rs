@@ -2365,19 +2365,59 @@ impl Simulation {
     pub fn metrics_snapshot(&self) -> MetricsSnapshot {
         let summaries = self.agent_summaries();
         let n = summaries.len() as f64;
+        let n_inv = if n > 0.0 { 1.0 / n } else { 0.0 };
+
+        // §17: Deep observability metrics for Phase 5 tuning
+        let avg_stress: f64 = if self.agents.is_empty() { 0.0 } else {
+            self.agents.iter().map(|a| (a.emotions.fear + a.emotions.anger).to_f64()).sum::<f64>() * n_inv
+        };
+        let avg_health: f64 = if self.agents.is_empty() { 0.0 } else {
+            self.agents.iter().map(|a| a.embodied.derived_health().to_f64()).sum::<f64>() * n_inv
+        };
+        let (trust_sum, quality_sum, rel_count) = self.agents.iter()
+            .flat_map(|a| a.relationship_v2s.iter())
+            .fold((0.0f64, 0.0f64, 0u64), |(tq, qq, c), rv2| {
+                (tq + rv2.trust.to_f64(), qq + rv2.quality().to_f64(), c + 1)
+            });
+        let rel_n = if rel_count > 0 { rel_count as f64 } else { 1.0 };
+        let avg_relationship_trust = trust_sum / rel_n;
+        let avg_relationship_quality = quality_sum / rel_n;
+        let active_meme_count = self.meme_registry.active_count() as u64;
+        let polarization_index = self.echo_chamber.polarization_index.to_f64();
+        let household_count = self.households.len() as u64;
+        let kinship_edge_count = self.kinship_graph.active_count() as u64;
+        let avg_agent_tier: f64 = if self.agents.is_empty() { 0.0 } else {
+            self.agents.iter().map(|a| match a.agent_tier.tier {
+                crate::agent_tier::AgentTier::Focal => 0.0,
+                crate::agent_tier::AgentTier::Secondary => 1.0,
+                crate::agent_tier::AgentTier::Background => 2.0,
+            }).sum::<f64>() * n_inv
+        };
+        let total_active_feuds: u64 = self.agents.iter().map(|a| a.feuds.len() as u64).sum();
+
         MetricsSnapshot {
             tick: self.current_tick().as_u64(),
-            avg_hunger: summaries.iter().map(|s| s.hunger.to_f64()).sum::<f64>() / n,
-            avg_thirst: summaries.iter().map(|s| s.thirst.to_f64()).sum::<f64>() / n,
-            avg_fatigue: summaries.iter().map(|s| s.fatigue.to_f64()).sum::<f64>() / n,
-            avg_valence: summaries.iter().map(|s| s.valence.to_f64()).sum::<f64>() / n,
-            avg_joy: summaries.iter().map(|s| s.joy.to_f64()).sum::<f64>() / n,
-            avg_fear: summaries.iter().map(|s| s.fear.to_f64()).sum::<f64>() / n,
+            avg_hunger: summaries.iter().map(|s| s.hunger.to_f64()).sum::<f64>() * n_inv,
+            avg_thirst: summaries.iter().map(|s| s.thirst.to_f64()).sum::<f64>() * n_inv,
+            avg_fatigue: summaries.iter().map(|s| s.fatigue.to_f64()).sum::<f64>() * n_inv,
+            avg_valence: summaries.iter().map(|s| s.valence.to_f64()).sum::<f64>() * n_inv,
+            avg_joy: summaries.iter().map(|s| s.joy.to_f64()).sum::<f64>() * n_inv,
+            avg_fear: summaries.iter().map(|s| s.fear.to_f64()).sum::<f64>() * n_inv,
             total_grain: self.total_grain().to_f64(),
             total_water: self.total_water().to_f64(),
             event_count: self.event_count() as u64,
             journal_len: self.journal_len() as u64,
             agent_count: self.agent_count() as u64,
+            avg_stress,
+            avg_health,
+            avg_relationship_trust,
+            avg_relationship_quality,
+            active_meme_count,
+            polarization_index,
+            household_count,
+            kinship_edge_count,
+            avg_agent_tier,
+            total_active_feuds,
         }
     }
 
@@ -4331,17 +4371,42 @@ const MAX_METRIC_HISTORY: usize = 500;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetricsSnapshot {
     pub tick: u64,
+    // ── Basic need state ──
     pub avg_hunger: f64,
     pub avg_thirst: f64,
     pub avg_fatigue: f64,
+    // ── Emotion ──
     pub avg_valence: f64,
     pub avg_joy: f64,
     pub avg_fear: f64,
+    // ── Resources ──
     pub total_grain: f64,
     pub total_water: f64,
+    // ── System stats ──
     pub event_count: u64,
     pub journal_len: u64,
     pub agent_count: u64,
+    // ── §17 Observability: deep metrics for Phase 5 tuning ──
+    /// Average stress (fear + anger) across all agents.
+    pub avg_stress: f64,
+    /// Average health from EmbodiedState.
+    pub avg_health: f64,
+    /// Average relationship trust across all relationship_v2 edges.
+    pub avg_relationship_trust: f64,
+    /// Average relationship quality across all relationship_v2 edges.
+    pub avg_relationship_quality: f64,
+    /// Number of active memes in the meme registry.
+    pub active_meme_count: u64,
+    /// Echo chamber polarization index.
+    pub polarization_index: f64,
+    /// Number of active households.
+    pub household_count: u64,
+    /// Number of active kinship edges.
+    pub kinship_edge_count: u64,
+    /// Average agent tier (0=Focal, 1=Secondary, 2=Background).
+    pub avg_agent_tier: f64,
+    /// Number of active feuds across all agents.
+    pub total_active_feuds: u64,
 }
 
 /// A lightweight summary of an agent's state for display.
