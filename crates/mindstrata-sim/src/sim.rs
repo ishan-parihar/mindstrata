@@ -962,6 +962,14 @@ impl Simulation {
                     stress, need_fatigue, pain_level, trauma,
                 );
 
+                // Architecture-plan-2 §8.1.14: Attachment system daily decay.
+                // Separation distress decays slowly; security stabilizes.
+                if tick_u64.is_multiple_of(144) {
+                    self.agents[i].attachment.separation_distress =
+                        (self.agents[i].attachment.separation_distress
+                            * Fixed::from_f64(0.95)).max(Fixed::ZERO);
+                }
+
                 // Architecture-plan-2 §8.1.5: Motivation update.
                 // Bridge biological needs from existing NeedState, then grow and update.
                 self.agents[i].motivation.hunger.deficit = needs[i].hunger;
