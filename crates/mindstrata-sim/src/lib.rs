@@ -36,6 +36,8 @@ pub mod world;
 pub mod world_gen;
 pub mod market;
 pub mod black_market;
+pub mod household;
+pub mod kinship;
 pub mod spec_lint;
 pub mod relationship_v2;
 pub mod attraction;
