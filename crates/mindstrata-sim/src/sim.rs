@@ -2297,10 +2297,13 @@ impl Simulation {
                 let from_idx = from.as_u64() as usize;
                 let to_idx = to.as_u64() as usize;
                 if from_idx < self.agents.len() && to_idx < self.agents.len() {
-                    // Architecture-plan-2 §8.1.14: Attachment activation during social contact.
-                    // Reunion reduces separation distress; comfort increases security.
-                    self.agents[from_idx].attachment.on_reunion();
-                    self.agents[to_idx].attachment.on_reunion();
+                    // Architecture-plan-2 §8.1.14: Attachment activation.
+                    // Only Gossip implies social reunion (sustained conversation).
+                    // Help/Trade are brief contacts — not strong enough for reunion.
+                    if matches!(kind, mindstrata_core::event::InteractionKind::Gossip) {
+                        self.agents[from_idx].attachment.on_reunion();
+                        self.agents[to_idx].attachment.on_reunion();
+                    }
                     // Architecture-plan-2 §8.1.9: Theory of Mind update from interaction.
                     // Agents update their mind models of each other based on observed behavior.
                     let trust_from_to = self.relationships.iter()
@@ -2420,8 +2423,9 @@ impl Simulation {
                         }
                     }
                 }
-            } §19.5.I Knowledge diffusion — cultural knowledge spreads through social networks ──
-        for ev in &self.events[pre_tick_events..].to_vec() {
+            }
+            // §19.5.I Knowledge diffusion — cultural knowledge spreads through social networks
+            for ev in &self.events[pre_tick_events..].to_vec() {
             if let SimEvent::InteractionOccurred {
                 from,
                 to,
@@ -3386,6 +3390,8 @@ impl Simulation {
                     narrative: crate::psychology::NarrativeIdentity::default(),
                     developmental: crate::psychology::DevelopmentalPsychState::default(),
                     psychopathology: crate::psychology::PsychopathologyState::default(),
+                    mind_models: crate::psychology::theory_of_mind::MindModels::default(),
+                    cultural_cognition: crate::psychology::CulturalCognition::default(),
                     psych_skills: crate::psychology::SkillState::default(),
                     relationship_v2s: Vec::new(),
                     attraction: crate::attraction::AttractionModel::default(),
@@ -3616,7 +3622,7 @@ impl Simulation {
                 let audience_fear = if !targets_clone.is_empty() {
                     let total: Fixed = targets_clone.iter()
                         .filter(|&&t| t < n_agents)
-                        .map(|&t| self.agents[t].affect.fear)
+                        .map(|&t| self.agents[t].emotions.fear)
                         .fold(Fixed::ZERO, |acc, f| acc + f);
                     let count = targets_clone.iter().filter(|&&t| t < n_agents).count() as i64;
                     if count > 0 { total / Fixed::from_int(count) } else { Fixed::ZERO }
@@ -3642,8 +3648,8 @@ impl Simulation {
                             ).clamp_01();
                             // Coercion increases fear
                             if coercion > Fixed::from_f64(0.3) {
-                                self.agents[target].affect.fear = (
-                                    self.agents[target].affect.fear
+                                self.agents[target].emotions.fear = (
+                                    self.agents[target].emotions.fear
                                     + coercion_push
                                 ).clamp_01();
                                 // Agents with high autonomy push back against coercion
