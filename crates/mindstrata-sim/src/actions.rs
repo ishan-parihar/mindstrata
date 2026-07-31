@@ -11,6 +11,50 @@ use mindstrata_core::rng::{RngStreams, RngStream};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
+/// Bundled context for action selection — replaces the 18-parameter signature.
+///
+/// All fields are either references (borrowed from agent/world state) or
+/// `Copy` scalars (emotional readings, moral values, resource levels).
+/// The `rng` field is kept separate because it requires `&mut` access.
+pub struct DecisionContext<'a> {
+    /// Agent's current need deficits.
+    pub needs: &'a NeedState,
+    /// Agent's personality traits.
+    pub personality: &'a Personality,
+    /// Agent's active goals.
+    pub active_goals: &'a [Goal],
+    /// Agent's identity state.
+    pub identity: &'a IdentityState,
+    /// Decision policy integrating all psychology into action.
+    pub decision_policy: &'a DecisionPolicy,
+    /// World-level grain scarcity (0 = abundant, 1 = depleted).
+    pub total_grain: Fixed,
+    /// World-level water scarcity (0 = abundant, 1 = depleted).
+    pub total_water: Fixed,
+    /// Aggregate norm pressure from all active norms.
+    pub norm_pressure: Fixed,
+    // ── Emotional readings ──────────────────────────────────────────
+    /// Agent's current anger level.
+    pub anger: Fixed,
+    /// Agent's current fear level.
+    pub fear: Fixed,
+    /// Agent's current joy level.
+    pub joy: Fixed,
+    /// Agent's current sadness level.
+    pub sadness: Fixed,
+    /// Agent's current stress level (fear + anger).
+    pub stress: Fixed,
+    // ── Moral foundations ───────────────────────────────────────────
+    /// Fairness foundation strength.
+    pub fairness: Fixed,
+    /// Authority foundation strength.
+    pub authority: Fixed,
+    /// Care foundation strength.
+    pub care: Fixed,
+    /// Loyalty foundation strength.
+    pub loyalty: Fixed,
+}
+
 /// An action that an agent can take.
 ///
 /// **Field semantics for `per_tick_effects()`:**
@@ -334,26 +378,14 @@ fn action_traits(kind: ActionKind) -> (bool, bool, bool, bool, bool, bool) {
 /// DecisionPolicy modifiers (emotional, moral, habit) are applied to each
 /// candidate's utility, making agents feel like adaptive intelligence rather
 /// than static utility functions.
-#[expect(clippy::too_many_arguments)]
+/// Select the best action for an agent based on utility.
+///
+/// DecisionPolicy modifiers (emotional, moral, habit) are applied to each
+/// candidate's utility, making agents feel like adaptive intelligence rather
+/// than static utility functions.
 pub fn select_action(
-    needs: &NeedState,
-    personality: &Personality,
-    active_goals: &[Goal],
+    ctx: &DecisionContext<'_>,
     rng: &mut RngStreams,
-    total_grain: Fixed,
-    total_water: Fixed,
-    identity: &IdentityState,
-    norm_pressure: Fixed,
-    decision_policy: &DecisionPolicy,
-    anger: Fixed,
-    fear: Fixed,
-    joy: Fixed,
-    sadness: Fixed,
-    stress: Fixed,
-    fairness: Fixed,
-    authority: Fixed,
-    care: Fixed,
-    loyalty: Fixed,
 ) -> ActionKind {
     let candidates = [
         ActionKind::Eat,
@@ -372,9 +404,9 @@ pub fn select_action(
 
     for kind in &candidates {
         let def = kind.definition();
-        let mut utility = compute_utility(&def, needs, personality, rng, total_grain, total_water, identity, norm_pressure);
+        let mut utility = compute_utility(&def, ctx.needs, ctx.personality, rng, ctx.total_grain, ctx.total_water, ctx.identity, ctx.norm_pressure);
 
-        for goal in active_goals {
+        for goal in ctx.active_goals {
             let goal_aligned = matches!(
                 (kind, goal.kind),
                 (ActionKind::Eat, GoalKind::Eat)
@@ -394,12 +426,12 @@ pub fn select_action(
         // and habit strength — making agents feel adaptive rather than static.
         let (is_social, is_risky, is_withdrawal, is_prosocial, is_disobedient, is_harmful) =
             action_traits(*kind);
-        let emo = decision_policy.emotional_modifier(
-            anger, fear, joy, sadness,
+        let emo = ctx.decision_policy.emotional_modifier(
+            ctx.anger, ctx.fear, ctx.joy, ctx.sadness,
             is_social, is_risky, is_withdrawal,
         );
-        let moral = decision_policy.moral_modifier(
-            fairness, authority, care, loyalty,
+        let moral = ctx.decision_policy.moral_modifier(
+            ctx.fairness, ctx.authority, ctx.care, ctx.loyalty,
             is_prosocial, is_disobedient, is_harmful,
         );
         // Habit modifier: routine actions get a boost under stress
@@ -407,7 +439,7 @@ pub fn select_action(
             ActionKind::Work | ActionKind::Eat | ActionKind::Drink
             | ActionKind::Rest | ActionKind::Worship
         );
-        let habit = decision_policy.habit_modifier(is_routine, stress);
+        let habit = ctx.decision_policy.habit_modifier(is_routine, ctx.stress);
         utility += emo + moral + habit;
 
         if utility > best_utility {
@@ -463,7 +495,25 @@ mod tests {
         let identity = IdentityState::default();
         let dp = make_decision_policy();
 
-        let eat_utility = select_action(&needs, &personality, &[], &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO, &dp, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO);
+        let eat_utility = select_action(&DecisionContext {
+            needs: &needs,
+            personality: &personality,
+            active_goals: &[],
+            identity: &identity,
+            decision_policy: &dp,
+            total_grain: Fixed::from_f64(0.5),
+            total_water: Fixed::from_f64(0.5),
+            norm_pressure: Fixed::ZERO,
+            anger: Fixed::ZERO,
+            fear: Fixed::ZERO,
+            joy: Fixed::ZERO,
+            sadness: Fixed::ZERO,
+            stress: Fixed::ZERO,
+            fairness: Fixed::ZERO,
+            authority: Fixed::ZERO,
+            care: Fixed::ZERO,
+            loyalty: Fixed::ZERO,
+        }, &mut rng);
         assert!(eat_utility == ActionKind::Eat, "Hungry agent should prefer Eat, got {eat_utility:?}");
     }
 
@@ -534,7 +584,25 @@ mod tests {
         let dp = make_decision_policy();
 
         // Use select_action and verify Eat is preferred under scarcity
-        let scarce = select_action(&needs, &personality, &[], &mut rng, Fixed::from_f64(0.1), Fixed::from_f64(0.8), &identity, Fixed::ZERO, &dp, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO);
+        let scarce = select_action(&DecisionContext {
+            needs: &needs,
+            personality: &personality,
+            active_goals: &[],
+            identity: &identity,
+            decision_policy: &dp,
+            total_grain: Fixed::from_f64(0.1),
+            total_water: Fixed::from_f64(0.8),
+            norm_pressure: Fixed::ZERO,
+            anger: Fixed::ZERO,
+            fear: Fixed::ZERO,
+            joy: Fixed::ZERO,
+            sadness: Fixed::ZERO,
+            stress: Fixed::ZERO,
+            fairness: Fixed::ZERO,
+            authority: Fixed::ZERO,
+            care: Fixed::ZERO,
+            loyalty: Fixed::ZERO,
+        }, &mut rng);
         assert!(scarce == ActionKind::Eat, "Under grain scarcity, hungry agent should Eat, got {scarce:?}");
     }
 
@@ -549,7 +617,25 @@ mod tests {
         let identity = IdentityState::default();
         let dp = make_decision_policy();
 
-        let scarce = select_action(&needs, &personality, &[], &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.1), &identity, Fixed::ZERO, &dp, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO);
+        let scarce = select_action(&DecisionContext {
+            needs: &needs,
+            personality: &personality,
+            active_goals: &[],
+            identity: &identity,
+            decision_policy: &dp,
+            total_grain: Fixed::from_f64(0.8),
+            total_water: Fixed::from_f64(0.1),
+            norm_pressure: Fixed::ZERO,
+            anger: Fixed::ZERO,
+            fear: Fixed::ZERO,
+            joy: Fixed::ZERO,
+            sadness: Fixed::ZERO,
+            stress: Fixed::ZERO,
+            fairness: Fixed::ZERO,
+            authority: Fixed::ZERO,
+            care: Fixed::ZERO,
+            loyalty: Fixed::ZERO,
+        }, &mut rng);
         assert!(scarce == ActionKind::Drink, "Under water scarcity, thirsty agent should Drink, got {scarce:?}");
     }
 

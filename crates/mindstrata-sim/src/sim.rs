@@ -1351,24 +1351,26 @@ impl Simulation {
                             }
                         }
                         actions::select_action(
-                            &needs[i],
-                            &personalities[i],
-                            &goals[i],
+                            &actions::DecisionContext {
+                                needs: &needs[i],
+                                personality: &personalities[i],
+                                active_goals: &goals[i],
+                                identity: &self.agents[i].identity,
+                                decision_policy: &self.agents[i].decision_policy,
+                                total_grain,
+                                total_water,
+                                norm_pressure: adjusted_pressure,
+                                anger: emotions[i].anger,
+                                fear: emotions[i].fear,
+                                joy: emotions[i].joy,
+                                sadness: emotions[i].sadness,
+                                stress,
+                                fairness: self.agents[i].moral_values.fairness,
+                                authority: self.agents[i].moral_values.authority,
+                                care: self.agents[i].moral_values.care,
+                                loyalty: self.agents[i].moral_values.loyalty,
+                            },
                             ctx.rng,
-                            total_grain,
-                            total_water,
-                            &self.agents[i].identity,
-                            adjusted_pressure,
-                            &self.agents[i].decision_policy,
-                            emotions[i].anger,
-                            emotions[i].fear,
-                            emotions[i].joy,
-                            emotions[i].sadness,
-                            stress,
-                            self.agents[i].moral_values.fairness,
-                            self.agents[i].moral_values.authority,
-                            self.agents[i].moral_values.care,
-                            self.agents[i].moral_values.loyalty,
                         )
                     };
                     self.agents[i].current_action = action;
