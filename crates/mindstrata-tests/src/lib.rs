@@ -13,6 +13,9 @@ mod statistical_emergence;
 mod comparison;
 
 #[cfg(test)]
+mod integration_tests;
+
+#[cfg(test)]
 mod smoke {
     use mindstrata_core::clock::Tick;
     use mindstrata_core::fixed::Fixed;

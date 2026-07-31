@@ -187,3 +187,96 @@ fn deterministic_replay_across_seeds() {
             "Seed {seed}: agent count determinism failed");
     }
 }
+
+// ── §18.2: Additional property tests ──────────────────────────
+
+#[test]
+fn agent_age_never_negative() {
+    for seed in 0..10u64 {
+        let config = SimConfig {
+            seed,
+            max_ticks: 1000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 8,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(1000);
+
+        for (i, agent) in sim.agents.iter().enumerate() {
+            let age = agent.age.to_f64();
+            assert!(age >= 0.0,
+                "Seed {seed}, agent {i}: age={age} is negative");
+        }
+    }
+}
+
+#[test]
+fn fertility_non_negative() {
+    for seed in 0..10u64 {
+        let config = SimConfig {
+            seed,
+            max_ticks: 500,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 8,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(500);
+
+        for (i, agent) in sim.agents.iter().enumerate() {
+            if let Some(fertility) = agent.body.fertility {
+                let f = fertility.to_f64();
+                assert!(f >= 0.0 && f <= 1.0,
+                    "Seed {seed}, agent {i}: fertility={f} out of [0,1]");
+            }
+        }
+    }
+}
+
+#[test]
+fn agent_ages_monotonically_non_decreasing() {
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 500,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 8,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+
+    let mut prev_ages: Vec<f64> = sim.agents.iter().map(|a| a.age.to_f64()).collect();
+    sim.run(500);
+
+    // After running, all original agents should have age >= their initial age
+    // (new agents may have been born with lower age, so we can't check all)
+    let n_initial = prev_ages.len();
+    for (i, agent) in sim.agents.iter().take(n_initial).enumerate() {
+        assert!(agent.age.to_f64() >= prev_ages[i] - 0.01,
+            "Agent {i}: age went from {} to {}", prev_ages[i], agent.age.to_f64());
+    }
+}
+
+#[test]
+fn stress_increases_heuristic_bias() {
+    // §22.1: sleep debt increases heuristic bias — verified at unit level
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::person::CognitiveState;
+
+    let mut calm = CognitiveState::default();
+    calm.update(Fixed::from_f64(0.1), Fixed::from_f64(0.1));
+    let calm_bias = calm.heuristic_bias;
+
+    let mut stressed = CognitiveState::default();
+    stressed.update(Fixed::from_f64(0.9), Fixed::from_f64(0.8));
+    let stressed_bias = stressed.heuristic_bias;
+
+    assert!(stressed_bias > calm_bias,
+        "Stress should increase heuristic bias: calm={calm_bias}, stressed={stressed_bias}");
+}
