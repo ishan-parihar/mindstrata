@@ -2313,236 +2313,9 @@ impl Simulation {
             }
         }
 
-        // ── 11b. §11.2 Gossip propagation with mutation ──
-        // Also wires §8.1.14 Attachment (on_reunion) and §8.1.9 Theory of Mind
-        for ev in &self.events[pre_tick_events..].to_vec() {
-            if let SimEvent::InteractionOccurred {
-                from,
-                to,
-                kind,
-                ..
-            } = ev
-            {
-                // Only process Gossip, Help, and Trade interactions
-                if !matches!(
-                    kind,
-                    mindstrata_core::event::InteractionKind::Gossip
-                    | mindstrata_core::event::InteractionKind::Help
-                    | mindstrata_core::event::InteractionKind::Trade
-                ) {
-                    continue;
-                }
-                let from_idx = from.as_u64() as usize;
-                let to_idx = to.as_u64() as usize;
-                if from_idx < self.agents.len() && to_idx < self.agents.len() {
-                    // Architecture-plan-2 §8.1.14: Attachment activation.
-                    // Only Gossip implies social reunion (sustained conversation).
-                    // Help/Trade are brief contacts — not strong enough for reunion.
-                    if matches!(kind, mindstrata_core::event::InteractionKind::Gossip) {
-                        self.agents[from_idx].attachment.on_reunion();
-                        self.agents[to_idx].attachment.on_reunion();
-                    }
-                    // Architecture-plan-2 §8.1.9: Theory of Mind update from interaction.
-                    // Agents update their mind models of each other based on observed behavior.
-                    let trust_from_to = self.relationships.iter()
-                        .find(|r| r.from == *from && r.to == *to)
-                        .map_or(Fixed::from_f64(0.5), |r| r.trust);
-                    let trust_to_from = self.relationships.iter()
-                        .find(|r| r.from == *to && r.to == *from)
-                        .map_or(Fixed::from_f64(0.5), |r| r.trust);
-                    // Update from_idx's model of to_idx
-                    let model_a = self.agents[from_idx].mind_models.get_or_create(*to);
-                    let positive_signal = trust_to_from * Fixed::from_f64(0.3);
-                    let negative_signal = (Fixed::ONE - trust_to_from) * Fixed::from_f64(0.1);
-                    model_a.update_from_observation(positive_signal, negative_signal, trust_to_from, Fixed::from_f64(0.5));
-                    model_a.infer_intent(trust_to_from, positive_signal, negative_signal);
-                    // Update to_idx's model of from_idx
-                    let model_b = self.agents[to_idx].mind_models.get_or_create(*from);
-                    let positive_signal_b = trust_from_to * Fixed::from_f64(0.3);
-                    let negative_signal_b = (Fixed::ONE - trust_from_to) * Fixed::from_f64(0.1);
-                    model_b.update_from_observation(positive_signal_b, negative_signal_b, trust_from_to, Fixed::from_f64(0.5));
-                    model_b.infer_intent(trust_from_to, positive_signal_b, negative_signal_b);
-                    // Architecture-plan-2 §8.1.18: Cultural category encounter during interaction.
-                    // When agents interact, each perceives the other's cultural identity.
-                    // Same-category encounter = positive (reinforcement); cross-category = outgroup exposure.
-                    // Extract category names first to avoid holding immutable borrows during mutable updates.
-                    let (from_primary_cat, to_primary_cat) = {
-                        let fc = self.agents[from_idx].cultural_cognition.categories.iter()
-                            .max_by_key(|c| c.identification.to_raw() as u64)
-                            .map(|c| c.name.clone());
-                        let tc = self.agents[to_idx].cultural_cognition.categories.iter()
-                            .max_by_key(|c| c.identification.to_raw() as u64)
-                            .map(|c| c.name.clone());
-                        (fc, tc)
-                    };
-                    if let (Some(ref from_name), Some(ref to_name)) = (&from_primary_cat, &to_primary_cat) {
-                        let same_category = from_name == to_name;
-                        // from agent encounters to's category
-                        if let Some(cat) = self.agents[from_idx].cultural_cognition.categories.iter_mut().find(|c| &c.name == to_name) {
-                            cat.encounter(same_category);
-                        }
-                        // to agent encounters from's category
-                        if let Some(cat) = self.agents[to_idx].cultural_cognition.categories.iter_mut().find(|c| &c.name == from_name) {
-                            cat.encounter(same_category);
-                        }
-                    }
-                    // Gossip-specific processing: belief sharing only for Gossip interactions.
-                    // Help and Trade only trigger attachment/ToM updates above.
-                    if !matches!(kind, mindstrata_core::event::InteractionKind::Gossip) {
-                        continue;
-                    }
-                    let from_beliefs = &self.agents[from_idx].beliefs;
-                    if from_beliefs.is_empty() {
-                        continue;
-                    }
-                    let pick = self.rng.get_mut(RngStream::Social).random_range(0..from_beliefs.len());
-                    let source_trust = self.relationships
-                        .iter()
-                        .find(|r| r.from == *from && r.to == *to)
-                        .map_or(Fixed::from_f64(0.5), |r| r.trust);
-                    let rumor = gossip::Rumor::from_belief(&from_beliefs[pick], tick_u64);
-                    let listener_beliefs = self.agents[to_idx].beliefs.clone();
-                    let result = gossip::process_gossip(
-                        &rumor,
-                        source_trust,
-                        &self.agents[from_idx].emotions,
-                        &self.agents[from_idx].personality,
-                        &self.agents[to_idx].personality,
-                        &listener_beliefs,
-                        tick_u64,
-                    );
-                    // §19.5.B: Capture old confidence before gossip update for provenance trace
-                    let old_conf = self.agents[to_idx].beliefs.iter()
-                        .find(|b| b.proposition_id == result.proposition_id)
-                        .map_or(Fixed::from_f64(0.5), |b| b.confidence);
-                    gossip::apply_gossip(&mut self.agents[to_idx].beliefs, &result, tick_u64);
-                    if result.accepted {
-                        // §19.5.B: Record belief update trace for provenance
-                        let new_conf = self.agents[to_idx].beliefs.iter()
-                            .find(|b| b.proposition_id == result.proposition_id)
-                            .map_or(result.mutated_confidence, |b| b.confidence);
-                        self.provenance.record_belief_update(
-                            crate::provenance::BeliefUpdateTrace {
-                                agent: *to,
-                                tick: tick_u64,
-                                proposition_id: result.proposition_id,
-                                old_confidence: old_conf,
-                                new_confidence: new_conf,
-                                cause: "gossip".into(),
-                                delta: (new_conf - old_conf),
-                            },
-                        );
-                        // Emit RumorSpread event for memory encoding
-                        self.events.push(SimEvent::RumorSpread {
-                            source: *from,
-                            target: *to,
-                            content_hash: result.proposition_id,
-                            distortion: (result.mutated_confidence - rumor.confidence).abs(),
-                            tick,
-                        });
+        // ── 11b. §11.2 Gossip propagation with mutation ── (extracted)
+        self.tick_gossip_and_knowledge(pre_tick_events, tick_u64, tick);
 
-                        // Architecture-plan-2 §13.1: Meme transmission during gossip.
-                        // Sample up to 3 active memes without replacement, check transmission.
-                        // Pre-compute active IDs once to avoid per-gossip heap allocation.
-                        let listener_susceptibility = Fixed::from_f64(0.5);
-                        let listener_skepticism = Fixed::from_f64(0.2);
-                        let novelty_boost = Fixed::from_f64(0.05);
-                        let sample_limit = 3;
-                        let mut sampled = 0u32;
-                        for meme in &mut self.meme_registry.memes {
-                            if !meme.active || sampled >= sample_limit {
-                                break;
-                            }
-                            let chance = meme.transmission_chance(
-                                source_trust, listener_susceptibility, listener_skepticism,
-                            );
-                            let roll = self.rng.get_mut(RngStream::Social)
-                                .random_range(0.0f64..1.0);
-                            if Fixed::from_f64(roll) < chance {
-                                meme.host_count = meme.host_count.saturating_add(1);
-                                meme.novelty = (meme.novelty + novelty_boost).clamp_01();
-                                sampled += 1;
-                            }
-                        }
-                    }                        // Architecture-plan-2 §13.3: Create rumor from gossip.
-                        // When gossip is accepted, create a RumorV2 entry if the gossip
-                        // is emotionally charged or accusation-related.
-                        if result.accepted && result.emotional_charge > Fixed::from_f64(0.3) {
-                            let mut rumor = crate::culture::RumorV2::new(
-                                0,
-                                format!("gossip about prop_{}", result.proposition_id),
-                                Some(to.as_u64() as usize),
-                                result.emotional_charge * Fixed::from_f64(0.5),
-                                source_trust,
-                                result.emotional_charge,
-                                tick_u64,
-                            );
-                            // Record source in chain so telephone-game fidelity works
-                            rumor.record_transmission(from.as_u64() as usize, tick_u64);
-                            self.rumor_registry.register(rumor);
-                        }
-                    }
-                }
-            }
-            // §19.5.I Knowledge diffusion — cultural knowledge spreads through social networks
-            for ev in &self.events[pre_tick_events..].to_vec() {
-            if let SimEvent::InteractionOccurred {
-                from,
-                to,
-                kind: mindstrata_core::event::InteractionKind::Gossip
-                | mindstrata_core::event::InteractionKind::Help
-                | mindstrata_core::event::InteractionKind::Trade,
-                ..
-            } = ev
-            {
-                let from_idx = from.as_u64() as usize;
-                let to_idx = to.as_u64() as usize;
-                if from_idx < self.agents.len() && to_idx < self.agents.len() {
-                    let source_trust = self.relationships
-                        .iter()
-                        .find(|r| r.from == *from && r.to == *to)
-                        .map_or(Fixed::from_f64(0.5), |r| r.trust);
-                    // Teacher teaches a random piece of knowledge they have
-                    if !self.agents[from_idx].cultural.knowledge.is_empty() {
-                        let pick = self.rng.get_mut(RngStream::Social)
-                            .random_range(0..self.agents[from_idx].cultural.knowledge.len());
-                        let knowledge_id = self.agents[from_idx].cultural.knowledge[pick];
-                        // Simple diffusion: probabilistic transfer based on trust and openness
-                        let trust_factor = source_trust;
-                        let openness = self.agents[to_idx].cultural.openness;
-                        let acceptance = (trust_factor * Fixed::from_f64(0.5)
-                            + openness * Fixed::from_f64(0.5)).clamp_01();
-                        if !self.agents[to_idx].cultural.knowledge.contains(&knowledge_id)
-                            && acceptance > Fixed::from_f64(0.5)
-                        {
-                            self.agents[to_idx].cultural.knowledge.push(knowledge_id);
-                            // §19.5.I: Update holder count in knowledge store
-                            if let Some(k) = self.knowledge_store.iter_mut().find(|k| k.id == knowledge_id) {
-                                k.holders += 1;
-                            }
-                            // Emit knowledge transfer event for observability
-                            self.events.push(SimEvent::KnowledgeTransferred {
-                                source: *from,
-                                target: *to,
-                                knowledge_id,
-                                tick,
-                            });
-                            // §19.5.B: Record knowledge transfer in provenance
-                            self.provenance.record_institutional(
-                                crate::provenance::InstitutionalTrace {
-                                    institution_name: "Community".into(),
-                                    tick: tick_u64,
-                                    decision_kind: "knowledge_transfer".into(),
-                                    description: format!("Agent {} taught knowledge {} to Agent {}", from.as_u64(), knowledge_id, to.as_u64()),
-                                    affected: vec![*from, *to],
-                                    success: true,
-                                },
-                            );
-                        }
-                    }
-                }
-            }
-        }
 
         // ── 11d. §19.5.F Childhood socialization — children learn from parents ──
         {
@@ -2626,420 +2399,11 @@ impl Simulation {
             }
         }
 
-        // ── 12. Institutional collective psychology derivation ────
-        // §23: Derive collective psychology from member states each tick.
-        for institution in &mut self.institutions {
-            let member_morales: Vec<Fixed> = institution
-                .members
-                .iter()
-                .filter_map(|m| {
-                    let idx = m.as_u64() as usize;
-                    if idx < self.agents.len() {
-                        Some(self.agents[idx].affect.valence)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            let member_trusts: Vec<Fixed> = institution
-                .members
-                .iter()
-                .filter_map(|m| {
-                    let idx = m.as_u64() as usize;
-                    if idx < self.agents.len() {
-                        Some(self.agents[idx].emotions.trust)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            institution.derive_collective_psychology(&member_morales, &member_trusts);
-            // Slow legitimacy decay without reinforcement
-            institution.decay_legitimacy(Fixed::from_f64(0.0001));
+        // ── 12. Institutional collective psychology (extracted) ────
+        self.tick_institutional_psychology(tick_u64);
 
-            // §19.5.C: Process pending policies — move ready ones to active
-            institution.process_policies(tick_u64);
-
-            // §19.5.C: Council auto-proposes 'Fine Theft' policy when legitimacy is high
-            // and enforcement capacity is moderate.
-            if institution.kind == institutions::InstitutionKind::Council
-                && institution.legitimacy > Fixed::from_f64(0.5)
-                && institution.active_policies.is_empty()
-                && institution.pending_policies.is_empty()
-                && tick_u64 > institutions::INITIAL_PROPOSAL_DELAY
-            {
-                institution.propose_policy(
-                    "Fine Theft Policy".into(),
-                    Fixed::from_f64(0.1), // tax effect
-                    tick_u64,
-                );
-            }
-
-            // §19.5.C: Record active policy effects (check name first to avoid borrow conflict)
-            let has_fine_theft = institution.active_policies.iter()
-                .any(|p| p.name == "Fine Theft Policy");
-            if has_fine_theft && tick_u64.is_multiple_of(institutions::POLICY_RECORD_INTERVAL) {
-                let members = institution.members.clone();
-                institution.record_action(
-                    tick_u64,
-                    "Fine Theft Policy enacted".into(),
-                    members.clone(),
-                    true,
-                );
-                // §19.5.B: Record institutional provenance trace
-                self.provenance.record_institutional(
-                    crate::provenance::InstitutionalTrace {
-                        institution_name: institution.kind.name().into(),
-                        tick: tick_u64,
-                        decision_kind: "policy_enacted".into(),
-                        description: "Fine Theft Policy enacted".into(),
-                        affected: members,
-                        success: true,
-                    },
-                );
-            }
-
-            // Trim old records to prevent unbounded growth (keep last 1000)
-            if institution.records.len() > institutions::MAX_RECORDS {
-                let drain_count = institution.records.len() - institutions::MAX_RECORDS;
-                institution.records.drain(..drain_count);
-            }
-
-            // §19.5.C: Institutional tax collection — all institutions collect taxes
-            if tick_u64.is_multiple_of(institutions::TAX_COLLECTION_INTERVAL) && tick_u64 > 0 && !institution.members.is_empty() {
-                let tax_rate = match institution.kind {
-                    institutions::InstitutionKind::Council => Fixed::from_f64(institutions::COUNCIL_TAX_RATE),
-                    institutions::InstitutionKind::Market => Fixed::from_f64(institutions::MARKET_FEE_RATE),
-                    institutions::InstitutionKind::Temple => Fixed::from_f64(institutions::TEMPLE_TITHE_RATE),
-                    _ => Fixed::ZERO,
-                };
-                if tax_rate > Fixed::ZERO {
-                    let mut member_wealth: Vec<(AgentId, Fixed)> = institution.members.iter()
-                        .filter_map(|m| {
-                            let idx = m.as_u64() as usize;
-                            if idx < self.agents.len() {
-                                Some((*m, self.agents[idx].wealth.coin))
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
-                    let collected = institution.collect_taxes(tax_rate, &mut member_wealth);
-                    // Write back tax deductions (AgentId::new(i) == index i)
-                    for (agent_id, new_wealth) in &member_wealth {
-                        let idx = agent_id.as_u64() as usize;
-                        if idx < self.agents.len() {
-                            self.agents[idx].wealth.coin = *new_wealth;
-                        }
-                    }
-                    if collected > Fixed::ZERO {
-                        let members = institution.members.clone();
-                        let action_name = match institution.kind {
-                            institutions::InstitutionKind::Temple => {
-                                format!("Temple tithe: {:.1} coins", collected.to_f64())
-                            }
-                            institutions::InstitutionKind::Market => {
-                                format!("Market merchant fee: {:.1} coins", collected.to_f64())
-                            }
-                            _ => {
-                                format!("Council tax: {:.1} coins", collected.to_f64())
-                            }
-                        };
-                        let inst_name = institution.kind.name().to_string();
-                        institution.record_action(tick_u64, action_name.clone(), members.clone(), true);
-                        // §19.5.B: Record institutional provenance trace for tax collection
-                        self.provenance.record_institutional(
-                            crate::provenance::InstitutionalTrace {
-                                institution_name: inst_name,
-                                tick: tick_u64,
-                                decision_kind: "tax_collection".into(),
-                                description: action_name,
-                                affected: members,
-                                success: true,
-                            },
-                        );
-                    }
-                }
-            }
-
-            // §19.5.C: All institutions pay role holders wages periodically
-            if tick_u64.is_multiple_of(institutions::WAGE_PAYMENT_INTERVAL) && tick_u64 > 0 {
-                let wage = Fixed::from_f64(institutions::BASE_WAGE);
-                let role_holder_count = institution.roles.iter().filter(|r| r.holder.is_some()).count() as i64;
-                let total_wage_cost = wage * Fixed::from_int(role_holder_count);
-                if institution.treasury >= total_wage_cost && role_holder_count > 0 {
-                    let mut member_wealth: Vec<(AgentId, Fixed)> = institution.roles.iter()
-                        .filter_map(|r| r.holder.map(|h| {
-                            let idx = h.as_u64() as usize;
-                            let wealth = if idx < self.agents.len() {
-                                self.agents[idx].wealth.coin
-                            } else {
-                                Fixed::ZERO
-                            };
-                            (h, wealth)
-                        }))
-                        .collect();
-                    let paid = institution.pay_wages(wage, &mut member_wealth);
-                    for (agent_id, new_wealth) in &member_wealth {
-                        let idx = agent_id.as_u64() as usize;
-                        if idx < self.agents.len() {
-                            self.agents[idx].wealth.coin = *new_wealth;
-                        }
-                    }
-                    if paid > Fixed::ZERO {
-                        let members = institution.members.clone();
-                        let role_names: Vec<&str> = institution.roles.iter()
-                            .filter(|r| r.holder.is_some())
-                            .map(|r| r.name.as_str())
-                            .collect();
-                        let kind_name = institution.kind.name().to_string();
-                        let wage_msg = format!("{} wage payment: {:.1} coins to {}", kind_name, paid.to_f64(), role_names.join(", "));
-                        institution.record_action(tick_u64, wage_msg.clone(), members.clone(), true);
-                        // §19.5.B: Record institutional provenance trace for wage payment
-                        self.provenance.record_institutional(
-                            crate::provenance::InstitutionalTrace {
-                                institution_name: kind_name,
-                                tick: tick_u64,
-                                decision_kind: "wage_payment".into(),
-                                description: wage_msg,
-                                affected: members,
-                                success: true,
-                            },
-                        );
-                    }
-                }
-            }
-
-            // §19.5.C: Taxation legitimacy feedback — taxed agents accumulate anger,
-            // and high tax rates periodically erode institutional legitimacy.
-            // NOTE: The per-tick decay_legitimacy(0.0001) above is a slow continuous baseline;
-            // this tax-rate erosion is an additional periodic penalty applied only on collection ticks.
-            if tick_u64.is_multiple_of(institutions::TAX_COLLECTION_INTERVAL) && tick_u64 > 0 && !institution.members.is_empty() {
-                // Tax burden affects legitimacy: higher tax rate → faster legitimacy decay
-                let tax_rate = match institution.kind {
-                    institutions::InstitutionKind::Council => institutions::COUNCIL_TAX_RATE,
-                    institutions::InstitutionKind::Market => institutions::MARKET_FEE_RATE,
-                    institutions::InstitutionKind::Temple => institutions::TEMPLE_TITHE_RATE,
-                    _ => 0.0,
-                };
-                if tax_rate > 0.0 {
-                    // Legitimacy erodes proportional to tax rate (taxation is a cost to subjects)
-                    let legitimacy_erosion = Fixed::from_f64(tax_rate * 0.01);
-                    institution.decay_legitimacy(legitimacy_erosion);
-
-                    // Each taxed agent loses a tiny amount of trust/affection toward the institution
-                    for m in &institution.members {
-                        let idx = m.as_u64() as usize;
-                        if idx < self.agents.len() {
-                            // Tax burden → anger if agent is already unhappy, shame if compliant
-                            let tax_fatigue = self.agents[idx].wealth.coin * Fixed::from_f64(tax_rate);
-                            if tax_fatigue > Fixed::from_f64(1.0) {
-                                // Heavy taxation → anger
-                                self.agents[idx].emotions.anger = (
-                                    self.agents[idx].emotions.anger + tax_fatigue * Fixed::from_f64(0.01)
-                                ).clamp_01();
-                            }
-                        }
-                    }
-                }
-            }
-        }        // ── 15. Faction dynamics — grievance, formation, recruitment, protests (Phase 8) ──
-        // §29.2: Factions emerge from collective grievance. §Phase 8: legitimacy crisis → rebellion or reform.
-        {
-            let faction_count = self.institutions.iter()
-                .filter(|i| i.kind == InstitutionKind::Faction)
-                .count();
-
-            // Compute grievance for each agent
-            let market_gini = self.market.inequality;
-            let grievances: Vec<(AgentId, Fixed)> = self.agents.iter().enumerate()
-                .map(|(i, agent)| {
-                    let g = factions::compute_grievance(
-                        agent.derived.resentment,
-                        agent.emotions.fear,
-                        agent.emotions.anger,
-                        agent.needs.autonomy,
-                        agent.needs.meaning,
-                        agent.moral_values.fairness,
-                        market_gini,
-                    );
-                    (AgentId::new(i as u64), g)
-                })
-                .collect();
-
-            // Find council legitimacy (average across councils)
-            let avg_council_legitimacy: Fixed = {
-                let councils: Vec<_> = self.institutions.iter()
-                    .filter(|i| i.kind == InstitutionKind::Council)
-                    .collect();
-                if councils.is_empty() {
-                    Fixed::from_f64(0.5)
-                } else {
-                    let sum: Fixed = councils.iter().map(|c| c.legitimacy).fold(Fixed::ZERO, |a, b| a + b);
-                    sum / Fixed::from_int(councils.len() as i64)
-                }
-            };
-
-            // Faction formation: when grievance is high and council legitimacy is low
-            let should_form = faction_count < factions::MAX_FACTIONS
-                && avg_council_legitimacy < Fixed::from_f64(0.5)
-                && tick_u64 > factions::FORMATION_COOLDOWN;
-
-            if should_form {
-                let recruitable = factions::find_recruitable_agents(
-                    &grievances, factions::RECRUITMENT_GRIEVANCE_THRESHOLD,
-                );
-
-                let avg_grievance = if recruitable.is_empty() {
-                    Fixed::ZERO
-                } else {
-                    let sum: Fixed = recruitable.iter().map(|(_, g)| *g).fold(Fixed::ZERO, |a, b| a + b);
-                    sum / Fixed::from_int(recruitable.len() as i64)
-                };
-
-                if avg_grievance >= factions::FORMATION_GRIEVANCE_THRESHOLD && recruitable.len() >= 2 {
-                    // Find leader candidates: high ambition, high dominance, low anger
-                    let leader_candidates: Vec<_> = recruitable.iter()
-                        .filter_map(|(id, _)| {
-                            let idx = id.as_u64() as usize;
-                            if idx < self.agents.len() {
-                                let a = &self.agents[idx];
-                                if a.personality.ambition >= factions::LEADER_AMBITION_THRESHOLD {
-                                    Some((*id, a.personality.ambition, a.personality.dominance,
-                                          a.personality.extraversion, a.emotions.anger))
-                                } else {
-                                    None
-                                }
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
-
-                    if let Some(leader) = factions::select_leader(&leader_candidates) {
-                        let members: Vec<AgentId> = recruitable.iter()
-                            .map(|(id, _)| *id)
-                            .collect();
-
-                        let new_faction = factions::create_faction(
-                            1000 + faction_count as u64,
-                            leader,
-                            members.clone(),
-                            avg_grievance,
-                        );
-
-                        tracing::warn!(
-                            leader = leader.as_u64(),
-                            members = members.len(),
-                            grievance = avg_grievance.to_f64(),
-                            tick = tick_u64,
-                            "Faction formed"
-                        );
-
-                        // Record in provenance
-                        self.provenance.record_decision(crate::provenance::DecisionTrace {
-                            agent: leader,
-                            tick: tick_u64,
-                            action_name: "FactionFormation".into(),
-                            factors: vec![
-                                crate::provenance::DecisionFactor {
-                                    kind: "grievance".into(),
-                                    magnitude: avg_grievance,
-                                    description: format!("Avg grievance: {:.2}", avg_grievance.to_f64()),
-                                },
-                                crate::provenance::DecisionFactor {
-                                    kind: "council_legitimacy".into(),
-                                    magnitude: avg_council_legitimacy,
-                                    description: format!("Council legitimacy: {:.2}", avg_council_legitimacy.to_f64()),
-                                },
-                            ],
-                            from_routine: false,
-                            interrupted_by_critical_needs: false,
-                            intention_abandoned: false,
-                        });
-
-                        self.institutions.push(new_faction);
-                    }
-                }
-            }
-
-            // Faction dynamics: check for protests from existing factions
-            for inst_idx in 0..self.institutions.len() {
-                if self.institutions[inst_idx].kind != InstitutionKind::Faction {
-                    continue;
-                }
-
-                let faction_grievance = self.institutions[inst_idx].collective.morale;
-                let faction_cohesion = self.institutions[inst_idx].collective.unity;
-
-                if factions::should_protest(faction_grievance, faction_cohesion, tick_u64) {
-                    let protest_size = self.institutions[inst_idx].members.len();
-                    let total_pop = self.agents.len();
-
-                    tracing::warn!(
-                        faction = self.institutions[inst_idx].name.as_str(),
-                        protest_size,
-                        total_pop,
-                        grievance = faction_grievance.to_f64(),
-                        tick = tick_u64,
-                        "Protest occurred"
-                    );
-
-                    // Council response
-                    let council_enforcement = self.institutions.iter()
-                        .filter(|i| i.kind == InstitutionKind::Council)
-                        .map(|i| i.enforcement_capacity)
-                        .fold(Fixed::ZERO, std::cmp::Ord::max);
-
-                    let (suppressed, legitimacy_effect) = factions::council_response(
-                        council_enforcement, protest_size, total_pop,
-                    );
-
-                    // Apply legitimacy effect to council
-                    for inst in &mut self.institutions {
-                        if inst.kind == InstitutionKind::Council {
-                            if legitimacy_effect > Fixed::ZERO {
-                                inst.increase_legitimacy(legitimacy_effect);
-                            } else {
-                                inst.decay_legitimacy(-legitimacy_effect);
-                            }
-                        }
-                    }
-
-                    // If not suppressed, faction gains legitimacy and morale boost
-                    if !suppressed {
-                        if let Some(faction) = self.institutions.get_mut(inst_idx) {
-                            faction.increase_legitimacy(Fixed::from_f64(0.02));
-                            faction.collective.morale = (faction.collective.morale + Fixed::from_f64(0.05)).clamp_01();
-                        }
-                    }
-
-                    // Record in provenance (use leader of the protesting faction)
-                    let protest_agent = self.institutions[inst_idx].get_role_holder("Leader")
-                        .unwrap_or(AgentId::new(0));
-                    self.provenance.record_decision(crate::provenance::DecisionTrace {
-                        agent: protest_agent,
-                        tick: tick_u64,
-                        action_name: "Protest".into(),
-                        factors: vec![
-                            crate::provenance::DecisionFactor {
-                                kind: "protest_size".into(),
-                                magnitude: Fixed::from_int(protest_size as i64),
-                                description: format!("Protest size: {protest_size}"),
-                            },
-                            crate::provenance::DecisionFactor {
-                                kind: "suppressed".into(),
-                                magnitude: if suppressed { Fixed::ONE } else { Fixed::ZERO },
-                                description: format!("Suppressed: {suppressed}"),
-                            },
-                        ],
-                        from_routine: false,
-                        interrupted_by_critical_needs: false,
-                        intention_abandoned: false,
-                    });
-                }
-            }
-        }
+        // ── 15. Faction dynamics (extracted) ────
+        self.tick_faction_dynamics(tick_u64, tick);
 
         // ── 14. §7.2: Moral panic detection — rumor cascades collapse institutional trust ──
         // Check if gossip about institutions has accumulated enough emotional charge
@@ -3905,6 +3269,185 @@ impl Simulation {
         }
     }
 
+    // ── Tick subsystem methods ──────────────────────────────────────
+    // Extracted from tick() for readability and maintainability.
+    // Each method handles one coherent subsystem tick.
+
+    /// §11.2 + §19.5.I: Gossip propagation, attachment reunion, ToM,
+    /// cultural encounter, knowledge diffusion, meme transmission.
+    fn tick_gossip_and_knowledge(&mut self, pre_tick_events: usize, tick_u64: u64, tick: Tick) {
+        // Collect event indices to process (avoids .to_vec() heap allocation)
+        let event_range = pre_tick_events..self.events.len();
+        // Snapshot event count to avoid re-processing newly-pushed events
+        let snap_count = self.events.len();
+
+        for idx in event_range.clone() {
+            if idx >= snap_count { break; }
+            if let SimEvent::InteractionOccurred { from, to, kind, .. } = self.events[idx] {
+                if !matches!(kind,
+                    mindstrata_core::event::InteractionKind::Gossip
+                    | mindstrata_core::event::InteractionKind::Help
+                    | mindstrata_core::event::InteractionKind::Trade
+                ) { continue; }
+                let from_idx = from.as_u64() as usize;
+                let to_idx = to.as_u64() as usize;
+                if from_idx >= self.agents.len() || to_idx >= self.agents.len() { continue; }
+
+                // §8.1.14: Attachment reunion (Gossip only)
+                if matches!(kind, mindstrata_core::event::InteractionKind::Gossip) {
+                    self.agents[from_idx].attachment.on_reunion();
+                    self.agents[to_idx].attachment.on_reunion();
+                }
+
+                // §8.1.9: Theory of Mind update
+                let trust_from_to = self.relationships.iter()
+                    .find(|r| r.from == from && r.to == to)
+                    .map_or(Fixed::from_f64(0.5), |r| r.trust);
+                let trust_to_from = self.relationships.iter()
+                    .find(|r| r.from == to && r.to == from)
+                    .map_or(Fixed::from_f64(0.5), |r| r.trust);
+                {
+                    let model_a = self.agents[from_idx].mind_models.get_or_create(to);
+                    let pos = trust_to_from * Fixed::from_f64(0.3);
+                    let neg = (Fixed::ONE - trust_to_from) * Fixed::from_f64(0.1);
+                    model_a.update_from_observation(pos, neg, trust_to_from, Fixed::from_f64(0.5));
+                    model_a.infer_intent(trust_to_from, pos, neg);
+                }
+                {
+                    let model_b = self.agents[to_idx].mind_models.get_or_create(from);
+                    let pos = trust_from_to * Fixed::from_f64(0.3);
+                    let neg = (Fixed::ONE - trust_from_to) * Fixed::from_f64(0.1);
+                    model_b.update_from_observation(pos, neg, trust_from_to, Fixed::from_f64(0.5));
+                    model_b.infer_intent(trust_from_to, pos, neg);
+                }
+
+                // §8.1.18: Cultural category encounter
+                let (from_cat, to_cat) = {
+                    let fc = self.agents[from_idx].cultural_cognition.categories.iter()
+                        .max_by_key(|c| c.identification.to_raw() as u64)
+                        .map(|c| c.name.clone());
+                    let tc = self.agents[to_idx].cultural_cognition.categories.iter()
+                        .max_by_key(|c| c.identification.to_raw() as u64)
+                        .map(|c| c.name.clone());
+                    (fc, tc)
+                };
+                if let (Some(ref fn_name), Some(ref tn_name)) = (&from_cat, &to_cat) {
+                    let same = fn_name == tn_name;
+                    if let Some(c) = self.agents[from_idx].cultural_cognition.categories.iter_mut().find(|c| &c.name == tn_name) {
+                        c.encounter(same);
+                    }
+                    if let Some(c) = self.agents[to_idx].cultural_cognition.categories.iter_mut().find(|c| &c.name == fn_name) {
+                        c.encounter(same);
+                    }
+                }
+
+                // Gossip-specific: belief sharing
+                if !matches!(kind, mindstrata_core::event::InteractionKind::Gossip) { continue; }
+                let from_beliefs = &self.agents[from_idx].beliefs;
+                if from_beliefs.is_empty() { continue; }
+                let pick = self.rng.get_mut(RngStream::Social).random_range(0..from_beliefs.len());
+                let source_trust = trust_from_to;
+                let rumor = gossip::Rumor::from_belief(&from_beliefs[pick], tick_u64);
+                let listener_beliefs = self.agents[to_idx].beliefs.clone();
+                let result = gossip::process_gossip(
+                    &rumor, source_trust,
+                    &self.agents[from_idx].emotions,
+                    &self.agents[from_idx].personality,
+                    &self.agents[to_idx].personality,
+                    &listener_beliefs, tick_u64,
+                );
+                let old_conf = self.agents[to_idx].beliefs.iter()
+                    .find(|b| b.proposition_id == result.proposition_id)
+                    .map_or(Fixed::from_f64(0.5), |b| b.confidence);
+                gossip::apply_gossip(&mut self.agents[to_idx].beliefs, &result, tick_u64);
+                if result.accepted {
+                    let new_conf = self.agents[to_idx].beliefs.iter()
+                        .find(|b| b.proposition_id == result.proposition_id)
+                        .map_or(result.mutated_confidence, |b| b.confidence);
+                    self.provenance.record_belief_update(crate::provenance::BeliefUpdateTrace {
+                        agent: to, tick: tick_u64,
+                        proposition_id: result.proposition_id,
+                        old_confidence: old_conf, new_confidence: new_conf,
+                        cause: "gossip".into(), delta: (new_conf - old_conf),
+                    });
+                    self.events.push(SimEvent::RumorSpread {
+                        source: from, target: to,
+                        content_hash: result.proposition_id,
+                        distortion: (result.mutated_confidence - rumor.confidence).abs(),
+                        tick,
+                    });
+                    // §13.1: Meme transmission
+                    let sus = Fixed::from_f64(0.5);
+                    let sk = Fixed::from_f64(0.2);
+                    let nb = Fixed::from_f64(0.05);
+                    let mut sampled = 0u32;
+                    for meme in &mut self.meme_registry.memes {
+                        if !meme.active || sampled >= 3 { break; }
+                        let chance = meme.transmission_chance(source_trust, sus, sk);
+                        let roll = self.rng.get_mut(RngStream::Social).random_range(0.0f64..1.0);
+                        if Fixed::from_f64(roll) < chance {
+                            meme.host_count = meme.host_count.saturating_add(1);
+                            meme.novelty = (meme.novelty + nb).clamp_01();
+                            sampled += 1;
+                        }
+                    }
+                }
+                // §13.3: Rumor creation from emotionally charged gossip
+                if result.accepted && result.emotional_charge > Fixed::from_f64(0.3) {
+                    let mut r = crate::culture::RumorV2::new(
+                        0, format!("gossip about prop_{}", result.proposition_id),
+                        Some(to.as_u64() as usize),
+                        result.emotional_charge * Fixed::from_f64(0.5),
+                        source_trust, result.emotional_charge, tick_u64,
+                    );
+                    r.record_transmission(from.as_u64() as usize, tick_u64);
+                    self.rumor_registry.register(r);
+                }
+            }
+        }
+
+        // §19.5.I: Knowledge diffusion
+        for idx in event_range {
+            if idx >= snap_count { break; }
+            if let SimEvent::InteractionOccurred {
+                from, to,
+                kind: mindstrata_core::event::InteractionKind::Gossip
+                    | mindstrata_core::event::InteractionKind::Help
+                    | mindstrata_core::event::InteractionKind::Trade, ..
+            } = self.events[idx] {
+                let fi = from.as_u64() as usize;
+                let ti = to.as_u64() as usize;
+                if fi >= self.agents.len() || ti >= self.agents.len() { continue; }
+                let source_trust = self.relationships.iter()
+                    .find(|r| r.from == from && r.to == to)
+                    .map_or(Fixed::from_f64(0.5), |r| r.trust);
+                if !self.agents[fi].cultural.knowledge.is_empty() {
+                    let pick = self.rng.get_mut(RngStream::Social)
+                        .random_range(0..self.agents[fi].cultural.knowledge.len());
+                    let kid = self.agents[fi].cultural.knowledge[pick];
+                    let acceptance = (source_trust * Fixed::from_f64(0.5)
+                        + self.agents[ti].cultural.openness * Fixed::from_f64(0.5)).clamp_01();
+                    if !self.agents[ti].cultural.knowledge.contains(&kid)
+                        && acceptance > Fixed::from_f64(0.5) {
+                        self.agents[ti].cultural.knowledge.push(kid);
+                        if let Some(k) = self.knowledge_store.iter_mut().find(|k| k.id == kid) {
+                            k.holders += 1;
+                        }
+                        self.events.push(SimEvent::KnowledgeTransferred {
+                            source: from, target: to, knowledge_id: kid, tick,
+                        });
+                        self.provenance.record_institutional(crate::provenance::InstitutionalTrace {
+                            institution_name: "Community".into(), tick: tick_u64,
+                            decision_kind: "knowledge_transfer".into(),
+                            description: format!("Agent {} taught knowledge {} to Agent {}", from.as_u64(), kid, to.as_u64()),
+                            affected: vec![from, to], success: true,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
     /// Access the current tick.
     pub fn current_tick(&self) -> Tick {
         self.clock.tick()
@@ -4098,6 +3641,430 @@ impl Simulation {
             agent_count: self.agent_count() as u64,
         }
     }
+
+    /// Section 12: Institutional collective psychology derivation.
+    fn tick_institutional_psychology(&mut self, tick_u64: u64) {
+        // ── 12. Institutional collective psychology derivation ────
+        // §23: Derive collective psychology from member states each tick.
+        for institution in &mut self.institutions {
+            let member_morales: Vec<Fixed> = institution
+                .members
+                .iter()
+                .filter_map(|m| {
+                    let idx = m.as_u64() as usize;
+                    if idx < self.agents.len() {
+                        Some(self.agents[idx].affect.valence)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            let member_trusts: Vec<Fixed> = institution
+                .members
+                .iter()
+                .filter_map(|m| {
+                    let idx = m.as_u64() as usize;
+                    if idx < self.agents.len() {
+                        Some(self.agents[idx].emotions.trust)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            institution.derive_collective_psychology(&member_morales, &member_trusts);
+            // Slow legitimacy decay without reinforcement
+            institution.decay_legitimacy(Fixed::from_f64(0.0001));
+
+            // §19.5.C: Process pending policies — move ready ones to active
+            institution.process_policies(tick_u64);
+
+            // §19.5.C: Council auto-proposes 'Fine Theft' policy when legitimacy is high
+            // and enforcement capacity is moderate.
+            if institution.kind == institutions::InstitutionKind::Council
+                && institution.legitimacy > Fixed::from_f64(0.5)
+                && institution.active_policies.is_empty()
+                && institution.pending_policies.is_empty()
+                && tick_u64 > institutions::INITIAL_PROPOSAL_DELAY
+            {
+                institution.propose_policy(
+                    "Fine Theft Policy".into(),
+                    Fixed::from_f64(0.1), // tax effect
+                    tick_u64,
+                );
+            }
+
+            // §19.5.C: Record active policy effects (check name first to avoid borrow conflict)
+            let has_fine_theft = institution.active_policies.iter()
+                .any(|p| p.name == "Fine Theft Policy");
+            if has_fine_theft && tick_u64.is_multiple_of(institutions::POLICY_RECORD_INTERVAL) {
+                let members = institution.members.clone();
+                institution.record_action(
+                    tick_u64,
+                    "Fine Theft Policy enacted".into(),
+                    members.clone(),
+                    true,
+                );
+                // §19.5.B: Record institutional provenance trace
+                self.provenance.record_institutional(
+                    crate::provenance::InstitutionalTrace {
+                        institution_name: institution.kind.name().into(),
+                        tick: tick_u64,
+                        decision_kind: "policy_enacted".into(),
+                        description: "Fine Theft Policy enacted".into(),
+                        affected: members,
+                        success: true,
+                    },
+                );
+            }
+
+            // Trim old records to prevent unbounded growth (keep last 1000)
+            if institution.records.len() > institutions::MAX_RECORDS {
+                let drain_count = institution.records.len() - institutions::MAX_RECORDS;
+                institution.records.drain(..drain_count);
+            }
+
+            // §19.5.C: Institutional tax collection — all institutions collect taxes
+            if tick_u64.is_multiple_of(institutions::TAX_COLLECTION_INTERVAL) && tick_u64 > 0 && !institution.members.is_empty() {
+                let tax_rate = match institution.kind {
+                    institutions::InstitutionKind::Council => Fixed::from_f64(institutions::COUNCIL_TAX_RATE),
+                    institutions::InstitutionKind::Market => Fixed::from_f64(institutions::MARKET_FEE_RATE),
+                    institutions::InstitutionKind::Temple => Fixed::from_f64(institutions::TEMPLE_TITHE_RATE),
+                    _ => Fixed::ZERO,
+                };
+                if tax_rate > Fixed::ZERO {
+                    let mut member_wealth: Vec<(AgentId, Fixed)> = institution.members.iter()
+                        .filter_map(|m| {
+                            let idx = m.as_u64() as usize;
+                            if idx < self.agents.len() {
+                                Some((*m, self.agents[idx].wealth.coin))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    let collected = institution.collect_taxes(tax_rate, &mut member_wealth);
+                    // Write back tax deductions (AgentId::new(i) == index i)
+                    for (agent_id, new_wealth) in &member_wealth {
+                        let idx = agent_id.as_u64() as usize;
+                        if idx < self.agents.len() {
+                            self.agents[idx].wealth.coin = *new_wealth;
+                        }
+                    }
+                    if collected > Fixed::ZERO {
+                        let members = institution.members.clone();
+                        let action_name = match institution.kind {
+                            institutions::InstitutionKind::Temple => {
+                                format!("Temple tithe: {:.1} coins", collected.to_f64())
+                            }
+                            institutions::InstitutionKind::Market => {
+                                format!("Market merchant fee: {:.1} coins", collected.to_f64())
+                            }
+                            _ => {
+                                format!("Council tax: {:.1} coins", collected.to_f64())
+                            }
+                        };
+                        let inst_name = institution.kind.name().to_string();
+                        institution.record_action(tick_u64, action_name.clone(), members.clone(), true);
+                        // §19.5.B: Record institutional provenance trace for tax collection
+                        self.provenance.record_institutional(
+                            crate::provenance::InstitutionalTrace {
+                                institution_name: inst_name,
+                                tick: tick_u64,
+                                decision_kind: "tax_collection".into(),
+                                description: action_name,
+                                affected: members,
+                                success: true,
+                            },
+                        );
+                    }
+                }
+            }
+
+            // §19.5.C: All institutions pay role holders wages periodically
+            if tick_u64.is_multiple_of(institutions::WAGE_PAYMENT_INTERVAL) && tick_u64 > 0 {
+                let wage = Fixed::from_f64(institutions::BASE_WAGE);
+                let role_holder_count = institution.roles.iter().filter(|r| r.holder.is_some()).count() as i64;
+                let total_wage_cost = wage * Fixed::from_int(role_holder_count);
+                if institution.treasury >= total_wage_cost && role_holder_count > 0 {
+                    let mut member_wealth: Vec<(AgentId, Fixed)> = institution.roles.iter()
+                        .filter_map(|r| r.holder.map(|h| {
+                            let idx = h.as_u64() as usize;
+                            let wealth = if idx < self.agents.len() {
+                                self.agents[idx].wealth.coin
+                            } else {
+                                Fixed::ZERO
+                            };
+                            (h, wealth)
+                        }))
+                        .collect();
+                    let paid = institution.pay_wages(wage, &mut member_wealth);
+                    for (agent_id, new_wealth) in &member_wealth {
+                        let idx = agent_id.as_u64() as usize;
+                        if idx < self.agents.len() {
+                            self.agents[idx].wealth.coin = *new_wealth;
+                        }
+                    }
+                    if paid > Fixed::ZERO {
+                        let members = institution.members.clone();
+                        let role_names: Vec<&str> = institution.roles.iter()
+                            .filter(|r| r.holder.is_some())
+                            .map(|r| r.name.as_str())
+                            .collect();
+                        let kind_name = institution.kind.name().to_string();
+                        let wage_msg = format!("{} wage payment: {:.1} coins to {}", kind_name, paid.to_f64(), role_names.join(", "));
+                        institution.record_action(tick_u64, wage_msg.clone(), members.clone(), true);
+                        // §19.5.B: Record institutional provenance trace for wage payment
+                        self.provenance.record_institutional(
+                            crate::provenance::InstitutionalTrace {
+                                institution_name: kind_name,
+                                tick: tick_u64,
+                                decision_kind: "wage_payment".into(),
+                                description: wage_msg,
+                                affected: members,
+                                success: true,
+                            },
+                        );
+                    }
+                }
+            }
+
+            // §19.5.C: Taxation legitimacy feedback — taxed agents accumulate anger,
+            // and high tax rates periodically erode institutional legitimacy.
+            // NOTE: The per-tick decay_legitimacy(0.0001) above is a slow continuous baseline;
+            // this tax-rate erosion is an additional periodic penalty applied only on collection ticks.
+            if tick_u64.is_multiple_of(institutions::TAX_COLLECTION_INTERVAL) && tick_u64 > 0 && !institution.members.is_empty() {
+                // Tax burden affects legitimacy: higher tax rate → faster legitimacy decay
+                let tax_rate = match institution.kind {
+                    institutions::InstitutionKind::Council => institutions::COUNCIL_TAX_RATE,
+                    institutions::InstitutionKind::Market => institutions::MARKET_FEE_RATE,
+                    institutions::InstitutionKind::Temple => institutions::TEMPLE_TITHE_RATE,
+                    _ => 0.0,
+                };
+                if tax_rate > 0.0 {
+                    // Legitimacy erodes proportional to tax rate (taxation is a cost to subjects)
+                    let legitimacy_erosion = Fixed::from_f64(tax_rate * 0.01);
+                    institution.decay_legitimacy(legitimacy_erosion);
+
+                    // Each taxed agent loses a tiny amount of trust/affection toward the institution
+                    for m in &institution.members {
+                        let idx = m.as_u64() as usize;
+                        if idx < self.agents.len() {
+                            // Tax burden → anger if agent is already unhappy, shame if compliant
+                            let tax_fatigue = self.agents[idx].wealth.coin * Fixed::from_f64(tax_rate);
+                            if tax_fatigue > Fixed::from_f64(1.0) {
+                                // Heavy taxation → anger
+                                self.agents[idx].emotions.anger = (
+                                    self.agents[idx].emotions.anger + tax_fatigue * Fixed::from_f64(0.01)
+                                ).clamp_01();
+                            }
+                        }
+                    }
+                }
+            }
+        }        // ── 15. Faction dynamics — grievance, formation, recruitment, protests (Phase 8) ──
+    }
+
+    /// Section 15: Faction dynamics - grievance, formation, recruitment, protests.
+    fn tick_faction_dynamics(&mut self, tick_u64: u64, tick: Tick) {
+        // §29.2: Factions emerge from collective grievance. §Phase 8: legitimacy crisis → rebellion or reform.
+        {
+            let faction_count = self.institutions.iter()
+                .filter(|i| i.kind == InstitutionKind::Faction)
+                .count();
+
+            // Compute grievance for each agent
+            let market_gini = self.market.inequality;
+            let grievances: Vec<(AgentId, Fixed)> = self.agents.iter().enumerate()
+                .map(|(i, agent)| {
+                    let g = factions::compute_grievance(
+                        agent.derived.resentment,
+                        agent.emotions.fear,
+                        agent.emotions.anger,
+                        agent.needs.autonomy,
+                        agent.needs.meaning,
+                        agent.moral_values.fairness,
+                        market_gini,
+                    );
+                    (AgentId::new(i as u64), g)
+                })
+                .collect();
+
+            // Find council legitimacy (average across councils)
+            let avg_council_legitimacy: Fixed = {
+                let councils: Vec<_> = self.institutions.iter()
+                    .filter(|i| i.kind == InstitutionKind::Council)
+                    .collect();
+                if councils.is_empty() {
+                    Fixed::from_f64(0.5)
+                } else {
+                    let sum: Fixed = councils.iter().map(|c| c.legitimacy).fold(Fixed::ZERO, |a, b| a + b);
+                    sum / Fixed::from_int(councils.len() as i64)
+                }
+            };
+
+            // Faction formation: when grievance is high and council legitimacy is low
+            let should_form = faction_count < factions::MAX_FACTIONS
+                && avg_council_legitimacy < Fixed::from_f64(0.5)
+                && tick_u64 > factions::FORMATION_COOLDOWN;
+
+            if should_form {
+                let recruitable = factions::find_recruitable_agents(
+                    &grievances, factions::RECRUITMENT_GRIEVANCE_THRESHOLD,
+                );
+
+                let avg_grievance = if recruitable.is_empty() {
+                    Fixed::ZERO
+                } else {
+                    let sum: Fixed = recruitable.iter().map(|(_, g)| *g).fold(Fixed::ZERO, |a, b| a + b);
+                    sum / Fixed::from_int(recruitable.len() as i64)
+                };
+
+                if avg_grievance >= factions::FORMATION_GRIEVANCE_THRESHOLD && recruitable.len() >= 2 {
+                    // Find leader candidates: high ambition, high dominance, low anger
+                    let leader_candidates: Vec<_> = recruitable.iter()
+                        .filter_map(|(id, _)| {
+                            let idx = id.as_u64() as usize;
+                            if idx < self.agents.len() {
+                                let a = &self.agents[idx];
+                                if a.personality.ambition >= factions::LEADER_AMBITION_THRESHOLD {
+                                    Some((*id, a.personality.ambition, a.personality.dominance,
+                                          a.personality.extraversion, a.emotions.anger))
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+
+                    if let Some(leader) = factions::select_leader(&leader_candidates) {
+                        let members: Vec<AgentId> = recruitable.iter()
+                            .map(|(id, _)| *id)
+                            .collect();
+
+                        let new_faction = factions::create_faction(
+                            1000 + faction_count as u64,
+                            leader,
+                            members.clone(),
+                            avg_grievance,
+                        );
+
+                        tracing::warn!(
+                            leader = leader.as_u64(),
+                            members = members.len(),
+                            grievance = avg_grievance.to_f64(),
+                            tick = tick_u64,
+                            "Faction formed"
+                        );
+
+                        // Record in provenance
+                        self.provenance.record_decision(crate::provenance::DecisionTrace {
+                            agent: leader,
+                            tick: tick_u64,
+                            action_name: "FactionFormation".into(),
+                            factors: vec![
+                                crate::provenance::DecisionFactor {
+                                    kind: "grievance".into(),
+                                    magnitude: avg_grievance,
+                                    description: format!("Avg grievance: {:.2}", avg_grievance.to_f64()),
+                                },
+                                crate::provenance::DecisionFactor {
+                                    kind: "council_legitimacy".into(),
+                                    magnitude: avg_council_legitimacy,
+                                    description: format!("Council legitimacy: {:.2}", avg_council_legitimacy.to_f64()),
+                                },
+                            ],
+                            from_routine: false,
+                            interrupted_by_critical_needs: false,
+                            intention_abandoned: false,
+                        });
+
+                        self.institutions.push(new_faction);
+                    }
+                }
+            }
+
+            // Faction dynamics: check for protests from existing factions
+            for inst_idx in 0..self.institutions.len() {
+                if self.institutions[inst_idx].kind != InstitutionKind::Faction {
+                    continue;
+                }
+
+                let faction_grievance = self.institutions[inst_idx].collective.morale;
+                let faction_cohesion = self.institutions[inst_idx].collective.unity;
+
+                if factions::should_protest(faction_grievance, faction_cohesion, tick_u64) {
+                    let protest_size = self.institutions[inst_idx].members.len();
+                    let total_pop = self.agents.len();
+
+                    tracing::warn!(
+                        faction = self.institutions[inst_idx].name.as_str(),
+                        protest_size,
+                        total_pop,
+                        grievance = faction_grievance.to_f64(),
+                        tick = tick_u64,
+                        "Protest occurred"
+                    );
+
+                    // Council response
+                    let council_enforcement = self.institutions.iter()
+                        .filter(|i| i.kind == InstitutionKind::Council)
+                        .map(|i| i.enforcement_capacity)
+                        .fold(Fixed::ZERO, std::cmp::Ord::max);
+
+                    let (suppressed, legitimacy_effect) = factions::council_response(
+                        council_enforcement, protest_size, total_pop,
+                    );
+
+                    // Apply legitimacy effect to council
+                    for inst in &mut self.institutions {
+                        if inst.kind == InstitutionKind::Council {
+                            if legitimacy_effect > Fixed::ZERO {
+                                inst.increase_legitimacy(legitimacy_effect);
+                            } else {
+                                inst.decay_legitimacy(-legitimacy_effect);
+                            }
+                        }
+                    }
+
+                    // If not suppressed, faction gains legitimacy and morale boost
+                    if !suppressed {
+                        if let Some(faction) = self.institutions.get_mut(inst_idx) {
+                            faction.increase_legitimacy(Fixed::from_f64(0.02));
+                            faction.collective.morale = (faction.collective.morale + Fixed::from_f64(0.05)).clamp_01();
+                        }
+                    }
+
+                    // Record in provenance (use leader of the protesting faction)
+                    let protest_agent = self.institutions[inst_idx].get_role_holder("Leader")
+                        .unwrap_or(AgentId::new(0));
+                    self.provenance.record_decision(crate::provenance::DecisionTrace {
+                        agent: protest_agent,
+                        tick: tick_u64,
+                        action_name: "Protest".into(),
+                        factors: vec![
+                            crate::provenance::DecisionFactor {
+                                kind: "protest_size".into(),
+                                magnitude: Fixed::from_int(protest_size as i64),
+                                description: format!("Protest size: {protest_size}"),
+                            },
+                            crate::provenance::DecisionFactor {
+                                kind: "suppressed".into(),
+                                magnitude: if suppressed { Fixed::ONE } else { Fixed::ZERO },
+                                description: format!("Suppressed: {suppressed}"),
+                            },
+                        ],
+                        from_routine: false,
+                        interrupted_by_critical_needs: false,
+                        intention_abandoned: false,
+                    });
+                }
+            }
+        }
+
+    }
+
 }
 
 /// Maximum number of metric snapshots to retain (last MAX_METRIC_HISTORY * 10 ticks).
