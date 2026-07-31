@@ -30,6 +30,7 @@ pub mod scenario;
 pub mod sim;
 pub mod snapshot;
 pub mod population_cap;
+pub mod clan;
 pub mod social;
 pub mod systems;
 pub mod world;

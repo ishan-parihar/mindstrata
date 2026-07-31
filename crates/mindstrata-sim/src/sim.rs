@@ -267,6 +267,8 @@ pub struct Simulation {
     pub collective_memory_registry: crate::culture::CollectiveMemoryRegistry,
     /// Architecture-plan-2 §13.6: Echo chamber state — belief clusters and polarization.
     pub echo_chamber: crate::culture::EchoChamberState,
+    /// Architecture-plan-2 §10.8: Clan registry — emergent kinship-plus-alliance groups.
+    pub clan_registry: crate::clan::ClanRegistry,
 }
 
 impl Simulation {
@@ -322,6 +324,7 @@ impl Simulation {
             rumor_registry: crate::culture::RumorRegistry::default(),
             collective_memory_registry: crate::culture::CollectiveMemoryRegistry::default(),
             echo_chamber: crate::culture::EchoChamberState::new(),
+            clan_registry: crate::clan::ClanRegistry::new(),
         }
     }
 
@@ -370,6 +373,7 @@ impl Simulation {
             rumor_registry: crate::culture::RumorRegistry::default(),
             collective_memory_registry: crate::culture::CollectiveMemoryRegistry::default(),
             echo_chamber: crate::culture::EchoChamberState::new(),
+            clan_registry: crate::clan::ClanRegistry::new(),
         }
     }
 
