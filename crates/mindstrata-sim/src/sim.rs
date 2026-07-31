@@ -3580,6 +3580,10 @@ impl Simulation {
         // §22.5: Use attention system to compute salience instead of hardcoded values.
         // Only events that pass the attention threshold are encoded into memory.
         for (i, agent) in self.agents.iter_mut().enumerate() {
+            // §17: Background agents skip memory encoding entirely
+            if !agent.agent_tier.tier.runs_memory_encoding() {
+                continue;
+            }
             for ev in &self.events[pre_tick_events..] {
                 // §22.5: Attention computes salience based on intensity, novelty, relevance
                 let salience = agent.attention.compute_salience(
@@ -4024,7 +4028,32 @@ impl Simulation {
     /// Sections 15+13: Derived mental state computation and belief updates.
     fn tick_derived_states_and_beliefs(&mut self, pre_tick_events: usize, tick_u64: u64) {
         // ── 15. Derived mental state computation (§22) ─────────────
+        // §17: Periodic tier reclassification (every 100 ticks)
+        if tick_u64 % 100 == 0 && tick_u64 > 0 {
+            for (idx, agent) in self.agents.iter_mut().enumerate() {
+                let agent_id = mindstrata_core::id::AgentId::new(idx as u64);
+                let has_role = self.institutions.iter().any(|inst| inst.has_member(agent_id));
+                let emotional_intensity = agent.emotions.fear + agent.emotions.anger + agent.emotions.joy;
+                agent.agent_tier.update_narrative_importance(
+                    has_role, agent.relationship_v2s.len(), emotional_intensity, 0,
+                );
+                agent.agent_tier.reclassify(
+                    agent.status.effective,
+                    has_role,
+                    false, // is_faction_leader — would need to check faction leadership
+                    agent.emotions.fear,
+                    agent.emotions.anger,
+                    agent.relationship_v2s.len(),
+                    tick_u64,
+                    100, // min reassign interval
+                );
+            }
+        }
         for agent in &mut self.agents {
+            // §17: Background agents skip derived states — use simple decay instead
+            if !agent.agent_tier.tier.runs_belief_updates() {
+                continue;
+            }
             let stress = agent.emotions.fear + agent.emotions.anger;
             let need_deficit_avg = (agent.needs.hunger + agent.needs.thirst + agent.needs.fatigue + agent.needs.safety) * Fixed::from_f64(0.25);
             let social_support = Fixed::ONE - agent.needs.social;
