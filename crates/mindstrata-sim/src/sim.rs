@@ -3465,12 +3465,38 @@ impl Simulation {
         }
 
         // Architecture-plan-2 §12.5: Execute due rituals every 12 ticks (~2 hours).
+        // Apply bonding effect to participating agents' relationship_v2s.
         if tick_u64.is_multiple_of(12) {
             let due: Vec<usize> = self.ritual_registry.due_rituals(tick_u64)
                 .into_iter().map(|r| r.id).collect();
             for ritual_id in due {
                 if let Some(ritual) = self.ritual_registry.rituals.iter_mut().find(|r| r.id == ritual_id) {
-                    let _bonding = ritual.execute(tick_u64);
+                    let bonding = ritual.execute(tick_u64);
+                    // Apply bonding to all participant pairs
+                    for i in 0..ritual.participants.len() {
+                        for j in (i + 1)..ritual.participants.len() {
+                            let a = ritual.participants[i];
+                            let b = ritual.participants[j];
+                            if a < self.agents.len() && b < self.agents.len() {
+                                // Increase trust and affection between participants
+                                let n_agents = self.agents.len();
+                                let idx_a = a * (n_agents - 1) + if b > a { b - 1 } else { b };
+                                if idx_a < self.agents[a].relationship_v2s.len() {
+                                    self.agents[a].relationship_v2s[idx_a].trust =
+                                        (self.agents[a].relationship_v2s[idx_a].trust + bonding * Fixed::from_f64(0.3)).clamp_01();
+                                    self.agents[a].relationship_v2s[idx_a].affection =
+                                        (self.agents[a].relationship_v2s[idx_a].affection + bonding * Fixed::from_f64(0.2)).clamp_01();
+                                }
+                                let idx_b = b * (n_agents - 1) + if a > b { a - 1 } else { a };
+                                if idx_b < self.agents[b].relationship_v2s.len() {
+                                    self.agents[b].relationship_v2s[idx_b].trust =
+                                        (self.agents[b].relationship_v2s[idx_b].trust + bonding * Fixed::from_f64(0.3)).clamp_01();
+                                    self.agents[b].relationship_v2s[idx_b].affection =
+                                        (self.agents[b].relationship_v2s[idx_b].affection + bonding * Fixed::from_f64(0.2)).clamp_01();
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
