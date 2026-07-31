@@ -1,8 +1,10 @@
 // §45.2 Component schemas — defines which components belong to which entity types.
 // The spec linter validates that all components used in code are declared here.
+// Updated for architecture-plan-2 §7–§17.
 
 Components(
     person: [
+        // §5: Core person components
         "Person",
         "BodyState",
         "NeedState",
@@ -20,6 +22,43 @@ Components(
         "ActionState",
         "Intention",
         "DailyRoutine",
+        // §7: Biological substrate
+        "EmbodiedState",
+        "Genome",
+        "EndocrineState",
+        "NervousSystemState",
+        "MetabolicState",
+        "CardiovascularState",
+        "RespiratoryState",
+        "ImmuneState",
+        "MuscularState",
+        "ReproductiveState",
+        "CircadianState",
+        "DevelopmentalState",
+        // §8: Psychological runtime
+        "InteroceptiveState",
+        "SelfModel",
+        "OtherMindModel",
+        "MindModels",
+        "AttachmentSystem",
+        "EmotionRegulationState",
+        "MoralCognition",
+        "ProspectionState",
+        "NarrativeIdentity",
+        "DevelopmentalPsychState",
+        "PsychopathologyState",
+        "SkillState",
+        "MotivationState",
+        "CulturalCognition",
+        "DecisionPolicy",
+        "CognitiveRuntime",
+        // §10: Relational depth
+        "RelationshipV2",
+        "AttractionModel",
+        // §11: Power/Status
+        "StatusDimensions",
+        // §17: Performance/scalability
+        "AgentTierState",
     ],
     institution: [
         "Institution",

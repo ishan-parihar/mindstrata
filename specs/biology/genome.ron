@@ -1,0 +1,32 @@
+// §7.1 Genome traits and predispositions.
+// Defines the heritable biological traits that affect agent behavior.
+
+Genome(
+    health_predispositions: (
+        immune_strength: 0.6, // 0..1, default genome value
+        recovery_speed: 0.5,
+        disease_resistance: 0.5,
+    ),
+    metabolic_predispositions: (
+        hunger_sensitivity: 1.0, // multiplier on hunger pressure
+        energy_recovery_rate: 1.0,
+        cold_tolerance: 0.5,
+        heat_tolerance: 0.5,
+        base_metabolic_rate: 1.0,
+    ),
+    trait_predispositions: (
+        stress_reactivity: 0.5, // baseline cortisol response
+        aggression_threshold: 0.5,
+        novelty_seeking: 0.5,
+        attachment_vulnerability: 0.5,
+        addiction_risk: 0.3,
+        depression_vulnerability: 0.3,
+    ),
+    reproductive_predispositions: (
+        base_fertility: 0.6,
+        puberty_age: 14.0,
+        menopause_age: 50.0,
+        gestation_duration_ticks: 3840, // 40 days at 96 ticks/day
+        litter_size: 1,
+    ),
+)
