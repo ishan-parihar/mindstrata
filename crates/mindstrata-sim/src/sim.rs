@@ -983,13 +983,17 @@ impl Simulation {
                 // Degrades effective capacity, inhibition, flexibility under stress.
                 let pain_level = self.agents[i].embodied.nervous.pain.effective_pain();
                 let trauma = self.agents[i].embodied.nervous.trauma_load;
-                self.agents[i].cognitive_runtime.update(
-                    stress, need_fatigue, pain_level, trauma,
-                );
+                // §17: Only focal agents run full executive function update
+                if self.agents[i].agent_tier.tier.runs_full_psychology() {
+                    self.agents[i].cognitive_runtime.update(
+                        stress, need_fatigue, pain_level, trauma,
+                    );
+                }
 
                 // Architecture-plan-2 §8.1.14: Attachment system daily decay.
                 // Separation distress decays slowly; security stabilizes.
-                if phases.is_daily {
+                // §17: Only agents with relationship updates run attachment decay
+                if phases.is_daily && self.agents[i].agent_tier.tier.runs_relationship_updates() {
                     self.agents[i].attachment.separation_distress =
                         (self.agents[i].attachment.separation_distress
                             * Fixed::from_f64(0.95)).max(Fixed::ZERO);
@@ -1031,81 +1035,89 @@ impl Simulation {
                         Fixed::from_f64(0.3) // baseline when no relationships
                     }
                 };
-                let regulation_strategy = self.agents[i].emotion_regulation.select_strategy(
-                    stress,
-                    social_support,
-                    personalities[i].extraversion,
-                );
-                // §8.1.4: Store regulation strategy for post-appraisal application.
-                // The actual apply_strategy() call happens after appraisal (step 6)
-                // so the skill-scaled boost uses the fresh, appraisal-derived affect values.
-                reg_strategies.push(regulation_strategy);
-                self.agents[i].emotion_regulation.update_capacity(
-                    stress, need_fatigue, social_support,
-                );
-
-                // Architecture-plan-2 §8.1.10: Moral cognition update
-                // §8.1.10: Compute witnessed violations from this tick's negative interactions.
-                // High anger = agent perceived a norm violation; threat/insult events contribute.
-                // Witnessed violations: anger signals perceived norm violation; fear of injustice adds
-                let witnessed_violations = (emotions[i].anger * Fixed::from_f64(0.6)
-                    + emotions[i].fear * Fixed::from_f64(0.2))
-                    .clamp_01();
-                // Personal violations: agent's own guilt/shame signal
-                let personal_violations = (emotions[i].guilt * Fixed::from_f64(0.4)
-                    + emotions[i].shame * Fixed::from_f64(0.3))
-                    .clamp_01();
-                // Moral achievements: pride and gratitude from prosocial interactions
-                let moral_achievements = (emotions[i].pride * Fixed::from_f64(0.3)
-                    + emotions[i].trust * Fixed::from_f64(0.2))
-                    .clamp_01();
-                self.agents[i].moral_cognition.update_moral_emotions(
-                    witnessed_violations,
-                    personal_violations,
-                    moral_achievements,
-                );
-
-                // Architecture-plan-2 §8.1.16: Prospection update
-                let agent_fear = emotions[i].fear;
-                let agent_ambition = self.agents[i].personality.ambition;
-                let agent_trauma = self.agents[i].embodied.nervous.trauma_load;
-                let agent_depression = self.agents[i].psychopathology.depression_risk;
-                self.agents[i].prospection.update(
-                    agent_fear, agent_ambition, agent_trauma, agent_depression,
-                );
-
-                // Architecture-plan-2 §8.1.17: Narrative update
-                // §8.1.17: Feed actual emotional events into narrative identity.
-                // Positive events increase redemption_script; negative events increase victimhood/contamination.
-                let positive_event_magnitude = if emotions[i].joy > Fixed::from_f64(0.3) {
-                    emotions[i].joy * Fixed::from_f64(0.1)
+                // §17: Only focal agents run full emotion regulation
+                if self.agents[i].agent_tier.tier.runs_full_psychology() {
+                    let regulation_strategy = self.agents[i].emotion_regulation.select_strategy(
+                        stress,
+                        social_support,
+                        personalities[i].extraversion,
+                    );
+                    // §8.1.4: Store regulation strategy for post-appraisal application.
+                    // The actual apply_strategy() call happens after appraisal (step 6)
+                    // so the skill-scaled boost uses the fresh, appraisal-derived affect values.
+                    reg_strategies.push(regulation_strategy);
+                    self.agents[i].emotion_regulation.update_capacity(
+                        stress, need_fatigue, social_support,
+                    );
                 } else {
-                    Fixed::ZERO
-                };
+                    // §17: Background/secondary agents use default regulation strategy
+                    reg_strategies.push(Default::default());
+                }
+
+                // §17: Only focal agents run moral cognition update
+                if self.agents[i].agent_tier.tier.runs_full_psychology() {
+                    // Architecture-plan-2 §8.1.10: Moral cognition update
+                    // §8.1.10: Compute witnessed violations from this tick's negative interactions.
+                    // High anger = agent perceived a norm violation; threat/insult events contribute.
+                    let witnessed_violations = (emotions[i].anger * Fixed::from_f64(0.6)
+                        + emotions[i].fear * Fixed::from_f64(0.2))
+                        .clamp_01();
+                    let personal_violations = (emotions[i].guilt * Fixed::from_f64(0.4)
+                        + emotions[i].shame * Fixed::from_f64(0.3))
+                        .clamp_01();
+                    let moral_achievements = (emotions[i].pride * Fixed::from_f64(0.3)
+                        + emotions[i].trust * Fixed::from_f64(0.2))
+                        .clamp_01();
+                    self.agents[i].moral_cognition.update_moral_emotions(
+                        witnessed_violations,
+                        personal_violations,
+                        moral_achievements,
+                    );
+                }
+
+                // §17: Only focal agents run prospection (mental simulation of futures)
+                if self.agents[i].agent_tier.tier.runs_prospection() {
+                    let agent_fear = emotions[i].fear;
+                    let agent_ambition = self.agents[i].personality.ambition;
+                    let agent_trauma = self.agents[i].embodied.nervous.trauma_load;
+                    let agent_depression = self.agents[i].psychopathology.depression_risk;
+                    self.agents[i].prospection.update(
+                        agent_fear, agent_ambition, agent_trauma, agent_depression,
+                    );
+                }
+
+                // §17: Compute negative_events once (shared by narrative + psychopathology)
                 let negative_events = if emotions[i].fear + emotions[i].sadness > Fixed::from_f64(0.3) {
                     (emotions[i].fear + emotions[i].sadness) * Fixed::from_f64(0.1)
                 } else {
                     Fixed::ZERO
                 };
-                if negative_events > Fixed::ZERO {
-                    self.agents[i].narrative.interpret_negative_event(
-                        negative_events,
-                        social_support,
-                        emotions[i].anger > Fixed::from_f64(0.3), // has_blame_target if angry
-                    );
-                }
-                if positive_event_magnitude > Fixed::ZERO {
-                    self.agents[i].narrative.interpret_positive_event(
-                        positive_event_magnitude,
-                        social_support, // social_recognition tied to social support
-                    );
-                }
-                self.agents[i].narrative.update_theme();
 
-                // Architecture-plan-2 §8.1.13: Developmental update
-                // §8.1.13: Only tick developmental psychology every 100 ticks (≈daily).
-                // Identity formation, moral development, and socialization are slow processes.
-                if phases.is_centum {
+                // §17: Only focal agents run narrative identity updates
+                if self.agents[i].agent_tier.tier.runs_narrative() {
+                    let positive_event_magnitude = if emotions[i].joy > Fixed::from_f64(0.3) {
+                        emotions[i].joy * Fixed::from_f64(0.1)
+                    } else {
+                        Fixed::ZERO
+                    };
+                    if negative_events > Fixed::ZERO {
+                        self.agents[i].narrative.interpret_negative_event(
+                            negative_events,
+                            social_support,
+                            emotions[i].anger > Fixed::from_f64(0.3),
+                        );
+                    }
+                    if positive_event_magnitude > Fixed::ZERO {
+                        self.agents[i].narrative.interpret_positive_event(
+                            positive_event_magnitude,
+                            social_support,
+                        );
+                    }
+                    self.agents[i].narrative.update_theme();
+                }
+
+                // §17: Only focal agents run developmental psychology
+                if phases.is_centum && self.agents[i].agent_tier.tier.runs_full_psychology() {
                     let agent_age = self.agents[i].age;
                     self.agents[i].developmental.tick_update(
                         agent_age,
@@ -1114,44 +1126,47 @@ impl Simulation {
                     );
                 }
 
-                // Architecture-plan-2 §8.1.15: Psychopathology update
-                let chronic_stress = self.agents[i].embodied.endocrine.stress.chronic_load;
-                let trauma_load = self.agents[i].embodied.nervous.trauma_load;
-                let chronic_pain = self.agents[i].embodied.nervous.pain.chronic;
-                let sleep_debt = self.agents[i].embodied.circadian.sleep_debt;
-                let depression_vuln = self.agents[i].embodied.genome.trait_predispositions.depression_vulnerability;
-                let addiction_risk = self.agents[i].embodied.genome.trait_predispositions.addiction_risk;
-                // §8.1.15: Compute social isolation from relationship quality
-                let social_isolation = (Fixed::ONE - social_support).max(Fixed::ZERO);
-                self.agents[i].psychopathology.tick_update(
-                    chronic_stress, trauma_load,
-                    social_isolation,
-                    Fixed::ZERO, // humiliation_recent — TODO: detect from interactions
-                    negative_events,
-                    Fixed::ZERO, // moral_injury — TODO: detect from moral_cognition
-                    chronic_pain, sleep_debt,
-                    depression_vuln, addiction_risk,
-                    social_support,
-                );
+                // §17: Only focal agents run psychopathology update
+                if self.agents[i].agent_tier.tier.runs_full_psychology() {
+                    let chronic_stress = self.agents[i].embodied.endocrine.stress.chronic_load;
+                    let trauma_load = self.agents[i].embodied.nervous.trauma_load;
+                    let chronic_pain = self.agents[i].embodied.nervous.pain.chronic;
+                    let sleep_debt = self.agents[i].embodied.circadian.sleep_debt;
+                    let depression_vuln = self.agents[i].embodied.genome.trait_predispositions.depression_vulnerability;
+                    let addiction_risk = self.agents[i].embodied.genome.trait_predispositions.addiction_risk;
+                    let social_isolation = (Fixed::ONE - social_support).max(Fixed::ZERO);
+                    self.agents[i].psychopathology.tick_update(
+                        chronic_stress, trauma_load,
+                        social_isolation,
+                        Fixed::ZERO, // humiliation_recent
+                        negative_events,
+                        Fixed::ZERO, // moral_injury
+                        chronic_pain, sleep_debt,
+                        depression_vuln, addiction_risk,
+                        social_support,
+                    );
+                }
 
-                // Architecture-plan-2 §8.1.18: Cultural cognition daily update.
-                // Conservatism shifts slowly based on positive cultural exposure.
-                if phases.is_daily {
+                // §17: Only focal agents run cultural cognition + decision policy
+                if phases.is_daily && self.agents[i].agent_tier.tier.runs_full_psychology() {
                     let positive_exposure = social_support * Fixed::from_f64(0.5);
                     let negative_exposure = stress * Fixed::from_f64(0.3);
                     self.agents[i].cultural_cognition.tick_update(positive_exposure, negative_exposure);
-
-                    // Architecture-plan-2 §8.1.20: Decision policy daily update.
-                    // Slowly adjusts utility weights based on recent success rate.
                     self.agents[i].decision_policy.daily_update();
                 }
 
-                // Architecture-plan-2 §8.1.19: Skill/habit update
-                self.agents[i].psych_skills.update_automaticity(stress, need_fatigue);
-                if phases.is_centum {
-                    self.agents[i].psych_skills.decay_habits(tick_u64);
+                // §17: Skill/habit update runs for focal + secondary (heuristic cognition)
+                if self.agents[i].agent_tier.tier.runs_heuristic_cognition() {
+                    self.agents[i].psych_skills.update_automaticity(stress, need_fatigue);
+                    if phases.is_centum {
+                        self.agents[i].psych_skills.decay_habits(tick_u64);
+                    }
                 }
             }
+
+            // §17: Verify reg_strategies Vec alignment after per-agent loop
+            debug_assert_eq!(reg_strategies.len(), self.agents.len(),
+                "reg_strategies must be aligned with agents after tier-gated psychology loop");
 
             // Compute avg_wealth once before status updates (O(N) instead of O(N²))
             let avg_wealth: Fixed = if self.agents.is_empty() {
