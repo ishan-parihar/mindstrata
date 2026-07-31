@@ -989,7 +989,7 @@ impl Simulation {
 
                 // Architecture-plan-2 §8.1.14: Attachment system daily decay.
                 // Separation distress decays slowly; security stabilizes.
-                if tick_u64.is_multiple_of(144) {
+                if phases.is_daily {
                     self.agents[i].attachment.separation_distress =
                         (self.agents[i].attachment.separation_distress
                             * Fixed::from_f64(0.95)).max(Fixed::ZERO);
@@ -1105,7 +1105,7 @@ impl Simulation {
                 // Architecture-plan-2 §8.1.13: Developmental update
                 // §8.1.13: Only tick developmental psychology every 100 ticks (≈daily).
                 // Identity formation, moral development, and socialization are slow processes.
-                if tick_u64.is_multiple_of(100) {
+                if phases.is_centum {
                     let agent_age = self.agents[i].age;
                     self.agents[i].developmental.tick_update(
                         agent_age,
@@ -1136,7 +1136,7 @@ impl Simulation {
 
                 // Architecture-plan-2 §8.1.18: Cultural cognition daily update.
                 // Conservatism shifts slowly based on positive cultural exposure.
-                if tick_u64.is_multiple_of(144) {
+                if phases.is_daily {
                     let positive_exposure = social_support * Fixed::from_f64(0.5);
                     let negative_exposure = stress * Fixed::from_f64(0.3);
                     self.agents[i].cultural_cognition.tick_update(positive_exposure, negative_exposure);
@@ -1148,7 +1148,7 @@ impl Simulation {
 
                 // Architecture-plan-2 §8.1.19: Skill/habit update
                 self.agents[i].psych_skills.update_automaticity(stress, need_fatigue);
-                if tick_u64.is_multiple_of(100) {
+                if phases.is_centum {
                     self.agents[i].psych_skills.decay_habits(tick_u64);
                 }
             }
@@ -1679,7 +1679,7 @@ impl Simulation {
         self.tick_resource_operations(&action_starts, pre_tick_events, tick_u64, tick);
 
         // ── 9. Memory encoding (extracted) ──
-        self.tick_memory_encoding(pre_tick_events, tick_u64);
+        self.tick_memory_encoding(pre_tick_events, tick_u64, phases);
 
         // ── 16. Ecology: season advance and fertility dynamics ──
         let new_season = self.season.advance();
@@ -1915,7 +1915,7 @@ impl Simulation {
         }
 
         // ── 12. Institutional collective psychology (extracted) ────
-        self.tick_institutional_psychology(tick_u64);
+        self.tick_institutional_psychology(tick_u64, phases);
 
         // ── 15. Faction dynamics (extracted) ────
         self.tick_faction_dynamics(tick_u64, tick);
@@ -1927,7 +1927,7 @@ impl Simulation {
         self.tick_derived_states_and_beliefs(pre_tick_events, tick_u64);
 
         // ── 18+19+20+21. Social cluster (extracted) ──
-        self.tick_social_cluster(pre_tick_events, tick_u64, tick);
+        self.tick_social_cluster(pre_tick_events, tick_u64, tick, phases);
 
         // ── 19. Marriage formation (extracted) ──
         self.tick_marriage_formation(tick_u64, tick);
@@ -1936,7 +1936,6 @@ impl Simulation {
         self.tick_birth_mechanics(tick_u64, tick);
 
         // ── §6 + §10.6/§10.7: Kinship & Household daily update ──
-        let phases = crate::scheduler::TickPhases::compute(tick_u64);
         self.tick_kinship_household_daily(tick_u64, phases);
 
 
@@ -1972,7 +1971,7 @@ impl Simulation {
         // ── 19. §6.5: Record metric history for observability ──
         // Every 10 ticks, snapshot key metrics for CSV export and analysis.
         // Cap at MAX_METRIC_HISTORY entries to prevent unbounded growth.
-        if tick_u64.is_multiple_of(10) {
+        if phases.is_deca {
             let snapshot = self.metrics_snapshot();
             self.metric_history.push(snapshot);
             if self.metric_history.len() > MAX_METRIC_HISTORY {
@@ -2368,7 +2367,7 @@ impl Simulation {
     }
 
     /// Section 12: Institutional collective psychology derivation.
-    fn tick_institutional_psychology(&mut self, tick_u64: u64) {
+    fn tick_institutional_psychology(&mut self, tick_u64: u64, phases: crate::scheduler::TickPhases) {
         // ── 12. Institutional collective psychology derivation ────
         // §23: Derive collective psychology from member states each tick.
         for institution in &mut self.institutions {
@@ -2421,7 +2420,7 @@ impl Simulation {
             // §19.5.C: Record active policy effects (check name first to avoid borrow conflict)
             let has_fine_theft = institution.active_policies.iter()
                 .any(|p| p.name == "Fine Theft Policy");
-            if has_fine_theft && tick_u64.is_multiple_of(institutions::POLICY_RECORD_INTERVAL) {
+            if has_fine_theft && phases.is_centum {
                 let members = institution.members.clone();
                 institution.record_action(
                     tick_u64,
@@ -2449,7 +2448,7 @@ impl Simulation {
             }
 
             // §19.5.C: Institutional tax collection — all institutions collect taxes
-            if tick_u64.is_multiple_of(institutions::TAX_COLLECTION_INTERVAL) && tick_u64 > 0 && !institution.members.is_empty() {
+            if phases.is_centum && tick_u64 > 0 && !institution.members.is_empty() {
                 let tax_rate = match institution.kind {
                     institutions::InstitutionKind::Council => Fixed::from_f64(institutions::COUNCIL_TAX_RATE),
                     institutions::InstitutionKind::Market => Fixed::from_f64(institutions::MARKET_FEE_RATE),
@@ -2506,7 +2505,7 @@ impl Simulation {
             }
 
             // §19.5.C: All institutions pay role holders wages periodically
-            if tick_u64.is_multiple_of(institutions::WAGE_PAYMENT_INTERVAL) && tick_u64 > 0 {
+            if phases.is_quincent && tick_u64 > 0 {
                 let wage = Fixed::from_f64(institutions::BASE_WAGE);
                 let role_holder_count = institution.roles.iter().filter(|r| r.holder.is_some()).count() as i64;
                 let total_wage_cost = wage * Fixed::from_int(role_holder_count);
@@ -2557,7 +2556,7 @@ impl Simulation {
             // and high tax rates periodically erode institutional legitimacy.
             // NOTE: The per-tick decay_legitimacy(0.0001) above is a slow continuous baseline;
             // this tax-rate erosion is an additional periodic penalty applied only on collection ticks.
-            if tick_u64.is_multiple_of(institutions::TAX_COLLECTION_INTERVAL) && tick_u64 > 0 && !institution.members.is_empty() {
+            if phases.is_centum && tick_u64 > 0 && !institution.members.is_empty() {
                 // Tax burden affects legitimacy: higher tax rate → faster legitimacy decay
                 let tax_rate = match institution.kind {
                     institutions::InstitutionKind::Council => institutions::COUNCIL_TAX_RATE,
@@ -2589,7 +2588,7 @@ impl Simulation {
 
             // §11.3: Hierarchy destabilization — corruption/low legitimacy erodes cohesion
             // Gated to every 100 ticks for performance (slow process).
-            if tick_u64.is_multiple_of(100) {
+            if phases.is_centum {
                 let destabilization = crate::hierarchy::destabilization_pressure(
                     institution.legitimacy,
                     institution.corruption,
@@ -2634,7 +2633,7 @@ impl Simulation {
 
             // §11.3: Leadership challenges — elections and coups
             // Gated to every 500 ticks for performance.
-            if tick_u64 > 1000 && tick_u64.is_multiple_of(500) && institution.kind == InstitutionKind::Council {
+            if tick_u64 > 1000 && phases.is_quincent && institution.kind == InstitutionKind::Council {
                 // Find current leader
                 let current_leader = institution.roles.iter()
                     .find(|r| r.name == "Leader")
@@ -3387,7 +3386,7 @@ impl Simulation {
 
         // Architecture-plan-2 §12.5: Execute due rituals every 12 ticks (~2 hours).
         // Apply bonding effect to participating agents' relationship_v2s.
-        if tick_u64.is_multiple_of(12) {
+        if phases.is_duodeca {
             let due: Vec<usize> = self.ritual_registry.due_rituals(tick_u64)
                 .into_iter().map(|r| r.id).collect();
             for ritual_id in due {
@@ -3613,7 +3612,7 @@ impl Simulation {
     }
 
     /// Section 9: Memory encoding from this tick's events.
-    fn tick_memory_encoding(&mut self, pre_tick_events: usize, tick_u64: u64) {
+    fn tick_memory_encoding(&mut self, pre_tick_events: usize, tick_u64: u64, phases: crate::scheduler::TickPhases) {
         // ── 9. Memory encoding from this tick's events ───────────────
         // §22.5: Use attention system to compute salience instead of hardcoded values.
         // Only events that pass the attention threshold are encoded into memory.
@@ -3673,7 +3672,7 @@ impl Simulation {
                 }
             }
             // Probabilistic memory rehearsal (every 10 ticks)
-            if tick_u64.is_multiple_of(10) {
+            if phases.is_deca {
                 agent.memory.rehearse_random(self.rng.get_mut(RngStream::Behavior));
             }
             // Decay memories
@@ -4145,7 +4144,7 @@ impl Simulation {
     }
 
     /// Sections 18-21: Feud tracking, market, demography, conflict, carrying cost.
-    fn tick_social_cluster(&mut self, pre_tick_events: usize, tick_u64: u64, tick: Tick) {
+    fn tick_social_cluster(&mut self, pre_tick_events: usize, tick_u64: u64, tick: Tick, phases: crate::scheduler::TickPhases) {
         // ── 18. §19.5.G Feud tracking — repeated violence creates persistent feuds ──
         let snap_count = self.events.len();
         for idx in pre_tick_events..snap_count {
@@ -4236,7 +4235,7 @@ impl Simulation {
         }
 
         // ── 18. Demography: aging and mortality ──
-        if tick_u64.is_multiple_of(10) { // process demography every 10 ticks to reduce overhead
+        if phases.is_deca { // process demography every 10 ticks to reduce overhead
             let mut deaths = Vec::new();
             for i in 0..self.agents.len() {
                 let (new_age, died) = demography::age_agent(
