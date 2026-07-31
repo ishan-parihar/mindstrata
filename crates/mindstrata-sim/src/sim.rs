@@ -198,6 +198,8 @@ pub struct AgentBundle {
     pub cognitive_runtime: crate::psychology::CognitiveRuntime,
     /// Architecture-plan-2 §8.1.5: Layered motivation architecture.
     pub motivation: crate::psychology::MotivationState,
+    /// Architecture-plan-2 §8.1.20: Decision policy integrating all psychology into action.
+    pub decision_policy: crate::psychology::DecisionPolicy,
 }
 
 /// §4.2: Skill levels that improve through repeated practice.
@@ -562,6 +564,14 @@ impl Simulation {
                 epistemic: epistemic_state,
                 cognitive_runtime: crate::psychology::CognitiveRuntime::from_personality(&personality_clone),
                 motivation: crate::psychology::MotivationState::from_personality(&personality_clone),
+                decision_policy: crate::psychology::DecisionPolicy::from_personality(
+                    personality_clone.neuroticism,
+                    personality_clone.extraversion,
+                    personality_clone.conscientiousness,
+                    personality_clone.openness,
+                    personality_clone.agreeableness,
+                    personality_clone.risk_tolerance,
+                ),
             });
         }
 
@@ -1121,6 +1131,10 @@ impl Simulation {
                     let positive_exposure = social_support * Fixed::from_f64(0.5);
                     let negative_exposure = stress * Fixed::from_f64(0.3);
                     self.agents[i].cultural_cognition.tick_update(positive_exposure, negative_exposure);
+
+                    // Architecture-plan-2 §8.1.20: Decision policy daily update.
+                    // Slowly adjusts utility weights based on recent success rate.
+                    self.agents[i].decision_policy.daily_update();
                 }
 
                 // Architecture-plan-2 §8.1.19: Skill/habit update
@@ -3430,6 +3444,7 @@ impl Simulation {
                     epistemic: crate::epistemic::EpistemicState::default(),
                     cognitive_runtime: crate::psychology::CognitiveRuntime::default(),
                     motivation: crate::psychology::MotivationState::default(),
+                    decision_policy: crate::psychology::DecisionPolicy::default(),
                 });                // Add relationships to all existing agents
                 for existing_idx in 0..self.agents.len() - 1 {
                     let trust = if existing_idx == parent_a || existing_idx == parent_b {
