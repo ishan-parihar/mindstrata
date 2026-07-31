@@ -225,10 +225,14 @@ impl MotivationState {
     /// Otherwise, the highest-pressure need wins.
     pub fn update_dominant(&mut self) {
         // Check biological urgency first
-        let bio_critical = self.hunger.deficit > Fixed::from_f64(0.5)
-            || self.thirst.deficit > Fixed::from_f64(0.5)
-            || self.sleep.deficit > Fixed::from_f64(0.7)
-            || self.safety.deficit > Fixed::from_f64(0.6);
+        // Biological needs dominate when their pressure exceeds a critical
+        // threshold. Using pressure (deficit × urgency) rather than raw
+        // deficit ensures high-urgency needs (e.g., thirst) dominate before
+        // low-urgency ones (e.g., warmth) even at similar deficit levels.
+        let bio_critical = self.hunger.pressure() > Fixed::from_f64(0.4)
+            || self.thirst.pressure() > Fixed::from_f64(0.4)
+            || self.sleep.pressure() > Fixed::from_f64(0.5)
+            || self.safety.pressure() > Fixed::from_f64(0.4);
 
         if bio_critical {
             // Pick the most critical biological need

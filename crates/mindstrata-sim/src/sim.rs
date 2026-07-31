@@ -856,6 +856,22 @@ impl Simulation {
                 let need_fatigue = needs[i].fatigue.max(needs[i].hunger).max(needs[i].thirst);
                 self.agents[i].cognitive.update(stress, need_fatigue);
 
+                // Architecture-plan-2 §8.1.12: Executive function update.
+                // Degrades effective capacity, inhibition, flexibility under stress.
+                let pain_level = self.agents[i].embodied.nervous.pain.effective_pain();
+                let trauma = self.agents[i].embodied.nervous.trauma_load;
+                self.agents[i].cognitive_runtime.update(
+                    stress, need_fatigue, pain_level, trauma,
+                );
+
+                // Architecture-plan-2 §8.1.5: Motivation update.
+                // Bridge biological needs from existing NeedState, then grow and update.
+                self.agents[i].motivation.hunger.deficit = needs[i].hunger;
+                self.agents[i].motivation.thirst.deficit = needs[i].thirst;
+                self.agents[i].motivation.sleep.deficit = needs[i].fatigue;
+                self.agents[i].motivation.safety.deficit = needs[i].safety;
+                self.agents[i].motivation.update();
+
                 // Architecture-plan-2 §8.1.4: Emotion regulation
                 // Compute social support from relationships (average trust of top-3 closest agents)
                 // Uses a fixed-size stack array to avoid heap allocation per agent per tick.

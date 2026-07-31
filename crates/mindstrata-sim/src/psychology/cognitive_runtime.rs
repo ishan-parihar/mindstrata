@@ -55,7 +55,10 @@ pub struct CognitiveRuntime {
     /// Current effective capacity after degradation factors applied.
     pub effective_capacity: Fixed,
     /// Base impulsivity (0–1). Personality-derived, stable baseline.
-    pub impulsivity: Fixed,
+    pub base_impulsivity: Fixed,
+    /// Current impulsivity after stress modulation (0–1).
+    /// Recovers toward base_impulsivity when calm.
+    pub current_impulsivity: Fixed,
     /// Current effective inhibition after stress degradation (0–1).
     pub effective_inhibition: Fixed,
     /// Current effective flexibility after degradation (0–1).
@@ -72,7 +75,8 @@ impl Default for CognitiveRuntime {
             self_monitoring: Fixed::from_f64(0.4),
             error_sensitivity: Fixed::from_f64(0.5),
             effective_capacity: Fixed::ZERO, // computed below
-            impulsivity: Fixed::from_f64(0.3),
+            base_impulsivity: Fixed::from_f64(0.3),
+            current_impulsivity: Fixed::from_f64(0.3),
             effective_inhibition: Fixed::ZERO, // computed below
             effective_flexibility: Fixed::ZERO, // computed below
         };
@@ -107,7 +111,8 @@ impl CognitiveRuntime {
                 + personality.conscientiousness * Fixed::from_f64(0.6))
                 .clamp_01(),
             effective_capacity: Fixed::ZERO, // computed below
-            impulsivity: personality.impulsivity,
+            base_impulsivity: personality.impulsivity,
+            current_impulsivity: personality.impulsivity,
             effective_inhibition: Fixed::ZERO, // computed below
             effective_flexibility: Fixed::ZERO, // computed below
         };
@@ -134,15 +139,15 @@ impl CognitiveRuntime {
 
     /// Recompute all effective fields from degradation factors.
     ///
-    /// Effective inhibition tracks stress-driven degradation of the base:
     /// ```text
     /// stress_load = stress×0.3 + fatigue×0.2 + pain×0.15
     /// effective_inhibition = inhibition × (1 - stress_load)
     /// effective_flexibility = flexibility × (1 - fatigue×0.25 - pain×0.1)
     /// effective_capacity = wm × (1-stress×0.3) × (1-fatigue×0.25)
     ///                    × (1-pain×0.2) × (1-trauma×0.15)
-    /// impulsivity = base_impulsivity × (1 - effective_inhibition)
-    ///            + stress_load × 0.3  // stress-driven impulsivity
+    /// current_impulsivity = clamp(base + stress_push - recovery, 0, 1)
+    ///   where stress_push = stress_load × 0.15
+    ///   and recovery = excess × 0.08  (excess = current - base)
     /// ```
     fn recompute(
         &mut self,
@@ -168,13 +173,18 @@ impl CognitiveRuntime {
             stress, fatigue, pain, trauma,
         );
 
-        // Impulsivity: base trait amplified by stress, decays when calm.
-        // The recovery rate ensures impulsivity returns toward baseline when stress drops.
+        // Impulsivity: always decay toward base, then stress pushes above.
+        // This creates a proper equilibrium: steady-state = base + stress_push / 0.08.
+        let excess = self.current_impulsivity - self.base_impulsivity;
+        if excess > Fixed::ZERO {
+            // Decay 8% of excess toward base each tick
+            let decay = excess * Fixed::from_f64(0.08);
+            self.current_impulsivity = (self.current_impulsivity - decay)
+                .max(self.base_impulsivity);
+        }
+        // Stress pushes impulsivity above base
         let stress_push = stress_load * Fixed::from_f64(0.15);
-        let recovery = (Fixed::ONE - stress_load) * Fixed::from_f64(0.08);
-        self.impulsivity = (self.impulsivity
-            + stress_push - recovery)
-            .clamp_01();
+        self.current_impulsivity = (self.current_impulsivity + stress_push).clamp_01();
     }
 
     /// Compute effective capacity from degradation factors.
@@ -253,19 +263,20 @@ mod tests {
     #[test]
     fn stress_increases_impulsivity() {
         let mut cr = CognitiveRuntime::default();
-        let baseline = cr.impulsivity;
+        let baseline = cr.current_impulsivity;
         cr.update(
             Fixed::from_f64(0.9),
             Fixed::from_f64(0.9),
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.5),
         );
-        assert!(cr.impulsivity > baseline, "stress should increase impulsivity");
+        assert!(cr.current_impulsivity > baseline, "stress should increase impulsivity");
     }
 
     #[test]
-    fn impulsivity_recovers_when_stress_drops() {
+    fn impulsivity_recovers_toward_base() {
         let mut cr = CognitiveRuntime::default();
+        let base = cr.base_impulsivity;
         // Stress for multiple ticks to push impulsivity up
         for _ in 0..10 {
             cr.update(
@@ -275,13 +286,15 @@ mod tests {
                 Fixed::from_f64(0.5),
             );
         }
-        let stressed = cr.impulsivity;
-        // Recover: stress drops to zero for several ticks
-        for _ in 0..20 {
+        let stressed = cr.current_impulsivity;
+        assert!(stressed > base, "stress should push above base");
+        // Recover: stress drops to zero for many ticks
+        for _ in 0..50 {
             cr.update(Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO);
         }
-        let recovered = cr.impulsivity;
+        let recovered = cr.current_impulsivity;
         assert!(recovered < stressed, "impulsivity should decrease when stress drops");
+        assert!(recovered >= base, "impulsivity should never drop below base");
     }
 
     #[test]
@@ -348,6 +361,7 @@ mod tests {
             );
         }
         assert!(cr.effective_capacity <= Fixed::ONE);
-        assert!(cr.impulsivity <= Fixed::ONE);
+        assert!(cr.current_impulsivity <= Fixed::ONE);
+        assert!(cr.current_impulsivity >= cr.base_impulsivity);
     }
 }
