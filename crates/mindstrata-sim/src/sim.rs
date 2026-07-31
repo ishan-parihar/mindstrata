@@ -1659,289 +1659,11 @@ impl Simulation {
             }
         }
 
-        // ── 4b. Resource operations, journal recording, intention tracking ──
+        // ── 4b. Resource operations (extracted) ──
+        self.tick_resource_operations(&action_starts, pre_tick_events, tick_u64, tick);
 
-        for (agent_idx, action) in &action_starts {
-            let agent_id = AgentId::new(*agent_idx as u64);
-            // §24.5: Track intention success/failure when action completes.
-            // The resource operation outcome (e.g., Eat failing because no grain)
-            // is known here, so we record intention success/failure based on
-            // the actual resource operation result.
-            let action_succeeded = match action {
-                ActionKind::Eat => {
-                    let amount = Fixed::from_f64(0.1);
-                    // §19.5.E: Use access-checking method to enforce resource access rights.
-                    if let Some(farm_idx) = self.world.accessible_farm_with_grain(agent_id, &self.institutions) {
-                        let taken = self.world.consume_resource(farm_idx, GRAIN_RESOURCE_ID, amount);
-                        // §13.3: Consumers pay coin for resources consumed
-                        let cost = taken * self.market.price(GRAIN_RESOURCE_ID);
-                        self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - cost).max(Fixed::ZERO);
-                        self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "grain".into(), amount: taken.to_f64() });
-                        taken > Fixed::ZERO
-                    } else {
-                        // §19.5.D: Theft detection — no accessible farm, but inaccessible farms with grain exist?
-                        if let Some(thief_idx) = self.world.inaccessible_farm_with_grain(agent_id, &self.institutions) {
-                            self.enforce_theft(*agent_idx, agent_id, thief_idx, GRAIN_RESOURCE_ID, amount, tick_u64, tick)
-                        } else {
-                            false
-                        }
-                    }
-                }
-                ActionKind::Drink => {
-                    let amount = Fixed::from_f64(0.15);
-                    // §19.5.E: Use access-checking method to enforce resource access rights.
-                    if let Some(well_idx) = self.world.accessible_well_with_water(agent_id, &self.institutions) {
-                        let taken = self.world.consume_resource(well_idx, WATER_RESOURCE_ID, amount);
-                        // §13.3: Consumers pay coin for water consumed
-                        let cost = taken * self.market.price(WATER_RESOURCE_ID);
-                        self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - cost).max(Fixed::ZERO);
-                        self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "water".into(), amount: taken.to_f64() });
-                        taken > Fixed::ZERO
-                    } else {
-                        // §19.5.D: Water theft detection — no accessible well, but inaccessible wells with water exist?
-                        if let Some(thief_idx) = self.world.inaccessible_well_with_water(agent_id, &self.institutions) {
-                            self.enforce_theft(*agent_idx, agent_id, thief_idx, WATER_RESOURCE_ID, amount, tick_u64, tick)
-                        } else {
-                            false
-                        }
-                    }
-                }
-                ActionKind::Work => {
-                    // §4.2: Productivity = base (conscientiousness) + skill bonus
-                    let skill_bonus = self.agents[*agent_idx].skills.farming * Fixed::from_f64(0.02);
-                    let productivity = (self.agents[*agent_idx].personality.conscientiousness * Fixed::from_f64(0.05) + skill_bonus).clamp_01();
-                    if let Some(farm_idx) = self.world.best_farm_for_work() {
-                        self.world.produce_resource(farm_idx, GRAIN_RESOURCE_ID, productivity);
-                        // §13.3: Workers earn coin proportional to productivity
-                        let wage = productivity * self.market.price(GRAIN_RESOURCE_ID) * Fixed::from_f64(0.3);
-                        self.agents[*agent_idx].wealth.coin += wage;
-
-                        self.journal.record(tick_u64, agent_id, JournalEntryKind::Worked { productivity: productivity.to_f64() });
-                        true
-                    } else {
-                        false
-                    }
-                }
-                ActionKind::Rest => {
-                    self.journal.record(tick_u64, agent_id, JournalEntryKind::Rested);
-                    true
-                }
-                ActionKind::Worship => {
-                    self.journal.record(tick_u64, agent_id, JournalEntryKind::Worshiped);
-                    true
-                }                    ActionKind::Trade => {
-                    // §13.3: Agent-to-agent trade — find a nearby seller at a market site
-                    let buyer_coin = self.agents[*agent_idx].wealth.coin;
-                    // Find a seller: nearby agent who owns a farm with grain
-                    let seller_info = self.agents.iter().enumerate()
-                        .find(|(j, a)| {
-                            *j != *agent_idx
-                                && self.agents[*agent_idx].position.manhattan_distance(&a.position) <= 3
-                                && a.home_site.is_some() // seller has a home/owned site
-                        })
-                        .and_then(|(j, a)| {
-                            // Check if seller's home is a farm with grain
-                            a.home_site.and_then(|hs| {
-                                if hs < self.world.sites.len()
-                                    && self.world.sites[hs].kind == crate::world::SiteKind::Farm
-                                {
-                                    let grain = self.world.sites[hs].inventory.iter()
-                                        .find(|s| s.resource_id == GRAIN_RESOURCE_ID)
-                                        .map_or(Fixed::ZERO, |s| s.quantity);
-                                    if grain > Fixed::ZERO {
-                                        Some((j, hs, grain))
-                                    } else {
-                                        None
-                                    }
-                                } else {
-                                    None
-                                }
-                            })
-                        });
-                    if let Some((seller, farm_idx, _available)) = seller_info {
-                        let trust = self.relationships.iter()
-                            .find(|r| r.from == AgentId::new(*agent_idx as u64) && r.to == AgentId::new(seller as u64))
-                            .map_or(Fixed::from_f64(0.5), |r| r.trust);
-                        let quantity = Fixed::from_f64(0.1);
-                        // §13.3: Execute trade — buyer pays coin, seller's farm provides grain
-                        let base_price = self.market.price(GRAIN_RESOURCE_ID);
-                        // Trust discount: high trust → lower price
-                        let trust_modifier = Fixed::from_f64(1.0) - trust * Fixed::from_f64(0.2) + (Fixed::ONE - trust) * Fixed::from_f64(0.1);
-                        let price = (base_price * trust_modifier).max(Fixed::from_f64(1.0));
-                        let cost = price * quantity;
-                        if buyer_coin >= cost {
-                            let taken = self.world.consume_resource(farm_idx, GRAIN_RESOURCE_ID, quantity);
-                            if taken > Fixed::ZERO {
-                                let actual_cost = price * taken;
-                                // Buyer pays coin to seller (farm owner)
-                                self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - actual_cost).max(Fixed::ZERO);
-                                self.agents[seller].wealth.coin += actual_cost;
-                                self.events.push(SimEvent::TradeOccurred {
-                                    buyer: AgentId::new(*agent_idx as u64),
-                                    seller: AgentId::new(seller as u64),
-                                    good: ResourceId::new(GRAIN_RESOURCE_ID),
-                                    quantity: taken,
-                                    price,
-                                    tick,
-                                });
-                                self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "grain_via_trade".into(), amount: taken.to_f64() });
-                                // §19.5.J: Record relationship trace — trade builds trust
-                                if let Some(rel) = self.relationships.iter_mut()
-                                    .find(|r| r.from == AgentId::new(*agent_idx as u64) && r.to == AgentId::new(seller as u64))
-                                {
-                                    let old_trust = rel.trust;
-                                    rel.trust = (rel.trust + Fixed::from_f64(0.02)).clamp_01();
-                                    self.provenance.record_relationship(crate::provenance::RelationshipTrace {
-                                        from: AgentId::new(*agent_idx as u64),
-                                        to: AgentId::new(seller as u64),
-                                        tick: tick_u64,
-                                        cause: "trade".into(),
-                                        old_trust,
-                                        new_trust: rel.trust,
-                                        old_affection: rel.affection,
-                                        new_affection: rel.affection,
-                                        description: format!("Trade built trust ({} -> {})", old_trust.to_f64(), rel.trust.to_f64()),
-                                    });
-                                }
-                                true
-                            } else {
-                                false
-                            }
-                        } else {
-                            false // insufficient funds
-                        }
-                    } else {
-                        false // no nearby seller with grain
-                    }
-                }
-                _ => false,
-            };
-
-            // Record intention success/failure based on actual resource outcome
-            if let Some(ref mut intention) = self.agents[*agent_idx].intention {
-                if action_succeeded {
-                    intention.record_success();
-                } else {
-                    intention.record_failure();
-                }
-            }
-            // §22: Track success rate for derived mental state computation
-            self.agents[*agent_idx].recent_attempts += 1;
-            if action_succeeded {
-                self.agents[*agent_idx].recent_successes += 1;
-            }
-            // Architecture-plan-2 §8.1.20: Decision policy learns from action outcome.
-            // EMA learning adjusts utility weights toward successful action patterns.
-            let action_cost = match action {
-                ActionKind::Work => Fixed::from_f64(0.1),
-                ActionKind::Eat | ActionKind::Drink => Fixed::from_f64(0.05),
-                ActionKind::Move { .. } | ActionKind::Wander => Fixed::from_f64(0.08),
-                ActionKind::Socialize => Fixed::from_f64(0.03),
-                _ => Fixed::from_f64(0.02),
-            };
-            self.agents[*agent_idx].decision_policy.learn_from_outcome(action_succeeded, action_cost);
-        }
-
-        // ── 9. Memory encoding from this tick's events ───────────────
-        // §22.5: Use attention system to compute salience instead of hardcoded values.
-        // Only events that pass the attention threshold are encoded into memory.
-        for (i, agent) in self.agents.iter_mut().enumerate() {
-            for ev in &self.events[pre_tick_events..] {
-                // §22.5: Attention computes salience based on intensity, novelty, relevance
-                let salience = agent.attention.compute_salience(
-                    ev,
-                    AgentId::new(i as u64),
-                    &agent.needs,
-                    &agent.affect,
-                );
-
-                // Only encode events that exceed the attention threshold
-                if salience < Fixed::from_f64(0.2) {
-                    continue;
-                }
-
-                // Emotional intensity scales with arousal
-                let emotional = agent.affect.arousal * Fixed::from_f64(0.6) + Fixed::from_f64(0.1);
-                match ev {
-                    SimEvent::AgentAte { agent: a, .. } if a.as_u64() == i as u64 => {
-                        agent.memory.encode(MemoryKind::Consumption, tick_u64, salience, emotional, None, MemoryTag::AteFood);
-                    }
-                    SimEvent::AgentDrank { agent: a, .. } if a.as_u64() == i as u64 => {
-                        agent.memory.encode(MemoryKind::Consumption, tick_u64, salience, emotional, None, MemoryTag::DrankWater);
-                    }
-                    SimEvent::AgentRested { agent: a, .. } if a.as_u64() == i as u64 => {
-                        agent.memory.encode(MemoryKind::Positive, tick_u64, salience, emotional, None, MemoryTag::Rested);
-                    }
-                    SimEvent::InteractionOccurred { from, to, kind, .. } => {
-                        if from.as_u64() == i as u64 {
-                            let tag = match kind {
-                                mindstrata_core::event::InteractionKind::Help => MemoryTag::HelpedBy,
-                                mindstrata_core::event::InteractionKind::Threaten => MemoryTag::ThreatenedBy,
-                                mindstrata_core::event::InteractionKind::Insult => MemoryTag::InsultedBy,
-                                mindstrata_core::event::InteractionKind::Gossip => MemoryTag::GossipedAbout,
-                                mindstrata_core::event::InteractionKind::Trade => MemoryTag::TradedWith,
-                                _ => MemoryTag::TalkedTo,
-                            };
-                            let kind = match kind {
-                                mindstrata_core::event::InteractionKind::Threaten | mindstrata_core::event::InteractionKind::Insult => MemoryKind::Negative,
-                                mindstrata_core::event::InteractionKind::Help | mindstrata_core::event::InteractionKind::Comfort => MemoryKind::Positive,
-                                _ => MemoryKind::Social,
-                            };
-                            agent.memory.encode(kind, tick_u64, salience, emotional, Some(to.as_u64() as u32), tag);
-                        }
-                        if to.as_u64() == i as u64 {
-                            agent.memory.encode(MemoryKind::Social, tick_u64, salience, emotional, Some(from.as_u64() as u32), MemoryTag::TalkedTo);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            // Probabilistic memory rehearsal (every 10 ticks)
-            if tick_u64.is_multiple_of(10) {
-                agent.memory.rehearse_random(self.rng.get_mut(RngStream::Behavior));
-            }
-            // Decay memories
-            agent.memory.decay(tick_u64);
-
-            // §22.5: Attention maintenance — decay habituation, replenish budget
-            agent.attention.decay_habituation(Fixed::from_f64(0.005));
-            let stress = agent.emotions.fear + agent.emotions.anger;
-            agent.attention.replenish_budget(stress, agent.needs.fatigue);
-
-            // §19.5.G: Update status from current wealth and social connections
-            agent.status.wealth_status = (agent.wealth.coin / Fixed::from_f64(20.0)).clamp_01();
-            // Social status: ratio of positive relationships to total relationships
-            // §19.5.G: A relationship is "positive" when trust exceeds 0.6
-            let agent_id = AgentId::new(i as u64);
-            let (positive_rels, total_rels) = self.relationships.iter()
-                .filter(|r| r.from == agent_id)
-                .fold((0u32, 0u32), |(pos, total), r| {
-                    (pos + if r.trust > Fixed::from_f64(0.6) { 1 } else { 0 }, total + 1)
-                });
-            if total_rels > 0 {
-                agent.status.social_status = Fixed::from_f64(positive_rels as f64 / total_rels as f64);
-            }
-            agent.status.recompute();
-
-            // §22: Memory reconsolidation — current emotions bias recalled memories
-            agent.memory.reconsolidate(agent.emotions.anger, agent.emotions.joy);
-
-            // §4.2: Skill improvement — agents improve skills through repeated practice.
-            // Small increments per tick; skills cap at 1.0.
-            let skill_gain = SKILL_GAIN_PER_TICK;
-            match agent.current_action {
-                crate::actions::ActionKind::Work => {
-                    agent.skills.farming = (agent.skills.farming + skill_gain).clamp_01();
-                }
-                crate::actions::ActionKind::Trade => {
-                    agent.skills.trading = (agent.skills.trading + skill_gain).clamp_01();
-                }
-                crate::actions::ActionKind::Socialize | crate::actions::ActionKind::Worship => {
-                    agent.skills.social = (agent.skills.social + skill_gain).clamp_01();
-                }
-                _ => {}
-            }
-        }
+        // ── 9. Memory encoding (extracted) ──
+        self.tick_memory_encoding(pre_tick_events, tick_u64);
 
         // ── 16. Ecology: season advance and fertility dynamics ──
         let new_season = self.season.advance();
@@ -2087,231 +1809,8 @@ impl Simulation {
             }
         }
 
-        // ── 11. Norm evaluation: threats and insults are norm violations ──
-        for ev in &self.events[pre_tick_events..].to_vec() {
-            if let SimEvent::InteractionOccurred {
-                from,
-                to,
-                kind: mindstrata_core::event::InteractionKind::Threaten
-                | mindstrata_core::event::InteractionKind::Insult,
-                ..
-            } = ev
-            {
-                let from_id = *from;
-                let to_id = *to;
-
-                // §19.5.H: Route threats through conflict system for trauma, combat fatigue tracking
-                let is_threat = matches!(
-                    ev,
-                    SimEvent::InteractionOccurred {
-                        kind: mindstrata_core::event::InteractionKind::Threaten, ..
-                    }
-                );
-                if is_threat {
-                    let from_idx = from_id.as_u64() as usize;
-                    let to_idx = to_id.as_u64() as usize;
-                    if from_idx < self.agents.len()
-                        && to_idx < self.agents.len()
-                        && to_idx < self.agent_diseases.len()
-                    {
-                        let rng_val = Fixed::from_f64(
-                            self.rng.get_mut(RngStream::Social).random::<f64>()
-                        );
-                        let conflict_result = conflict::resolve_conflict(
-                            ConflictKind::Threat,
-                            &self.agents[from_idx].personality,
-                            &self.agents[to_idx].emotions,
-                            self.agents[to_idx].body.health,
-                            &self.agents[to_idx].conflict,
-                            rng_val,
-                        );
-                        if conflict_result.occurred {
-                            // Record conflict state: trauma, combat fatigue
-                            self.agents[to_idx].conflict.record_conflict(ConflictKind::Threat);
-                            // Apply fear induction
-                            self.agents[to_idx].emotions.fear = (
-                                self.agents[to_idx].emotions.fear + conflict_result.fear_induced
-                            ).clamp_01();
-                            // Emit conflict event for observability
-                            self.events.push(SimEvent::ConflictOccurred {
-                                aggressor: from_id,
-                                target: to_id,
-                                kind: format!("{:?}", ConflictKind::Threat),
-                                injury: conflict_result.injury,
-                                fear_induced: conflict_result.fear_induced,
-                                tick,
-                            });
-
-                            // §19.5.H: Violence escalation — when threat fails to deter
-                            // (target fear remains low after threat), aggressive aggressors
-                            // escalate to physical violence with real injury.
-                            let target_fear_after = self.agents[to_idx].emotions.fear;
-                            let threat_failed = target_fear_after < Fixed::from_f64(0.3);
-                            let aggressor_aggression = self.agents[from_idx].personality.dominance
-                                + self.agents[from_idx].personality.risk_tolerance;
-                            let escalate = threat_failed
-                                && aggressor_aggression > Fixed::from_f64(1.2)
-                                && self.rng.get_mut(RngStream::Social).random::<f64>() < 0.3; // probabilistic
-
-                            if escalate {
-                                let violence_result = conflict::resolve_conflict(
-                                    ConflictKind::Violence,
-                                    &self.agents[from_idx].personality,
-                                    &self.agents[to_idx].emotions,
-                                    self.agents[to_idx].body.health,
-                                    &self.agents[to_idx].conflict,
-                                    rng_val,
-                                );
-                                if violence_result.occurred {
-                                    self.agents[to_idx].conflict.record_conflict(ConflictKind::Violence);
-                                    self.agents[to_idx].emotions.fear = (
-                                        self.agents[to_idx].emotions.fear + violence_result.fear_induced
-                                    ).clamp_01();
-                                    // Apply injury to target's health
-                                    self.agents[to_idx].body.health = (
-                                        self.agents[to_idx].body.health - violence_result.injury
-                                    ).max(Fixed::ZERO);
-                                    // Record injury
-                                    self.agents[to_idx].conflict.record_injury();
-                                    // Attacker accumulates trauma too
-                                    self.agents[from_idx].conflict.record_conflict(ConflictKind::Violence);
-                                    // Reduce trust and affection between the two
-                                    // §19.5.J: Record relationship trace for provenance
-                                    if let Some(rel) = self.relationships.iter_mut()
-                                        .find(|r| r.from == from_id && r.to == to_id)
-                                    {
-                                        let old_trust = rel.trust;
-                                        let old_affection = rel.affection;
-                                        rel.trust = (rel.trust - Fixed::from_f64(0.3)).max(Fixed::ZERO);
-                                        rel.affection = (rel.affection - Fixed::from_f64(0.2)).max(Fixed::ZERO);
-                                        self.provenance.record_relationship(crate::provenance::RelationshipTrace {
-                                            from: from_id,
-                                            to: to_id,
-                                            tick: tick_u64,
-                                            cause: "violence".into(),
-                                            old_trust,
-                                            new_trust: rel.trust,
-                                            old_affection,
-                                            new_affection: rel.affection,
-                                            description: format!("Violence destroyed trust ({} -> {})", old_trust.to_f64(), rel.trust.to_f64()),
-                                        });
-                                    }
-                                    if let Some(rel) = self.relationships.iter_mut()
-                                        .find(|r| r.from == to_id && r.to == from_id)
-                                    {
-                                        let old_trust = rel.trust;
-                                        let old_affection = rel.affection;
-                                        rel.trust = (rel.trust - Fixed::from_f64(0.3)).max(Fixed::ZERO);
-                                        rel.affection = (rel.affection - Fixed::from_f64(0.2)).max(Fixed::ZERO);
-                                        self.provenance.record_relationship(crate::provenance::RelationshipTrace {
-                                            from: to_id,
-                                            to: from_id,
-                                            tick: tick_u64,
-                                            cause: "violence".into(),
-                                            old_trust,
-                                            new_trust: rel.trust,
-                                            old_affection,
-                                            new_affection: rel.affection,
-                                            description: format!("Fear response — trust dropped ({} -> {})", old_trust.to_f64(), rel.trust.to_f64()),
-                                        });
-                                    }
-                                    // Record in journal
-                                    self.journal.record(tick_u64, from_id, JournalEntryKind::CommittedViolence {
-                                        target: to_id.as_u64(),
-                                        injury: violence_result.injury.to_f64(),
-                                    });
-                                    // Emit violence event
-                                    self.events.push(SimEvent::ConflictOccurred {
-                                        aggressor: from_id,
-                                        target: to_id,
-                                        kind: format!("{:?}", ConflictKind::Violence),
-                                        injury: violence_result.injury,
-                                        fear_induced: violence_result.fear_induced,
-                                        tick,
-                                    });
-                                    // §19.5.D: Violence is a severe norm violation
-                                    let _ = self.norms.check_violation(4, from_id, tick_u64); // norm id=4: No Violence
-                                    // §19.5.G: Feud tracking is handled in dedicated section 18
-
-                                    // Attacker gains shame from violence
-                                    self.agents[from_idx].emotions.shame = (
-                                        self.agents[from_idx].emotions.shame + Fixed::from_f64(0.15)
-                                    ).clamp_01();
-
-                                    // §19.5.H: Check if violence was lethal
-                                    if self.agents[to_idx].body.health <= Fixed::ZERO {
-                                        self.agents[to_idx].conflict.record_casualty();
-                                        self.events.push(SimEvent::AgentDied {
-                                            agent: to_id,
-                                            cause: mindstrata_core::event::DeathCause::Violence,
-                                            tick,
-                                        });
-                                        tracing::warn!(
-                                            agent = to_id.as_u64(),
-                                            attacker = from_id.as_u64(),
-                                            tick = tick_u64,
-                                            "Agent killed by violence"
-                                        );
-                                    }
-
-                                    tracing::warn!(
-                                        aggressor = from_id.as_u64(),
-                                        target = to_id.as_u64(),
-                                        injury = violence_result.injury.to_f64(),
-                                        tick = tick_u64,
-                                        "Violence escalated from failed threat"
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-
-                let punishment = self.norms.check_violation(1, from_id, tick_u64);
-                if punishment > Fixed::ZERO {
-                        if let Some(rel) = self
-                            .relationships
-                            .iter_mut()
-                            .find(|r| r.from == to_id && r.to == from_id)
-                        {
-                            let old_trust = rel.trust;
-                            rel.trust =
-                                (rel.trust - punishment * Fixed::from_f64(0.15)).max(Fixed::ZERO);
-                            // §19.5.J: Record norm violation relationship trace
-                            self.provenance.record_relationship(crate::provenance::RelationshipTrace {
-                                from: to_id,
-                                to: from_id,
-                                tick: tick_u64,
-                                cause: "norm_violation".into(),
-                                old_trust,
-                                new_trust: rel.trust,
-                                old_affection: rel.affection,
-                                new_affection: rel.affection,
-                                description: format!("Trust eroded by norm violation ({} -> {})", old_trust.to_f64(), rel.trust.to_f64()),
-                            });
-                        }
-                        let from_idx = from_id.as_u64() as usize;
-                        if from_idx < self.agents.len() {
-                            // §22.1: Moral outrage modulated by moral foundations.
-                            // High care/fairness → more shame from own violations.
-                            let outrage = self.agents[from_idx].moral_values.moral_outrage(punishment);
-                            self.agents[from_idx].emotions.shame = (self.agents[from_idx]
-                                .emotions
-                                .shame
-                                + outrage * Fixed::from_f64(0.10))
-                                .clamp_01();
-                        }
-                        // §12.4: Successful norm enforcement increases institutional legitimacy
-                        // Modulated by enforcement_capacity — low-capacity councils gain less.
-                        for inst in &mut self.institutions {
-                            if inst.kind == institutions::InstitutionKind::Council {
-                                let legitimacy_gain = inst.enforcement_capacity * Fixed::from_f64(0.005);
-                                inst.increase_legitimacy(legitimacy_gain);
-                            }
-                        }
-                    }
-            }
-        }
+        // ── 11. Norm evaluation (extracted) ──
+        self.tick_norm_evaluation(pre_tick_events, tick_u64, tick);
 
         // ── 11b. §11.2 Gossip propagation with mutation ── (extracted)
         self.tick_gossip_and_knowledge(pre_tick_events, tick_u64, tick);
@@ -2405,327 +1904,14 @@ impl Simulation {
         // ── 15. Faction dynamics (extracted) ────
         self.tick_faction_dynamics(tick_u64, tick);
 
-        // ── 14. §7.2: Moral panic detection — rumor cascades collapse institutional trust ──
-        // Check if gossip about institutions has accumulated enough emotional charge
-        // to trigger a moral panic. This happens when many agents hold high-emotion
-        // beliefs about an institution, causing sudden legitimacy collapse.
-        {
-            // Check propositions 0 ("the_market_is_fair") and 1 ("the_council_protects_us")
-            let belief_refs: Vec<&Vec<Belief>> = self.agents.iter().map(|a| &a.beliefs).collect();
-            for prop_id in 0..=1 {
-                let panic_result = gossip::detect_moral_panic(&belief_refs, prop_id);
-                if panic_result.triggered {
-                    tracing::warn!(
-                        proposition = prop_id,
-                        avg_charge = panic_result.avg_charge.to_f64(),
-                        tick = tick_u64,
-                        "§7.2: Moral panic triggered!"
-                    );
-                    // Apply legitimacy damage to all matching institutions
-                    for inst in &mut self.institutions {
-                        let inst_prop = match inst.kind {
-                            InstitutionKind::Council => Some(1u64),  // council → proposition 1
-                            InstitutionKind::Market => Some(0u64),   // market → proposition 0
-                            _ => None,
-                        };
-                        if inst_prop == Some(prop_id) {
-                            inst.legitimacy = (inst.legitimacy - panic_result.legitimacy_damage).max(Fixed::ZERO);
-                        }
-                    }
-                    // Boost faction grievance from panic
-                    for inst in &mut self.institutions {
-                        if inst.kind == InstitutionKind::Faction {
-                            inst.collective.morale = (inst.collective.morale + panic_result.grievance_boost).clamp_01();
-                        }
-                    }
-                    self.events.push(SimEvent::ConflictOccurred {
-                        aggressor: AgentId::new(0),
-                        target: AgentId::new(0),
-                        kind: "MoralPanic".into(),
-                        injury: Fixed::ZERO,
-                        fear_induced: panic_result.avg_charge,
-                        tick,
-                    });
-                }
-            }
-        }
+        // ── 14. Moral panic + Revolution (extracted) ──
+        self.tick_moral_panic_and_revolution(tick_u64, tick);
 
-        // ── 14b. §7.3: Revolution mechanism — faction seizes control ──
-        // When a faction has enough grievance, membership, and the council's
-        // legitimacy is critically low, the faction stages a revolution.
-        {
-            let council_legitimacy: Fixed = self.institutions.iter()
-                .filter(|i| i.kind == InstitutionKind::Council)
-                .map(|i| i.legitimacy)
-                .fold(Fixed::ZERO, std::cmp::Ord::max);
+        // ── 15+13. Derived mental state + Belief updates (extracted) ──
+        self.tick_derived_states_and_beliefs(pre_tick_events, tick_u64);
 
-            for inst_idx in 0..self.institutions.len() {
-                if self.institutions[inst_idx].kind != InstitutionKind::Faction {
-                    continue;
-                }
-                let faction = &self.institutions[inst_idx];
-                let faction_grievance = faction.collective.morale;
-                let faction_size = faction.members.len();
-                let total_pop = self.agents.len();
-
-                // Revolution score: weighted combination of grievance, size, and council weakness
-                let revolution_score = faction_grievance * factions::REVOLUTION_GRIEVANCE_WEIGHT
-                    + Fixed::from_int(faction_size as i64) / Fixed::from_int(total_pop.max(1) as i64) * factions::REVOLUTION_SIZE_WEIGHT
-                    + (Fixed::ONE - council_legitimacy) * factions::REVOLUTION_LEGITIMACY_WEIGHT;
-
-                let revolution_cooldown_ok = tick_u64.saturating_sub(self.last_revolution_tick) >= factions::REVOLUTION_COOLDOWN;
-                if revolution_score >= factions::REVOLUTION_SCORE_THRESHOLD
-                    && tick_u64 > factions::REVOLUTION_MIN_TICK
-                    && revolution_cooldown_ok
-                {
-                    tracing::warn!(
-                        faction = inst_idx,
-                        score = revolution_score.to_f64(),
-                        council_legitimacy = council_legitimacy.to_f64(),
-                        tick = tick_u64,
-                        "§7.3: Revolution! Faction seizes control"
-                    );
-                    // Council loses all legitimacy
-                    for inst in &mut self.institutions {
-                        if inst.kind == InstitutionKind::Council {
-                            inst.legitimacy = Fixed::ZERO;
-                            inst.collective.morale = Fixed::from_f64(0.1);
-                        }
-                    }
-                    // Faction gains legitimacy
-                    self.institutions[inst_idx].legitimacy = Fixed::from_f64(0.6);
-                    self.institutions[inst_idx].collective.morale = Fixed::from_f64(0.8);
-                    // Track revolution tick for cooldown
-                    self.last_revolution_tick = tick_u64;
-                    // Record revolution event
-                    self.events.push(SimEvent::ConflictOccurred {
-                        aggressor: self.institutions[inst_idx].get_role_holder("Leader").unwrap_or(AgentId::new(0)),
-                        target: AgentId::new(0),
-                        kind: "Revolution".into(),
-                        injury: Fixed::ZERO,
-                        fear_induced: Fixed::from_f64(0.5),
-                        tick,
-                    });
-                    break; // only one revolution per tick
-                }
-            }
-        }
-
-        // ── 15. Derived mental state computation (§22) ─────────────
-        for agent in &mut self.agents {
-            let stress = agent.emotions.fear + agent.emotions.anger;
-            let need_deficit_avg = (agent.needs.hunger + agent.needs.thirst + agent.needs.fatigue + agent.needs.safety) * Fixed::from_f64(0.25);
-            let social_support = Fixed::ONE - agent.needs.social;
-            let success_rate = if agent.recent_attempts > 0 {
-                Fixed::from_int(agent.recent_successes as i64) / Fixed::from_int(agent.recent_attempts as i64)
-            } else {
-                Fixed::from_f64(0.5)
-            };
-            let justice_perception = agent.moral_values.fairness;
-            agent.derived.compute(&crate::person::MentalStateInput {
-                stress,
-                coping_potential: agent.personality.conscientiousness,
-                social_support,
-                need_deficit_avg,
-                meaning: agent.needs.meaning,
-                autonomy: agent.needs.autonomy,
-                success_rate,
-                neuroticism: agent.personality.neuroticism,
-                justice_perception,
-            });
-            // Decay success tracking window
-            agent.recent_attempts = agent.recent_attempts.saturating_sub(1);
-            agent.recent_successes = agent.recent_successes.saturating_sub(1);
-        }
-
-        // ── 13. Belief updates from this tick's social interactions ────
-        for ev in &self.events[pre_tick_events..] {
-            if let SimEvent::InteractionOccurred { from, to, .. } = ev {
-                let from_idx = from.as_u64() as usize;
-                let to_idx = to.as_u64() as usize;
-                if from_idx < self.agents.len() && to_idx < self.agents.len() {
-                    let trust = self.relationships
-                        .iter()
-                        .find(|r| r.from == *from && r.to == *to)
-                        .map_or(Fixed::from_f64(0.5), |r| r.trust);
-
-                    let evidence_strength = trust - Fixed::from_f64(0.5);
-                    let source_trust = Fixed::from_f64(0.6);
-
-                    belief_update::update_beliefs(
-                        &mut self.agents[from_idx].beliefs,
-                        &[(2, evidence_strength, source_trust)],
-                        Fixed::ZERO,
-                        Fixed::ZERO,
-                        tick_u64,
-                    );
-                }
-            }
-        }
-
-        // ── 18. §19.5.G Feud tracking — repeated violence creates persistent feuds ──
-        for ev in &self.events[pre_tick_events..].to_vec() {
-            if let SimEvent::ConflictOccurred {
-                aggressor,
-                target,
-                kind,
-                ..
-            } = ev
-            {
-                if *kind == format!("{:?}", ConflictKind::Violence) {
-                    let a_idx = aggressor.as_u64() as usize;
-                    let t_idx = target.as_u64() as usize;
-                    if a_idx < self.agents.len() && t_idx < self.agents.len() {
-                        let was_new = !self.agents[a_idx].feuds.contains(&t_idx);
-                        if was_new {
-                            self.agents[a_idx].feuds.push(t_idx);
-                            self.agents[a_idx].feud_ticks.push(tick_u64);
-                            self.agents[t_idx].feuds.push(a_idx);
-                            self.agents[t_idx].feud_ticks.push(tick_u64);
-                            self.events.push(SimEvent::FeudFormed {
-                                party_a: *aggressor,
-                                party_b: *target,
-                                tick,
-                            });
-                        }
-                    }
-                }
-            }
-        }
-
-        // ── 19. Marriage formation (extracted) ──
-        self.tick_marriage_formation(tick_u64, tick);
-
-        // ── 19b. Birth mechanics (extracted) ──
-        self.tick_birth_mechanics(tick_u64, tick);
-
-        // ── 20. Conflict state update — trauma decay, combat fatigue, feud decay ──
-        for agent in &mut self.agents {
-            agent.conflict.update();
-            // §19.5.G: Feud decay — remove feuds older than 500 ticks
-            let feud_decay_threshold = tick_u64.saturating_sub(500);
-            let mut keep = 0;
-            for j in 0..agent.feuds.len() {
-                if agent.feud_ticks[j] > feud_decay_threshold {
-                    agent.feuds[keep] = agent.feuds[j];
-                    agent.feud_ticks[keep] = agent.feud_ticks[j];
-                    keep += 1;
-                }
-            }
-            agent.feuds.truncate(keep);
-            agent.feud_ticks.truncate(keep);
-        }
-
-        // ── 21. §19.5.E Carrying cost — heavy loads increase fatigue ──
-        // Agents who performed physical actions (Work) incur carrying cost based on load.
-        // Since agents don't carry items yet, this serves as a workload fatigue modifier.
-        for i in 0..self.agents.len() {
-            if self.agents[i].current_action == ActionKind::Work {
-                let load_ratio = Fixed::from_f64(0.4); // moderate load for work
-                let fatigue_cost = logistics::carrying_cost(
-                    load_ratio,
-                    Fixed::from_f64(1.0),
-                    self.agents[i].needs.fatigue,
-                );
-                self.agents[i].needs.fatigue = (
-                    self.agents[i].needs.fatigue + fatigue_cost
-                ).clamp_01();
-            }
-        }
-
-        // ── 19. Market system: price formation, inequality tracking ──
-        {
-            let agent_economic_state: Vec<_> = self.agents.iter()
-                .map(|a| (a.needs.clone(), a.wealth.clone()))
-                .collect();
-            market::system_market(&self.world, &agent_economic_state, &mut self.market, tick_u64);
-
-            // §4.4: Update black market state based on current scarcity and enforcement
-            // Scarcity is normalized: 0 = abundant, 1 = critically scarce
-            let total_grain = self.world.total_food();
-            let expected_capacity = Fixed::from_int(self.agents.len() as i64) * Fixed::from_int(EXPECTED_GRAIN_PER_AGENT as i64);
-            let scarcity = if expected_capacity > Fixed::ZERO {
-                (Fixed::ONE - total_grain / expected_capacity).clamp_01()
-            } else {
-                Fixed::ZERO
-            };
-            let council_enforcement = self.institutions.iter()
-                .filter(|i| i.kind == InstitutionKind::Council)
-                .map(|i| i.enforcement_capacity)
-                .fold(Fixed::ZERO, std::cmp::Ord::max);
-            self.black_market.update(scarcity, council_enforcement);
-        }
-
-        // ── 18. Demography: aging and mortality ──
-        if tick_u64.is_multiple_of(10) { // process demography every 10 ticks to reduce overhead
-            let mut deaths = Vec::new();
-            for i in 0..self.agents.len() {
-                let (new_age, died) = demography::age_agent(
-                    self.agents[i].age,
-                    self.agents[i].body.health,
-                    self.agents[i].body.energy,
-                    &self.demography_config,
-                );
-                self.agents[i].age = new_age;
-                if died {
-                    deaths.push(i);
-                }
-            }
-            // Remove dead agents (in reverse order to preserve indices)
-            for &idx in deaths.iter().rev() {
-                let agent_id = AgentId::new(idx as u64);
-                tracing::warn!(
-                    agent = self.agents[idx].name.as_str(),
-                    age = self.agents[idx].age.to_f64(),
-                    tick = tick_u64,
-                    "Agent died"
-                );                    // §19.5.F: Inheritance — transfer wealth to spouse and children
-                let inherited_wealth = self.agents[idx].wealth.coin;
-                if inherited_wealth > Fixed::ZERO {
-                    let mut heirs: Vec<usize> = Vec::new();
-                    // Spouse inherits first — but only if not also dying this tick
-                    if let Some(spouse_idx) = self.agents[idx].partner {
-                        if spouse_idx < self.agents.len() && !deaths.contains(&spouse_idx) {
-                            heirs.push(spouse_idx);
-                        }
-                    }
-                    // Children inherit second — skip if also dying
-                    for child_idx in 0..self.agents.len() {
-                        if child_idx != idx && !deaths.contains(&child_idx) {
-                            let is_child = self.agents[child_idx].parent_a == Some(idx)
-                                || self.agents[child_idx].parent_b == Some(idx);
-                            if is_child {
-                                heirs.push(child_idx);
-                            }
-                        }
-                    }
-                    // Split wealth among heirs (or give to a random agent if no heirs)
-                    if !heirs.is_empty() {
-                        let share = inherited_wealth / Fixed::from_f64(heirs.len() as f64);
-                        for &heir_idx in &heirs {
-                            if heir_idx < self.agents.len() {
-                                self.agents[heir_idx].wealth.coin += share;
-                            }
-                        }
-                    }
-                    self.journal.record(tick_u64, agent_id, JournalEntryKind::Inheritance {
-                        heir_count: heirs.len() as u64,
-                        amount: inherited_wealth.to_f64(),
-                    });
-                }
-                self.agents.remove(idx);
-                self.agent_diseases.remove(idx);
-                // Remove from relationships
-                self.relationships.retain(|r| r.from != agent_id && r.to != agent_id);
-                // Remove from institutions
-                for inst in &mut self.institutions {
-                    inst.remove_member(agent_id);
-                }
-            }
-        }
-
-        // §19.5.J: Trim provenance traces to prevent unbounded growth
-        self.provenance.trim(institutions::MAX_PROVENANCE_RECORDS);
+        // ── 18+19+20+21. Social cluster (extracted) ──
+        self.tick_social_cluster(pre_tick_events, tick_u64, tick);
 
         // ── Kinship & Household daily update (extracted) ──
         self.tick_kinship_household_daily(tick_u64);
@@ -4085,6 +3271,863 @@ impl Simulation {
                 }
             }
         }
+
+    }
+
+
+    /// Section 4b: Resource operations, journal recording, intention tracking.
+    fn tick_resource_operations(&mut self, action_starts: &[(usize, ActionKind)], pre_tick_events: usize, tick_u64: u64, tick: Tick) {
+        // ── 4b. Resource operations, journal recording, intention tracking ──
+
+        for (agent_idx, action) in action_starts {
+            let agent_id = AgentId::new(*agent_idx as u64);
+            // §24.5: Track intention success/failure when action completes.
+            // The resource operation outcome (e.g., Eat failing because no grain)
+            // is known here, so we record intention success/failure based on
+            // the actual resource operation result.
+            let action_succeeded = match action {
+                ActionKind::Eat => {
+                    let amount = Fixed::from_f64(0.1);
+                    // §19.5.E: Use access-checking method to enforce resource access rights.
+                    if let Some(farm_idx) = self.world.accessible_farm_with_grain(agent_id, &self.institutions) {
+                        let taken = self.world.consume_resource(farm_idx, GRAIN_RESOURCE_ID, amount);
+                        // §13.3: Consumers pay coin for resources consumed
+                        let cost = taken * self.market.price(GRAIN_RESOURCE_ID);
+                        self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - cost).max(Fixed::ZERO);
+                        self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "grain".into(), amount: taken.to_f64() });
+                        taken > Fixed::ZERO
+                    } else {
+                        // §19.5.D: Theft detection — no accessible farm, but inaccessible farms with grain exist?
+                        if let Some(thief_idx) = self.world.inaccessible_farm_with_grain(agent_id, &self.institutions) {
+                            self.enforce_theft(*agent_idx, agent_id, thief_idx, GRAIN_RESOURCE_ID, amount, tick_u64, tick)
+                        } else {
+                            false
+                        }
+                    }
+                }
+                ActionKind::Drink => {
+                    let amount = Fixed::from_f64(0.15);
+                    // §19.5.E: Use access-checking method to enforce resource access rights.
+                    if let Some(well_idx) = self.world.accessible_well_with_water(agent_id, &self.institutions) {
+                        let taken = self.world.consume_resource(well_idx, WATER_RESOURCE_ID, amount);
+                        // §13.3: Consumers pay coin for water consumed
+                        let cost = taken * self.market.price(WATER_RESOURCE_ID);
+                        self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - cost).max(Fixed::ZERO);
+                        self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "water".into(), amount: taken.to_f64() });
+                        taken > Fixed::ZERO
+                    } else {
+                        // §19.5.D: Water theft detection — no accessible well, but inaccessible wells with water exist?
+                        if let Some(thief_idx) = self.world.inaccessible_well_with_water(agent_id, &self.institutions) {
+                            self.enforce_theft(*agent_idx, agent_id, thief_idx, WATER_RESOURCE_ID, amount, tick_u64, tick)
+                        } else {
+                            false
+                        }
+                    }
+                }
+                ActionKind::Work => {
+                    // §4.2: Productivity = base (conscientiousness) + skill bonus
+                    let skill_bonus = self.agents[*agent_idx].skills.farming * Fixed::from_f64(0.02);
+                    let productivity = (self.agents[*agent_idx].personality.conscientiousness * Fixed::from_f64(0.05) + skill_bonus).clamp_01();
+                    if let Some(farm_idx) = self.world.best_farm_for_work() {
+                        self.world.produce_resource(farm_idx, GRAIN_RESOURCE_ID, productivity);
+                        // §13.3: Workers earn coin proportional to productivity
+                        let wage = productivity * self.market.price(GRAIN_RESOURCE_ID) * Fixed::from_f64(0.3);
+                        self.agents[*agent_idx].wealth.coin += wage;
+
+                        self.journal.record(tick_u64, agent_id, JournalEntryKind::Worked { productivity: productivity.to_f64() });
+                        true
+                    } else {
+                        false
+                    }
+                }
+                ActionKind::Rest => {
+                    self.journal.record(tick_u64, agent_id, JournalEntryKind::Rested);
+                    true
+                }
+                ActionKind::Worship => {
+                    self.journal.record(tick_u64, agent_id, JournalEntryKind::Worshiped);
+                    true
+                }                    ActionKind::Trade => {
+                    // §13.3: Agent-to-agent trade — find a nearby seller at a market site
+                    let buyer_coin = self.agents[*agent_idx].wealth.coin;
+                    // Find a seller: nearby agent who owns a farm with grain
+                    let seller_info = self.agents.iter().enumerate()
+                        .find(|(j, a)| {
+                            *j != *agent_idx
+                                && self.agents[*agent_idx].position.manhattan_distance(&a.position) <= 3
+                                && a.home_site.is_some() // seller has a home/owned site
+                        })
+                        .and_then(|(j, a)| {
+                            // Check if seller's home is a farm with grain
+                            a.home_site.and_then(|hs| {
+                                if hs < self.world.sites.len()
+                                    && self.world.sites[hs].kind == crate::world::SiteKind::Farm
+                                {
+                                    let grain = self.world.sites[hs].inventory.iter()
+                                        .find(|s| s.resource_id == GRAIN_RESOURCE_ID)
+                                        .map_or(Fixed::ZERO, |s| s.quantity);
+                                    if grain > Fixed::ZERO {
+                                        Some((j, hs, grain))
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
+                            })
+                        });
+                    if let Some((seller, farm_idx, _available)) = seller_info {
+                        let trust = self.relationships.iter()
+                            .find(|r| r.from == AgentId::new(*agent_idx as u64) && r.to == AgentId::new(seller as u64))
+                            .map_or(Fixed::from_f64(0.5), |r| r.trust);
+                        let quantity = Fixed::from_f64(0.1);
+                        // §13.3: Execute trade — buyer pays coin, seller's farm provides grain
+                        let base_price = self.market.price(GRAIN_RESOURCE_ID);
+                        // Trust discount: high trust → lower price
+                        let trust_modifier = Fixed::from_f64(1.0) - trust * Fixed::from_f64(0.2) + (Fixed::ONE - trust) * Fixed::from_f64(0.1);
+                        let price = (base_price * trust_modifier).max(Fixed::from_f64(1.0));
+                        let cost = price * quantity;
+                        if buyer_coin >= cost {
+                            let taken = self.world.consume_resource(farm_idx, GRAIN_RESOURCE_ID, quantity);
+                            if taken > Fixed::ZERO {
+                                let actual_cost = price * taken;
+                                // Buyer pays coin to seller (farm owner)
+                                self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - actual_cost).max(Fixed::ZERO);
+                                self.agents[seller].wealth.coin += actual_cost;
+                                self.events.push(SimEvent::TradeOccurred {
+                                    buyer: AgentId::new(*agent_idx as u64),
+                                    seller: AgentId::new(seller as u64),
+                                    good: ResourceId::new(GRAIN_RESOURCE_ID),
+                                    quantity: taken,
+                                    price,
+                                    tick,
+                                });
+                                self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "grain_via_trade".into(), amount: taken.to_f64() });
+                                // §19.5.J: Record relationship trace — trade builds trust
+                                if let Some(rel) = self.relationships.iter_mut()
+                                    .find(|r| r.from == AgentId::new(*agent_idx as u64) && r.to == AgentId::new(seller as u64))
+                                {
+                                    let old_trust = rel.trust;
+                                    rel.trust = (rel.trust + Fixed::from_f64(0.02)).clamp_01();
+                                    self.provenance.record_relationship(crate::provenance::RelationshipTrace {
+                                        from: AgentId::new(*agent_idx as u64),
+                                        to: AgentId::new(seller as u64),
+                                        tick: tick_u64,
+                                        cause: "trade".into(),
+                                        old_trust,
+                                        new_trust: rel.trust,
+                                        old_affection: rel.affection,
+                                        new_affection: rel.affection,
+                                        description: format!("Trade built trust ({} -> {})", old_trust.to_f64(), rel.trust.to_f64()),
+                                    });
+                                }
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false // insufficient funds
+                        }
+                    } else {
+                        false // no nearby seller with grain
+                    }
+                }
+                _ => false,
+            };
+
+            // Record intention success/failure based on actual resource outcome
+            if let Some(ref mut intention) = self.agents[*agent_idx].intention {
+                if action_succeeded {
+                    intention.record_success();
+                } else {
+                    intention.record_failure();
+                }
+            }
+            // §22: Track success rate for derived mental state computation
+            self.agents[*agent_idx].recent_attempts += 1;
+            if action_succeeded {
+                self.agents[*agent_idx].recent_successes += 1;
+            }
+            // Architecture-plan-2 §8.1.20: Decision policy learns from action outcome.
+            // EMA learning adjusts utility weights toward successful action patterns.
+            let action_cost = match action {
+                ActionKind::Work => Fixed::from_f64(0.1),
+                ActionKind::Eat | ActionKind::Drink => Fixed::from_f64(0.05),
+                ActionKind::Move { .. } | ActionKind::Wander => Fixed::from_f64(0.08),
+                ActionKind::Socialize => Fixed::from_f64(0.03),
+                _ => Fixed::from_f64(0.02),
+            };
+            self.agents[*agent_idx].decision_policy.learn_from_outcome(action_succeeded, action_cost);
+        }
+
+    }
+
+    /// Section 9: Memory encoding from this tick's events.
+    fn tick_memory_encoding(&mut self, pre_tick_events: usize, tick_u64: u64) {
+        // ── 9. Memory encoding from this tick's events ───────────────
+        // §22.5: Use attention system to compute salience instead of hardcoded values.
+        // Only events that pass the attention threshold are encoded into memory.
+        for (i, agent) in self.agents.iter_mut().enumerate() {
+            for ev in &self.events[pre_tick_events..] {
+                // §22.5: Attention computes salience based on intensity, novelty, relevance
+                let salience = agent.attention.compute_salience(
+                    ev,
+                    AgentId::new(i as u64),
+                    &agent.needs,
+                    &agent.affect,
+                );
+
+                // Only encode events that exceed the attention threshold
+                if salience < Fixed::from_f64(0.2) {
+                    continue;
+                }
+
+                // Emotional intensity scales with arousal
+                let emotional = agent.affect.arousal * Fixed::from_f64(0.6) + Fixed::from_f64(0.1);
+                match ev {
+                    SimEvent::AgentAte { agent: a, .. } if a.as_u64() == i as u64 => {
+                        agent.memory.encode(MemoryKind::Consumption, tick_u64, salience, emotional, None, MemoryTag::AteFood);
+                    }
+                    SimEvent::AgentDrank { agent: a, .. } if a.as_u64() == i as u64 => {
+                        agent.memory.encode(MemoryKind::Consumption, tick_u64, salience, emotional, None, MemoryTag::DrankWater);
+                    }
+                    SimEvent::AgentRested { agent: a, .. } if a.as_u64() == i as u64 => {
+                        agent.memory.encode(MemoryKind::Positive, tick_u64, salience, emotional, None, MemoryTag::Rested);
+                    }
+                    SimEvent::InteractionOccurred { from, to, kind, .. } => {
+                        if from.as_u64() == i as u64 {
+                            let tag = match kind {
+                                mindstrata_core::event::InteractionKind::Help => MemoryTag::HelpedBy,
+                                mindstrata_core::event::InteractionKind::Threaten => MemoryTag::ThreatenedBy,
+                                mindstrata_core::event::InteractionKind::Insult => MemoryTag::InsultedBy,
+                                mindstrata_core::event::InteractionKind::Gossip => MemoryTag::GossipedAbout,
+                                mindstrata_core::event::InteractionKind::Trade => MemoryTag::TradedWith,
+                                _ => MemoryTag::TalkedTo,
+                            };
+                            let kind = match kind {
+                                mindstrata_core::event::InteractionKind::Threaten | mindstrata_core::event::InteractionKind::Insult => MemoryKind::Negative,
+                                mindstrata_core::event::InteractionKind::Help | mindstrata_core::event::InteractionKind::Comfort => MemoryKind::Positive,
+                                _ => MemoryKind::Social,
+                            };
+                            agent.memory.encode(kind, tick_u64, salience, emotional, Some(to.as_u64() as u32), tag);
+                        }
+                        if to.as_u64() == i as u64 {
+                            agent.memory.encode(MemoryKind::Social, tick_u64, salience, emotional, Some(from.as_u64() as u32), MemoryTag::TalkedTo);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            // Probabilistic memory rehearsal (every 10 ticks)
+            if tick_u64.is_multiple_of(10) {
+                agent.memory.rehearse_random(self.rng.get_mut(RngStream::Behavior));
+            }
+            // Decay memories
+            agent.memory.decay(tick_u64);
+
+            // §22.5: Attention maintenance — decay habituation, replenish budget
+            agent.attention.decay_habituation(Fixed::from_f64(0.005));
+            let stress = agent.emotions.fear + agent.emotions.anger;
+            agent.attention.replenish_budget(stress, agent.needs.fatigue);
+
+            // §19.5.G: Update status from current wealth and social connections
+            agent.status.wealth_status = (agent.wealth.coin / Fixed::from_f64(20.0)).clamp_01();
+            // Social status: ratio of positive relationships to total relationships
+            // §19.5.G: A relationship is "positive" when trust exceeds 0.6
+            let agent_id = AgentId::new(i as u64);
+            let (positive_rels, total_rels) = self.relationships.iter()
+                .filter(|r| r.from == agent_id)
+                .fold((0u32, 0u32), |(pos, total), r| {
+                    (pos + if r.trust > Fixed::from_f64(0.6) { 1 } else { 0 }, total + 1)
+                });
+            if total_rels > 0 {
+                agent.status.social_status = Fixed::from_f64(positive_rels as f64 / total_rels as f64);
+            }
+            agent.status.recompute();
+
+            // §22: Memory reconsolidation — current emotions bias recalled memories
+            agent.memory.reconsolidate(agent.emotions.anger, agent.emotions.joy);
+
+            // §4.2: Skill improvement — agents improve skills through repeated practice.
+            // Small increments per tick; skills cap at 1.0.
+            let skill_gain = SKILL_GAIN_PER_TICK;
+            match agent.current_action {
+                crate::actions::ActionKind::Work => {
+                    agent.skills.farming = (agent.skills.farming + skill_gain).clamp_01();
+                }
+                crate::actions::ActionKind::Trade => {
+                    agent.skills.trading = (agent.skills.trading + skill_gain).clamp_01();
+                }
+                crate::actions::ActionKind::Socialize | crate::actions::ActionKind::Worship => {
+                    agent.skills.social = (agent.skills.social + skill_gain).clamp_01();
+                }
+                _ => {}
+            }
+        }
+
+    }
+
+    /// Section 11: Norm evaluation — threats and insults are norm violations.
+    fn tick_norm_evaluation(&mut self, pre_tick_events: usize, tick_u64: u64, tick: Tick) {
+        // ── 11. Norm evaluation: threats and insults are norm violations ──
+        for ev in &self.events[pre_tick_events..].to_vec() {
+            if let SimEvent::InteractionOccurred {
+                from,
+                to,
+                kind: mindstrata_core::event::InteractionKind::Threaten
+                | mindstrata_core::event::InteractionKind::Insult,
+                ..
+            } = ev
+            {
+                let from_id = *from;
+                let to_id = *to;
+
+                // §19.5.H: Route threats through conflict system for trauma, combat fatigue tracking
+                let is_threat = matches!(
+                    ev,
+                    SimEvent::InteractionOccurred {
+                        kind: mindstrata_core::event::InteractionKind::Threaten, ..
+                    }
+                );
+                if is_threat {
+                    let from_idx = from_id.as_u64() as usize;
+                    let to_idx = to_id.as_u64() as usize;
+                    if from_idx < self.agents.len()
+                        && to_idx < self.agents.len()
+                        && to_idx < self.agent_diseases.len()
+                    {
+                        let rng_val = Fixed::from_f64(
+                            self.rng.get_mut(RngStream::Social).random::<f64>()
+                        );
+                        let conflict_result = conflict::resolve_conflict(
+                            ConflictKind::Threat,
+                            &self.agents[from_idx].personality,
+                            &self.agents[to_idx].emotions,
+                            self.agents[to_idx].body.health,
+                            &self.agents[to_idx].conflict,
+                            rng_val,
+                        );
+                        if conflict_result.occurred {
+                            // Record conflict state: trauma, combat fatigue
+                            self.agents[to_idx].conflict.record_conflict(ConflictKind::Threat);
+                            // Apply fear induction
+                            self.agents[to_idx].emotions.fear = (
+                                self.agents[to_idx].emotions.fear + conflict_result.fear_induced
+                            ).clamp_01();
+                            // Emit conflict event for observability
+                            self.events.push(SimEvent::ConflictOccurred {
+                                aggressor: from_id,
+                                target: to_id,
+                                kind: format!("{:?}", ConflictKind::Threat),
+                                injury: conflict_result.injury,
+                                fear_induced: conflict_result.fear_induced,
+                                tick,
+                            });
+
+                            // §19.5.H: Violence escalation — when threat fails to deter
+                            // (target fear remains low after threat), aggressive aggressors
+                            // escalate to physical violence with real injury.
+                            let target_fear_after = self.agents[to_idx].emotions.fear;
+                            let threat_failed = target_fear_after < Fixed::from_f64(0.3);
+                            let aggressor_aggression = self.agents[from_idx].personality.dominance
+                                + self.agents[from_idx].personality.risk_tolerance;
+                            let escalate = threat_failed
+                                && aggressor_aggression > Fixed::from_f64(1.2)
+                                && self.rng.get_mut(RngStream::Social).random::<f64>() < 0.3; // probabilistic
+
+                            if escalate {
+                                let violence_result = conflict::resolve_conflict(
+                                    ConflictKind::Violence,
+                                    &self.agents[from_idx].personality,
+                                    &self.agents[to_idx].emotions,
+                                    self.agents[to_idx].body.health,
+                                    &self.agents[to_idx].conflict,
+                                    rng_val,
+                                );
+                                if violence_result.occurred {
+                                    self.agents[to_idx].conflict.record_conflict(ConflictKind::Violence);
+                                    self.agents[to_idx].emotions.fear = (
+                                        self.agents[to_idx].emotions.fear + violence_result.fear_induced
+                                    ).clamp_01();
+                                    // Apply injury to target's health
+                                    self.agents[to_idx].body.health = (
+                                        self.agents[to_idx].body.health - violence_result.injury
+                                    ).max(Fixed::ZERO);
+                                    // Record injury
+                                    self.agents[to_idx].conflict.record_injury();
+                                    // Attacker accumulates trauma too
+                                    self.agents[from_idx].conflict.record_conflict(ConflictKind::Violence);
+                                    // Reduce trust and affection between the two
+                                    // §19.5.J: Record relationship trace for provenance
+                                    if let Some(rel) = self.relationships.iter_mut()
+                                        .find(|r| r.from == from_id && r.to == to_id)
+                                    {
+                                        let old_trust = rel.trust;
+                                        let old_affection = rel.affection;
+                                        rel.trust = (rel.trust - Fixed::from_f64(0.3)).max(Fixed::ZERO);
+                                        rel.affection = (rel.affection - Fixed::from_f64(0.2)).max(Fixed::ZERO);
+                                        self.provenance.record_relationship(crate::provenance::RelationshipTrace {
+                                            from: from_id,
+                                            to: to_id,
+                                            tick: tick_u64,
+                                            cause: "violence".into(),
+                                            old_trust,
+                                            new_trust: rel.trust,
+                                            old_affection,
+                                            new_affection: rel.affection,
+                                            description: format!("Violence destroyed trust ({} -> {})", old_trust.to_f64(), rel.trust.to_f64()),
+                                        });
+                                    }
+                                    if let Some(rel) = self.relationships.iter_mut()
+                                        .find(|r| r.from == to_id && r.to == from_id)
+                                    {
+                                        let old_trust = rel.trust;
+                                        let old_affection = rel.affection;
+                                        rel.trust = (rel.trust - Fixed::from_f64(0.3)).max(Fixed::ZERO);
+                                        rel.affection = (rel.affection - Fixed::from_f64(0.2)).max(Fixed::ZERO);
+                                        self.provenance.record_relationship(crate::provenance::RelationshipTrace {
+                                            from: to_id,
+                                            to: from_id,
+                                            tick: tick_u64,
+                                            cause: "violence".into(),
+                                            old_trust,
+                                            new_trust: rel.trust,
+                                            old_affection,
+                                            new_affection: rel.affection,
+                                            description: format!("Fear response — trust dropped ({} -> {})", old_trust.to_f64(), rel.trust.to_f64()),
+                                        });
+                                    }
+                                    // Record in journal
+                                    self.journal.record(tick_u64, from_id, JournalEntryKind::CommittedViolence {
+                                        target: to_id.as_u64(),
+                                        injury: violence_result.injury.to_f64(),
+                                    });
+                                    // Emit violence event
+                                    self.events.push(SimEvent::ConflictOccurred {
+                                        aggressor: from_id,
+                                        target: to_id,
+                                        kind: format!("{:?}", ConflictKind::Violence),
+                                        injury: violence_result.injury,
+                                        fear_induced: violence_result.fear_induced,
+                                        tick,
+                                    });
+                                    // §19.5.D: Violence is a severe norm violation
+                                    let _ = self.norms.check_violation(4, from_id, tick_u64); // norm id=4: No Violence
+                                    // §19.5.G: Feud tracking is handled in dedicated section 18
+
+                                    // Attacker gains shame from violence
+                                    self.agents[from_idx].emotions.shame = (
+                                        self.agents[from_idx].emotions.shame + Fixed::from_f64(0.15)
+                                    ).clamp_01();
+
+                                    // §19.5.H: Check if violence was lethal
+                                    if self.agents[to_idx].body.health <= Fixed::ZERO {
+                                        self.agents[to_idx].conflict.record_casualty();
+                                        self.events.push(SimEvent::AgentDied {
+                                            agent: to_id,
+                                            cause: mindstrata_core::event::DeathCause::Violence,
+                                            tick,
+                                        });
+                                        tracing::warn!(
+                                            agent = to_id.as_u64(),
+                                            attacker = from_id.as_u64(),
+                                            tick = tick_u64,
+                                            "Agent killed by violence"
+                                        );
+                                    }
+
+                                    tracing::warn!(
+                                        aggressor = from_id.as_u64(),
+                                        target = to_id.as_u64(),
+                                        injury = violence_result.injury.to_f64(),
+                                        tick = tick_u64,
+                                        "Violence escalated from failed threat"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let punishment = self.norms.check_violation(1, from_id, tick_u64);
+                if punishment > Fixed::ZERO {
+                        if let Some(rel) = self
+                            .relationships
+                            .iter_mut()
+                            .find(|r| r.from == to_id && r.to == from_id)
+                        {
+                            let old_trust = rel.trust;
+                            rel.trust =
+                                (rel.trust - punishment * Fixed::from_f64(0.15)).max(Fixed::ZERO);
+                            // §19.5.J: Record norm violation relationship trace
+                            self.provenance.record_relationship(crate::provenance::RelationshipTrace {
+                                from: to_id,
+                                to: from_id,
+                                tick: tick_u64,
+                                cause: "norm_violation".into(),
+                                old_trust,
+                                new_trust: rel.trust,
+                                old_affection: rel.affection,
+                                new_affection: rel.affection,
+                                description: format!("Trust eroded by norm violation ({} -> {})", old_trust.to_f64(), rel.trust.to_f64()),
+                            });
+                        }
+                        let from_idx = from_id.as_u64() as usize;
+                        if from_idx < self.agents.len() {
+                            // §22.1: Moral outrage modulated by moral foundations.
+                            // High care/fairness → more shame from own violations.
+                            let outrage = self.agents[from_idx].moral_values.moral_outrage(punishment);
+                            self.agents[from_idx].emotions.shame = (self.agents[from_idx]
+                                .emotions
+                                .shame
+                                + outrage * Fixed::from_f64(0.10))
+                                .clamp_01();
+                        }
+                        // §12.4: Successful norm enforcement increases institutional legitimacy
+                        // Modulated by enforcement_capacity — low-capacity councils gain less.
+                        for inst in &mut self.institutions {
+                            if inst.kind == institutions::InstitutionKind::Council {
+                                let legitimacy_gain = inst.enforcement_capacity * Fixed::from_f64(0.005);
+                                inst.increase_legitimacy(legitimacy_gain);
+                            }
+                        }
+                    }
+            }
+        }
+
+    }
+
+    /// Sections 14+14b: Moral panic detection and revolution mechanism.
+    fn tick_moral_panic_and_revolution(&mut self, tick_u64: u64, tick: Tick) {
+        // ── 14. §7.2: Moral panic detection — rumor cascades collapse institutional trust ──
+        // Check if gossip about institutions has accumulated enough emotional charge
+        // to trigger a moral panic. This happens when many agents hold high-emotion
+        // beliefs about an institution, causing sudden legitimacy collapse.
+        {
+            // Check propositions 0 ("the_market_is_fair") and 1 ("the_council_protects_us")
+            let belief_refs: Vec<&Vec<Belief>> = self.agents.iter().map(|a| &a.beliefs).collect();
+            for prop_id in 0..=1 {
+                let panic_result = gossip::detect_moral_panic(&belief_refs, prop_id);
+                if panic_result.triggered {
+                    tracing::warn!(
+                        proposition = prop_id,
+                        avg_charge = panic_result.avg_charge.to_f64(),
+                        tick = tick_u64,
+                        "§7.2: Moral panic triggered!"
+                    );
+                    // Apply legitimacy damage to all matching institutions
+                    for inst in &mut self.institutions {
+                        let inst_prop = match inst.kind {
+                            InstitutionKind::Council => Some(1u64),  // council → proposition 1
+                            InstitutionKind::Market => Some(0u64),   // market → proposition 0
+                            _ => None,
+                        };
+                        if inst_prop == Some(prop_id) {
+                            inst.legitimacy = (inst.legitimacy - panic_result.legitimacy_damage).max(Fixed::ZERO);
+                        }
+                    }
+                    // Boost faction grievance from panic
+                    for inst in &mut self.institutions {
+                        if inst.kind == InstitutionKind::Faction {
+                            inst.collective.morale = (inst.collective.morale + panic_result.grievance_boost).clamp_01();
+                        }
+                    }
+                    self.events.push(SimEvent::ConflictOccurred {
+                        aggressor: AgentId::new(0),
+                        target: AgentId::new(0),
+                        kind: "MoralPanic".into(),
+                        injury: Fixed::ZERO,
+                        fear_induced: panic_result.avg_charge,
+                        tick,
+                    });
+                }
+            }
+        }
+
+        // ── 14b. §7.3: Revolution mechanism — faction seizes control ──
+        // When a faction has enough grievance, membership, and the council's
+        // legitimacy is critically low, the faction stages a revolution.
+        {
+            let council_legitimacy: Fixed = self.institutions.iter()
+                .filter(|i| i.kind == InstitutionKind::Council)
+                .map(|i| i.legitimacy)
+                .fold(Fixed::ZERO, std::cmp::Ord::max);
+
+            for inst_idx in 0..self.institutions.len() {
+                if self.institutions[inst_idx].kind != InstitutionKind::Faction {
+                    continue;
+                }
+                let faction = &self.institutions[inst_idx];
+                let faction_grievance = faction.collective.morale;
+                let faction_size = faction.members.len();
+                let total_pop = self.agents.len();
+
+                // Revolution score: weighted combination of grievance, size, and council weakness
+                let revolution_score = faction_grievance * factions::REVOLUTION_GRIEVANCE_WEIGHT
+                    + Fixed::from_int(faction_size as i64) / Fixed::from_int(total_pop.max(1) as i64) * factions::REVOLUTION_SIZE_WEIGHT
+                    + (Fixed::ONE - council_legitimacy) * factions::REVOLUTION_LEGITIMACY_WEIGHT;
+
+                let revolution_cooldown_ok = tick_u64.saturating_sub(self.last_revolution_tick) >= factions::REVOLUTION_COOLDOWN;
+                if revolution_score >= factions::REVOLUTION_SCORE_THRESHOLD
+                    && tick_u64 > factions::REVOLUTION_MIN_TICK
+                    && revolution_cooldown_ok
+                {
+                    tracing::warn!(
+                        faction = inst_idx,
+                        score = revolution_score.to_f64(),
+                        council_legitimacy = council_legitimacy.to_f64(),
+                        tick = tick_u64,
+                        "§7.3: Revolution! Faction seizes control"
+                    );
+                    // Council loses all legitimacy
+                    for inst in &mut self.institutions {
+                        if inst.kind == InstitutionKind::Council {
+                            inst.legitimacy = Fixed::ZERO;
+                            inst.collective.morale = Fixed::from_f64(0.1);
+                        }
+                    }
+                    // Faction gains legitimacy
+                    self.institutions[inst_idx].legitimacy = Fixed::from_f64(0.6);
+                    self.institutions[inst_idx].collective.morale = Fixed::from_f64(0.8);
+                    // Track revolution tick for cooldown
+                    self.last_revolution_tick = tick_u64;
+                    // Record revolution event
+                    self.events.push(SimEvent::ConflictOccurred {
+                        aggressor: self.institutions[inst_idx].get_role_holder("Leader").unwrap_or(AgentId::new(0)),
+                        target: AgentId::new(0),
+                        kind: "Revolution".into(),
+                        injury: Fixed::ZERO,
+                        fear_induced: Fixed::from_f64(0.5),
+                        tick,
+                    });
+                    break; // only one revolution per tick
+                }
+            }
+        }
+
+    }
+
+    /// Sections 15+13: Derived mental state computation and belief updates.
+    fn tick_derived_states_and_beliefs(&mut self, pre_tick_events: usize, tick_u64: u64) {
+        // ── 15. Derived mental state computation (§22) ─────────────
+        for agent in &mut self.agents {
+            let stress = agent.emotions.fear + agent.emotions.anger;
+            let need_deficit_avg = (agent.needs.hunger + agent.needs.thirst + agent.needs.fatigue + agent.needs.safety) * Fixed::from_f64(0.25);
+            let social_support = Fixed::ONE - agent.needs.social;
+            let success_rate = if agent.recent_attempts > 0 {
+                Fixed::from_int(agent.recent_successes as i64) / Fixed::from_int(agent.recent_attempts as i64)
+            } else {
+                Fixed::from_f64(0.5)
+            };
+            let justice_perception = agent.moral_values.fairness;
+            agent.derived.compute(&crate::person::MentalStateInput {
+                stress,
+                coping_potential: agent.personality.conscientiousness,
+                social_support,
+                need_deficit_avg,
+                meaning: agent.needs.meaning,
+                autonomy: agent.needs.autonomy,
+                success_rate,
+                neuroticism: agent.personality.neuroticism,
+                justice_perception,
+            });
+            // Decay success tracking window
+            agent.recent_attempts = agent.recent_attempts.saturating_sub(1);
+            agent.recent_successes = agent.recent_successes.saturating_sub(1);
+        }
+
+        // ── 13. Belief updates from this tick's social interactions ────
+        for ev in &self.events[pre_tick_events..] {
+            if let SimEvent::InteractionOccurred { from, to, .. } = ev {
+                let from_idx = from.as_u64() as usize;
+                let to_idx = to.as_u64() as usize;
+                if from_idx < self.agents.len() && to_idx < self.agents.len() {
+                    let trust = self.relationships
+                        .iter()
+                        .find(|r| r.from == *from && r.to == *to)
+                        .map_or(Fixed::from_f64(0.5), |r| r.trust);
+
+                    let evidence_strength = trust - Fixed::from_f64(0.5);
+                    let source_trust = Fixed::from_f64(0.6);
+
+                    belief_update::update_beliefs(
+                        &mut self.agents[from_idx].beliefs,
+                        &[(2, evidence_strength, source_trust)],
+                        Fixed::ZERO,
+                        Fixed::ZERO,
+                        tick_u64,
+                    );
+                }
+            }
+        }
+
+    }
+
+    /// Sections 18-21: Feud tracking, market, demography, conflict, carrying cost.
+    fn tick_social_cluster(&mut self, pre_tick_events: usize, tick_u64: u64, tick: Tick) {
+        // ── 18. §19.5.G Feud tracking — repeated violence creates persistent feuds ──
+        for ev in &self.events[pre_tick_events..].to_vec() {
+            if let SimEvent::ConflictOccurred {
+                aggressor,
+                target,
+                kind,
+                ..
+            } = ev
+            {
+                if *kind == format!("{:?}", ConflictKind::Violence) {
+                    let a_idx = aggressor.as_u64() as usize;
+                    let t_idx = target.as_u64() as usize;
+                    if a_idx < self.agents.len() && t_idx < self.agents.len() {
+                        let was_new = !self.agents[a_idx].feuds.contains(&t_idx);
+                        if was_new {
+                            self.agents[a_idx].feuds.push(t_idx);
+                            self.agents[a_idx].feud_ticks.push(tick_u64);
+                            self.agents[t_idx].feuds.push(a_idx);
+                            self.agents[t_idx].feud_ticks.push(tick_u64);
+                            self.events.push(SimEvent::FeudFormed {
+                                party_a: *aggressor,
+                                party_b: *target,
+                                tick,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── 19. Marriage formation (extracted) ──
+        self.tick_marriage_formation(tick_u64, tick);
+
+        // ── 19b. Birth mechanics (extracted) ──
+        self.tick_birth_mechanics(tick_u64, tick);
+
+        // ── 20. Conflict state update — trauma decay, combat fatigue, feud decay ──
+        for agent in &mut self.agents {
+            agent.conflict.update();
+            // §19.5.G: Feud decay — remove feuds older than 500 ticks
+            let feud_decay_threshold = tick_u64.saturating_sub(500);
+            let mut keep = 0;
+            for j in 0..agent.feuds.len() {
+                if agent.feud_ticks[j] > feud_decay_threshold {
+                    agent.feuds[keep] = agent.feuds[j];
+                    agent.feud_ticks[keep] = agent.feud_ticks[j];
+                    keep += 1;
+                }
+            }
+            agent.feuds.truncate(keep);
+            agent.feud_ticks.truncate(keep);
+        }
+
+        // ── 21. §19.5.E Carrying cost — heavy loads increase fatigue ──
+        // Agents who performed physical actions (Work) incur carrying cost based on load.
+        // Since agents don't carry items yet, this serves as a workload fatigue modifier.
+        for i in 0..self.agents.len() {
+            if self.agents[i].current_action == ActionKind::Work {
+                let load_ratio = Fixed::from_f64(0.4); // moderate load for work
+                let fatigue_cost = logistics::carrying_cost(
+                    load_ratio,
+                    Fixed::from_f64(1.0),
+                    self.agents[i].needs.fatigue,
+                );
+                self.agents[i].needs.fatigue = (
+                    self.agents[i].needs.fatigue + fatigue_cost
+                ).clamp_01();
+            }
+        }
+
+        // ── 19. Market system: price formation, inequality tracking ──
+        {
+            let agent_economic_state: Vec<_> = self.agents.iter()
+                .map(|a| (a.needs.clone(), a.wealth.clone()))
+                .collect();
+            market::system_market(&self.world, &agent_economic_state, &mut self.market, tick_u64);
+
+            // §4.4: Update black market state based on current scarcity and enforcement
+            // Scarcity is normalized: 0 = abundant, 1 = critically scarce
+            let total_grain = self.world.total_food();
+            let expected_capacity = Fixed::from_int(self.agents.len() as i64) * Fixed::from_int(EXPECTED_GRAIN_PER_AGENT as i64);
+            let scarcity = if expected_capacity > Fixed::ZERO {
+                (Fixed::ONE - total_grain / expected_capacity).clamp_01()
+            } else {
+                Fixed::ZERO
+            };
+            let council_enforcement = self.institutions.iter()
+                .filter(|i| i.kind == InstitutionKind::Council)
+                .map(|i| i.enforcement_capacity)
+                .fold(Fixed::ZERO, std::cmp::Ord::max);
+            self.black_market.update(scarcity, council_enforcement);
+        }
+
+        // ── 18. Demography: aging and mortality ──
+        if tick_u64.is_multiple_of(10) { // process demography every 10 ticks to reduce overhead
+            let mut deaths = Vec::new();
+            for i in 0..self.agents.len() {
+                let (new_age, died) = demography::age_agent(
+                    self.agents[i].age,
+                    self.agents[i].body.health,
+                    self.agents[i].body.energy,
+                    &self.demography_config,
+                );
+                self.agents[i].age = new_age;
+                if died {
+                    deaths.push(i);
+                }
+            }
+            // Remove dead agents (in reverse order to preserve indices)
+            for &idx in deaths.iter().rev() {
+                let agent_id = AgentId::new(idx as u64);
+                tracing::warn!(
+                    agent = self.agents[idx].name.as_str(),
+                    age = self.agents[idx].age.to_f64(),
+                    tick = tick_u64,
+                    "Agent died"
+                );                    // §19.5.F: Inheritance — transfer wealth to spouse and children
+                let inherited_wealth = self.agents[idx].wealth.coin;
+                if inherited_wealth > Fixed::ZERO {
+                    let mut heirs: Vec<usize> = Vec::new();
+                    // Spouse inherits first — but only if not also dying this tick
+                    if let Some(spouse_idx) = self.agents[idx].partner {
+                        if spouse_idx < self.agents.len() && !deaths.contains(&spouse_idx) {
+                            heirs.push(spouse_idx);
+                        }
+                    }
+                    // Children inherit second — skip if also dying
+                    for child_idx in 0..self.agents.len() {
+                        if child_idx != idx && !deaths.contains(&child_idx) {
+                            let is_child = self.agents[child_idx].parent_a == Some(idx)
+                                || self.agents[child_idx].parent_b == Some(idx);
+                            if is_child {
+                                heirs.push(child_idx);
+                            }
+                        }
+                    }
+                    // Split wealth among heirs (or give to a random agent if no heirs)
+                    if !heirs.is_empty() {
+                        let share = inherited_wealth / Fixed::from_f64(heirs.len() as f64);
+                        for &heir_idx in &heirs {
+                            if heir_idx < self.agents.len() {
+                                self.agents[heir_idx].wealth.coin += share;
+                            }
+                        }
+                    }
+                    self.journal.record(tick_u64, agent_id, JournalEntryKind::Inheritance {
+                        heir_count: heirs.len() as u64,
+                        amount: inherited_wealth.to_f64(),
+                    });
+                }
+                self.agents.remove(idx);
+                self.agent_diseases.remove(idx);
+                // Remove from relationships
+                self.relationships.retain(|r| r.from != agent_id && r.to != agent_id);
+                // Remove from institutions
+                for inst in &mut self.institutions {
+                    inst.remove_member(agent_id);
+                }
+            }
+        }
+
+        // §19.5.J: Trim provenance traces to prevent unbounded growth
+        self.provenance.trim(institutions::MAX_PROVENANCE_RECORDS);
 
     }
 
