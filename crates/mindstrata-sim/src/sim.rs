@@ -2,7 +2,7 @@
 
 use crate::actions::{self, ActionKind};
 use crate::conflict::{self, ConflictKind, ConflictState};
-use crate::cultural::{CulturalState, Knowledge, KnowledgeCategory};
+use crate::culture::{CulturalState, Knowledge, KnowledgeCategory};
 use crate::logistics;
 use crate::gossip;
 use crate::market::{self, MarketState, WealthState};

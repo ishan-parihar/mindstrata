@@ -11,7 +11,7 @@
 //! ```
 
 use crate::black_market::BlackMarketState;
-use crate::cultural::Knowledge;
+use crate::culture::Knowledge;
 use crate::demography::DemographyConfig;
 use crate::ecology::{EcologyConfig, SeasonTracker};
 use crate::health::{ActiveDisease, HealthConfig};
