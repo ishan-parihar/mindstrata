@@ -1186,10 +1186,19 @@ impl Simulation {
                     self.agents[i].status_v2.network_centrality = avg_quality;
                 }
 
-                // Architecture-plan-2 §10.2: RelationshipV2 decay.
-                // Decay all relationship V2s once per tick.
+                // Architecture-plan-2 §17.3: Relationship caching.
+                // Only decay relationships that have been recently active (dirty)
+                // or are due for the daily full update. Dormant relationships
+                // receive no per-tick decay — they only decay during the daily pass.
                 for rv2 in &mut self.agents[i].relationship_v2s {
-                    rv2.decay(1);
+                    if rv2.is_active_this_tick(tick_u64) {
+                        rv2.decay(1);
+                        // After daily boundary decay, clear dirty so dormant
+                        // relationships return to sleep on the next tick.
+                        if tick_u64 > 0 && tick_u64 % 144 == 0 {
+                            rv2.clear_dirty(tick_u64);
+                        }
+                    }
                 }
             }
 

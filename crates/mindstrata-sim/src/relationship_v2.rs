@@ -129,6 +129,12 @@ pub struct RelationshipV2 {
     pub last_negative_tick: u64,
     pub decay_rate: Fixed,
     pub volatility: Fixed,
+
+    // §17.3: Relationship caching — skip full updates for dormant relationships.
+    // Updated on every interaction; daily decay pass updates all stale ones.
+    pub last_update_tick: u64,
+    /// Whether this relationship has pending changes that need processing.
+    pub dirty: bool,
 }
 
 impl RelationshipV2 {
@@ -161,6 +167,8 @@ impl RelationshipV2 {
             last_negative_tick: 0,
             decay_rate: Fixed::from_f64(0.0005),
             volatility: Fixed::from_f64(0.5),
+            last_update_tick: 0,
+            dirty: false,
         }
     }
 
@@ -180,6 +188,8 @@ impl RelationshipV2 {
         self.gratitude = (self.gratitude + magnitude * Fixed::from_f64(0.01)).clamp_01();
         self.resentment = (self.resentment - magnitude * Fixed::from_f64(0.005)).max(Fixed::ZERO);
         self.last_positive_tick = tick;
+        self.last_update_tick = tick;
+        self.dirty = true;
         self.interaction_count += 1;
     }
 
@@ -190,6 +200,8 @@ impl RelationshipV2 {
         self.resentment = (self.resentment + magnitude * Fixed::from_f64(0.02)).clamp_01();
         self.fear = (self.fear + magnitude * Fixed::from_f64(0.01)).clamp_01();
         self.last_negative_tick = tick;
+        self.last_update_tick = tick;
+        self.dirty = true;
         self.interaction_count += 1;
     }
 
@@ -198,6 +210,29 @@ impl RelationshipV2 {
         self.trust = (self.trust - decay).max(Fixed::ZERO);
         self.affection = (self.affection - decay * Fixed::from_f64(0.5)).max(Fixed::ZERO);
         self.intimacy = (self.intimacy - decay * Fixed::from_f64(0.3)).max(Fixed::ZERO);
+        // NOTE: dirty is NOT set here — decay is passive, not an interaction.
+        // dirty is only set by record_positive/record_negative (active interactions).
+    }
+
+    /// §17.3: Check if this relationship needs decay this tick.
+    ///
+    /// Relationships are "dormant" when no interaction, rumor, or emotional
+    /// event has touched them recently. Dormant relationships only receive
+    /// the daily decay pass (every 144 ticks). Active (dirty) relationships
+    /// decay every tick until cleared.
+    pub fn is_active_this_tick(&self, current_tick: u64) -> bool {
+        // Active if recently interacted with (dirty)
+        if self.dirty {
+            return true;
+        }
+        // Also active on daily boundary for the bulk decay pass
+        current_tick > 0 && current_tick % 144 == 0
+    }
+
+    /// §17.3: Clear dirty flag after processing.
+    pub fn clear_dirty(&mut self, tick: u64) {
+        self.dirty = false;
+        self.last_update_tick = tick;
     }
 }
 
@@ -237,5 +272,78 @@ mod tests {
     fn stage_progression() {
         let next = RelationshipStage::Unnoticed.next_positive().unwrap();
         assert_eq!(next, RelationshipStage::Noticed);
+    }
+
+    // ── §17.3 Relationship Caching Tests ──────────────────────────────
+
+    #[test]
+    fn decay_does_not_set_dirty() {
+        // §17.3: decay() is passive — it must NOT set the dirty flag.
+        let mut r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        assert!(!r.dirty);
+        r.decay(1);
+        assert!(!r.dirty, "decay() must not set dirty flag");
+    }
+
+    #[test]
+    fn record_positive_sets_dirty() {
+        let mut r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        assert!(!r.dirty);
+        r.record_positive(10, Fixed::from_f64(0.5));
+        assert!(r.dirty, "record_positive must set dirty");
+        assert_eq!(r.last_update_tick, 10);
+    }
+
+    #[test]
+    fn record_negative_sets_dirty() {
+        let mut r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        assert!(!r.dirty);
+        r.record_negative(20, Fixed::from_f64(0.5));
+        assert!(r.dirty, "record_negative must set dirty");
+        assert_eq!(r.last_update_tick, 20);
+    }
+
+    #[test]
+    fn dormant_relationship_skips_decay() {
+        // §17.3: A non-dirty relationship at a non-daily-boundary tick
+        // should NOT be active (i.e., should skip decay).
+        let r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        // Tick 50 is neither dirty nor a daily boundary (144)
+        assert!(!r.is_active_this_tick(50),
+            "Dormant relationship should not be active at non-daily tick");
+    }
+
+    #[test]
+    fn daily_boundary_activates_all() {
+        // §17.3: On daily boundary (tick % 144 == 0), all relationships
+        // should be active for the bulk decay pass.
+        let r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        assert!(r.is_active_this_tick(144),
+            "Daily boundary should activate all relationships");
+        assert!(r.is_active_this_tick(288),
+            "Daily boundary should activate all relationships");
+    }
+
+    #[test]
+    fn dirty_relationship_stays_active_until_cleared() {
+        let mut r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        r.record_positive(5, Fixed::from_f64(0.5));
+        // At tick 100 (non-daily), still active because dirty
+        assert!(r.is_active_this_tick(100),
+            "Dirty relationship should be active at any tick");
+        // Clear dirty
+        r.clear_dirty(100);
+        assert!(!r.is_active_this_tick(100),
+            "After clear_dirty, relationship should be dormant");
+    }
+
+    #[test]
+    fn clear_dirty_resets_flag() {
+        let mut r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        r.record_positive(5, Fixed::from_f64(0.5));
+        assert!(r.dirty);
+        r.clear_dirty(10);
+        assert!(!r.dirty);
+        assert_eq!(r.last_update_tick, 10);
     }
 }
