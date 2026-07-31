@@ -47,3 +47,4 @@ pub mod status_dims;
 
 pub use sim::Simulation;
 pub mod epistemic;
+pub mod agent_tier;

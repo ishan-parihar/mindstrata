@@ -200,6 +200,8 @@ pub struct AgentBundle {
     pub motivation: crate::psychology::MotivationState,
     /// Architecture-plan-2 §8.1.20: Decision policy integrating all psychology into action.
     pub decision_policy: crate::psychology::DecisionPolicy,
+    /// Architecture-plan-2 §17: Agent tier for level-of-detail simulation.
+    pub agent_tier: crate::agent_tier::AgentTierState,
 }
 
 /// §4.2: Skill levels that improve through repeated practice.
@@ -575,6 +577,9 @@ impl Simulation {
                     personality_clone.openness,
                     personality_clone.agreeableness,
                     personality_clone.risk_tolerance,
+                ),
+                agent_tier: crate::agent_tier::AgentTierState::new(
+                    crate::agent_tier::AgentTier::Secondary, 0,
                 ),
             });
         }
@@ -3105,6 +3110,9 @@ impl Simulation {
                     cognitive_runtime: crate::psychology::CognitiveRuntime::default(),
                     motivation: crate::psychology::MotivationState::default(),
                     decision_policy: crate::psychology::DecisionPolicy::default(),
+                    agent_tier: crate::agent_tier::AgentTierState::new(
+                        crate::agent_tier::AgentTier::Secondary, tick_u64,
+                    ),
                 });                // Add relationships to all existing agents
                 for existing_idx in 0..self.agents.len() - 1 {
                     let trust = if existing_idx == parent_a || existing_idx == parent_b {
