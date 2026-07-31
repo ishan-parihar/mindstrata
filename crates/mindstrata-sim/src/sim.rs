@@ -2324,8 +2324,30 @@ impl Simulation {
                     let negative_signal_b = (Fixed::ONE - trust_from_to) * Fixed::from_f64(0.1);
                     model_b.update_from_observation(positive_signal_b, negative_signal_b, trust_from_to, Fixed::from_f64(0.5));
                     model_b.infer_intent(trust_from_to, positive_signal_b, negative_signal_b);
-                    // Gossip-specific processing: belief sharing only for Gossip interactions.
-                    // Help and Trade only trigger attachment/ToM updates above.
+                    // Architecture-plan-2 §8.1.18: Cultural category encounter during interaction.
+                    // When agents interact, each perceives the other's cultural identity.
+                    // Same-category encounter = positive (reinforcement); cross-category = outgroup exposure.
+                    // Extract category names first to avoid holding immutable borrows during mutable updates.
+                    let (from_primary_cat, to_primary_cat) = {
+                        let fc = self.agents[from_idx].cultural_cognition.categories.iter()
+                            .max_by_key(|c| c.identification.to_raw() as u64)
+                            .map(|c| c.name.clone());
+                        let tc = self.agents[to_idx].cultural_cognition.categories.iter()
+                            .max_by_key(|c| c.identification.to_raw() as u64)
+                            .map(|c| c.name.clone());
+                        (fc, tc)
+                    };
+                    if let (Some(ref from_name), Some(ref to_name)) = (&from_primary_cat, &to_primary_cat) {
+                        let same_category = from_name == to_name;
+                        // from agent encounters to's category
+                        if let Some(cat) = self.agents[from_idx].cultural_cognition.categories.iter_mut().find(|c| &c.name == to_name) {
+                            cat.encounter(same_category);
+                        }
+                        // to agent encounters from's category
+                        if let Some(cat) = self.agents[to_idx].cultural_cognition.categories.iter_mut().find(|c| &c.name == from_name) {
+                            cat.encounter(same_category);
+                        }
+                    }
                     // Gossip-specific processing: belief sharing only for Gossip interactions.
                     // Help and Trade only trigger attachment/ToM updates above.
                     if !matches!(kind, mindstrata_core::event::InteractionKind::Gossip) {
@@ -3336,6 +3358,7 @@ impl Simulation {
                 let agent_id = AgentId::new(child_idx as u64);
 
                 let child_embodied = EmbodiedState::random(child_age, &mut child_rng);
+                let child_attachment_vulnerability = child_embodied.genome.trait_predispositions.attachment_vulnerability;
                 let child_neuroticism = child_personality.neuroticism;
                 let child_openness = child_personality.openness;
                 self.agents.push(AgentBundle {
@@ -3383,7 +3406,15 @@ impl Simulation {
                         inter
                     },
                     self_model: crate::psychology::SelfModel::default(),
-                    attachment: crate::psychology::AttachmentSystem::default(),
+                    attachment: {
+                        let mut att = crate::psychology::AttachmentSystem::default();
+                        att.initialize(
+                            Fixed::from_f64(0.7), // high caregiver security for child
+                            Fixed::ZERO, // no trauma history
+                            child_attachment_vulnerability,
+                        );
+                        att
+                    },
                     emotion_regulation: crate::psychology::EmotionRegulationState::default(),
                     moral_cognition: crate::psychology::MoralCognition::default(),
                     prospection: crate::psychology::ProspectionState::default(),
