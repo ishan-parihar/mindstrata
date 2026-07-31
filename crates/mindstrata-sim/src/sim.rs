@@ -2087,14 +2087,27 @@ impl Simulation {
                         distortion: (result.mutated_confidence - rumor.confidence).abs(),
                         tick,
                     });
-                    // §13.1: Meme transmission
-                    let sus = Fixed::from_f64(0.5);
-                    let sk = Fixed::from_f64(0.2);
+                    // §13.1 + §13.2: Meme transmission using agent epistemic traits.
+                    // susceptibility: gullible agents (high conspiracy_susceptibility) accept
+                    //   memes more readily; floor of 0.2 ensures realistic information permeability.
+                    // skepticism: critical agents (high source_monitoring, low dogmatism) resist
+                    //   memes more; multiplier 0.6 gives meaningful differentiation between
+                    //   gullible (≈0.08) and critical (≈0.6) agents.
+                    let listener_susceptibility = (
+                        self.agents[to_idx].epistemic.conspiracy_susceptibility
+                        * Fixed::from_f64(0.6)
+                        + Fixed::from_f64(0.2)
+                    ).clamp_01();
+                    let listener_skepticism = (
+                        self.agents[to_idx].epistemic.source_monitoring
+                        * (Fixed::ONE - self.agents[to_idx].epistemic.dogmatism * Fixed::from_f64(0.5))
+                        * Fixed::from_f64(0.6)
+                    ).clamp_01();
                     let nb = Fixed::from_f64(0.05);
                     let mut sampled = 0u32;
                     for meme in &mut self.meme_registry.memes {
                         if !meme.active || sampled >= 3 { break; }
-                        let chance = meme.transmission_chance(source_trust, sus, sk);
+                        let chance = meme.transmission_chance(source_trust, listener_susceptibility, listener_skepticism);
                         let roll = self.rng.get_mut(RngStream::Social).random_range(0.0f64..1.0);
                         if Fixed::from_f64(roll) < chance {
                             meme.host_count = meme.host_count.saturating_add(1);

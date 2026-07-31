@@ -283,4 +283,74 @@ mod tests {
         reg.register(m2);
         assert_eq!(reg.active_count(), 1);
     }
+
+    // ── §13.2 Agent-specific meme propagation tests ──────────────────
+
+    /// §13.2: Gullible agent (high susceptibility, low skepticism) accepts
+    /// memes more readily than a critical agent.
+    #[test]
+    fn gullible_agent_accepts_more_memes() {
+        let m = Meme::new(0, "test".into(), MemeContent::Conspiracy,
+            Fixed::from_f64(0.8), Fixed::from_f64(0.7), 0);
+        // Gullible: high conspiracy_susceptibility → high susceptibility
+        //   susceptibility = 0.8 * 0.6 + 0.2 = 0.68
+        //   skepticism = 0.2 * (1 - 0.7*0.5) * 0.6 = 0.066
+        let gullible_sus = Fixed::from_f64(0.8) * Fixed::from_f64(0.6)
+            + Fixed::from_f64(0.2);
+        let gullible_sk = Fixed::from_f64(0.2)
+            * (Fixed::ONE - Fixed::from_f64(0.7) * Fixed::from_f64(0.5))
+            * Fixed::from_f64(0.6);
+        let gullible = m.transmission_chance(Fixed::from_f64(0.7), gullible_sus, gullible_sk);
+
+        // Critical: low conspiracy_susceptibility → low susceptibility
+        //   susceptibility = 0.1 * 0.6 + 0.2 = 0.26
+        //   skepticism = 0.8 * (1 - 0.2*0.5) * 0.6 = 0.432
+        let critical_sus = Fixed::from_f64(0.1) * Fixed::from_f64(0.6)
+            + Fixed::from_f64(0.2);
+        let critical_sk = Fixed::from_f64(0.8)
+            * (Fixed::ONE - Fixed::from_f64(0.2) * Fixed::from_f64(0.5))
+            * Fixed::from_f64(0.6);
+        let critical = m.transmission_chance(Fixed::from_f64(0.7), critical_sus, critical_sk);
+
+        assert!(gullible > critical,
+            "Gullible agent ({}) should accept more than critical ({})",
+            gullible.to_f64(), critical.to_f64());
+    }
+
+    /// §13.2: Dogmatic agents resist skepticism more than open agents.
+    #[test]
+    fn dogmatism_reduces_skepticism_effectiveness() {
+        let m = Meme::new(0, "test".into(), MemeContent::Moral,
+            Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0);
+        // Dogmatic: source_monitoring=0.8, dogmatism=0.9
+        //   skepticism = 0.8 * (1 - 0.9*0.5) * 0.6 = 0.264
+        let dogmatic_sk = Fixed::from_f64(0.8)
+            * (Fixed::ONE - Fixed::from_f64(0.9) * Fixed::from_f64(0.5))
+            * Fixed::from_f64(0.6);
+        // Open: source_monitoring=0.8, dogmatism=0.1
+        //   skepticism = 0.8 * (1 - 0.1*0.5) * 0.6 = 0.456
+        let open_sk = Fixed::from_f64(0.8)
+            * (Fixed::ONE - Fixed::from_f64(0.1) * Fixed::from_f64(0.5))
+            * Fixed::from_f64(0.6);
+        let dogmatic_chance = m.transmission_chance(
+            Fixed::from_f64(0.5), Fixed::from_f64(0.5), dogmatic_sk);
+        let open_chance = m.transmission_chance(
+            Fixed::from_f64(0.5), Fixed::from_f64(0.5), open_sk);
+
+        assert!(dogmatic_chance > open_chance,
+            "Dogmatic agent ({}) should be more susceptible than open ({})",
+            dogmatic_chance.to_f64(), open_chance.to_f64());
+    }
+
+    /// §13.2: Suspicion floors ensure even critical agents aren't perfectly immune.
+    #[test]
+    fn suspicion_floor_prevents_perfect_immunity() {
+        // Perfect agent: conspiracy_susceptibility=0, source_monitoring=1, dogmatism=0
+        let perfect_sus = Fixed::from_f64(0.0) * Fixed::from_f64(0.6)
+            + Fixed::from_f64(0.2);
+        assert!(perfect_sus >= Fixed::from_f64(0.2),
+            "Suspicion floor of 0.2 not enforced: {}", perfect_sus.to_f64());
+        assert!(perfect_sus <= Fixed::ONE,
+            "Suspicion should not exceed 1.0: {}", perfect_sus.to_f64());
+    }
 }
