@@ -3604,7 +3604,85 @@ impl Simulation {
             // Architecture-plan-2 §13.5: Decay collective memory daily.
             self.collective_memory_registry.tick_all(tick_u64);
             // Architecture-plan-2 §13.6: Update echo chamber polarization daily.
-            self.echo_chamber.tick_update();
+            // Assign agents to belief clusters based on dominant belief orientation.
+            // Agents with similar beliefs cluster together; cross-cutting ties are
+            // social connections between agents in different clusters.
+            {
+                // Phase 1: Create clusters from agents' dominant belief orientation.
+                // Use belief confidence sum as a simple proxy for belief orientation.
+                let n = self.agents.len();
+                if n >= 2 {
+                    // Clear existing clusters and rebuild daily
+                    self.echo_chamber.clusters.clear();
+                    // Create 2 default clusters (pro-institution vs anti-institution)
+                    let c_pro = self.echo_chamber.create_cluster("pro_institution".into());
+                    let c_anti = self.echo_chamber.create_cluster("anti_institution".into());
+                    for i in 0..n {
+                        // Simple heuristic: high traditionalism + high agreeableness = pro-institution
+                        let pro_score = self.agents[i].personality.traditionalism
+                            + self.agents[i].personality.agreeableness;
+                        let cluster_id = if pro_score > Fixed::from_f64(1.0) {
+                            c_pro
+                        } else {
+                            c_anti
+                        };
+                        if let Some(cluster) = self.echo_chamber.get_cluster_mut(cluster_id) {
+                            cluster.add_member(i);
+                            // Accumulate emotional charge from agent's affect
+                            cluster.emotional_charge = (cluster.emotional_charge
+                                + self.agents[i].affect.arousal * Fixed::from_f64(0.1)).clamp_01();
+                            cluster.identity_fusion = (cluster.identity_fusion
+                                + self.agents[i].personality.conformity * Fixed::from_f64(0.05)).clamp_01();
+                        }
+                    }
+                    // Phase 2: Compute cross-cutting ties from relationship_v2s.
+                    // Pre-compute membership map for O(1) cluster lookup per agent.
+                    // An agent has a cross-cutting tie if they have a high-trust relationship
+                    // with someone in a different cluster. Each edge counted once (j > i).
+                    let membership: Vec<Option<usize>> = (0..n)
+                        .map(|i| self.echo_chamber.clusters.iter()
+                            .find(|c| c.members.contains(&i))
+                            .map(|c| c.id))
+                        .collect();
+                    for i in 0..n {
+                        if let Some(my_c) = membership[i] {
+                            for j in (i + 1)..n {
+                                if let Some(their_c) = membership[j] {
+                                    if my_c != their_c {
+                                        // Check relationship trust (i→j)
+                                        let n_agents_local = self.agents.len();
+                                        let idx = Self::relationship_v2_index(i, j, n_agents_local);
+                                        if idx < self.agents[i].relationship_v2s.len() {
+                                            let trust = self.agents[i].relationship_v2s[idx].trust;
+                                            if trust > Fixed::from_f64(0.5) {
+                                                // Count once per cluster involved
+                                                if let Some(c) = self.echo_chamber.get_cluster_mut(my_c) {
+                                                    c.cross_cutting_ties = c.cross_cutting_ties.saturating_add(1);
+                                                }
+                                                if let Some(c) = self.echo_chamber.get_cluster_mut(their_c) {
+                                                    c.cross_cutting_ties = c.cross_cutting_ties.saturating_add(1);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Phase 3: Normalize cluster emotional charge and compute polarization
+                    for cluster in &mut self.echo_chamber.clusters {
+                        let member_count = cluster.members.len() as i64;
+                        if member_count > 0 {
+                            cluster.emotional_charge = cluster.emotional_charge
+                                / Fixed::from_int(member_count);
+                            cluster.identity_fusion = cluster.identity_fusion
+                                / Fixed::from_int(member_count);
+                            cluster.outgroup_hostility = cluster.cohesion * cluster.identity_fusion;
+                        }
+                    }
+                    self.echo_chamber.compute_polarization();
+                }
+            }
         }
 
         // Architecture-plan-2 §12.5: Execute due rituals every 12 ticks (~2 hours).
