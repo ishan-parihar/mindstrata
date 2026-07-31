@@ -255,6 +255,12 @@ pub struct Simulation {
     pub propaganda_registry: crate::culture::PropagandaRegistry,
     /// Architecture-plan-2 §12.5: Ritual registry — structured ceremonial activities.
     pub ritual_registry: crate::culture::RitualRegistry,
+    /// Architecture-plan-2 §13.3: Rumor registry — rumors with uncertainty and social stakes.
+    pub rumor_registry: crate::culture::RumorRegistry,
+    /// Architecture-plan-2 §13.5: Collective memory registry — shared group memories.
+    pub collective_memory_registry: crate::culture::CollectiveMemoryRegistry,
+    /// Architecture-plan-2 §13.6: Echo chamber state — belief clusters and polarization.
+    pub echo_chamber: crate::culture::EchoChamberState,
 }
 
 impl Simulation {
@@ -307,6 +313,9 @@ impl Simulation {
             meme_registry: crate::culture::MemeRegistry::default(),
             propaganda_registry: crate::culture::PropagandaRegistry::default(),
             ritual_registry: crate::culture::RitualRegistry::default(),
+            rumor_registry: crate::culture::RumorRegistry::default(),
+            collective_memory_registry: crate::culture::CollectiveMemoryRegistry::default(),
+            echo_chamber: crate::culture::EchoChamberState::new(),
         }
     }
 
@@ -352,6 +361,9 @@ impl Simulation {
             meme_registry: crate::culture::MemeRegistry::default(),
             propaganda_registry: crate::culture::PropagandaRegistry::default(),
             ritual_registry: crate::culture::RitualRegistry::default(),
+            rumor_registry: crate::culture::RumorRegistry::default(),
+            collective_memory_registry: crate::culture::CollectiveMemoryRegistry::default(),
+            echo_chamber: crate::culture::EchoChamberState::new(),
         }
     }
 
@@ -3499,8 +3511,14 @@ impl Simulation {
             }
             // Architecture-plan-2 §13.1: Decay meme novelty daily.
             self.meme_registry.tick_all();
+            // Architecture-plan-2 §13.3: Decay rumor prevalence daily.
+            self.rumor_registry.tick_all(tick_u64);
             // Architecture-plan-2 §13.4: Tick propaganda campaigns daily.
             self.propaganda_registry.tick_all();
+            // Architecture-plan-2 §13.5: Decay collective memory daily.
+            self.collective_memory_registry.tick_all(tick_u64);
+            // Architecture-plan-2 §13.6: Update echo chamber polarization daily.
+            self.echo_chamber.tick_update();
         }
 
         // Architecture-plan-2 §12.5: Execute due rituals every 12 ticks (~2 hours).
