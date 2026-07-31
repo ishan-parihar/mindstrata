@@ -2338,12 +2338,26 @@ impl Simulation {
                                 sampled += 1;
                             }
                         }
+                    }                        // Architecture-plan-2 §13.3: Create rumor from gossip.
+                        // When gossip is accepted, create a RumorV2 entry if the gossip
+                        // is emotionally charged or accusation-related.
+                        if result.accepted && result.emotional_charge > Fixed::from_f64(0.3) {
+                            let mut rumor = crate::culture::RumorV2::new(
+                                0,
+                                format!("gossip about prop_{}", result.proposition_id),
+                                Some(to.as_u64() as usize),
+                                result.emotional_charge * Fixed::from_f64(0.5),
+                                source_trust,
+                                result.emotional_charge,
+                                tick_u64,
+                            );
+                            // Record source in chain so telephone-game fidelity works
+                            rumor.record_transmission(from.as_u64() as usize, tick_u64);
+                            self.rumor_registry.register(rumor);
+                        }
                     }
                 }
-            }
-        }
-
-        // ── 11c. §19.5.I Knowledge diffusion — cultural knowledge spreads through social networks ──
+            } §19.5.I Knowledge diffusion — cultural knowledge spreads through social networks ──
         for ev in &self.events[pre_tick_events..].to_vec() {
             if let SimEvent::InteractionOccurred {
                 from,
@@ -3515,6 +3529,78 @@ impl Simulation {
             self.rumor_registry.tick_all(tick_u64);
             // Architecture-plan-2 §13.4: Tick propaganda campaigns daily.
             self.propaganda_registry.tick_all();
+            // Architecture-plan-2 §13.4: Apply propaganda effects to target agents.
+            // For each active campaign, compute effectiveness using institutional legitimacy
+            // and audience fear, then nudge target agents' emotional state.
+            let n_agents = self.agents.len();
+            let n_insts = self.institutions.len();
+            let campaign_ids: Vec<usize> = self.propaganda_registry.campaigns.iter()
+                .filter(|c| c.active)
+                .map(|c| c.id)
+                .collect();
+            for campaign_id in campaign_ids {
+                let (sponsor, targets_clone, intensity, coercion) = {
+                    let c = &self.propaganda_registry.campaigns[campaign_id];
+                    (c.sponsor, c.targets.clone(), c.intensity, c.coercion)
+                };
+                // Get sponsor institution's legitimacy (0.5 if sponsor out of bounds)
+                let legitimacy = if sponsor < n_insts {
+                    self.institutions[sponsor].legitimacy
+                } else {
+                    Fixed::from_f64(0.5)
+                };
+                // Compute average audience fear from target agents
+                let audience_fear = if !targets_clone.is_empty() {
+                    let total: Fixed = targets_clone.iter()
+                        .filter(|&&t| t < n_agents)
+                        .map(|&t| self.agents[t].affect.fear)
+                        .fold(Fixed::ZERO, |acc, f| acc + f);
+                    let count = targets_clone.iter().filter(|&&t| t < n_agents).count() as i64;
+                    if count > 0 { total / Fixed::from_int(count) } else { Fixed::ZERO }
+                } else {
+                    Fixed::ZERO
+                };
+                // Compute effectiveness (mutates the campaign)
+                if let Some(campaign) = self.propaganda_registry.campaigns.get_mut(campaign_id) {
+                    campaign.compute_effectiveness(legitimacy, audience_fear);
+                }
+                // Apply propaganda effect to each target agent
+                let effectiveness = self.propaganda_registry.campaigns[campaign_id].effectiveness;
+                if effectiveness > Fixed::from_f64(0.1) {
+                    let propaganda_push = effectiveness * intensity * Fixed::from_f64(0.05);
+                    let coercion_push = coercion * Fixed::from_f64(0.03);
+                    let mut pushback_accum = Fixed::ZERO;
+                    for &target in &targets_clone {
+                        if target < n_agents {
+                            // Nudge affect toward propaganda's emotional tone
+                            self.agents[target].affect.valence = (
+                                self.agents[target].affect.valence
+                                + propaganda_push * Fixed::from_f64(0.02)
+                            ).clamp_01();
+                            // Coercion increases fear
+                            if coercion > Fixed::from_f64(0.3) {
+                                self.agents[target].affect.fear = (
+                                    self.agents[target].affect.fear
+                                    + coercion_push
+                                ).clamp_01();
+                                // Agents with high autonomy push back against coercion
+                                let autonomy = self.agents[target].personality.dominance
+                                    + self.agents[target].personality.openness;
+                                if autonomy > Fixed::from_f64(1.0) {
+                                    pushback_accum = (pushback_accum
+                                        + Fixed::from_f64(0.01)).clamp_01();
+                                }
+                            }
+                        }
+                    }
+                    // Record accumulated pushback to increase campaign resistance
+                    if pushback_accum > Fixed::ZERO {
+                        if let Some(c) = self.propaganda_registry.campaigns.get_mut(campaign_id) {
+                            c.record_pushback(pushback_accum);
+                        }
+                    }
+                }
+            }
             // Architecture-plan-2 §13.5: Decay collective memory daily.
             self.collective_memory_registry.tick_all(tick_u64);
             // Architecture-plan-2 §13.6: Update echo chamber polarization daily.
