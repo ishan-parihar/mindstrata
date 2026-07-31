@@ -179,6 +179,8 @@ pub struct AgentBundle {
     pub developmental: DevelopmentalPsychState,
     /// Architecture-plan-2 §8.1.15: Mental health risk dynamics.
     pub psychopathology: PsychopathologyState,
+    /// Architecture-plan-2 §8.1.9: Theory of Mind — models of other agents' minds.
+    pub mind_models: crate::psychology::theory_of_mind::MindModels,
     /// Architecture-plan-2 §8.1.19: Skills and habits.
     pub psych_skills: PsychSkillState,
     /// Architecture-plan-2 §10.2: Enriched relationship model.
@@ -549,6 +551,7 @@ impl Simulation {
                 narrative: crate::psychology::NarrativeIdentity::default(),
                 developmental: crate::psychology::DevelopmentalPsychState::default(),
                 psychopathology: crate::psychology::PsychopathologyState::default(),
+                mind_models: crate::psychology::theory_of_mind::MindModels::default(),
                 psych_skills: crate::psychology::SkillState::default(),
                 relationship_v2s: Vec::new(), // populated after agents are created
                 attraction: crate::attraction::AttractionModel::default(),
@@ -2262,17 +2265,58 @@ impl Simulation {
         }
 
         // ── 11b. §11.2 Gossip propagation with mutation ──
+        // Also wires §8.1.14 Attachment (on_reunion) and §8.1.9 Theory of Mind
         for ev in &self.events[pre_tick_events..].to_vec() {
             if let SimEvent::InteractionOccurred {
                 from,
                 to,
-                kind: mindstrata_core::event::InteractionKind::Gossip,
+                kind,
                 ..
             } = ev
             {
+                // Only process Gossip, Help, and Trade interactions
+                if !matches!(
+                    kind,
+                    mindstrata_core::event::InteractionKind::Gossip
+                    | mindstrata_core::event::InteractionKind::Help
+                    | mindstrata_core::event::InteractionKind::Trade
+                ) {
+                    continue;
+                }
                 let from_idx = from.as_u64() as usize;
                 let to_idx = to.as_u64() as usize;
                 if from_idx < self.agents.len() && to_idx < self.agents.len() {
+                    // Architecture-plan-2 §8.1.14: Attachment activation during social contact.
+                    // Reunion reduces separation distress; comfort increases security.
+                    self.agents[from_idx].attachment.on_reunion();
+                    self.agents[to_idx].attachment.on_reunion();
+                    // Architecture-plan-2 §8.1.9: Theory of Mind update from interaction.
+                    // Agents update their mind models of each other based on observed behavior.
+                    let trust_from_to = self.relationships.iter()
+                        .find(|r| r.from == *from && r.to == *to)
+                        .map_or(Fixed::from_f64(0.5), |r| r.trust);
+                    let trust_to_from = self.relationships.iter()
+                        .find(|r| r.from == *to && r.to == *from)
+                        .map_or(Fixed::from_f64(0.5), |r| r.trust);
+                    // Update from_idx's model of to_idx
+                    let model_a = self.agents[from_idx].mind_models.get_or_create(*to);
+                    let positive_signal = trust_to_from * Fixed::from_f64(0.3);
+                    let negative_signal = (Fixed::ONE - trust_to_from) * Fixed::from_f64(0.1);
+                    model_a.update_from_observation(positive_signal, negative_signal, trust_to_from, Fixed::from_f64(0.5));
+                    model_a.infer_intent(trust_to_from, positive_signal, negative_signal);
+                    // Update to_idx's model of from_idx
+                    let model_b = self.agents[to_idx].mind_models.get_or_create(*from);
+                    let positive_signal_b = trust_from_to * Fixed::from_f64(0.3);
+                    let negative_signal_b = (Fixed::ONE - trust_from_to) * Fixed::from_f64(0.1);
+                    model_b.update_from_observation(positive_signal_b, negative_signal_b, trust_from_to, Fixed::from_f64(0.5));
+                    model_b.infer_intent(trust_from_to, positive_signal_b, negative_signal_b);
+                    // Gossip-specific processing: belief sharing only for Gossip interactions.
+                    // Help and Trade only trigger attachment/ToM updates above.
+                    // Gossip-specific processing: belief sharing only for Gossip interactions.
+                    // Help and Trade only trigger attachment/ToM updates above.
+                    if !matches!(kind, mindstrata_core::event::InteractionKind::Gossip) {
+                        continue;
+                    }
                     let from_beliefs = &self.agents[from_idx].beliefs;
                     if from_beliefs.is_empty() {
                         continue;
