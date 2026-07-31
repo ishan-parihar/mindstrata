@@ -2593,302 +2593,11 @@ impl Simulation {
             }
         }
 
-        // ── 19. §19.5.F Marriage formation — compatible age + high affection ──
-        {
-            let n = self.agents.len();
-            let mut new_marriages: Vec<(usize, usize)> = Vec::new();
+        // ── 19. Marriage formation (extracted) ──
+        self.tick_marriage_formation(tick_u64, tick);
 
-            for i in 0..n {
-                if self.agents[i].partner.is_some() {
-                    continue; // already partnered
-                }
-                if self.agents[i].age < Fixed::from_f64(18.0) {
-                    continue; // too young
-                }
-
-                // Find candidate: compatible age, high affection, no partner
-                for j in (i + 1)..n {
-                    if self.agents[j].partner.is_some() {
-                        continue;
-                    }
-                    if self.agents[j].age < Fixed::from_f64(18.0) {
-                        continue;
-                    }
-                    // Check age compatibility (within 15 years)
-                    let age_diff = (self.agents[i].age - self.agents[j].age).abs();
-                    if age_diff > Fixed::from_f64(15.0) {
-                        continue;
-                    }
-                    // Check relationship affection
-                    let affection = self.relationships.iter()
-                        .find(|r| r.from == AgentId::new(i as u64) && r.to == AgentId::new(j as u64))
-                        .map_or(Fixed::ZERO, |r| r.affection);
-                    // Architecture-plan-2 §10.4: Compute attraction score.
-                    // Personality compatibility (agreeableness similarity), physical proximity,
-                    // and social approval feed into the AttractionModel.
-                    let personality_compat = Fixed::ONE - (self.agents[i].personality.agreeableness
-                        - self.agents[j].personality.agreeableness).abs();
-                    let pos_i = self.agents[i].position;
-                    let pos_j = self.agents[j].position;
-                    let distance = Fixed::from_int(pos_i.manhattan_distance(&pos_j) as i64);
-                    // Architecture-plan-2 §10.4: Max distance for marriage proximity scoring.
-                    const MAX_MARRIAGE_DISTANCE: f64 = 20.0;
-                    let proximity = (Fixed::ONE - distance / Fixed::from_f64(MAX_MARRIAGE_DISTANCE)).max(Fixed::ZERO);
-                    let mut att = crate::attraction::AttractionModel::default();
-                    att.personality_attraction = personality_compat;
-                    att.familiarity = affection;
-                    att.physical_attraction = proximity;
-                    att.reciprocity = affection; // reciprocity from mutual affection
-                    let attraction_score = att.total_attraction();
-                    // Marriage probability: attraction * health * trust
-                    let health = (self.agents[i].body.health + self.agents[j].body.health) * Fixed::from_f64(0.5);
-                    let trust = self.relationships.iter()
-                        .find(|r| r.from == AgentId::new(i as u64) && r.to == AgentId::new(j as u64))
-                        .map_or(Fixed::ZERO, |r| r.trust);
-                    let marriage_chance = attraction_score * health * trust * Fixed::from_f64(0.001);
-                    let rng_val = Fixed::from_f64(
-                        self.rng.get_mut(RngStream::Social).random::<f64>()
-                    );
-                    if rng_val < marriage_chance {
-                        new_marriages.push((i, j));
-                        break; // only one marriage per agent per tick
-                    }
-                }
-            }
-
-            for (a, b) in new_marriages {
-                self.agents[a].partner = Some(b);
-                self.agents[b].partner = Some(a);
-                self.events.push(SimEvent::MarriageFormed {
-                    spouse_a: AgentId::new(a as u64),
-                    spouse_b: AgentId::new(b as u64),
-                    tick,
-                });
-                // Marriage boosts trust and affection
-                // §19.5.J: Record marriage relationship traces
-                if let Some(rel) = self.relationships.iter_mut()
-                    .find(|r| r.from == AgentId::new(a as u64) && r.to == AgentId::new(b as u64))
-                {
-                    let old_trust = rel.trust;
-                    let old_affection = rel.affection;
-                    rel.trust = (rel.trust + Fixed::from_f64(0.2)).clamp_01();
-                    rel.affection = (rel.affection + Fixed::from_f64(0.3)).clamp_01();
-                    self.provenance.record_relationship(crate::provenance::RelationshipTrace {
-                        from: AgentId::new(a as u64),
-                        to: AgentId::new(b as u64),
-                        tick: tick_u64,
-                        cause: "marriage".into(),
-                        old_trust,
-                        new_trust: rel.trust,
-                        old_affection,
-                        new_affection: rel.affection,
-                        description: format!("Marriage bond formed (trust {} -> {}, affection {} -> {})", old_trust.to_f64(), rel.trust.to_f64(), old_affection.to_f64(), rel.affection.to_f64()),
-                    });
-                }
-                if let Some(rel) = self.relationships.iter_mut()
-                    .find(|r| r.from == AgentId::new(b as u64) && r.to == AgentId::new(a as u64))
-                {
-                    let old_trust = rel.trust;
-                    let old_affection = rel.affection;
-                    rel.trust = (rel.trust + Fixed::from_f64(0.2)).clamp_01();
-                    rel.affection = (rel.affection + Fixed::from_f64(0.3)).clamp_01();
-                    self.provenance.record_relationship(crate::provenance::RelationshipTrace {
-                        from: AgentId::new(b as u64),
-                        to: AgentId::new(a as u64),
-                        tick: tick_u64,
-                        cause: "marriage".into(),
-                        old_trust,
-                        new_trust: rel.trust,
-                        old_affection,
-                        new_affection: rel.affection,
-                        description: format!("Marriage bond formed (trust {} -> {}, affection {} -> {})", old_trust.to_f64(), rel.trust.to_f64(), old_affection.to_f64(), rel.affection.to_f64()),
-                    });
-                }
-                tracing::info!(
-                    spouse_a = a, spouse_b = b, tick = tick_u64,
-                    "Marriage formed"
-                );
-            }
-        }
-
-        // ── 19b. §19.5.F Birth mechanics — new agents from partnered couples ──
-        {
-            let n = self.agents.len();
-            let mut new_births: Vec<(usize, usize, usize)> = Vec::new(); // (parent_a, parent_b, child_idx)
-
-            for i in 0..n {
-                if let Some(partner_idx) = self.agents[i].partner {
-                    if partner_idx <= i {
-                        continue; // only process each couple once
-                    }
-                    let age_a = self.agents[i].age.to_f64();
-                    let age_b = self.agents[partner_idx].age.to_f64();
-                    let avg_age = (age_a + age_b) * 0.5;
-                    let health_a = self.agents[i].body.health;
-                    let health_b = self.agents[partner_idx].body.health;
-                    let min_health = health_a.min(health_b);
-                    let rng_val = Fixed::from_f64(
-                        self.rng.get_mut(RngStream::Social).random::<f64>()
-                    );
-                    // Count existing children for this specific couple
-                    let existing_children = self.agents.iter().filter(|a| {
-                        (a.parent_a == Some(i) && a.parent_b == Some(partner_idx))
-                            || (a.parent_a == Some(partner_idx) && a.parent_b == Some(i))
-                    }).count();
-                    let should = demography::should_birth(
-                        true, min_health, avg_age, existing_children,
-                        &self.demography_config, rng_val,
-                    );
-                    if should && n + new_births.len() < crate::population_cap::MAX_POPULATION {
-                        new_births.push((i, partner_idx, n + new_births.len()));
-                    }
-                }
-            }
-
-            for (parent_a, parent_b, child_idx) in new_births {
-                let child_name = format!("Child_{child_idx}");
-                // Inherit personality traits with noise
-                let mut child_rng = rand_chacha::ChaCha8Rng::seed_from_u64(
-                    self.config.seed.wrapping_add(tick_u64).wrapping_add(child_idx as u64)
-                );
-                let child_personality = Personality::random(&mut child_rng);
-                let child_age = Fixed::from_f64(0.0); // newborn
-
-                // Allocate home site
-                let home_site = self.agents[parent_a].home_site;
-
-                let agent_id = AgentId::new(child_idx as u64);
-
-                let child_embodied = EmbodiedState::random(child_age, &mut child_rng);
-                let child_attachment_vulnerability = child_embodied.genome.trait_predispositions.attachment_vulnerability;
-                let child_neuroticism = child_personality.neuroticism;
-                let child_openness = child_personality.openness;
-                self.agents.push(AgentBundle {
-                    body: BodyState::from(&child_embodied),
-                    needs: NeedState::default(),
-                    personality: child_personality,
-                    goals: Vec::new(),
-                    beliefs: Vec::new(),
-                    affect: Affect::default(),
-                    emotions: DiscreteEmotions::default(),
-                    current_action: ActionKind::Idle,
-                    action_progress: 0,
-                    name: child_name,
-                    position: self.agents[parent_a].position,
-                    home_site,
-                    memory: MemoryStore::new(200),
-                    identity: IdentityState {
-                        identities: vec![],
-                    },
-                    attention: AttentionState::default(),
-                    intention: None,
-                    routine: DailyRoutine::village_routine(),
-                    moral_values: MoralValues::random(&mut child_rng),
-                    cognitive: CognitiveState::default(),
-                    derived: DerivedMentalState::default(),
-                    recent_successes: 0,
-                    recent_attempts: 0,
-                    age: child_age,
-                    wealth: WealthState { coin: Fixed::from_f64(1.0) },
-                    conflict: ConflictState::default(),
-                    cultural: CulturalState::default(),
-                    partner: None,
-                    parent_a: Some(parent_a),
-                    parent_b: Some(parent_b),
-                    feuds: Vec::new(),
-                    feud_ticks: Vec::new(),
-                    status: StatusState::default(),
-                    rejected_goals: Vec::new(),
-                    completed_goals: Vec::new(),
-                    skills: AgentSkills::default(),
-                    embodied: child_embodied,
-                    interoception: {
-                        let mut inter = crate::psychology::InteroceptiveState::default();
-                        inter.initialize_from_personality(child_neuroticism, child_openness, Fixed::ZERO);
-                        inter
-                    },
-                    self_model: crate::psychology::SelfModel::default(),
-                    attachment: {
-                        let mut att = crate::psychology::AttachmentSystem::default();
-                        att.initialize(
-                            Fixed::from_f64(0.7), // high caregiver security for child
-                            Fixed::ZERO, // no trauma history
-                            child_attachment_vulnerability,
-                        );
-                        att
-                    },
-                    emotion_regulation: crate::psychology::EmotionRegulationState::default(),
-                    moral_cognition: crate::psychology::MoralCognition::default(),
-                    prospection: crate::psychology::ProspectionState::default(),
-                    narrative: crate::psychology::NarrativeIdentity::default(),
-                    developmental: crate::psychology::DevelopmentalPsychState::default(),
-                    psychopathology: crate::psychology::PsychopathologyState::default(),
-                    mind_models: crate::psychology::theory_of_mind::MindModels::default(),
-                    cultural_cognition: crate::psychology::CulturalCognition::default(),
-                    psych_skills: crate::psychology::SkillState::default(),
-                    relationship_v2s: Vec::new(),
-                    attraction: crate::attraction::AttractionModel::default(),
-                    status_v2: crate::status_dims::StatusDimensions::default(),
-                    epistemic: crate::epistemic::EpistemicState::default(),
-                    cognitive_runtime: crate::psychology::CognitiveRuntime::default(),
-                    motivation: crate::psychology::MotivationState::default(),
-                    decision_policy: crate::psychology::DecisionPolicy::default(),
-                });                // Add relationships to all existing agents
-                for existing_idx in 0..self.agents.len() - 1 {
-                    let trust = if existing_idx == parent_a || existing_idx == parent_b {
-                        Fixed::from_f64(0.8) // high trust for parents
-                    } else {
-                        Fixed::from_f64(0.4) // moderate trust for others
-                    };
-                    self.relationships.push(Relationship {
-                        from: agent_id,
-                        to: AgentId::new(existing_idx as u64),
-                        trust,
-                        affection: trust * Fixed::from_f64(0.8),
-                        respect: Fixed::from_f64(0.3),
-                        fear: Fixed::ZERO,
-                        obligation: Fixed::ZERO,
-                        last_interaction_tick: tick_u64,
-                        kind: RelationshipKind::Kin,
-                        interaction_count: 1,
-                        last_positive_tick: tick_u64,
-                        last_negative_tick: 0,
-                    });
-                    self.relationships.push(Relationship {
-                        from: AgentId::new(existing_idx as u64),
-                        to: agent_id,
-                        trust,
-                        affection: trust * Fixed::from_f64(0.5),
-                        respect: Fixed::ZERO,
-                        fear: Fixed::ZERO,
-                        obligation: Fixed::ZERO,
-                        last_interaction_tick: tick_u64,
-                        kind: RelationshipKind::Stranger,
-                        interaction_count: 0,
-                        last_positive_tick: 0,
-                        last_negative_tick: 0,
-                    });
-                }
-
-                // Disease tracking for new agent
-                self.agent_diseases.push(Vec::new());
-
-                self.events.push(SimEvent::ChildBorn {
-                    child: agent_id,
-                    parent_a: AgentId::new(parent_a as u64),
-                    parent_b: AgentId::new(parent_b as u64),
-                    tick,
-                });
-
-                tracing::info!(
-                    child = child_idx,
-                    parent_a = parent_a,
-                    parent_b = parent_b,
-                    tick = tick_u64,
-                    "Child born"
-                );
-            }
-        }
+        // ── 19b. Birth mechanics (extracted) ──
+        self.tick_birth_mechanics(tick_u64, tick);
 
         // ── 20. Conflict state update — trauma decay, combat fatigue, feud decay ──
         for agent in &mut self.agents {
@@ -3018,215 +2727,9 @@ impl Simulation {
         // §19.5.J: Trim provenance traces to prevent unbounded growth
         self.provenance.trim(institutions::MAX_PROVENANCE_RECORDS);
 
-        // ── Architecture-plan-2 §10.6/§10.7: Kinship & Household daily update ──
-        // §10.6: Decay kinship edges daily (every 144 ticks = 1 day).
-        // §10.7: Tick household dynamics (cohesion, conflict, reputation).
-        if tick_u64.is_multiple_of(144) {
-            self.kinship_graph.decay_daily();
-            for household in &mut self.households {
-                household.tick_update();
-            }
-            // Architecture-plan-2 §13.1: Decay meme novelty daily.
-            self.meme_registry.tick_all();
-            // Architecture-plan-2 §13.3: Decay rumor prevalence daily.
-            self.rumor_registry.tick_all(tick_u64);
-            // Architecture-plan-2 §13.4: Tick propaganda campaigns daily.
-            self.propaganda_registry.tick_all();
-            // Architecture-plan-2 §13.4: Apply propaganda effects to target agents.
-            // For each active campaign, compute effectiveness using institutional legitimacy
-            // and audience fear, then nudge target agents' emotional state.
-            let n_agents = self.agents.len();
-            let n_insts = self.institutions.len();
-            let campaign_ids: Vec<usize> = self.propaganda_registry.campaigns.iter()
-                .filter(|c| c.active)
-                .map(|c| c.id)
-                .collect();
-            for campaign_id in campaign_ids {
-                let (sponsor, targets_clone, intensity, coercion) = {
-                    let c = &self.propaganda_registry.campaigns[campaign_id];
-                    (c.sponsor, c.targets.clone(), c.intensity, c.coercion)
-                };
-                // Get sponsor institution's legitimacy (0.5 if sponsor out of bounds)
-                let legitimacy = if sponsor < n_insts {
-                    self.institutions[sponsor].legitimacy
-                } else {
-                    Fixed::from_f64(0.5)
-                };
-                // Compute average audience fear from target agents
-                let audience_fear = if !targets_clone.is_empty() {
-                    let total: Fixed = targets_clone.iter()
-                        .filter(|&&t| t < n_agents)
-                        .map(|&t| self.agents[t].emotions.fear)
-                        .fold(Fixed::ZERO, |acc, f| acc + f);
-                    let count = targets_clone.iter().filter(|&&t| t < n_agents).count() as i64;
-                    if count > 0 { total / Fixed::from_int(count) } else { Fixed::ZERO }
-                } else {
-                    Fixed::ZERO
-                };
-                // Compute effectiveness (mutates the campaign)
-                if let Some(campaign) = self.propaganda_registry.campaigns.get_mut(campaign_id) {
-                    campaign.compute_effectiveness(legitimacy, audience_fear);
-                }
-                // Apply propaganda effect to each target agent
-                let effectiveness = self.propaganda_registry.campaigns[campaign_id].effectiveness;
-                if effectiveness > Fixed::from_f64(0.1) {
-                    let propaganda_push = effectiveness * intensity * Fixed::from_f64(0.05);
-                    let coercion_push = coercion * Fixed::from_f64(0.03);
-                    let mut pushback_accum = Fixed::ZERO;
-                    for &target in &targets_clone {
-                        if target < n_agents {
-                            // Nudge affect toward propaganda's emotional tone
-                            self.agents[target].affect.valence = (
-                                self.agents[target].affect.valence
-                                + propaganda_push * Fixed::from_f64(0.02)
-                            ).clamp_01();
-                            // Coercion increases fear
-                            if coercion > Fixed::from_f64(0.3) {
-                                self.agents[target].emotions.fear = (
-                                    self.agents[target].emotions.fear
-                                    + coercion_push
-                                ).clamp_01();
-                                // Agents with high autonomy push back against coercion
-                                let autonomy = self.agents[target].personality.dominance
-                                    + self.agents[target].personality.openness;
-                                if autonomy > Fixed::from_f64(1.0) {
-                                    pushback_accum = (pushback_accum
-                                        + Fixed::from_f64(0.01)).clamp_01();
-                                }
-                            }
-                        }
-                    }
-                    // Record accumulated pushback to increase campaign resistance
-                    if pushback_accum > Fixed::ZERO {
-                        if let Some(c) = self.propaganda_registry.campaigns.get_mut(campaign_id) {
-                            c.record_pushback(pushback_accum);
-                        }
-                    }
-                }
-            }
-            // Architecture-plan-2 §13.5: Decay collective memory daily.
-            self.collective_memory_registry.tick_all(tick_u64);
-            // Architecture-plan-2 §13.6: Update echo chamber polarization daily.
-            // Assign agents to belief clusters based on dominant belief orientation.
-            // Agents with similar beliefs cluster together; cross-cutting ties are
-            // social connections between agents in different clusters.
-            {
-                // Phase 1: Create clusters from agents' dominant belief orientation.
-                // Use belief confidence sum as a simple proxy for belief orientation.
-                let n = self.agents.len();
-                if n >= 2 {
-                    // Clear existing clusters and rebuild daily
-                    self.echo_chamber.clusters.clear();
-                    // Create 2 default clusters (pro-institution vs anti-institution)
-                    let c_pro = self.echo_chamber.create_cluster("pro_institution".into());
-                    let c_anti = self.echo_chamber.create_cluster("anti_institution".into());
-                    for i in 0..n {
-                        // Simple heuristic: high traditionalism + high agreeableness = pro-institution
-                        let pro_score = self.agents[i].personality.traditionalism
-                            + self.agents[i].personality.agreeableness;
-                        let cluster_id = if pro_score > Fixed::from_f64(1.0) {
-                            c_pro
-                        } else {
-                            c_anti
-                        };
-                        if let Some(cluster) = self.echo_chamber.get_cluster_mut(cluster_id) {
-                            cluster.add_member(i);
-                            // Accumulate emotional charge from agent's affect
-                            cluster.emotional_charge = (cluster.emotional_charge
-                                + self.agents[i].affect.arousal * Fixed::from_f64(0.1)).clamp_01();
-                            cluster.identity_fusion = (cluster.identity_fusion
-                                + self.agents[i].personality.conformity * Fixed::from_f64(0.05)).clamp_01();
-                        }
-                    }
-                    // Phase 2: Compute cross-cutting ties from relationship_v2s.
-                    // Pre-compute membership map for O(1) cluster lookup per agent.
-                    // An agent has a cross-cutting tie if they have a high-trust relationship
-                    // with someone in a different cluster. Each edge counted once (j > i).
-                    let membership: Vec<Option<usize>> = (0..n)
-                        .map(|i| self.echo_chamber.clusters.iter()
-                            .find(|c| c.members.contains(&i))
-                            .map(|c| c.id))
-                        .collect();
-                    for i in 0..n {
-                        if let Some(my_c) = membership[i] {
-                            for j in (i + 1)..n {
-                                if let Some(their_c) = membership[j] {
-                                    if my_c != their_c {
-                                        // Check relationship trust (i→j)
-                                        let n_agents_local = self.agents.len();
-                                        let idx = Self::relationship_v2_index(i, j, n_agents_local);
-                                        if idx < self.agents[i].relationship_v2s.len() {
-                                            let trust = self.agents[i].relationship_v2s[idx].trust;
-                                            if trust > Fixed::from_f64(0.5) {
-                                                // Count once per cluster involved
-                                                if let Some(c) = self.echo_chamber.get_cluster_mut(my_c) {
-                                                    c.cross_cutting_ties = c.cross_cutting_ties.saturating_add(1);
-                                                }
-                                                if let Some(c) = self.echo_chamber.get_cluster_mut(their_c) {
-                                                    c.cross_cutting_ties = c.cross_cutting_ties.saturating_add(1);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // Phase 3: Normalize cluster emotional charge and compute polarization
-                    for cluster in &mut self.echo_chamber.clusters {
-                        let member_count = cluster.members.len() as i64;
-                        if member_count > 0 {
-                            cluster.emotional_charge = cluster.emotional_charge
-                                / Fixed::from_int(member_count);
-                            cluster.identity_fusion = cluster.identity_fusion
-                                / Fixed::from_int(member_count);
-                            cluster.outgroup_hostility = cluster.cohesion * cluster.identity_fusion;
-                        }
-                    }
-                    self.echo_chamber.compute_polarization();
-                }
-            }
-            // Architecture-plan-2 §10.8: Clan daily update.
-            // Decay grievance, adjust cohesion, decay myth belief.
-            self.clan_registry.daily_update();
-        }
+        // ── Kinship & Household daily update (extracted) ──
+        self.tick_kinship_household_daily(tick_u64);
 
-        // Architecture-plan-2 §12.5: Execute due rituals every 12 ticks (~2 hours).
-        // Apply bonding effect to participating agents' relationship_v2s.
-        if tick_u64.is_multiple_of(12) {
-            let due: Vec<usize> = self.ritual_registry.due_rituals(tick_u64)
-                .into_iter().map(|r| r.id).collect();
-            for ritual_id in due {
-                if let Some(ritual) = self.ritual_registry.rituals.iter_mut().find(|r| r.id == ritual_id) {
-                    let bonding = ritual.execute(tick_u64);
-                    // Apply bonding to all participant pairs
-                    for i in 0..ritual.participants.len() {
-                        for j in (i + 1)..ritual.participants.len() {
-                            let a = ritual.participants[i];
-                            let b = ritual.participants[j];
-                            if a < self.agents.len() && b < self.agents.len() {
-                                // Increase trust and affection between participants
-                                let n_agents = self.agents.len();
-                                let idx_a = Self::relationship_v2_index(a, b, n_agents);
-                                if idx_a < self.agents[a].relationship_v2s.len() {
-                                    self.agents[a].relationship_v2s[idx_a].trust =
-                                        (self.agents[a].relationship_v2s[idx_a].trust + bonding * Fixed::from_f64(0.3)).clamp_01();
-                                    self.agents[a].relationship_v2s[idx_a].affection =
-                                        (self.agents[a].relationship_v2s[idx_a].affection + bonding * Fixed::from_f64(0.2)).clamp_01();
-                                }
-                                let idx_b = Self::relationship_v2_index(b, a, n_agents);
-                                if idx_b < self.agents[b].relationship_v2s.len() {
-                                    self.agents[b].relationship_v2s[idx_b].trust =
-                                        (self.agents[b].relationship_v2s[idx_b].trust + bonding * Fixed::from_f64(0.3)).clamp_01();
-                                    self.agents[b].relationship_v2s[idx_b].affection =
-                                        (self.agents[b].relationship_v2s[idx_b].affection + bonding * Fixed::from_f64(0.2)).clamp_01();
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
         // ── Architecture-plan-2 §8.1.5: Motivation relieve() calls ──
         // Relieve psychological needs based on current actions.
@@ -4059,6 +3562,526 @@ impl Simulation {
                         interrupted_by_critical_needs: false,
                         intention_abandoned: false,
                     });
+                }
+            }
+        }
+
+    }
+
+
+    /// Section 19: Marriage formation.
+    fn tick_marriage_formation(&mut self, tick_u64: u64, tick: Tick) {
+        // ── 19. §19.5.F Marriage formation — compatible age + high affection ──
+        {
+            let n = self.agents.len();
+            let mut new_marriages: Vec<(usize, usize)> = Vec::new();
+
+            for i in 0..n {
+                if self.agents[i].partner.is_some() {
+                    continue; // already partnered
+                }
+                if self.agents[i].age < Fixed::from_f64(18.0) {
+                    continue; // too young
+                }
+
+                // Find candidate: compatible age, high affection, no partner
+                for j in (i + 1)..n {
+                    if self.agents[j].partner.is_some() {
+                        continue;
+                    }
+                    if self.agents[j].age < Fixed::from_f64(18.0) {
+                        continue;
+                    }
+                    // Check age compatibility (within 15 years)
+                    let age_diff = (self.agents[i].age - self.agents[j].age).abs();
+                    if age_diff > Fixed::from_f64(15.0) {
+                        continue;
+                    }
+                    // Check relationship affection
+                    let affection = self.relationships.iter()
+                        .find(|r| r.from == AgentId::new(i as u64) && r.to == AgentId::new(j as u64))
+                        .map_or(Fixed::ZERO, |r| r.affection);
+                    // Architecture-plan-2 §10.4: Compute attraction score.
+                    // Personality compatibility (agreeableness similarity), physical proximity,
+                    // and social approval feed into the AttractionModel.
+                    let personality_compat = Fixed::ONE - (self.agents[i].personality.agreeableness
+                        - self.agents[j].personality.agreeableness).abs();
+                    let pos_i = self.agents[i].position;
+                    let pos_j = self.agents[j].position;
+                    let distance = Fixed::from_int(pos_i.manhattan_distance(&pos_j) as i64);
+                    // Architecture-plan-2 §10.4: Max distance for marriage proximity scoring.
+                    const MAX_MARRIAGE_DISTANCE: f64 = 20.0;
+                    let proximity = (Fixed::ONE - distance / Fixed::from_f64(MAX_MARRIAGE_DISTANCE)).max(Fixed::ZERO);
+                    let mut att = crate::attraction::AttractionModel::default();
+                    att.personality_attraction = personality_compat;
+                    att.familiarity = affection;
+                    att.physical_attraction = proximity;
+                    att.reciprocity = affection; // reciprocity from mutual affection
+                    let attraction_score = att.total_attraction();
+                    // Marriage probability: attraction * health * trust
+                    let health = (self.agents[i].body.health + self.agents[j].body.health) * Fixed::from_f64(0.5);
+                    let trust = self.relationships.iter()
+                        .find(|r| r.from == AgentId::new(i as u64) && r.to == AgentId::new(j as u64))
+                        .map_or(Fixed::ZERO, |r| r.trust);
+                    let marriage_chance = attraction_score * health * trust * Fixed::from_f64(0.001);
+                    let rng_val = Fixed::from_f64(
+                        self.rng.get_mut(RngStream::Social).random::<f64>()
+                    );
+                    if rng_val < marriage_chance {
+                        new_marriages.push((i, j));
+                        break; // only one marriage per agent per tick
+                    }
+                }
+            }
+
+            for (a, b) in new_marriages {
+                self.agents[a].partner = Some(b);
+                self.agents[b].partner = Some(a);
+                self.events.push(SimEvent::MarriageFormed {
+                    spouse_a: AgentId::new(a as u64),
+                    spouse_b: AgentId::new(b as u64),
+                    tick,
+                });
+                // Marriage boosts trust and affection
+                // §19.5.J: Record marriage relationship traces
+                if let Some(rel) = self.relationships.iter_mut()
+                    .find(|r| r.from == AgentId::new(a as u64) && r.to == AgentId::new(b as u64))
+                {
+                    let old_trust = rel.trust;
+                    let old_affection = rel.affection;
+                    rel.trust = (rel.trust + Fixed::from_f64(0.2)).clamp_01();
+                    rel.affection = (rel.affection + Fixed::from_f64(0.3)).clamp_01();
+                    self.provenance.record_relationship(crate::provenance::RelationshipTrace {
+                        from: AgentId::new(a as u64),
+                        to: AgentId::new(b as u64),
+                        tick: tick_u64,
+                        cause: "marriage".into(),
+                        old_trust,
+                        new_trust: rel.trust,
+                        old_affection,
+                        new_affection: rel.affection,
+                        description: format!("Marriage bond formed (trust {} -> {}, affection {} -> {})", old_trust.to_f64(), rel.trust.to_f64(), old_affection.to_f64(), rel.affection.to_f64()),
+                    });
+                }
+                if let Some(rel) = self.relationships.iter_mut()
+                    .find(|r| r.from == AgentId::new(b as u64) && r.to == AgentId::new(a as u64))
+                {
+                    let old_trust = rel.trust;
+                    let old_affection = rel.affection;
+                    rel.trust = (rel.trust + Fixed::from_f64(0.2)).clamp_01();
+                    rel.affection = (rel.affection + Fixed::from_f64(0.3)).clamp_01();
+                    self.provenance.record_relationship(crate::provenance::RelationshipTrace {
+                        from: AgentId::new(b as u64),
+                        to: AgentId::new(a as u64),
+                        tick: tick_u64,
+                        cause: "marriage".into(),
+                        old_trust,
+                        new_trust: rel.trust,
+                        old_affection,
+                        new_affection: rel.affection,
+                        description: format!("Marriage bond formed (trust {} -> {}, affection {} -> {})", old_trust.to_f64(), rel.trust.to_f64(), old_affection.to_f64(), rel.affection.to_f64()),
+                    });
+                }
+                tracing::info!(
+                    spouse_a = a, spouse_b = b, tick = tick_u64,
+                    "Marriage formed"
+                );
+            }
+        }
+
+    }
+
+    /// Section 19b: Birth mechanics.
+    fn tick_birth_mechanics(&mut self, tick_u64: u64, tick: Tick) {
+        // ── 19b. §19.5.F Birth mechanics — new agents from partnered couples ──
+        {
+            let n = self.agents.len();
+            let mut new_births: Vec<(usize, usize, usize)> = Vec::new(); // (parent_a, parent_b, child_idx)
+
+            for i in 0..n {
+                if let Some(partner_idx) = self.agents[i].partner {
+                    if partner_idx <= i {
+                        continue; // only process each couple once
+                    }
+                    let age_a = self.agents[i].age.to_f64();
+                    let age_b = self.agents[partner_idx].age.to_f64();
+                    let avg_age = (age_a + age_b) * 0.5;
+                    let health_a = self.agents[i].body.health;
+                    let health_b = self.agents[partner_idx].body.health;
+                    let min_health = health_a.min(health_b);
+                    let rng_val = Fixed::from_f64(
+                        self.rng.get_mut(RngStream::Social).random::<f64>()
+                    );
+                    // Count existing children for this specific couple
+                    let existing_children = self.agents.iter().filter(|a| {
+                        (a.parent_a == Some(i) && a.parent_b == Some(partner_idx))
+                            || (a.parent_a == Some(partner_idx) && a.parent_b == Some(i))
+                    }).count();
+                    let should = demography::should_birth(
+                        true, min_health, avg_age, existing_children,
+                        &self.demography_config, rng_val,
+                    );
+                    if should && n + new_births.len() < crate::population_cap::MAX_POPULATION {
+                        new_births.push((i, partner_idx, n + new_births.len()));
+                    }
+                }
+            }
+
+            for (parent_a, parent_b, child_idx) in new_births {
+                let child_name = format!("Child_{child_idx}");
+                // Inherit personality traits with noise
+                let mut child_rng = rand_chacha::ChaCha8Rng::seed_from_u64(
+                    self.config.seed.wrapping_add(tick_u64).wrapping_add(child_idx as u64)
+                );
+                let child_personality = Personality::random(&mut child_rng);
+                let child_age = Fixed::from_f64(0.0); // newborn
+
+                // Allocate home site
+                let home_site = self.agents[parent_a].home_site;
+
+                let agent_id = AgentId::new(child_idx as u64);
+
+                let child_embodied = EmbodiedState::random(child_age, &mut child_rng);
+                let child_attachment_vulnerability = child_embodied.genome.trait_predispositions.attachment_vulnerability;
+                let child_neuroticism = child_personality.neuroticism;
+                let child_openness = child_personality.openness;
+                self.agents.push(AgentBundle {
+                    body: BodyState::from(&child_embodied),
+                    needs: NeedState::default(),
+                    personality: child_personality,
+                    goals: Vec::new(),
+                    beliefs: Vec::new(),
+                    affect: Affect::default(),
+                    emotions: DiscreteEmotions::default(),
+                    current_action: ActionKind::Idle,
+                    action_progress: 0,
+                    name: child_name,
+                    position: self.agents[parent_a].position,
+                    home_site,
+                    memory: MemoryStore::new(200),
+                    identity: IdentityState {
+                        identities: vec![],
+                    },
+                    attention: AttentionState::default(),
+                    intention: None,
+                    routine: DailyRoutine::village_routine(),
+                    moral_values: MoralValues::random(&mut child_rng),
+                    cognitive: CognitiveState::default(),
+                    derived: DerivedMentalState::default(),
+                    recent_successes: 0,
+                    recent_attempts: 0,
+                    age: child_age,
+                    wealth: WealthState { coin: Fixed::from_f64(1.0) },
+                    conflict: ConflictState::default(),
+                    cultural: CulturalState::default(),
+                    partner: None,
+                    parent_a: Some(parent_a),
+                    parent_b: Some(parent_b),
+                    feuds: Vec::new(),
+                    feud_ticks: Vec::new(),
+                    status: StatusState::default(),
+                    rejected_goals: Vec::new(),
+                    completed_goals: Vec::new(),
+                    skills: AgentSkills::default(),
+                    embodied: child_embodied,
+                    interoception: {
+                        let mut inter = crate::psychology::InteroceptiveState::default();
+                        inter.initialize_from_personality(child_neuroticism, child_openness, Fixed::ZERO);
+                        inter
+                    },
+                    self_model: crate::psychology::SelfModel::default(),
+                    attachment: {
+                        let mut att = crate::psychology::AttachmentSystem::default();
+                        att.initialize(
+                            Fixed::from_f64(0.7), // high caregiver security for child
+                            Fixed::ZERO, // no trauma history
+                            child_attachment_vulnerability,
+                        );
+                        att
+                    },
+                    emotion_regulation: crate::psychology::EmotionRegulationState::default(),
+                    moral_cognition: crate::psychology::MoralCognition::default(),
+                    prospection: crate::psychology::ProspectionState::default(),
+                    narrative: crate::psychology::NarrativeIdentity::default(),
+                    developmental: crate::psychology::DevelopmentalPsychState::default(),
+                    psychopathology: crate::psychology::PsychopathologyState::default(),
+                    mind_models: crate::psychology::theory_of_mind::MindModels::default(),
+                    cultural_cognition: crate::psychology::CulturalCognition::default(),
+                    psych_skills: crate::psychology::SkillState::default(),
+                    relationship_v2s: Vec::new(),
+                    attraction: crate::attraction::AttractionModel::default(),
+                    status_v2: crate::status_dims::StatusDimensions::default(),
+                    epistemic: crate::epistemic::EpistemicState::default(),
+                    cognitive_runtime: crate::psychology::CognitiveRuntime::default(),
+                    motivation: crate::psychology::MotivationState::default(),
+                    decision_policy: crate::psychology::DecisionPolicy::default(),
+                });                // Add relationships to all existing agents
+                for existing_idx in 0..self.agents.len() - 1 {
+                    let trust = if existing_idx == parent_a || existing_idx == parent_b {
+                        Fixed::from_f64(0.8) // high trust for parents
+                    } else {
+                        Fixed::from_f64(0.4) // moderate trust for others
+                    };
+                    self.relationships.push(Relationship {
+                        from: agent_id,
+                        to: AgentId::new(existing_idx as u64),
+                        trust,
+                        affection: trust * Fixed::from_f64(0.8),
+                        respect: Fixed::from_f64(0.3),
+                        fear: Fixed::ZERO,
+                        obligation: Fixed::ZERO,
+                        last_interaction_tick: tick_u64,
+                        kind: RelationshipKind::Kin,
+                        interaction_count: 1,
+                        last_positive_tick: tick_u64,
+                        last_negative_tick: 0,
+                    });
+                    self.relationships.push(Relationship {
+                        from: AgentId::new(existing_idx as u64),
+                        to: agent_id,
+                        trust,
+                        affection: trust * Fixed::from_f64(0.5),
+                        respect: Fixed::ZERO,
+                        fear: Fixed::ZERO,
+                        obligation: Fixed::ZERO,
+                        last_interaction_tick: tick_u64,
+                        kind: RelationshipKind::Stranger,
+                        interaction_count: 0,
+                        last_positive_tick: 0,
+                        last_negative_tick: 0,
+                    });
+                }
+
+                // Disease tracking for new agent
+                self.agent_diseases.push(Vec::new());
+
+                self.events.push(SimEvent::ChildBorn {
+                    child: agent_id,
+                    parent_a: AgentId::new(parent_a as u64),
+                    parent_b: AgentId::new(parent_b as u64),
+                    tick,
+                });
+
+                tracing::info!(
+                    child = child_idx,
+                    parent_a = parent_a,
+                    parent_b = parent_b,
+                    tick = tick_u64,
+                    "Child born"
+                );
+            }
+        }
+
+    }
+
+    /// Kinship & Household daily update.
+    fn tick_kinship_household_daily(&mut self, tick_u64: u64) {
+        // ── Architecture-plan-2 §10.6/§10.7: Kinship & Household daily update ──
+        // §10.6: Decay kinship edges daily (every 144 ticks = 1 day).
+        // §10.7: Tick household dynamics (cohesion, conflict, reputation).
+        if tick_u64.is_multiple_of(144) {
+            self.kinship_graph.decay_daily();
+            for household in &mut self.households {
+                household.tick_update();
+            }
+            // Architecture-plan-2 §13.1: Decay meme novelty daily.
+            self.meme_registry.tick_all();
+            // Architecture-plan-2 §13.3: Decay rumor prevalence daily.
+            self.rumor_registry.tick_all(tick_u64);
+            // Architecture-plan-2 §13.4: Tick propaganda campaigns daily.
+            self.propaganda_registry.tick_all();
+            // Architecture-plan-2 §13.4: Apply propaganda effects to target agents.
+            // For each active campaign, compute effectiveness using institutional legitimacy
+            // and audience fear, then nudge target agents' emotional state.
+            let n_agents = self.agents.len();
+            let n_insts = self.institutions.len();
+            let campaign_ids: Vec<usize> = self.propaganda_registry.campaigns.iter()
+                .filter(|c| c.active)
+                .map(|c| c.id)
+                .collect();
+            for campaign_id in campaign_ids {
+                let (sponsor, targets_clone, intensity, coercion) = {
+                    let c = &self.propaganda_registry.campaigns[campaign_id];
+                    (c.sponsor, c.targets.clone(), c.intensity, c.coercion)
+                };
+                // Get sponsor institution's legitimacy (0.5 if sponsor out of bounds)
+                let legitimacy = if sponsor < n_insts {
+                    self.institutions[sponsor].legitimacy
+                } else {
+                    Fixed::from_f64(0.5)
+                };
+                // Compute average audience fear from target agents
+                let audience_fear = if !targets_clone.is_empty() {
+                    let total: Fixed = targets_clone.iter()
+                        .filter(|&&t| t < n_agents)
+                        .map(|&t| self.agents[t].emotions.fear)
+                        .fold(Fixed::ZERO, |acc, f| acc + f);
+                    let count = targets_clone.iter().filter(|&&t| t < n_agents).count() as i64;
+                    if count > 0 { total / Fixed::from_int(count) } else { Fixed::ZERO }
+                } else {
+                    Fixed::ZERO
+                };
+                // Compute effectiveness (mutates the campaign)
+                if let Some(campaign) = self.propaganda_registry.campaigns.get_mut(campaign_id) {
+                    campaign.compute_effectiveness(legitimacy, audience_fear);
+                }
+                // Apply propaganda effect to each target agent
+                let effectiveness = self.propaganda_registry.campaigns[campaign_id].effectiveness;
+                if effectiveness > Fixed::from_f64(0.1) {
+                    let propaganda_push = effectiveness * intensity * Fixed::from_f64(0.05);
+                    let coercion_push = coercion * Fixed::from_f64(0.03);
+                    let mut pushback_accum = Fixed::ZERO;
+                    for &target in &targets_clone {
+                        if target < n_agents {
+                            // Nudge affect toward propaganda's emotional tone
+                            self.agents[target].affect.valence = (
+                                self.agents[target].affect.valence
+                                + propaganda_push * Fixed::from_f64(0.02)
+                            ).clamp_01();
+                            // Coercion increases fear
+                            if coercion > Fixed::from_f64(0.3) {
+                                self.agents[target].emotions.fear = (
+                                    self.agents[target].emotions.fear
+                                    + coercion_push
+                                ).clamp_01();
+                                // Agents with high autonomy push back against coercion
+                                let autonomy = self.agents[target].personality.dominance
+                                    + self.agents[target].personality.openness;
+                                if autonomy > Fixed::from_f64(1.0) {
+                                    pushback_accum = (pushback_accum
+                                        + Fixed::from_f64(0.01)).clamp_01();
+                                }
+                            }
+                        }
+                    }
+                    // Record accumulated pushback to increase campaign resistance
+                    if pushback_accum > Fixed::ZERO {
+                        if let Some(c) = self.propaganda_registry.campaigns.get_mut(campaign_id) {
+                            c.record_pushback(pushback_accum);
+                        }
+                    }
+                }
+            }
+            // Architecture-plan-2 §13.5: Decay collective memory daily.
+            self.collective_memory_registry.tick_all(tick_u64);
+            // Architecture-plan-2 §13.6: Update echo chamber polarization daily.
+            // Assign agents to belief clusters based on dominant belief orientation.
+            // Agents with similar beliefs cluster together; cross-cutting ties are
+            // social connections between agents in different clusters.
+            {
+                // Phase 1: Create clusters from agents' dominant belief orientation.
+                // Use belief confidence sum as a simple proxy for belief orientation.
+                let n = self.agents.len();
+                if n >= 2 {
+                    // Clear existing clusters and rebuild daily
+                    self.echo_chamber.clusters.clear();
+                    // Create 2 default clusters (pro-institution vs anti-institution)
+                    let c_pro = self.echo_chamber.create_cluster("pro_institution".into());
+                    let c_anti = self.echo_chamber.create_cluster("anti_institution".into());
+                    for i in 0..n {
+                        // Simple heuristic: high traditionalism + high agreeableness = pro-institution
+                        let pro_score = self.agents[i].personality.traditionalism
+                            + self.agents[i].personality.agreeableness;
+                        let cluster_id = if pro_score > Fixed::from_f64(1.0) {
+                            c_pro
+                        } else {
+                            c_anti
+                        };
+                        if let Some(cluster) = self.echo_chamber.get_cluster_mut(cluster_id) {
+                            cluster.add_member(i);
+                            // Accumulate emotional charge from agent's affect
+                            cluster.emotional_charge = (cluster.emotional_charge
+                                + self.agents[i].affect.arousal * Fixed::from_f64(0.1)).clamp_01();
+                            cluster.identity_fusion = (cluster.identity_fusion
+                                + self.agents[i].personality.conformity * Fixed::from_f64(0.05)).clamp_01();
+                        }
+                    }
+                    // Phase 2: Compute cross-cutting ties from relationship_v2s.
+                    // Pre-compute membership map for O(1) cluster lookup per agent.
+                    // An agent has a cross-cutting tie if they have a high-trust relationship
+                    // with someone in a different cluster. Each edge counted once (j > i).
+                    let membership: Vec<Option<usize>> = (0..n)
+                        .map(|i| self.echo_chamber.clusters.iter()
+                            .find(|c| c.members.contains(&i))
+                            .map(|c| c.id))
+                        .collect();
+                    for i in 0..n {
+                        if let Some(my_c) = membership[i] {
+                            for j in (i + 1)..n {
+                                if let Some(their_c) = membership[j] {
+                                    if my_c != their_c {
+                                        // Check relationship trust (i→j)
+                                        let n_agents_local = self.agents.len();
+                                        let idx = Self::relationship_v2_index(i, j, n_agents_local);
+                                        if idx < self.agents[i].relationship_v2s.len() {
+                                            let trust = self.agents[i].relationship_v2s[idx].trust;
+                                            if trust > Fixed::from_f64(0.5) {
+                                                // Count once per cluster involved
+                                                if let Some(c) = self.echo_chamber.get_cluster_mut(my_c) {
+                                                    c.cross_cutting_ties = c.cross_cutting_ties.saturating_add(1);
+                                                }
+                                                if let Some(c) = self.echo_chamber.get_cluster_mut(their_c) {
+                                                    c.cross_cutting_ties = c.cross_cutting_ties.saturating_add(1);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Phase 3: Normalize cluster emotional charge and compute polarization
+                    for cluster in &mut self.echo_chamber.clusters {
+                        let member_count = cluster.members.len() as i64;
+                        if member_count > 0 {
+                            cluster.emotional_charge = cluster.emotional_charge
+                                / Fixed::from_int(member_count);
+                            cluster.identity_fusion = cluster.identity_fusion
+                                / Fixed::from_int(member_count);
+                            cluster.outgroup_hostility = cluster.cohesion * cluster.identity_fusion;
+                        }
+                    }
+                    self.echo_chamber.compute_polarization();
+                }
+            }
+            // Architecture-plan-2 §10.8: Clan daily update.
+            // Decay grievance, adjust cohesion, decay myth belief.
+            self.clan_registry.daily_update();
+        }
+
+        // Architecture-plan-2 §12.5: Execute due rituals every 12 ticks (~2 hours).
+        // Apply bonding effect to participating agents' relationship_v2s.
+        if tick_u64.is_multiple_of(12) {
+            let due: Vec<usize> = self.ritual_registry.due_rituals(tick_u64)
+                .into_iter().map(|r| r.id).collect();
+            for ritual_id in due {
+                if let Some(ritual) = self.ritual_registry.rituals.iter_mut().find(|r| r.id == ritual_id) {
+                    let bonding = ritual.execute(tick_u64);
+                    // Apply bonding to all participant pairs
+                    for i in 0..ritual.participants.len() {
+                        for j in (i + 1)..ritual.participants.len() {
+                            let a = ritual.participants[i];
+                            let b = ritual.participants[j];
+                            if a < self.agents.len() && b < self.agents.len() {
+                                // Increase trust and affection between participants
+                                let n_agents = self.agents.len();
+                                let idx_a = Self::relationship_v2_index(a, b, n_agents);
+                                if idx_a < self.agents[a].relationship_v2s.len() {
+                                    self.agents[a].relationship_v2s[idx_a].trust =
+                                        (self.agents[a].relationship_v2s[idx_a].trust + bonding * Fixed::from_f64(0.3)).clamp_01();
+                                    self.agents[a].relationship_v2s[idx_a].affection =
+                                        (self.agents[a].relationship_v2s[idx_a].affection + bonding * Fixed::from_f64(0.2)).clamp_01();
+                                }
+                                let idx_b = Self::relationship_v2_index(b, a, n_agents);
+                                if idx_b < self.agents[b].relationship_v2s.len() {
+                                    self.agents[b].relationship_v2s[idx_b].trust =
+                                        (self.agents[b].relationship_v2s[idx_b].trust + bonding * Fixed::from_f64(0.3)).clamp_01();
+                                    self.agents[b].relationship_v2s[idx_b].affection =
+                                        (self.agents[b].relationship_v2s[idx_b].affection + bonding * Fixed::from_f64(0.2)).clamp_01();
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
