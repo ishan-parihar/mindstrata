@@ -83,7 +83,8 @@ pub struct Snapshot {
 /// Version of the snapshot format.
 /// Version 2 → 3: Added mind_models to AgentBundle.
 /// Version 3 → 4: Added cultural_cognition to AgentBundle.
-pub const SNAPSHOT_VERSION: u32 = 4;
+/// v3: mind_models, v4: cultural_cognition, v5: decision_policy
+pub const SNAPSHOT_VERSION: u32 = 5;
 
 /// Bundles all simulation state references needed to capture a snapshot.
 /// Replaces the 21-parameter `capture()` signature with a single struct.

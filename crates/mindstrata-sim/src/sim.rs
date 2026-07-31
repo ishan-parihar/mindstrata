@@ -1816,6 +1816,16 @@ impl Simulation {
             if action_succeeded {
                 self.agents[*agent_idx].recent_successes += 1;
             }
+            // Architecture-plan-2 §8.1.20: Decision policy learns from action outcome.
+            // EMA learning adjusts utility weights toward successful action patterns.
+            let action_cost = match action {
+                ActionKind::Work => Fixed::from_f64(0.1),
+                ActionKind::Eat | ActionKind::Drink => Fixed::from_f64(0.05),
+                ActionKind::Move { .. } | ActionKind::Wander => Fixed::from_f64(0.08),
+                ActionKind::Socialize => Fixed::from_f64(0.03),
+                _ => Fixed::from_f64(0.02),
+            };
+            self.agents[*agent_idx].decision_policy.learn_from_outcome(action_succeeded, action_cost);
         }
 
         // ── 9. Memory encoding from this tick's events ───────────────
