@@ -190,6 +190,10 @@ pub struct AgentBundle {
     /// Architecture-plan-2 §8.2: Epistemic/informational substrate.
     /// Agents have partial, distorted, local knowledge.
     pub epistemic: crate::epistemic::EpistemicState,
+    /// Architecture-plan-2 §8.1.12: Executive function and metacognition.
+    pub cognitive_runtime: crate::psychology::CognitiveRuntime,
+    /// Architecture-plan-2 §8.1.5: Layered motivation architecture.
+    pub motivation: crate::psychology::MotivationState,
 }
 
 /// §4.2: Skill levels that improve through repeated practice.
@@ -422,6 +426,7 @@ impl Simulation {
             };
 
             let epistemic_state = crate::epistemic::EpistemicState::from_personality(&personality);
+            let personality_clone = personality.clone();
             self.agents.push(AgentBundle {
                 body: BodyState::from(&embodied),
                 needs,
@@ -502,6 +507,8 @@ impl Simulation {
                 attraction: crate::attraction::AttractionModel::default(),
                 status_v2: crate::status_dims::StatusDimensions::default(),
                 epistemic: epistemic_state,
+                cognitive_runtime: crate::psychology::CognitiveRuntime::from_personality(&personality_clone),
+                motivation: crate::psychology::MotivationState::from_personality(&personality_clone),
             });
         }
 
@@ -3169,6 +3176,8 @@ impl Simulation {
                     attraction: crate::attraction::AttractionModel::default(),
                     status_v2: crate::status_dims::StatusDimensions::default(),
                     epistemic: crate::epistemic::EpistemicState::default(),
+                    cognitive_runtime: crate::psychology::CognitiveRuntime::default(),
+                    motivation: crate::psychology::MotivationState::default(),
                 });                // Add relationships to all existing agents
                 for existing_idx in 0..self.agents.len() - 1 {
                     let trust = if existing_idx == parent_a || existing_idx == parent_b {

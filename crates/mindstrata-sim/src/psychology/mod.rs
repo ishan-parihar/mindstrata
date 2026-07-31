@@ -32,11 +32,13 @@
 //! ```
 
 pub mod attachment;
+pub mod cognitive_runtime;
 pub mod developmental;
 pub mod emotion_regulation;
 pub mod imagination;
 pub mod interoception;
 pub mod moral_cognition;
+pub mod motivation;
 pub mod narrative;
 pub mod psychopathology;
 pub mod self_model;
@@ -44,11 +46,13 @@ pub mod skill;
 pub mod theory_of_mind;
 
 pub use attachment::AttachmentSystem;
+pub use cognitive_runtime::CognitiveRuntime;
 pub use developmental::DevelopmentalPsychState;
 pub use emotion_regulation::{EmotionRegulationState, RegulationStrategy};
 pub use imagination::ProspectionState;
 pub use interoception::InteroceptiveState;
 pub use moral_cognition::MoralCognition;
+pub use motivation::{MotivationState, MotiveCategory};
 pub use narrative::NarrativeIdentity;
 pub use psychopathology::PsychopathologyState;
 pub use self_model::SelfModel;
