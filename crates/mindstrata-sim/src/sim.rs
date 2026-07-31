@@ -1355,6 +1355,16 @@ impl Simulation {
                             total_water,
                             &self.agents[i].identity,
                             adjusted_pressure,
+                            &self.agents[i].decision_policy,
+                            emotions[i].anger,
+                            emotions[i].fear,
+                            emotions[i].joy,
+                            emotions[i].sadness,
+                            stress,
+                            self.agents[i].moral_values.fairness,
+                            self.agents[i].moral_values.authority,
+                            self.agents[i].moral_values.care,
+                            self.agents[i].moral_values.loyalty,
                         )
                     };
                     self.agents[i].current_action = action;

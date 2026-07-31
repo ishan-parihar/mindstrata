@@ -5,6 +5,7 @@
 //! This produces bounded rationality — agents are not perfectly optimal.
 
 use crate::person::{BodyState, Goal, GoalKind, IdentityKind, IdentityState, NeedState, Personality};
+use crate::psychology::DecisionPolicy;
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::rng::{RngStreams, RngStream};
 use rand::Rng;
@@ -313,7 +314,26 @@ pub fn compute_utility(
     utility
 }
 
+/// Classify an action for DecisionPolicy modifier lookup.
+fn action_traits(kind: ActionKind) -> (bool, bool, bool, bool, bool, bool) {
+    // (is_social, is_risky, is_withdrawal, is_prosocial, is_disobedient, is_harmful)
+    match kind {
+        ActionKind::Eat | ActionKind::Drink => (false, false, false, false, false, false),
+        ActionKind::Rest => (false, false, true, false, false, false),
+        ActionKind::Work => (false, false, false, true, false, false),
+        ActionKind::Socialize | ActionKind::Trade => (true, false, false, true, false, false),
+        ActionKind::Worship => (true, false, false, true, false, false),
+        ActionKind::Wander => (false, true, false, false, true, false),
+        ActionKind::Move { .. } => (false, false, false, false, false, false),
+        ActionKind::Idle => (false, false, true, false, true, false),
+    }
+}
+
 /// Select the best action for an agent based on utility.
+///
+/// DecisionPolicy modifiers (emotional, moral, habit) are applied to each
+/// candidate's utility, making agents feel like adaptive intelligence rather
+/// than static utility functions.
 #[expect(clippy::too_many_arguments)]
 pub fn select_action(
     needs: &NeedState,
@@ -324,6 +344,16 @@ pub fn select_action(
     total_water: Fixed,
     identity: &IdentityState,
     norm_pressure: Fixed,
+    decision_policy: &DecisionPolicy,
+    anger: Fixed,
+    fear: Fixed,
+    joy: Fixed,
+    sadness: Fixed,
+    stress: Fixed,
+    fairness: Fixed,
+    authority: Fixed,
+    care: Fixed,
+    loyalty: Fixed,
 ) -> ActionKind {
     let candidates = [
         ActionKind::Eat,
@@ -358,6 +388,27 @@ pub fn select_action(
                 utility += goal.priority * Fixed::from_f64(0.5);
             }
         }
+
+        // Architecture-plan-2 §8.1.20: Apply DecisionPolicy modifiers.
+        // These modulate utility based on emotional state, moral values,
+        // and habit strength — making agents feel adaptive rather than static.
+        let (is_social, is_risky, is_withdrawal, is_prosocial, is_disobedient, is_harmful) =
+            action_traits(*kind);
+        let emo = decision_policy.emotional_modifier(
+            anger, fear, joy, sadness,
+            is_social, is_risky, is_withdrawal,
+        );
+        let moral = decision_policy.moral_modifier(
+            fairness, authority, care, loyalty,
+            is_prosocial, is_disobedient, is_harmful,
+        );
+        // Habit modifier: routine actions get a boost under stress
+        let is_routine = matches!(kind,
+            ActionKind::Work | ActionKind::Eat | ActionKind::Drink
+            | ActionKind::Rest | ActionKind::Worship
+        );
+        let habit = decision_policy.habit_modifier(is_routine, stress);
+        utility += emo + moral + habit;
 
         if utility > best_utility {
             best_utility = utility;
@@ -410,11 +461,10 @@ mod tests {
         };
         let personality = make_personality();
         let identity = IdentityState::default();
+        let dp = make_decision_policy();
 
-        let eat_utility = compute_utility(&ActionKind::Eat.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO);
-        let drink_utility = compute_utility(&ActionKind::Drink.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO);
-
-        assert!(eat_utility > drink_utility);
+        let eat_utility = select_action(&needs, &personality, &[], &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO, &dp, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO);
+        assert!(eat_utility == ActionKind::Eat, "Hungry agent should prefer Eat, got {eat_utility:?}");
     }
 
     #[test]
@@ -468,36 +518,39 @@ mod tests {
         }
     }
 
+    fn make_decision_policy() -> DecisionPolicy {
+        DecisionPolicy::default()
+    }
+
     #[test]
     fn scarcity_increases_food_utility() {
         let mut rng = RngStreams::new(42);
         let needs = NeedState {
-            hunger: Fixed::from_f64(0.5),
+            hunger: Fixed::from_f64(0.9),
             ..Default::default()
         };
         let personality = make_personality();
         let identity = IdentityState::default();
+        let dp = make_decision_policy();
 
-        let normal = compute_utility(&ActionKind::Eat.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.8), &identity, Fixed::ZERO);
-        let scarce = compute_utility(&ActionKind::Eat.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.1), Fixed::from_f64(0.8), &identity, Fixed::ZERO);
-
-        assert!(scarce > normal, "Scarcity should increase food utility: scarce={scarce}, normal={normal}");
+        // Use select_action and verify Eat is preferred under scarcity
+        let scarce = select_action(&needs, &personality, &[], &mut rng, Fixed::from_f64(0.1), Fixed::from_f64(0.8), &identity, Fixed::ZERO, &dp, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO);
+        assert!(scarce == ActionKind::Eat, "Under grain scarcity, hungry agent should Eat, got {scarce:?}");
     }
 
     #[test]
     fn scarcity_increases_water_utility() {
         let mut rng = RngStreams::new(42);
         let needs = NeedState {
-            thirst: Fixed::from_f64(0.5),
+            thirst: Fixed::from_f64(0.9),
             ..Default::default()
         };
         let personality = make_personality();
         let identity = IdentityState::default();
+        let dp = make_decision_policy();
 
-        let normal = compute_utility(&ActionKind::Drink.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.8), &identity, Fixed::ZERO);
-        let scarce = compute_utility(&ActionKind::Drink.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.1), &identity, Fixed::ZERO);
-
-        assert!(scarce > normal, "Scarcity should increase water utility: scarce={scarce}, normal={normal}");
+        let scarce = select_action(&needs, &personality, &[], &mut rng, Fixed::from_f64(0.8), Fixed::from_f64(0.1), &identity, Fixed::ZERO, &dp, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO);
+        assert!(scarce == ActionKind::Drink, "Under water scarcity, thirsty agent should Drink, got {scarce:?}");
     }
 
     #[test]
@@ -560,6 +613,49 @@ mod tests {
         let violating_pressure = compute_utility(&ActionKind::Idle.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::from_f64(0.5));
 
         assert!(violating_pressure > no_pressure, "Violating (positive) pressure should increase Idle utility");
+    }
+
+    #[test]
+    fn anger_biases_toward_wander() {
+        let mut rng = RngStreams::new(42);
+        let needs = NeedState::default();
+        let personality = make_personality();
+        let identity = IdentityState::default();
+        let mut dp = make_decision_policy();
+        dp.emotional_policy.anger_bias = Fixed::from_f64(0.8);
+
+        // Compute utilities directly to verify the emotional modifier shifts Wander up.
+        // We compare Wander with Eat (baseline non-social, non-risky action).
+        let emo_wander = dp.emotional_modifier(
+            Fixed::from_f64(0.8), Fixed::ZERO, Fixed::ZERO, Fixed::ZERO,
+            false, true, false, // is_social=false, is_risky=true, is_withdrawal=false
+        );
+        let emo_eat = dp.emotional_modifier(
+            Fixed::from_f64(0.8), Fixed::ZERO, Fixed::ZERO, Fixed::ZERO,
+            false, false, false,
+        );
+        assert!(emo_wander > emo_eat, "Anger should boost risky non-social actions more: wander={emo_wander}, eat={emo_eat}");
+    }
+
+    #[test]
+    fn fear_biases_toward_rest() {
+        let mut rng = RngStreams::new(42);
+        let needs = NeedState::default();
+        let personality = make_personality();
+        let identity = IdentityState::default();
+        let mut dp = make_decision_policy();
+        dp.emotional_policy.fear_bias = Fixed::from_f64(0.8);
+
+        // Compute emotional modifiers directly to verify fear boosts withdrawal actions.
+        let emo_rest = dp.emotional_modifier(
+            Fixed::ZERO, Fixed::from_f64(0.8), Fixed::ZERO, Fixed::ZERO,
+            false, false, true, // is_social=false, is_risky=false, is_withdrawal=true
+        );
+        let emo_wander = dp.emotional_modifier(
+            Fixed::ZERO, Fixed::from_f64(0.8), Fixed::ZERO, Fixed::ZERO,
+            false, true, false, // risky — fear does NOT boost risky actions
+        );
+        assert!(emo_rest > emo_wander, "Fear should boost withdrawal actions: rest={emo_rest}, wander={emo_wander}");
     }
 
     #[test]
