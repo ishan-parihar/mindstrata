@@ -3570,7 +3570,9 @@ impl Simulation {
     /// Section 11: Norm evaluation — threats and insults are norm violations.
     fn tick_norm_evaluation(&mut self, pre_tick_events: usize, tick_u64: u64, tick: Tick) {
         // ── 11. Norm evaluation: threats and insults are norm violations ──
-        for ev in &self.events[pre_tick_events..].to_vec() {
+        let snap_count = self.events.len();
+        for idx in pre_tick_events..snap_count {
+            let ev = &self.events[idx];
             if let SimEvent::InteractionOccurred {
                 from,
                 to,
@@ -3966,7 +3968,9 @@ impl Simulation {
     /// Sections 18-21: Feud tracking, market, demography, conflict, carrying cost.
     fn tick_social_cluster(&mut self, pre_tick_events: usize, tick_u64: u64, tick: Tick) {
         // ── 18. §19.5.G Feud tracking — repeated violence creates persistent feuds ──
-        for ev in &self.events[pre_tick_events..].to_vec() {
+        let snap_count = self.events.len();
+        for idx in pre_tick_events..snap_count {
+            let ev = &self.events[idx];
             if let SimEvent::ConflictOccurred {
                 aggressor,
                 target,
