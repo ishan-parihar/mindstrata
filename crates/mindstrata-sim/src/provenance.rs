@@ -122,26 +122,6 @@ pub struct RelationshipTrace {
     pub description: String,
 }
 
-impl std::fmt::Display for ProvenanceCategory {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Biological => write!(f, "biological"),
-            Self::Hormonal => write!(f, "hormonal"),
-            Self::Attachment => write!(f, "attachment"),
-            Self::IdentityThreat => write!(f, "identity_threat"),
-            Self::Meme => write!(f, "meme"),
-            Self::Propaganda => write!(f, "propaganda"),
-            Self::Relationship => write!(f, "relationship"),
-            Self::Status => write!(f, "status"),
-            Self::Group => write!(f, "group"),
-            Self::Ritual => write!(f, "ritual"),
-            Self::Belief => write!(f, "belief"),
-            Self::Trauma => write!(f, "trauma"),
-            Self::Reproductive => write!(f, "reproductive"),
-        }
-    }
-}
-
 /// §16.1: Cross-system provenance category — tracks which subsystems influenced an event.
 ///
 /// Every new system must produce debug traces. This enum classifies the
@@ -174,6 +154,26 @@ pub enum ProvenanceCategory {
     Trauma,
     /// Reproductive event — conception, birth, or pregnancy milestone.
     Reproductive,
+}
+
+impl std::fmt::Display for ProvenanceCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Biological => write!(f, "biological"),
+            Self::Hormonal => write!(f, "hormonal"),
+            Self::Attachment => write!(f, "attachment"),
+            Self::IdentityThreat => write!(f, "identity_threat"),
+            Self::Meme => write!(f, "meme"),
+            Self::Propaganda => write!(f, "propaganda"),
+            Self::Relationship => write!(f, "relationship"),
+            Self::Status => write!(f, "status"),
+            Self::Group => write!(f, "group"),
+            Self::Ritual => write!(f, "ritual"),
+            Self::Belief => write!(f, "belief"),
+            Self::Trauma => write!(f, "trauma"),
+            Self::Reproductive => write!(f, "reproductive"),
+        }
+    }
 }
 
 /// §16.1: A cross-system provenance trace — records which subsystems influenced an event.
