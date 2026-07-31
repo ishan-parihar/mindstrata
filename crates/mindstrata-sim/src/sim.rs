@@ -1913,6 +1913,12 @@ impl Simulation {
         // ── 18+19+20+21. Social cluster (extracted) ──
         self.tick_social_cluster(pre_tick_events, tick_u64, tick);
 
+        // ── 19. Marriage formation (extracted) ──
+        self.tick_marriage_formation(tick_u64, tick);
+
+        // ── 19b. Birth mechanics (extracted) ──
+        self.tick_birth_mechanics(tick_u64, tick);
+
         // ── Kinship & Household daily update (extracted) ──
         self.tick_kinship_household_daily(tick_u64);
 
@@ -3620,7 +3626,7 @@ impl Simulation {
                             self.events.push(SimEvent::ConflictOccurred {
                                 aggressor: from_id,
                                 target: to_id,
-                                kind: format!("{:?}", ConflictKind::Threat),
+                                kind: "Threat".into(),
                                 injury: conflict_result.injury,
                                 fear_induced: conflict_result.fear_induced,
                                 tick,
@@ -3708,7 +3714,7 @@ impl Simulation {
                                     self.events.push(SimEvent::ConflictOccurred {
                                         aggressor: from_id,
                                         target: to_id,
-                                        kind: format!("{:?}", ConflictKind::Violence),
+                                        kind: "Violence".into(),
                                         injury: violence_result.injury,
                                         fear_induced: violence_result.fear_induced,
                                         tick,
@@ -3978,7 +3984,7 @@ impl Simulation {
                 ..
             } = ev
             {
-                if *kind == format!("{:?}", ConflictKind::Violence) {
+                if *kind == "Violence" {
                     let a_idx = aggressor.as_u64() as usize;
                     let t_idx = target.as_u64() as usize;
                     if a_idx < self.agents.len() && t_idx < self.agents.len() {
@@ -3998,12 +4004,6 @@ impl Simulation {
                 }
             }
         }
-
-        // ── 19. Marriage formation (extracted) ──
-        self.tick_marriage_formation(tick_u64, tick);
-
-        // ── 19b. Birth mechanics (extracted) ──
-        self.tick_birth_mechanics(tick_u64, tick);
 
         // ── 20. Conflict state update — trauma decay, combat fatigue, feud decay ──
         for agent in &mut self.agents {
