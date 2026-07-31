@@ -12,6 +12,7 @@
 #![allow(missing_docs)]
 
 pub mod clock;
+pub mod conflict;
 pub mod error;
 pub mod event;
 pub mod fixed;
@@ -20,6 +21,7 @@ pub mod proposition;
 pub mod rng;
 
 pub use clock::{Clock, Tick};
+pub use conflict::ConflictKind;
 pub use error::{Error, Result};
 pub use fixed::Fixed;
 pub use id::{AgentId, EntityId, ResourceId, SiteId};

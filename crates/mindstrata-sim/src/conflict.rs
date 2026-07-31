@@ -10,55 +10,8 @@ use crate::person::{DiscreteEmotions, Personality};
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 
-/// Types of conflict interactions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ConflictKind {
-    /// Verbal threat — fear-inducing but no physical harm.
-    Threat,
-    /// Intimidation — repeated threats that erode will.
-    Intimidation,
-    /// Physical violence — direct harm.
-    Violence,
-    /// Organized combat — between factions or groups.
-    Combat,
-    /// Feud — ongoing conflict between two parties.
-    Feud,
-}
-
-impl ConflictKind {
-    /// Base injury severity from this conflict type.
-    pub fn injury_severity(self) -> Fixed {
-        match self {
-            ConflictKind::Threat => Fixed::ZERO, // no physical harm
-            ConflictKind::Intimidation => Fixed::from_f64(0.05),
-            ConflictKind::Violence => Fixed::from_f64(0.3),
-            ConflictKind::Combat => Fixed::from_f64(0.5),
-            ConflictKind::Feud => Fixed::from_f64(0.2), // cumulative over time
-        }
-    }
-
-    /// Trauma accumulation rate per incident.
-    pub fn trauma_rate(self) -> Fixed {
-        match self {
-            ConflictKind::Threat => Fixed::from_f64(0.02),
-            ConflictKind::Intimidation => Fixed::from_f64(0.05),
-            ConflictKind::Violence => Fixed::from_f64(0.15),
-            ConflictKind::Combat => Fixed::from_f64(0.25),
-            ConflictKind::Feud => Fixed::from_f64(0.08),
-        }
-    }
-
-    /// Fear induced in the target.
-    pub fn fear_induction(self) -> Fixed {
-        match self {
-            ConflictKind::Threat => Fixed::from_f64(0.15),
-            ConflictKind::Intimidation => Fixed::from_f64(0.25),
-            ConflictKind::Violence => Fixed::from_f64(0.4),
-            ConflictKind::Combat => Fixed::from_f64(0.6),
-            ConflictKind::Feud => Fixed::from_f64(0.2),
-        }
-    }
-}
+// ConflictKind is now defined in mindstrata-core and re-exported here for backwards compatibility.
+pub use mindstrata_core::ConflictKind;
 
 /// Conflict tracking state for an agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]

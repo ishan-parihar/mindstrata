@@ -3626,7 +3626,7 @@ impl Simulation {
                             self.events.push(SimEvent::ConflictOccurred {
                                 aggressor: from_id,
                                 target: to_id,
-                                kind: "Threat".into(),
+                                kind: ConflictKind::Threat,
                                 injury: conflict_result.injury,
                                 fear_induced: conflict_result.fear_induced,
                                 tick,
@@ -3714,7 +3714,7 @@ impl Simulation {
                                     self.events.push(SimEvent::ConflictOccurred {
                                         aggressor: from_id,
                                         target: to_id,
-                                        kind: "Violence".into(),
+                                        kind: ConflictKind::Violence,
                                         injury: violence_result.injury,
                                         fear_induced: violence_result.fear_induced,
                                         tick,
@@ -3843,7 +3843,7 @@ impl Simulation {
                     self.events.push(SimEvent::ConflictOccurred {
                         aggressor: AgentId::new(0),
                         target: AgentId::new(0),
-                        kind: "MoralPanic".into(),
+                        kind: ConflictKind::MoralPanic,
                         injury: Fixed::ZERO,
                         fear_induced: panic_result.avg_charge,
                         tick,
@@ -3903,7 +3903,7 @@ impl Simulation {
                     self.events.push(SimEvent::ConflictOccurred {
                         aggressor: self.institutions[inst_idx].get_role_holder("Leader").unwrap_or(AgentId::new(0)),
                         target: AgentId::new(0),
-                        kind: "Revolution".into(),
+                        kind: ConflictKind::Revolution,
                         injury: Fixed::ZERO,
                         fear_induced: Fixed::from_f64(0.5),
                         tick,
@@ -3984,7 +3984,7 @@ impl Simulation {
                 ..
             } = ev
             {
-                if *kind == "Violence" {
+                if *kind == ConflictKind::Violence {
                     let a_idx = aggressor.as_u64() as usize;
                     let t_idx = target.as_u64() as usize;
                     if a_idx < self.agents.len() && t_idx < self.agents.len() {

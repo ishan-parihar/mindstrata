@@ -7,6 +7,7 @@
 //! Every important state change should be captured as an event so that
 //! causal provenance can be traced.
 
+use crate::conflict::ConflictKind;
 use crate::fixed::Fixed;
 use crate::id::{AgentId, EntityId, ResourceId};
 use crate::clock::Tick;
@@ -122,7 +123,7 @@ pub enum SimEvent {
     ConflictOccurred {
         aggressor: AgentId,
         target: AgentId,
-        kind: String,
+        kind: ConflictKind,
         injury: Fixed,
         fear_induced: Fixed,
         tick: Tick,
