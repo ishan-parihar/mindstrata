@@ -59,6 +59,14 @@ Components(
         "StatusDimensions",
         // §17: Performance/scalability
         "AgentTierState",
+        // Other components on AgentBundle
+        "EpistemicState",
+        "WealthState",
+        "ConflictState",
+        "CulturalState",
+        "Position",
+        "AgentSkills",
+        "PsychSkillState",
     ],
     institution: [
         "Institution",
