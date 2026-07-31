@@ -245,6 +245,10 @@ pub struct Simulation {
     last_revolution_tick: u64,
     /// §4.4: Black market state — activates under scarcity with weak enforcement.
     pub black_market: crate::black_market::BlackMarketState,
+    /// Architecture-plan-2 §10.6: Kinship graph — biological, marital, ritual kin.
+    pub kinship_graph: crate::kinship::KinshipGraph,
+    /// Architecture-plan-2 §10.7: Households — primary social and economic units.
+    pub households: Vec<crate::household::Household>,
 }
 
 impl Simulation {
@@ -277,6 +281,8 @@ impl Simulation {
             metric_history: Vec::new(),
             last_revolution_tick: 0,
             black_market: crate::black_market::BlackMarketState::default(),
+            kinship_graph: crate::kinship::KinshipGraph::default(),
+            households: Vec::new(),
         }
     }
 
@@ -317,6 +323,8 @@ impl Simulation {
             metric_history: snapshot.metric_history,
             last_revolution_tick: snapshot.last_revolution_tick,
             black_market: snapshot.black_market,
+            kinship_graph: crate::kinship::KinshipGraph::default(),
+            households: Vec::new(),
         }
     }
 
@@ -689,12 +697,63 @@ impl Simulation {
             }
         }
 
+        // Architecture-plan-2 §10.6: Build kinship graph from parent/child data.
+        for (i, agent) in self.agents.iter().enumerate() {
+            if let Some(parent_a) = agent.parent_a {
+                self.kinship_graph.add_link(parent_a, i, crate::kinship::KinshipLink::ParentChild, 0);
+            }
+            if let Some(parent_b) = agent.parent_b {
+                self.kinship_graph.add_link(parent_b, i, crate::kinship::KinshipLink::ParentChild, 0);
+            }
+            // Siblings share at least one parent
+            let parents: [Option<usize>; 2] = [agent.parent_a, agent.parent_b];
+            for &parent in parents.iter().flatten() {
+                for j in 0..self.agents.len() {
+                    if j != i {
+                        let shares_parent = self.agents[j].parent_a == Some(parent)
+                            || self.agents[j].parent_b == Some(parent);
+                        if shares_parent {
+                            let already_linked = self.kinship_graph.edges.iter().any(|e|
+                                e.from == i && e.to == j && e.link == crate::kinship::KinshipLink::Sibling);
+                            if !already_linked {
+                                self.kinship_graph.add_link(i, j, crate::kinship::KinshipLink::Sibling, 0);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Architecture-plan-2 §10.7: Create households from partner pairs + singles.
+        let mut household_assigned = vec![false; self.agents.len()];
+        for (i, agent) in self.agents.iter().enumerate() {
+            if household_assigned[i] {
+                continue;
+            }
+            if let Some(spouse_idx) = agent.partner {
+                if spouse_idx < self.agents.len() && !household_assigned[spouse_idx] {
+                    let mut h = crate::household::Household::new(i, agent.home_site, 0);
+                    h.add_member(spouse_idx);
+                    h.head = Some(i);
+                    household_assigned[i] = true;
+                    household_assigned[spouse_idx] = true;
+                    self.households.push(h);
+                }
+            }
+            if !household_assigned[i] {
+                self.households.push(crate::household::Household::new(i, agent.home_site, 0));
+                household_assigned[i] = true;
+            }
+        }
+
         tracing::info!(
             agents = self.agents.len(),
             sites = self.world.sites.len(),
             relationships = self.relationships.len(),
             norms = self.norms.norms().len(),
             institutions = self.institutions.len(),
+            kinship_edges = self.kinship_graph.edges.len(),
+            households = self.households.len(),
             "World populated"
         );
     }
@@ -3378,6 +3437,45 @@ impl Simulation {
 
         // §19.5.J: Trim provenance traces to prevent unbounded growth
         self.provenance.trim(institutions::MAX_PROVENANCE_RECORDS);
+
+        // ── Architecture-plan-2 §10.6/§10.7: Kinship & Household daily update ──
+        // §10.6: Decay kinship edges daily (every 144 ticks = 1 day).
+        // §10.7: Tick household dynamics (cohesion, conflict, reputation).
+        if tick_u64.is_multiple_of(144) {
+            self.kinship_graph.decay_daily();
+            for household in &mut self.households {
+                household.tick_update();
+            }
+        }
+
+        // ── Architecture-plan-2 §8.1.5: Motivation relieve() calls ──
+        // Relieve psychological needs based on current actions.
+        // Amounts calibrated so multiple actions needed for full satisfaction
+        // (relieve ≈ 3–5× growth_rate per tick, creating realistic behavioral pressure).
+        for i in 0..self.agents.len() {
+            match self.agents[i].current_action {
+                ActionKind::Socialize => {
+                    self.agents[i].motivation.belonging.relieve(Fixed::from_f64(0.01));
+                    self.agents[i].motivation.attachment.relieve(Fixed::from_f64(0.008));
+                }
+                ActionKind::Worship => {
+                    self.agents[i].motivation.meaning.relieve(Fixed::from_f64(0.008));
+                    self.agents[i].motivation.certainty.relieve(Fixed::from_f64(0.005));
+                }
+                ActionKind::Trade => {
+                    self.agents[i].motivation.competence.relieve(Fixed::from_f64(0.008));
+                    self.agents[i].motivation.recognition.relieve(Fixed::from_f64(0.005));
+                }
+                ActionKind::Work => {
+                    self.agents[i].motivation.competence.relieve(Fixed::from_f64(0.006));
+                    self.agents[i].motivation.recognition.relieve(Fixed::from_f64(0.006));
+                }
+                ActionKind::Rest => {
+                    self.agents[i].motivation.sleep.relieve(Fixed::from_f64(0.02));
+                }
+                _ => {}
+            }
+        }
 
         // ── 19. §6.5: Record metric history for observability ──
         // Every 10 ticks, snapshot key metrics for CSV export and analysis.
