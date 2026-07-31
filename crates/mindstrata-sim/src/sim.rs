@@ -249,6 +249,12 @@ pub struct Simulation {
     pub kinship_graph: crate::kinship::KinshipGraph,
     /// Architecture-plan-2 §10.7: Households — primary social and economic units.
     pub households: Vec<crate::household::Household>,
+    /// Architecture-plan-2 §13.1: Meme registry — cultural units that propagate.
+    pub meme_registry: crate::culture::MemeRegistry,
+    /// Architecture-plan-2 §13.4: Propaganda registry — institutional narrative campaigns.
+    pub propaganda_registry: crate::culture::PropagandaRegistry,
+    /// Architecture-plan-2 §12.5: Ritual registry — structured ceremonial activities.
+    pub ritual_registry: crate::culture::RitualRegistry,
 }
 
 impl Simulation {
@@ -283,6 +289,9 @@ impl Simulation {
             black_market: crate::black_market::BlackMarketState::default(),
             kinship_graph: crate::kinship::KinshipGraph::default(),
             households: Vec::new(),
+            meme_registry: crate::culture::MemeRegistry::default(),
+            propaganda_registry: crate::culture::PropagandaRegistry::default(),
+            ritual_registry: crate::culture::RitualRegistry::default(),
         }
     }
 
@@ -325,6 +334,9 @@ impl Simulation {
             black_market: snapshot.black_market,
             kinship_graph: crate::kinship::KinshipGraph::default(),
             households: Vec::new(),
+            meme_registry: crate::culture::MemeRegistry::default(),
+            propaganda_registry: crate::culture::PropagandaRegistry::default(),
+            ritual_registry: crate::culture::RitualRegistry::default(),
         }
     }
 
@@ -3445,6 +3457,21 @@ impl Simulation {
             self.kinship_graph.decay_daily();
             for household in &mut self.households {
                 household.tick_update();
+            }
+            // Architecture-plan-2 §13.1: Decay meme novelty daily.
+            self.meme_registry.tick_all();
+            // Architecture-plan-2 §13.4: Tick propaganda campaigns daily.
+            self.propaganda_registry.tick_all();
+        }
+
+        // Architecture-plan-2 §12.5: Execute due rituals every 12 ticks (~2 hours).
+        if tick_u64.is_multiple_of(12) {
+            let due: Vec<usize> = self.ritual_registry.due_rituals(tick_u64)
+                .into_iter().map(|r| r.id).collect();
+            for ritual_id in due {
+                if let Some(ritual) = self.ritual_registry.rituals.iter_mut().find(|r| r.id == ritual_id) {
+                    let _bonding = ritual.execute(tick_u64);
+                }
             }
         }
 
