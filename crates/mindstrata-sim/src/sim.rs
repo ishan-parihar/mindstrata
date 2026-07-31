@@ -258,6 +258,21 @@ pub struct Simulation {
 }
 
 impl Simulation {
+    /// Compute the index into relationship_v2s for agent a → agent b.
+    ///
+    /// The relationship_v2s vector for agent `a` contains entries for all other
+    /// agents in a fixed order. This helper guarantees the same index formula
+    /// is used everywhere (populate, ritual bonding, tick loop).
+    ///
+    /// # Panics
+    /// Panics if `a == b` or `a >= n_agents`.
+    #[inline]
+    fn relationship_v2_index(a: usize, b: usize, n_agents: usize) -> usize {
+        debug_assert!(a != b, "self-relationship index requested");
+        debug_assert!(a < n_agents && b < n_agents, "agent index out of bounds");
+        a * (n_agents - 1) + if b > a { b - 1 } else { b }
+    }
+
     /// Create a new simulation from config.
     pub fn new(config: SimConfig) -> Self {
         let rng = RngStreams::new(config.seed);
@@ -566,7 +581,7 @@ impl Simulation {
                 if i != j {
                     let mut rv2 = RelationshipV2::new(AgentId::new(i as u64), AgentId::new(j as u64));
                     // O(1) lookup: relationships are pushed as (0,1),(0,2),...,(0,N-1),(1,0),(1,2),...
-                    let rel_idx = i * (n_agents - 1) + if j > i { j - 1 } else { j };
+                    let rel_idx = Self::relationship_v2_index(i, j, n_agents);
                     if rel_idx < self.relationships.len() {
                         rv2.trust = self.relationships[rel_idx].trust;
                         rv2.affection = self.relationships[rel_idx].affection;
@@ -3480,14 +3495,14 @@ impl Simulation {
                             if a < self.agents.len() && b < self.agents.len() {
                                 // Increase trust and affection between participants
                                 let n_agents = self.agents.len();
-                                let idx_a = a * (n_agents - 1) + if b > a { b - 1 } else { b };
+                                let idx_a = Self::relationship_v2_index(a, b, n_agents);
                                 if idx_a < self.agents[a].relationship_v2s.len() {
                                     self.agents[a].relationship_v2s[idx_a].trust =
                                         (self.agents[a].relationship_v2s[idx_a].trust + bonding * Fixed::from_f64(0.3)).clamp_01();
                                     self.agents[a].relationship_v2s[idx_a].affection =
                                         (self.agents[a].relationship_v2s[idx_a].affection + bonding * Fixed::from_f64(0.2)).clamp_01();
                                 }
-                                let idx_b = b * (n_agents - 1) + if a > b { a - 1 } else { a };
+                                let idx_b = Self::relationship_v2_index(b, a, n_agents);
                                 if idx_b < self.agents[b].relationship_v2s.len() {
                                     self.agents[b].relationship_v2s[idx_b].trust =
                                         (self.agents[b].relationship_v2s[idx_b].trust + bonding * Fixed::from_f64(0.3)).clamp_01();
