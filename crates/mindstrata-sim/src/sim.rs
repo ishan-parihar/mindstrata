@@ -3286,6 +3286,88 @@ impl Simulation {
 
     }
 
+    /// §17.4: Wire meme aggregation into the tick loop.
+    ///
+    /// Called daily after meme novelty decay. Computes group-level meme
+    /// prevalence, most viral meme, spreader centrality, and echo chamber
+    /// strength for observability and Phase 5 tuning.
+    ///
+    /// **Limitation**: Meme host assignment is a placeholder heuristic based
+    /// on cultural category indices. Aggregation metrics (prevalence,
+    /// homogeneity, echo strength) are deterministic artifacts of initial
+    /// category assignment, not emergent from social dynamics. Replace with
+    /// real per-agent meme host tracking (`hosted_memes: Vec<usize>` field)
+    /// before using these metrics for Phase 5 tuning decisions.
+    ///
+    /// **TODO**: Wire `sample_exposures()` into the gossip block where
+    /// `meme.transmission_chance` is called to populate `exposure_samples`.
+    fn wire_meme_aggregation(&mut self, tick_u64: u64) {
+        let n_agents = self.agents.len();
+        if n_agents == 0 || self.meme_registry.memes.is_empty() {
+            return;
+        }
+
+        // Build per-agent meme host lists (agent_idx → meme ids hosted).
+        // §13.2 + §17.4: Track which memes each agent hosts.
+        // NOTE: This is a placeholder heuristic — real meme hosting should be
+        // tracked via a per-agent `hosted_memes: Vec<usize>` field. For now,
+        // we assign memes based on cultural category identification strength.
+        let meme_count = self.meme_registry.memes.len();
+        let agent_meme_hosts: Vec<Vec<usize>> = self.agents.iter().map(|a| {
+            let mut hosts: Vec<usize> = Vec::new();
+            for (cat_idx, cat) in a.cultural_cognition.categories.iter().enumerate() {
+                // Agents host memes whose index aligns with their identified categories
+                if cat.identification > Fixed::from_f64(0.3) {
+                    let meme_id = cat_idx % meme_count;
+                    if !hosts.contains(&meme_id) {
+                        hosts.push(meme_id);
+                    }
+                }
+            }
+            if hosts.is_empty() {
+                // Fallback: all agents host at least meme 0
+                hosts.push(0);
+            }
+            hosts
+        }).collect();
+
+        // Build agent group assignments (simplified: household index)
+        let agent_groups: Vec<Option<usize>> = self.agents.iter().enumerate().map(|(i, _)| {
+            self.households.iter().position(|h| h.members.contains(&i))
+        }).collect();
+
+        // Collect active meme ids and emotional charges
+        let meme_ids: Vec<usize> = self.meme_registry.memes.iter()
+            .filter(|m| m.active)
+            .map(|m| m.id)
+            .collect();
+        let meme_charges: Vec<Fixed> = meme_ids.iter().filter_map(|&mid| {
+            self.meme_registry.get(mid).map(|m| m.emotional_charge)
+        }).collect();
+
+        // Build group labels from households
+        let group_labels: Vec<(usize, String)> = self.households.iter().enumerate()
+            .map(|(i, _)| (i, format!("household_{}", i)))
+            .collect();
+
+        // Simplified centrality: relationship count normalized to [0,1].
+        // Typical agent has 3-8 relationships; 10 normalizes well-connected agents to ~1.0.
+        let centrality: Vec<Fixed> = self.agents.iter().map(|a| {
+            let n_rels = a.relationship_v2s.len() as f64;
+            Fixed::from_f64((n_rels / 10.0).min(1.0))
+        }).collect();
+
+        self.meme_aggregator.aggregate(
+            tick_u64,
+            &agent_meme_hosts,
+            &agent_groups,
+            &meme_ids,
+            &meme_charges,
+            &group_labels,
+            &centrality,
+        );
+    }
+
     /// §6 + §10.6/§10.7: Kinship & Household daily update.
     fn tick_kinship_household_daily(&mut self, tick_u64: u64, phases: crate::scheduler::TickPhases) {
         // §10.6: Decay kinship edges daily.
@@ -3297,6 +3379,8 @@ impl Simulation {
             }
             // Architecture-plan-2 §13.1: Decay meme novelty daily.
             self.meme_registry.tick_all();
+            // §17.4: Aggregate meme metrics for large-population observability.
+            self.wire_meme_aggregation(tick_u64);
             // Architecture-plan-2 §13.3: Decay rumor prevalence daily.
             self.rumor_registry.tick_all(tick_u64);
             // Architecture-plan-2 §13.4: Tick propaganda campaigns daily.
