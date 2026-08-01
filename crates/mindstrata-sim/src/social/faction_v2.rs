@@ -275,15 +275,16 @@ mod tests {
 
     #[test]
     fn recruit_requires_grievance() {
-        let mut f = FactionV2::new(0, vec![0, 1], Fixed::from_f64(0.7), 0);
-        // Low grievance recruit should fail
-        assert!(!f.attempt_recruit(Fixed::from_f64(0.2), 10));
+        let f = FactionV2::new(0, vec![0, 1], Fixed::from_f64(0.7), 0);
+        // Low grievance recruit should return zero chance
+        assert_eq!(f.recruitment_chance(Fixed::from_f64(0.2), 10), Fixed::ZERO);
     }
 
     #[test]
     fn recruit_fails_at_capacity() {
-        let mut f = FactionV2::new(0, vec![0, 1], Fixed::from_f64(0.7), 0);
-        assert!(!f.attempt_recruit(Fixed::from_f64(0.8), 2));
+        let f = FactionV2::new(0, vec![0, 1], Fixed::from_f64(0.7), 0);
+        // max_members=2, already has 2 members → zero chance
+        assert_eq!(f.recruitment_chance(Fixed::from_f64(0.8), 2), Fixed::ZERO);
     }
 
     #[test]

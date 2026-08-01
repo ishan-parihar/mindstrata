@@ -55,6 +55,8 @@ use serde::{Deserialize, Serialize};
 pub const EXPECTED_GRAIN_PER_AGENT: u32 = 10;
 /// Skill improvement per tick of practice.
 pub const SKILL_GAIN_PER_TICK: Fixed = Fixed::from_raw(10); // 0.001
+/// Minimum mutual trust required to initiate a courtship (0.3).
+const COURTSHIP_TRUST_THRESHOLD: Fixed = Fixed::from_raw(3000); // 0.3
 
 /// Configuration for a simulation run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,7 +83,7 @@ impl Default for SimConfig {
 }
 
 /// §6: Agent's spatial position in the world grid.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Position {
     pub x: i32,
     pub y: i32,
@@ -295,8 +297,10 @@ pub struct Simulation {
     pub faction_v2_registry: crate::social::faction_v2::FactionV2Registry,
     /// Architecture-plan-2 §10.4: Active courtships between agents.
     /// NOTE: not persisted in snapshots — rebuilt from agent state.
-    /// TODO: wire courtship creation into social interaction tick
     pub active_courtships: Vec<crate::social::courtship::Courtship>,
+    /// Architecture-plan-2 §10.9: Patronage relations — asymmetric patron/client power dynamics.
+    /// NOTE: not persisted in snapshots — rebuilt from agent state.
+    pub patronage_registry: crate::social::patronage::PatronageRegistry,
 }
 
 impl Simulation {
@@ -362,6 +366,7 @@ impl Simulation {
             belief_ecology: crate::noosphere::BeliefEcologyNoosphere::new(),
             faction_v2_registry: crate::social::faction_v2::FactionV2Registry::new(),
             active_courtships: Vec::new(),
+            patronage_registry: crate::social::patronage::PatronageRegistry::new(),
         }
     }
 
@@ -420,6 +425,7 @@ impl Simulation {
             belief_ecology: crate::noosphere::BeliefEcologyNoosphere::new(),
             faction_v2_registry: crate::social::faction_v2::FactionV2Registry::new(),
             active_courtships: Vec::new(),
+            patronage_registry: crate::social::patronage::PatronageRegistry::new(),
         }
     }
 
@@ -3464,6 +3470,8 @@ impl Simulation {
             for household in &mut self.households {
                 household.tick_update();
             }
+            // Architecture-plan-2 §10.9: Tick patronage relations daily.
+            self.patronage_registry.daily_update();
             // Architecture-plan-2 §13.1: Decay meme novelty daily.
             self.meme_registry.tick_all();
             // §17.4: Aggregate meme metrics for large-population observability.
@@ -3655,6 +3663,32 @@ impl Simulation {
 
         // Per-agent daily updates for new systems.
         if phases.is_daily {
+            // Architecture-plan-2 §10.3: Relationship stage transitions.
+            // Evaluate whether any RelationshipV2 should advance or regress based on
+            // interaction count, trust, and affection. Runs once daily for all pairs.
+            let n_agents = self.agents.len();
+            for i in 0..n_agents {
+                for j in 0..n_agents {
+                    if i == j { continue; }
+                    let rv2_idx = Self::relationship_v2_index(i, j, n_agents);
+                    if rv2_idx >= self.agents[i].relationship_v2s.len() { continue; }
+                    let current_stage = self.agents[i].relationship_v2s[rv2_idx].stage;
+                    let interactions = self.agents[i].relationship_v2s[rv2_idx].interaction_count;
+                    let trust = self.agents[i].relationship_v2s[rv2_idx].trust;
+                    let affection = self.agents[i].relationship_v2s[rv2_idx].affection;
+                    let fear = self.agents[i].relationship_v2s[rv2_idx].fear;
+                    // Try advancement first; if not, try regression
+                    if let Some(new_stage) = crate::social::relationship_stages::try_advance_stage(
+                        current_stage, interactions, trust, affection,
+                    ) {
+                        self.agents[i].relationship_v2s[rv2_idx].stage = new_stage;
+                    } else if let Some(new_stage) = crate::social::relationship_stages::try_regress_stage(
+                        current_stage, trust, fear,
+                    ) {
+                        self.agents[i].relationship_v2s[rv2_idx].stage = new_stage;
+                    }
+                }
+            }
             for agent in &mut self.agents {
                 // §8.1.17: Narrative frame update — resilience factor modulates
                 // how narrative meaning-making buffers against adversity.
@@ -3697,6 +3731,62 @@ impl Simulation {
                             }
                         }
                     }
+                }
+            }
+
+            // Architecture-plan-2 §12.2: Evaluate group formation pressure.
+            // After ritual bonding, check if any agent clusters have sufficient
+            // shared identity, repeated interaction, or external threat to form a
+            // formal group. Gated by is_duodeca to limit O(N²) overhead.
+            let n_agents = self.agents.len();
+            for i in 0..n_agents {
+                // Find peers: agents with high mutual trust and shared location
+                let mut peers: Vec<usize> = Vec::new();
+                for j in 0..n_agents {
+                    if i == j { continue; }
+                    let rv2_idx = Self::relationship_v2_index(i, j, n_agents);
+                    if rv2_idx < self.agents[i].relationship_v2s.len()
+                        && self.agents[i].relationship_v2s[rv2_idx].trust > Fixed::from_f64(0.5)
+                        && self.agents[i].position == self.agents[j].position
+                    {
+                        peers.push(j);
+                    }
+                }
+                // Need at least 2 peers (3 total including i) for group formation
+                if peers.len() < 2 { continue; }
+                // Check shared identity from relationship_v2 solidarity
+                let shared_identity: Fixed = peers.iter().map(|&j| {
+                    let rv2_idx = Self::relationship_v2_index(i, j, n_agents);
+                    if rv2_idx < self.agents[i].relationship_v2s.len() {
+                        self.agents[i].relationship_v2s[rv2_idx].solidarity
+                    } else {
+                        Fixed::ZERO
+                    }
+                }).fold(Fixed::ZERO, |acc, s| acc + s) / Fixed::from_int(peers.len() as i64);
+                // Shared grievance from derived mental state
+                let shared_grievance: Fixed = peers.iter().map(|&j| {
+                    self.agents[j].derived.resentment
+                }).fold(Fixed::ZERO, |acc, r| acc + r) / Fixed::from_int(peers.len() as i64);
+                let candidate = crate::social::group_formation::GroupCandidate {
+                    members: { let mut m = vec![i]; m.extend_from_slice(&peers); m },
+                    shared_grievance,
+                    shared_identity,
+                    emotional_synchrony: Fixed::from_f64(0.5),
+                    repeated_interaction: Fixed::from_f64(0.5),
+                    leadership_gravity: Fixed::ZERO,
+                    external_threat: Fixed::ZERO,
+                    social_cost: Fixed::from_f64(0.1),
+                    institutional_suppression: Fixed::from_f64(0.2),
+                    identified_tick: tick_u64,
+                };
+                if candidate.should_form() {
+                    tracing::info!(
+                        members = candidate.members.len(),
+                        shared_grievance = shared_grievance.to_f64(),
+                        shared_identity = shared_identity.to_f64(),
+                        tick = tick_u64,
+                        "Peer group formed via group_formation"
+                    );
                 }
             }
         }
@@ -4504,7 +4594,6 @@ impl Simulation {
         // Architecture-plan-2 §10.4: When two unpartnered adult agents with sufficient
         // attraction and trust interact, a Courtship is initiated.
         // Runs every 12 ticks (~2 hours) to avoid O(N²) overhead every tick.
-        const COURTSHIP_TRUST_THRESHOLD: Fixed = Fixed::from_raw(3000); // 0.3
         if phases.is_duodeca {
             let n = self.agents.len();
             // Build HashSet of agents already in courtships for O(1) lookup.
