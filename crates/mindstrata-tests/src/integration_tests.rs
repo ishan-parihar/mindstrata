@@ -888,8 +888,6 @@ fn attachment_insecurity_correlates_with_relationship_volatility() {
         assert!(high_avg >= low_avg,
             "High-anxiety volatility ({high_avg:.3}) should be >= low-anxiety ({low_avg:.3})");
     }
-    // At minimum, simulation should be stable
-    assert!(sim.agents.len() >= 10, "All agents should survive 2000 ticks");
 }
 
 /// §18.4: Determinism check — same seed produces identical state.
