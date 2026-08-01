@@ -146,6 +146,7 @@ impl MemeAggregator {
         agent_groups: &[Option<usize>],  // agent_idx → group_id
         meme_ids: &[usize],              // all active meme ids
         group_labels: &[(usize, String)], // (group_id, type_label)
+        meme_emotional_charges: &[Fixed], // meme_id → emotional_charge (parallel to meme_ids)
     ) -> Vec<GroupMemePrevalence> {
         let mut result = Vec::new();
 
@@ -193,18 +194,26 @@ impl MemeAggregator {
                 })
                 .collect();
 
-            // Average emotional charge (simplified: use prevalence-weighted average)
+            // §17.4: Average emotional charge from meme data (not prevalence proxy)
+            let avg_charge = if prevalence_vec.is_empty() {
+                Fixed::ZERO
+            } else {
+                let total_charge: Fixed = prevalence_vec
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(idx, (mid, _))| {
+                        meme_ids.iter().position(|id| id == mid)
+                            .and_then(|pos| meme_emotional_charges.get(pos))
+                            .map(|c| *c)
+                    })
+                    .fold(Fixed::ZERO, |acc, c| acc + c);
+                let charge_count = prevalence_vec.len().max(1) as i64;
+                (total_charge / Fixed::from_int(charge_count)).clamp_01()
+            };
             let total_prevalence: Fixed = prevalence_vec
                 .iter()
                 .map(|(_, p)| *p)
                 .fold(Fixed::ZERO, |acc, p| acc + p);
-            let avg_charge = if total_prevalence > Fixed::ZERO {
-                // Approximate: use mean prevalence as charge proxy
-                total_prevalence
-                    / Fixed::from_int(prevalence_vec.len().max(1) as i64)
-            } else {
-                Fixed::ZERO
-            };
 
             // Meme homogeneity: how uniform is the prevalence distribution?
             // High homogeneity = most agents share the same memes
@@ -275,22 +284,32 @@ impl MemeAggregator {
     ///
     /// This is the main entry point called periodically from the tick loop.
     /// It computes group prevalence, samples exposures, and aggregates metrics.
+    /// Run full aggregation pass.
+    ///
+    /// `meme_emotional_charges` is parallel to `meme_ids` — the emotional
+    /// charge of each meme (for accurate group-level charge metrics).
+    ///
+    /// Note: `should_aggregate(tick)` returns false for tick 0, but this
+    /// method always runs on tick 0 to produce initial metrics.
     pub fn aggregate(
         &mut self,
         tick: u64,
         agent_meme_hosts: &[Vec<usize>],
         agent_groups: &[Option<usize>],
         meme_ids: &[usize],
+        meme_emotional_charges: &[Fixed],
         group_labels: &[(usize, String)],
-        agent_centrality: &[Fixed], // per-agent network centrality
+        agent_centrality: &[Fixed],
     ) -> &AggregatedMemeMetrics {
-        if !self.should_aggregate(tick) && tick != 0 {
+        // Always run on tick 0 for initialization; otherwise respect interval.
+        if tick != 0 && !self.should_aggregate(tick) {
             return &self.cached_metrics;
         }
 
-        // 1. Compute group prevalence
-        let group_prevalences =
-            self.compute_group_prevalence(agent_meme_hosts, agent_groups, meme_ids, group_labels);
+        // 1. Compute group prevalence with actual emotional charges
+        let group_prevalences = self.compute_group_prevalence(
+            agent_meme_hosts, agent_groups, meme_ids, group_labels, meme_emotional_charges,
+        );
 
         // 2. Find most viral meme
         let most_viral = meme_ids
@@ -312,14 +331,18 @@ impl MemeAggregator {
             })
             .copied();
 
-        // 3. Compute average spreader centrality
-        let total_centrality: Fixed = agent_centrality
+        // 3. Compute average spreader centrality (only meme hosts, not all agents)
+        let meme_host_centralities: Vec<Fixed> = agent_meme_hosts
             .iter()
-            .fold(Fixed::ZERO, |acc, c| acc + *c);
-        let avg_centrality = if agent_centrality.is_empty() {
+            .enumerate()
+            .filter(|(_, hosts)| !hosts.is_empty())
+            .filter_map(|(idx, _)| agent_centrality.get(idx).copied())
+            .collect();
+        let avg_centrality = if meme_host_centralities.is_empty() {
             Fixed::ZERO
         } else {
-            total_centrality / Fixed::from_int(agent_centrality.len() as i64)
+            let total: Fixed = meme_host_centralities.iter().fold(Fixed::ZERO, |acc, c| acc + *c);
+            total / Fixed::from_int(meme_host_centralities.len() as i64)
         };
 
         // 4. Aggregate echo chamber strength from group homogeneities
@@ -368,6 +391,7 @@ mod tests {
         let agent_meme_hosts = vec![vec![0], vec![0], vec![1], vec![1]];
         let agent_groups = vec![Some(0), Some(0), Some(1), Some(1)];
         let meme_ids = vec![0, 1];
+        let meme_charges = vec![Fixed::from_f64(0.7), Fixed::from_f64(0.4)];
         let group_labels = vec![(0, "faction".into()), (1, "faction".into())];
 
         let result = agg.compute_group_prevalence(
@@ -375,6 +399,7 @@ mod tests {
             &agent_groups,
             &meme_ids,
             &group_labels,
+            &meme_charges,
         );
 
         assert_eq!(result.len(), 2);
@@ -407,6 +432,7 @@ mod tests {
         let agent_meme_hosts = vec![vec![0], vec![0], vec![1]];
         let agent_groups = vec![Some(0), Some(0), Some(1)];
         let meme_ids = vec![0, 1];
+        let meme_charges = vec![Fixed::from_f64(0.7), Fixed::from_f64(0.4)];
         let group_labels = vec![(0, "faction".into()), (1, "faction".into())];
         let centrality = vec![
             Fixed::from_f64(0.8),
@@ -419,6 +445,7 @@ mod tests {
             &agent_meme_hosts,
             &agent_groups,
             &meme_ids,
+            &meme_charges,
             &group_labels,
             &centrality,
         );
