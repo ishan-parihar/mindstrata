@@ -25,7 +25,6 @@
 
 pub mod attraction;
 pub mod clan;
-#[expect(dead_code, reason = "not yet wired into tick loop")]
 pub mod courtship;
 pub mod cult;
 pub mod epistemic;
@@ -37,7 +36,6 @@ pub mod interaction;
 pub mod kinship;
 pub mod marriage;
 pub mod patronage;
-#[expect(dead_code, reason = "not yet wired into tick loop")]
 pub mod relationship_stages;
 pub mod relationship_v2;
 pub mod status_dims;

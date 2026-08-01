@@ -66,7 +66,6 @@ impl FactionV2 {
         grievance: Fixed,
         tick: u64,
     ) -> Self {
-        let member_count = Fixed::from_int(members.len() as i64);
         // Higher grievance = higher initial morale and mobilization
         let morale = (grievance * Fixed::from_f64(0.8) + Fixed::from_f64(0.2)).clamp_01();
         let mobilization = (grievance * Fixed::from_f64(0.6) + Fixed::from_f64(0.1)).clamp_01();
