@@ -371,7 +371,7 @@ fn courtship_to_marriage_chain() {
         "At least 2 agents should be partnered after 3000 ticks, got {partnered}");
 
     // Partnership should be symmetric: if A partners B, then B partners A
-    for (_i, agent) in sim.agents.iter().enumerate() {
+    for (i, agent) in sim.agents.iter().enumerate() {
         if let Some(partner_idx) = agent.partner {
             let partner = &sim.agents[partner_idx];
             assert!(partner.partner == Some(i),
@@ -387,9 +387,6 @@ fn courtship_to_marriage_chain() {
 /// Verifies that the cult formation system is active and produces valid
 /// cult structures when conditions emerge naturally from simulation dynamics.
 
-out of bounds ", p.to_f64());
-    }
-}
 
 /// §18.4: Over multiple seeds, friendships should correlate with proximity.
 /// Agents who are geographically close should form more relationships above
