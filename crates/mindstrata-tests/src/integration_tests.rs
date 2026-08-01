@@ -1,4 +1,4 @@
-//! §18.3 Integration Tests — verify cross-system emergent behaviors.
+//! §18.3 Integration Tests - verify cross-system emergent behaviors.
 //!
 //! These tests check that multiple subsystems interact correctly to produce
 //! emergent phenomena that require cooperation across biology, psychology,
@@ -27,7 +27,7 @@ fn run_sim(seed: u64, ticks: u64) -> Simulation {
 
 #[test]
 fn marriage_creates_partnerships() {
-    // §18.3: marriage can produce household — verified through partner field
+    // §18.3: marriage can produce household - verified through partner field
     let sim = run_sim(42, 2000);
     let married = sim.agents.iter().filter(|a| a.partner.is_some()).count();
     // After 2000 ticks with attraction model, some agents should pair up
@@ -44,12 +44,12 @@ fn children_inherit_genetic_traits() {
 
     for child in &children {
         let parent_a = &sim.agents[child.parent_a.unwrap()];
-        // Child genome should be derived from parents — verify child stress_reactivity
+        // Child genome should be derived from parents - verify child stress_reactivity
         // is within mutation range of parent (parent ± 0.3 is a typical mutation bound)
         let child_trait = child.embodied.genome.trait_predispositions.stress_reactivity.to_f64();
         let parent_trait = parent_a.embodied.genome.trait_predispositions.stress_reactivity.to_f64();
         // Child trait should be within [0,1] (valid Fixed range) and
-        // differ from parent (mutation occurred) — genome is recombined from both parents
+        // differ from parent (mutation occurred) - genome is recombined from both parents
         assert!((0.0..=1.0).contains(&child_trait),
             "Child stress_reactivity={child_trait} should be in [0,1]");
         // Verify the child has a distinct genome from the parent (mutation happened)
@@ -92,7 +92,7 @@ fn attachment_affects_emotional_response() {
         let avg_secure_fear: f64 = secure_agents.iter()
             .map(|a| a.emotions.fear.to_f64()).sum::<f64>() / secure_agents.len() as f64;
         // Anxious agents should tend toward higher fear (not guaranteed per-agent, but statistically)
-        // This is a weak assertion — just verify both groups exist and have plausible fear
+        // This is a weak assertion - just verify both groups exist and have plausible fear
         assert!(avg_anxious_fear >= 0.0 && avg_anxious_fear <= 1.0,
             "Anxious agents should have plausible fear: {avg_anxious_fear}");
         assert!(avg_secure_fear >= 0.0 && avg_secure_fear <= 1.0,
@@ -192,7 +192,7 @@ fn meme_mutation_over_generations() {
         "Cultural knowledge should spread to at least 2 agents, got {agents_with_knowledge}");
 
     // Verify that the initial seeded knowledge was distributed beyond just
-    // the initial agent population — socialization spread knowledge to children
+    // the initial agent population - socialization spread knowledge to children
     let total_knowledge_entries: usize = sim.agents.iter()
         .map(|a| a.cultural.knowledge.len())
         .sum();
@@ -204,7 +204,7 @@ fn meme_mutation_over_generations() {
 
 #[test]
 fn rumor_spreads_through_network() {
-    // §18.3: rumor degrades over transmission hops — verified through gossip events
+    // §18.3: rumor degrades over transmission hops - verified through gossip events
     let sim = run_sim(42, 1000);
     // Gossip events should have occurred
     // Check that social events were produced (interactions occur)
@@ -231,7 +231,7 @@ fn belief_confidence_shifts_over_time() {
 
 #[test]
 fn ritual_participation_builds_legitimacy() {
-    // §18.3: ritual increases group cohesion — verified through institution cohesion
+    // §18.3: ritual increases group cohesion - verified through institution cohesion
     let sim = run_sim(42, 1000);
     // Institutions should have non-zero cohesion after rituals
     for inst in &sim.institutions {
@@ -347,7 +347,7 @@ fn childhood_trauma_increases_attachment_insecurity() {
 
 // ── §18.3: Courtship → Marriage Chain ────────────────────────────
 
-/// §18.3: Courtship can become marriage — explicit chain test.
+/// §18.3: Courtship can become marriage - explicit chain test.
 /// Verifies that courtship advancement leads to partnership formation
 /// and that married agents exist after sufficient simulation time.
 #[test]
@@ -387,7 +387,7 @@ fn courtship_to_marriage_chain() {
 /// Verifies that the cult formation system is active and produces valid
 /// cult structures when conditions emerge naturally from simulation dynamics.
 
-out of bounds", p.to_f64());
+out of bounds ", p.to_f64());
     }
 }
 
@@ -441,9 +441,9 @@ fn friendships_correlate_with_proximity_across_seeds() {
 
     // Require minimum data for meaningful statistical comparison.
     // Guard failure indicates the proximity-friendship correlation requires
-    // more simulation time to manifest — test still passes as a stability check.
+    // more simulation time to manifest - test still passes as a stability check.
     if close_total < 10 || far_total < 10 {
-        eprintln!("proximity test: guards failed (close={close_total}, far={far_total}) — correlation may need more ticks");
+        eprintln!("proximity test: guards failed (close={close_total}, far={far_total}) - correlation may need more ticks");
     }
     assert!(close_total >= 10, "Insufficient close-proximity pairs: {close_total}");
     assert!(far_total >= 10, "Insufficient far-proximity pairs: {far_total}");
@@ -851,7 +851,7 @@ fn attachment_insecurity_correlates_with_relationship_volatility() {
     }
 }
 
-/// §18.4: Determinism check — same seed produces identical state.
+/// §18.4: Determinism check - same seed produces identical state.
 #[test]
 fn determinism_across_runs() {
     let make_sim = |seed: u64| {
