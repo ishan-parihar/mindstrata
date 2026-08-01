@@ -29,7 +29,6 @@ pub mod clan;
 pub mod courtship;
 pub mod cult;
 pub mod epistemic;
-#[expect(dead_code, reason = "not yet wired into tick loop")]
 pub mod faction_v2;
 pub mod group_formation;
 pub mod hierarchy;

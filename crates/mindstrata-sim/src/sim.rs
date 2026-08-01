@@ -291,6 +291,8 @@ pub struct Simulation {
     pub noospheric_field: crate::noosphere::NoosphericField,
     /// Architecture-plan-2 §13.6: Belief ecology — population-level polarization.
     pub belief_ecology: crate::noosphere::BeliefEcologyNoosphere,
+    /// Architecture-plan-2 §5.2, §29.2: Faction v2 — upgraded faction dynamics.
+    pub faction_v2_registry: crate::social::faction_v2::FactionV2Registry,
 }
 
 impl Simulation {
@@ -354,6 +356,7 @@ impl Simulation {
             moral_panic_registry: crate::noosphere::MoralPanicRegistry::new(),
             noospheric_field: crate::noosphere::NoosphericField::new(),
             belief_ecology: crate::noosphere::BeliefEcologyNoosphere::new(),
+            faction_v2_registry: crate::social::faction_v2::FactionV2Registry::new(),
         }
     }
 
@@ -410,6 +413,7 @@ impl Simulation {
             moral_panic_registry: crate::noosphere::MoralPanicRegistry::new(),
             noospheric_field: crate::noosphere::NoosphericField::new(),
             belief_ecology: crate::noosphere::BeliefEcologyNoosphere::new(),
+            faction_v2_registry: crate::social::faction_v2::FactionV2Registry::new(),
         }
     }
 
@@ -3631,6 +3635,7 @@ impl Simulation {
 
             // Architecture-plan-2 §13.6: Belief ecology daily update.
             self.belief_ecology.daily_update();
+            self.faction_v2_registry.daily_update();
         }
 
         // Architecture-plan-2 §13: Noospheric field natural decay (every tick).
