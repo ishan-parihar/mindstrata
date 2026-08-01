@@ -420,7 +420,7 @@ impl Simulation {
         let mut clock = Clock::new();
         clock.set(snapshot.clock_tick);
         let rng = RngStreams::new(snapshot.master_seed);
-        Self {
+        let mut sim = Self {
             config: snapshot.config,
             clock,
             params: crate::parameters::SimParameters::default(),
@@ -465,7 +465,10 @@ impl Simulation {
             patronage_registry: crate::social::patronage::PatronageRegistry::new(),
             group_registry: crate::social::group_formation::GroupRegistry::new(),
             exposure_samples: Vec::new(),
-        }
+        };
+        // Rebuild the GroupRegistry membership cache (skipped by serde).
+        sim.group_registry.rebuild_cache();
+        sim
     }
 
     /// §16.1: Capture a snapshot of the current simulation state.
