@@ -2113,6 +2113,15 @@ impl Simulation {
         // ── 18+19+20+21. Social cluster (extracted) ──
         self.tick_social_cluster(pre_tick_events, tick_u64, tick, phases);
 
+        // Architecture-plan-2 §13.6: Per-tick echo chamber drift.
+        // After the daily cluster rebuild (in tick_social_cluster), this accumulates
+        // gradual outgroup hostility and identity fusion between rebuilds.
+        // Skip on daily ticks — tick_social_cluster already rebuilds clusters and
+        // recomputes polarization, so tick_update() would be redundant.
+        if !phases.is_daily {
+            self.echo_chamber.tick_update();
+        }
+
         // ── 19. Marriage formation (extracted) ──
         self.tick_marriage_formation(tick_u64, tick);
 
