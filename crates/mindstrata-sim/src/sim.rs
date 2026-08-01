@@ -58,6 +58,26 @@ pub const SKILL_GAIN_PER_TICK: Fixed = Fixed::from_raw(10); // 0.001
 /// Minimum mutual trust required to initiate a courtship (0.3).
 const COURTSHIP_TRUST_THRESHOLD: Fixed = Fixed::from_raw(3000); // 0.3
 
+// ── Patronage creation constants (§22b) ────────────────────────────
+/// Maximum clients a single patron may acquire per duodeca cycle.
+const PATRONAGE_MAX_CLIENTS_PER_PATRON: usize = 3;
+/// Minimum status differential for patron over client.
+const PATRONAGE_STATUS_GAP: Fixed = Fixed::from_raw(1500); // 0.15
+/// Minimum trust required for patronage formation.
+const PATRONAGE_TRUST_THRESHOLD: Fixed = Fixed::from_raw(3500); // 0.35
+/// Minimum affection required for patronage formation.
+const PATRONAGE_AFFECTION_THRESHOLD: Fixed = Fixed::from_raw(2000); // 0.2
+/// Patronage formation chance multiplier (scaled by trust).
+const PATRONAGE_CHANCE_SCALE: Fixed = Fixed::from_raw(500); // 0.05
+
+// ── Group formation constants (§12.2) ──────────────────────────────
+/// Social cost scale factor (density × this → 0.0–0.2).
+const GROUP_SOCIAL_COST_SCALE: Fixed = Fixed::from_raw(2000); // 0.2
+/// Default council legitimacy fallback when no Council exists.
+const GROUP_COUNCIL_LEGITIMACY_DEFAULT: Fixed = Fixed::from_raw(5000); // 0.5
+/// Institutional suppression scale factor (legitimacy × this → 0.0–0.4).
+const GROUP_SUPPRESSION_SCALE: Fixed = Fixed::from_raw(4000); // 0.4
+
 /// Configuration for a simulation run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimConfig {
@@ -3779,15 +3799,13 @@ impl Simulation {
                     Fixed::from_f64(total_members as f64 / self.agents.len() as f64)
                         .clamp_01()
                 };
-                density * Fixed::from_f64(0.2) // 0.0–0.2 range
+                density * GROUP_SOCIAL_COST_SCALE
             };
             // institutional_suppression: high council legitimacy → institutions suppress groups.
             let institutional_suppression = self.institutions.iter()
-                .filter(|inst| inst.kind == institutions::InstitutionKind::Council)
-                .map(|inst| inst.legitimacy)
-                .next()
-                .unwrap_or(Fixed::from_f64(0.5))
-                * Fixed::from_f64(0.4); // 0.0–0.4 range
+                .find_map(|inst| (inst.kind == institutions::InstitutionKind::Council).then(|| inst.legitimacy))
+                .unwrap_or(GROUP_COUNCIL_LEGITIMACY_DEFAULT)
+                * GROUP_SUPPRESSION_SCALE;
             for i in 0..n_agents {
                 // Find peers: agents with high mutual trust and shared location
                 let mut peers: Vec<usize> = Vec::new();
@@ -4750,20 +4768,20 @@ impl Simulation {
             let mut patron_client_counts: Vec<usize> = vec![0; self.agents.len()];
             for i in 0..self.agents.len() {
                 let patron_status = status_cache[i];
-                if patron_client_counts[i] >= 3 { continue; }
+                if patron_client_counts[i] >= PATRONAGE_MAX_CLIENTS_PER_PATRON { continue; }
                 for j in 0..self.agents.len() {
                     if i == j { continue; }
                     // Patron must be notably higher status than client
-                    if patron_status <= status_cache[j] + Fixed::from_f64(0.15) { continue; }
+                    if patron_status <= status_cache[j] + PATRONAGE_STATUS_GAP { continue; }
                     // Must not already have a patronage link (O(1) HashSet lookup)
                     if patronage_clients.contains(&j) { continue; }
                     // Check trust from relationship_v2
                     let rv2_idx = Self::relationship_v2_index(i, j, self.agents.len());
                     if rv2_idx >= self.agents[i].relationship_v2s.len() { continue; }
                     let trust = self.agents[i].relationship_v2s[rv2_idx].trust;
-                    let affection = self.agents[i].relationship_v2s[rv2_idx].affection;
-                    // Need moderate trust and positive affect to form patronage
-                    if trust < Fixed::from_f64(0.35) || affection < Fixed::from_f64(0.2) { continue; }                        let chance = (trust * Fixed::from_f64(0.05)).clamp_01();
+                    let affection = self.agents[i].relationship_v2s[rv2_idx].affection;                    // Need moderate trust and positive affect to form patronage
+                    if trust < PATRONAGE_TRUST_THRESHOLD || affection < PATRONAGE_AFFECTION_THRESHOLD { continue; }
+                    let chance = (trust * PATRONAGE_CHANCE_SCALE).clamp_01();
                     let roll = Fixed::from_f64(self.rng.get_mut(RngStream::Social).random_range(0.0..1.0));
                     if roll < chance {
                         let rel = crate::social::patronage::PatronageRelation::new(i, j, tick_u64);
