@@ -135,11 +135,15 @@ impl Courtship {
         (base + reciprocity_bonus + approval_bonus).clamp_01()
     }
 
-    /// Daily update — decay reciprocity, check for inactivity timeout.
+    /// Daily update — decay reciprocity, converge social approval toward reciprocity.
     pub fn daily_update(&mut self) {
+        if !self.active {
+            return;
+        }
         // Reciprocity slowly decays without reinforcement
         self.reciprocity = (self.reciprocity * Fixed::from_f64(0.98)).max(Fixed::ZERO);
-        // Social approval can shift over time
+        // Social approval tracks mutual interest: community perception follows
+        // how much the pursued returns the pursuer's interest.
         self.social_approval = (self.social_approval * Fixed::from_f64(0.995) + Fixed::from_f64(0.005) * self.reciprocity).clamp_01();
     }
 

@@ -294,6 +294,8 @@ pub struct Simulation {
     /// Architecture-plan-2 §5.2, §29.2: Faction v2 — upgraded faction dynamics.
     pub faction_v2_registry: crate::social::faction_v2::FactionV2Registry,
     /// Architecture-plan-2 §10.4: Active courtships between agents.
+    /// NOTE: not persisted in snapshots — rebuilt from agent state.
+    /// TODO: wire courtship creation into social interaction tick
     pub active_courtships: Vec<crate::social::courtship::Courtship>,
 }
 
