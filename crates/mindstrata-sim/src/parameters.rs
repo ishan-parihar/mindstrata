@@ -71,6 +71,16 @@ pub struct SimParameters {
     /// Gossip acceptance salience threshold (0.15 = rumors below this are ignored).
     pub gossip_acceptance_threshold: Fixed,
 
+    // ── Appraisal ────────────────────────────────────────────
+    /// Goal-relevance threshold for triggering emotional response (0.3).
+    pub appraisal_goal_relevance_threshold: Fixed,
+    /// Sadness multiplier for circumstance-caused events (0.7).
+    pub appraisal_sadness_multiplier: Fixed,
+    /// Fear multiplier from low coping potential (0.5).
+    pub appraisal_fear_coping_multiplier: Fixed,
+    /// Low-coping threshold below which fear intensifies (0.3).
+    pub appraisal_low_coping_threshold: Fixed,
+
     // ── Relational ────────────────────────────────────────────
     /// Trust threshold for friendship classification.
     pub friendship_trust_threshold: Fixed,
@@ -155,6 +165,10 @@ impl Default for SimParameters {
             gossip_base_fidelity: Fixed::from_f64(0.7), // matches original
             gossip_emotional_distortion: Fixed::from_f64(0.15), // matches original
             gossip_acceptance_threshold: Fixed::from_f64(0.15), // matches original
+            appraisal_goal_relevance_threshold: Fixed::from_f64(0.3),
+            appraisal_sadness_multiplier: Fixed::from_f64(0.7),
+            appraisal_fear_coping_multiplier: Fixed::from_f64(0.5),
+            appraisal_low_coping_threshold: Fixed::from_f64(0.3),
 
             // Relational
             friendship_trust_threshold: Fixed::from_f64(0.5),

@@ -94,10 +94,10 @@ impl EmotionDelta {
 ///
 /// This implements the cognitive appraisal → emotion mapping from
 /// the architecture spec's Section 9.2.
-pub fn appraise(appraisal: &Appraisal, _tick: Tick) -> EmotionDelta {
+pub fn appraise(appraisal: &Appraisal, _tick: Tick, params: &crate::parameters::SimParameters) -> EmotionDelta {
     let mut delta = EmotionDelta::default();
 
-    if appraisal.goal_relevance > Fixed::from_f64(0.3) {
+    if appraisal.goal_relevance > params.appraisal_goal_relevance_threshold {
         if appraisal.goal_congruence > Fixed::ZERO {
             // Goal-congruent: positive emotions
             delta.joy = appraisal.goal_relevance * appraisal.goal_congruence;
@@ -131,17 +131,17 @@ pub fn appraise(appraisal: &Appraisal, _tick: Tick) -> EmotionDelta {
                     }
                 }
                 Agency::Circumstance | Agency::Unknown => {
-                    delta.sadness = intensity * Fixed::from_f64(0.7);
+                    delta.sadness = intensity * params.appraisal_sadness_multiplier;
                     delta.fear = intensity
                         * (Fixed::ONE - appraisal.coping_potential)
-                        * Fixed::from_f64(0.5);
+                        * params.appraisal_fear_coping_multiplier;
                 }
             }
         }
     }
 
     // Low coping potential intensifies fear
-    if appraisal.coping_potential < Fixed::from_f64(0.3) {
+    if appraisal.coping_potential < params.appraisal_low_coping_threshold {
         delta.fear = (delta.fear + Fixed::from_f64(0.1)).clamp_01();
     }
 
@@ -155,6 +155,7 @@ pub fn appraise(appraisal: &Appraisal, _tick: Tick) -> EmotionDelta {
 
 #[cfg(test)]
 mod tests {
+    use crate::parameters::SimParameters;
     use super::*;
     use mindstrata_core::rng::RngStreams;
 
@@ -171,7 +172,7 @@ mod tests {
             social_visibility: Fixed::ZERO,
             identity_relevance: Fixed::ZERO,
         };
-        let delta = appraise(&appraisal, Tick::new(0));
+        let delta = appraise(&appraisal, Tick::new(0), &SimParameters::default());
         assert!(delta.joy > Fixed::ZERO, "Should produce joy");
         assert_eq!(delta.anger, Fixed::ZERO, "Should not produce anger");
     }
@@ -189,7 +190,7 @@ mod tests {
             social_visibility: Fixed::ZERO,
             identity_relevance: Fixed::ZERO,
         };
-        let delta = appraise(&appraisal, Tick::new(0));
+        let delta = appraise(&appraisal, Tick::new(0), &SimParameters::default());
         assert!(
             delta.anger > Fixed::from_f64(0.3),
             "Should produce significant anger"
@@ -209,7 +210,7 @@ mod tests {
             social_visibility: Fixed::ZERO,
             identity_relevance: Fixed::ZERO,
         };
-        let delta = appraise(&appraisal, Tick::new(0));
+        let delta = appraise(&appraisal, Tick::new(0), &SimParameters::default());
         assert!(
             delta.fear > Fixed::ZERO,
             "Low coping should increase fear"

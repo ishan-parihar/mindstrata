@@ -1584,7 +1584,7 @@ impl Simulation {
                     identity_relevance: Fixed::from_f64(0.2),
                 };
 
-                let delta = appraisal::appraise(&appraisal, tick);
+                let delta = appraisal::appraise(&appraisal, tick, &self.params);
 
                 emotions[i].fear = (emotions[i].fear + delta.fear).clamp_01();
                 emotions[i].anger = (emotions[i].anger + delta.anger).clamp_01();
