@@ -4500,7 +4500,75 @@ impl Simulation {
             agent.feud_ticks.truncate(keep);
         }
 
-        // ── 21. §19.5.E Carrying cost — heavy loads increase fatigue ──
+        // ── 21b. Courtship creation — eligible agents begin romantic courtship ──
+        // Architecture-plan-2 §10.4: When two unpartnered adult agents with sufficient
+        // attraction and trust interact, a Courtship is initiated.
+        // Runs every 12 ticks (~2 hours) to avoid O(N²) overhead every tick.
+        if phases.is_duodeca {
+            let n = self.agents.len();
+            for i in 0..n {
+                // Skip agents already in a courtship
+                let already_in_courtship = self.active_courtships.iter().any(|c|
+                    c.active && (c.pursuer == i || c.pursued == i));
+                if already_in_courtship { continue; }
+                // Skip partnered agents
+                if self.agents[i].partner.is_some() { continue; }
+                // Skip minors
+                if self.agents[i].age < Fixed::from_f64(16.0) { continue; }
+
+                for j in (i + 1)..n {
+                    // Skip if j is already in a courtship or partnered
+                    let j_in_courtship = self.active_courtships.iter().any(|c|
+                        c.active && (c.pursuer == j || c.pursued == j));
+                    if j_in_courtship { continue; }
+                    if self.agents[j].partner.is_some() { continue; }
+                    if self.agents[j].age < Fixed::from_f64(16.0) { continue; }
+
+                    // Check kinship — skip close relatives
+                    let kinship_coeff = self.kinship_graph.coefficient_between(i, j);
+                    if kinship_coeff >= Fixed::from_f64(0.25) { continue; }
+
+                    // Compute mutual attraction from relationship_v2
+                    let n_agents = self.agents.len();
+                    let idx_ij = Self::relationship_v2_index(i, j, n_agents);
+                    let idx_ji = Self::relationship_v2_index(j, i, n_agents);
+                    let trust_ij = if idx_ij < self.agents[i].relationship_v2s.len() {
+                        self.agents[i].relationship_v2s[idx_ij].trust
+                    } else { Fixed::ZERO };
+                    let trust_ji = if idx_ji < self.agents[j].relationship_v2s.len() {
+                        self.agents[j].relationship_v2s[idx_ji].trust
+                    } else { Fixed::ZERO };
+                    let avg_trust = (trust_ij + trust_ji) * Fixed::from_f64(0.5);
+
+                    // Attraction threshold — must have some trust基础
+                    if avg_trust < Fixed::from_f64(0.3) { continue; }
+
+                    // Check if eligible (age, kinship, attraction thresholds)
+                    let mutual_attraction = avg_trust;
+                    let already_bonded = self.marriage_registry.find_bond(i, j).is_some();
+                    if !crate::social::courtship::eligible_for_courtship(
+                        self.agents[i].age,
+                        self.agents[j].age,
+                        kinship_coeff,
+                        already_bonded,
+                        Fixed::from_f64(0.3),
+                        mutual_attraction,
+                    ) { continue; }
+
+                    // Deterministic chance to start courtship — based on attraction
+                    let chance = avg_trust * Fixed::from_f64(0.02);
+                    let roll = Fixed::from_f64(self.rng.get_mut(RngStream::Social).random_range(0.0..1.0));
+                    if roll < chance {
+                        let mut courtship = crate::social::courtship::Courtship::new(i, j, tick_u64);
+                        courtship.mutual_attraction = mutual_attraction;
+                        courtship.stage = crate::social::marriage::RomanticStage::Awareness;
+                        self.active_courtships.push(courtship);
+                    }
+                }
+            }
+        }
+
+        // ── 22. §19.5.E Carrying cost — heavy loads increase fatigue ──
         // Agents who performed physical actions (Work) incur carrying cost based on load.
         // Since agents don't carry items yet, this serves as a workload fatigue modifier.
         for i in 0..self.agents.len() {
