@@ -4730,11 +4730,11 @@ impl Simulation {
                 .map(|(idx, _)| idx)
                 .collect();
             // Track how many clients each patron has acquired this tick (max 3).
-            let mut patron_client_counts: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+            // Vec indexed by agent ID — simpler and avoids HashMap overhead.
+            let mut patron_client_counts: Vec<usize> = vec![0; self.agents.len()];
             for i in 0..self.agents.len() {
                 let patron_status = status_cache[i];
-                let patron_clients_count = *patron_client_counts.get(&i).unwrap_or(&0);
-                if patron_clients_count >= 3 { continue; }
+                if patron_client_counts[i] >= 3 { continue; }
                 for j in 0..self.agents.len() {
                     if i == j { continue; }
                     // Patron must be notably higher status than client
@@ -4747,13 +4747,12 @@ impl Simulation {
                     let trust = self.agents[i].relationship_v2s[rv2_idx].trust;
                     let affection = self.agents[i].relationship_v2s[rv2_idx].affection;
                     // Need moderate trust and positive affect to form patronage
-                    if trust < Fixed::from_f64(0.35) || affection < Fixed::from_f64(0.2) { continue; }
-                    let chance = (trust * Fixed::from_f64(0.03)).clamp_01();
+                    if trust < Fixed::from_f64(0.35) || affection < Fixed::from_f64(0.2) { continue; }                        let chance = (trust * Fixed::from_f64(0.05)).clamp_01();
                     let roll = Fixed::from_f64(self.rng.get_mut(RngStream::Social).random_range(0.0..1.0));
                     if roll < chance {
                         let rel = crate::social::patronage::PatronageRelation::new(i, j, tick_u64);
                         self.patronage_registry.register(rel);
-                        *patron_client_counts.entry(i).or_insert(0) += 1;
+                        patron_client_counts[i] += 1;
                         tracing::info!(
                             patron = i,
                             client = j,
