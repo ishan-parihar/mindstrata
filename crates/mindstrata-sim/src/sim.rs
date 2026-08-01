@@ -4407,9 +4407,8 @@ pub struct MetricsSnapshot {
 
 impl MetricsSnapshot {
     /// §5.1/§19: CSV header for exporting metrics for analysis.
-    pub fn csv_header() -> String {
+    pub fn csv_header() -> &'static str {
         "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds"
-            .into()
     }
 
     /// §5.1/§19: One CSV line for this snapshot.
