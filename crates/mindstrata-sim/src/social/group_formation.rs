@@ -19,6 +19,7 @@
 
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 /// A candidate group that may form from emergent social dynamics.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -139,9 +140,15 @@ impl PeerGroup {
 }
 
 /// Registry for all active peer groups in the simulation.
+///
+/// Maintains an O(1) membership cache for fast agent-in-group lookups.
+/// The cache is rebuilt on register/dissolve operations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GroupRegistry {
     pub groups: Vec<PeerGroup>,
+    /// O(1) membership cache: set of agent indices currently in active groups.
+    #[serde(skip)]
+    active_members: HashSet<usize>,
 }
 
 impl Default for GroupRegistry {
@@ -152,11 +159,17 @@ impl Default for GroupRegistry {
 
 impl GroupRegistry {
     pub fn new() -> Self {
-        Self { groups: Vec::new() }
+        Self { groups: Vec::new(), active_members: HashSet::new() }
     }
 
     pub fn register(&mut self, group: PeerGroup) -> GroupId {
         let id = self.groups.len();
+        // Update membership cache for new group.
+        if group.active {
+            for &member in &group.members {
+                self.active_members.insert(member);
+            }
+        }
         self.groups.push(group);
         id
     }
@@ -176,20 +189,40 @@ impl GroupRegistry {
             .collect()
     }
 
-    /// Daily update for all groups — decay cohesion.
+    /// Daily update for all groups — decay cohesion and dissolve inactive groups.
+    /// Rebuilds the membership cache after dissolution.
     pub fn daily_update(&mut self) {
+        self.active_members.clear();
         for group in &mut self.groups {
             if group.active {
                 group.daily_update();
+            }
+            // Rebuild cache for groups that remain active.
+            if group.active {
+                for &member in &group.members {
+                    self.active_members.insert(member);
+                }
             }
         }
     }
 
     /// Check if an agent is already in an active group.
+    /// O(1) lookup via the membership cache.
     pub fn agent_in_active_group(&self, agent_idx: usize) -> bool {
-        self.groups.iter()
-            .filter(|g| g.active)
-            .any(|g| g.members.contains(&agent_idx))
+        self.active_members.contains(&agent_idx)
+    }
+
+    /// Rebuild the membership cache from scratch.
+    /// Call after deserializing a snapshot (serde skips the cache).
+    pub fn rebuild_cache(&mut self) {
+        self.active_members.clear();
+        for group in &self.groups {
+            if group.active {
+                for &member in &group.members {
+                    self.active_members.insert(member);
+                }
+            }
+        }
     }
 }
 
@@ -325,5 +358,70 @@ mod tests {
         };
         group.daily_update();
         assert!(!group.active);
+    }
+
+    #[test]
+    fn group_registry_cache_works_after_deserialization() {
+        // Register a group, serialize, deserialize (cache skipped), rebuild, verify.
+        let mut reg = GroupRegistry::new();
+        let candidate = GroupCandidate {
+            members: vec![0, 1, 2],
+            shared_grievance: Fixed::from_f64(0.7),
+            shared_identity: Fixed::from_f64(0.6),
+            emotional_synchrony: Fixed::from_f64(0.5),
+            repeated_interaction: Fixed::from_f64(0.4),
+            leadership_gravity: Fixed::from_f64(0.3),
+            external_threat: Fixed::from_f64(0.6),
+            social_cost: Fixed::from_f64(0.1),
+            institutional_suppression: Fixed::from_f64(0.1),
+            identified_tick: 0,
+        };
+        let group = PeerGroup::from_candidate(&candidate, 0, 100);
+        reg.register(group);
+
+        // Cache is populated after register.
+        assert!(reg.agent_in_active_group(0));
+        assert!(reg.agent_in_active_group(1));
+        assert!(!reg.agent_in_active_group(99));
+
+        // Serialize and deserialize — cache is skipped.
+        let json = serde_json::to_string(&reg).expect("serialize");
+        let mut restored: GroupRegistry = serde_json::from_str(&json).expect("deserialize");
+
+        // Cache is empty after deserialization.
+        assert!(!restored.agent_in_active_group(0));
+        assert_eq!(restored.groups.len(), 1);
+        assert!(restored.groups[0].active);
+
+        // Rebuild cache — membership is restored.
+        restored.rebuild_cache();
+        assert!(restored.agent_in_active_group(0));
+        assert!(restored.agent_in_active_group(1));
+        assert!(restored.agent_in_active_group(2));
+        assert!(!restored.agent_in_active_group(99));
+    }
+
+    #[test]
+    fn group_registry_daily_update_rebuilds_cache() {
+        let mut reg = GroupRegistry::new();
+        let candidate = GroupCandidate {
+            members: vec![0, 1, 2],
+            shared_grievance: Fixed::from_f64(0.7),
+            shared_identity: Fixed::from_f64(0.6),
+            emotional_synchrony: Fixed::from_f64(0.5),
+            repeated_interaction: Fixed::from_f64(0.4),
+            leadership_gravity: Fixed::from_f64(0.3),
+            external_threat: Fixed::from_f64(0.6),
+            social_cost: Fixed::from_f64(0.1),
+            institutional_suppression: Fixed::from_f64(0.1),
+            identified_tick: 0,
+        };
+        reg.register(PeerGroup::from_candidate(&candidate, 0, 100));
+        assert!(reg.agent_in_active_group(0));
+
+        // After daily_update, cache is rebuilt and agent is still in active group.
+        reg.daily_update();
+        assert!(reg.agent_in_active_group(0));
+        assert!(reg.agent_in_active_group(1));
     }
 }
