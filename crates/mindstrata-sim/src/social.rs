@@ -39,36 +39,36 @@ pub fn process_interaction(
 
     match interaction.kind {
         InteractionKind::Talk => {
-            trust_delta = Fixed::from_f64(0.01) * bonding_rate * Fixed::from_f64(0.2);
-            affection_delta = Fixed::from_f64(0.005) * bonding_rate * Fixed::from_f64(0.1);
+            trust_delta = Fixed::from_f64(0.01) * bonding_rate;
+            affection_delta = Fixed::from_f64(0.005) * bonding_rate;
         }
         InteractionKind::Help => {
             trust_delta = Fixed::from_f64(0.05) * bonding_rate;
             affection_delta = Fixed::from_f64(0.03) * bonding_rate;
         }
         InteractionKind::Threaten => {
-            trust_delta = Fixed::from_f64(-0.1) * conflict_escalation_rate * Fixed::from_f64(1.25);
-            affection_delta = Fixed::from_f64(-0.05) * conflict_escalation_rate * Fixed::from_f64(0.625);
+            trust_delta = Fixed::from_f64(-0.1) * conflict_escalation_rate;
+            affection_delta = Fixed::from_f64(-0.05) * conflict_escalation_rate;
         }
         InteractionKind::Trade => {
-            trust_delta = Fixed::from_f64(0.02) * bonding_rate * Fixed::from_f64(0.4);
+            trust_delta = Fixed::from_f64(0.02) * bonding_rate;
             affection_delta = Fixed::ZERO;
         }
         InteractionKind::Gossip => {
-            trust_delta = Fixed::from_f64(0.005) * bonding_rate * Fixed::from_f64(0.1);
-            affection_delta = Fixed::from_f64(0.01) * bonding_rate * Fixed::from_f64(0.2);
+            trust_delta = Fixed::from_f64(0.005) * bonding_rate;
+            affection_delta = Fixed::from_f64(0.01) * bonding_rate;
         }
         InteractionKind::Comfort => {
-            trust_delta = Fixed::from_f64(0.03) * bonding_rate * Fixed::from_f64(0.6);
+            trust_delta = Fixed::from_f64(0.03) * bonding_rate;
             affection_delta = Fixed::from_f64(0.05) * bonding_rate;
         }
         InteractionKind::Insult => {
             trust_delta = Fixed::from_f64(-0.08) * conflict_escalation_rate;
-            affection_delta = Fixed::from_f64(-0.1) * conflict_escalation_rate * Fixed::from_f64(1.25);
+            affection_delta = Fixed::from_f64(-0.1) * conflict_escalation_rate;
         }
         InteractionKind::Teach => {
-            trust_delta = Fixed::from_f64(0.04) * bonding_rate * Fixed::from_f64(0.8);
-            affection_delta = Fixed::from_f64(0.02) * bonding_rate * Fixed::from_f64(0.4);
+            trust_delta = Fixed::from_f64(0.04) * bonding_rate;
+            affection_delta = Fixed::from_f64(0.02) * bonding_rate;
         }
     }
 
@@ -262,7 +262,7 @@ pub fn update_witnesses(
             // Negative interactions: witnesses reduce trust in perpetrator
             InteractionKind::Threaten | InteractionKind::Insult => {
                 if let Some(rel) = relationships.iter_mut().find(|r| r.from == witness && r.to == interaction.from) {
-                    let delta = Fixed::from_f64(-0.03) * conflict_escalation_rate * Fixed::from_f64(0.375);
+                    let delta = Fixed::from_f64(-0.03) * conflict_escalation_rate;
                     rel.trust = (rel.trust + delta).max(Fixed::ZERO);
                     rel.last_interaction_tick = tick.as_u64();
                 }
@@ -270,7 +270,7 @@ pub fn update_witnesses(
             // Positive interactions: witnesses increase trust in helper
             InteractionKind::Help | InteractionKind::Comfort => {
                 if let Some(rel) = relationships.iter_mut().find(|r| r.from == witness && r.to == interaction.from) {
-                    let delta = Fixed::from_f64(0.02) * bonding_rate * Fixed::from_f64(0.4);
+                    let delta = Fixed::from_f64(0.02) * bonding_rate;
                     rel.trust = (rel.trust + delta).clamp_01();
                     rel.last_interaction_tick = tick.as_u64();
                 }

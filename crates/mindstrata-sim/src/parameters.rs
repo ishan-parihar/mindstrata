@@ -70,9 +70,11 @@ pub struct SimParameters {
     pub relationship_dormant_decay: Fixed,
     /// Emotional event contribution to relationship change.
     pub emotional_event_weight: Fixed,
-    /// Bonding rate from positive interactions.
+    /// Bonding rate multiplier — scales all positive interaction deltas.
+    /// Default 1.0 preserves original hardcoded behavior; >1.0 amplifies bonding.
     pub bonding_rate: Fixed,
-    /// Conflict escalation rate from negative interactions.
+    /// Conflict escalation rate multiplier — scales all negative interaction deltas.
+    /// Default 1.0 preserves original hardcoded behavior; >1.0 amplifies conflict.
     pub conflict_escalation_rate: Fixed,
 
     // ── Cultural ──────────────────────────────────────────────
@@ -144,8 +146,8 @@ impl Default for SimParameters {
             alliance_trust_threshold: Fixed::from_f64(0.7),
             relationship_dormant_decay: Fixed::from_f64(0.001),
             emotional_event_weight: Fixed::from_f64(0.3),
-            bonding_rate: Fixed::from_f64(0.05),
-            conflict_escalation_rate: Fixed::from_f64(0.08),
+            bonding_rate: Fixed::ONE,   // identity: preserves original hardcoded deltas
+            conflict_escalation_rate: Fixed::ONE,   // identity: preserves original hardcoded deltas
 
             // Cultural
             meme_transmission_multiplier: Fixed::from_f64(1.0),

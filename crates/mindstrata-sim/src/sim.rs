@@ -55,8 +55,6 @@ use serde::{Deserialize, Serialize};
 pub const EXPECTED_GRAIN_PER_AGENT: u32 = 10;
 /// Skill improvement per tick of practice.
 pub const SKILL_GAIN_PER_TICK: Fixed = Fixed::from_raw(10); // 0.001
-/// Belief resistance decay rate per tick.
-pub const BELIEF_RESISTANCE_DECAY: Fixed = Fixed::from_raw(10); // 0.001
 
 /// Configuration for a simulation run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
