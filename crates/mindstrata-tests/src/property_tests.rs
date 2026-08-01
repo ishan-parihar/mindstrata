@@ -251,7 +251,7 @@ fn agent_ages_monotonically_non_decreasing() {
     let mut sim = Simulation::new(config);
     sim.populate();
 
-    let mut prev_ages: Vec<f64> = sim.agents.iter().map(|a| a.age.to_f64()).collect();
+    let prev_ages: Vec<f64> = sim.agents.iter().map(|a| a.age.to_f64()).collect();
     sim.run(500);
 
     // After running, all original agents should have age >= their initial age

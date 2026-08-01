@@ -32,9 +32,9 @@ use crate::psychology::NarrativeIdentity;
 use crate::psychology::DevelopmentalPsychState;
 use crate::psychology::PsychopathologyState;
 use crate::psychology::SkillState as PsychSkillState;
-use crate::relationship_v2::RelationshipV2;
-use crate::attraction::AttractionModel;
-use crate::status_dims::StatusDimensions;
+use crate::social::relationship_v2::RelationshipV2;
+use crate::social::attraction::AttractionModel;
+use crate::social::status_dims::StatusDimensions;
 use crate::provenance::{CausalProvenance, DecisionFactor, DecisionTrace};
 use crate::scenario::{Scenario, ShockKind};
 use crate::snapshot::Snapshot;
@@ -191,7 +191,7 @@ pub struct AgentBundle {
     pub status_v2: StatusDimensions,
     /// Architecture-plan-2 §8.2: Epistemic/informational substrate.
     /// Agents have partial, distorted, local knowledge.
-    pub epistemic: crate::epistemic::EpistemicState,
+    pub epistemic: crate::social::epistemic::EpistemicState,
     /// Architecture-plan-2 §8.1.12: Executive function and metacognition.
     pub cognitive_runtime: crate::psychology::CognitiveRuntime,
     /// Architecture-plan-2 §8.1.5: Layered motivation architecture.
@@ -200,6 +200,14 @@ pub struct AgentBundle {
     pub decision_policy: crate::psychology::DecisionPolicy,
     /// Architecture-plan-2 §17: Agent tier for level-of-detail simulation.
     pub agent_tier: crate::agent_tier::AgentTierState,
+    /// Architecture-plan-2 §8.1.17: Narrative frames for event interpretation.
+    pub narrative_frames: crate::culture::narrative_frame::NarrativeFrameSet,
+    /// Architecture-plan-2 §13.6: Ideological position and polarization.
+    pub ideology: crate::culture::ideology::Ideology,
+    /// Architecture-plan-2 §8.1.7: Sacred values that resist cost-benefit reasoning.
+    pub sacred_values: crate::culture::sacred::SacredValues,
+    /// Architecture-plan-2 §8.1.18: Education state for knowledge transmission.
+    pub education: crate::culture::education::EducationState,
 }
 
 /// §4.2: Skill levels that improve through repeated practice.
@@ -254,9 +262,9 @@ pub struct Simulation {
     /// §4.4: Black market state — activates under scarcity with weak enforcement.
     pub black_market: crate::black_market::BlackMarketState,
     /// Architecture-plan-2 §10.6: Kinship graph — biological, marital, ritual kin.
-    pub kinship_graph: crate::kinship::KinshipGraph,
+    pub kinship_graph: crate::social::kinship::KinshipGraph,
     /// Architecture-plan-2 §10.7: Households — primary social and economic units.
-    pub households: Vec<crate::household::Household>,
+    pub households: Vec<crate::social::household::Household>,
     /// Architecture-plan-2 §13.1: Meme registry — cultural units that propagate.
     pub meme_registry: crate::culture::MemeRegistry,
     /// Architecture-plan-2 §17.4: Meme aggregation engine for large-population metrics.
@@ -272,7 +280,17 @@ pub struct Simulation {
     /// Architecture-plan-2 §13.6: Echo chamber state — belief clusters and polarization.
     pub echo_chamber: crate::culture::EchoChamberState,
     /// Architecture-plan-2 §10.8: Clan registry — emergent kinship-plus-alliance groups.
-    pub clan_registry: crate::clan::ClanRegistry,
+    pub clan_registry: crate::social::clan::ClanRegistry,
+    /// Architecture-plan-2 §10.4-§10.5: Marriage registry — pair bonds and marriages.
+    pub marriage_registry: crate::social::marriage::MarriageRegistry,
+    /// Architecture-plan-2 §12.4: Cult registry — emergent cult dynamics.
+    pub cult_registry: crate::social::cult::CultRegistry,
+    /// Architecture-plan-2 §13.5: Moral panic registry — collective fear events.
+    pub moral_panic_registry: crate::noosphere::MoralPanicRegistry,
+    /// Architecture-plan-2 §13: Noospheric field — symbolic concept space.
+    pub noospheric_field: crate::noosphere::NoosphericField,
+    /// Architecture-plan-2 §13.6: Belief ecology — population-level polarization.
+    pub belief_ecology: crate::noosphere::BeliefEcologyNoosphere,
 }
 
 impl Simulation {
@@ -321,7 +339,7 @@ impl Simulation {
             metric_history: Vec::new(),
             last_revolution_tick: 0,
             black_market: crate::black_market::BlackMarketState::default(),
-            kinship_graph: crate::kinship::KinshipGraph::default(),
+            kinship_graph: crate::social::kinship::KinshipGraph::default(),
             households: Vec::new(),
             meme_registry: crate::culture::MemeRegistry::default(),
             meme_aggregator: crate::culture::MemeAggregator::default(),
@@ -330,7 +348,12 @@ impl Simulation {
             rumor_registry: crate::culture::RumorRegistry::default(),
             collective_memory_registry: crate::culture::CollectiveMemoryRegistry::default(),
             echo_chamber: crate::culture::EchoChamberState::new(),
-            clan_registry: crate::clan::ClanRegistry::new(),
+            clan_registry: crate::social::clan::ClanRegistry::new(),
+            marriage_registry: crate::social::marriage::MarriageRegistry::new(),
+            cult_registry: crate::social::cult::CultRegistry::new(),
+            moral_panic_registry: crate::noosphere::MoralPanicRegistry::new(),
+            noospheric_field: crate::noosphere::NoosphericField::new(),
+            belief_ecology: crate::noosphere::BeliefEcologyNoosphere::new(),
         }
     }
 
@@ -372,7 +395,7 @@ impl Simulation {
             metric_history: snapshot.metric_history,
             last_revolution_tick: snapshot.last_revolution_tick,
             black_market: snapshot.black_market,
-            kinship_graph: crate::kinship::KinshipGraph::default(),
+            kinship_graph: crate::social::kinship::KinshipGraph::default(),
             households: Vec::new(),
             meme_registry: crate::culture::MemeRegistry::default(),
             meme_aggregator: crate::culture::MemeAggregator::default(),
@@ -381,7 +404,12 @@ impl Simulation {
             rumor_registry: crate::culture::RumorRegistry::default(),
             collective_memory_registry: crate::culture::CollectiveMemoryRegistry::default(),
             echo_chamber: crate::culture::EchoChamberState::new(),
-            clan_registry: crate::clan::ClanRegistry::new(),
+            clan_registry: crate::social::clan::ClanRegistry::new(),
+            marriage_registry: crate::social::marriage::MarriageRegistry::new(),
+            cult_registry: crate::social::cult::CultRegistry::new(),
+            moral_panic_registry: crate::noosphere::MoralPanicRegistry::new(),
+            noospheric_field: crate::noosphere::NoosphericField::new(),
+            belief_ecology: crate::noosphere::BeliefEcologyNoosphere::new(),
         }
     }
 
@@ -490,7 +518,7 @@ impl Simulation {
                 Position::new(8, 8) // center of 16x16 world
             };
 
-            let epistemic_state = crate::epistemic::EpistemicState::from_personality(&personality);
+            let epistemic_state = crate::social::epistemic::EpistemicState::from_personality(&personality);
             let personality_clone = personality.clone();
             self.agents.push(AgentBundle {
                 body: BodyState::from(&embodied),
@@ -571,8 +599,8 @@ impl Simulation {
                 cultural_cognition: crate::psychology::CulturalCognition::default(),
                 psych_skills: crate::psychology::SkillState::default(),
                 relationship_v2s: Vec::new(), // populated after agents are created
-                attraction: crate::attraction::AttractionModel::default(),
-                status_v2: crate::status_dims::StatusDimensions::default(),
+                attraction: crate::social::attraction::AttractionModel::default(),
+                status_v2: crate::social::status_dims::StatusDimensions::default(),
                 epistemic: epistemic_state,
                 cognitive_runtime: crate::psychology::CognitiveRuntime::from_personality(&personality_clone),
                 motivation: crate::psychology::MotivationState::from_personality(&personality_clone),
@@ -587,6 +615,28 @@ impl Simulation {
                 agent_tier: crate::agent_tier::AgentTierState::new(
                     crate::agent_tier::AgentTier::Secondary, 0,
                 ),
+                narrative_frames: crate::culture::narrative_frame::NarrativeFrameSet::default(),
+                ideology: crate::culture::ideology::Ideology {
+                    axes: vec![
+                        crate::culture::ideology::IdeologyAxis { name: "tradition".into(), position: Fixed::from_f64(populate_rng.random_range(0.2..0.8)), conviction: Fixed::from_f64(0.5) },
+                        crate::culture::ideology::IdeologyAxis { name: "authority".into(), position: Fixed::from_f64(populate_rng.random_range(0.2..0.8)), conviction: Fixed::from_f64(0.5) },
+                    ],
+                    dogmatism: Fixed::from_f64(populate_rng.random_range(0.2..0.7)),
+                    echo_chamber_strength: Fixed::from_f64(0.3),
+                    polarization_tendency: Fixed::from_f64(populate_rng.random_range(0.1..0.5)),
+                },
+                sacred_values: {
+                    let mut sv = crate::culture::sacred::SacredValues::default();
+                    sv.add_or_strengthen("family_honor".into(), Fixed::from_f64(populate_rng.random_range(0.3..0.8)), Fixed::from_f64(populate_rng.random_range(0.3..0.7)));
+                    sv.add_or_strengthen("community_safety".into(), Fixed::from_f64(populate_rng.random_range(0.3..0.7)), Fixed::from_f64(populate_rng.random_range(0.2..0.6)));
+                    sv
+                },
+                education: crate::culture::education::EducationState {
+                    teaching_skill: Fixed::from_f64(populate_rng.random_range(0.1..0.5)),
+                    learning_aptitude: Fixed::from_f64(populate_rng.random_range(0.3..0.8)),
+                    teaching_patience: Fixed::from_f64(0.5),
+                    ..crate::culture::education::EducationState::default()
+                },
             });
         }
 
@@ -631,10 +681,10 @@ impl Simulation {
                     }
                     // Advance stage based on initial trust
                     if rv2.trust > Fixed::from_f64(0.5) {
-                        rv2.stage = crate::relationship_v2::RelationshipStage::Acquaintance;
+                        rv2.stage = crate::social::relationship_v2::RelationshipStage::Acquaintance;
                     }
                     if rv2.trust > Fixed::from_f64(0.6) {
-                        rv2.stage = crate::relationship_v2::RelationshipStage::Familiar;
+                        rv2.stage = crate::social::relationship_v2::RelationshipStage::Familiar;
                     }
                     v2s.push(rv2);
                 }
@@ -770,10 +820,10 @@ impl Simulation {
         // Architecture-plan-2 §10.6: Build kinship graph from parent/child data.
         for (i, agent) in self.agents.iter().enumerate() {
             if let Some(parent_a) = agent.parent_a {
-                self.kinship_graph.add_link(parent_a, i, crate::kinship::KinshipLink::ParentChild, 0);
+                self.kinship_graph.add_link(parent_a, i, crate::social::kinship::KinshipLink::ParentChild, 0);
             }
             if let Some(parent_b) = agent.parent_b {
-                self.kinship_graph.add_link(parent_b, i, crate::kinship::KinshipLink::ParentChild, 0);
+                self.kinship_graph.add_link(parent_b, i, crate::social::kinship::KinshipLink::ParentChild, 0);
             }
             // Siblings share at least one parent
             let parents: [Option<usize>; 2] = [agent.parent_a, agent.parent_b];
@@ -784,9 +834,9 @@ impl Simulation {
                             || self.agents[j].parent_b == Some(parent);
                         if shares_parent {
                             let already_linked = self.kinship_graph.edges.iter().any(|e|
-                                e.from == i && e.to == j && e.link == crate::kinship::KinshipLink::Sibling);
+                                e.from == i && e.to == j && e.link == crate::social::kinship::KinshipLink::Sibling);
                             if !already_linked {
-                                self.kinship_graph.add_link(i, j, crate::kinship::KinshipLink::Sibling, 0);
+                                self.kinship_graph.add_link(i, j, crate::social::kinship::KinshipLink::Sibling, 0);
                             }
                         }
                     }
@@ -802,7 +852,7 @@ impl Simulation {
             }
             if let Some(spouse_idx) = agent.partner {
                 if spouse_idx < self.agents.len() && !household_assigned[spouse_idx] {
-                    let mut h = crate::household::Household::new(i, agent.home_site, 0);
+                    let mut h = crate::social::household::Household::new(i, agent.home_site, 0);
                     h.add_member(spouse_idx);
                     h.head = Some(i);
                     household_assigned[i] = true;
@@ -811,7 +861,7 @@ impl Simulation {
                 }
             }
             if !household_assigned[i] {
-                self.households.push(crate::household::Household::new(i, agent.home_site, 0));
+                self.households.push(crate::social::household::Household::new(i, agent.home_site, 0));
                 household_assigned[i] = true;
             }
         }
@@ -1215,7 +1265,7 @@ impl Simulation {
                 let num_connections = self.agents[i].relationship_v2s.len() as i64;
                 if num_connections > 0 {
                     let avg_quality: Fixed = self.agents[i].relationship_v2s.iter()
-                        .map(crate::relationship_v2::RelationshipV2::quality)
+                        .map(crate::social::relationship_v2::RelationshipV2::quality)
                         .fold(Fixed::ZERO, |acc, q| acc + q)
                         / Fixed::from_int(num_connections);
                     self.agents[i].status_v2.network_centrality = avg_quality;
@@ -2677,7 +2727,7 @@ impl Simulation {
             // §11.3: Hierarchy destabilization — corruption/low legitimacy erodes cohesion
             // Gated to every 100 ticks for performance (slow process).
             if phases.is_centum {
-                let destabilization = crate::hierarchy::destabilization_pressure(
+                let destabilization = crate::social::hierarchy::destabilization_pressure(
                     institution.legitimacy,
                     institution.corruption,
                     institution.cohesion,
@@ -2695,7 +2745,7 @@ impl Simulation {
                     .filter(|r| r.sponsor == institution.id as usize)
                     .map(|r| r.synchrony)
                     .fold(Fixed::ZERO, |a, b| a + b);
-                crate::hierarchy::stabilize_hierarchy(
+                crate::social::hierarchy::stabilize_hierarchy(
                     institution,
                     ritual_strength.min(Fixed::ONE),
                     institution.enforcement_capacity,
@@ -2729,7 +2779,7 @@ impl Simulation {
                 if let Some(leader_id) = current_leader {
                     let leader_idx = leader_id.as_u64() as usize;
                     if leader_idx < self.agents.len() {
-                        let leader_score = crate::hierarchy::leadership_score(
+                        let leader_score = crate::social::hierarchy::leadership_score(
                             self.agents[leader_idx].personality.ambition,
                             self.agents[leader_idx].personality.dominance,
                             self.agents[leader_idx].personality.extraversion,
@@ -2746,7 +2796,7 @@ impl Simulation {
                         for member_id in &institution.members {
                             let mid = member_id.as_u64() as usize;
                             if mid < self.agents.len() && mid != leader_idx {
-                                let score = crate::hierarchy::leadership_score(
+                                let score = crate::social::hierarchy::leadership_score(
                                     self.agents[mid].personality.ambition,
                                     self.agents[mid].personality.dominance,
                                     self.agents[mid].personality.extraversion,
@@ -2764,18 +2814,18 @@ impl Simulation {
                         }
 
                         if let Some((challenger_id, challenger_score)) = best_challenger {
-                            if crate::hierarchy::should_challenge(
+                            if crate::social::hierarchy::should_challenge(
                                 institution, challenger_score, leader_score, tick_u64, self.last_revolution_tick,
                             ) {
-                                let result = crate::hierarchy::attempt_challenge(
+                                let result = crate::social::hierarchy::attempt_challenge(
                                     institution, leader_id, challenger_id,
                                     challenger_score, leader_score, institution.corruption,
                                 );
                                 match &result {
-                                    crate::hierarchy::ChallengeResult::Election { .. } => {
+                                    crate::social::hierarchy::ChallengeResult::Election { .. } => {
                                         tracing::warn!(tick = tick_u64, "Leadership election occurred");
                                     }
-                                    crate::hierarchy::ChallengeResult::Coup { .. } => {
+                                    crate::social::hierarchy::ChallengeResult::Coup { .. } => {
                                         tracing::warn!(tick = tick_u64, "Leadership coup attempted");
                                     }
                                     _ => {}
@@ -3033,7 +3083,7 @@ impl Simulation {
                     // Architecture-plan-2 §10.4: Max distance for marriage proximity scoring.
                     const MAX_MARRIAGE_DISTANCE: f64 = 20.0;
                     let proximity = (Fixed::ONE - distance / Fixed::from_f64(MAX_MARRIAGE_DISTANCE)).max(Fixed::ZERO);
-                    let mut att = crate::attraction::AttractionModel::default();
+                    let mut att = crate::social::attraction::AttractionModel::default();
                     att.personality_attraction = personality_compat;
                     att.familiarity = affection;
                     att.physical_attraction = proximity;
@@ -3230,15 +3280,30 @@ impl Simulation {
                     cultural_cognition: crate::psychology::CulturalCognition::default(),
                     psych_skills: crate::psychology::SkillState::default(),
                     relationship_v2s: Vec::new(),
-                    attraction: crate::attraction::AttractionModel::default(),
-                    status_v2: crate::status_dims::StatusDimensions::default(),
-                    epistemic: crate::epistemic::EpistemicState::default(),
+                    attraction: crate::social::attraction::AttractionModel::default(),
+                    status_v2: crate::social::status_dims::StatusDimensions::default(),
+                    epistemic: crate::social::epistemic::EpistemicState::default(),
                     cognitive_runtime: crate::psychology::CognitiveRuntime::default(),
                     motivation: crate::psychology::MotivationState::default(),
                     decision_policy: crate::psychology::DecisionPolicy::default(),
                     agent_tier: crate::agent_tier::AgentTierState::new(
                         crate::agent_tier::AgentTier::Secondary, tick_u64,
                     ),
+                    narrative_frames: crate::culture::narrative_frame::NarrativeFrameSet::default(),
+                    ideology: crate::culture::ideology::Ideology {
+                        axes: vec![
+                            crate::culture::ideology::IdeologyAxis { name: "tradition".into(), position: Fixed::from_f64(0.5), conviction: Fixed::from_f64(0.5) },
+                            crate::culture::ideology::IdeologyAxis { name: "authority".into(), position: Fixed::from_f64(0.5), conviction: Fixed::from_f64(0.5) },
+                        ],
+                        dogmatism: Fixed::from_f64(0.4),
+                        echo_chamber_strength: Fixed::from_f64(0.3),
+                        polarization_tendency: Fixed::from_f64(0.3),
+                    },
+                    sacred_values: crate::culture::sacred::SacredValues::default(),
+                    education: crate::culture::education::EducationState {
+                        learning_aptitude: Fixed::from_f64(0.6),
+                        ..crate::culture::education::EducationState::default()
+                    },
                 });                // Add relationships to all existing agents
                 for existing_idx in 0..self.agents.len() - 1 {
                     let trust = if existing_idx == parent_a || existing_idx == parent_b {
@@ -3554,6 +3619,32 @@ impl Simulation {
             // Architecture-plan-2 §10.8: Clan daily update.
             // Decay grievance, adjust cohesion, decay myth belief.
             self.clan_registry.daily_update();
+
+            // Architecture-plan-2 §10.4-§10.5: Marriage registry daily update.
+            self.marriage_registry.daily_update();
+
+            // Architecture-plan-2 §12.4: Cult registry daily update.
+            self.cult_registry.daily_update();
+
+            // Architecture-plan-2 §13.5: Moral panic daily update.
+            self.moral_panic_registry.daily_update();
+
+            // Architecture-plan-2 §13.6: Belief ecology daily update.
+            self.belief_ecology.daily_update();
+        }
+
+        // Architecture-plan-2 §13: Noospheric field natural decay (every tick).
+        self.noospheric_field.decay_all(Fixed::from_f64(0.001));
+
+        // Per-agent daily updates for new systems.
+        if phases.is_daily {
+            for agent in &mut self.agents {
+                // §8.1.17: Narrative frame update — resilience factor modulates
+                // how narrative meaning-making buffers against adversity.
+                // (Computed but applied through narrative identity system above.)
+                // §8.1.18: Education daily update
+                agent.education.daily_update();
+            }
         }
 
         // Architecture-plan-2 §12.5: Execute due rituals every 12 ticks (~2 hours).

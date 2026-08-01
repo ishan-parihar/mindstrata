@@ -110,10 +110,10 @@ fn stress_reduces_planning_depth() {
     let sim = run_sim(42, 2000);
 
     // Partition agents into high-stress and low-stress groups
-    let high_stress: Vec<_> = sim.agents.iter()
+    let _high_stress: Vec<_> = sim.agents.iter()
         .filter(|a| (a.emotions.fear + a.emotions.anger) > Fixed::from_f64(0.4))
         .collect();
-    let low_stress: Vec<_> = sim.agents.iter()
+    let _low_stress: Vec<_> = sim.agents.iter()
         .filter(|a| (a.emotions.fear + a.emotions.anger) < Fixed::from_f64(0.15))
         .collect();
 
@@ -146,7 +146,7 @@ fn courtship_emerges_from_repeated_positive_interaction() {
     let sim = run_sim(42, 2000);
 
     // Check that some relationship_v2 pairs have progressed beyond Unnoticed
-    let mut max_stage_reached = mindstrata_sim::relationship_v2::RelationshipStage::Unnoticed;
+    let mut max_stage_reached = mindstrata_sim::social::relationship_v2::RelationshipStage::Unnoticed;
     let mut progressed_count = 0;
 
     for agent in &sim.agents {
@@ -154,7 +154,7 @@ fn courtship_emerges_from_repeated_positive_interaction() {
             if rv2.stage > max_stage_reached {
                 max_stage_reached = rv2.stage;
             }
-            if rv2.stage >= mindstrata_sim::relationship_v2::RelationshipStage::Acquaintance {
+            if rv2.stage >= mindstrata_sim::social::relationship_v2::RelationshipStage::Acquaintance {
                 progressed_count += 1;
             }
         }
