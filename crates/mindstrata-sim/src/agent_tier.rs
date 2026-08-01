@@ -104,6 +104,15 @@ impl AgentTier {
     pub fn runs_action_selection(&self) -> bool {
         matches!(self, Self::Focal | Self::Secondary)
     }
+
+    /// §17: Numeric tier index for metrics (Focal=0, Secondary=1, Background=2).
+    pub fn tier_index(&self) -> f64 {
+        match self {
+            Self::Focal => 0.0,
+            Self::Secondary => 1.0,
+            Self::Background => 2.0,
+        }
+    }
 }
 
 /// §17.2: Cognitive budget — limits per-tick processing capacity for each agent.

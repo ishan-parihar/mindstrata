@@ -2387,11 +2387,7 @@ impl Simulation {
         let household_count = self.households.len() as u64;
         let kinship_edge_count = self.kinship_graph.active_count() as u64;
         let avg_agent_tier: f64 = if self.agents.is_empty() { 0.0 } else {
-            self.agents.iter().map(|a| match a.agent_tier.tier {
-                crate::agent_tier::AgentTier::Focal => 0.0,
-                crate::agent_tier::AgentTier::Secondary => 1.0,
-                crate::agent_tier::AgentTier::Background => 2.0,
-            }).sum::<f64>() * n_inv
+            self.agents.iter().map(|a| a.agent_tier.tier.tier_index()).sum::<f64>() * n_inv
         };
         let total_active_feuds: u64 = self.agents.iter().map(|a| a.feuds.len() as u64).sum();
 
@@ -4407,6 +4403,31 @@ pub struct MetricsSnapshot {
     pub avg_agent_tier: f64,
     /// Number of active feuds across all agents.
     pub total_active_feuds: u64,
+}
+
+impl MetricsSnapshot {
+    /// §5.1/§19: CSV header for exporting metrics for analysis.
+    pub fn csv_header() -> String {
+        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds"
+            .into()
+    }
+
+    /// §5.1/§19: One CSV line for this snapshot.
+    pub fn to_csv_line(&self) -> String {
+        format!(
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            self.tick,
+            self.avg_hunger, self.avg_thirst, self.avg_fatigue,
+            self.avg_valence, self.avg_joy, self.avg_fear,
+            self.total_grain, self.total_water,
+            self.event_count, self.journal_len, self.agent_count,
+            self.avg_stress, self.avg_health,
+            self.avg_relationship_trust, self.avg_relationship_quality,
+            self.active_meme_count, self.polarization_index,
+            self.household_count, self.kinship_edge_count,
+            self.avg_agent_tier, self.total_active_feuds,
+        )
+    }
 }
 
 /// A lightweight summary of an agent's state for display.
