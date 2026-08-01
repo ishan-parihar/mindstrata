@@ -19,6 +19,9 @@ use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 use super::marriage::RomanticStage;
 
+/// Minimum attraction as a fraction of the trust threshold for stage advancement.
+const ATTRACTION_FLOOR_RATIO: Fixed = Fixed::from_f64(0.6);
+
 /// A courtship in progress between two agents.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Courtship {
@@ -91,7 +94,7 @@ impl Courtship {
         if let Some(next) = self.stage.next_positive() {
             let trust_ok = trust >= next.base_trust();
             // Attraction must be at least 60% of the trust threshold
-            let min_attraction = next.base_trust() * Fixed::from_f64(0.6);
+            let min_attraction = next.base_trust() * ATTRACTION_FLOOR_RATIO;
             let attraction_ok = attraction >= min_attraction;
             let balance_ok = self.positive_interactions > self.negative_interactions;
 
