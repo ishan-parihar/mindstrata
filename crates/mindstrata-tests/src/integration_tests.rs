@@ -280,3 +280,55 @@ fn determinism_across_runs() {
             a1.name, a1.age.to_f64(), a2.age.to_f64());
     }
 }
+
+/// §17 Observability: verify all MetricsSnapshot fields stay in valid ranges.
+#[test]
+fn metrics_snapshot_fields_in_valid_ranges() {
+    let config = mindstrata_sim::sim::SimConfig {
+        seed: 42,
+        max_ticks: 500,
+        num_agents: 12,
+        world_width: 16,
+        world_height: 16,
+        snapshot_interval: None,
+    };
+    let mut sim = mindstrata_sim::sim::Simulation::new(config);
+    sim.populate();
+    for _ in 0..500 {
+        sim.tick();
+    }
+    let ms = sim.metrics_snapshot();
+    // Core metrics must be in [0, 1]
+    assert!(ms.avg_hunger >= 0.0 && ms.avg_hunger <= 1.0,
+        "avg_hunger out of range: {}", ms.avg_hunger);
+    assert!(ms.avg_thirst >= 0.0 && ms.avg_thirst <= 1.0,
+        "avg_thirst out of range: {}", ms.avg_thirst);
+    assert!(ms.avg_fatigue >= 0.0 && ms.avg_fatigue <= 1.0,
+        "avg_fatigue out of range: {}", ms.avg_fatigue);
+    assert!(ms.avg_stress >= 0.0 && ms.avg_stress <= 2.0,
+        "avg_stress out of range: {}", ms.avg_stress);
+    assert!(ms.avg_health >= 0.0 && ms.avg_health <= 1.0,
+        "avg_health out of range: {}", ms.avg_health);
+    // Relationship metrics must be in [0, 1]
+    assert!(ms.avg_relationship_trust >= 0.0 && ms.avg_relationship_trust <= 1.0,
+        "avg_relationship_trust out of range: {}", ms.avg_relationship_trust);
+    assert!(ms.avg_relationship_quality >= 0.0 && ms.avg_relationship_quality <= 1.0,
+        "avg_relationship_quality out of range: {}", ms.avg_relationship_quality);
+    // Polarization must be in [0, 1]
+    assert!(ms.polarization_index >= 0.0 && ms.polarization_index <= 1.0,
+        "polarization_index out of range: {}", ms.polarization_index);
+    // Agent tier must be in [0, 2]
+    assert!(ms.avg_agent_tier >= 0.0 && ms.avg_agent_tier <= 2.0,
+        "avg_agent_tier out of range: {}", ms.avg_agent_tier);
+    // Non-negative counts
+    assert!(ms.agent_count > 0, "agent_count should be positive");
+    assert!(ms.household_count > 0, "household_count should be positive");
+    // CSV export must produce valid output
+    let header = mindstrata_sim::sim::MetricsSnapshot::csv_header();
+    assert!(header.contains("tick"), "CSV header missing tick field");
+    let line = ms.to_csv_line();
+    let fields: Vec<&str> = line.split(',').collect();
+    let header_fields: Vec<&str> = header.split(',').collect();
+    assert_eq!(fields.len(), header_fields.len(),
+        "CSV line has {} fields but header has {}", fields.len(), header_fields.len());
+}
