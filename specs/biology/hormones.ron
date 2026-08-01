@@ -61,7 +61,7 @@ EndocrineSpec(
     // Fertility axis (estrogen/androgen-like) — §7.2.2
     fertility_axis: (
         base_level: 0.5,
-        age_modifier青春期_onset: 0.8,
+        age_modifier_puberty_onset: 0.8,
         age_modifier_menopause: 0.1,
         health_weight: 0.3,
         nutrition_weight: 0.2,
