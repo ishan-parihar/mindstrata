@@ -2973,6 +2973,27 @@ impl Simulation {
                         });
 
                         self.institutions.push(new_faction);
+
+                        // Architecture-plan-2 §5.2: Also register a FactionV2 in the upgraded registry.
+                        let member_indices: Vec<usize> = members.iter()
+                            .map(|id| id.as_u64() as usize)
+                            .filter(|&idx| idx < self.agents.len())
+                            .collect();
+                        let fv2 = crate::social::faction_v2::FactionV2::new(
+                            leader.as_u64() as usize,
+                            member_indices,
+                            avg_grievance,
+                            tick_u64,
+                        );
+                        let fv2_id = self.faction_v2_registry.register(fv2);
+                        tracing::info!(
+                            faction_v2_id = fv2_id,
+                            leader = leader.as_u64(),
+                            members = members.len(),
+                            grievance = avg_grievance.to_f64(),
+                            tick = tick_u64,
+                            "FactionV2 registered alongside v1"
+                        );
                     }
                 }
             }
@@ -3675,7 +3696,15 @@ impl Simulation {
                     let rv2_idx = Self::relationship_v2_index(i, j, n_agents);
                     if rv2_idx >= self.agents[i].relationship_v2s.len() { continue; }
                     let current_stage = self.agents[i].relationship_v2s[rv2_idx].stage;
+                    // Short-circuit: skip pairs with 0 interactions at entry-level stages.
+                    // No advancement is possible without interactions; regression only matters
+                    // for Established+ stages or when fear is high.
                     let interactions = self.agents[i].relationship_v2s[rv2_idx].interaction_count;
+                    if interactions == 0 {
+                        if matches!(current_stage, crate::social::relationship_v2::RelationshipStage::Unnoticed | crate::social::relationship_v2::RelationshipStage::Noticed | crate::social::relationship_v2::RelationshipStage::Disliked) {
+                            continue;
+                        }
+                    }
                     let trust = self.agents[i].relationship_v2s[rv2_idx].trust;
                     let affection = self.agents[i].relationship_v2s[rv2_idx].affection;
                     let fear = self.agents[i].relationship_v2s[rv2_idx].fear;
@@ -3805,12 +3834,13 @@ impl Simulation {
                     identified_tick: tick_u64,
                 };
                 if candidate.should_form() {
-                    // TODO(#arch2-12.2): Register the formed group in a GroupRegistry
-                    // For now, detection-only — log the formation pressure event.
+                    // Architecture-plan-2 §12.2: Record group formation pressure.
+                    // Actual GroupRegistry creation deferred until group persistence is added.
                     tracing::info!(
                         members = candidate.members.len(),
                         shared_grievance = shared_grievance.to_f64(),
                         shared_identity = shared_identity.to_f64(),
+                        leader_index = i,
                         tick = tick_u64,
                         "Peer group formation pressure detected"
                     );
@@ -4684,7 +4714,59 @@ impl Simulation {
             }
         }
 
-        // ── 22. §19.5.E Carrying cost — heavy loads increase fatigue ──
+        // ── 22b. Patronage creation (architecture-plan-2 §10.9) ──────────
+        // When a high-status agent has repeated positive interactions with a low-status
+        // agent, a patronage relationship may form. Runs every 12 ticks to limit O(N²).
+        if phases.is_duodeca {
+            // Pre-cache effective status for all agents (O(N) instead of O(N²) recomputation).
+            let status_cache: Vec<Fixed> = self.agents.iter()
+                .map(|a| a.status_v2.effective_status())
+                .collect();
+            // Pre-build HashSet of agents already in a patronage relation as client.
+            // O(M) build + O(1) lookups vs O(N²×M) with inline patron_of() calls.
+            let patronage_clients: std::collections::HashSet<usize> = self.agents.iter()
+                .enumerate()
+                .filter(|(idx, _)| self.patronage_registry.patron_of(*idx).is_some())
+                .map(|(idx, _)| idx)
+                .collect();
+            // Track how many clients each patron has acquired this tick (max 3).
+            let mut patron_client_counts: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+            for i in 0..self.agents.len() {
+                let patron_status = status_cache[i];
+                let patron_clients_count = *patron_client_counts.get(&i).unwrap_or(&0);
+                if patron_clients_count >= 3 { continue; }
+                for j in 0..self.agents.len() {
+                    if i == j { continue; }
+                    // Patron must be notably higher status than client
+                    if patron_status <= status_cache[j] + Fixed::from_f64(0.15) { continue; }
+                    // Must not already have a patronage link (O(1) HashSet lookup)
+                    if patronage_clients.contains(&j) { continue; }
+                    // Check trust from relationship_v2
+                    let rv2_idx = Self::relationship_v2_index(i, j, self.agents.len());
+                    if rv2_idx >= self.agents[i].relationship_v2s.len() { continue; }
+                    let trust = self.agents[i].relationship_v2s[rv2_idx].trust;
+                    let affection = self.agents[i].relationship_v2s[rv2_idx].affection;
+                    // Need moderate trust and positive affect to form patronage
+                    if trust < Fixed::from_f64(0.35) || affection < Fixed::from_f64(0.2) { continue; }
+                    let chance = (trust * Fixed::from_f64(0.03)).clamp_01();
+                    let roll = Fixed::from_f64(self.rng.get_mut(RngStream::Social).random_range(0.0..1.0));
+                    if roll < chance {
+                        let rel = crate::social::patronage::PatronageRelation::new(i, j, tick_u64);
+                        self.patronage_registry.register(rel);
+                        *patron_client_counts.entry(i).or_insert(0) += 1;
+                        tracing::info!(
+                            patron = i,
+                            client = j,
+                            trust = trust.to_f64(),
+                            tick = tick_u64,
+                            "Patronage relationship formed"
+                        );
+                    }
+                }
+            }
+        }
+
+        // ── 23. §19.5.E Carrying cost — heavy loads increase fatigue ──
         // Agents who performed physical actions (Work) incur carrying cost based on load.
         // Since agents don't carry items yet, this serves as a workload fatigue modifier.
         for i in 0..self.agents.len() {
