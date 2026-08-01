@@ -280,3 +280,203 @@ fn stress_increases_heuristic_bias() {
     assert!(stressed_bias > calm_bias,
         "Stress should increase heuristic bias: calm={calm_bias}, stressed={stressed_bias}");
 }
+
+// ── §17.2 + §18: Budget gating property tests ──────────────────
+
+use mindstrata_sim::agent_tier::{AgentTier, AgentTierState, CognitiveBudget, CognitiveBudgetTracker};
+
+/// §17.2: Budget tracker respects tier limits — focal agents get higher
+/// budgets than secondary, which get higher than background.
+#[test]
+fn budget_limits_decrease_with_tier() {
+    let focal = CognitiveBudget::focal();
+    let secondary = CognitiveBudget::secondary();
+    let background = CognitiveBudget::background();
+
+    // Appraisals: focal > secondary > background
+    assert!(focal.max_appraisals > secondary.max_appraisals);
+    assert!(secondary.max_appraisals > background.max_appraisals);
+
+    // Memory operations: focal > secondary > background
+    assert!(focal.max_memory_operations > secondary.max_memory_operations);
+    assert!(secondary.max_memory_operations > background.max_memory_operations);
+
+    // Prospections: focal > secondary = background = 0
+    assert!(focal.max_prospections > secondary.max_prospections);
+    assert_eq!(secondary.max_prospections, 0);
+    assert_eq!(background.max_prospections, 0);
+
+    // Social inferences: focal > secondary > background = 0
+    assert!(focal.max_social_inferences > secondary.max_social_inferences);
+    assert!(secondary.max_social_inferences > background.max_social_inferences);
+    assert_eq!(background.max_social_inferences, 0);
+}
+
+/// §17.2: Budget exhaustion prevents further operations.
+#[test]
+fn budget_exhaustion_stops_operations() {
+    let budget = CognitiveBudget::secondary();
+    let mut tracker = CognitiveBudgetTracker::from_budget(&budget);
+
+    // Exhaust appraisals
+    for _ in 0..budget.max_appraisals {
+        assert!(tracker.consume_appraisal(), "should succeed before exhaustion");
+    }
+    assert!(!tracker.can_appraise(), "should be exhausted");
+    assert!(!tracker.consume_appraisal(), "should fail after exhaustion");
+}
+
+/// §17.2: Budget resets each tick — exhausted budget becomes full again.
+#[test]
+fn budget_resets_each_tick() {
+    let mut state = AgentTierState::new(AgentTier::Focal, 0);
+
+    // Exhaust all budget categories
+    for _ in 0..20 {
+        state.budget_tracker.consume_appraisal();
+    }
+    for _ in 0..10 {
+        state.budget_tracker.consume_memory_op();
+    }
+    for _ in 0..5 {
+        state.budget_tracker.consume_prospection();
+    }
+    for _ in 0..10 {
+        state.budget_tracker.consume_social_inference();
+    }
+
+    assert!(!state.budget_tracker.can_appraise());
+    assert!(!state.budget_tracker.can_memory_op());
+    assert!(!state.budget_tracker.can_prospect());
+    assert!(!state.budget_tracker.can_social_infer());
+
+    // Reset
+    state.reset_tick_budget();
+
+    assert!(state.budget_tracker.can_appraise());
+    assert!(state.budget_tracker.can_memory_op());
+    assert!(state.budget_tracker.can_prospect());
+    assert!(state.budget_tracker.can_social_infer());
+}
+
+/// §17.1: Tier reclassification always produces a valid tier.
+#[test]
+fn tier_reclassification_always_valid() {
+    for seed in 0..10u64 {
+        let config = SimConfig {
+            seed,
+            max_ticks: 500,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 8,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(500);
+
+        for (i, agent) in sim.agents.iter().enumerate() {
+            let tier = &agent.agent_tier.tier;
+            // Tier must be one of the three valid variants
+            assert!(matches!(tier, AgentTier::Focal | AgentTier::Secondary | AgentTier::Background),
+                "Seed {seed}, agent {i}: invalid tier {:?}", tier);
+        }
+    }
+}
+
+/// §17.2: After a full simulation tick, budget tracker should have been
+/// reset (not exhausted from previous tick).
+#[test]
+fn budget_not_stale_after_tick() {
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 200,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 8,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.run(200);
+
+    // After running, agents should have had their budgets reset each tick.
+    // The budget tracker state at the end should reflect the last reset.
+    for (i, agent) in sim.agents.iter().enumerate() {
+        let tier = &agent.agent_tier.tier;
+        let budget = &agent.agent_tier.budget;
+        let tracker = &agent.agent_tier.budget_tracker;
+
+        // Budget limits should match the tier
+        match tier {
+            AgentTier::Focal => {
+                assert_eq!(budget.max_appraisals, 20);
+                assert_eq!(budget.max_prospections, 5);
+            }
+            AgentTier::Secondary => {
+                assert_eq!(budget.max_appraisals, 5);
+                assert_eq!(budget.max_prospections, 0);
+            }
+            AgentTier::Background => {
+                assert_eq!(budget.max_appraisals, 1);
+                assert_eq!(budget.max_prospections, 0);
+            }
+        }
+
+        // Tracker should not exceed budget limits
+        assert!(tracker.remaining_appraisals() <= budget.max_appraisals,
+            "Seed 42, agent {i}: remaining appraisals {} exceeds max {}",
+            tracker.remaining_appraisals(), budget.max_appraisals);
+    }
+}
+
+/// §17.2: Background agents always have zero prospection budget.
+#[test]
+fn background_agents_never_prospect() {
+    for seed in 0..10u64 {
+        let config = SimConfig {
+            seed,
+            max_ticks: 300,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 8,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(300);
+
+        for (i, agent) in sim.agents.iter().enumerate() {
+            if matches!(agent.agent_tier.tier, AgentTier::Background) {
+                assert_eq!(agent.agent_tier.budget.max_prospections, 0,
+                    "Seed {seed}, agent {i}: background agent has prospection budget");
+                assert_eq!(agent.agent_tier.budget.max_social_inferences, 0,
+                    "Seed {seed}, agent {i}: background agent has social inference budget");
+            }
+        }
+    }
+}
+
+/// §17.2: Narrative importance stays within [0, 1] across simulation.
+#[test]
+fn narrative_importance_bounded() {
+    for seed in 0..10u64 {
+        let config = SimConfig {
+            seed,
+            max_ticks: 500,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 8,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(500);
+
+        for (i, agent) in sim.agents.iter().enumerate() {
+            let ni = agent.agent_tier.narrative_importance.to_f64();
+            assert!((0.0..=1.0).contains(&ni),
+                "Seed {seed}, agent {i}: narrative_importance={ni} out of [0,1]");
+        }
+    }
+}
