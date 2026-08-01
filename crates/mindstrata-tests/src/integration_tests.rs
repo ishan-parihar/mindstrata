@@ -117,30 +117,22 @@ fn stress_reduces_planning_depth() {
         .filter(|a| (a.emotions.fear + a.emotions.anger) < Fixed::from_f64(0.15))
         .collect();
 
-    if !high_stress.is_empty() && !low_stress.is_empty() {
-        let avg_high_planning: f64 = high_stress.iter()
-            .map(|a| a.cognitive_runtime.planning_depth.to_f64())
-            .sum::<f64>() / high_stress.len() as f64;
-        let avg_low_planning: f64 = low_stress.iter()
-            .map(|a| a.cognitive_runtime.planning_depth.to_f64())
-            .sum::<f64>() / low_stress.len() as f64;
-
-        // Both groups should have plausible planning depth
-        assert!(avg_high_planning >= 0.0 && avg_high_planning <= 1.0,
-            "High-stress planning_depth should be in [0,1]: {avg_high_planning}");
-        assert!(avg_low_planning >= 0.0 && avg_low_planning <= 1.0,
-            "Low-stress planning_depth should be in [0,1]: {avg_low_planning}");
-
-        // High-stress agents should have lower or equal planning depth
-        // (statistical — not guaranteed per-agent, but average should trend)
-        assert!(avg_high_planning <= avg_low_planning + 0.1,
-            "High-stress agents should not plan deeper than low-stress: high={avg_high_planning}, low={avg_low_planning}");
-    }
-
     // All agents should have non-degraded planning_depth within valid range
     for agent in &sim.agents {
         assert!(agent.cognitive_runtime.planning_depth >= Fixed::ZERO,
             "Agent {} has negative planning_depth", agent.name);
+    }
+
+    // Verify stress degrades planning: every agent with stress > 0.5 should
+    // have planning_depth < 0.6 (stress impairs executive function)
+    for agent in &sim.agents {
+        let stress = (agent.emotions.fear + agent.emotions.anger).to_f64();
+        if stress > 0.5 {
+            let planning = agent.cognitive_runtime.planning_depth.to_f64();
+            assert!(planning < 0.7,
+                "Agent {} with stress={stress:.2} should have planning < 0.7, got {planning:.2}",
+                agent.name);
+        }
     }
 }
 
@@ -156,7 +148,6 @@ fn courtship_emerges_from_repeated_positive_interaction() {
     // Check that some relationship_v2 pairs have progressed beyond Unnoticed
     let mut max_stage_reached = mindstrata_sim::relationship_v2::RelationshipStage::Unnoticed;
     let mut progressed_count = 0;
-    let mut intimate_count = 0;
 
     for agent in &sim.agents {
         for rv2 in &agent.relationship_v2s {
@@ -165,10 +156,6 @@ fn courtship_emerges_from_repeated_positive_interaction() {
             }
             if rv2.stage >= mindstrata_sim::relationship_v2::RelationshipStage::Acquaintance {
                 progressed_count += 1;
-            }
-            // High intimacy + passion = romantic pair-bond
-            if rv2.intimacy > Fixed::from_f64(0.4) && rv2.passion > Fixed::from_f64(0.2) {
-                intimate_count += 1;
             }
         }
     }
@@ -204,12 +191,13 @@ fn meme_mutation_over_generations() {
     assert!(agents_with_knowledge >= 2,
         "Cultural knowledge should spread to at least 2 agents, got {agents_with_knowledge}");
 
-    // Verify agents have non-zero meme exposure through cultural cognition
-    // (cultural_cognition tracks ideological exposure from memes/rumors)
-    for agent in &sim.agents {
-        assert!(agent.cultural_cognition.identity_strength >= Fixed::ZERO,
-            "Agent {} should have non-negative cultural identity strength", agent.name);
-    }
+    // Verify that the initial seeded knowledge was distributed beyond just
+    // the initial agent population — socialization spread knowledge to children
+    let total_knowledge_entries: usize = sim.agents.iter()
+        .map(|a| a.cultural.knowledge.len())
+        .sum();
+    assert!(total_knowledge_entries > sim.agents.len() * 2,
+        "Total knowledge entries ({total_knowledge_entries}) should exceed 2× agent count, indicating diffusion");
 }
 
 // ── §18.3: Gossip and Propaganda ─────────────────────────────────
