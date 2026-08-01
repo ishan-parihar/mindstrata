@@ -44,6 +44,28 @@ impl<'a> SystemContext<'a> {
 
 // ── Need decay system ────────────────────────────────────────────────────
 
+/// §5.1: Need decay using configurable parameters.
+///
+/// Each need accumulates deficit at its own rate, controlled by
+/// `SimParameters`. Higher-order needs (safety, social, meaning)
+/// grow slower than survival needs (hunger, thirst).
+pub fn system_need_decay_with_params(
+    params: &crate::parameters::SimParameters,
+    needs: &mut [NeedState],
+) {
+    for need in needs.iter_mut() {
+        need.hunger = (need.hunger + params.hunger_decay_rate).clamp_01();
+        need.thirst = (need.thirst + params.thirst_decay_rate).clamp_01();
+        need.fatigue = (need.fatigue + params.fatigue_decay_rate).clamp_01();
+        need.safety = (need.safety + params.safety_decay_rate).clamp_01();
+        need.social = (need.social + params.social_decay_rate).clamp_01();
+        need.meaning = (need.meaning + params.meaning_decay_rate).clamp_01();
+        // Esteem and autonomy decay at 2/3 the meaning rate
+        need.esteem = (need.esteem + params.meaning_decay_rate * Fixed::from_f64(0.67)).clamp_01();
+        need.autonomy = (need.autonomy + params.meaning_decay_rate * Fixed::from_f64(0.67)).clamp_01();
+    }
+}
+
 /// Decay needs each tick: deficits grow over time.
 pub fn system_need_decay(
     _ctx: &mut SystemContext,

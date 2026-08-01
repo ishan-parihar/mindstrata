@@ -218,6 +218,8 @@ pub struct AgentSkills {
 /// The simulation state.
 pub struct Simulation {
     config: SimConfig,
+    /// §5.1 / Phase 5: Configurable simulation parameters.
+    pub params: crate::parameters::SimParameters,
     clock: Clock,
     rng: RngStreams,
     pub world: World,
@@ -298,6 +300,7 @@ impl Simulation {
 
         Self {
             config,
+            params: crate::parameters::SimParameters::default(),
             clock: Clock::new(),
             rng,
             world,
@@ -349,6 +352,7 @@ impl Simulation {
         Self {
             config: snapshot.config,
             clock,
+            params: crate::parameters::SimParameters::default(),
             rng,
             world: snapshot.world,
             agents: snapshot.agents,
@@ -1236,8 +1240,9 @@ impl Simulation {
             }
 
             // ── 1. Need decay (nonlinear pressure, §9.1) ────────────────
-            tracing::debug!(tick = tick_u64, "systems::need_decay");
-            systems::system_need_decay(&mut ctx, &bodies, &mut needs);
+            // §5.1: Use configurable parameters for decay rates.
+            let params = self.params;
+            systems::system_need_decay_with_params(&params, &mut needs);
 
             // ── 2. Body state update ──────────────────────────────────
             tracing::debug!(tick = tick_u64, "systems::body_update");
