@@ -125,6 +125,38 @@ pub struct SimParameters {
     /// Default 1.0 preserves original hardcoded behavior; >1.0 amplifies conflict.
     pub conflict_escalation_rate: Fixed,
 
+    // ── Conflict ─────────────────────────────────────────────
+    /// Combat fatigue decay rate per tick when not in combat (0.02).
+    pub conflict_combat_fatigue_decay: Fixed,
+    /// Trauma decay rate per tick (0.0001 — very slow, years to recover).
+    pub conflict_trauma_decay: Fixed,
+    /// Combat fatigue accumulation per combat event (0.1).
+    pub conflict_combat_fatigue_rate: Fixed,
+    /// Dominance weight for aggression calculation (0.3).
+    pub conflict_dominance_weight: Fixed,
+    /// Risk tolerance weight for aggression calculation (0.2).
+    pub conflict_risk_weight: Fixed,
+    /// Aggression injury multiplier (0.1).
+    pub conflict_aggression_injury_multiplier: Fixed,
+    /// Fear sensitivity weight (0.3).
+    pub conflict_fear_sensitivity_weight: Fixed,
+    /// Fear sensitivity base (0.7).
+    pub conflict_fear_sensitivity_base: Fixed,
+    /// Trauma multiplier from prior trauma (0.5).
+    pub conflict_trauma_multiplier: Fixed,
+    /// Lethal injury threshold — injury above this can kill (0.3).
+    pub conflict_lethal_injury_threshold: Fixed,
+    /// Lethal health threshold — health below this is vulnerable (0.2).
+    pub conflict_lethal_health_threshold: Fixed,
+    /// Lethal RNG threshold — random chance of death (0.3).
+    pub conflict_lethal_rng_threshold: Fixed,
+    /// Violence escalation fear threshold — threat fails if target fear below (0.3).
+    pub conflict_escalation_fear_threshold: Fixed,
+    /// Violence escalation aggression threshold — aggressor must exceed (1.2).
+    pub conflict_escalation_aggression_threshold: Fixed,
+    /// Violence escalation chance when thresholds met (0.3).
+    pub conflict_escalation_chance: Fixed,
+
     // ── Cultural ──────────────────────────────────────────────
     /// Meme transmission base chance multiplier.
     pub meme_transmission_multiplier: Fixed,
@@ -220,6 +252,22 @@ impl Default for SimParameters {
             bonding_rate: Fixed::ONE,   // identity: preserves original hardcoded deltas
             conflict_escalation_rate: Fixed::ONE,   // identity: preserves original hardcoded deltas
 
+            // Conflict
+            conflict_combat_fatigue_decay: Fixed::from_f64(0.02),
+            conflict_trauma_decay: Fixed::from_f64(0.0001),
+            conflict_combat_fatigue_rate: Fixed::from_f64(0.1),
+            conflict_dominance_weight: Fixed::from_f64(0.3),
+            conflict_risk_weight: Fixed::from_f64(0.2),
+            conflict_aggression_injury_multiplier: Fixed::from_f64(0.1),
+            conflict_fear_sensitivity_weight: Fixed::from_f64(0.3),
+            conflict_fear_sensitivity_base: Fixed::from_f64(0.7),
+            conflict_trauma_multiplier: Fixed::from_f64(0.5),
+            conflict_lethal_injury_threshold: Fixed::from_f64(0.3),
+            conflict_lethal_health_threshold: Fixed::from_f64(0.2),
+            conflict_lethal_rng_threshold: Fixed::from_f64(0.3),
+            conflict_escalation_fear_threshold: Fixed::from_f64(0.3),
+            conflict_escalation_aggression_threshold: Fixed::from_f64(1.2),
+            conflict_escalation_chance: Fixed::from_f64(0.3),
             // Cultural
             meme_transmission_multiplier: Fixed::from_f64(1.0),
             propaganda_effectiveness: Fixed::from_f64(0.3),

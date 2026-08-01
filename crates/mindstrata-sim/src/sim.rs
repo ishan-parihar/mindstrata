@@ -3950,10 +3950,11 @@ impl Simulation {
                             self.agents[to_idx].body.health,
                             &self.agents[to_idx].conflict,
                             rng_val,
+                            &self.params,
                         );
                         if conflict_result.occurred {
                             // Record conflict state: trauma, combat fatigue
-                            self.agents[to_idx].conflict.record_conflict(ConflictKind::Threat);
+                            self.agents[to_idx].conflict.record_conflict(ConflictKind::Threat, &self.params);
                             // Apply fear induction
                             self.agents[to_idx].emotions.fear = (
                                 self.agents[to_idx].emotions.fear + conflict_result.fear_induced
@@ -3972,12 +3973,12 @@ impl Simulation {
                             // (target fear remains low after threat), aggressive aggressors
                             // escalate to physical violence with real injury.
                             let target_fear_after = self.agents[to_idx].emotions.fear;
-                            let threat_failed = target_fear_after < Fixed::from_f64(0.3);
+                            let threat_failed = target_fear_after < self.params.conflict_escalation_fear_threshold;
                             let aggressor_aggression = self.agents[from_idx].personality.dominance
                                 + self.agents[from_idx].personality.risk_tolerance;
                             let escalate = threat_failed
-                                && aggressor_aggression > Fixed::from_f64(1.2)
-                                && self.rng.get_mut(RngStream::Social).random::<f64>() < 0.3; // probabilistic
+                                && aggressor_aggression > self.params.conflict_escalation_aggression_threshold
+                                && self.rng.get_mut(RngStream::Social).random::<f64>() < self.params.conflict_escalation_chance.to_f64();
 
                             if escalate {
                                 let violence_result = conflict::resolve_conflict(
@@ -3987,9 +3988,10 @@ impl Simulation {
                                     self.agents[to_idx].body.health,
                                     &self.agents[to_idx].conflict,
                                     rng_val,
+                                    &self.params,
                                 );
                                 if violence_result.occurred {
-                                    self.agents[to_idx].conflict.record_conflict(ConflictKind::Violence);
+                                    self.agents[to_idx].conflict.record_conflict(ConflictKind::Violence, &self.params);
                                     self.agents[to_idx].emotions.fear = (
                                         self.agents[to_idx].emotions.fear + violence_result.fear_induced
                                     ).clamp_01();
@@ -4000,7 +4002,7 @@ impl Simulation {
                                     // Record injury
                                     self.agents[to_idx].conflict.record_injury();
                                     // Attacker accumulates trauma too
-                                    self.agents[from_idx].conflict.record_conflict(ConflictKind::Violence);
+                                    self.agents[from_idx].conflict.record_conflict(ConflictKind::Violence, &self.params);
                                     // Reduce trust and affection between the two
                                     // §19.5.J: Record relationship trace for provenance
                                     if let Some(rel) = self.relationships.iter_mut()
@@ -4373,7 +4375,7 @@ impl Simulation {
 
         // ── 20. Conflict state update — trauma decay, combat fatigue, feud decay ──
         for agent in &mut self.agents {
-            agent.conflict.update();
+            agent.conflict.update(&self.params);
             // §19.5.G: Feud decay — remove feuds older than 500 ticks
             let feud_decay_threshold = tick_u64.saturating_sub(500);
             let mut keep = 0;
