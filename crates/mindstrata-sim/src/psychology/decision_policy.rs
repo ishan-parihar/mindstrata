@@ -306,7 +306,7 @@ impl DecisionPolicy {
         fairness: Fixed,
         authority: Fixed,
         care: Fixed,
-        loyalty: Fixed,
+        _loyalty: Fixed,
         action_is_prosocial: bool,
         action_is_disobedient: bool,
         action_is_harmful: bool,

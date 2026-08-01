@@ -9,9 +9,7 @@
 //! Destabilization emerges from humiliation, corruption, scarcity,
 //! betrayal, rival prestige, moral panic, and external shock.
 
-use crate::institutions::{Institution, InstitutionKind};
-use crate::person::Personality;
-use mindstrata_core::event::SimEvent;
+use crate::institutions::Institution;
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::id::AgentId;
 use serde::{Deserialize, Serialize};
@@ -24,9 +22,6 @@ const COUP_CORRUPTION_THRESHOLD: Fixed = Fixed::from_raw(6144); // ~0.6
 
 /// Cooldown between leadership challenges (ticks).
 const CHALLENGE_COOLDOWN: u64 = 500;
-
-/// Cooldown between elections (ticks).
-const ELECTION_COOLDOWN: u64 = 1000;
 
 /// The result of a hierarchy challenge attempt.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -225,6 +220,7 @@ pub fn stabilize_hierarchy(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::institutions::InstitutionKind;
 
     #[test]
     fn leadership_score_increases_with_charisma() {

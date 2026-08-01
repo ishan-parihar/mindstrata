@@ -204,7 +204,7 @@ impl MemeAggregator {
                 let total_charge: Fixed = prevalence_vec
                     .iter()
                     .enumerate()
-                    .filter_map(|(idx, (mid, _))| {
+                    .filter_map(|(_idx, (mid, _))| {
                         meme_ids.iter().position(|id| id == mid)
                             .and_then(|pos| meme_emotional_charges.get(pos))
                             .map(|c| *c)

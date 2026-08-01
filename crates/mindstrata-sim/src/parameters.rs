@@ -192,8 +192,6 @@ pub struct SimParameters {
     pub market_initial_water_price: Fixed,
     /// Default price for unknown resources (10.0).
     pub market_default_price: Fixed,
-    /// Gini normalization divisor (2.0).
-    pub market_gini_divisor: Fixed,
 
     // ── Cultural ──────────────────────────────────────────────
     /// Meme transmission base chance multiplier.
@@ -324,7 +322,6 @@ impl Default for SimParameters {
             market_initial_grain_price: Fixed::from_f64(5.0),
             market_initial_water_price: Fixed::from_f64(2.0),
             market_default_price: Fixed::from_f64(10.0),
-            market_gini_divisor: Fixed::from_f64(2.0),
             // Cultural
             meme_transmission_multiplier: Fixed::from_f64(1.0),
             propaganda_effectiveness: Fixed::from_f64(0.3),

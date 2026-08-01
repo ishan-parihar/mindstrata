@@ -999,7 +999,7 @@ impl Simulation {
                     self.agents[i].cognitive_runtime.update(
                         stress, need_fatigue, pain_level, trauma,
                     );
-                    self.agents[i].agent_tier.budget_tracker.consume_appraisal();
+                    let _ = self.agents[i].agent_tier.budget_tracker.consume_appraisal();
                 }
 
                 // Architecture-plan-2 §8.1.14: Attachment system daily decay.
@@ -1099,7 +1099,7 @@ impl Simulation {
                     self.agents[i].prospection.update(
                         agent_fear, agent_ambition, agent_trauma, agent_depression,
                     );
-                    self.agents[i].agent_tier.budget_tracker.consume_prospection();
+                    let _ = self.agents[i].agent_tier.budget_tracker.consume_prospection();
                 }
 
                 // §17: Compute negative_events once (shared by narrative + psychopathology)
@@ -1133,7 +1133,7 @@ impl Simulation {
                         );
                     }
                     self.agents[i].narrative.update_theme();
-                    self.agents[i].agent_tier.budget_tracker.consume_appraisal();
+                    let _ = self.agents[i].agent_tier.budget_tracker.consume_appraisal();
                 }
 
                 // §17: Only focal agents run developmental psychology
@@ -2068,7 +2068,7 @@ impl Simulation {
                     let neg = (Fixed::ONE - trust_to_from) * Fixed::from_f64(0.1);
                     model_a.update_from_observation(pos, neg, trust_to_from, Fixed::from_f64(0.5));
                     model_a.infer_intent(trust_to_from, pos, neg);
-                    self.agents[from_idx].agent_tier.budget_tracker.consume_social_inference();
+                    let _ = self.agents[from_idx].agent_tier.budget_tracker.consume_social_inference();
                 }
                 if self.agents[to_idx].agent_tier.tier.runs_theory_of_mind()
                     && self.agents[to_idx].agent_tier.budget_tracker.can_social_infer()
@@ -2078,7 +2078,7 @@ impl Simulation {
                     let neg = (Fixed::ONE - trust_from_to) * Fixed::from_f64(0.1);
                     model_b.update_from_observation(pos, neg, trust_from_to, Fixed::from_f64(0.5));
                     model_b.infer_intent(trust_from_to, pos, neg);
-                    self.agents[to_idx].agent_tier.budget_tracker.consume_social_inference();
+                    let _ = self.agents[to_idx].agent_tier.budget_tracker.consume_social_inference();
                 }
 
                 // §8.1.18: Cultural category encounter
@@ -2789,7 +2789,7 @@ impl Simulation {
     }
 
     /// Section 15: Faction dynamics - grievance, formation, recruitment, protests.
-    fn tick_faction_dynamics(&mut self, tick_u64: u64, tick: Tick) {
+    fn tick_faction_dynamics(&mut self, tick_u64: u64, _tick: Tick) {
         // §29.2: Factions emerge from collective grievance. §Phase 8: legitimacy crisis → rebellion or reform.
         {
             let faction_count = self.institutions.iter()
@@ -3597,7 +3597,7 @@ impl Simulation {
 
 
     /// Section 4b: Resource operations, journal recording, intention tracking.
-    fn tick_resource_operations(&mut self, action_starts: &[(usize, ActionKind)], pre_tick_events: usize, tick_u64: u64, tick: Tick) {
+    fn tick_resource_operations(&mut self, action_starts: &[(usize, ActionKind)], _pre_tick_events: usize, tick_u64: u64, tick: Tick) {
         // ── 4b. Resource operations, journal recording, intention tracking ──
 
         for (agent_idx, action) in action_starts {
@@ -3815,19 +3815,19 @@ impl Simulation {
                 match ev {
                     SimEvent::AgentAte { agent: a, .. } if a.as_u64() == i as u64 => {
                         if agent.agent_tier.budget_tracker.can_memory_op() {
-                            agent.agent_tier.budget_tracker.consume_memory_op();
+                            let _ = agent.agent_tier.budget_tracker.consume_memory_op();
                             agent.memory.encode(MemoryKind::Consumption, tick_u64, salience, emotional, None, MemoryTag::AteFood);
                         }
                     }
                     SimEvent::AgentDrank { agent: a, .. } if a.as_u64() == i as u64 => {
                         if agent.agent_tier.budget_tracker.can_memory_op() {
-                            agent.agent_tier.budget_tracker.consume_memory_op();
+                            let _ = agent.agent_tier.budget_tracker.consume_memory_op();
                             agent.memory.encode(MemoryKind::Consumption, tick_u64, salience, emotional, None, MemoryTag::DrankWater);
                         }
                     }
                     SimEvent::AgentRested { agent: a, .. } if a.as_u64() == i as u64 => {
                         if agent.agent_tier.budget_tracker.can_memory_op() {
-                            agent.agent_tier.budget_tracker.consume_memory_op();
+                            let _ = agent.agent_tier.budget_tracker.consume_memory_op();
                             agent.memory.encode(MemoryKind::Positive, tick_u64, salience, emotional, None, MemoryTag::Rested);
                         }
                     }
@@ -3847,13 +3847,13 @@ impl Simulation {
                                 _ => MemoryKind::Social,
                             };
                             if agent.agent_tier.budget_tracker.can_memory_op() {
-                                agent.agent_tier.budget_tracker.consume_memory_op();
+                                let _ = agent.agent_tier.budget_tracker.consume_memory_op();
                                 agent.memory.encode(kind, tick_u64, salience, emotional, Some(to.as_u64() as u32), tag);
                             }
                         }
                         if to.as_u64() == i as u64 {
                             if agent.agent_tier.budget_tracker.can_memory_op() {
-                                agent.agent_tier.budget_tracker.consume_memory_op();
+                                let _ = agent.agent_tier.budget_tracker.consume_memory_op();
                                 agent.memory.encode(MemoryKind::Social, tick_u64, salience, emotional, Some(from.as_u64() as u32), MemoryTag::TalkedTo);
                             }
                         }
