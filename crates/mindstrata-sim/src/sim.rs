@@ -408,6 +408,15 @@ impl Simulation {
 
     /// §16.1: Restore from a snapshot (deterministic replay).
     pub fn from_snapshot(snapshot: crate::snapshot::Snapshot) -> Self {
+        // Warn if loading a snapshot older than v6 (which added group_registry).
+        if snapshot.version < crate::snapshot::SNAPSHOT_VERSION {
+            tracing::warn!(
+                snapshot_version = snapshot.version,
+                expected = crate::snapshot::SNAPSHOT_VERSION,
+                "Loading old snapshot — group_registry data was not present in v{}",
+                snapshot.version,
+            );
+        }
         let mut clock = Clock::new();
         clock.set(snapshot.clock_tick);
         let rng = RngStreams::new(snapshot.master_seed);
