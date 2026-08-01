@@ -390,6 +390,8 @@ mod tests {
 
         // Cache is empty after deserialization.
         assert!(!restored.agent_in_active_group(0));
+        assert!(!restored.agent_in_active_group(1));
+        assert!(!restored.agent_in_active_group(2));
         assert_eq!(restored.groups.len(), 1);
         assert!(restored.groups[0].active);
 
@@ -423,5 +425,32 @@ mod tests {
         reg.daily_update();
         assert!(reg.agent_in_active_group(0));
         assert!(reg.agent_in_active_group(1));
+    }
+
+    #[test]
+    fn group_registry_dissolution_removes_from_cache() {
+        let mut reg = GroupRegistry::new();
+        // Register a group with very low cohesion so it dissolves on daily_update.
+        let mut group = PeerGroup {
+            id: 0,
+            members: vec![0, 1],
+            leader: Some(0),
+            group_type: GroupType::PeerGroup,
+            shared_grievance: Fixed::ZERO,
+            shared_identity: Fixed::ZERO,
+            cohesion: Fixed::from_f64(0.05), // below 0.1 threshold
+            formed_tick: 0,
+            last_interaction_tick: 0,
+            active: true,
+        };
+        reg.register(group);
+        assert!(reg.agent_in_active_group(0));
+        assert!(reg.agent_in_active_group(1));
+
+        // daily_update dissolves the group — members should leave the cache.
+        reg.daily_update();
+        assert!(!reg.agent_in_active_group(0));
+        assert!(!reg.agent_in_active_group(1));
+        assert!(!reg.groups[0].active);
     }
 }
