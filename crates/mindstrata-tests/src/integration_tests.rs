@@ -1025,7 +1025,7 @@ fn ten_thousand_tick_stability() {
 
     // 3b. Relationship count must be stable (N-1 per agent)
     for (i, agent) in sim.agents.iter().enumerate() {
-        assert_eq!(agent.relationship_v2s.len(), 11,
+        assert_eq!(agent.relationship_v2s.len(), sim.agents.len() - 1,
             "Agent {} has {} relationships after 10K ticks, expected 11", i, agent.relationship_v2s.len());
     }
 
