@@ -299,9 +299,8 @@ pub struct Simulation {
     /// NOTE: not persisted in snapshots — rebuilt from agent state.
     pub active_courtships: Vec<crate::social::courtship::Courtship>,
     /// Architecture-plan-2 §10.9: Patronage relations — asymmetric patron/client power dynamics.
+    /// Wired: creation in §22b (social tick), daily_update in §20 (kinship daily).
     /// NOTE: not persisted in snapshots — rebuilt from agent state.
-    // TODO(#arch2-10.9): Wire patronage creation into social interaction tick
-    // (e.g. when high-status agent helps low-status agent repeatedly)
     pub patronage_registry: crate::social::patronage::PatronageRegistry,
 }
 
@@ -3770,6 +3769,25 @@ impl Simulation {
             // shared identity, repeated interaction, or external threat to form a
             // formal group. Gated by is_duodeca to limit O(N²) overhead.
             let n_agents = self.agents.len();
+            // Pre-compute institution-level values once (not per-agent).
+            // social_cost: higher membership density → higher cost to break away.
+            let social_cost = {
+                let total_members: usize = self.institutions.iter()
+                    .map(|inst| inst.members.len())
+                    .sum();
+                let density = if self.agents.is_empty() { Fixed::ZERO } else {
+                    Fixed::from_f64(total_members as f64 / self.agents.len() as f64)
+                        .clamp_01()
+                };
+                density * Fixed::from_f64(0.2) // 0.0–0.2 range
+            };
+            // institutional_suppression: high council legitimacy → institutions suppress groups.
+            let institutional_suppression = self.institutions.iter()
+                .filter(|inst| inst.kind == institutions::InstitutionKind::Council)
+                .map(|inst| inst.legitimacy)
+                .next()
+                .unwrap_or(Fixed::from_f64(0.5))
+                * Fixed::from_f64(0.4); // 0.0–0.4 range
             for i in 0..n_agents {
                 // Find peers: agents with high mutual trust and shared location
                 let mut peers: Vec<usize> = Vec::new();
@@ -3827,10 +3845,8 @@ impl Simulation {
                     repeated_interaction,
                     leadership_gravity: Fixed::ZERO,
                     external_threat: Fixed::ZERO,
-                    // TODO(#arch2-12.2): compute social_cost from institutional membership density
-                    social_cost: Fixed::from_f64(0.1),
-                    // TODO(#arch2-12.2): compute institutional_suppression from council legitimacy
-                    institutional_suppression: Fixed::from_f64(0.2),
+                    social_cost,
+                    institutional_suppression,
                     identified_tick: tick_u64,
                 };
                 if candidate.should_form() {
