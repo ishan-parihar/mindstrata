@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use super::marriage::RomanticStage;
 
 /// Minimum attraction as a fraction of the trust threshold for stage advancement.
-const ATTRACTION_FLOOR_RATIO: Fixed = Fixed::from_f64(0.6);
+const ATTRACTION_FLOOR_RATIO: Fixed = Fixed::from_raw(6000); // 0.6
 
 /// A courtship in progress between two agents.
 #[derive(Debug, Clone, Serialize, Deserialize)]

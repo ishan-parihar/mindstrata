@@ -110,6 +110,9 @@ impl FactionV2 {
     }
 
     /// Record casualties from a conflict or crackdown.
+    ///
+    /// Also increases grievance and legitimacy_of_violence (martyrdom effect):
+    /// casualties radicalize survivors and make violence feel more justified.
     pub fn record_casualties(&mut self, loss_fraction: Fixed) {
         self.casualties = (self.casualties + loss_fraction).clamp_01();
         // Casualties reduce morale and mobilization
