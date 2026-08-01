@@ -78,6 +78,12 @@ const GROUP_COUNCIL_LEGITIMACY_DEFAULT: Fixed = Fixed::from_raw(5000); // 0.5
 /// Institutional suppression scale factor (legitimacy × this → 0.0–0.4).
 const GROUP_SUPPRESSION_SCALE: Fixed = Fixed::from_raw(4000); // 0.4
 
+// ── SystemTrace provenance thresholds (§16.2) ─────────────────────
+/// Cortisol level above which we record Hormonal provenance (0.6).
+const HORMONAL_TRACE_THRESHOLD: Fixed = Fixed::from_raw(6000); // 0.6
+/// Social support below which we record Attachment provenance (0.3).
+const ATTACHMENT_LOW_SUPPORT_THRESHOLD: Fixed = Fixed::from_raw(3000); // 0.3
+
 /// Configuration for a simulation run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimConfig {
@@ -1082,6 +1088,20 @@ impl Simulation {
                 self.agents[i].body.energy = derived_energy;
                 self.agents[i].body.fatigue = derived_fatigue;
 
+                // §16.2: Record hormonal provenance when stress axis level exceeds threshold.
+                // This traces cross-system causal influence from biology into psychology.
+                let cortisol = self.agents[i].embodied.endocrine.stress.level;
+                if cortisol > HORMONAL_TRACE_THRESHOLD {
+                    self.provenance.record_system(crate::provenance::SystemTrace {
+                        agent: AgentId::new(i as u64),
+                        tick: tick_u64,
+                        category: crate::provenance::ProvenanceCategory::Hormonal,
+                        description: format!("Stress axis level ({}) influencing threat appraisal", cortisol.to_f64()),
+                        magnitude: cortisol,
+                        cause: "biological_update".into(),
+                    });
+                }
+
             }
 
             // §8.1.4: Collect regulation strategies from step 0b, applied after appraisal in step 6.
@@ -1168,6 +1188,17 @@ impl Simulation {
                     // §8.1.4: Store regulation strategy for post-appraisal application.
                     // The actual apply_strategy() call happens after appraisal (step 6)
                     // so the skill-scaled boost uses the fresh, appraisal-derived affect values.
+                    // §16.2: Record attachment-proximate provenance when social support is low.
+                    if social_support < ATTACHMENT_LOW_SUPPORT_THRESHOLD {
+                        self.provenance.record_system(crate::provenance::SystemTrace {
+                            agent: AgentId::new(i as u64),
+                            tick: tick_u64,
+                            category: crate::provenance::ProvenanceCategory::Attachment,
+                            description: format!("Low social support ({}) activating attachment-driven regulation", social_support.to_f64()),
+                            magnitude: (Fixed::ONE - social_support).clamp_01(),
+                            cause: "emotion_regulation_selection".into(),
+                        });
+                    }
                     reg_strategies.push(regulation_strategy);
                     self.agents[i].emotion_regulation.update_capacity(
                         stress, need_fatigue, social_support,
