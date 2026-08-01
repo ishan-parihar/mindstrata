@@ -3166,7 +3166,7 @@ impl Simulation {
                         personality_attraction: personality_compat,
                         familiarity: affection,
                         physical_attraction: proximity,
-                        reciprocity: affection,
+                        reciprocity: affection, // reciprocity from mutual affection
                         ..crate::social::attraction::AttractionModel::default()
                     };
                     let attraction_score = att.total_attraction();
