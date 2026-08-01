@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// Per Rust best practices (Chapter 1), small Copy types are passed by value.
 /// This struct is Copy + Clone + Default for cheap embedding in Simulation.
+#[must_use]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SimParameters {
     // ── Biological ─────────────────────────────────────────────

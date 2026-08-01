@@ -61,8 +61,8 @@ pub fn system_need_decay_with_params(
         need.social = (need.social + params.social_decay_rate).clamp_01();
         need.meaning = (need.meaning + params.meaning_decay_rate).clamp_01();
         // Esteem and autonomy decay at 2/3 the meaning rate
-        need.esteem = (need.esteem + params.meaning_decay_rate * Fixed::from_f64(0.67)).clamp_01();
-        need.autonomy = (need.autonomy + params.meaning_decay_rate * Fixed::from_f64(0.67)).clamp_01();
+        need.esteem = (need.esteem + params.meaning_decay_rate * Fixed::from_f64(0.6667)).clamp_01();
+        need.autonomy = (need.autonomy + params.meaning_decay_rate * Fixed::from_f64(0.6667)).clamp_01();
     }
 }
 
