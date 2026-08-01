@@ -1,3 +1,4 @@
+// Maps to: social::kinship::KinshipGraph
 // §10.6 Kinship system — defines kinship graph mechanics and marriage restrictions.
 // Used by social/kinship.rs to model family relationships.
 

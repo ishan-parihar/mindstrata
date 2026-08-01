@@ -1,3 +1,4 @@
+// Maps to: norms::Taboo definitions
 // §13 Taboo system — defines forbidden practices and severity scaling.
 // Used by culture/ and norms.rs to model cultural prohibitions.
 

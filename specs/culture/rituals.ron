@@ -1,3 +1,4 @@
+// Maps to: culture::ritual::RitualRegistry
 // §12.5 Ritual system — defines ritual types, effects, and frequency.
 // Used by culture/ritual.rs to model communal practices.
 

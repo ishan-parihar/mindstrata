@@ -1,3 +1,4 @@
+// Maps to: culture::propaganda::PropagandaSystem
 // §13.4 Propaganda system — defines institutional narrative campaigns.
 // Used by culture/propaganda.rs to model institutional messaging.
 

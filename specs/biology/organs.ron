@@ -1,3 +1,4 @@
+// Maps to: biology::{skeletal::SkeletalState, muscular::MuscularState, cardiovascular::CardiovascularState, respiratory::RespiratoryState, immune::ImmuneState, circadian::CircadianState}
 // §7.2.3-7.2.9 Organ systems — defines abstract organ-system dynamics.
 // Used by biology/mod.rs to simulate body subsystems.
 

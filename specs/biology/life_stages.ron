@@ -1,3 +1,4 @@
+// Maps to: biology::development::DevelopmentalStage
 // §7.2.6 Life stages — defines developmental stages and transitions.
 // Used by biology/development.rs to model agent development.
 

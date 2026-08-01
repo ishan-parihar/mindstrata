@@ -1,3 +1,4 @@
+// Maps to: appraisal::DiscreteEmotions and appraisal dimensions
 // §8.1.4 Expanded emotion system — defines emotion families and appraisal dimensions.
 // Used by psychology/ and appraisal.rs to model agent emotions.
 

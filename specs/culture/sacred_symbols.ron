@@ -1,3 +1,4 @@
+// Maps to: culture::sacred::SacredValues
 // §13 Sacred symbols — defines sacred values and their protection dynamics.
 // Used by culture/sacred.rs and psychology/moral_cognition.rs.
 
@@ -30,7 +31,7 @@ SacredSymbols(
         punishment_severity_multiplier: 2.0,
         social_punishment_weight: 0.4,
         internal_punishment_weight: 0.3,
-        group_cohesion_effect: "increase",  // desecration of out-group sacred objects
+        group_cohesion_effect: Increase,  // desecration of out-group sacred objects
     ),
 
     // Syncretism dynamics

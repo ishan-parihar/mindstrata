@@ -1,3 +1,4 @@
+// Maps to: biology::endocrine::EndocrineState
 // §7.2.2 Hormonal / Endocrine System — defines functional hormonal axes.
 // Used by biology/endocrine.rs to modulate psychology and behavior.
 

@@ -1,3 +1,4 @@
+// Maps to: social::marriage::MarriageState
 // §10.5 Marriage system — defines marriage mechanics and dynamics.
 // Used by social/marriage.rs to model formal partnerships.
 

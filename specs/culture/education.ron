@@ -1,3 +1,4 @@
+// Maps to: culture::knowledge::EducationSystem
 // §8.1.19 Education system — defines structured knowledge transfer.
 // Used by culture/education.rs to model learning and apprenticeship.
 

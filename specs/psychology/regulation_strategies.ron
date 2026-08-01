@@ -1,3 +1,4 @@
+// Maps to: psychology::emotion_regulation::EmotionRegulation
 // §8.1.4 Emotion regulation strategies — defines how agents manage emotions.
 // Used by psychology/emotion_regulation.rs to model emotional coping.
 

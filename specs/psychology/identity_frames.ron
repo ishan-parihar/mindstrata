@@ -1,3 +1,4 @@
+// Maps to: psychology::self_model::SelfModel
 // §8.1.7 Identity and self-model — defines identity claims, roles, and values.
 // Used by psychology/self_model.rs to model agent identity.
 

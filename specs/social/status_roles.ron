@@ -1,3 +1,4 @@
+// Maps to: social::hierarchy::HierarchyState and status_dims
 // §11 Status roles — defines status dimensions and hierarchy mechanics.
 // Used by social/hierarchy.rs and status_dims.rs to model social stratification.
 

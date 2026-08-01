@@ -1,3 +1,4 @@
+// Maps to: psychology::moral_cognition::MoralCognition
 // §8.1.10 Moral cognition — defines moral foundations and internalized norms.
 // Used by psychology/moral_cognition.rs to model agent morality.
 

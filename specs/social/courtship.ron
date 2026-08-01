@@ -1,3 +1,4 @@
+// Maps to: social::courtship::CourtshipState
 // §10.4 Courtship system — defines romantic relationship formation.
 // Used by social/courtship.rs to model attraction and pair-bonding.
 

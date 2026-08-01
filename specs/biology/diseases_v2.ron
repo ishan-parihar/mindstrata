@@ -1,3 +1,4 @@
+// Maps to: health::Disease definitions
 // §7.2 Disease system — defines disease types, transmission, and severity.
 // Used by health.rs to simulate disease dynamics.
 

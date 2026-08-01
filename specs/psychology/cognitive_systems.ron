@@ -1,3 +1,4 @@
+// Maps to: psychology::cognitive_runtime::CognitiveRuntime
 // §8.1 Cognitive systems — defines cognitive runtime parameters.
 // Used by psychology/cognitive_runtime.rs to model agent cognition.
 
