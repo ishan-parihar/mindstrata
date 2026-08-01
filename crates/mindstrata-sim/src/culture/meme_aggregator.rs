@@ -140,6 +140,9 @@ impl MemeAggregator {
     ///
     /// For each group, count how many agents host each meme and compute
     /// the prevalence fraction (hosted / group_size).
+    ///
+    /// `meme_emotional_charges` must be parallel to `meme_ids` — the
+    /// emotional charge of each meme for accurate group-level charge metrics.
     pub fn compute_group_prevalence(
         &self,
         agent_meme_hosts: &[Vec<usize>], // agent_idx → list of meme ids hosted
@@ -255,6 +258,9 @@ impl MemeAggregator {
     /// Randomly samples a subset of agents and records their meme transmission
     /// outcomes. The `source_centrality` parameter should come from a
     /// precomputed network centrality measure.
+    ///
+    /// Call from the tick loop after meme propagation to populate the
+    /// `exposure_samples` field in [`AggregatedMemeMetrics`].
     pub fn sample_exposures(
         &self,
         agent_idx: usize,
@@ -267,7 +273,6 @@ impl MemeAggregator {
             return;
         }
         for &meme_id in meme_ids_hosted.iter().take(2) {
-            // cap at 2 per agent to spread sampling
             samples.push(ExposureSample {
                 agent: AgentId::new(agent_idx as u64),
                 meme_id,
@@ -280,10 +285,20 @@ impl MemeAggregator {
         }
     }
 
+    /// §17.4: Store pre-sampled exposure data into the cached metrics.
+    ///
+    /// Call after `aggregate()` and after collecting samples via
+    /// `sample_exposures()` from the tick loop.
+    pub fn set_exposure_samples(&mut self, samples: Vec<ExposureSample>) {
+        self.cached_metrics.exposure_samples = samples;
+    }
+
     /// §17.4: Run full aggregation pass.
     ///
     /// This is the main entry point called periodically from the tick loop.
-    /// It computes group prevalence, samples exposures, and aggregates metrics.
+    /// It computes group prevalence and aggregates metrics. Exposure samples
+    /// should be collected via `sample_exposures()` in the tick loop and
+    /// stored via `set_exposure_samples()` after this call.
     /// Run full aggregation pass.
     ///
     /// `meme_emotional_charges` is parallel to `meme_ids` — the emotional
