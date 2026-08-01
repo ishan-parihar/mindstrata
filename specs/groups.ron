@@ -1,0 +1,106 @@
+// §12.1/§12.2 Group types and formation mechanics.
+// Defines the types of groups that can emerge and their formation conditions.
+
+Groups(
+    group_types: [
+        GroupType(
+            name: "Household",
+            basis: ["residence", "kinship", "economy"],
+            min_members: 2,
+            max_members: 8,
+            cohesion_decay_rate: 0.0001,
+            dissolution_threshold: 0.05,
+        ),
+        GroupType(
+            name: "Family",
+            basis: ["kinship", "attachment"],
+            min_members: 2,
+            max_members: 12,
+            cohesion_decay_rate: 0.00005,
+            dissolution_threshold: 0.03,
+        ),
+        GroupType(
+            name: "Clan",
+            basis: ["kinship", "myth", "honor"],
+            min_members: 10,
+            max_members: 100,
+            cohesion_decay_rate: 0.00002,
+            dissolution_threshold: 0.08,
+        ),
+        GroupType(
+            name: "Faction",
+            basis: ["grievance", "interest"],
+            min_members: 3,
+            max_members: 30,
+            cohesion_decay_rate: 0.0003,
+            dissolution_threshold: 0.1,
+        ),
+        GroupType(
+            name: "Cult",
+            basis: ["charisma", "sacred_narrative", "identity_fusion"],
+            min_members: 3,
+            max_members: 20,
+            cohesion_decay_rate: 0.0005,
+            dissolution_threshold: 0.15,
+        ),
+        GroupType(
+            name: "Congregation",
+            basis: ["ritual", "belief"],
+            min_members: 5,
+            max_members: 50,
+            cohesion_decay_rate: 0.0001,
+            dissolution_threshold: 0.1,
+        ),
+        GroupType(
+            name: "Guild",
+            basis: ["skill", "economic_interest"],
+            min_members: 3,
+            max_members: 15,
+            cohesion_decay_rate: 0.0002,
+            dissolution_threshold: 0.1,
+        ),
+        GroupType(
+            name: "Patronage",
+            basis: ["obligation", "protection"],
+            min_members: 2,
+            max_members: 10,
+            cohesion_decay_rate: 0.0003,
+            dissolution_threshold: 0.1,
+        ),
+        GroupType(
+            name: "PeerGroup",
+            basis: ["age", "proximity", "identity"],
+            min_members: 3,
+            max_members: 8,
+            cohesion_decay_rate: 0.0004,
+            dissolution_threshold: 0.1,
+        ),
+        GroupType(
+            name: "Warband",
+            basis: ["violence", "loyalty", "survival"],
+            min_members: 5,
+            max_members: 25,
+            cohesion_decay_rate: 0.0002,
+            dissolution_threshold: 0.12,
+        ),
+    ],
+
+    // Formation pressure thresholds (§12.2)
+    formation: (
+        pressure_threshold: 0.5,
+        min_interaction_frequency: 0.2,
+        min_shared_identity: 0.3,
+        min_emotional_synchrony: 0.2,
+        leadership_gravity_weight: 0.15,
+        external_threat_weight: 0.15,
+        social_cost_weight: 0.15,
+        institutional_suppression_weight: 0.15,
+    ),
+
+    // Dissolution conditions
+    dissolution: (
+        cohesion_threshold: 0.1,
+        min_members: 2,
+        inactivity_ticks: 10000,
+    ),
+)

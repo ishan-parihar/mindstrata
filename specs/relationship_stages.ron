@@ -1,0 +1,80 @@
+// §10.3 Relationship stages — defines the developmental trajectory of social bonds.
+// Used by relationship_stages.rs to determine when relationships advance or regress.
+
+RelationshipStages(
+    // General social stages (positive branch)
+    social_positive: [
+        "Unnoticed",
+        "Noticed",
+        "Acquaintance",
+        "Familiar",
+        "Neighbor",
+        "Friend",
+        "CloseFriend",
+        "Confidant",
+        "Ally",
+    ],
+
+    // Negative branch
+    social_negative: [
+        "Disliked",
+        "Rival",
+        "Enemy",
+        "Nemesis",
+    ],
+
+    // Authority branch
+    authority: [
+        "PatronClient",
+        "LordVassal",
+        "MasterApprentice",
+        "PriestLayperson",
+        "ElderJunior",
+        "GuardCitizen",
+    ],
+
+    // Kin branch
+    kin: [
+        "Kin",
+        "ParentChild",
+        "Sibling",
+        "Cousin",
+        "InLaw",
+        "AncestorDescendant",
+    ],
+
+    // Romantic stages (§10.4)
+    romantic: [
+        "Awareness",
+        "Attraction",
+        "Flirtation",
+        "Courtship",
+        "Exclusivity",
+        "Betrothal",
+        "Marriage",
+        "HouseholdFormation",
+        "Parenthood",
+        "Stabilization",
+        "Reconciliation",
+        "Separation",
+        "Widowhood",
+    ],
+
+    // Advancement thresholds — minimum interaction quality to progress
+    advancement_thresholds: (
+        trust_required: 0.3,
+        affection_required: 0.2,
+        respect_required: 0.1,
+        interaction_count_required: 5,
+        positive_ratio_required: 0.6,
+    ),
+
+    // Regression thresholds — triggers for stage regression
+    regression_triggers: (
+        trust_below: 0.1,
+        fear_above: 0.7,
+        betrayal_count_threshold: 1,
+        negative_memory_ratio: 0.7,
+        inactivity_decay_ticks: 5000,
+    ),
+)
