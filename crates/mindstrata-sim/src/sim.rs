@@ -4285,17 +4285,22 @@ impl Simulation {
                 Fixed::from_f64(0.5)
             };
             let justice_perception = agent.moral_values.fairness;
-            agent.derived.compute(&crate::person::MentalStateInput {
-                stress,
-                coping_potential: agent.personality.conscientiousness,
-                social_support,
-                need_deficit_avg,
-                meaning: agent.needs.meaning,
-                autonomy: agent.needs.autonomy,
-                success_rate,
-                neuroticism: agent.personality.neuroticism,
-                justice_perception,
-            });
+            // §5.1: Use configurable smoothing/accumulation from SimParameters
+            agent.derived.compute(
+                &crate::person::MentalStateInput {
+                    stress,
+                    coping_potential: agent.personality.conscientiousness,
+                    social_support,
+                    need_deficit_avg,
+                    meaning: agent.needs.meaning,
+                    autonomy: agent.needs.autonomy,
+                    success_rate,
+                    neuroticism: agent.personality.neuroticism,
+                    justice_perception,
+                },
+                self.params.mental_state_smoothing,
+                self.params.mental_state_accumulation,
+            );
             // Decay success tracking window
             agent.recent_attempts = agent.recent_attempts.saturating_sub(1);
             agent.recent_successes = agent.recent_successes.saturating_sub(1);

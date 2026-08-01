@@ -60,6 +60,10 @@ pub struct SimParameters {
     pub rumor_prevalence_decay: Fixed,
     /// Belief resistance decay rate per tick — how fast belief resistance weakens.
     pub belief_resistance_decay: Fixed,
+    /// Mental state smoothing factor — how much previous state persists (0.995 = very slow change).
+    pub mental_state_smoothing: Fixed,
+    /// Mental state accumulation factor — how fast new input is absorbed (0.005 = very slow).
+    pub mental_state_accumulation: Fixed,
 
     // ── Relational ────────────────────────────────────────────
     /// Trust threshold for friendship classification.
@@ -140,6 +144,8 @@ impl Default for SimParameters {
             meme_novelty_decay: Fixed::from_f64(0.002),
             rumor_prevalence_decay: Fixed::from_f64(0.01),
             belief_resistance_decay: Fixed::from_f64(0.001), // matches original BELIEF_RESISTANCE_DECAY
+            mental_state_smoothing: Fixed::from_f64(0.995), // matches original
+            mental_state_accumulation: Fixed::from_f64(0.005), // matches original
 
             // Relational
             friendship_trust_threshold: Fixed::from_f64(0.5),

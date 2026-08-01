@@ -456,8 +456,8 @@ mod smoke {
 
         // Simulate 200 ticks — states should accumulate
         for _ in 0..200 {
-            stressed.compute(&stressed_input);
-            calm.compute(&calm_input);
+            stressed.compute(&stressed_input, Fixed::from_f64(0.995), Fixed::from_f64(0.005));
+            calm.compute(&calm_input, Fixed::from_f64(0.995), Fixed::from_f64(0.005));
         }
 
         // Stressed agent should have higher trauma and depression risk

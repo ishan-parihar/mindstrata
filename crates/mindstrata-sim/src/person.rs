@@ -415,24 +415,28 @@ pub struct MentalStateInput {
 
 impl DerivedMentalState {
     /// Compute derived mental states from lower-level variables.
+    ///
     /// §22.1: These should influence traits over time.
-    pub fn compute(&mut self, input: &MentalStateInput) {
+    /// §5.1: `smoothing` and `accumulation` control the blending rate:
+    ///   - smoothing=0.995, accumulation=0.005 → original slow build
+    ///   - smoothing=0.99, accumulation=0.01 → 2× faster adaptation
+    pub fn compute(&mut self, input: &MentalStateInput, smoothing: Fixed, accumulation: Fixed) {
         // Trauma risk: repeated stress + low coping + low support
         let stress_factor = input.stress * Fixed::from_f64(0.3);
         let coping_factor = (Fixed::ONE - input.coping_potential) * Fixed::from_f64(0.3);
         let support_factor = (Fixed::ONE - input.social_support) * Fixed::from_f64(0.2);
         let neuroticism_boost = input.neuroticism * Fixed::from_f64(0.2);
         let trauma_delta = stress_factor + coping_factor + support_factor + neuroticism_boost;
-        // Slow accumulation — trauma builds over many ticks, not instantly
-        self.trauma_risk = (self.trauma_risk * Fixed::from_f64(0.995) + trauma_delta * Fixed::from_f64(0.005)).clamp_01();
+        // §5.1: Configurable accumulation — trauma builds over many ticks
+        self.trauma_risk = (self.trauma_risk * smoothing + trauma_delta * accumulation).clamp_01();
 
         // Depression risk: chronic need deficit + low meaning + low autonomy
         let deficit_factor = input.need_deficit_avg * Fixed::from_f64(0.3);
         let meaning_factor = (Fixed::ONE - input.meaning) * Fixed::from_f64(0.25);
         let autonomy_factor = (Fixed::ONE - input.autonomy) * Fixed::from_f64(0.2);
         let depression_delta = deficit_factor + meaning_factor + autonomy_factor;
-        // Slow accumulation — depression builds from chronic conditions
-        self.depression_risk = (self.depression_risk * Fixed::from_f64(0.995) + depression_delta * Fixed::from_f64(0.005)).clamp_01();
+        // §5.1: Configurable accumulation
+        self.depression_risk = (self.depression_risk * smoothing + depression_delta * accumulation).clamp_01();
 
         // Ambition: from success and energy
         self.ambition = (input.success_rate * Fixed::from_f64(0.4) + Fixed::from_f64(0.3)).clamp_01();
@@ -442,8 +446,8 @@ impl DerivedMentalState {
 
         // Resentment: from perceived injustice
         let injustice = (Fixed::ONE - input.justice_perception) * Fixed::from_f64(0.4);
-        // Slow accumulation — resentment builds from repeated injustice
-        self.resentment = (self.resentment * Fixed::from_f64(0.995) + injustice * Fixed::from_f64(0.005)).clamp_01();
+        // §5.1: Configurable accumulation
+        self.resentment = (self.resentment * smoothing + injustice * accumulation).clamp_01();
     }
 }
 
