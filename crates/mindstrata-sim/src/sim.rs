@@ -3643,10 +3643,9 @@ impl Simulation {
             self.belief_ecology.daily_update();
             self.faction_v2_registry.daily_update();
             // Architecture-plan-2 §10.4: Courtship daily updates — advance/regress stages.
+            // daily_update() is self-contained: it short-circuits on !active.
             for courtship in &mut self.active_courtships {
-                if courtship.active {
-                    courtship.daily_update();
-                }
+                courtship.daily_update();
             }
             self.active_courtships.retain(|c| c.active);
         }
