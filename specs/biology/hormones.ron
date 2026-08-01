@@ -1,0 +1,136 @@
+// §7.2.2 Hormonal / Endocrine System — defines functional hormonal axes.
+// Used by biology/endocrine.rs to modulate psychology and behavior.
+
+EndocrineSpec(
+    // Stress axis (cortisol-like) — §7.2.2
+    stress_axis: (
+        base_level: 0.2,
+        acute_stress_input_weight: 0.4,
+        chronic_stress_input_weight: 0.1,
+        recovery_rate: 0.05,
+        parasympathetic_tone_weight: 0.3,
+        max_level: 1.0,
+        // Effects on psychology
+        fear_amplification: 0.3,
+        anger_amplification: 0.2,
+        planning_horizon_reduction: 0.4,
+        heuristic_bias_increase: 0.3,
+        memory_accuracy_reduction: 0.2,
+        disease_vulnerability_increase: 0.15,
+        fertility_reduction_if_chronic: 0.25,
+    ),
+
+    // Bonding axis (oxytocin-like) — §7.2.2
+    bonding_axis: (
+        base_level: 0.3,
+        positive_touch_weight: 0.2,
+        comforting_weight: 0.15,
+        caregiving_weight: 0.2,
+        shared_meal_weight: 0.1,
+        ritual_synchronization_weight: 0.15,
+        trusted_gossip_weight: 0.1,
+        max_level: 1.0,
+        // Effects on psychology
+        trust_increase: 0.2,
+        attachment_activation: 0.3,
+        grief_after_loss_amplification: 0.25,
+        pair_bond_strength_increase: 0.2,
+        parental_bonding_increase: 0.3,
+        in_group_favoritism_increase: 0.15,
+    ),
+
+    // Dominance axis (testosterone-like) — §7.2.2
+    dominance_axis: (
+        base_level: 0.4,
+        status_victory_weight: 0.3,
+        status_defeat_weight: -0.25,
+        competition_weight: 0.2,
+        public_respect_weight: 0.2,
+        public_humiliation_weight: -0.3,
+        feud_outcome_weight: 0.15,
+        max_level: 1.0,
+        // Effects on psychology
+        confidence_modulation: 0.3,
+        aggression_modulation: 0.25,
+        risk_tolerance_modulation: 0.2,
+        status_seeking_modulation: 0.3,
+        submission_susceptibility: -0.2,
+        defiance_susceptibility: 0.2,
+    ),
+
+    // Fertility axis (estrogen/androgen-like) — §7.2.2
+    fertility_axis: (
+        base_level: 0.5,
+        age_modifier青春期_onset: 0.8,
+        age_modifier_menopause: 0.1,
+        health_weight: 0.3,
+        nutrition_weight: 0.2,
+        stress_penalty: 0.25,
+        season_weight: 0.1,
+        pair_bond_weight: 0.15,
+        pregnancy_suppression: 0.8,
+        lactation_suppression: 0.6,
+        max_level: 1.0,
+        // Effects on psychology
+        libido_modulation: 0.4,
+        parental_motivation_increase: 0.3,
+    ),
+
+    // Metabolic axis (insulin/glucagon/leptin-like) — §7.2.2
+    metabolic_axis: (
+        base_level: 0.5,
+        food_intake_weight: 0.3,
+        hunger_weight: 0.25,
+        body_reserves_weight: 0.2,
+        activity_weight: 0.15,
+        illness_penalty: 0.2,
+        max_level: 1.0,
+        // Effects on psychology
+        energy_availability_modulation: 0.4,
+        appetite_modulation: 0.3,
+        satiety_modulation: 0.3,
+        weakness_threshold: 0.2,
+    ),
+
+    // Arousal axis (adrenaline/noradrenaline-like) — §7.2.2
+    arousal_axis: (
+        base_level: 0.3,
+        sudden_event_weight: 0.4,
+        danger_weight: 0.35,
+        anger_weight: 0.25,
+        fear_weight: 0.3,
+        excitement_weight: 0.2,
+        max_level: 1.0,
+        // Effects on psychology
+        action_readiness_increase: 0.4,
+        attention_narrowing: 0.3,
+        flashbulb_memory_encoding: 0.35,
+        fight_flight_freeze_bias: 0.3,
+    ),
+
+    // Growth axis (development, repair, aging) — §7.2.2
+    growth_axis: (
+        base_level: 0.5,
+        age_childhood_weight: 0.8,
+        age_adolescent_weight: 0.6,
+        age_adult_weight: 0.3,
+        age_elder_weight: 0.1,
+        nutrition_weight: 0.3,
+        sleep_weight: 0.2,
+        illness_penalty: 0.2,
+        injury_penalty: 0.15,
+        max_level: 1.0,
+        // Effects on development
+        childhood_development_rate: 0.3,
+        muscle_adaptation_rate: 0.2,
+        bone_maturation_rate: 0.25,
+        aging_decline_rate: 0.15,
+        wound_healing_rate: 0.2,
+    ),
+
+    // Update frequencies (§6.2)
+    update_frequencies: (
+        fast_modulation: 6,  // every 6 ticks (~1 hour)
+        slow_regulation: 144, // daily
+    ),
+)

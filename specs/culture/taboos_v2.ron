@@ -1,0 +1,45 @@
+// §13 Taboo system — defines forbidden practices and severity scaling.
+// Used by culture/ and norms.rs to model cultural prohibitions.
+
+TaboosV2(
+    // Taboo categories
+    categories: [
+        "Theft",
+        "Violence",
+        "Disrespect",
+        "Incest",
+        "Sacrilege",
+        "Heresy",
+        "Adultery",
+        "Lying",
+        "BrokenOath",
+    ],
+
+    // Severity scaling
+    severity: (
+        witness_count_weight: 0.3,
+        traditionalism_weight: 0.25,
+        institution_legitimacy_weight: 0.2,
+        moral_reputation_weight: 0.15,
+        social_visibility_weight: 0.1,
+    ),
+
+    // Enforcement
+    enforcement: (
+        detection_chance_base: 0.3,
+        detection_chance_with_witnesses: 0.7,
+        punishment_severity_base: 0.2,
+        punishment_escalation_per_repeat: 0.1,
+        max_punishment_severity: 0.8,
+        crime_record_retention_ticks: 5000,
+    ),
+
+    // Taboo effects on behavior
+    effects: (
+        norm_compliance_pressure: 0.3,
+        guilt_accumulation_rate: 0.01,
+        shame_accumulation_rate: 0.015,
+        social_punishment_weight: 0.2,
+        internal_punishment_weight: 0.15,
+    ),
+)

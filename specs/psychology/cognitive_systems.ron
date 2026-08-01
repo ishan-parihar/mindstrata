@@ -1,0 +1,84 @@
+// §8.1 Cognitive systems — defines cognitive runtime parameters.
+// Used by psychology/cognitive_runtime.rs to model agent cognition.
+
+CognitiveSystems(
+    // Working memory
+    working_memory: (
+        base_capacity: 7,  // Miller's 7±2
+        stress_reduction_per_unit: 0.3,
+        fatigue_reduction_per_unit: 0.2,
+        age_child_modifier: 0.5,
+        age_elder_modifier: 0.7,
+    ),
+
+    // Attention system (§8.1.2)
+    attention: (
+        base_capacity: 0.8,
+        salience_weights: {
+            "intensity": 0.2,
+            "novelty": 0.25,
+            "survival_relevance": 0.3,
+            "social_relevance": 0.15,
+            "emotional_charge": 0.1,
+        },
+        habituation_rate: 0.05,
+        habituation_recovery_rate: 0.01,
+        focus_switch_cost: 0.1,
+        threat_bias_weight: 0.3,
+        social_bias_weight: 0.2,
+        novelty_bias_weight: 0.15,
+    ),
+
+    // Executive function (§8.1.12)
+    executive: (
+        base_inhibition: 0.6,
+        base_cognitive_flexibility: 0.5,
+        base_planning_depth: 20,
+        base_impulsivity: 0.3,
+        base_self_monitoring: 0.5,
+        base_error_sensitivity: 0.5,
+        stress_inhibition_penalty: 0.3,
+        fatigue_planning_penalty: 0.4,
+        pain_planning_penalty: 0.2,
+        trauma_planning_penalty: 0.25,
+    ),
+
+    // Prospection / imagination (§8.1.16)
+    prospection: (
+        base_optimism_bias: 0.5,
+        base_catastrophic_bias: 0.3,
+        base_planning_confidence: 0.6,
+        fear_dread_amplification: 0.3,
+        ambition_hope_amplification: 0.25,
+        trauma_catastrophe_amplification: 0.4,
+        depression_hope_reduction: 0.35,
+        max_scenarios_per_tick: 3,
+    ),
+
+    // Cognitive budget (§17.2)
+    budget: (
+        focal_max_appraisals: 5,
+        focal_max_memory_retrievals: 3,
+        focal_max_prospections: 2,
+        focal_max_social_inferences: 3,
+        secondary_max_appraisals: 2,
+        secondary_max_memory_retrievals: 1,
+        secondary_max_prospections: 0,
+        secondary_max_social_inferences: 1,
+        background_max_appraisals: 1,
+        background_max_memory_retrievals: 0,
+        background_max_prospections: 0,
+        background_max_social_inferences: 0,
+    ),
+
+    // Skill and habit (§8.1.19)
+    skill: (
+        skill_gain_per_practice_tick: 0.001,
+        skill_decay_per_idle_tick: 0.0001,
+        automaticity_gain_per_repetition: 0.002,
+        automaticity_decay_rate: 0.0005,
+        habit_formation_threshold: 0.5,
+        habit_under_stress_weight: 0.4,
+        max_skills_per_agent: 12,
+    ),
+)

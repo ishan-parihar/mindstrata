@@ -1,0 +1,111 @@
+// §8.1.7 Identity and self-model — defines identity claims, roles, and values.
+// Used by psychology/self_model.rs to model agent identity.
+
+IdentityFrames(
+    // Identity claim categories
+    identity_categories: [
+        "Occupational",     // farmer, merchant, priest, guard
+        "Relational",       // parent, child, sibling, spouse
+        "Moral",            // faithful, honest, just, merciful
+        "Social",           // leader, elder, respected, outcast
+        "Cultural",         // traditional, progressive, devout
+        "Personal",         // strong, wise, brave, cunning
+    ],
+
+    // Role identities (§8.1.7)
+    role_identities: [
+        RoleIdentity(
+            name: "Elder",
+            requires_age_min: 55,
+            requires_conscientiousness: 0.6,
+            requires_agreeableness: 0.5,
+            status_bonus: 0.3,
+            legitimacy_bonus: 0.2,
+            responsibility_weight: 0.3,
+        ),
+        RoleIdentity(
+            name: "Priest",
+            requires_traditionalism: 0.7,
+            requires_agreeableness: 0.5,
+            status_bonus: 0.25,
+            legitimacy_bonus: 0.3,
+            ritual_participation_weight: 0.4,
+        ),
+        RoleIdentity(
+            name: "Merchant",
+            requires_ambition: 0.6,
+            requires_dominance: 0.5,
+            status_bonus: 0.2,
+            wealth_weight: 0.3,
+            social_network_weight: 0.2,
+        ),
+        RoleIdentity(
+            name: "Guard",
+            requires_dominance: 0.7,
+            requires_conscientiousness: 0.6,
+            status_bonus: 0.15,
+            fear_weight: 0.2,
+            protectiveness_weight: 0.3,
+        ),
+        RoleIdentity(
+            name: "Parent",
+            requires_adult: true,
+            status_bonus: 0.1,
+            responsibility_weight: 0.35,
+            attachment_weight: 0.3,
+        ),
+        RoleIdentity(
+            name: "Leader",
+            requires_dominance: 0.7,
+            requires_ambition: 0.7,
+            requires_conscientiousness: 0.6,
+            status_bonus: 0.4,
+            legitimacy_weight: 0.3,
+            trust_weight: 0.2,
+        ),
+    ],
+
+    // Value commitments (§8.1.7)
+    values: [
+        "Tradition",
+        "Innovation",
+        "Loyalty",
+        "Justice",
+        "Mercy",
+        "Purity",
+        "Authority",
+        "Liberty",
+        "Care",
+        "Fairness",
+    ],
+
+    // Sacred values — resist change at high cost
+    sacred_values: (
+        activation_threshold: 0.7,
+        resistance_multiplier: 3.0,
+        identity_linkage_weight: 0.5,
+        social_reinforcement_weight: 0.3,
+        emotional_charge_weight: 0.2,
+    ),
+
+    // Identity defense parameters
+    defense: (
+        belief_resistance_base: 0.3,
+        identity_linkage_resistance_bonus: 0.25,
+        social_reinforcement_resistance_bonus: 0.15,
+        emotional_charge_resistance_bonus: 0.1,
+        sacredness_resistance_multiplier: 2.0,
+        max_resistance: 0.95,
+    ),
+
+    // Identity dynamics
+    dynamics: (
+        identity_claim_formation_rate: 0.01,
+        identity_claim_decay_rate: 0.001,
+        role_identity_adoption_rate: 0.02,
+        role_identity_abandonment_rate: 0.005,
+        self_esteem_change_rate: 0.005,
+        self_coherence_change_rate: 0.002,
+        identity_security_change_rate: 0.003,
+    ),
+)

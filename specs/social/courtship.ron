@@ -1,0 +1,76 @@
+// §10.4 Courtship system — defines romantic relationship formation.
+// Used by social/courtship.rs to model attraction and pair-bonding.
+
+Courtship(
+    // Courtship stages (§10.4)
+    stages: [
+        CourtshipStage(
+            name: "Awareness",
+            min_proximity_ticks: 10,
+            min_trust: 0.1,
+            requires_adult: true,
+        ),
+        CourtshipStage(
+            name: "Attraction",
+            min_attraction_score: 0.3,
+            min_positive_interactions: 3,
+            requires_adult: true,
+        ),
+        CourtshipStage(
+            name: "Flirtation",
+            min_attraction_score: 0.45,
+            min_trust: 0.25,
+            min_positive_interactions: 8,
+            requires_adult: true,
+        ),
+        CourtshipStage(
+            name: "Courtship",
+            min_attraction_score: 0.6,
+            min_trust: 0.4,
+            min_affection: 0.3,
+            min_positive_interactions: 15,
+            requires_adult: true,
+            social_visibility: 0.6,
+        ),
+        CourtshipStage(
+            name: "Exclusivity",
+            min_attraction_score: 0.7,
+            min_trust: 0.5,
+            min_affection: 0.4,
+            min_commitment: 0.4,
+            requires_adult: true,
+            public_recognition_weight: 0.3,
+        ),
+        CourtshipStage(
+            name: "Betrothal",
+            min_trust: 0.6,
+            min_affection: 0.5,
+            min_commitment: 0.6,
+            requires_adult: true,
+            social_approval_weight: 0.4,
+            family_approval_weight: 0.3,
+        ),
+    ],
+
+    // Attraction model weights (§10.4)
+    attraction_weights: (
+        physical_compatibility: 0.2,
+        personality_compatibility: 0.2,
+        status_admiration: 0.15,
+        familiarity: 0.1,
+        reciprocity: 0.1,
+        social_approval: 0.05,
+        attachment_resonance: 0.15,
+        fertility_compatibility: 0.05,
+    ),
+
+    // Courtship dynamics
+    dynamics: (
+        rejection_recovery_ticks: 500,
+        jealousy_escalation_rate: 0.005,
+        gossip_spread_chance: 0.3,
+        social_disapproval_penalty: 0.2,
+        kinship_penalty_threshold: 0.125,
+        age_compatibility_range: 15,
+    ),
+)

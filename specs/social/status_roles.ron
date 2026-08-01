@@ -1,0 +1,104 @@
+// §11 Status roles — defines status dimensions and hierarchy mechanics.
+// Used by social/hierarchy.rs and status_dims.rs to model social stratification.
+
+StatusRoles(
+    // Status dimensions (§11.1)
+    dimensions: [
+        StatusDimension(
+            name: "Dominance",
+            description: "power through fear/coercion",
+            base_value: 0.3,
+            competition_weight: 0.3,
+            violence_weight: 0.2,
+            age_weight: 0.1,
+            wealth_weight: 0.1,
+            institutional_weight: 0.1,
+        ),
+        StatusDimension(
+            name: "Prestige",
+            description: "power through admiration/competence",
+            base_value: 0.4,
+            skill_weight: 0.3,
+            achievement_weight: 0.25,
+            generosity_weight: 0.15,
+            age_weight: 0.15,
+            institutional_weight: 0.15,
+        ),
+        StatusDimension(
+            name: "Authority",
+            description: "power through institutional role",
+            base_value: 0.2,
+            institutional_role_weight: 0.5,
+            legitimacy_weight: 0.3,
+            enforcement_capacity_weight: 0.2,
+        ),
+        StatusDimension(
+            name: "Legitimacy",
+            description: "power through perceived rightfulness",
+            base_value: 0.5,
+            moral_reputation_weight: 0.3,
+            institutional_backing_weight: 0.25,
+            social_recognition_weight: 0.25,
+            tradition_weight: 0.2,
+        ),
+        StatusDimension(
+            name: "WealthRank",
+            description: "relative economic position",
+            base_value: 0.3,
+            resource_ownership_weight: 0.4,
+            trade_network_weight: 0.3,
+            inheritance_weight: 0.2,
+            patronage_weight: 0.1,
+        ),
+        StatusDimension(
+            name: "MoralReputation",
+            description: "perceived ethical standing",
+            base_value: 0.5,
+            norm_compliance_weight: 0.3,
+            generosity_weight: 0.2,
+            honesty_weight: 0.2,
+            public_visibility_weight: 0.15,
+        ),
+    ],
+
+    // Hierarchy formation mechanics (§11.3)
+    hierarchy: (
+        competence_weight: 0.25,
+        age_weight: 0.15,
+        wealth_weight: 0.15,
+        violence_weight: 0.1,
+        religious_sanction_weight: 0.1,
+        inheritance_weight: 0.1,
+        charisma_weight: 0.1,
+        network_centrality_weight: 0.05,
+        crisis_response_weight: 0.05,
+    ),
+
+    // Hierarchy stabilization
+    stabilization: (
+        legitimacy_weight: 0.3,
+        ritual_weight: 0.2,
+        reciprocity_weight: 0.2,
+        punishment_weight: 0.15,
+        narrative_weight: 0.1,
+        institutional_memory_weight: 0.05,
+    ),
+
+    // Hierarchy destabilization
+    destabilization: (
+        humiliation_weight: 0.25,
+        corruption_weight: 0.2,
+        scarcity_weight: 0.15,
+        betrayal_weight: 0.15,
+        rival_prestige_weight: 0.1,
+        moral_panic_weight: 0.1,
+        external_shock_weight: 0.05,
+    ),
+
+    // Recalibration frequency
+    recalibration: (
+        daily_minor_adjustment: true,
+        weekly_full_recalibration: true,
+        event_triggered_recalibration: true,
+    ),
+)

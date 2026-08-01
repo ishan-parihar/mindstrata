@@ -1,0 +1,116 @@
+// §8.1.4 Expanded emotion system — defines emotion families and appraisal dimensions.
+// Used by psychology/ and appraisal.rs to model agent emotions.
+
+EmotionsV2(
+    // Expanded emotion families (§8.1.4)
+    emotion_families: [
+        "Fear",
+        "Anger",
+        "Joy",
+        "Sadness",
+        "Trust",
+        "Shame",
+        "Guilt",
+        "Pride",
+        "Disgust",
+        "Contempt",
+        "Awe",
+        "Gratitude",
+        "Jealousy",
+        "Envy",
+        "Loneliness",
+        "Tenderness",
+        "Humiliation",
+        "Relief",
+        "Hope",
+        "Despair",
+        "Nostalgia",
+        "MoralOutrage",
+    ],
+
+    // Appraisal dimensions (§8.1.4)
+    appraisal_dimensions: [
+        "GoalRelevance",
+        "GoalCongruence",
+        "CopingPotential",
+        "Expectedness",
+        "Fairness",
+        "Agency",
+        "SocialVisibility",
+        "IdentityRelevance",
+        "MoralViolation",
+        "SacrednessViolation",
+        "AttachmentThreat",
+        "StatusThreat",
+        "PurityDisgust",
+        "Controllability",
+        "FutureImplication",
+        "SocialAudience",
+        "NarrativeMeaning",
+    ],
+
+    // Emotion derivation rules
+    derivation_rules: [
+        AppraisalRule(
+            emotion: "Fear",
+            triggers: ["LowCopingPotential", "UnexpectedThreat", "IdentityRelevance"],
+            intensity_formula: "coping_potential * expectedness * identity_relevance",
+        ),
+        AppraisalRule(
+            emotion: "Anger",
+            triggers: ["Unfairness", "OtherAgency", "GoalBlockage"],
+            intensity_formula: "fairness_violation * other_agency * goal_relevance",
+        ),
+        AppraisalRule(
+            emotion: "Joy",
+            triggers: ["GoalCongruence", "SelfAgency", "UnexpectedSuccess"],
+            intensity_formula: "goal_congruence * self_agency * novelty",
+        ),
+        AppraisalRule(
+            emotion: "Sadness",
+            triggers: ["Loss", "Irreversibility", "LowCopingPotential"],
+            intensity_formula: "loss_magnitude * irreversibility * helplessness",
+        ),
+        AppraisalRule(
+            emotion: "Shame",
+            triggers: ["MoralViolation", "SocialVisibility", "IdentityThreat"],
+            intensity_formula: "moral_violation * social_audience * identity_relevance",
+        ),
+        AppraisalRule(
+            emotion: "Guilt",
+            triggers: ["MoralViolation", "SelfAgency", "OtherHarm"],
+            intensity_formula: "moral_violation * self_agency * harm_magnitude",
+        ),
+        AppraisalRule(
+            emotion: "Pride",
+            triggers: ["Achievement", "SelfAgency", "SocialRecognition"],
+            intensity_formula: "achievement_magnitude * self_agency * social_recognition",
+        ),
+        AppraisalRule(
+            emotion: "MoralOutrage",
+            triggers: ["MoralViolation", "OtherAgency", "IdentityRelevance"],
+            intensity_formula: "moral_violation * other_agency * identity_relevance * social_audience",
+        ),
+    ],
+
+    // Emotion decay parameters
+    decay: (
+        base_decay_rate: 0.01,
+        high_intensity_decay_slowdown: 0.5,
+        identity_linked_decay_slowdown: 0.3,
+        memory_linked_decay_slowdown: 0.4,
+        min_emotion_level: 0.01,
+    ),
+
+    // PAD model mapping (dimensional)
+    pad_mapping: {
+        "Joy": [0.8, 0.6, 0.7],
+        "Fear": [-0.7, 0.8, -0.6],
+        "Anger": [-0.6, 0.7, 0.5],
+        "Sadness": [-0.7, -0.3, -0.5],
+        "Trust": [0.5, 0.1, 0.3],
+        "Shame": [-0.6, 0.2, -0.4],
+        "Guilt": [-0.5, 0.3, -0.3],
+        "Pride": [0.7, 0.5, 0.6],
+    },
+)

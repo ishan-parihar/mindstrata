@@ -1,0 +1,73 @@
+// §13.4 Propaganda system — defines institutional narrative campaigns.
+// Used by culture/propaganda.rs to model institutional messaging.
+
+Propaganda(
+    // Propaganda channels (§13.4)
+    channels: [
+        PropagandaChannel(
+            name: "Sermons",
+            institution: "Temple",
+            credibility_weight: 0.3,
+            audience_reach: 0.6,
+            coercion_level: 0.0,
+        ),
+        PropagandaChannel(
+            name: "Edicts",
+            institution: "Council",
+            credibility_weight: 0.25,
+            audience_reach: 0.8,
+            coercion_level: 0.3,
+        ),
+        PropagandaChannel(
+            name: "MarketAnnouncements",
+            institution: "Market",
+            credibility_weight: 0.2,
+            audience_reach: 0.7,
+            coercion_level: 0.0,
+        ),
+        PropagandaChannel(
+            name: "TrustedMessengers",
+            institution: "Any",
+            credibility_weight: 0.35,
+            audience_reach: 0.4,
+            coercion_level: 0.0,
+        ),
+        PropagandaChannel(
+            name: "PunishmentExamples",
+            institution: "Council",
+            credibility_weight: 0.2,
+            audience_reach: 0.9,
+            coercion_level: 0.5,
+        ),
+        PropagandaChannel(
+            name: "PublicRituals",
+            institution: "Temple",
+            credibility_weight: 0.3,
+            audience_reach: 0.7,
+            coercion_level: 0.1,
+        ),
+    ],
+
+    // Propaganda effectiveness formula (§13.4)
+    effectiveness: (
+        institutional_legitimacy_weight: 0.25,
+        messenger_trust_weight: 0.2,
+        repetition_weight: 0.15,
+        emotional_fit_weight: 0.15,
+        identity_congruence_weight: 0.1,
+        audience_fear_weight: 0.1,
+        network_centrality_weight: 0.05,
+        counter_narrative_penalty: 0.2,
+        hypocrisy_evidence_penalty: 0.25,
+    ),
+
+    // Campaign dynamics
+    campaign: (
+        min_duration_ticks: 100,
+        max_duration_ticks: 1000,
+        intensity_decay_rate: 0.002,
+        resistance_accumulation_rate: 0.005,
+        max_resistance: 0.8,
+        cooldown_after_failure_ticks: 500,
+    ),
+)

@@ -1,0 +1,66 @@
+// §10.5 Marriage system — defines marriage mechanics and dynamics.
+// Used by social/marriage.rs to model formal partnerships.
+
+Marriage(
+    // Marriage types
+    types: [
+        MarriageType(
+            name: "Monogamous",
+            max_partners: 2,
+            legitimacy_base: 0.8,
+            social_recognition_weight: 0.3,
+        ),
+        MarriageType(
+            name: "Arranged",
+            max_partners: 2,
+            legitimacy_base: 0.9,
+            family_approval_weight: 0.4,
+            social_recognition_weight: 0.4,
+        ),
+    ],
+
+    // Marriage formation requirements
+    formation: (
+        min_courtship_stage: "Betrothal",
+        min_trust: 0.6,
+        min_affection: 0.5,
+        min_commitment: 0.6,
+        requires_adult: true,
+        kinship_check_required: true,
+        social_approval_weight: 0.3,
+        family_approval_weight: 0.3,
+        religious_sanction_weight: 0.2,
+    ),
+
+    // Marriage dynamics
+    dynamics: (
+        bond_strength_base: 0.7,
+        exclusivity_weight: 0.4,
+        public_recognition_weight: 0.3,
+        emotional_intimacy_weight: 0.25,
+        economic_cooperation_weight: 0.15,
+        strain_accumulation_rate: 0.001,
+        jealousy_load_accumulation_rate: 0.002,
+        reconciliation_chance_per_positive_interaction: 0.1,
+    ),
+
+    // Marriage dissolution
+    dissolution: (
+        death_dissolution: true,
+        abandonment_threshold: 0.2,
+        annulment_requires_institution: true,
+        divorce_requires_institution: true,
+        exile_dissolution: true,
+        religious_sanction_dissolution: true,
+        child_custody_priority: "mother",
+    ),
+
+    // Household formation
+    household: (
+        formation_after_marriage_ticks: 144,
+        pooled_resources_weight: 0.3,
+        role_distribution_based_on_personality: true,
+        cohesion_accumulation_rate: 0.005,
+        conflict_accumulation_rate: 0.001,
+    ),
+)

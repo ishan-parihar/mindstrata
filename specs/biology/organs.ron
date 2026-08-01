@@ -1,0 +1,98 @@
+// §7.2.3-7.2.9 Organ systems — defines abstract organ-system dynamics.
+// Used by biology/mod.rs to simulate body subsystems.
+
+OrganSystems(
+    // Skeletal system (§7.2.3)
+    skeletal: (
+        base_frame_size: 0.5,
+        base_bone_density: 0.7,
+        childhood_growth_rate: 0.02,
+        adolescent_maturation_rate: 0.015,
+        adult_peak_age: 30,
+        elder_frailty_onset_age: 60,
+        malnutrition_bone_density_penalty: 0.3,
+        fracture_risk_from_fall: 0.2,
+        chronic_pain_accumulation_rate: 0.001,
+    ),
+
+    // Muscular system (§7.2.4)
+    muscular: (
+        base_strength: 0.5,
+        base_endurance: 0.5,
+        conditioning_gain_per_labor_tick: 0.001,
+        fatigue_accumulation_per_labor_tick: 0.005,
+        soreness_recovery_rate: 0.02,
+        atrophy_rate_per_inactivity_tick: 0.0005,
+        atrophy_rate_per_starvation_tick: 0.002,
+        age_strength_modifier_elder: 0.6,
+        injury_recovery_rate: 0.001,
+    ),
+
+    // Cardiovascular system (§7.2.9)
+    cardiovascular: (
+        base_cardiac_capacity: 0.7,
+        base_circulation: 0.7,
+        base_blood_volume: 0.8,
+        fitness_gain_per_labor_tick: 0.0005,
+        fitness_loss_per_inactivity_tick: 0.0002,
+        shock_risk_from_severe_injury: 0.4,
+        blood_loss_per_combat_injury: 0.1,
+        blood_pressure_chronic_stress_increase: 0.001,
+        age_capacity_modifier_elder: 0.5,
+        recovery_rate_base: 0.02,
+    ),
+
+    // Respiratory system (§7.2.8)
+    respiratory: (
+        base_oxygenation: 0.8,
+        base_lung_health: 0.8,
+        exertion_breathlessness_threshold: 0.6,
+        smoke_irritation_rate: 0.01,
+        cold_irritation_rate: 0.005,
+        damp_housing_irritation_rate: 0.003,
+        epidemic_disease_load_increase: 0.02,
+        age_lung_health_modifier_elder: 0.6,
+        endurance_modifier_from_lung_health: 0.3,
+    ),
+
+    // Immune system (§7.3.1)
+    immune: (
+        base_resistance: 0.6,
+        inflammation_rate_per_infection: 0.01,
+        recovery_capacity_base: 0.02,
+        autoimmune_risk_base: 0.05,
+        nutrition_resistance_bonus: 0.2,
+        stress_resistance_penalty: 0.15,
+        sleep_resistance_bonus: 0.1,
+        age_resistance_modifier_child: 0.7,
+        age_resistance_modifier_elder: 0.5,
+        hygiene_resistance_bonus: 0.1,
+        crowding_resistance_penalty: 0.1,
+    ),
+
+    // Circadian system (§7.3.2)
+    circadian: (
+        base_phase: 0.0,
+        sleep_pressure_accumulation_per_wake_tick: 0.005,
+        sleep_pressure_recovery_per_sleep_tick: 0.03,
+        rhythm_stability_base: 0.7,
+        chronotype_distribution: {
+            "EarlyBird": 0.3,
+            "Normal": 0.5,
+            "NightOwl": 0.2,
+        },
+        sleep_deprivation_irritability_increase: 0.2,
+        sleep_deprivation_cognitive_penalty: 0.3,
+    ),
+
+    // Thermoregulation (§7.3.3)
+    thermal: (
+        base_body_temperature: 0.5,
+        cold_stress_threshold: 0.3,
+        heat_stress_threshold: 0.7,
+        cold_stress_rate_per_cold_tick: 0.005,
+        heat_stress_rate_per_hot_tick: 0.003,
+        housing_insulation_bonus: 0.2,
+        clothing_bonus: 0.15,
+    ),
+)

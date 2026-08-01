@@ -1,0 +1,53 @@
+// §13 Sacred symbols — defines sacred values and their protection dynamics.
+// Used by culture/sacred.rs and psychology/moral_cognition.rs.
+
+SacredSymbols(
+    // Sacred value categories
+    categories: [
+        "Deity",
+        "Ancestor",
+        "HolyGround",
+        "Relic",
+        "Scripture",
+        "RitualObject",
+        "Taboo",
+        "Oath",
+        "Flag",
+        "Leadership",
+    ],
+
+    // Sacredness protection dynamics
+    protection: (
+        violation_sensitivity_weight: 0.4,
+        identity_linkage_weight: 0.3,
+        social_reinforcement_weight: 0.2,
+        emotional_charge_weight: 0.1,
+    ),
+
+    // Desecration response
+    desecration: (
+        moral_outrage_threshold: 0.6,
+        punishment_severity_multiplier: 2.0,
+        social_punishment_weight: 0.4,
+        internal_punishment_weight: 0.3,
+        group_cohesion_effect: "increase",  // desecration of out-group sacred objects
+    ),
+
+    // Syncretism dynamics
+    syncretism: (
+        acceptance_threshold: 0.3,
+        cultural_distance_weight: 0.3,
+        institutional_backing_weight: 0.25,
+        social_approval_weight: 0.2,
+        novelty_weight: 0.15,
+    ),
+
+    // Heresy detection
+    heresy: (
+        detection_threshold: 0.5,
+        moral_violation_weight: 0.4,
+        social_visibility_weight: 0.3,
+        institutional_backing_weight: 0.3,
+        punishment_severity: 0.6,
+    ),
+)

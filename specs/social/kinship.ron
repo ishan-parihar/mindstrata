@@ -1,0 +1,48 @@
+// §10.6 Kinship system — defines kinship graph mechanics and marriage restrictions.
+// Used by social/kinship.rs to model family relationships.
+
+Kinship(
+    // Kinship link types
+    link_types: [
+        "Biological",
+        "Marriage",
+        "Adoption",
+        "Ritual",  // godparent, oath-sworn
+    ],
+
+    // Kinship coefficient calculation
+    coefficients: (
+        parent_child: 0.5,
+        sibling: 0.5,
+        grandparent_grandchild: 0.25,
+        aunt_uncle_niece_nephew: 0.25,
+        first_cousin: 0.125,
+        second_cousin: 0.03125,
+        half_sibling: 0.25,
+    ),
+
+    // Marriage restrictions
+    restrictions: (
+        incest_threshold: 0.125,  // first cousin or closer
+        age_difference_max: 30,
+        same_household_penalty: 0.3,
+    ),
+
+    // Kinship effects on relationships
+    effects: (
+        trust_baseline_bonus: 0.2,
+        obligation_weight: 0.25,
+        inheritance_weight: 0.3,
+        feud_participation_weight: 0.2,
+        marriage_restriction_weight: 0.4,
+        household_formation_weight: 0.3,
+        clan_identity_weight: 0.35,
+    ),
+
+    // Transitive kinship calculation (§10.6)
+    transitive: (
+        enabled: true,
+        max_depth: 6,
+        decay_per_hop: 0.5,
+    ),
+)

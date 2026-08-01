@@ -1,0 +1,92 @@
+// §7.2 Disease system — defines disease types, transmission, and severity.
+// Used by health.rs to simulate disease dynamics.
+
+Diseases(
+    diseases: [
+        Disease(
+            name: "Cold",
+            severity: 0.1,
+            transmission_rate_per_contact: 0.05,
+            duration_ticks: 200,
+            severity_curve: "bell",
+            peak_at_fraction: 0.33,
+            natural_recovery_rate: 0.01,
+            immunity_gain_per_recovery: 0.3,
+            health_drain_per_tick: 0.001,
+            energy_drain_per_tick: 0.0005,
+            nutrition_recovery_bonus: 0.2,
+        ),
+        Disease(
+            name: "Fever",
+            severity: 0.3,
+            transmission_rate_per_contact: 0.03,
+            duration_ticks: 400,
+            severity_curve: "bell",
+            peak_at_fraction: 0.33,
+            natural_recovery_rate: 0.005,
+            immunity_gain_per_recovery: 0.4,
+            health_drain_per_tick: 0.002,
+            energy_drain_per_tick: 0.001,
+            nutrition_recovery_bonus: 0.25,
+        ),
+        Disease(
+            name: "WoundInfection",
+            severity: 0.5,
+            transmission_rate_per_contact: 0.0,
+            duration_ticks: 600,
+            severity_curve: "bell",
+            peak_at_fraction: 0.25,
+            natural_recovery_rate: 0.003,
+            immunity_gain_per_recovery: 0.2,
+            health_drain_per_tick: 0.003,
+            energy_drain_per_tick: 0.0015,
+            nutrition_recovery_bonus: 0.3,
+            requires_injury: true,
+        ),
+        Disease(
+            name: "Malnutrition",
+            severity: 0.4,
+            transmission_rate_per_contact: 0.0,
+            duration_ticks: 1000,
+            severity_curve: "plateau",
+            peak_at_fraction: 0.5,
+            natural_recovery_rate: 0.002,
+            immunity_gain_per_recovery: 0.1,
+            health_drain_per_tick: 0.002,
+            energy_drain_per_tick: 0.002,
+            nutrition_recovery_bonus: 0.5,
+            requires_hunger_above: 0.7,
+        ),
+        Disease(
+            name: "Epidemic",
+            severity: 0.7,
+            transmission_rate_per_contact: 0.15,
+            duration_ticks: 800,
+            severity_curve: "bell",
+            peak_at_fraction: 0.3,
+            natural_recovery_rate: 0.004,
+            immunity_gain_per_recovery: 0.5,
+            health_drain_per_tick: 0.004,
+            energy_drain_per_tick: 0.002,
+            nutrition_recovery_bonus: 0.35,
+            crowding_multiplier: 1.5,
+        ),
+    ],
+
+    // Transmission modifiers
+    transmission: (
+        proximity_required: 5,  // Manhattan distance
+        healthy_resistance_bonus: 0.3,
+        crowding_multiplier_per_agent_above_4: 0.05,
+        hygiene_penalty: 0.1,
+    ),
+
+    // Recovery modifiers
+    recovery: (
+        healthy_recovery_bonus: 0.2,
+        well_fed_recovery_bonus: 0.3,
+        rested_recovery_bonus: 0.2,
+        age_recovery_penalty_elder: 0.3,
+        age_recovery_penalty_child: 0.2,
+    ),
+)

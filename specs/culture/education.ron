@@ -1,0 +1,83 @@
+// §8.1.19 Education system — defines structured knowledge transfer.
+// Used by culture/education.rs to model learning and apprenticeship.
+
+Education(
+    // Education types
+    types: [
+        EducationType(
+            name: "Apprenticeship",
+            description: "one-on-one skill transfer from master to apprentice",
+            min_master_skill: 0.6,
+            learning_rate_multiplier: 1.5,
+            relationship_weight: 0.3,
+            trust_weight: 0.25,
+            attention_weight: 0.2,
+            practice_weight: 0.25,
+        ),
+        EducationType(
+            name: "FormalTeaching",
+            description: "group instruction by authority figure",
+            min_teacher_authority: 0.5,
+            learning_rate_multiplier: 1.0,
+            group_size_penalty_per_member: 0.05,
+            attention_weight: 0.2,
+            repetition_weight: 0.3,
+            ritual_weight: 0.2,
+        ),
+        EducationType(
+            name: "PeerLearning",
+            description: "learning from peers through observation and imitation",
+            learning_rate_multiplier: 0.7,
+            similarity_weight: 0.3,
+            social_approach_weight: 0.2,
+            practice_weight: 0.3,
+        ),
+        EducationType(
+            name: "ParentalTeaching",
+            description: "parent teaching child through daily activities",
+            learning_rate_multiplier: 0.8,
+            attachment_weight: 0.35,
+            routine_weight: 0.25,
+            patience_weight: 0.2,
+        ),
+    ],
+
+    // Knowledge categories
+    categories: [
+        "Agricultural",
+        "Craft",
+        "Medical",
+        "Philosophical",
+        "Social",
+        "Ritual",
+        "Martial",
+        "Economic",
+    ],
+
+    // Learning parameters
+    learning: (
+        base_learning_rate: 0.01,
+        difficulty_modifier: 0.5,
+        openness_bonus: 0.2,
+        intelligence_bonus: 0.15,
+        age_learning_curve: {
+            "5": 0.3,
+            "10": 0.6,
+            "15": 0.8,
+            "25": 0.9,
+            "40": 0.8,
+            "60": 0.6,
+        },
+        fatigue_penalty: 0.2,
+        stress_penalty: 0.15,
+    ),
+
+    // Knowledge diffusion (§13)
+    diffusion: (
+        teacher_skill_weight: 0.3,
+        student_openness_weight: 0.2,
+        trust_weight: 0.2,
+        knowledge_difficulty_weight: 0.15,
+        proximity_weight: 0.15,
+    ),
+)

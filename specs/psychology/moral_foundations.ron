@@ -1,0 +1,94 @@
+// §8.1.10 Moral cognition — defines moral foundations and internalized norms.
+// Used by psychology/moral_cognition.rs to model agent morality.
+
+MoralFoundations(
+    // Moral foundations (§8.1.10)
+    foundations: [
+        MoralFoundation(
+            name: "CareHarm",
+            description: "sensitivity to suffering and need for protection",
+            base_sensitivity: 0.5,
+            personality_agreeableness_weight: 0.3,
+            personality_neuroticism_weight: 0.15,
+            experience_weight: 0.2,
+        ),
+        MoralFoundation(
+            name: "FairnessCheating",
+            description: "sensitivity to justice and proportionality",
+            base_sensitivity: 0.5,
+            personality_conscientiousness_weight: 0.25,
+            personality_openness_weight: 0.1,
+            experience_weight: 0.2,
+        ),
+        MoralFoundation(
+            name: "LoyaltyBetrayal",
+            description: "sensitivity to group cohesion and fidelity",
+            base_sensitivity: 0.5,
+            personality_conformity_weight: 0.25,
+            personality_traditionalism_weight: 0.2,
+            experience_weight: 0.15,
+        ),
+        MoralFoundation(
+            name: "AuthoritySubversion",
+            description: "sensitivity to hierarchy and legitimate order",
+            base_sensitivity: 0.5,
+            personality_traditionalism_weight: 0.35,
+            personality_conformity_weight: 0.2,
+            experience_weight: 0.1,
+        ),
+        MoralFoundation(
+            name: "PurityDegradation",
+            description: "sensitivity to contamination and sanctity",
+            base_sensitivity: 0.5,
+            personality_traditionalism_weight: 0.3,
+            personality_conscientiousness_weight: 0.15,
+            experience_weight: 0.1,
+        ),
+        MoralFoundation(
+            name: "LibertyOppression",
+            description: "sensitivity to coercion and domination",
+            base_sensitivity: 0.5,
+            personality_openness_weight: 0.25,
+            personality_ambition_weight: 0.15,
+            experience_weight: 0.2,
+        ),
+    ],
+
+    // Moral emotions
+    moral_emotions: (
+        moral_outrage_threshold: 0.6,
+        moral_outrage_intensity_weight: 0.4,
+        moral_outrage_social_audience_weight: 0.3,
+        moral_outrage_identity_weight: 0.2,
+        guilt_threshold: 0.5,
+        guilt_intensity_weight: 0.3,
+        guilt_repair_motivation: 0.25,
+        shame_threshold: 0.6,
+        shame_intensity_weight: 0.35,
+        shame_avoidance_weight: 0.3,
+        pride_threshold: 0.5,
+        pride_intensity_weight: 0.25,
+        pride_prosocial_weight: 0.2,
+    ),
+
+    // Internalized norms
+    internalization: (
+        internalization_rate_per_reinforcement: 0.01,
+        internalization_decay_rate: 0.0005,
+        max_internalization: 0.9,
+        identity_weight: 0.3,
+        social_reinforcement_weight: 0.25,
+        emotional_charge_weight: 0.2,
+        age_internalization_bonus: 0.1,
+    ),
+
+    // Hypocrisy sensitivity
+    hypocrisy: (
+        detection_threshold: 0.3,
+        moral_identity_weight: 0.4,
+        social_visibility_weight: 0.3,
+        personal_violation_weight: 0.3,
+        accusation_effectiveness: 0.5,
+        defense_reputation_cost: 0.2,
+    ),
+)

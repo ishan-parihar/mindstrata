@@ -1,0 +1,82 @@
+// §7.2.6 Sexual / Reproductive System — defines reproduction mechanics.
+// Used by biology/reproductive.rs to model fertility, pregnancy, and birth.
+
+Reproduction(
+    // Puberty stages (§7.2.6)
+    puberty_stages: [
+        "PrePubertal",
+        "EarlyPuberty",
+        "MidPuberty",
+        "LatePuberty",
+        "PostPubertal",
+    ],
+
+    // Fertility parameters
+    fertility: (
+        base_fertility: 0.6,
+        age_fertility_curve: {
+            "14": 0.3,
+            "18": 0.8,
+            "25": 1.0,
+            "35": 0.8,
+            "40": 0.5,
+            "45": 0.2,
+            "50": 0.05,
+        },
+        health_fertility_modifier: 0.3,
+        nutrition_fertility_modifier: 0.2,
+        stress_fertility_penalty: 0.25,
+        season_fertility_modifier: 0.1,
+        pair_bond_fertility_bonus: 0.15,
+    ),
+
+    // Pregnancy parameters
+    pregnancy: (
+        gestation_duration_ticks: 3840, // ~40 days at 96 ticks/day
+        health_risk_base: 0.05,
+        nutrition_demand_increase: 0.3,
+        fatigue_increase: 0.2,
+        vulnerability_increase: 0.15,
+        social_recognition_tick: 288, // recognized after ~3 days
+        birth_mortality_risk_base: 0.02,
+        birth_mortality_risk_elder: 0.08,
+        birth_mortality_risk_young: 0.04,
+    ),
+
+    // Pair-bonding parameters
+    pair_bonding: (
+        min_positive_interactions: 10,
+        min_trust_threshold: 0.4,
+        min_affection_threshold: 0.3,
+        exclusivity_weight: 0.3,
+        public_recognition_weight: 0.2,
+        emotional_intimacy_weight: 0.25,
+        economic_cooperation_weight: 0.15,
+        shared_children_bond_bonus: 0.2,
+        strain_accumulation_rate: 0.001,
+        jealousy_load_accumulation_rate: 0.002,
+    ),
+
+    // Attraction model (§10.4)
+    attraction: (
+        physical_attraction_weight: 0.2,
+        personality_attraction_weight: 0.2,
+        status_attraction_weight: 0.15,
+        moral_attraction_weight: 0.1,
+        familiarity_weight: 0.1,
+        reciprocity_weight: 0.1,
+        social_approval_weight: 0.05,
+        kinship_penalty_weight: -0.4,
+        taboo_penalty_weight: -0.3,
+        attachment_resonance_weight: 0.15,
+    ),
+
+    // Parental investment
+    parental_investment: (
+        maternal_investment_weight: 0.6,
+        paternal_investment_weight: 0.3,
+        shared_parenting_bonus: 0.2,
+        first_child_investment_bonus: 0.15,
+        resource_allocation_per_child: 0.15,
+    ),
+)
