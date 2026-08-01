@@ -322,6 +322,9 @@ pub struct Simulation {
     /// Wired: creation in §22b (social tick), daily_update in §20 (kinship daily).
     /// NOTE: not persisted in snapshots — rebuilt from agent state.
     pub patronage_registry: crate::social::patronage::PatronageRegistry,
+    /// Architecture-plan-2 §12.2: Peer group registry — emergent groups from formation pressure.
+    /// Wired: registration in duodeca (§12.2), daily_update in §20 (kinship daily).
+    pub group_registry: crate::social::group_formation::GroupRegistry,
 }
 
 impl Simulation {
@@ -388,6 +391,7 @@ impl Simulation {
             faction_v2_registry: crate::social::faction_v2::FactionV2Registry::new(),
             active_courtships: Vec::new(),
             patronage_registry: crate::social::patronage::PatronageRegistry::new(),
+            group_registry: crate::social::group_formation::GroupRegistry::new(),
         }
     }
 
@@ -447,6 +451,7 @@ impl Simulation {
             faction_v2_registry: crate::social::faction_v2::FactionV2Registry::new(),
             active_courtships: Vec::new(),
             patronage_registry: crate::social::patronage::PatronageRegistry::new(),
+            group_registry: crate::social::group_formation::GroupRegistry::new(),
         }
     }
 
@@ -3692,6 +3697,8 @@ impl Simulation {
             // Architecture-plan-2 §13.6: Belief ecology daily update.
             self.belief_ecology.daily_update();
             self.faction_v2_registry.daily_update();
+            // Architecture-plan-2 §12.2: Peer group daily update — decay cohesion.
+            self.group_registry.daily_update();
             // Architecture-plan-2 §10.4: Courtship daily updates — advance/regress stages.
             // daily_update() is self-contained: it short-circuits on !active.
             for courtship in &mut self.active_courtships {
@@ -3868,15 +3875,21 @@ impl Simulation {
                     identified_tick: tick_u64,
                 };
                 if candidate.should_form() {
-                    // Architecture-plan-2 §12.2: Record group formation pressure.
-                    // Actual GroupRegistry creation deferred until group persistence is added.
+                    // Architecture-plan-2 §12.2: Register the formed peer group.
+                    let group = crate::social::group_formation::PeerGroup::from_candidate(
+                        &candidate,
+                        self.group_registry.groups.len(),
+                        tick_u64,
+                    );
+                    let group_id = self.group_registry.register(group);
                     tracing::info!(
+                        group_id = group_id,
                         members = candidate.members.len(),
                         shared_grievance = shared_grievance.to_f64(),
                         shared_identity = shared_identity.to_f64(),
                         leader_index = i,
                         tick = tick_u64,
-                        "Peer group formation pressure detected"
+                        "Peer group formed and registered"
                     );
                 }
             }
