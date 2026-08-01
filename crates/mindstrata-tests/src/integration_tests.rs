@@ -477,7 +477,7 @@ fn friendships_correlate_with_proximity_across_seeds() {
             max_ticks: 2000,
             world_width: 16,
             world_height: 16,
-            num_agents: 12,
+            num_agents: 20,
             snapshot_interval: None,
         };
         let mut sim = Simulation::new(config);
@@ -492,7 +492,6 @@ fn friendships_correlate_with_proximity_across_seeds() {
                     let dist = agent.position.manhattan_distance(&sim.agents[j].position);
                     let stage = rv2.stage as u32;
                     // Use <= 2 for close (same area) and >= 6 for far (different areas)
-                    // to ensure both groups have data in a 16×16 world with 12 agents
                     if dist <= 2 {
                         close_total += 1;
                         if stage >= RelationshipStage::Acquaintance as u32 {
@@ -509,19 +508,15 @@ fn friendships_correlate_with_proximity_across_seeds() {
         }
     }
 
-    // Both groups should have data
-    assert!(close_total > 0, "No close-proximity pairs found");
-    assert!(far_total > 0, "No far-proximity pairs found");
+    // Require minimum data for meaningful statistical comparison
+    assert!(close_total >= 10, "Insufficient close-proximity pairs: {close_total}");
+    assert!(far_total >= 10, "Insufficient far-proximity pairs: {far_total}");
 
-    // Close pairs should have a higher progression rate than far pairs
-    // (statistical tendency, not strict guarantee)
-    if close_total >= 5 && far_total >= 5 {
-        let close_rate = close_progressed as f64 / close_total as f64;
-        let far_rate = far_progressed as f64 / far_total as f64;
-        // Close pairs should have at least as high a rate (weak assertion)
-        assert!(close_rate >= far_rate * 0.5,
-            "Close pairs rate ({close_rate:.3}) should be comparable to far pairs ({far_rate:.3})");
-    }
+    // Close pairs should have at least as high a progression rate
+    let close_rate = close_progressed as f64 / close_total as f64;
+    let far_rate = far_progressed as f64 / far_total as f64;
+    assert!(close_rate >= far_rate,
+        "Close pairs rate ({close_rate:.3}) should be >= far pairs ({far_rate:.3})");
 }
 
 /// §18.4: Over multiple seeds, children should resemble parents statistically.
