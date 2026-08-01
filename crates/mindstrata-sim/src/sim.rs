@@ -325,6 +325,8 @@ pub struct Simulation {
     /// Architecture-plan-2 §12.2: Peer group registry — emergent groups from formation pressure.
     /// Wired: registration in duodeca (§12.2), daily_update in §20 (kinship daily).
     pub group_registry: crate::social::group_formation::GroupRegistry,
+    /// §17.4: Accumulated exposure samples from gossip block, flushed daily into meme_aggregator.
+    exposure_samples: Vec<crate::culture::meme_aggregator::ExposureSample>,
 }
 
 impl Simulation {
@@ -392,6 +394,7 @@ impl Simulation {
             active_courtships: Vec::new(),
             patronage_registry: crate::social::patronage::PatronageRegistry::new(),
             group_registry: crate::social::group_formation::GroupRegistry::new(),
+            exposure_samples: Vec::new(),
         }
     }
 
@@ -452,6 +455,7 @@ impl Simulation {
             active_courtships: Vec::new(),
             patronage_registry: crate::social::patronage::PatronageRegistry::new(),
             group_registry: crate::social::group_formation::GroupRegistry::new(),
+            exposure_samples: Vec::new(),
         }
     }
 
@@ -2257,6 +2261,15 @@ impl Simulation {
                             meme.host_count = meme.host_count.saturating_add(1);
                             meme.novelty = (meme.novelty + nb).clamp_01();
                             sampled += 1;
+                            // §17.4: Record exposure sample for meme aggregation.
+                            let meme_ids = [meme.id];
+                            self.meme_aggregator.sample_exposures(
+                                to_idx,
+                                &meme_ids,
+                                source_trust,
+                                true,
+                                &mut self.exposure_samples,
+                            );
                         }
                     }
                 }
@@ -3439,13 +3452,15 @@ impl Simulation {
     /// real per-agent meme host tracking (`hosted_memes: Vec<usize>` field)
     /// before using these metrics for Phase 5 tuning decisions.
     ///
-    /// **TODO**: Wire `sample_exposures()` into the gossip block where
-    /// `meme.transmission_chance` is called to populate `exposure_samples`.
     fn wire_meme_aggregation(&mut self, tick_u64: u64) {
         let n_agents = self.agents.len();
         if n_agents == 0 || self.meme_registry.memes.is_empty() {
             return;
         }
+
+        // §17.4: Flush accumulated exposure samples into the aggregator.
+        let samples = std::mem::take(&mut self.exposure_samples);
+        self.meme_aggregator.set_exposure_samples(samples);
 
         // Build per-agent meme host lists (agent_idx → meme ids hosted).
         // §13.2 + §17.4: Track which memes each agent hosts.
