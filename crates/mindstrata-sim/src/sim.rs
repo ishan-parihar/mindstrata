@@ -413,7 +413,7 @@ impl Simulation {
             tracing::warn!(
                 snapshot_version = snapshot.version,
                 expected = crate::snapshot::SNAPSHOT_VERSION,
-                "Loading old snapshot — group_registry data was not present in v{}",
+                "Loading old snapshot (v{}) without group_registry — registry will be empty after restore",
                 snapshot.version,
             );
         }
