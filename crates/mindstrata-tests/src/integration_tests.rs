@@ -719,7 +719,7 @@ fn propaganda_effectiveness_correlates_with_legitimacy() {
         sim.run(2000);
 
         for inst in &sim.institutions {
-            let legitimacy = inst.collective.legitimacy.to_f64();
+            let legitimacy = inst.legitimacy.to_f64();
             let campaign_count = sim.propaganda_registry.campaigns.iter()
                 .filter(|c| c.sponsor == inst.id as usize && c.active)
                 .count();
