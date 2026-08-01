@@ -61,8 +61,8 @@ impl BeliefEcologyNoosphere {
                 let dist = (self.clusters[i].center - self.clusters[j].center).abs();
                 let weight =
                     Fixed::from_int(self.clusters[i].size as i64 + self.clusters[j].size as i64);
-                total_weighted_distance = total_weighted_distance + dist * weight;
-                total_weight = total_weight + weight;
+                total_weighted_distance += dist * weight;
+                total_weight += weight;
             }
         }
 

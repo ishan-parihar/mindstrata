@@ -144,6 +144,12 @@ pub struct GroupRegistry {
     pub groups: Vec<PeerGroup>,
 }
 
+impl Default for GroupRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GroupRegistry {
     pub fn new() -> Self {
         Self { groups: Vec::new() }
@@ -167,7 +173,6 @@ impl GroupRegistry {
     pub fn active(&self) -> Vec<(GroupId, &PeerGroup)> {
         self.groups.iter().enumerate()
             .filter(|(_, g)| g.active)
-            .map(|(i, g)| (i, g))
             .collect()
     }
 

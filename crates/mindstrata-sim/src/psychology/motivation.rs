@@ -244,8 +244,7 @@ impl MotivationState {
             ];
             self.dominant_need = max_bio.iter()
                 .max_by_key(|(_, p)| p.to_raw())
-                .map(|(c, _)| *c)
-                .unwrap_or(MotiveCategory::Hunger);
+                .map_or(MotiveCategory::Hunger, |(c, _)| *c);
         } else {
             // All needs compete equally
             let all = [
@@ -269,8 +268,7 @@ impl MotivationState {
             ];
             self.dominant_need = all.iter()
                 .max_by_key(|(_, p)| p.to_raw())
-                .map(|(c, _)| *c)
-                .unwrap_or(MotiveCategory::Hunger);
+                .map_or(MotiveCategory::Hunger, |(c, _)| *c);
         }
     }
 

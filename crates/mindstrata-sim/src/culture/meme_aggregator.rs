@@ -128,7 +128,7 @@ impl MemeAggregator {
     pub fn should_aggregate(&self, tick: u64) -> bool {
         tick > 0
             && tick >= self.last_aggregation_tick + self.aggregation_interval
-            && tick % self.aggregation_interval == 0
+            && tick.is_multiple_of(self.aggregation_interval)
     }
 
     /// Get the cached metrics from the last aggregation.
@@ -175,7 +175,7 @@ impl MemeAggregator {
                     .filter(|&&agent_idx| {
                         agent_meme_hosts
                             .get(agent_idx)
-                            .map_or(false, |memes| memes.contains(&meme_id))
+                            .is_some_and(|memes| memes.contains(&meme_id))
                     })
                     .count() as u32;
                 if count > 0 {
@@ -203,11 +203,10 @@ impl MemeAggregator {
             } else {
                 let total_charge: Fixed = prevalence_vec
                     .iter()
-                    .enumerate()
-                    .filter_map(|(_idx, (mid, _))| {
+                    
+                    .filter_map(|(mid, _)| {
                         meme_ids.iter().position(|id| id == mid)
-                            .and_then(|pos| meme_emotional_charges.get(pos))
-                            .map(|c| *c)
+                            .and_then(|pos| meme_emotional_charges.get(pos)).copied()
                     })
                     .fold(Fixed::ZERO, |acc, c| acc + c);
                 let charge_count = prevalence_vec.len().max(1) as i64;

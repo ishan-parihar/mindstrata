@@ -54,7 +54,7 @@ impl Ideology {
         let mut count = 0i64;
         for (a, b) in self.axes.iter().zip(other.axes.iter()) {
             let diff = a.position - b.position;
-            total = total + diff * diff;
+            total += diff * diff;
             count += 1;
         }
         if count > 0 {
@@ -142,9 +142,9 @@ impl BeliefEcology {
                     .zip(self.clusters[j].center.iter())
                 {
                     let diff = a.position - b.position;
-                    dist = dist + diff * diff;
+                    dist += diff * diff;
                 }
-                total_distance = total_distance + dist;
+                total_distance += dist;
                 pairs += 1;
             }
         }

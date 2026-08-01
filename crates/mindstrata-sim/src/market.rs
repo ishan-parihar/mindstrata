@@ -165,13 +165,14 @@ impl Default for MarketState {
 impl MarketState {
     /// Create market state with default prices for grain and water.
     pub fn new(params: &crate::parameters::SimParameters) -> Self {
-        let mut state = Self::default();
-        state.default_price = params.market_default_price;
-        // Grain price tracker (resource_id 0)
-        state.prices.push(PriceTracker::new(params.market_initial_grain_price));
-        // Water price tracker (resource_id 1)
-        state.prices.push(PriceTracker::new(params.market_initial_water_price));
-        state
+        Self {
+            default_price: params.market_default_price,
+            prices: vec![
+                PriceTracker::new(params.market_initial_grain_price),
+                PriceTracker::new(params.market_initial_water_price),
+            ],
+            ..Self::default()
+        }
     }
 
     /// Get the current price for a resource.

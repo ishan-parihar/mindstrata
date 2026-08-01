@@ -114,15 +114,15 @@ impl TickPhases {
     pub fn compute(tick: u64) -> Self {
         Self {
             tick,
-            is_hourly: tick > 0 && tick % 6 == 0,
-            is_deca: tick > 0 && tick % 10 == 0,
-            is_duodeca: tick > 0 && tick % 12 == 0,
-            is_centum: tick > 0 && tick % 100 == 0,
-            is_daily: tick > 0 && tick % 144 == 0,
-            is_quincent: tick > 0 && tick % 500 == 0,
-            is_weekly: tick > 0 && tick % 1008 == 0,
-            is_seasonal: tick > 0 && tick % 4320 == 0,
-            is_yearly: tick > 0 && tick % 51840 == 0,
+            is_hourly: tick > 0 && tick.is_multiple_of(6),
+            is_deca: tick > 0 && tick.is_multiple_of(10),
+            is_duodeca: tick > 0 && tick.is_multiple_of(12),
+            is_centum: tick > 0 && tick.is_multiple_of(100),
+            is_daily: tick > 0 && tick.is_multiple_of(144),
+            is_quincent: tick > 0 && tick.is_multiple_of(500),
+            is_weekly: tick > 0 && tick.is_multiple_of(1008),
+            is_seasonal: tick > 0 && tick.is_multiple_of(4320),
+            is_yearly: tick > 0 && tick.is_multiple_of(51840),
         }
     }
 

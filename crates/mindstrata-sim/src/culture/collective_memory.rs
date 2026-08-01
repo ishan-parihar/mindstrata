@@ -213,18 +213,12 @@ impl CollectiveMemory {
 
 /// Registry of collective memories for all groups.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct CollectiveMemoryRegistry {
     /// All collective memories, indexed by group_id.
     pub entries: Vec<CollectiveMemory>,
 }
 
-impl Default for CollectiveMemoryRegistry {
-    fn default() -> Self {
-        Self {
-            entries: Vec::new(),
-        }
-    }
-}
 
 impl CollectiveMemoryRegistry {
     /// Get or create collective memory for a group.

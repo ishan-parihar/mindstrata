@@ -120,8 +120,7 @@ impl TrustNetwork {
         self.agent_trust
             .iter()
             .find(|(id, _)| *id == agent_id)
-            .map(|(_, t)| *t)
-            .unwrap_or(Fixed::from_f64(0.5)) // default trust for unknown agents
+            .map_or(Fixed::from_f64(0.5), |(_, t)| *t) // default trust for unknown agents
     }
 
     /// Update trust for an agent based on interaction outcome.
@@ -139,8 +138,7 @@ impl TrustNetwork {
         self.institution_trust
             .iter()
             .find(|(id, _)| *id == inst_id)
-            .map(|(_, t)| *t)
-            .unwrap_or(Fixed::from_f64(0.5))
+            .map_or(Fixed::from_f64(0.5), |(_, t)| *t)
     }
 
     /// Update trust for an institution.

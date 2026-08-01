@@ -18,20 +18,17 @@ use serde::{Deserialize, Serialize};
 
 /// Simulation tier for an agent — determines which systems run each tick.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum AgentTier {
     /// Full simulation: biology, psychology, relationships, memory, prospection, narrative.
     Focal,
     /// Reduced simulation: simplified biology, heuristic cognition, relationship updates only when relevant.
+    #[default]
     Secondary,
     /// Aggregate simulation: household-level behavior, statistical belief updates, minimal memory.
     Background,
 }
 
-impl Default for AgentTier {
-    fn default() -> Self {
-        Self::Secondary
-    }
-}
 
 impl AgentTier {
     /// Does this tier run the full biological update (endocrine, metabolism, cardiovascular, etc.)?
@@ -188,6 +185,7 @@ impl CognitiveBudget {
 /// paths (e.g., skip prospection, use cached appraisal, skip ToM update).
 #[derive(Debug, Clone)]
 #[must_use]
+#[expect(clippy::struct_field_names, reason = "all fields track remaining budget for a specific cognitive operation")]
 pub struct CognitiveBudgetTracker {
     remaining_appraisals: u32,
     remaining_memory_operations: u32,

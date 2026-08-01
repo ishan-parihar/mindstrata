@@ -226,7 +226,7 @@ impl RelationshipV2 {
             return true;
         }
         // Also active on daily boundary for the bulk decay pass
-        current_tick > 0 && current_tick % 144 == 0
+        current_tick > 0 && current_tick.is_multiple_of(144)
     }
 
     /// §17.3: Clear dirty flag after processing.

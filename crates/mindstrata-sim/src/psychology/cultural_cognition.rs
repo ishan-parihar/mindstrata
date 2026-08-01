@@ -282,7 +282,7 @@ impl CulturalCognition {
     /// Compute the agent's resistance to cultural change.
     pub fn change_resistance(&self) -> Fixed {
         let taboo_strength: Fixed = self.taboos.iter()
-            .map(|t| t.violation_cost())
+            .map(Taboo::violation_cost)
             .fold(Fixed::ZERO, |acc, t| acc + t);
         let category_rigidity: Fixed = if self.categories.is_empty() {
             Fixed::ZERO
@@ -309,8 +309,7 @@ impl CulturalCognition {
     pub fn outgroup_disgust_for(&self, target_category: &str) -> Fixed {
         self.categories.iter()
             .find(|c| c.name == target_category)
-            .map(|c| c.outgroup_disgust)
-            .unwrap_or(Fixed::ZERO)
+            .map_or(Fixed::ZERO, |c| c.outgroup_disgust)
     }
 
     /// Tick update — conservatism shifts based on exposure.

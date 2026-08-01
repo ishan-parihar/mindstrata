@@ -352,21 +352,23 @@ impl Default for SimParameters {
 impl SimParameters {
     /// Create parameters tuned for faster simulation (compressed timescales).
     pub fn fast() -> Self {
-        let mut p = Self::default();
-        p.hunger_decay_rate = Fixed::from_f64(0.002);
-        p.thirst_decay_rate = Fixed::from_f64(0.004);
-        p.fatigue_decay_rate = Fixed::from_f64(0.001);
-        p
+        Self {
+            hunger_decay_rate: Fixed::from_f64(0.002),
+            thirst_decay_rate: Fixed::from_f64(0.004),
+            fatigue_decay_rate: Fixed::from_f64(0.001),
+            ..Self::default()
+        }
     }
 
     /// Create parameters tuned for slow, stable simulation.
     pub fn stable() -> Self {
-        let mut p = Self::default();
-        p.hunger_decay_rate = Fixed::from_f64(0.0005);
-        p.thirst_decay_rate = Fixed::from_f64(0.001);
-        p.fatigue_decay_rate = Fixed::from_f64(0.00025);
-        p.stress_smoothing = Fixed::from_f64(0.05);
-        p
+        Self {
+            hunger_decay_rate: Fixed::from_f64(0.0005),
+            thirst_decay_rate: Fixed::from_f64(0.001),
+            fatigue_decay_rate: Fixed::from_f64(0.00025),
+            stress_smoothing: Fixed::from_f64(0.05),
+            ..Self::default()
+        }
     }
 }
 

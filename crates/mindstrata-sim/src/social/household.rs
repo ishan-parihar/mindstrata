@@ -129,7 +129,7 @@ impl Household {
     /// Distribute food to a member (returns amount actually given).
     pub fn distribute_food(&mut self, amount: Fixed) -> Fixed {
         let given = amount.min(self.food_reserves);
-        self.food_reserves = self.food_reserves - given;
+        self.food_reserves -= given;
         given
     }
 

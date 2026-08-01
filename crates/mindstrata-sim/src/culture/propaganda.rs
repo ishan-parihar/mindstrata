@@ -158,6 +158,7 @@ impl PropagandaCampaign {
 
 /// Registry of all propaganda campaigns.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct PropagandaRegistry {
     /// All campaigns.
     pub campaigns: Vec<PropagandaCampaign>,
@@ -165,14 +166,6 @@ pub struct PropagandaRegistry {
     next_id: usize,
 }
 
-impl Default for PropagandaRegistry {
-    fn default() -> Self {
-        Self {
-            campaigns: Vec::new(),
-            next_id: 0,
-        }
-    }
-}
 
 impl PropagandaRegistry {
     /// Register a new campaign and return its id.

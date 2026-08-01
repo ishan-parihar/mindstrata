@@ -168,7 +168,7 @@ impl EchoChamberState {
         let total_echo: Fixed = self
             .clusters
             .iter()
-            .map(|c| c.echo_strength())
+            .map(BeliefCluster::echo_strength)
             .fold(Fixed::ZERO, |acc, e| acc + e);
         let n_clusters = Fixed::from_int(self.clusters.len() as i64);
         self.echo_chamber_strength = (total_echo / n_clusters).clamp_01();

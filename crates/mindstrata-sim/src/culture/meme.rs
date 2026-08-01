@@ -166,6 +166,7 @@ impl Meme {
 
 /// Registry of all memes in the simulation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct MemeRegistry {
     /// All memes, indexed by id.
     pub memes: Vec<Meme>,
@@ -173,14 +174,6 @@ pub struct MemeRegistry {
     next_id: usize,
 }
 
-impl Default for MemeRegistry {
-    fn default() -> Self {
-        Self {
-            memes: Vec::new(),
-            next_id: 0,
-        }
-    }
-}
 
 impl MemeRegistry {
     /// Register a new meme and return its id.

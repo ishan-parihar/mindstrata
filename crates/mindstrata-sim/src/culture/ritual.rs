@@ -151,6 +151,7 @@ impl Ritual {
 
 /// Registry of all rituals in the simulation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct RitualRegistry {
     /// All rituals.
     pub rituals: Vec<Ritual>,
@@ -158,14 +159,6 @@ pub struct RitualRegistry {
     next_id: usize,
 }
 
-impl Default for RitualRegistry {
-    fn default() -> Self {
-        Self {
-            rituals: Vec::new(),
-            next_id: 0,
-        }
-    }
-}
 
 impl RitualRegistry {
     /// Register a new ritual and return its id.

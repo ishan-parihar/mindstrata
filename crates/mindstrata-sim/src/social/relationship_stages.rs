@@ -119,7 +119,7 @@ pub fn try_advance_stage(
 ) -> Option<RelationshipStage> {
     let next = current.next_positive()?;
 
-    if interactions as u32 >= min_interactions_for_stage(next)
+    if interactions >= min_interactions_for_stage(next)
         && trust >= trust_threshold_for_stage(next)
         && affection >= affection_threshold_for_stage(next)
     {

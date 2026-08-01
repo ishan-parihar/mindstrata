@@ -1026,6 +1026,7 @@ impl Simulation {
                     trust_deltas[from_idx].push((target_id, rel.trust));
                 }
             }
+            #[expect(clippy::needless_range_loop, reason = "intentional parallel-array indexing: trust_deltas[i] + agents[i]")]
             for i in 0..self.agents.len() {
                 for &(target_id, rel_trust) in &trust_deltas[i] {
                     let current_trust = self.agents[i].epistemic.trust_network.trust_for_agent(target_id);
@@ -1038,6 +1039,7 @@ impl Simulation {
             // Tick the rich biological substrate before cognitive processing.
             // Uses previous tick's emotions — biology reacts to current felt state.
             // EmbodiedState feeds endocrine/nervous signals into the legacy BodyState.
+            #[expect(clippy::needless_range_loop, reason = "intentional parallel-array indexing: agents[i] + emotions[i]")]
             for i in 0..self.agents.len() {
                 let threat_level = emotions[i].fear + emotions[i].anger;
                 let social_safety = Fixed::ONE - threat_level;
@@ -1122,7 +1124,7 @@ impl Simulation {
                 let social_support = {
                     let mut top3: [Fixed; 3] = [Fixed::ZERO; 3];
                     let mut count: usize = 0;
-                    for r in self.relationships.iter() {
+                    for r in &self.relationships {
                         if r.from == AgentId::new(i as u64) {
                             // Insert into sorted top-3 (descending)
                             let pos = top3.iter().position(|t| r.trust > *t);
@@ -1327,7 +1329,7 @@ impl Simulation {
                         rv2.decay(1);
                         // After daily boundary decay, clear dirty so dormant
                         // relationships return to sleep on the next tick.
-                        if tick_u64 > 0 && tick_u64 % 144 == 0 {
+                        if tick_u64 > 0 && tick_u64.is_multiple_of(144) {
                             rv2.clear_dirty(tick_u64);
                         }
                     }
@@ -2863,7 +2865,7 @@ impl Simulation {
                                     self.agents[mid].status_v2.moral_reputation,
                                     self.agents[mid].embodied.nervous.trauma_load,
                                 );
-                                if best_challenger.map_or(true, |(_, s)| score > s) {
+                                if best_challenger.is_none_or(|(_, s)| score > s) {
                                     best_challenger = Some((*member_id, score));
                                 }
                             }
@@ -2884,7 +2886,7 @@ impl Simulation {
                                     crate::social::hierarchy::ChallengeResult::Coup { .. } => {
                                         tracing::warn!(tick = tick_u64, "Leadership coup attempted");
                                     }
-                                    _ => {}
+                                    crate::social::hierarchy::ChallengeResult::None => {}
                                 }
                             }
                         }
@@ -3160,11 +3162,13 @@ impl Simulation {
                     // Architecture-plan-2 §10.4: Max distance for marriage proximity scoring.
                     const MAX_MARRIAGE_DISTANCE: f64 = 20.0;
                     let proximity = (Fixed::ONE - distance / Fixed::from_f64(MAX_MARRIAGE_DISTANCE)).max(Fixed::ZERO);
-                    let mut att = crate::social::attraction::AttractionModel::default();
-                    att.personality_attraction = personality_compat;
-                    att.familiarity = affection;
-                    att.physical_attraction = proximity;
-                    att.reciprocity = affection; // reciprocity from mutual affection
+                    let att = crate::social::attraction::AttractionModel {
+                        personality_attraction: personality_compat,
+                        familiarity: affection,
+                        physical_attraction: proximity,
+                        reciprocity: affection,
+                        ..crate::social::attraction::AttractionModel::default()
+                    };
                     let attraction_score = att.total_attraction();
                     // Marriage probability: attraction * health * trust
                     let health = (self.agents[i].body.health + self.agents[j].body.health) * Fixed::from_f64(0.5);
@@ -3503,7 +3507,7 @@ impl Simulation {
 
         // Build group labels from households
         let group_labels: Vec<(usize, String)> = self.households.iter().enumerate()
-            .map(|(i, _)| (i, format!("household_{}", i)))
+            .map(|(i, _)| (i, format!("household_{i}")))
             .collect();
 
         // Simplified centrality: relationship count normalized to [0,1].
@@ -3658,6 +3662,7 @@ impl Simulation {
                             .find(|c| c.members.contains(&i))
                             .map(|c| c.id))
                         .collect();
+                    #[expect(clippy::needless_range_loop, reason = "intentional parallel-array indexing: membership[i/j] + relationship_v2s[i]")]
                     for i in 0..n {
                         if let Some(my_c) = membership[i] {
                             for j in (i + 1)..n {
@@ -3742,11 +3747,10 @@ impl Simulation {
                     // No advancement is possible without interactions; regression only matters
                     // for Established+ stages or when fear is high.
                     let interactions = self.agents[i].relationship_v2s[rv2_idx].interaction_count;
-                    if interactions == 0 {
-                        if matches!(current_stage, crate::social::relationship_v2::RelationshipStage::Unnoticed | crate::social::relationship_v2::RelationshipStage::Noticed | crate::social::relationship_v2::RelationshipStage::Disliked) {
+                    if interactions == 0
+                        && matches!(current_stage, crate::social::relationship_v2::RelationshipStage::Unnoticed | crate::social::relationship_v2::RelationshipStage::Noticed | crate::social::relationship_v2::RelationshipStage::Disliked) {
                             continue;
                         }
-                    }
                     let trust = self.agents[i].relationship_v2s[rv2_idx].trust;
                     let affection = self.agents[i].relationship_v2s[rv2_idx].affection;
                     let fear = self.agents[i].relationship_v2s[rv2_idx].fear;
@@ -3826,7 +3830,7 @@ impl Simulation {
             };
             // institutional_suppression: high council legitimacy → institutions suppress groups.
             let institutional_suppression = self.institutions.iter()
-                .find_map(|inst| (inst.kind == institutions::InstitutionKind::Council).then(|| inst.legitimacy))
+                .find_map(|inst| (inst.kind == institutions::InstitutionKind::Council).then_some(inst.legitimacy))
                 .unwrap_or(GROUP_COUNCIL_LEGITIMACY_DEFAULT)
                 * GROUP_SUPPRESSION_SCALE;
             for i in 0..n_agents {
@@ -4169,12 +4173,11 @@ impl Simulation {
                                 agent.memory.encode(kind, tick_u64, salience, emotional, Some(to.as_u64() as u32), tag);
                             }
                         }
-                        if to.as_u64() == i as u64 {
-                            if agent.agent_tier.budget_tracker.can_memory_op() {
+                        if to.as_u64() == i as u64
+                            && agent.agent_tier.budget_tracker.can_memory_op() {
                                 let _ = agent.agent_tier.budget_tracker.consume_memory_op();
                                 agent.memory.encode(MemoryKind::Social, tick_u64, salience, emotional, Some(from.as_u64() as u32), MemoryTag::TalkedTo);
                             }
-                        }
                     }
                     _ => {}
                 }
@@ -4576,7 +4579,7 @@ impl Simulation {
     fn tick_derived_states_and_beliefs(&mut self, pre_tick_events: usize, tick_u64: u64) {
         // ── 15. Derived mental state computation (§22) ─────────────
         // §17: Periodic tier reclassification (every 100 ticks)
-        if tick_u64 % 100 == 0 && tick_u64 > 0 {
+        if tick_u64.is_multiple_of(100) && tick_u64 > 0 {
             for (idx, agent) in self.agents.iter_mut().enumerate() {
                 let agent_id = mindstrata_core::id::AgentId::new(idx as u64);
                 let has_role = self.institutions.iter().any(|inst| inst.has_member(agent_id));
@@ -4795,6 +4798,7 @@ impl Simulation {
             // Track how many clients each patron has acquired this tick (max 3).
             // Vec indexed by agent ID — simpler and avoids HashMap overhead.
             let mut patron_client_counts: Vec<usize> = vec![0; self.agents.len()];
+            #[expect(clippy::needless_range_loop, reason = "intentional parallel-array indexing: status_cache[i/j] + patron_client_counts[i] + relationship_v2s[i]")]
             for i in 0..self.agents.len() {
                 let patron_status = status_cache[i];
                 if patron_client_counts[i] >= PATRONAGE_MAX_CLIENTS_PER_PATRON { continue; }

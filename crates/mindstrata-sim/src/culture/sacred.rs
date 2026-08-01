@@ -111,7 +111,7 @@ impl SacredValues {
         let total: Fixed = self
             .values
             .iter()
-            .map(|v| v.update_resistance())
+            .map(SacredValue::update_resistance)
             .fold(Fixed::ZERO, |acc, r| acc + r);
         (total / Fixed::from_int(self.values.len() as i64)).clamp_01()
     }

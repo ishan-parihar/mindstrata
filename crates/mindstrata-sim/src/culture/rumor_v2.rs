@@ -181,6 +181,7 @@ impl RumorV2 {
 
 /// Registry of all rumors in the simulation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct RumorRegistry {
     /// All rumors.
     pub rumors: Vec<RumorV2>,
@@ -188,14 +189,6 @@ pub struct RumorRegistry {
     next_id: usize,
 }
 
-impl Default for RumorRegistry {
-    fn default() -> Self {
-        Self {
-            rumors: Vec::new(),
-            next_id: 0,
-        }
-    }
-}
 
 impl RumorRegistry {
     /// Register a new rumor and return its id.
