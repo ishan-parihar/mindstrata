@@ -123,8 +123,8 @@ impl AgentTier {
 pub struct CognitiveBudget {
     /// Maximum appraisals per tick (events processed through emotion generation).
     pub max_appraisals: u32,
-    /// Maximum memory retrievals per tick.
-    pub max_memory_retrievals: u32,
+    /// Maximum memory operations (encode + retrieve) per tick.
+    pub max_memory_operations: u32,
     /// Maximum prospections (mental simulations of future outcomes) per tick.
     pub max_prospections: u32,
     /// Maximum social inferences (theory-of-mind updates) per tick.
@@ -142,7 +142,7 @@ impl CognitiveBudget {
     pub fn focal() -> Self {
         Self {
             max_appraisals: 20,
-            max_memory_retrievals: 10,
+            max_memory_operations: 10,
             max_prospections: 5,
             max_social_inferences: 10,
         }
@@ -152,7 +152,7 @@ impl CognitiveBudget {
     pub fn secondary() -> Self {
         Self {
             max_appraisals: 5,
-            max_memory_retrievals: 3,
+            max_memory_operations: 3,
             max_prospections: 0,
             max_social_inferences: 2,
         }
@@ -162,7 +162,7 @@ impl CognitiveBudget {
     pub fn background() -> Self {
         Self {
             max_appraisals: 1,
-            max_memory_retrievals: 0,
+            max_memory_operations: 0,
             max_prospections: 0,
             max_social_inferences: 0,
         }
@@ -190,7 +190,7 @@ impl CognitiveBudget {
 #[must_use]
 pub struct CognitiveBudgetTracker {
     remaining_appraisals: u32,
-    remaining_memory_retrievals: u32,
+    remaining_memory_operations: u32,
     remaining_prospections: u32,
     remaining_social_inferences: u32,
 }
@@ -206,7 +206,7 @@ impl CognitiveBudgetTracker {
     pub fn from_budget(budget: &CognitiveBudget) -> Self {
         Self {
             remaining_appraisals: budget.max_appraisals,
-            remaining_memory_retrievals: budget.max_memory_retrievals,
+            remaining_memory_operations: budget.max_memory_operations,
             remaining_prospections: budget.max_prospections,
             remaining_social_inferences: budget.max_social_inferences,
         }
@@ -215,7 +215,7 @@ impl CognitiveBudgetTracker {
     /// Reset all counters to the budget limits (called at tick start).
     pub fn reset(&mut self, budget: &CognitiveBudget) {
         self.remaining_appraisals = budget.max_appraisals;
-        self.remaining_memory_retrievals = budget.max_memory_retrievals;
+        self.remaining_memory_operations = budget.max_memory_operations;
         self.remaining_prospections = budget.max_prospections;
         self.remaining_social_inferences = budget.max_social_inferences;
     }
@@ -227,9 +227,9 @@ impl CognitiveBudgetTracker {
         self.remaining_appraisals > 0
     }
 
-    /// Can this agent perform another memory retrieval this tick?
-    pub fn can_retrieve_memory(&self) -> bool {
-        self.remaining_memory_retrievals > 0
+    /// Can this agent perform another memory operation (encode or retrieve) this tick?
+    pub fn can_memory_op(&self) -> bool {
+        self.remaining_memory_operations > 0
     }
 
     /// Can this agent perform another prospection this tick?
@@ -255,11 +255,11 @@ impl CognitiveBudgetTracker {
         }
     }
 
-    /// Record one memory retrieval performed.
+    /// Record one memory operation performed (encode or retrieve).
     #[must_use]
-    pub fn consume_memory_retrieval(&mut self) -> bool {
-        if self.remaining_memory_retrievals > 0 {
-            self.remaining_memory_retrievals -= 1;
+    pub fn consume_memory_op(&mut self) -> bool {
+        if self.remaining_memory_operations > 0 {
+            self.remaining_memory_operations -= 1;
             true
         } else {
             false
@@ -295,9 +295,9 @@ impl CognitiveBudgetTracker {
         self.remaining_appraisals
     }
 
-    /// Remaining memory retrieval budget.
-    pub fn remaining_memory_retrievals(&self) -> u32 {
-        self.remaining_memory_retrievals
+    /// Remaining memory operation budget.
+    pub fn remaining_memory_operations(&self) -> u32 {
+        self.remaining_memory_operations
     }
 
     /// Remaining prospection budget.
@@ -495,6 +495,7 @@ mod tests {
     fn for_tier_matches_individual_constructors() {
         assert_eq!(CognitiveBudget::for_tier(AgentTier::Focal).max_appraisals, 20);
         assert_eq!(CognitiveBudget::for_tier(AgentTier::Secondary).max_appraisals, 5);
+        assert_eq!(CognitiveBudget::for_tier(AgentTier::Background).max_memory_operations, 0);
         assert_eq!(CognitiveBudget::for_tier(AgentTier::Background).max_appraisals, 1);
     }
 
@@ -610,7 +611,7 @@ mod tests {
         let budget = CognitiveBudget::focal();
         let tracker = CognitiveBudgetTracker::from_budget(&budget);
         assert_eq!(tracker.remaining_appraisals(), 20);
-        assert_eq!(tracker.remaining_memory_retrievals(), 10);
+        assert_eq!(tracker.remaining_memory_operations(), 10);
         assert_eq!(tracker.remaining_prospections(), 5);
         assert_eq!(tracker.remaining_social_inferences(), 10);
     }
@@ -658,7 +659,7 @@ mod tests {
         let tracker = CognitiveBudgetTracker::from_budget(&budget);
         assert!(!tracker.can_prospect());
         assert!(!tracker.can_social_infer());
-        assert!(!tracker.can_retrieve_memory());
+        assert!(!tracker.can_memory_op());
         assert!(tracker.can_appraise()); // background gets 1 appraisal
     }
 

@@ -2040,25 +2040,32 @@ impl Simulation {
                 }
 
                 // §8.1.9: Theory of Mind update
+                // §17.2: Gate social inference budget — ToM is the most expensive per-interaction op.
                 let trust_from_to = self.relationships.iter()
                     .find(|r| r.from == from && r.to == to)
                     .map_or(Fixed::from_f64(0.5), |r| r.trust);
                 let trust_to_from = self.relationships.iter()
                     .find(|r| r.from == to && r.to == from)
                     .map_or(Fixed::from_f64(0.5), |r| r.trust);
+                if self.agents[from_idx].agent_tier.tier.runs_theory_of_mind()
+                    && self.agents[from_idx].agent_tier.budget_tracker.can_social_infer()
                 {
                     let model_a = self.agents[from_idx].mind_models.get_or_create(to);
                     let pos = trust_to_from * Fixed::from_f64(0.3);
                     let neg = (Fixed::ONE - trust_to_from) * Fixed::from_f64(0.1);
                     model_a.update_from_observation(pos, neg, trust_to_from, Fixed::from_f64(0.5));
                     model_a.infer_intent(trust_to_from, pos, neg);
+                    self.agents[from_idx].agent_tier.budget_tracker.consume_social_inference();
                 }
+                if self.agents[to_idx].agent_tier.tier.runs_theory_of_mind()
+                    && self.agents[to_idx].agent_tier.budget_tracker.can_social_infer()
                 {
                     let model_b = self.agents[to_idx].mind_models.get_or_create(from);
                     let pos = trust_from_to * Fixed::from_f64(0.3);
                     let neg = (Fixed::ONE - trust_from_to) * Fixed::from_f64(0.1);
                     model_b.update_from_observation(pos, neg, trust_from_to, Fixed::from_f64(0.5));
                     model_b.infer_intent(trust_from_to, pos, neg);
+                    self.agents[to_idx].agent_tier.budget_tracker.consume_social_inference();
                 }
 
                 // §8.1.18: Cultural category encounter
@@ -3683,7 +3690,10 @@ impl Simulation {
         // Only events that pass the attention threshold are encoded into memory.
         for (i, agent) in self.agents.iter_mut().enumerate() {
             // §17: Background agents skip memory encoding entirely
-            if !agent.agent_tier.tier.runs_memory_encoding() {
+            // §17.2: Also check memory retrieval budget
+            if !agent.agent_tier.tier.runs_memory_encoding()
+                || !agent.agent_tier.budget_tracker.can_memory_op()
+            {
                 continue;
             }
             for ev in &self.events[pre_tick_events..] {
@@ -3704,13 +3714,22 @@ impl Simulation {
                 let emotional = agent.affect.arousal * Fixed::from_f64(0.6) + Fixed::from_f64(0.1);
                 match ev {
                     SimEvent::AgentAte { agent: a, .. } if a.as_u64() == i as u64 => {
-                        agent.memory.encode(MemoryKind::Consumption, tick_u64, salience, emotional, None, MemoryTag::AteFood);
+                        if agent.agent_tier.budget_tracker.can_memory_op() {
+                            agent.agent_tier.budget_tracker.consume_memory_op();
+                            agent.memory.encode(MemoryKind::Consumption, tick_u64, salience, emotional, None, MemoryTag::AteFood);
+                        }
                     }
                     SimEvent::AgentDrank { agent: a, .. } if a.as_u64() == i as u64 => {
-                        agent.memory.encode(MemoryKind::Consumption, tick_u64, salience, emotional, None, MemoryTag::DrankWater);
+                        if agent.agent_tier.budget_tracker.can_memory_op() {
+                            agent.agent_tier.budget_tracker.consume_memory_op();
+                            agent.memory.encode(MemoryKind::Consumption, tick_u64, salience, emotional, None, MemoryTag::DrankWater);
+                        }
                     }
                     SimEvent::AgentRested { agent: a, .. } if a.as_u64() == i as u64 => {
-                        agent.memory.encode(MemoryKind::Positive, tick_u64, salience, emotional, None, MemoryTag::Rested);
+                        if agent.agent_tier.budget_tracker.can_memory_op() {
+                            agent.agent_tier.budget_tracker.consume_memory_op();
+                            agent.memory.encode(MemoryKind::Positive, tick_u64, salience, emotional, None, MemoryTag::Rested);
+                        }
                     }
                     SimEvent::InteractionOccurred { from, to, kind, .. } => {
                         if from.as_u64() == i as u64 {
@@ -3727,10 +3746,16 @@ impl Simulation {
                                 mindstrata_core::event::InteractionKind::Help | mindstrata_core::event::InteractionKind::Comfort => MemoryKind::Positive,
                                 _ => MemoryKind::Social,
                             };
-                            agent.memory.encode(kind, tick_u64, salience, emotional, Some(to.as_u64() as u32), tag);
+                            if agent.agent_tier.budget_tracker.can_memory_op() {
+                                agent.agent_tier.budget_tracker.consume_memory_op();
+                                agent.memory.encode(kind, tick_u64, salience, emotional, Some(to.as_u64() as u32), tag);
+                            }
                         }
                         if to.as_u64() == i as u64 {
-                            agent.memory.encode(MemoryKind::Social, tick_u64, salience, emotional, Some(from.as_u64() as u32), MemoryTag::TalkedTo);
+                            if agent.agent_tier.budget_tracker.can_memory_op() {
+                                agent.agent_tier.budget_tracker.consume_memory_op();
+                                agent.memory.encode(MemoryKind::Social, tick_u64, salience, emotional, Some(from.as_u64() as u32), MemoryTag::TalkedTo);
+                            }
                         }
                     }
                     _ => {}
