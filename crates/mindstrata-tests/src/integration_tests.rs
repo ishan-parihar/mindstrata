@@ -511,9 +511,14 @@ fn friendships_correlate_with_proximity_across_seeds() {
     // Require minimum data for meaningful statistical comparison.
     // Guard failure indicates the proximity-friendship correlation requires
     // more simulation time to manifest — test still passes as a stability check.
+    if close_total < 10 || far_total < 10 {
+        eprintln!("proximity test: guards failed (close={close_total}, far={far_total}) — correlation may need more ticks");
+    }
     assert!(close_total >= 10, "Insufficient close-proximity pairs: {close_total}");
     assert!(far_total >= 10, "Insufficient far-proximity pairs: {far_total}");
 
+    // Note: pair counts are directed (both i->j and j->i), not unique pairs.
+    // Rates are still correct since both directions are counted symmetrically.
     // Close pairs should have at least as high a progression rate
     let close_rate = close_progressed as f64 / close_total as f64;
     let far_rate = far_progressed as f64 / far_total as f64;
@@ -556,6 +561,8 @@ fn children_resemble_parents_statistically() {
         "No parent-child pairs found across 10 seeds");
 
     // Average difference should be less than 0.4 (children resemble parents)
+    // 0.4 threshold: genome recombination from two parents typically keeps
+    // child trait within ~0.3 of parent mean (mutation + recombination noise).
     let avg_diff: f64 = trait_differences.iter().sum::<f64>()
         / trait_differences.len() as f64;
     assert!(avg_diff < 0.4,
