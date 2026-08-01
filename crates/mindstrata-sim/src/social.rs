@@ -33,6 +33,7 @@ pub fn process_interaction(
     same_faction: bool, // §5.4: in-group bias modifier
     bonding_rate: Fixed,          // §5.1: from SimParameters
     conflict_escalation_rate: Fixed, // §5.1: from SimParameters
+    params: &crate::parameters::SimParameters,
 ) {
     let trust_delta;
     let affection_delta;
@@ -103,7 +104,7 @@ pub fn process_interaction(
             rel.last_negative_tick = tick_u64;
         }
         // §19.5.G: Relationship evolution — evolve kind based on interaction history
-        evolve_relationship_kind(rel);
+        evolve_relationship_kind(rel, params);
     }
 
     // Reciprocal relationship update (weaker)
@@ -111,8 +112,8 @@ pub fn process_interaction(
         .iter_mut()
         .find(|r| r.from == interaction.to && r.to == interaction.from)
     {
-        rel.trust = (rel.trust + trust_delta * Fixed::from_f64(0.3)).clamp_01();
-        rel.affection = (rel.affection + affection_delta * Fixed::from_f64(0.3)).clamp_01();
+        rel.trust = (rel.trust + trust_delta * params.social_reciprocal_factor).clamp_01();
+        rel.affection = (rel.affection + affection_delta * params.social_reciprocal_factor).clamp_01();
         rel.last_interaction_tick = tick_u64;
         rel.interaction_count += 1;
         if is_positive {
@@ -121,7 +122,7 @@ pub fn process_interaction(
         if is_negative {
             rel.last_negative_tick = tick_u64;
         }
-        evolve_relationship_kind(rel);
+        evolve_relationship_kind(rel, params);
     }
 
     // Generate event
@@ -200,18 +201,19 @@ pub fn choose_interaction(
     personality_openness: Fixed,
     personality_agreeableness: Fixed,
     rng: &mut RngStreams,
+    params: &crate::parameters::SimParameters,
 ) -> InteractionKind {
     let social_rng = rng.get_mut(RngStream::Social);
     let roll: f64 = social_rng.random_range(0.0..1.0);
 
-    if trust < Fixed::from_f64(0.2) {
+    if trust < params.social_low_trust_threshold {
         // Low trust: threaten or avoid
         if roll < 0.3 {
             InteractionKind::Threaten
         } else {
             InteractionKind::Talk // cautious talk
         }
-    } else if affection > Fixed::from_f64(0.7) {
+    } else if affection > params.social_high_affection_threshold {
         // High affection: comfort, help, talk
         if roll < 0.2 {
             InteractionKind::Comfort
@@ -220,11 +222,11 @@ pub fn choose_interaction(
         } else {
             InteractionKind::Talk
         }
-    } else if personality_openness > Fixed::from_f64(0.6) {
+    } else if personality_openness > params.social_openness_threshold {
         // Open personality: gossip, teach
         if roll < 0.3 {
             InteractionKind::Gossip
-        } else if roll < 0.5 && personality_agreeableness > Fixed::from_f64(0.5) {
+        } else if roll < 0.5 && personality_agreeableness > params.social_agreeableness_threshold {
             InteractionKind::Teach
         } else {
             InteractionKind::Talk
@@ -283,7 +285,7 @@ pub fn update_witnesses(
 
 /// §19.5.G: Evolve relationship kind based on accumulated interactions.
 /// Stranger → Neighbor (5+ interactions) → Friend (high trust+affection) or Rival (low trust).
-fn evolve_relationship_kind(rel: &mut Relationship) {
+fn evolve_relationship_kind(rel: &mut Relationship, params: &crate::parameters::SimParameters) {
     // Don't evolve if already a special kind
     if matches!(rel.kind, RelationshipKind::Kin) {
         return;
@@ -300,20 +302,20 @@ fn evolve_relationship_kind(rel: &mut Relationship) {
 
     // Upgrade from Neighbor to Friend or Rival based on trust/affection
     if rel.kind == RelationshipKind::Neighbor {
-        if trust > Fixed::from_f64(0.7) && affection > Fixed::from_f64(0.5) {
+        if trust > params.social_friend_trust_threshold && affection > params.social_friend_affection_threshold {
             rel.kind = RelationshipKind::Friend;
-        } else if trust < Fixed::from_f64(0.2) {
+        } else if trust < params.social_rival_trust_threshold {
             rel.kind = RelationshipKind::Rival;
         }
     }
 
     // Friend can downgrade to Neighbor if trust drops
-    if rel.kind == RelationshipKind::Friend && trust < Fixed::from_f64(0.4) {
+    if rel.kind == RelationshipKind::Friend && trust < params.social_friend_downgrade_threshold {
         rel.kind = RelationshipKind::Neighbor;
     }
 
     // Rival can be repaired if trust recovers
-    if rel.kind == RelationshipKind::Rival && trust > Fixed::from_f64(0.5) {
+    if rel.kind == RelationshipKind::Rival && trust > params.social_rival_repair_trust {
         rel.kind = RelationshipKind::Neighbor;
     }
 }
@@ -334,12 +336,13 @@ pub fn system_social_interactions(
     rng: &mut RngStreams,
     bonding_rate: Fixed,              // §5.1: from SimParameters
     conflict_escalation_rate: Fixed,  // §5.1: from SimParameters
+    params: &crate::parameters::SimParameters,
 ) {
     let num_agents = agents.len();
 
     for (i, (agent_id, openness, agreeableness, extraversion)) in agents.iter().enumerate() {
         // Extraversion affects interaction frequency
-        let interact_chance = Fixed::from_f64(0.3) + *extraversion * Fixed::from_f64(0.4);
+        let interact_chance = params.social_interaction_base_chance + *extraversion * params.social_extraversion_multiplier;
         let roll = Fixed::from_f64(rng.get_mut(RngStream::Social).random_range(0.0..1.0));
 
         if roll > interact_chance {
@@ -354,16 +357,16 @@ pub fn system_social_interactions(
             let trust = relationships
                 .iter()
                 .find(|r| r.from == *agent_id && r.to == target_id)
-                .map_or(Fixed::from_f64(0.5), |r| r.trust);
+                .map_or(params.social_default_trust, |r| r.trust);
 
             let affection = relationships
                 .iter()
                 .find(|r| r.from == *agent_id && r.to == target_id)
-                .map_or(Fixed::from_f64(0.3), |r| r.affection);
+                .map_or(params.social_default_affection, |r| r.affection);
 
             // §5.4: In-group/out-group — check if both agents share a faction
             let same_faction = same_faction_matrix[i][target_idx];
-            let kind = choose_interaction(trust, affection, *openness, *agreeableness, rng);
+            let kind = choose_interaction(trust, affection, *openness, *agreeableness, rng, params);
 
             let interaction = Interaction {
                 from: *agent_id,
@@ -374,7 +377,7 @@ pub fn system_social_interactions(
             // Update witnesses before processing the interaction
             update_witnesses(&interaction, relationships, num_agents, tick, bonding_rate, conflict_escalation_rate);
 
-            process_interaction(&interaction, relationships, events, tick, same_faction, bonding_rate, conflict_escalation_rate);
+            process_interaction(&interaction, relationships, events, tick, same_faction, bonding_rate, conflict_escalation_rate, params);
         }
     }
 }
@@ -407,7 +410,7 @@ mod tests {
             kind: InteractionKind::Help,
         };
 
-        process_interaction(&interaction, &mut relationships, &mut events, Tick::new(1), false, Fixed::from_f64(0.05), Fixed::from_f64(0.08));
+        process_interaction(&interaction, &mut relationships, &mut events, Tick::new(1), false, Fixed::from_f64(0.05), Fixed::from_f64(0.08), &crate::parameters::SimParameters::default());
 
         assert!(relationships[0].trust > Fixed::from_f64(0.5));
         assert!(!events.is_empty());
@@ -437,7 +440,7 @@ mod tests {
             kind: InteractionKind::Threaten,
         };
 
-        process_interaction(&interaction, &mut relationships, &mut events, Tick::new(1), false, Fixed::from_f64(0.05), Fixed::from_f64(0.08));
+        process_interaction(&interaction, &mut relationships, &mut events, Tick::new(1), false, Fixed::from_f64(0.05), Fixed::from_f64(0.08), &crate::parameters::SimParameters::default());
 
         assert!(relationships[0].trust < Fixed::from_f64(0.5));
     }

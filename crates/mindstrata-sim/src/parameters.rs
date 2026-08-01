@@ -81,7 +81,35 @@ pub struct SimParameters {
     /// Low-coping threshold below which fear intensifies (0.3).
     pub appraisal_low_coping_threshold: Fixed,
 
-    // ── Relational ────────────────────────────────────────────
+    // ── Relational / Social ──────────────────────────────────
+    /// Reciprocal relationship update factor (0.3 = 30% of direct effect).
+    pub social_reciprocal_factor: Fixed,
+    /// Low trust threshold — below this, agents threaten/avoid (0.2).
+    pub social_low_trust_threshold: Fixed,
+    /// High affection threshold — above this, agents comfort/help (0.7).
+    pub social_high_affection_threshold: Fixed,
+    /// Openness threshold — above this, agents gossip/teach (0.6).
+    pub social_openness_threshold: Fixed,
+    /// Trust threshold for Friend classification (0.7).
+    pub social_friend_trust_threshold: Fixed,
+    /// Affection threshold for Friend classification (0.5).
+    pub social_friend_affection_threshold: Fixed,
+    /// Trust threshold for Rival classification (0.2).
+    pub social_rival_trust_threshold: Fixed,
+    /// Default trust for new relationships (0.5).
+    pub social_default_trust: Fixed,
+    /// Default affection for new relationships (0.3).
+    pub social_default_affection: Fixed,
+    /// Base interaction chance (0.3).
+    pub social_interaction_base_chance: Fixed,
+    /// Extraversion multiplier for interaction chance (0.4).
+    pub social_extraversion_multiplier: Fixed,
+    /// Agreeableness threshold for Teach interaction (0.5).
+    pub social_agreeableness_threshold: Fixed,
+    /// Friend→Neighbor downgrade threshold (0.4 = Friend downgrades if trust drops below).
+    pub social_friend_downgrade_threshold: Fixed,
+    /// Rival→Neighbor repair threshold (0.5 = Rival repairs if trust rises above).
+    pub social_rival_repair_trust: Fixed,
     /// Trust threshold for friendship classification.
     pub friendship_trust_threshold: Fixed,
     /// Trust threshold for alliance classification.
@@ -169,6 +197,20 @@ impl Default for SimParameters {
             appraisal_sadness_multiplier: Fixed::from_f64(0.7),
             appraisal_fear_coping_multiplier: Fixed::from_f64(0.5),
             appraisal_low_coping_threshold: Fixed::from_f64(0.3),
+            social_reciprocal_factor: Fixed::from_f64(0.3),
+            social_low_trust_threshold: Fixed::from_f64(0.2),
+            social_high_affection_threshold: Fixed::from_f64(0.7),
+            social_openness_threshold: Fixed::from_f64(0.6),
+            social_friend_trust_threshold: Fixed::from_f64(0.7),
+            social_friend_affection_threshold: Fixed::from_f64(0.5),
+            social_rival_trust_threshold: Fixed::from_f64(0.2),
+            social_default_trust: Fixed::from_f64(0.5),
+            social_default_affection: Fixed::from_f64(0.3),
+            social_interaction_base_chance: Fixed::from_f64(0.3),
+            social_extraversion_multiplier: Fixed::from_f64(0.4),
+            social_agreeableness_threshold: Fixed::from_f64(0.5),
+            social_friend_downgrade_threshold: Fixed::from_f64(0.4),
+            social_rival_repair_trust: Fixed::from_f64(0.5),
 
             // Relational
             friendship_trust_threshold: Fixed::from_f64(0.5),

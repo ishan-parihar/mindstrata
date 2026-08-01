@@ -1564,6 +1564,7 @@ impl Simulation {
                     ctx.rng,
                     self.params.bonding_rate,
                     self.params.conflict_escalation_rate,
+                    &self.params,
                 );
             }
 
