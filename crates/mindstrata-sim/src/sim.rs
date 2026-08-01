@@ -1564,6 +1564,8 @@ impl Simulation {
                     ctx.events,
                     tick,
                     ctx.rng,
+                    self.params.bonding_rate,
+                    self.params.conflict_escalation_rate,
                 );
             }
 
@@ -1629,10 +1631,12 @@ impl Simulation {
             }
 
             // ── 8. Belief resistance decay ────────────────────────────
+            // §5.1: Use configurable decay rate from SimParameters.
+            let belief_resistance_decay = self.params.belief_resistance_decay;
             for agent_beliefs in &mut self.agents {
                 belief_update::decay_belief_resistance(
                     &mut agent_beliefs.beliefs,
-                    BELIEF_RESISTANCE_DECAY,
+                    belief_resistance_decay,
                 );
             }
 

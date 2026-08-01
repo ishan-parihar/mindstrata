@@ -22,48 +22,53 @@ pub struct Interaction {
 /// Process a social interaction between two agents.
 ///
 /// Updates their relationship and generates events.
+///
+/// §5.1: Trust and affection deltas are scaled by `bonding_rate` (positive)
+/// and `conflict_escalation_rate` (negative) from `SimParameters`.
 pub fn process_interaction(
     interaction: &Interaction,
     relationships: &mut [Relationship],
     events: &mut Vec<SimEvent>,
     tick: Tick,
     same_faction: bool, // §5.4: in-group bias modifier
+    bonding_rate: Fixed,          // §5.1: from SimParameters
+    conflict_escalation_rate: Fixed, // §5.1: from SimParameters
 ) {
     let trust_delta;
     let affection_delta;
 
     match interaction.kind {
         InteractionKind::Talk => {
-            trust_delta = Fixed::from_f64(0.01);
-            affection_delta = Fixed::from_f64(0.005);
+            trust_delta = Fixed::from_f64(0.01) * bonding_rate * Fixed::from_f64(0.2);
+            affection_delta = Fixed::from_f64(0.005) * bonding_rate * Fixed::from_f64(0.1);
         }
         InteractionKind::Help => {
-            trust_delta = Fixed::from_f64(0.05);
-            affection_delta = Fixed::from_f64(0.03);
+            trust_delta = Fixed::from_f64(0.05) * bonding_rate;
+            affection_delta = Fixed::from_f64(0.03) * bonding_rate;
         }
         InteractionKind::Threaten => {
-            trust_delta = Fixed::from_f64(-0.1);
-            affection_delta = Fixed::from_f64(-0.05);
+            trust_delta = Fixed::from_f64(-0.1) * conflict_escalation_rate * Fixed::from_f64(1.25);
+            affection_delta = Fixed::from_f64(-0.05) * conflict_escalation_rate * Fixed::from_f64(0.625);
         }
         InteractionKind::Trade => {
-            trust_delta = Fixed::from_f64(0.02);
+            trust_delta = Fixed::from_f64(0.02) * bonding_rate * Fixed::from_f64(0.4);
             affection_delta = Fixed::ZERO;
         }
         InteractionKind::Gossip => {
-            trust_delta = Fixed::from_f64(0.005);
-            affection_delta = Fixed::from_f64(0.01);
+            trust_delta = Fixed::from_f64(0.005) * bonding_rate * Fixed::from_f64(0.1);
+            affection_delta = Fixed::from_f64(0.01) * bonding_rate * Fixed::from_f64(0.2);
         }
         InteractionKind::Comfort => {
-            trust_delta = Fixed::from_f64(0.03);
-            affection_delta = Fixed::from_f64(0.05);
+            trust_delta = Fixed::from_f64(0.03) * bonding_rate * Fixed::from_f64(0.6);
+            affection_delta = Fixed::from_f64(0.05) * bonding_rate;
         }
         InteractionKind::Insult => {
-            trust_delta = Fixed::from_f64(-0.08);
-            affection_delta = Fixed::from_f64(-0.1);
+            trust_delta = Fixed::from_f64(-0.08) * conflict_escalation_rate;
+            affection_delta = Fixed::from_f64(-0.1) * conflict_escalation_rate * Fixed::from_f64(1.25);
         }
         InteractionKind::Teach => {
-            trust_delta = Fixed::from_f64(0.04);
-            affection_delta = Fixed::from_f64(0.02);
+            trust_delta = Fixed::from_f64(0.04) * bonding_rate * Fixed::from_f64(0.8);
+            affection_delta = Fixed::from_f64(0.02) * bonding_rate * Fixed::from_f64(0.4);
         }
     }
 
@@ -236,11 +241,16 @@ pub fn choose_interaction(
 
 /// Update witness relationships when an interaction is observed.
 /// Witnesses update their trust in both parties based on what they saw.
+///
+/// §5.1: Witness trust deltas scaled by `bonding_rate` (positive) and
+/// `conflict_escalation_rate` (negative) from `SimParameters`.
 pub fn update_witnesses(
     interaction: &Interaction,
     relationships: &mut [Relationship],
     num_agents: usize,
     tick: Tick,
+    bonding_rate: Fixed,              // §5.1
+    conflict_escalation_rate: Fixed,  // §5.1
 ) {
     for w in 0..num_agents {
         let witness = AgentId::new(w as u64);
@@ -252,14 +262,16 @@ pub fn update_witnesses(
             // Negative interactions: witnesses reduce trust in perpetrator
             InteractionKind::Threaten | InteractionKind::Insult => {
                 if let Some(rel) = relationships.iter_mut().find(|r| r.from == witness && r.to == interaction.from) {
-                    rel.trust = (rel.trust - Fixed::from_f64(0.03)).max(Fixed::ZERO);
+                    let delta = Fixed::from_f64(-0.03) * conflict_escalation_rate * Fixed::from_f64(0.375);
+                    rel.trust = (rel.trust + delta).max(Fixed::ZERO);
                     rel.last_interaction_tick = tick.as_u64();
                 }
             }
             // Positive interactions: witnesses increase trust in helper
             InteractionKind::Help | InteractionKind::Comfort => {
                 if let Some(rel) = relationships.iter_mut().find(|r| r.from == witness && r.to == interaction.from) {
-                    rel.trust = (rel.trust + Fixed::from_f64(0.02)).clamp_01();
+                    let delta = Fixed::from_f64(0.02) * bonding_rate * Fixed::from_f64(0.4);
+                    rel.trust = (rel.trust + delta).clamp_01();
                     rel.last_interaction_tick = tick.as_u64();
                 }
             }
@@ -311,6 +323,7 @@ fn evolve_relationship_kind(rel: &mut Relationship) {
 /// §2.4: Social interactions are proximity-based — agents within perception
 /// radius can interact, creating natural neighborhoods and social clusters.
 /// §5.4: Faction in-group bias — members of the same faction get trust bonuses.
+/// §5.1: Bonding and conflict rates from `SimParameters`.
 pub fn system_social_interactions(
     agents: &[(AgentId, Fixed, Fixed, Fixed)], // (id, openness, agreeableness, extraversion)
     agent_positions: &[(i32, i32)],            // §2.4: agent (x, y) positions
@@ -319,6 +332,8 @@ pub fn system_social_interactions(
     events: &mut Vec<SimEvent>,
     tick: Tick,
     rng: &mut RngStreams,
+    bonding_rate: Fixed,              // §5.1: from SimParameters
+    conflict_escalation_rate: Fixed,  // §5.1: from SimParameters
 ) {
     let num_agents = agents.len();
 
@@ -357,9 +372,9 @@ pub fn system_social_interactions(
             };
 
             // Update witnesses before processing the interaction
-            update_witnesses(&interaction, relationships, num_agents, tick);
+            update_witnesses(&interaction, relationships, num_agents, tick, bonding_rate, conflict_escalation_rate);
 
-            process_interaction(&interaction, relationships, events, tick, same_faction);
+            process_interaction(&interaction, relationships, events, tick, same_faction, bonding_rate, conflict_escalation_rate);
         }
     }
 }
@@ -392,7 +407,7 @@ mod tests {
             kind: InteractionKind::Help,
         };
 
-        process_interaction(&interaction, &mut relationships, &mut events, Tick::new(1), false);
+        process_interaction(&interaction, &mut relationships, &mut events, Tick::new(1), false, Fixed::from_f64(0.05), Fixed::from_f64(0.08));
 
         assert!(relationships[0].trust > Fixed::from_f64(0.5));
         assert!(!events.is_empty());
@@ -422,7 +437,7 @@ mod tests {
             kind: InteractionKind::Threaten,
         };
 
-        process_interaction(&interaction, &mut relationships, &mut events, Tick::new(1), false);
+        process_interaction(&interaction, &mut relationships, &mut events, Tick::new(1), false, Fixed::from_f64(0.05), Fixed::from_f64(0.08));
 
         assert!(relationships[0].trust < Fixed::from_f64(0.5));
     }

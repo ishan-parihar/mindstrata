@@ -58,6 +58,8 @@ pub struct SimParameters {
     pub meme_novelty_decay: Fixed,
     /// Rumor prevalence decay rate (daily).
     pub rumor_prevalence_decay: Fixed,
+    /// Belief resistance decay rate per tick — how fast belief resistance weakens.
+    pub belief_resistance_decay: Fixed,
 
     // ── Relational ────────────────────────────────────────────
     /// Trust threshold for friendship classification.
@@ -135,6 +137,7 @@ impl Default for SimParameters {
             trust_sync_rate: Fixed::from_f64(0.1),
             meme_novelty_decay: Fixed::from_f64(0.002),
             rumor_prevalence_decay: Fixed::from_f64(0.01),
+            belief_resistance_decay: Fixed::from_f64(0.001), // matches original BELIEF_RESISTANCE_DECAY
 
             // Relational
             friendship_trust_threshold: Fixed::from_f64(0.5),
