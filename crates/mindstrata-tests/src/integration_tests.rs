@@ -622,6 +622,9 @@ fn stress_correlates_with_conflict_across_seeds() {
 /// Married agents should have higher relationship_v2 trust than average, and partners
 /// should have similar status levels (assortative mating).
 #[test]
+/// §18.4: Over many seeds, marriages correlate with compatibility and status.
+/// Married agents should have trust with their partners and similar
+/// status levels (assortative mating).
 fn marriages_correlate_with_compatibility_and_status() {
     use mindstrata_core::fixed::Fixed;
 
@@ -666,6 +669,9 @@ fn marriages_correlate_with_compatibility_and_status() {
 /// §18.4: Over multiple seeds, gossip accuracy should decline with transmission hops.
 /// Verify that rumor evidence_quality decreases as source_chain length increases.
 #[test]
+/// §18.4: Over many seeds, gossip accuracy declines with transmission hops.
+/// Rumor evidence_quality decreases as source_chain length increases
+/// due to information distortion across retelling generations.
 fn gossip_accuracy_declines_with_hops() {
     let mut short_chain_evidence = Vec::new();
     let mut long_chain_evidence = Vec::new();
@@ -684,6 +690,9 @@ fn gossip_accuracy_declines_with_hops() {
     }
 
     // If both groups have data, long chains should have lower evidence quality
+    if short_chain_evidence.is_empty() || long_chain_evidence.is_empty() {
+        eprintln!("gossip test: insufficient data (short={}, long={})", short_chain_evidence.len(), long_chain_evidence.len());
+    }
     if !short_chain_evidence.is_empty() && !long_chain_evidence.is_empty() {
         let short_avg: f64 = short_chain_evidence.iter().sum::<f64>()
             / short_chain_evidence.len() as f64;
@@ -701,6 +710,9 @@ fn gossip_accuracy_declines_with_hops() {
 /// institutional legitimacy. Institutions with higher legitimacy should have
 /// more propaganda campaigns with higher belief shifts.
 #[test]
+/// §18.4: Over many seeds, propaganda effectiveness correlates with
+/// institutional legitimacy. Institutions with higher legitimacy can
+/// sponsor more effective propaganda campaigns.
 fn propaganda_effectiveness_correlates_with_legitimacy() {
     let mut high_legitimacy_campaigns = 0usize;
     let mut low_legitimacy_campaigns = 0usize;
@@ -734,6 +746,9 @@ fn propaganda_effectiveness_correlates_with_legitimacy() {
     // If both groups have data, high-legitimacy institutions should have
     // at least as many campaigns (they can sponsor propaganda more effectively)
     if high_legitimacy_campaigns > 0 || low_legitimacy_campaigns > 0 {
+        if high_legitimacy_campaigns == 0 && low_legitimacy_campaigns > 0 {
+            eprintln!("propaganda test: only low-legitimacy campaigns found ({low_legitimacy_campaigns})");
+        }
         assert!(high_legitimacy_campaigns >= low_legitimacy_campaigns,
             "High-legitimacy campaigns ({high_legitimacy_campaigns}) should be >= low ({low_legitimacy_campaigns})");
     }
@@ -745,6 +760,9 @@ fn propaganda_effectiveness_correlates_with_legitimacy() {
 /// §18.4: Over multiple seeds, rituals should correlate with group stability.
 /// Institutions with ritual participation should have higher unity than those without.
 #[test]
+/// §18.4: Over many seeds, rituals correlate with group stability.
+/// Institutions with active ritual participation should maintain
+/// comparable or higher unity than those without rituals.
 fn rituals_correlate_with_group_stability() {
     let mut ritual_participation_count = 0usize;
     let mut no_ritual_participation_count = 0usize;
@@ -778,6 +796,9 @@ fn rituals_correlate_with_group_stability() {
         }
     }
 
+    if ritual_participation_count == 0 || no_ritual_participation_count == 0 {
+        eprintln!("rituals test: insufficient data (ritual={}, no_ritual={})", ritual_participation_count, no_ritual_participation_count);
+    }
     if ritual_participation_count > 0 && no_ritual_participation_count > 0 {
         let ritual_avg = ritual_unity_sum / ritual_participation_count as f64;
         let no_ritual_avg = no_ritual_unity_sum / no_ritual_participation_count as f64;
@@ -790,6 +811,9 @@ fn rituals_correlate_with_group_stability() {
 /// §18.4: Over multiple seeds, inequality should correlate with faction formation.
 /// Higher market inequality (wealth gap) should be associated with more factions.
 #[test]
+/// §18.4: Over many seeds, inequality correlates with faction formation.
+/// Higher wealth inequality (max - min coin > 5) should be associated
+/// with at least as many factions as low inequality (< 2).
 fn inequality_correlates_with_faction_formation() {
     let mut high_inequality_factions = 0usize;
     let mut low_inequality_factions = 0usize;
@@ -831,10 +855,13 @@ fn inequality_correlates_with_faction_formation() {
     }
 
     // If both groups have data, high inequality should have at least as many factions
+    if high_inequality_seeds == 0 || low_inequality_seeds == 0 {
+        eprintln!("inequality test: insufficient data (high_ineq_seeds={}, low_ineq_seeds={})", high_inequality_seeds, low_inequality_seeds);
+    }
     if high_inequality_seeds > 0 && low_inequality_seeds > 0 {
         let high_avg = high_inequality_factions as f64 / high_inequality_seeds as f64;
         let low_avg = low_inequality_factions as f64 / low_inequality_seeds as f64;
-        // Weak assertion: high inequality should not have fewer factions
+        // High inequality should have at least 30% of low-inequality factions
         assert!(high_avg >= low_avg * 0.3,
             "High inequality factions ({high_avg:.3}) should be >= 30% of low ({low_avg:.3})");
     }
@@ -844,6 +871,9 @@ fn inequality_correlates_with_faction_formation() {
 /// relationship volatility. Agents with high attachment anxiety should have
 /// more relationship stage fluctuations.
 #[test]
+/// §18.4: Over many seeds, attachment insecurity correlates with
+/// relationship volatility. High-anxiety agents should have at least
+/// as much relationship fluctuation as low-anxiety agents.
 fn attachment_insecurity_correlates_with_relationship_volatility() {
     let mut high_anxiety_volatility = 0usize;
     let mut low_anxiety_volatility = 0usize;
