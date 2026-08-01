@@ -4500,38 +4500,38 @@ impl Simulation {
             agent.feud_ticks.truncate(keep);
         }
 
-        // ── 21b. Courtship creation — eligible agents begin romantic courtship ──
+        // ── 22. Courtship creation — eligible agents begin romantic courtship ──
         // Architecture-plan-2 §10.4: When two unpartnered adult agents with sufficient
         // attraction and trust interact, a Courtship is initiated.
         // Runs every 12 ticks (~2 hours) to avoid O(N²) overhead every tick.
+        const COURTSHIP_TRUST_THRESHOLD: Fixed = Fixed::from_raw(3000); // 0.3
         if phases.is_duodeca {
             let n = self.agents.len();
+            // Build HashSet of agents already in courtships for O(1) lookup.
+            let mut in_courtship: std::collections::HashSet<usize> = std::collections::HashSet::new();
+            for c in &self.active_courtships {
+                if c.active {
+                    in_courtship.insert(c.pursuer);
+                    in_courtship.insert(c.pursued);
+                }
+            }
             for i in 0..n {
-                // Skip agents already in a courtship
-                let already_in_courtship = self.active_courtships.iter().any(|c|
-                    c.active && (c.pursuer == i || c.pursued == i));
-                if already_in_courtship { continue; }
-                // Skip partnered agents
+                // Skip agents already in a courtship, partnered, or minors
+                if in_courtship.contains(&i) { continue; }
                 if self.agents[i].partner.is_some() { continue; }
-                // Skip minors
                 if self.agents[i].age < Fixed::from_f64(16.0) { continue; }
 
                 for j in (i + 1)..n {
-                    // Skip if j is already in a courtship or partnered
-                    let j_in_courtship = self.active_courtships.iter().any(|c|
-                        c.active && (c.pursuer == j || c.pursued == j));
-                    if j_in_courtship { continue; }
+                    if in_courtship.contains(&j) { continue; }
                     if self.agents[j].partner.is_some() { continue; }
                     if self.agents[j].age < Fixed::from_f64(16.0) { continue; }
 
                     // Check kinship — skip close relatives
                     let kinship_coeff = self.kinship_graph.coefficient_between(i, j);
-                    if kinship_coeff >= Fixed::from_f64(0.25) { continue; }
 
-                    // Compute mutual attraction from relationship_v2
-                    let n_agents = self.agents.len();
-                    let idx_ij = Self::relationship_v2_index(i, j, n_agents);
-                    let idx_ji = Self::relationship_v2_index(j, i, n_agents);
+                    // Compute mutual trust from relationship_v2
+                    let idx_ij = Self::relationship_v2_index(i, j, n);
+                    let idx_ji = Self::relationship_v2_index(j, i, n);
                     let trust_ij = if idx_ij < self.agents[i].relationship_v2s.len() {
                         self.agents[i].relationship_v2s[idx_ij].trust
                     } else { Fixed::ZERO };
@@ -4540,28 +4540,28 @@ impl Simulation {
                     } else { Fixed::ZERO };
                     let avg_trust = (trust_ij + trust_ji) * Fixed::from_f64(0.5);
 
-                    // Attraction threshold — must have some trust基础
-                    if avg_trust < Fixed::from_f64(0.3) { continue; }
-
-                    // Check if eligible (age, kinship, attraction thresholds)
-                    let mutual_attraction = avg_trust;
+                    // Delegate all eligibility checks to the function
                     let already_bonded = self.marriage_registry.find_bond(i, j).is_some();
                     if !crate::social::courtship::eligible_for_courtship(
                         self.agents[i].age,
                         self.agents[j].age,
                         kinship_coeff,
                         already_bonded,
-                        Fixed::from_f64(0.3),
-                        mutual_attraction,
+                        COURTSHIP_TRUST_THRESHOLD,
+                        avg_trust,
                     ) { continue; }
 
-                    // Deterministic chance to start courtship — based on attraction
+                    // Deterministic chance to start courtship — based on trust
                     let chance = avg_trust * Fixed::from_f64(0.02);
                     let roll = Fixed::from_f64(self.rng.get_mut(RngStream::Social).random_range(0.0..1.0));
                     if roll < chance {
                         let mut courtship = crate::social::courtship::Courtship::new(i, j, tick_u64);
-                        courtship.mutual_attraction = mutual_attraction;
+                        courtship.mutual_attraction = avg_trust;
                         courtship.stage = crate::social::marriage::RomanticStage::Awareness;
+                        // Update the HashSet immediately to prevent double-matching
+                        // within the same tick (agent in two courtships simultaneously).
+                        in_courtship.insert(i);
+                        in_courtship.insert(j);
                         self.active_courtships.push(courtship);
                     }
                 }
