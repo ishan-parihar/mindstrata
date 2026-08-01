@@ -593,7 +593,10 @@ fn stress_correlates_with_conflict_across_seeds() {
 
         for agent in &sim.agents {
             let stress = (agent.emotions.fear + agent.emotions.anger).to_f64();
-            let conflicts = agent.feuds.len();
+            // Count both feuds and combat fatigue as conflict indicators
+            let feud_count = agent.feuds.len();
+            let has_fatigue = agent.conflict.combat_fatigue > mindstrata_core::fixed::Fixed::ZERO;
+            let conflicts = feud_count + if has_fatigue { 1 } else { 0 };
             if stress > 0.5 {
                 high_stress_count += 1;
                 high_stress_conflicts += conflicts;
