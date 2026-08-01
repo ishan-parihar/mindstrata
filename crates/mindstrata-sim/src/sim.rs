@@ -484,6 +484,7 @@ impl Simulation {
             last_revolution_tick: self.last_revolution_tick,
             black_market: &self.black_market,
             site_work_ticks: &self.site_work_ticks,
+            group_registry: &self.group_registry,
         })
     }
 

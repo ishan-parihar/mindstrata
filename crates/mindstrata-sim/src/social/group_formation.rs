@@ -139,6 +139,7 @@ impl PeerGroup {
 }
 
 /// Registry for all active peer groups in the simulation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GroupRegistry {
     pub groups: Vec<PeerGroup>,
 }

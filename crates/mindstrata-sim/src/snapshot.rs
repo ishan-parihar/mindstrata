@@ -22,6 +22,7 @@ use crate::norms::NormRegistry;
 use crate::person::Relationship;
 use crate::provenance::CausalProvenance;
 use crate::sim::{AgentBundle, MetricsSnapshot, SimConfig};
+use crate::social::group_formation::GroupRegistry;
 use crate::world::World;
 use mindstrata_core::clock::Tick;
 use serde::{Deserialize, Serialize};
@@ -78,13 +79,14 @@ pub struct Snapshot {
     pub black_market: BlackMarketState,
     /// §19.5.E: Site work ticks.
     pub site_work_ticks: Vec<u32>,
+    /// Architecture-plan-2 §12.2: Peer group registry.
+    pub group_registry: GroupRegistry,
 }
 
-/// Version of the snapshot format.
-/// Version 2 → 3: Added mind_models to AgentBundle.
-/// Version 3 → 4: Added cultural_cognition to AgentBundle.
-/// v3: mind_models, v4: cultural_cognition, v5: decision_policy
-pub const SNAPSHOT_VERSION: u32 = 5;
+/// Version of the snapshot format.    /// Version 2 → 3: Added mind_models to AgentBundle.
+    /// Version 3 → 4: Added cultural_cognition to AgentBundle.
+    /// v3: mind_models, v4: cultural_cognition, v5: decision_policy, v6: group_registry
+    pub const SNAPSHOT_VERSION: u32 = 6;
 
 /// Bundles all simulation state references needed to capture a snapshot.
 /// Replaces the 21-parameter `capture()` signature with a single struct.
@@ -111,6 +113,7 @@ pub struct CaptureContext<'a> {
     pub last_revolution_tick: u64,
     pub black_market: &'a BlackMarketState,
     pub site_work_ticks: &'a [u32],
+    pub group_registry: &'a GroupRegistry,
 }
 
 impl Snapshot {
@@ -142,6 +145,7 @@ impl Snapshot {
             last_revolution_tick: ctx.last_revolution_tick,
             black_market: ctx.black_market.clone(),
             site_work_ticks: ctx.site_work_ticks.to_vec(),
+            group_registry: ctx.group_registry.clone(),
         }
     }
 
@@ -334,6 +338,7 @@ mod tests {
             last_revolution_tick: 0,
             black_market: crate::black_market::BlackMarketState::default(),
             site_work_ticks: vec![],
+            group_registry: crate::social::group_formation::GroupRegistry::new(),
         }
     }
 
