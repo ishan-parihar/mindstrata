@@ -3769,15 +3769,38 @@ impl Simulation {
                 let shared_grievance: Fixed = peers.iter().map(|&j| {
                     self.agents[j].derived.resentment
                 }).fold(Fixed::ZERO, |acc, r| acc + r) / Fixed::from_int(peers.len() as i64);
+                // Compute emotional synchrony from mean valence similarity.
+                // Valence = (joy + trust + pride) - (fear + anger + sadness + guilt + shame).
+                let emotional_synchrony: Fixed = peers.iter().map(|&j| {
+                    let vi = (self.agents[i].emotions.joy + self.agents[i].emotions.trust + self.agents[i].emotions.pride)
+                        - (self.agents[i].emotions.fear + self.agents[i].emotions.anger + self.agents[i].emotions.sadness + self.agents[i].emotions.guilt + self.agents[i].emotions.shame);
+                    let vj = (self.agents[j].emotions.joy + self.agents[j].emotions.trust + self.agents[j].emotions.pride)
+                        - (self.agents[j].emotions.fear + self.agents[j].emotions.anger + self.agents[j].emotions.sadness + self.agents[j].emotions.guilt + self.agents[j].emotions.shame);
+                    let diff = (vi - vj).abs();
+                    (Fixed::ONE - diff).clamp_01()
+                }).fold(Fixed::ZERO, |acc, s| acc + s) / Fixed::from_int(peers.len() as i64);
+                // Count recent interactions as proxy for repeated interaction
+                let repeated_interaction: Fixed = peers.iter().map(|&j| {
+                    let rv2_idx = Self::relationship_v2_index(i, j, n_agents);
+                    if rv2_idx < self.agents[i].relationship_v2s.len() {
+                        let ic = self.agents[i].relationship_v2s[rv2_idx].interaction_count;
+                        // Normalize: 10+ interactions → ~1.0
+                        Fixed::from_f64(ic as f64 / 10.0).clamp_01()
+                    } else {
+                        Fixed::ZERO
+                    }
+                }).fold(Fixed::ZERO, |acc, r| acc + r) / Fixed::from_int(peers.len() as i64);
                 let candidate = crate::social::group_formation::GroupCandidate {
                     members: { let mut m = vec![i]; m.extend_from_slice(&peers); m },
                     shared_grievance,
                     shared_identity,
-                    emotional_synchrony: Fixed::from_f64(0.5),
-                    repeated_interaction: Fixed::from_f64(0.5),
+                    emotional_synchrony,
+                    repeated_interaction,
                     leadership_gravity: Fixed::ZERO,
                     external_threat: Fixed::ZERO,
+                    // TODO(#arch2-12.2): compute social_cost from institutional membership density
                     social_cost: Fixed::from_f64(0.1),
+                    // TODO(#arch2-12.2): compute institutional_suppression from council legitimacy
                     institutional_suppression: Fixed::from_f64(0.2),
                     identified_tick: tick_u64,
                 };
