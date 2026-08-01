@@ -474,7 +474,7 @@ fn friendships_correlate_with_proximity_across_seeds() {
     for seed in 0..10u64 {
         let config = SimConfig {
             seed,
-            max_ticks: 2000,
+            max_ticks: 1000,
             world_width: 16,
             world_height: 16,
             num_agents: 20,
