@@ -26,12 +26,13 @@ pub fn update_belief(
     emotional_reinforcement: Fixed,
     social_reinforcement_delta: Fixed,
     current_tick: u64,
+    params: &crate::parameters::SimParameters,
 ) {
     let resistance = belief.resistance;
 
     // §19.5.A: Blend explicit source_trust with belief's source base_trust.
     // This means the evidence source of the belief itself modulates trust.
-    let blended_trust = (source_trust + belief.source.base_trust()) * Fixed::from_f64(0.5);
+    let blended_trust = (source_trust + belief.source.base_trust()) * params.belief_trust_blend_factor;
 
     // §19.5.A: Track social reinforcement count when social evidence confirms belief.
     if social_reinforcement_delta > Fixed::ZERO {
@@ -45,8 +46,8 @@ pub fn update_belief(
         + social_reinforcement_delta;
 
     // Identity protection bias: beliefs with high identity linkage resist change
-    let identity_protection = if belief.identity_linkage > Fixed::from_f64(0.5) {
-        let protection = Fixed::ONE - belief.identity_linkage * Fixed::from_f64(0.3);
+    let identity_protection = if belief.identity_linkage > params.belief_identity_linkage_threshold {
+        let protection = Fixed::ONE - belief.identity_linkage * params.belief_identity_protection_strength;
         belief.confidence * (Fixed::ONE - protection) + base_update * protection
     } else {
         base_update
@@ -58,7 +59,7 @@ pub fn update_belief(
     // Reinforcement decays resistance over time
     let time_since_reinforce = current_tick.saturating_sub(belief.last_reinforced_tick);
     if time_since_reinforce > 0 && evidence_strength > Fixed::ZERO {
-        let decay = Fixed::from_f64(0.001) * Fixed::from_int(time_since_reinforce as i64);
+        let decay = params.belief_resistance_decay_rate * Fixed::from_int(time_since_reinforce as i64);
         belief.resistance = (belief.resistance - decay).clamp_01();
         belief.last_reinforced_tick = current_tick;
     }
@@ -71,6 +72,7 @@ pub fn update_beliefs(
     emotional_reinforcement: Fixed,
     social_reinforcement: Fixed,
     current_tick: u64,
+    params: &crate::parameters::SimParameters,
 ) {
     for (prop_id, strength, trust) in evidence {
         if let Some(belief) = beliefs.iter_mut().find(|b| b.proposition_id == *prop_id) {
@@ -81,15 +83,16 @@ pub fn update_beliefs(
                 emotional_reinforcement,
                 social_reinforcement,
                 current_tick,
+                params,
             );
         }
     }
 }
 
 /// Decay belief resistance over time (beliefs become slightly easier to update).
-pub fn decay_belief_resistance(beliefs: &mut [Belief], decay_rate: Fixed) {
+pub fn decay_belief_resistance(beliefs: &mut [Belief], decay_rate: Fixed, params: &crate::parameters::SimParameters) {
     for belief in beliefs.iter_mut() {
-        let baseline = Fixed::from_f64(0.3);
+        let baseline = params.belief_resistance_baseline;
         if belief.resistance > baseline {
             belief.resistance = (belief.resistance - decay_rate).clamp_01();
         }
@@ -121,6 +124,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             100,
+            &crate::parameters::SimParameters::default(),
         );
 
         assert!(
@@ -150,6 +154,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             100,
+            &crate::parameters::SimParameters::default(),
         );
 
         // Identity-linked beliefs resist change, but should still move somewhat

@@ -125,6 +125,18 @@ pub struct SimParameters {
     /// Default 1.0 preserves original hardcoded behavior; >1.0 amplifies conflict.
     pub conflict_escalation_rate: Fixed,
 
+    // ── Belief Update ────────────────────────────────────────
+    /// Trust blend factor for blending source_trust with base_trust (0.5).
+    pub belief_trust_blend_factor: Fixed,
+    /// Identity linkage threshold above which protection kicks in (0.5).
+    pub belief_identity_linkage_threshold: Fixed,
+    /// Identity protection strength — higher = more resistant (0.3).
+    pub belief_identity_protection_strength: Fixed,
+    /// Per-tick resistance decay rate (0.001).
+    pub belief_resistance_decay_rate: Fixed,
+    /// Resistance baseline — below this, no further decay (0.3).
+    pub belief_resistance_baseline: Fixed,
+
     // ── Conflict ─────────────────────────────────────────────
     /// Combat fatigue decay rate per tick when not in combat (0.02).
     pub conflict_combat_fatigue_decay: Fixed,
@@ -252,6 +264,12 @@ impl Default for SimParameters {
             bonding_rate: Fixed::ONE,   // identity: preserves original hardcoded deltas
             conflict_escalation_rate: Fixed::ONE,   // identity: preserves original hardcoded deltas
 
+            // Belief Update
+            belief_trust_blend_factor: Fixed::from_f64(0.5),
+            belief_identity_linkage_threshold: Fixed::from_f64(0.5),
+            belief_identity_protection_strength: Fixed::from_f64(0.3),
+            belief_resistance_decay_rate: Fixed::from_f64(0.001),
+            belief_resistance_baseline: Fixed::from_f64(0.3),
             // Conflict
             conflict_combat_fatigue_decay: Fixed::from_f64(0.02),
             conflict_trauma_decay: Fixed::from_f64(0.0001),

@@ -1636,6 +1636,7 @@ impl Simulation {
                 belief_update::decay_belief_resistance(
                     &mut agent_beliefs.beliefs,
                     belief_resistance_decay,
+                    &self.params,
                 );
             }
 
@@ -4332,6 +4333,7 @@ impl Simulation {
                         Fixed::ZERO,
                         Fixed::ZERO,
                         tick_u64,
+                        &self.params,
                     );
                 }
             }
