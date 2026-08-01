@@ -46,6 +46,15 @@ pub mod spec_lint;
 pub mod relationship_v2;
 pub mod attraction;
 pub mod status_dims;
+pub mod marriage;
+pub mod cult;
+pub mod group_formation;
+pub mod patronage;
+pub mod narrative_frame;
+pub mod ideology;
+pub mod sacred;
+pub mod education;
+pub mod noosphere;
 
 pub use sim::Simulation;
 pub mod epistemic;
