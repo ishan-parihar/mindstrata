@@ -1,0 +1,55 @@
+// §13.1 Meme system — defines meme types, propagation mechanics, and mutation rates.
+// Used by culture/meme.rs and culture/meme_aggregator.rs.
+
+Memes(
+    // Meme content types (§13.1)
+    content_types: [
+        "Rumor",
+        "Insult",
+        "Praise",
+        "TheologicalClaim",
+        "PoliticalAccusation",
+        "MoralNorm",
+        "Conspiracy",
+        "Prophecy",
+        "HistoricalMyth",
+        "PracticalKnowledge",
+        "Taboo",
+        "Joke",
+        "Song",
+        "Slogan",
+    ],
+
+    // Propagation parameters (§13.2)
+    propagation: (
+        source_credibility_weight: 0.2,
+        emotional_arousal_weight: 0.15,
+        identity_relevance_weight: 0.15,
+        novelty_weight: 0.1,
+        listener_susceptibility_weight: 0.1,
+        repetition_weight: 0.1,
+        social_conformity_weight: 0.1,
+        institutional_amplification_weight: 0.1,
+        skepticism_penalty: 0.15,
+        belief_contradiction_penalty: 0.1,
+        suppression_penalty: 0.2,
+        base_transmission_chance: 0.1,
+    ),
+
+    // Mutation parameters (§13.2)
+    mutation: (
+        memory_error_rate: 0.02,
+        emotional_exaggeration_rate: 0.05,
+        identity_bias_rate: 0.03,
+        narrative_simplification_rate: 0.04,
+        audience_tailoring_rate: 0.03,
+    ),
+
+    // Meme lifecycle
+    lifecycle: (
+        decay_rate: 0.001,
+        min_host_count: 1,
+        virality_threshold: 0.6,
+        sacredness_decay_rate: 0.0001,
+    ),
+)

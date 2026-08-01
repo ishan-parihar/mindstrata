@@ -1,0 +1,64 @@
+// §8.1.14 Attachment styles — defines the four attachment patterns and their dynamics.
+// Used by psychology/attachment.rs to model how agents bond under stress.
+
+AttachmentStyles(
+    styles: [
+        AttachmentStyle(
+            name: "Secure",
+            security_baseline: 0.7,
+            anxiety_baseline: 0.2,
+            avoidance_baseline: 0.1,
+            protest_threshold: 0.4,
+            soothing_receptivity: 0.8,
+            separation_distress: 0.3,
+            caregiving_style: "Responsive",
+        ),
+        AttachmentStyle(
+            name: "Anxious",
+            security_baseline: 0.3,
+            anxiety_baseline: 0.8,
+            avoidance_baseline: 0.1,
+            protest_threshold: 0.2,
+            soothing_receptivity: 0.5,
+            separation_distress: 0.8,
+            caregiving_style: "Intrusive",
+        ),
+        AttachmentStyle(
+            name: "Avoidant",
+            security_baseline: 0.4,
+            anxiety_baseline: 0.2,
+            avoidance_baseline: 0.8,
+            protest_threshold: 0.6,
+            soothing_receptivity: 0.2,
+            separation_distress: 0.2,
+            caregiving_style: "Dismissive",
+        ),
+        AttachmentStyle(
+            name: "Disorganized",
+            security_baseline: 0.2,
+            anxiety_baseline: 0.6,
+            avoidance_baseline: 0.6,
+            protest_threshold: 0.3,
+            soothing_receptivity: 0.3,
+            separation_distress: 0.7,
+            caregiving_style: "Frightened",
+        ),
+    ],
+
+    // Dynamics under threat (§8.1.14)
+    threat_response: (
+        secure: "seeks_support_and_recovers",
+        anxious: "clings_and_demands_reassurance",
+        avoidant: "withdraws_and_self_regulates",
+        disorganized: "oscillates_or_freezes",
+    ),
+
+    // Attachment formation parameters
+    formation: (
+        positive_interaction_weight: 0.3,
+        consistency_weight: 0.2,
+        responsiveness_weight: 0.3,
+        trauma_disruption_weight: 0.4,
+        developmentally_sensitive_period_ticks: 10000,
+    ),
+)
