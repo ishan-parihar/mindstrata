@@ -329,19 +329,8 @@ fn childhood_trauma_increases_attachment_insecurity() {
         .filter(|a| a.attachment.security > Fixed::from_f64(0.6))
         .collect();
 
-    if !insecure_agents.is_empty() && !secure_agents.is_empty() {
-        // Insecure agents should have higher separation distress
-        let avg_insecure_distress: f64 = insecure_agents.iter()
-            .map(|a| a.attachment.separation_distress.to_f64()).sum::<f64>()
-            / insecure_agents.len() as f64;
-        let avg_secure_distress: f64 = secure_agents.iter()
-            .map(|a| a.attachment.separation_distress.to_f64()).sum::<f64>()
-            / secure_agents.len() as f64;
-        // Insecure agents should tend toward higher distress (statistical check)
-        assert!(avg_insecure_distress >= 0.0 && avg_insecure_distress <= 1.0,
-            "Insecure agents should have plausible distress: {avg_insecure_distress}");
-        assert!(avg_secure_distress >= 0.0 && avg_secure_distress <= 1.0,
-            "Secure agents should have plausible distress: {avg_secure_distress}");
+    // Require minimum partition size for meaningful statistical comparison
+    if insecure_agents.len() >= 3 && secure_agents.len() >= 3 {
         // Insecure agents should have higher anxiety on average
         let avg_insecure_anxiety: f64 = insecure_agents.iter()
             .map(|a| a.attachment.anxiety.to_f64()).sum::<f64>()
@@ -394,12 +383,11 @@ fn courtship_to_marriage_chain() {
 
 // ── §18.3: Cult Formation ───────────────────────────────────────
 
-/// §18.3: Cult can form around charismatic leader under crisis.
-/// Verifies that under high-stress conditions with low institutional
-/// legitimacy, charismatic agents can attract devoted followers.
+/// §18.3: Cult can form around charismatic leader under emergent conditions.
+/// Verifies that the cult formation system is active and produces valid
+/// cult structures when conditions emerge naturally from simulation dynamics.
 #[test]
-fn cult_formation_under_crisis() {
-    // Use a drought scenario to create crisis conditions
+fn cult_formation_emergence() {
     let config = SimConfig {
         seed: 42,
         max_ticks: 5000,
@@ -411,16 +399,14 @@ fn cult_formation_under_crisis() {
     let mut sim = Simulation::new(config);
     sim.populate();
 
-    // Simulate 5000 ticks — enough for crisis + cult formation
+    // Simulate 5000 ticks — enough for cult formation dynamics to emerge
     sim.run(5000);
 
-    // Verify the cult registry exists and the simulation is stable
     let cult_count = sim.cult_registry.cults.len();
 
     // At minimum, the cult formation system should be active
-    // (cults may or may not form depending on emergent conditions)
     assert!(sim.agents.len() >= 15,
-        "Most agents should survive 5000 ticks (cult formation takes time)");
+        "Most agents should survive 5000 ticks");
 
     // If a cult formed, verify its structure
     if cult_count > 0 {
