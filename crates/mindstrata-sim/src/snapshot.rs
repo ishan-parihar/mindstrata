@@ -328,7 +328,7 @@ mod tests {
             health_config: crate::health::HealthConfig::default(),
             demography_config: crate::demography::DemographyConfig::default(),
             agent_diseases: vec![],
-            market: crate::market::MarketState::new(),
+            market: crate::market::MarketState::new(&crate::parameters::SimParameters::default()),
             knowledge_store: vec![],
             metric_history: vec![],
             last_revolution_tick: 0,

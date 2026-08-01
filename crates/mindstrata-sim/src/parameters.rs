@@ -169,6 +169,32 @@ pub struct SimParameters {
     /// Violence escalation chance when thresholds met (0.3).
     pub conflict_escalation_chance: Fixed,
 
+    // ── Market / Economic ────────────────────────────────────
+    /// Price smoothing factor (0.1 = exponential moving average alpha).
+    pub market_price_smoothing: Fixed,
+    /// No-supply price ratio (2.0 = price doubles when supply is zero).
+    pub market_no_supply_ratio: Fixed,
+    /// Trust discount multiplier for direct trades (0.2).
+    pub market_trust_discount: Fixed,
+    /// Demand weight for need pressure calculation (2.0).
+    pub market_demand_weight: Fixed,
+    /// Purchasing power divisor (10.0 = coin / 10 = normalized power).
+    pub market_purchasing_power_divisor: Fixed,
+    /// Scarcity extreme cost multiplier (2.0 = 2x cost when supply is zero).
+    pub market_scarcity_extreme: Fixed,
+    /// Scarcity abundance cost multiplier (0.5 = 0.5x cost when abundant).
+    pub market_scarcity_abundance: Fixed,
+    /// Scarcity linear interpolation range (1.5 = 2.0 - 0.5).
+    pub market_scarcity_range: Fixed,
+    /// Starting grain price (5.0).
+    pub market_initial_grain_price: Fixed,
+    /// Starting water price (2.0).
+    pub market_initial_water_price: Fixed,
+    /// Default price for unknown resources (10.0).
+    pub market_default_price: Fixed,
+    /// Gini normalization divisor (2.0).
+    pub market_gini_divisor: Fixed,
+
     // ── Cultural ──────────────────────────────────────────────
     /// Meme transmission base chance multiplier.
     pub meme_transmission_multiplier: Fixed,
@@ -286,6 +312,19 @@ impl Default for SimParameters {
             conflict_escalation_fear_threshold: Fixed::from_f64(0.3),
             conflict_escalation_aggression_threshold: Fixed::from_f64(1.2),
             conflict_escalation_chance: Fixed::from_f64(0.3),
+            // Market / Economic
+            market_price_smoothing: Fixed::from_f64(0.1),
+            market_no_supply_ratio: Fixed::from_f64(2.0),
+            market_trust_discount: Fixed::from_f64(0.2),
+            market_demand_weight: Fixed::from_f64(2.0),
+            market_purchasing_power_divisor: Fixed::from_f64(10.0),
+            market_scarcity_extreme: Fixed::from_f64(2.0),
+            market_scarcity_abundance: Fixed::from_f64(0.5),
+            market_scarcity_range: Fixed::from_f64(1.5),
+            market_initial_grain_price: Fixed::from_f64(5.0),
+            market_initial_water_price: Fixed::from_f64(2.0),
+            market_default_price: Fixed::from_f64(10.0),
+            market_gini_divisor: Fixed::from_f64(2.0),
             // Cultural
             meme_transmission_multiplier: Fixed::from_f64(1.0),
             propaganda_effectiveness: Fixed::from_f64(0.3),

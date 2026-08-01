@@ -316,7 +316,7 @@ impl Simulation {
             demography_config: demography::DemographyConfig::default(),
             agent_diseases: Vec::new(),
             site_work_ticks: Vec::new(),
-            market: MarketState::new(),
+            market: MarketState::new(&crate::parameters::SimParameters::default()),
             knowledge_store: Vec::new(),
             metric_history: Vec::new(),
             last_revolution_tick: 0,
@@ -4414,7 +4414,7 @@ impl Simulation {
             let agent_economic_state: Vec<_> = self.agents.iter()
                 .map(|a| (a.needs.clone(), a.wealth.clone()))
                 .collect();
-            market::system_market(&self.world, &agent_economic_state, &mut self.market, tick_u64);
+            market::system_market(&self.world, &agent_economic_state, &mut self.market, tick_u64, &self.params);
 
             // §4.4: Update black market state based on current scarcity and enforcement
             // Scarcity is normalized: 0 = abundant, 1 = critically scarce
