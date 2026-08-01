@@ -55,6 +55,6 @@ pub use interaction::{
 pub use kinship::KinshipGraph;
 pub use marriage::{Marriage, MarriageRegistry, PairBond, RomanticStage};
 pub use patronage::{PatronageRegistry, PatronageRelation};
-pub use relationship_stages::{try_advance_stage, try_regress_stage, obligation_multiplier_for_stage};
+pub use relationship_stages::{try_advance_stage, try_regress_stage};
 pub use relationship_v2::{RelationshipV2, RelationshipStage};
 pub use status_dims::StatusDimensions;
