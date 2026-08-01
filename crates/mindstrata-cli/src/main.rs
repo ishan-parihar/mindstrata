@@ -300,20 +300,18 @@ fn main() {
                 }
             }
 
-            // §6.5: Export metric history to CSV
+            // §6.5 + §17: Export metric history to CSV using MetricsSnapshot methods
             if let Some(ref path) = export_metrics {
+                use mindstrata_sim::sim::MetricsSnapshot;
                 let metrics = &sim.metric_history;
                 if metrics.is_empty() {
                     eprintln!("No metric history to export.");
                 } else {
-                    let mut csv = String::from("tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count\n");
+                    let mut csv = String::from(MetricsSnapshot::csv_header());
+                    csv.push('\n');
                     for m in metrics {
-                        use std::fmt::Write;
-                        let _ = writeln!(csv, "{},{},{},{},{},{},{},{},{},{},{},{}",
-                            m.tick, m.avg_hunger, m.avg_thirst, m.avg_fatigue,
-                            m.avg_valence, m.avg_joy, m.avg_fear,
-                            m.total_grain, m.total_water,
-                            m.event_count, m.journal_len, m.agent_count);
+                        csv.push_str(&m.to_csv_line());
+                        csv.push('\n');
                     }
                     match std::fs::write(path, &csv) {
                         Ok(()) => println!("\n  Metrics exported to: {path} ({} rows)", metrics.len()),
