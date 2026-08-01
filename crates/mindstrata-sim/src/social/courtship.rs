@@ -135,6 +135,14 @@ impl Courtship {
         (base + reciprocity_bonus + approval_bonus).clamp_01()
     }
 
+    /// Daily update — decay reciprocity, check for inactivity timeout.
+    pub fn daily_update(&mut self) {
+        // Reciprocity slowly decays without reinforcement
+        self.reciprocity = (self.reciprocity * Fixed::from_f64(0.98)).max(Fixed::ZERO);
+        // Social approval can shift over time
+        self.social_approval = (self.social_approval * Fixed::from_f64(0.995) + Fixed::from_f64(0.005) * self.reciprocity).clamp_01();
+    }
+
     /// Courtship probability of regression per tick — depends on negative interactions.
     pub fn regression_probability(&self) -> Fixed {
         let negatives = Fixed::from_int(self.negative_interactions as i64);
