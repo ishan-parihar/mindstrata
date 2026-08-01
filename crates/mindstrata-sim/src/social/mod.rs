@@ -29,6 +29,8 @@ pub mod clan;
 pub mod courtship;
 pub mod cult;
 pub mod epistemic;
+#[expect(dead_code, reason = "not yet wired into tick loop")]
+pub mod faction_v2;
 pub mod group_formation;
 pub mod hierarchy;
 pub mod household;
@@ -44,9 +46,10 @@ pub mod status_dims;
 // Re-export key types for convenient access
 pub use attraction::AttractionModel;
 pub use clan::Clan;
-pub use courtship::{Courtship, CourtshipStage};
+pub use courtship::Courtship;
 pub use cult::{CultDynamics, CultRegistry};
 pub use epistemic::EpistemicState;
+pub use faction_v2::{FactionV2, FactionV2Registry};
 pub use group_formation::{GroupCandidate, GroupType};
 pub use household::Household;
 pub use interaction::{

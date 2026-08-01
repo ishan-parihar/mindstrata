@@ -1,13 +1,12 @@
 //! §10.4 Courtship mechanics — the process from attraction to pair-bond.
 //!
 //! Architecture §10.4: Romantic stages flow from Awareness → Attraction →
-//! Flirtation → Courtship → Exclusivity → Betrothal → Marriage.
+//! Flirtation → ActiveCourtship → TestingReciprocity → SocialValidation
+//! → Exclusivity → Betrothal → Marriage.
 //!
-//! Courtship is a scripted social process with probabilistic gates:
-//!   - Each stage has entry conditions based on attraction, trust, and social context
-//!   - Progression requires repeated positive interactions
-//!   - Social approval modulates progression speed
-//!   - Rejection or betrayal can reset or reverse stages
+//! This module uses `RomanticStage` from `marriage.rs` (the unified enum)
+//! and provides courtship-specific logic: eligibility checks, progression
+//! probability, and reciprocity tracking.
 //!
 //! ```text
 //! Courtship dynamics:
@@ -18,91 +17,7 @@
 
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
-
-/// Stage of courtship between two agents.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub enum CourtshipStage {
-    /// No romantic awareness.
-    Unaware,
-    /// One or both agents are aware of each other as potential partners.
-    Awareness,
-    /// Initial attraction detected (may be one-sided).
-    Attraction,
-    /// Subtle signaling of interest (glances, proximity seeking).
-    Flirtation,
-    /// Active courtship — pursuing the relationship deliberately.
-    ActiveCourtship,
-    /// Testing reciprocity — does the other feel the same?
-    TestingReciprocity,
-    /// Social validation — gossip, community awareness.
-    SocialValidation,
-    /// Exclusivity agreed upon (private or public).
-    Exclusivity,
-    /// Formal betrothal / engagement.
-    Betrothal,
-}
-
-impl CourtshipStage {
-    /// Advance to the next stage if the courtship progresses positively.
-    pub fn next(&self) -> Option<Self> {
-        match self {
-            Self::Unaware => Some(Self::Awareness),
-            Self::Awareness => Some(Self::Attraction),
-            Self::Attraction => Some(Self::Flirtation),
-            Self::Flirtation => Some(Self::ActiveCourtship),
-            Self::ActiveCourtship => Some(Self::TestingReciprocity),
-            Self::TestingReciprocity => Some(Self::SocialValidation),
-            Self::SocialValidation => Some(Self::Exclusivity),
-            Self::Exclusivity => Some(Self::Betrothal),
-            Self::Betrothal => None, // Courtship complete — leads to marriage
-        }
-    }
-
-    /// Regression — courtship can fail and step back.
-    pub fn regress(&self) -> Option<Self> {
-        match self {
-            Self::Betrothal => Some(Self::Exclusivity),
-            Self::Exclusivity => Some(Self::ActiveCourtship),
-            Self::ActiveCourtship => Some(Self::Flirtation),
-            Self::Flirtation => Some(Self::Attraction),
-            Self::Attraction => Some(Self::Awareness),
-            Self::Awareness => None, // Back to unaware — courtship failed
-            Self::TestingReciprocity => Some(Self::ActiveCourtship),
-            Self::SocialValidation => Some(Self::TestingReciprocity),
-            Self::Unaware => None,
-        }
-    }
-
-    /// Minimum trust required to enter this stage.
-    pub fn trust_threshold(&self) -> Fixed {
-        match self {
-            Self::Unaware => Fixed::ZERO,
-            Self::Awareness => Fixed::from_f64(0.1),
-            Self::Attraction => Fixed::from_f64(0.15),
-            Self::Flirtation => Fixed::from_f64(0.25),
-            Self::ActiveCourtship => Fixed::from_f64(0.35),
-            Self::TestingReciprocity => Fixed::from_f64(0.4),
-            Self::SocialValidation => Fixed::from_f64(0.45),
-            Self::Exclusivity => Fixed::from_f64(0.55),
-            Self::Betrothal => Fixed::from_f64(0.65),
-        }
-    }
-
-    /// Minimum attraction required to enter this stage.
-    pub fn attraction_threshold(&self) -> Fixed {
-        match self {
-            Self::Unaware => Fixed::ZERO,
-            Self::Awareness => Fixed::from_f64(0.1),
-            Self::Attraction => Fixed::from_f64(0.2),
-            Self::Flirtation => Fixed::from_f64(0.3),
-            Self::ActiveCourtship => Fixed::from_f64(0.4),
-            Self::TestingReciprocity => Fixed::from_f64(0.45),
-            Self::SocialValidation => Fixed::from_f64(0.5),
-            Self::Exclusivity => Fixed::from_f64(0.55),
-            Self::Betrothal => Fixed::from_f64(0.6),
-        }
-    }
-}
+use super::marriage::RomanticStage;
 
 /// A courtship in progress between two agents.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -111,8 +26,8 @@ pub struct Courtship {
     pub pursuer: usize,
     /// Index of agent being pursued.
     pub pursued: usize,
-    /// Current courtship stage.
-    pub stage: CourtshipStage,
+    /// Current romantic stage (using the unified RomanticStage enum).
+    pub stage: RomanticStage,
     /// Mutual attraction level (averaged from both agents).
     pub mutual_attraction: Fixed,
     /// Social approval from the community (0–1).
@@ -137,7 +52,7 @@ impl Courtship {
         Self {
             pursuer,
             pursued,
-            stage: CourtshipStage::Unaware,
+            stage: RomanticStage::Unaware,
             mutual_attraction: Fixed::ZERO,
             social_approval: Fixed::from_f64(0.5),
             reciprocity: Fixed::ZERO,
@@ -169,12 +84,18 @@ impl Courtship {
     }
 
     /// Check if stage advancement conditions are met.
+    ///
+    /// Requires: trust >= stage threshold, attraction >= 60% of trust,
+    /// and positive interactions outnumber negatives.
     fn try_advance(&mut self, trust: Fixed, attraction: Fixed) {
-        if let Some(next) = self.stage.next() {
-            if trust >= next.trust_threshold()
-                && attraction >= next.attraction_threshold()
-                && self.positive_interactions > self.negative_interactions
-            {
+        if let Some(next) = self.stage.next_positive() {
+            let trust_ok = trust >= next.base_trust();
+            // Attraction must be at least 60% of the trust threshold
+            let min_attraction = next.base_trust() * Fixed::from_f64(0.6);
+            let attraction_ok = attraction >= min_attraction;
+            let balance_ok = self.positive_interactions > self.negative_interactions;
+
+            if trust_ok && attraction_ok && balance_ok {
                 self.stage = next;
             }
         }
@@ -183,10 +104,21 @@ impl Courtship {
     /// Check if stage regression conditions are met.
     fn try_regress(&mut self) {
         if self.negative_interactions > self.positive_interactions {
-            if let Some(prev) = self.stage.regress() {
-                self.stage = prev;
+            // Regress one stage back if possible
+            let prev = match self.stage {
+                RomanticStage::ActiveCourtship => Some(RomanticStage::Flirtation),
+                RomanticStage::TestingReciprocity => Some(RomanticStage::ActiveCourtship),
+                RomanticStage::SocialValidation => Some(RomanticStage::TestingReciprocity),
+                RomanticStage::Exclusivity => Some(RomanticStage::ActiveCourtship),
+                RomanticStage::Betrothal => Some(RomanticStage::Exclusivity),
+                RomanticStage::Flirtation => Some(RomanticStage::Attraction),
+                RomanticStage::Attraction => Some(RomanticStage::Awareness),
+                RomanticStage::Awareness => None, // courtship failed
+                _ => None,
+            };
+            if let Some(p) = prev {
+                self.stage = p;
             } else {
-                // Courtship failed completely
                 self.active = false;
             }
         }
@@ -204,12 +136,12 @@ impl Courtship {
     pub fn regression_probability(&self) -> Fixed {
         let negatives = Fixed::from_int(self.negative_interactions as i64);
         let positives = Fixed::from_int(self.positive_interactions as i64);
-        let ratio = if negatives + positives > Fixed::ZERO {
-            negatives / (negatives + positives)
+        let total = negatives + positives;
+        if total > Fixed::ZERO {
+            (negatives / total) * Fixed::from_f64(0.03)
         } else {
             Fixed::ZERO
-        };
-        ratio * Fixed::from_f64(0.03)
+        }
     }
 }
 
@@ -244,24 +176,24 @@ mod tests {
         let mut courtship = Courtship::new(0, 1, 0);
         courtship.record_positive(10, Fixed::from_f64(0.5), Fixed::from_f64(0.5));
         // Should advance from Unaware to at least Awareness or Attraction
-        assert!(courtship.stage >= CourtshipStage::Awareness);
+        assert!(courtship.stage >= RomanticStage::Awareness);
     }
 
     #[test]
     fn courtship_stage_regresses_on_negatives() {
         let mut courtship = Courtship::new(0, 1, 0);
-        courtship.stage = CourtshipStage::Flirtation;
+        courtship.stage = RomanticStage::Flirtation;
         // Multiple negatives should regress
         for i in 0..5 {
             courtship.record_negative(10 + i);
         }
-        assert!(courtship.stage < CourtshipStage::Flirtation);
+        assert!(courtship.stage < RomanticStage::Flirtation);
     }
 
     #[test]
     fn courtship_fails_after_enough_negatives() {
         let mut courtship = Courtship::new(0, 1, 0);
-        courtship.stage = CourtshipStage::Attraction;
+        courtship.stage = RomanticStage::Attraction;
         for i in 0..10 {
             courtship.record_negative(10 + i);
         }

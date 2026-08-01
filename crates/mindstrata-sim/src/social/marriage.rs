@@ -29,7 +29,11 @@ pub enum RomanticStage {
     /// Subtle signaling of interest.
     Flirtation,
     /// Active courtship — pursuing the relationship.
-    Courtship,
+    ActiveCourtship,
+    /// Testing whether interest is mutual.
+    TestingReciprocity,
+    /// Social validation — gossip, community awareness.
+    SocialValidation,
     /// Mutually agreed exclusivity.
     Exclusivity,
     /// Formal betrothal / engagement.
@@ -53,8 +57,10 @@ impl RomanticStage {
             Self::Unaware => Some(Self::Awareness),
             Self::Awareness => Some(Self::Attraction),
             Self::Attraction => Some(Self::Flirtation),
-            Self::Flirtation => Some(Self::Courtship),
-            Self::Courtship => Some(Self::Exclusivity),
+            Self::Flirtation => Some(Self::ActiveCourtship),
+            Self::ActiveCourtship => Some(Self::TestingReciprocity),
+            Self::TestingReciprocity => Some(Self::SocialValidation),
+            Self::SocialValidation => Some(Self::Exclusivity),
             Self::Exclusivity => Some(Self::Betrothal),
             Self::Betrothal => Some(Self::Married),
             Self::Married => Some(Self::HouseholdFormed),
@@ -72,7 +78,9 @@ impl RomanticStage {
             Self::Awareness => Fixed::from_f64(0.1),
             Self::Attraction => Fixed::from_f64(0.2),
             Self::Flirtation => Fixed::from_f64(0.3),
-            Self::Courtship => Fixed::from_f64(0.4),
+            Self::ActiveCourtship => Fixed::from_f64(0.35),
+            Self::TestingReciprocity => Fixed::from_f64(0.4),
+            Self::SocialValidation => Fixed::from_f64(0.45),
             Self::Exclusivity => Fixed::from_f64(0.55),
             Self::Betrothal => Fixed::from_f64(0.65),
             Self::Married => Fixed::from_f64(0.75),
