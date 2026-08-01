@@ -304,7 +304,7 @@ fn fnv1a_hash(data: &[u8]) -> u64 {
 mod tests {
     use super::*;
     use crate::sim::SimConfig;
-    use crate::social::group_formation::{GroupCandidate, PeerGroup, GroupType};
+    use crate::social::group_formation::{GroupCandidate, PeerGroup};
     use mindstrata_core::fixed::Fixed;
 
     fn make_test_snapshot() -> Snapshot {
