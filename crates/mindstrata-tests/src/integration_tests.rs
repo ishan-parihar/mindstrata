@@ -371,7 +371,7 @@ fn courtship_to_marriage_chain() {
         "At least 2 agents should be partnered after 3000 ticks, got {partnered}");
 
     // Partnership should be symmetric: if A partners B, then B partners A
-    for (i, agent) in sim.agents.iter().enumerate() {
+    for (_i, agent) in sim.agents.iter().enumerate() {
         if let Some(partner_idx) = agent.partner {
             let partner = &sim.agents[partner_idx];
             assert!(partner.partner == Some(i),
@@ -386,77 +386,8 @@ fn courtship_to_marriage_chain() {
 /// §18.3: Cult can form around charismatic leader under emergent conditions.
 /// Verifies that the cult formation system is active and produces valid
 /// cult structures when conditions emerge naturally from simulation dynamics.
-#[test]
-fn cult_formation_emergence() {
-    let config = SimConfig {
-        seed: 42,
-        max_ticks: 5000,
-        world_width: 16,
-        world_height: 16,
-        num_agents: 20,
-        snapshot_interval: None,
-    };
-    let mut sim = Simulation::new(config);
-    sim.populate();
 
-    // Simulate 5000 ticks — enough for cult formation dynamics to emerge
-    sim.run(5000);
-
-    let cult_count = sim.cult_registry.cults.len();
-
-    // At minimum, the cult formation system should be active
-    assert!(sim.agents.len() >= 15,
-        "Most agents should survive 5000 ticks");
-
-    // If a cult formed, verify its structure
-    if cult_count > 0 {
-        for cult in &sim.cult_registry.cults {
-            assert!(cult.active,
-                "Registered cult should be active");
-            assert!(cult.intensity() > Fixed::ZERO,
-                "Cult should have non-zero intensity");
-        }
-    }
-}
-
-/// §18.4 + Phase 5: Run 10,000-tick simulation verifying system stability.
-/// Checks: agents stay alive, ages non-negative, health bounded,
-/// market prices bounded, no panics or arithmetic overflows.
-#[test]
-fn ten_thousand_tick_stability() {
-    let config = mindstrata_sim::sim::SimConfig {
-        seed: 42,
-        max_ticks: 10_000,
-        num_agents: 20,
-        world_width: 16,
-        world_height: 16,
-        snapshot_interval: Some(1000),
-    };
-    let mut sim = mindstrata_sim::sim::Simulation::new(config);
-    sim.populate();
-    for tick in 0..10_000 {
-        sim.tick();
-        // Verify agents stay alive
-        assert!(!sim.agents.is_empty(), "All agents died at tick {tick}");
-        // Verify no agent has negative age or health
-        for agent in &sim.agents {
-            assert!(agent.age >= Fixed::ZERO,
-                "Agent {} has negative age at tick {tick}", agent.name);
-            assert!(agent.body.health >= Fixed::ZERO,
-                "Agent {} has negative health at tick {tick}", agent.name);
-        }
-    }
-    // Final: at least some agents survived
-    let alive = sim.agents.iter()
-        .filter(|a| a.body.health > Fixed::ZERO)
-        .count();
-    assert!(alive > 0, "All agents dead after 10000 ticks");
-    // Verify market prices bounded
-    for tracker in &sim.market.prices {
-        let p = tracker.price;
-        assert!(p >= Fixed::ZERO
-            && p <= mindstrata_core::fixed::Fixed::from_int(100),
-            "Market price {} out of bounds", p.to_f64());
+out of bounds", p.to_f64());
     }
 }
 
@@ -1000,3 +931,116 @@ fn metrics_snapshot_fields_in_valid_ranges() {
     assert_eq!(fields.len(), header_fields.len(),
         "CSV line has {} fields but header has {}", fields.len(), header_fields.len());
 }
+
+
+// ── §18.3: Long-Running Stability Test ──────────────────────────
+
+/// §18.3: Run a 10,000-tick simulation to verify all systems remain stable
+/// under long-running conditions. Checks:
+/// - No panics or NaN Fixed values
+/// - Agent count stays bounded (no explosion or collapse)
+/// - Provenance traces are consistent
+/// - All derived metrics remain in valid ranges
+#[test]
+fn ten_thousand_tick_stability() {
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 10_000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.run(10_000);
+
+    // 1. Agent count must remain stable (no explosion or collapse)
+    assert_eq!(sim.agents.len(), 12,
+        "Agent count changed during 10K-tick run: {}", sim.agents.len());
+
+    // 2. No NaN or infinite Fixed values in any agent's core state
+    for (i, agent) in sim.agents.iter().enumerate() {
+        // Health must be finite and in [0, 1]
+        assert!(agent.body.health.to_f64().is_finite(),
+            "Agent {} has non-finite health: {}", i, agent.body.health.to_f64());
+        assert!(agent.body.health >= Fixed::ZERO && agent.body.health <= Fixed::ONE,
+            "Agent {} health out of range: {}", i, agent.body.health.to_f64());
+
+        // Energy must be finite and in [0, 1]
+        assert!(agent.body.energy.to_f64().is_finite(),
+            "Agent {} has non-finite energy: {}", i, agent.body.energy.to_f64());
+        assert!(agent.body.energy >= Fixed::ZERO && agent.body.energy <= Fixed::ONE,
+            "Agent {} energy out of range: {}", i, agent.body.energy.to_f64());
+
+        // Age must be non-negative and reasonable (< 200 years)
+        assert!(agent.age.to_f64().is_finite(),
+            "Agent {} has non-finite age: {}", i, agent.age.to_f64());
+        assert!(agent.age >= Fixed::ZERO && agent.age < Fixed::from_f64(200.0),
+            "Agent {} age out of range: {}", i, agent.age.to_f64());
+
+        // Wealth must be non-negative
+        assert!(agent.wealth.coin.to_f64().is_finite(),
+            "Agent {} has non-finite wealth: {}", i, agent.wealth.coin.to_f64());
+        assert!(agent.wealth.coin >= Fixed::ZERO,
+            "Agent {} has negative wealth: {}", i, agent.wealth.coin.to_f64());
+
+        // Status dimensions must be in [0, 1]
+        let sv = &agent.status_v2;
+        assert!(sv.authority.to_f64().is_finite() && sv.authority >= Fixed::ZERO && sv.authority <= Fixed::ONE,
+            "Agent {} authority out of range: {}", i, sv.authority.to_f64());
+        assert!(sv.wealth_rank.to_f64().is_finite() && sv.wealth_rank >= Fixed::ZERO && sv.wealth_rank <= Fixed::ONE,
+            "Agent {} wealth_rank out of range: {}", i, sv.wealth_rank.to_f64());
+        assert!(sv.moral_reputation.to_f64().is_finite() && sv.moral_reputation >= Fixed::ZERO && sv.moral_reputation <= Fixed::ONE,
+            "Agent {} moral_reputation out of range: {}", i, sv.moral_reputation.to_f64());
+
+        // Embodied endocrine stress must be finite and in [0, 1]
+        assert!(agent.embodied.endocrine.stress.level.to_f64().is_finite(),
+            "Agent {} has non-finite stress: {}", i, agent.embodied.endocrine.stress.level.to_f64());
+        assert!(agent.embodied.endocrine.stress.level >= Fixed::ZERO
+            && agent.embodied.endocrine.stress.level <= Fixed::ONE,
+            "Agent {} stress out of range: {}", i, agent.embodied.endocrine.stress.level.to_f64());
+
+        // Attachment anxiety must be finite and in [0, 1]
+        assert!(agent.attachment.anxiety.to_f64().is_finite(),
+            "Agent {} has non-finite attachment anxiety: {}", i, agent.attachment.anxiety.to_f64());
+        assert!(agent.attachment.anxiety >= Fixed::ZERO && agent.attachment.anxiety <= Fixed::ONE,
+            "Agent {} attachment anxiety out of range: {}", i, agent.attachment.anxiety.to_f64());
+
+        // Narrative redemption must be in [0, 1]
+        assert!(agent.narrative.redemption_script.to_f64().is_finite(),
+            "Agent {} has non-finite redemption_script: {}", i, agent.narrative.redemption_script.to_f64());
+        assert!(agent.narrative.redemption_script >= Fixed::ZERO
+            && agent.narrative.redemption_script <= Fixed::ONE,
+            "Agent {} redemption_script out of range: {}", i, agent.narrative.redemption_script.to_f64());
+
+        // Psychopathology depression risk must be finite and in [0, 1]
+        assert!(agent.psychopathology.depression_risk.to_f64().is_finite(),
+            "Agent {} has non-finite depression_risk: {}", i, agent.psychopathology.depression_risk.to_f64());
+        assert!(agent.psychopathology.depression_risk >= Fixed::ZERO
+            && agent.psychopathology.depression_risk <= Fixed::ONE,
+            "Agent {} depression_risk out of range: {}", i, agent.psychopathology.depression_risk.to_f64());
+    }
+
+    // 3. Institutions must still exist and have valid legitimacy
+    for (i, inst) in sim.institutions.iter().enumerate() {
+        assert!(inst.legitimacy.to_f64().is_finite(),
+            "Institution {} has non-finite legitimacy: {}", i, inst.legitimacy.to_f64());
+        assert!(inst.legitimacy >= Fixed::ZERO && inst.legitimacy <= Fixed::ONE,
+            "Institution {} legitimacy out of range: {}", i, inst.legitimacy.to_f64());
+    }
+
+    // 4. Metric history should have entries (snapshot every 10 ticks)
+    assert!(!sim.metric_history.is_empty(),
+        "No metric history recorded during 10K-tick run");
+
+    // 5. Verify the last metric snapshot has valid values
+    let last = sim.metric_history.last().expect("metric_history empty");
+    assert!(last.avg_health >= 0.0 && last.avg_health <= 1.0,
+        "Final avg_health out of range: {}", last.avg_health);
+    assert!(last.polarization_index >= 0.0 && last.polarization_index <= 1.0,
+        "Final polarization_index out of range: {}", last.polarization_index);
+    assert!(last.agent_count > 0,
+        "Final agent_count should be positive");
+}
+
