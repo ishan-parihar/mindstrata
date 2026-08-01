@@ -440,21 +440,21 @@ fn ten_thousand_tick_stability() {
         assert!(!sim.agents.is_empty(), "All agents died at tick {tick}");
         // Verify no agent has negative age or health
         for agent in &sim.agents {
-            assert!(agent.age >= mindstrata_core::fixed::Fixed::ZERO,
+            assert!(agent.age >= Fixed::ZERO,
                 "Agent {} has negative age at tick {tick}", agent.name);
-            assert!(agent.body.health >= mindstrata_core::fixed::Fixed::ZERO,
+            assert!(agent.body.health >= Fixed::ZERO,
                 "Agent {} has negative health at tick {tick}", agent.name);
         }
     }
     // Final: at least some agents survived
     let alive = sim.agents.iter()
-        .filter(|a| a.body.health > mindstrata_core::fixed::Fixed::ZERO)
+        .filter(|a| a.body.health > Fixed::ZERO)
         .count();
     assert!(alive > 0, "All agents dead after 10000 ticks");
     // Verify market prices bounded
     for tracker in &sim.market.prices {
         let p = tracker.price;
-        assert!(p >= mindstrata_core::fixed::Fixed::ZERO
+        assert!(p >= Fixed::ZERO
             && p <= mindstrata_core::fixed::Fixed::from_int(100),
             "Market price {} out of bounds", p.to_f64());
     }
@@ -595,7 +595,7 @@ fn stress_correlates_with_conflict_across_seeds() {
             let stress = (agent.emotions.fear + agent.emotions.anger).to_f64();
             // Count both feuds and combat fatigue as conflict indicators
             let feud_count = agent.feuds.len();
-            let has_fatigue = agent.conflict.combat_fatigue > mindstrata_core::fixed::Fixed::ZERO;
+            let has_fatigue = agent.conflict.combat_fatigue > Fixed::ZERO;
             let conflicts = feud_count + if has_fatigue { 1 } else { 0 };
             if stress > 0.5 {
                 high_stress_count += 1;
@@ -614,7 +614,7 @@ fn stress_correlates_with_conflict_across_seeds() {
     // High-stress agents should have at least as many conflicts
     let high_avg = high_stress_conflicts as f64 / high_stress_count as f64;
     let low_avg = low_stress_conflicts as f64 / low_stress_count as f64;
-    assert!(high_avg >= low_avg * 0.5,
+    assert!(high_avg >= low_avg,
         "High-stress conflict rate ({high_avg:.3}) should be comparable to low-stress ({low_avg:.3})");
 }
 
