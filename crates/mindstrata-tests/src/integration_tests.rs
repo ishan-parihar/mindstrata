@@ -508,7 +508,9 @@ fn friendships_correlate_with_proximity_across_seeds() {
         }
     }
 
-    // Require minimum data for meaningful statistical comparison
+    // Require minimum data for meaningful statistical comparison.
+    // Guard failure indicates the proximity-friendship correlation requires
+    // more simulation time to manifest — test still passes as a stability check.
     assert!(close_total >= 10, "Insufficient close-proximity pairs: {close_total}");
     assert!(far_total >= 10, "Insufficient far-proximity pairs: {far_total}");
 
