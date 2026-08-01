@@ -2113,6 +2113,9 @@ impl Simulation {
                     &self.agents[from_idx].personality,
                     &self.agents[to_idx].personality,
                     &listener_beliefs, tick_u64,
+                    self.params.gossip_base_fidelity,
+                    self.params.gossip_emotional_distortion,
+                    self.params.gossip_acceptance_threshold,
                 );
                 let old_conf = self.agents[to_idx].beliefs.iter()
                     .find(|b| b.proposition_id == result.proposition_id)

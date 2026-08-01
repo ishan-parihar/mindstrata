@@ -64,6 +64,12 @@ pub struct SimParameters {
     pub mental_state_smoothing: Fixed,
     /// Mental state accumulation factor — how fast new input is absorbed (0.005 = very slow).
     pub mental_state_accumulation: Fixed,
+    /// Base gossip transmission fidelity (0.7 = 70% base accuracy per hop).
+    pub gossip_base_fidelity: Fixed,
+    /// Gossip emotional distortion multiplier (anger/fear exaggeration).
+    pub gossip_emotional_distortion: Fixed,
+    /// Gossip acceptance salience threshold (0.15 = rumors below this are ignored).
+    pub gossip_acceptance_threshold: Fixed,
 
     // ── Relational ────────────────────────────────────────────
     /// Trust threshold for friendship classification.
@@ -146,6 +152,9 @@ impl Default for SimParameters {
             belief_resistance_decay: Fixed::from_f64(0.001), // matches original BELIEF_RESISTANCE_DECAY
             mental_state_smoothing: Fixed::from_f64(0.995), // matches original
             mental_state_accumulation: Fixed::from_f64(0.005), // matches original
+            gossip_base_fidelity: Fixed::from_f64(0.7), // matches original
+            gossip_emotional_distortion: Fixed::from_f64(0.15), // matches original
+            gossip_acceptance_threshold: Fixed::from_f64(0.15), // matches original
 
             // Relational
             friendship_trust_threshold: Fixed::from_f64(0.5),

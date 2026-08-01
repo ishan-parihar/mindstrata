@@ -101,17 +101,19 @@ pub fn mutate_rumor(
     spreader_emotions: &DiscreteEmotions,
     spreader_personality: &Personality,
     listener_personality: &Personality,
+    gossip_base_fidelity: Fixed,
+    gossip_emotional_distortion: Fixed,
 ) -> (Fixed, Fixed) {
     // Source memory accuracy: degrades with hops (telephone game)
     let memory_accuracy = Fixed::from_f64(0.95).powi(rumor.hops);
 
     // Transmission fidelity: extraversion and agreeableness improve fidelity
-    let transmission_fidelity = Fixed::from_f64(0.7)
+    let transmission_fidelity = gossip_base_fidelity
         + spreader_personality.extraversion * Fixed::from_f64(0.15)
         + spreader_personality.agreeableness * Fixed::from_f64(0.1);
 
     // Emotional salience bias: angry or fearful spreaders exaggerate
-    let emotional_distortion = spreader_emotions.anger * Fixed::from_f64(0.15)
+    let emotional_distortion = spreader_emotions.anger * gossip_emotional_distortion
         + spreader_emotions.fear * Fixed::from_f64(0.1)
         - spreader_emotions.joy * Fixed::from_f64(0.05);
 
@@ -149,6 +151,9 @@ pub fn process_gossip(
     listener_personality: &Personality,
     listener_beliefs: &[Belief],
     current_tick: u64,
+    gossip_base_fidelity: Fixed,
+    gossip_emotional_distortion: Fixed,
+    gossip_acceptance_threshold: Fixed,
 ) -> GossipResult {
     let (mutated_confidence, emotional_charge) = mutate_rumor(
         rumor,
@@ -156,6 +161,8 @@ pub fn process_gossip(
         spreader_emotions,
         spreader_personality,
         listener_personality,
+        gossip_base_fidelity,
+        gossip_emotional_distortion,
     );
 
     // Check if listener already has a belief about this proposition
@@ -175,7 +182,7 @@ pub fn process_gossip(
 
     // Accept if the rumor has enough salience
     let salience = rumor.salience(current_tick);
-    let accepted = salience > Fixed::from_f64(0.15);
+    let accepted = salience > gossip_acceptance_threshold;
 
     GossipResult {
         proposition_id: rumor.proposition_id,
@@ -414,9 +421,11 @@ mod tests {
 
         let (mutated_angry, _) = mutate_rumor(
             &rumor, Fixed::from_f64(0.7), &angry_emotions, &personality, &personality,
+            Fixed::from_f64(0.7), Fixed::from_f64(0.15),
         );
         let (mutated_calm, _) = mutate_rumor(
             &rumor, Fixed::from_f64(0.7), &calm_emotions, &personality, &personality,
+            Fixed::from_f64(0.7), Fixed::from_f64(0.15),
         );
 
         // Angry spreaders should distort confidence differently
@@ -436,6 +445,7 @@ mod tests {
             &make_personality(),
             &listener_beliefs,
             100,
+            Fixed::from_f64(0.7), Fixed::from_f64(0.15), Fixed::from_f64(0.15),
         );
 
         assert!(result.accepted, "Gossip should be accepted");
@@ -455,6 +465,7 @@ mod tests {
             &make_personality(),
             &listener_beliefs,
             100,
+            Fixed::from_f64(0.7), Fixed::from_f64(0.15), Fixed::from_f64(0.15),
         );
 
         assert!(result.accepted);
@@ -534,6 +545,7 @@ mod tests {
             &make_personality(),
             &[high_resistance_belief],
             100,
+            Fixed::from_f64(0.7), Fixed::from_f64(0.15), Fixed::from_f64(0.15),
         );
 
         // High resistance should make the belief barely change
