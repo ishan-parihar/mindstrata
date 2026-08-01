@@ -83,10 +83,11 @@ pub struct Snapshot {
     pub group_registry: GroupRegistry,
 }
 
-/// Version of the snapshot format.    /// Version 2 → 3: Added mind_models to AgentBundle.
-    /// Version 3 → 4: Added cultural_cognition to AgentBundle.
-    /// v3: mind_models, v4: cultural_cognition, v5: decision_policy, v6: group_registry
-    pub const SNAPSHOT_VERSION: u32 = 6;
+/// Version of the snapshot format.
+/// Version 2 → 3: Added mind_models to AgentBundle.
+/// Version 3 → 4: Added cultural_cognition to AgentBundle.
+/// v3: mind_models, v4: cultural_cognition, v5: decision_policy, v6: group_registry
+pub const SNAPSHOT_VERSION: u32 = 6;
 
 /// Bundles all simulation state references needed to capture a snapshot.
 /// Replaces the 21-parameter `capture()` signature with a single struct.
@@ -303,6 +304,8 @@ fn fnv1a_hash(data: &[u8]) -> u64 {
 mod tests {
     use super::*;
     use crate::sim::SimConfig;
+    use crate::social::group_formation::{GroupCandidate, PeerGroup, GroupType};
+    use mindstrata_core::fixed::Fixed;
 
     fn make_test_snapshot() -> Snapshot {
         let config = SimConfig {
@@ -315,7 +318,7 @@ mod tests {
         };
         Snapshot {
             version: SNAPSHOT_VERSION,
-            config: config,
+            config,
             tick: 100,
             clock_tick: Tick::new(100),
             master_seed: 42,
@@ -342,6 +345,27 @@ mod tests {
         }
     }
 
+    /// Create a snapshot with an active group in the registry for testing
+    /// that postcard roundtrip preserves group data correctly.
+    fn make_snapshot_with_active_group() -> Snapshot {
+        let mut snap = make_test_snapshot();
+        let candidate = GroupCandidate {
+            members: vec![0, 1, 2],
+            shared_grievance: Fixed::from_f64(0.7),
+            shared_identity: Fixed::from_f64(0.6),
+            emotional_synchrony: Fixed::from_f64(0.5),
+            repeated_interaction: Fixed::from_f64(0.4),
+            leadership_gravity: Fixed::from_f64(0.3),
+            external_threat: Fixed::from_f64(0.6),
+            social_cost: Fixed::from_f64(0.1),
+            institutional_suppression: Fixed::from_f64(0.1),
+            identified_tick: 0,
+        };
+        let group = PeerGroup::from_candidate(&candidate, 0, 100);
+        snap.group_registry.register(group);
+        snap
+    }
+
     #[test]
     fn snapshot_postcard_roundtrip() {
         let original = make_test_snapshot();
@@ -350,6 +374,48 @@ mod tests {
         assert_eq!(original.tick, restored.tick);
         assert_eq!(original.config.seed, restored.config.seed);
         assert_eq!(original.agents.len(), restored.agents.len());
+    }
+
+    /// §12.2 / §16.1: Verify postcard roundtrip preserves GroupRegistry data.
+    ///
+    /// The `active_members` cache is `#[serde(skip)]`, so after postcard
+    /// deserialization it will be empty. This test verifies the groups data
+    /// itself survives the roundtrip, and that `rebuild_cache()` restores
+    /// the O(1) membership cache.
+    #[test]
+    fn snapshot_postcard_roundtrip_preserves_group_registry() {
+        let mut original = make_snapshot_with_active_group();
+
+        // Verify the original has an active group with cached membership.
+        assert_eq!(original.group_registry.active().len(), 1);
+        assert!(original.group_registry.agent_in_active_group(0));
+        assert!(original.group_registry.agent_in_active_group(1));
+        assert!(original.group_registry.agent_in_active_group(2));
+
+        // Serialize via postcard (the real snapshot format).
+        let bytes = original.to_bytes().expect("postcard serialize");
+
+        // Deserialize — cache is skipped by serde.
+        let mut restored = Snapshot::from_bytes(&bytes).expect("postcard deserialize");
+
+        // Groups survive the roundtrip.
+        assert_eq!(restored.group_registry.groups.len(), 1);
+        assert!(restored.group_registry.groups[0].active);
+        assert_eq!(restored.group_registry.groups[0].members, vec![0, 1, 2]);
+        assert_eq!(
+            restored.group_registry.groups[0].shared_grievance,
+            Fixed::from_f64(0.7)
+        );
+
+        // Cache is empty after postcard deserialization.
+        assert!(!restored.group_registry.agent_in_active_group(0));
+
+        // Rebuild cache — membership is restored.
+        restored.group_registry.rebuild_cache();
+        assert!(restored.group_registry.agent_in_active_group(0));
+        assert!(restored.group_registry.agent_in_active_group(1));
+        assert!(restored.group_registry.agent_in_active_group(2));
+        assert!(!restored.group_registry.agent_in_active_group(99));
     }
 
     #[test]
