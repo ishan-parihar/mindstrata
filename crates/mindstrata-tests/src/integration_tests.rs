@@ -942,6 +942,7 @@ fn metrics_snapshot_fields_in_valid_ranges() {
 /// - Provenance traces are consistent
 /// - All derived metrics remain in valid ranges
 #[test]
+#[ignore] // Run with --ignored for periodic validation (~70s runtime)
 fn ten_thousand_tick_stability() {
     let config = SimConfig {
         seed: 42,
@@ -1022,7 +1023,24 @@ fn ten_thousand_tick_stability() {
             "Agent {} depression_risk out of range: {}", i, agent.psychopathology.depression_risk.to_f64());
     }
 
-    // 3. Institutions must still exist and have valid legitimacy
+    // 3b. Relationship count must be stable (N-1 per agent)
+    for (i, agent) in sim.agents.iter().enumerate() {
+        assert_eq!(agent.relationship_v2s.len(), 11,
+            "Agent {} has {} relationships after 10K ticks, expected 11", i, agent.relationship_v2s.len());
+    }
+
+    // 3c. Genome trait predispositions must stay bounded in [0, 1]
+    for (i, agent) in sim.agents.iter().enumerate() {
+        let gd = &agent.embodied.genome.trait_predispositions;
+        assert!(gd.depression_vulnerability >= Fixed::ZERO && gd.depression_vulnerability <= Fixed::ONE,
+            "Agent {} depression_vulnerability out of range: {}", i, gd.depression_vulnerability.to_f64());
+        assert!(gd.addiction_risk >= Fixed::ZERO && gd.addiction_risk <= Fixed::ONE,
+            "Agent {} addiction_risk out of range: {}", i, gd.addiction_risk.to_f64());
+        assert!(gd.attachment_vulnerability >= Fixed::ZERO && gd.attachment_vulnerability <= Fixed::ONE,
+            "Agent {} attachment_vulnerability out of range: {}", i, gd.attachment_vulnerability.to_f64());
+    }
+
+    // 4. Institutions must still exist and have valid legitimacy
     for (i, inst) in sim.institutions.iter().enumerate() {
         assert!(inst.legitimacy.to_f64().is_finite(),
             "Institution {} has non-finite legitimacy: {}", i, inst.legitimacy.to_f64());
@@ -1030,11 +1048,11 @@ fn ten_thousand_tick_stability() {
             "Institution {} legitimacy out of range: {}", i, inst.legitimacy.to_f64());
     }
 
-    // 4. Metric history should have entries (snapshot every 10 ticks)
+    // 6. Metric history should have entries (snapshot every 10 ticks)
     assert!(!sim.metric_history.is_empty(),
         "No metric history recorded during 10K-tick run");
 
-    // 5. Verify the last metric snapshot has valid values
+    // 7. Verify the last metric snapshot has valid values
     let last = sim.metric_history.last().expect("metric_history empty");
     assert!(last.avg_health >= 0.0 && last.avg_health <= 1.0,
         "Final avg_health out of range: {}", last.avg_health);
