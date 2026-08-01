@@ -259,6 +259,8 @@ pub struct Simulation {
     pub households: Vec<crate::household::Household>,
     /// Architecture-plan-2 §13.1: Meme registry — cultural units that propagate.
     pub meme_registry: crate::culture::MemeRegistry,
+    /// Architecture-plan-2 §17.4: Meme aggregation engine for large-population metrics.
+    pub meme_aggregator: crate::culture::MemeAggregator,
     /// Architecture-plan-2 §13.4: Propaganda registry — institutional narrative campaigns.
     pub propaganda_registry: crate::culture::PropagandaRegistry,
     /// Architecture-plan-2 §12.5: Ritual registry — structured ceremonial activities.
@@ -321,6 +323,7 @@ impl Simulation {
             kinship_graph: crate::kinship::KinshipGraph::default(),
             households: Vec::new(),
             meme_registry: crate::culture::MemeRegistry::default(),
+            meme_aggregator: crate::culture::MemeAggregator::default(),
             propaganda_registry: crate::culture::PropagandaRegistry::default(),
             ritual_registry: crate::culture::RitualRegistry::default(),
             rumor_registry: crate::culture::RumorRegistry::default(),
@@ -370,6 +373,7 @@ impl Simulation {
             kinship_graph: crate::kinship::KinshipGraph::default(),
             households: Vec::new(),
             meme_registry: crate::culture::MemeRegistry::default(),
+            meme_aggregator: crate::culture::MemeAggregator::default(),
             propaganda_registry: crate::culture::PropagandaRegistry::default(),
             ritual_registry: crate::culture::RitualRegistry::default(),
             rumor_registry: crate::culture::RumorRegistry::default(),
