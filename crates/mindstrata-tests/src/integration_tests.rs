@@ -381,13 +381,6 @@ fn courtship_to_marriage_chain() {
     }
 }
 
-// ── §18.3: Cult Formation ───────────────────────────────────────
-
-/// §18.3: Cult can form around charismatic leader under emergent conditions.
-/// Verifies that the cult formation system is active and produces valid
-/// cult structures when conditions emerge naturally from simulation dynamics.
-
-
 /// §18.4: Over multiple seeds, friendships should correlate with proximity.
 /// Agents who are geographically close should form more relationships above
 /// Acquaintance than agents who are far apart.
