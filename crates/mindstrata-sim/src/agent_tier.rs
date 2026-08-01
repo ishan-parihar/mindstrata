@@ -178,13 +178,151 @@ impl CognitiveBudget {
     }
 }
 
+/// §17.2: Per-tick cognitive budget tracker — enforces processing limits.
+///
+/// Reset at the start of each tick from the agent's [`CognitiveBudget`].
+/// Subsystems check `can_*()` before running expensive operations and
+/// call `consume_*()` after successfully performing them.
+///
+/// When budget is exhausted, the agent falls back to cheaper heuristic
+/// paths (e.g., skip prospection, use cached appraisal, skip ToM update).
+#[derive(Debug, Clone)]
+#[must_use]
+pub struct CognitiveBudgetTracker {
+    remaining_appraisals: u32,
+    remaining_memory_retrievals: u32,
+    remaining_prospections: u32,
+    remaining_social_inferences: u32,
+}
+
+impl Default for CognitiveBudgetTracker {
+    fn default() -> Self {
+        Self::from_budget(&CognitiveBudget::default())
+    }
+}
+
+impl CognitiveBudgetTracker {
+    /// Create a tracker from a budget — all counters start full.
+    pub fn from_budget(budget: &CognitiveBudget) -> Self {
+        Self {
+            remaining_appraisals: budget.max_appraisals,
+            remaining_memory_retrievals: budget.max_memory_retrievals,
+            remaining_prospections: budget.max_prospections,
+            remaining_social_inferences: budget.max_social_inferences,
+        }
+    }
+
+    /// Reset all counters to the budget limits (called at tick start).
+    pub fn reset(&mut self, budget: &CognitiveBudget) {
+        self.remaining_appraisals = budget.max_appraisals;
+        self.remaining_memory_retrievals = budget.max_memory_retrievals;
+        self.remaining_prospections = budget.max_prospections;
+        self.remaining_social_inferences = budget.max_social_inferences;
+    }
+
+    // ── Check methods ───────────────────────────────────────────────
+
+    /// Can this agent perform another appraisal this tick?
+    pub fn can_appraise(&self) -> bool {
+        self.remaining_appraisals > 0
+    }
+
+    /// Can this agent perform another memory retrieval this tick?
+    pub fn can_retrieve_memory(&self) -> bool {
+        self.remaining_memory_retrievals > 0
+    }
+
+    /// Can this agent perform another prospection this tick?
+    pub fn can_prospect(&self) -> bool {
+        self.remaining_prospections > 0
+    }
+
+    /// Can this agent perform another social inference (ToM) this tick?
+    pub fn can_social_infer(&self) -> bool {
+        self.remaining_social_inferences > 0
+    }
+
+    // ── Consume methods ─────────────────────────────────────────────
+
+    /// Record one appraisal performed. Returns false if budget was already exhausted.
+    #[must_use]
+    pub fn consume_appraisal(&mut self) -> bool {
+        if self.remaining_appraisals > 0 {
+            self.remaining_appraisals -= 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Record one memory retrieval performed.
+    #[must_use]
+    pub fn consume_memory_retrieval(&mut self) -> bool {
+        if self.remaining_memory_retrievals > 0 {
+            self.remaining_memory_retrievals -= 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Record one prospection performed.
+    #[must_use]
+    pub fn consume_prospection(&mut self) -> bool {
+        if self.remaining_prospections > 0 {
+            self.remaining_prospections -= 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Record one social inference performed.
+    #[must_use]
+    pub fn consume_social_inference(&mut self) -> bool {
+        if self.remaining_social_inferences > 0 {
+            self.remaining_social_inferences -= 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    // ── Inspection methods ──────────────────────────────────────────
+
+    /// Remaining appraisal budget.
+    pub fn remaining_appraisals(&self) -> u32 {
+        self.remaining_appraisals
+    }
+
+    /// Remaining memory retrieval budget.
+    pub fn remaining_memory_retrievals(&self) -> u32 {
+        self.remaining_memory_retrievals
+    }
+
+    /// Remaining prospection budget.
+    pub fn remaining_prospections(&self) -> u32 {
+        self.remaining_prospections
+    }
+
+    /// Remaining social inference budget.
+    pub fn remaining_social_inferences(&self) -> u32 {
+        self.remaining_social_inferences
+    }
+}
+
 /// §17.1 + §17.2: Combined tier state stored on each agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentTierState {
     /// Current simulation tier.
     pub tier: AgentTier,
-    /// Cognitive budget for this tick.
+    /// Cognitive budget limits for this tier.
     pub budget: CognitiveBudget,
+    /// §17.2: Per-tick tracker enforcing the budget limits.
+    /// Reset each tick via `reset_tick_budget()`. Serde skips this field;
+    /// on deserialization it defaults to focal limits until the first tick reset.
+    #[serde(skip)]
+    pub budget_tracker: CognitiveBudgetTracker,
     /// Narrative importance score (0–1). Higher = more likely to be focal.
     pub narrative_importance: Fixed,
     /// Last tick when tier was reassigned.
@@ -193,9 +331,11 @@ pub struct AgentTierState {
 
 impl Default for AgentTierState {
     fn default() -> Self {
+        let budget = CognitiveBudget::secondary();
         Self {
             tier: AgentTier::Secondary,
-            budget: CognitiveBudget::secondary(),
+            budget_tracker: CognitiveBudgetTracker::from_budget(&budget),
+            budget,
             narrative_importance: Fixed::from_f64(0.3),
             last_tier_reassign_tick: 0,
         }
@@ -205,12 +345,20 @@ impl Default for AgentTierState {
 impl AgentTierState {
     /// Create a new tier state for a given tier.
     pub fn new(tier: AgentTier, tick: u64) -> Self {
+        let budget = CognitiveBudget::for_tier(tier);
         Self {
-            budget: CognitiveBudget::for_tier(tier),
+            budget_tracker: CognitiveBudgetTracker::from_budget(&budget),
+            budget,
             tier,
             narrative_importance: Fixed::from_f64(0.3),
             last_tier_reassign_tick: tick,
         }
+    }
+
+    /// §17.2: Reset the budget tracker for a new tick.
+    /// Call at the start of each tick to replenish the agent's cognitive budget.
+    pub fn reset_tick_budget(&mut self) {
+        self.budget_tracker.reset(&self.budget);
     }
 
     /// §17.1: Reclassify an agent's tier based on current state.
@@ -288,6 +436,8 @@ impl AgentTierState {
         if new_tier != self.tier {
             self.tier = new_tier;
             self.budget = CognitiveBudget::for_tier(new_tier);
+            // §17.2: Sync tracker limits when tier changes
+            self.budget_tracker.reset(&self.budget);
             self.last_tier_reassign_tick = tick;
         }
     }
@@ -451,5 +601,90 @@ mod tests {
         );
         // Should have increased
         assert!(state.narrative_importance > Fixed::from_f64(0.2));
+    }
+
+    // ── §17.2 CognitiveBudgetTracker tests ─────────────────────────
+
+    #[test]
+    fn tracker_from_budget_has_full_counts() {
+        let budget = CognitiveBudget::focal();
+        let tracker = CognitiveBudgetTracker::from_budget(&budget);
+        assert_eq!(tracker.remaining_appraisals(), 20);
+        assert_eq!(tracker.remaining_memory_retrievals(), 10);
+        assert_eq!(tracker.remaining_prospections(), 5);
+        assert_eq!(tracker.remaining_social_inferences(), 10);
+    }
+
+    #[test]
+    fn tracker_consume_decrements_remaining() {
+        let budget = CognitiveBudget::focal();
+        let mut tracker = CognitiveBudgetTracker::from_budget(&budget);
+        assert!(tracker.can_appraise());
+        assert!(tracker.consume_appraisal());
+        assert_eq!(tracker.remaining_appraisals(), 19);
+        assert!(tracker.can_prospect());
+        assert!(tracker.consume_prospection());
+        assert_eq!(tracker.remaining_prospections(), 4);
+    }
+
+    #[test]
+    fn tracker_exhaustion_prevents_further_consumption() {
+        let budget = CognitiveBudget::secondary(); // max_appraisals = 5
+        let mut tracker = CognitiveBudgetTracker::from_budget(&budget);
+        for _ in 0..5 {
+            assert!(tracker.consume_appraisal());
+        }
+        assert!(!tracker.can_appraise());
+        assert!(!tracker.consume_appraisal());
+        assert_eq!(tracker.remaining_appraisals(), 0);
+    }
+
+    #[test]
+    fn tracker_reset_restores_full_budget() {
+        let budget = CognitiveBudget::focal();
+        let mut tracker = CognitiveBudgetTracker::from_budget(&budget);
+        for _ in 0..20 {
+            tracker.consume_appraisal();
+        }
+        assert!(!tracker.can_appraise());
+        tracker.reset(&budget);
+        assert!(tracker.can_appraise());
+        assert_eq!(tracker.remaining_appraisals(), 20);
+    }
+
+    #[test]
+    fn tracker_background_has_zero_prospection() {
+        let budget = CognitiveBudget::background();
+        let tracker = CognitiveBudgetTracker::from_budget(&budget);
+        assert!(!tracker.can_prospect());
+        assert!(!tracker.can_social_infer());
+        assert!(!tracker.can_retrieve_memory());
+        assert!(tracker.can_appraise()); // background gets 1 appraisal
+    }
+
+    #[test]
+    fn tier_state_reset_tick_budget_works() {
+        let mut state = AgentTierState::new(AgentTier::Focal, 0);
+        // Exhaust some budget
+        state.budget_tracker.consume_appraisal();
+        state.budget_tracker.consume_appraisal();
+        assert_eq!(state.budget_tracker.remaining_appraisals(), 18);
+        // Reset tick budget
+        state.reset_tick_budget();
+        assert_eq!(state.budget_tracker.remaining_appraisals(), 20);
+    }
+
+    #[test]
+    fn tier_reclassification_updates_tracker() {
+        let mut state = AgentTierState::new(AgentTier::Secondary, 0);
+        assert_eq!(state.budget_tracker.remaining_prospections(), 0);
+        // Promote to focal
+        state.reclassify(
+            Fixed::from_f64(0.8), false, false,
+            Fixed::ZERO, Fixed::ZERO, 0, 100, 10,
+        );
+        assert_eq!(state.tier, AgentTier::Focal);
+        // Budget tracker should now have focal limits
+        assert_eq!(state.budget_tracker.remaining_prospections(), 5);
     }
 }

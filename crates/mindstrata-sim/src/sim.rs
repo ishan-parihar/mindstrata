@@ -906,6 +906,8 @@ impl Simulation {
             let trust_sync_rate = Fixed::from_f64(0.1);
             for agent in &mut self.agents {
                 agent.epistemic.reset_tick();
+                // §17.2: Reset cognitive budget tracker for this tick.
+                agent.agent_tier.reset_tick_budget();
             }
             // Sync TrustNetwork from existing relationship trust values.
             // O(N) pre-computation: build a per-agent trust delta map from relationships.
@@ -984,10 +986,14 @@ impl Simulation {
                 let pain_level = self.agents[i].embodied.nervous.pain.effective_pain();
                 let trauma = self.agents[i].embodied.nervous.trauma_load;
                 // §17: Only focal agents run full executive function update
-                if self.agents[i].agent_tier.tier.runs_full_psychology() {
+                // §17.2: Budget check — executive function counts as an appraisal.
+                if self.agents[i].agent_tier.tier.runs_full_psychology()
+                    && self.agents[i].agent_tier.budget_tracker.can_appraise()
+                {
                     self.agents[i].cognitive_runtime.update(
                         stress, need_fatigue, pain_level, trauma,
                     );
+                    self.agents[i].agent_tier.budget_tracker.consume_appraisal();
                 }
 
                 // Architecture-plan-2 §8.1.14: Attachment system daily decay.
@@ -1076,7 +1082,10 @@ impl Simulation {
                 }
 
                 // §17: Only focal agents run prospection (mental simulation of futures)
-                if self.agents[i].agent_tier.tier.runs_prospection() {
+                // §17.2: Also check cognitive budget — skip if prospection budget exhausted.
+                if self.agents[i].agent_tier.tier.runs_prospection()
+                    && self.agents[i].agent_tier.budget_tracker.can_prospect()
+                {
                     let agent_fear = emotions[i].fear;
                     let agent_ambition = self.agents[i].personality.ambition;
                     let agent_trauma = self.agents[i].embodied.nervous.trauma_load;
@@ -1084,6 +1093,7 @@ impl Simulation {
                     self.agents[i].prospection.update(
                         agent_fear, agent_ambition, agent_trauma, agent_depression,
                     );
+                    self.agents[i].agent_tier.budget_tracker.consume_prospection();
                 }
 
                 // §17: Compute negative_events once (shared by narrative + psychopathology)
@@ -1094,7 +1104,10 @@ impl Simulation {
                 };
 
                 // §17: Only focal agents run narrative identity updates
-                if self.agents[i].agent_tier.tier.runs_narrative() {
+                // §17.2: Budget check — narrative interpretation counts as an appraisal.
+                if self.agents[i].agent_tier.tier.runs_narrative()
+                    && self.agents[i].agent_tier.budget_tracker.can_appraise()
+                {
                     let positive_event_magnitude = if emotions[i].joy > Fixed::from_f64(0.3) {
                         emotions[i].joy * Fixed::from_f64(0.1)
                     } else {
@@ -1114,6 +1127,7 @@ impl Simulation {
                         );
                     }
                     self.agents[i].narrative.update_theme();
+                    self.agents[i].agent_tier.budget_tracker.consume_appraisal();
                 }
 
                 // §17: Only focal agents run developmental psychology
