@@ -300,6 +300,8 @@ pub struct Simulation {
     pub active_courtships: Vec<crate::social::courtship::Courtship>,
     /// Architecture-plan-2 §10.9: Patronage relations — asymmetric patron/client power dynamics.
     /// NOTE: not persisted in snapshots — rebuilt from agent state.
+    // TODO(#arch2-10.9): Wire patronage creation into social interaction tick
+    // (e.g. when high-status agent helps low-status agent repeatedly)
     pub patronage_registry: crate::social::patronage::PatronageRegistry,
 }
 
@@ -3780,12 +3782,14 @@ impl Simulation {
                     identified_tick: tick_u64,
                 };
                 if candidate.should_form() {
+                    // TODO(#arch2-12.2): Register the formed group in a GroupRegistry
+                    // For now, detection-only — log the formation pressure event.
                     tracing::info!(
                         members = candidate.members.len(),
                         shared_grievance = shared_grievance.to_f64(),
                         shared_identity = shared_identity.to_f64(),
                         tick = tick_u64,
-                        "Peer group formed via group_formation"
+                        "Peer group formation pressure detected"
                     );
                 }
             }
