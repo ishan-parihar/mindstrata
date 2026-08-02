@@ -302,7 +302,6 @@ impl EmbodiedState {
                 stress_suppression: params.reproduction_stress_suppression,
                 age_decline_rate: params.reproduction_age_decline_rate,
                 gestation_rate_mult: params.reproduction_gestation_rate,
-                conception_multiplier: params.reproduction_conception_multiplier,
             },
         );
 

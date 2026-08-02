@@ -36,8 +36,7 @@ pub struct ReproductiveUpdateParams {
     pub age_decline_rate: Fixed,
     /// Gestation rate multiplier (higher = faster pregnancy). Range: 0.5–2.0, default 1.0.
     pub gestation_rate_mult: Fixed,
-    /// Conception probability multiplier per tick. Range: 0.1–5.0, default 1.0.
-    pub conception_multiplier: Fixed,
+
 }
 
 impl Default for ReproductiveUpdateParams {
@@ -46,7 +45,7 @@ impl Default for ReproductiveUpdateParams {
             stress_suppression: Fixed::from_f64(0.3),
             age_decline_rate: Fixed::from_f64(0.03),
             gestation_rate_mult: Fixed::from_f64(1.0),
-            conception_multiplier: Fixed::from_f64(1.0),
+
         }
     }
 }
