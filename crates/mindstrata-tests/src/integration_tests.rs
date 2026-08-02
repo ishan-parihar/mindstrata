@@ -548,7 +548,7 @@ fn marriages_correlate_with_compatibility_and_status() {
         sim.run(3000);
 
         // Check that married agents have high trust with their partners
-        for (i, agent) in sim.agents.iter().enumerate() {
+        for (_i, agent) in sim.agents.iter().enumerate() {
             if let Some(partner_idx) = agent.partner {
                 if partner_idx < sim.agents.len() {
                     let partner = &sim.agents[partner_idx];
