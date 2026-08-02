@@ -213,7 +213,7 @@ mod tests {
             Fixed::from_f64(0.05), 0, 0,
         );
         let low_sync = r.pair_bonding(Fixed::ZERO);
-        let mut r2 = r.clone();
+        let mut r2 = r;
         r2.synchrony = Fixed::ONE;
         let high_sync = r2.pair_bonding(Fixed::ZERO);
         assert!(high_sync > low_sync);

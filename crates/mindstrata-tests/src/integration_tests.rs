@@ -659,7 +659,7 @@ fn propaganda_effectiveness_correlates_with_legitimacy() {
             "High-legitimacy campaigns ({high_legitimacy_campaigns}) should be >= low ({low_legitimacy_campaigns})");
     }
     // System should be stable
-    assert!(high_legitimacy_campaigns + low_legitimacy_campaigns >= 0,
+    assert!(high_legitimacy_campaigns + low_legitimacy_campaigns > 0,
         "Propaganda system should be active");
 }
 

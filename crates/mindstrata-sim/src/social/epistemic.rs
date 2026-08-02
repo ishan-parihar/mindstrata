@@ -470,7 +470,7 @@ mod tests {
 
         let mut belief = make_belief(0, 0.5);
         let info_direct = make_info(InformationSource::DirectObservation, 0.7);
-        let delta_direct = state.clone().process_information(
+        let delta_direct = state.process_information(
             &mut belief, &info_direct, &personality, &emotions, 100,
         );
 

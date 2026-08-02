@@ -298,7 +298,7 @@ mod tests {
         c1.cross_cutting_ties = 0;
         let no_ties = c1.echo_strength();
 
-        let mut c2 = c1.clone();
+        let mut c2 = c1;
         c2.cross_cutting_ties = 10;
         let many_ties = c2.echo_strength();
 
