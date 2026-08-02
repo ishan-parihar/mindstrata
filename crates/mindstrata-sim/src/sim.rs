@@ -2200,8 +2200,18 @@ impl Simulation {
 
                 // §8.1.14: Attachment reunion (Gossip only)
                 if matches!(kind, mindstrata_core::event::InteractionKind::Gossip) {
-                    self.agents[from_idx].attachment.on_reunion();
-                    self.agents[to_idx].attachment.on_reunion();
+                    self.agents[from_idx].attachment.on_reunion(
+                        self.params.attachment_secure_recovery,
+                        self.params.attachment_anxious_recovery,
+                        self.params.attachment_avoidant_recovery,
+                        self.params.attachment_disorganized_recovery,
+                    );
+                    self.agents[to_idx].attachment.on_reunion(
+                        self.params.attachment_secure_recovery,
+                        self.params.attachment_anxious_recovery,
+                        self.params.attachment_avoidant_recovery,
+                        self.params.attachment_disorganized_recovery,
+                    );
                 }
 
                 // §8.1.9: Theory of Mind update

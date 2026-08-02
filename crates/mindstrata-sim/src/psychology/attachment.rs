@@ -120,53 +120,56 @@ impl AttachmentSystem {
     }
 
     /// React to separation from an attachment figure.
-    pub fn on_separation(&mut self, closeness: Fixed) {
-        let distress = closeness * self.anxiety * Fixed::from_f64(0.3);
+    pub fn on_separation(&mut self, closeness: Fixed, separation_rate: Fixed) {
+        let distress = closeness * self.anxiety * separation_rate;
         self.separation_distress = (self.separation_distress + distress).clamp_01();
     }
 
     /// React to reunion with an attachment figure.
-    pub fn on_reunion(&mut self) {
+    pub fn on_reunion(&mut self, secure_recovery: Fixed, anxious_recovery: Fixed,
+                      avoidant_recovery: Fixed, disorganized_recovery: Fixed) {
         match self.style {
             AttachmentStyle::Secure => {
                 // Quick recovery
-                self.separation_distress = (self.separation_distress * Fixed::from_f64(0.3)).clamp_01();
+                self.separation_distress = (self.separation_distress * secure_recovery).clamp_01();
                 self.security = (self.security + Fixed::from_f64(0.01)).clamp_01();
             }
             AttachmentStyle::Anxious => {
                 // Slow recovery, may be angry
-                self.separation_distress = (self.separation_distress * Fixed::from_f64(0.6)).clamp_01();
+                self.separation_distress = (self.separation_distress * anxious_recovery).clamp_01();
             }
             AttachmentStyle::Avoidant => {
                 // Appears to recover quickly but internally stressed
-                self.separation_distress = (self.separation_distress * Fixed::from_f64(0.4)).clamp_01();
+                self.separation_distress = (self.separation_distress * avoidant_recovery).clamp_01();
             }
             AttachmentStyle::Disorganized => {
                 // Unpredictable — may oscillate
-                self.separation_distress = (self.separation_distress * Fixed::from_f64(0.5)).clamp_01();
+                self.separation_distress = (self.separation_distress * disorganized_recovery).clamp_01();
             }
         }
     }
 
     /// Receive comfort from an attachment figure.
-    pub fn receive_comfort(&mut self, comfort_quality: Fixed) {
+    pub fn receive_comfort(&mut self, comfort_quality: Fixed, secure_comfort: Fixed,
+                          anxious_comfort: Fixed, avoidant_comfort: Fixed,
+                          disorganized_comfort: Fixed, security_gain: Fixed) {
         let effectiveness = self.soothing_receptivity * comfort_quality;
         match self.style {
             AttachmentStyle::Secure => {
-                self.separation_distress = (self.separation_distress - effectiveness * Fixed::from_f64(0.3)).max(Fixed::ZERO);
-                self.security = (self.security + effectiveness * Fixed::from_f64(0.005)).clamp_01();
+                self.separation_distress = (self.separation_distress - effectiveness * secure_comfort).max(Fixed::ZERO);
+                self.security = (self.security + effectiveness * security_gain).clamp_01();
             }
             AttachmentStyle::Anxious => {
                 // Partially soothed but anxiety remains
-                self.separation_distress = (self.separation_distress - effectiveness * Fixed::from_f64(0.15)).max(Fixed::ZERO);
+                self.separation_distress = (self.separation_distress - effectiveness * anxious_comfort).max(Fixed::ZERO);
             }
             AttachmentStyle::Avoidant => {
                 // May reject comfort, but still benefits slightly
-                self.separation_distress = (self.separation_distress - effectiveness * Fixed::from_f64(0.1)).max(Fixed::ZERO);
+                self.separation_distress = (self.separation_distress - effectiveness * avoidant_comfort).max(Fixed::ZERO);
             }
             AttachmentStyle::Disorganized => {
                 // Unpredictable response
-                self.separation_distress = (self.separation_distress - effectiveness * Fixed::from_f64(0.2)).max(Fixed::ZERO);
+                self.separation_distress = (self.separation_distress - effectiveness * disorganized_comfort).max(Fixed::ZERO);
             }
         }
     }
@@ -203,7 +206,7 @@ mod tests {
         let mut att = AttachmentSystem::default();
         att.security = Fixed::from_f64(0.8);
         att.anxiety = Fixed::from_f64(0.5);
-        att.on_separation(Fixed::from_f64(0.7));
+        att.on_separation(Fixed::from_f64(0.7), Fixed::from_f64(0.3));
         assert!(att.separation_distress > Fixed::ZERO);
     }
 
@@ -212,7 +215,7 @@ mod tests {
         let mut att = AttachmentSystem::default();
         att.style = AttachmentStyle::Secure;
         att.separation_distress = Fixed::from_f64(0.5);
-        att.on_reunion();
+        att.on_reunion(Fixed::from_f64(0.3), Fixed::from_f64(0.6), Fixed::from_f64(0.4), Fixed::from_f64(0.5));
         assert!(att.separation_distress < Fixed::from_f64(0.5));
     }
 }
