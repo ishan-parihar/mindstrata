@@ -464,7 +464,7 @@ mod tests {
 
     #[test]
     fn direct_observation_trusted_more_than_unknown() {
-        let state = EpistemicState::default();
+        let mut state = EpistemicState::default();
         let personality = make_personality();
         let emotions = make_emotions();
 
