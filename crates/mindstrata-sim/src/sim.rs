@@ -2321,7 +2321,7 @@ impl Simulation {
                     let mut sampled = 0u32;
                     for meme in &mut self.meme_registry.memes {
                         if !meme.active || sampled >= 3 { break; }
-                        let chance = meme.transmission_chance(source_trust, listener_susceptibility, listener_skepticism);
+                        let chance = meme.transmission_chance(source_trust, listener_susceptibility, listener_skepticism, self.params.meme_transmission_multiplier);
                         let roll = self.rng.get_mut(RngStream::Social).random_range(0.0f64..1.0);
                         if Fixed::from_f64(roll) < chance {
                             meme.host_count = meme.host_count.saturating_add(1);
@@ -3603,7 +3603,7 @@ impl Simulation {
             // Architecture-plan-2 §10.9: Tick patronage relations daily.
             self.patronage_registry.daily_update();
             // Architecture-plan-2 §13.1: Decay meme novelty daily.
-            self.meme_registry.tick_all();
+            self.meme_registry.tick_all(self.params.meme_novelty_decay_factor);
             // §17.4: Aggregate meme metrics for large-population observability.
             self.wire_meme_aggregation(tick_u64);
             // Architecture-plan-2 §13.3: Decay rumor prevalence daily.
