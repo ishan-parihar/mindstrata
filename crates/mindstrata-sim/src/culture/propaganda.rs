@@ -138,11 +138,13 @@ impl PropagandaCampaign {
     }
 
     /// Tick the campaign forward by one tick.
-    pub fn tick(&mut self) {
+    ///
+    /// `resistance_growth` controls how fast audience fatigue accumulates per tick.
+    pub fn tick(&mut self, resistance_growth: Fixed) {
         if self.remaining > 0 {
             self.remaining -= 1;
             // Resistance grows slowly as audience gets tired of propaganda
-            self.resistance = (self.resistance + Fixed::from_f64(0.002)).clamp_01();
+            self.resistance = (self.resistance + resistance_growth).clamp_01();
         }
         // Deactivate when duration fully elapsed
         if self.remaining == 0 {
@@ -184,10 +186,12 @@ impl PropagandaRegistry {
     }
 
     /// Tick all active campaigns.
-    pub fn tick_all(&mut self) {
+    ///
+    /// `resistance_growth` controls audience fatigue accumulation per tick.
+    pub fn tick_all(&mut self, resistance_growth: Fixed) {
         for campaign in &mut self.campaigns {
             if campaign.active {
-                campaign.tick();
+                campaign.tick(resistance_growth);
             }
         }
     }
@@ -232,7 +236,7 @@ mod tests {
             0, 0, vec![], "test".into(),
             Fixed::from_f64(0.5), vec![], 10, 0,
         );
-        c.tick();
+        c.tick(Fixed::from_f64(0.002));
         assert_eq!(c.remaining, 9);
     }
 
@@ -242,7 +246,7 @@ mod tests {
             0, 0, vec![], "test".into(),
             Fixed::from_f64(0.5), vec![], 1, 0,
         );
-        c.tick();
+        c.tick(Fixed::from_f64(0.002));
         assert!(!c.active);
     }
 

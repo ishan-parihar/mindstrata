@@ -3609,7 +3609,7 @@ impl Simulation {
             // Architecture-plan-2 §13.3: Decay rumor prevalence daily.
             self.rumor_registry.tick_all(tick_u64);
             // Architecture-plan-2 §13.4: Tick propaganda campaigns daily.
-            self.propaganda_registry.tick_all();
+            self.propaganda_registry.tick_all(self.params.propaganda_resistance_growth);
             // Architecture-plan-2 §13.4: Apply propaganda effects to target agents.
             // For each active campaign, compute effectiveness using institutional legitimacy
             // and audience fear, then nudge target agents' emotional state.

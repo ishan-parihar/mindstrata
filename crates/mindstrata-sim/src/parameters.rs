@@ -240,6 +240,8 @@ pub struct SimParameters {
     pub meme_mutation_rate_base: Fixed,
     /// Propaganda effectiveness multiplier.
     pub propaganda_effectiveness: Fixed,
+    /// Propaganda resistance growth rate per tick (audience fatigue).
+    pub propaganda_resistance_growth: Fixed,
     /// Ritual cohesion boost per participation.
     pub ritual_cohesion_boost: Fixed,
     /// Echo chamber emotional charge threshold.
@@ -390,6 +392,7 @@ impl Default for SimParameters {
             meme_novelty_decay_factor: Fixed::from_f64(0.998),
             meme_mutation_rate_base: Fixed::from_f64(0.1),
             propaganda_effectiveness: Fixed::from_f64(0.35),
+            propaganda_resistance_growth: Fixed::from_f64(0.002),
             ritual_cohesion_boost: Fixed::from_f64(0.12),
             echo_chamber_emotional_threshold: Fixed::from_f64(0.55),
 
