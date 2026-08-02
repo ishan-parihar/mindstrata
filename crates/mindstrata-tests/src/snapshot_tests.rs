@@ -10,28 +10,103 @@
 
 use crate::test_helpers::run_sim;
 
+// ── Module-level snapshot structs ──────────────────────────────
+// Per Apollo Ch. 5, test helper types are module-level for reusability.
+// Fields read by insta::assert_debug_snapshot! via Debug derive, not direct field access.
+
+#[derive(Debug)]
+#[expect(dead_code)] // insta reads via Debug, not direct field access
+struct Metrics500 {
+    avg_hunger: f64,
+    avg_thirst: f64,
+    avg_fatigue: f64,
+    avg_stress: f64,
+    avg_health: f64,
+    avg_relationship_trust: f64,
+    avg_relationship_quality: f64,
+    polarization_index: f64,
+    agent_count: f64,
+    household_count: f64,
+}
+
+#[derive(Debug)]
+#[expect(dead_code)] // insta reads via Debug, not direct field access
+struct Metrics2000 {
+    avg_hunger: f64,
+    avg_thirst: f64,
+    avg_fatigue: f64,
+    avg_stress: f64,
+    avg_health: f64,
+    avg_relationship_trust: f64,
+    polarization_index: f64,
+    agent_count: f64,
+    household_count: f64,
+}
+
+#[derive(Debug)]
+#[expect(dead_code)] // insta reads via Debug, not direct field access
+struct AgentSnapshot {
+    name: String,
+    age: f64,
+    health: f64,
+    energy: f64,
+    hunger: f64,
+    fear: f64,
+    anger: f64,
+    joy: f64,
+    attachment_security: f64,
+    attachment_anxiety: f64,
+    heuristic_bias: f64,
+    stress_level: f64,
+    redemption_script: f64,
+    depression_risk: f64,
+    authority: f64,
+    wealth_rank: f64,
+}
+
+#[derive(Debug)]
+#[expect(dead_code)] // insta reads via Debug, not direct field access
+struct InstitutionSnapshot {
+    name: String,
+    kind: String,
+    legitimacy: f64,
+    morale: f64,
+    unity: f64,
+    fear: f64,
+    trust_in_leadership: f64,
+    member_count: usize,
+}
+
+#[derive(Debug)]
+#[expect(dead_code)] // insta reads via Debug, not direct field access
+struct EndocrineSnapshot {
+    name: String,
+    stress: f64,
+    bonding: f64,
+    dominance: f64,
+    fertility: f64,
+    metabolic_energy: f64,
+    arousal: f64,
+    growth_capacity: f64,
+}
+
+#[derive(Debug)]
+#[expect(dead_code)] // insta reads via Debug, not direct field access
+struct AttachmentSnapshot {
+    name: String,
+    security: f64,
+    anxiety: f64,
+    avoidance: f64,
+}
+
+// ── Tests ─────────────────────────────────────────────────────
+
 /// §18.5: Snapshot agent metrics after 500 ticks — catches any drift in
 /// core biological, psychological, or social state distributions.
 #[test]
 fn snapshot_agent_metrics_500_ticks() {
     let sim = run_sim(42, 500);
     let ms = sim.metrics_snapshot();
-
-    #[derive(Debug)]
-    // Fields read by insta::assert_debug_snapshot! via Debug derive, not direct field access.
-    #[expect(dead_code)]
-    struct Metrics500 {
-        avg_hunger: f64,
-        avg_thirst: f64,
-        avg_fatigue: f64,
-        avg_stress: f64,
-        avg_health: f64,
-        avg_relationship_trust: f64,
-        avg_relationship_quality: f64,
-        polarization_index: f64,
-        agent_count: f64,
-        household_count: f64,
-    }
 
     insta::assert_debug_snapshot!("metrics_500_ticks", Metrics500 {
         avg_hunger: ms.avg_hunger,
@@ -53,21 +128,6 @@ fn snapshot_agent_metrics_2000_ticks() {
     let sim = run_sim(42, 2000);
     let ms = sim.metrics_snapshot();
 
-    #[derive(Debug)]
-    // Fields read by insta::assert_debug_snapshot! via Debug derive, not direct field access.
-    #[expect(dead_code)]
-    struct Metrics2000 {
-        avg_hunger: f64,
-        avg_thirst: f64,
-        avg_fatigue: f64,
-        avg_stress: f64,
-        avg_health: f64,
-        avg_relationship_trust: f64,
-        polarization_index: f64,
-        agent_count: f64,
-        household_count: f64,
-    }
-
     insta::assert_debug_snapshot!("metrics_2000_ticks", Metrics2000 {
         avg_hunger: ms.avg_hunger,
         avg_thirst: ms.avg_thirst,
@@ -86,28 +146,6 @@ fn snapshot_agent_metrics_2000_ticks() {
 #[test]
 fn snapshot_agent_state_1000_ticks() {
     let sim = run_sim(42, 1000);
-
-    #[derive(Debug)]
-    // Fields read by insta::assert_debug_snapshot! via Debug derive, not direct field access.
-    #[expect(dead_code)]
-    struct AgentSnapshot {
-        name: String,
-        age: f64,
-        health: f64,
-        energy: f64,
-        hunger: f64,
-        fear: f64,
-        anger: f64,
-        joy: f64,
-        attachment_security: f64,
-        attachment_anxiety: f64,
-        heuristic_bias: f64,
-        stress_level: f64,
-        redemption_script: f64,
-        depression_risk: f64,
-        authority: f64,
-        wealth_rank: f64,
-    }
 
     let agent_states: Vec<AgentSnapshot> = sim.agents.iter().take(3).map(|a| AgentSnapshot {
         name: a.name.clone(),
@@ -136,20 +174,6 @@ fn snapshot_agent_state_1000_ticks() {
 #[test]
 fn snapshot_institution_state_1000_ticks() {
     let sim = run_sim(42, 1000);
-
-    #[derive(Debug)]
-    // Fields read by insta::assert_debug_snapshot! via Debug derive, not direct field access.
-    #[expect(dead_code)]
-    struct InstitutionSnapshot {
-        name: String,
-        kind: String,
-        legitimacy: f64,
-        morale: f64,
-        unity: f64,
-        fear: f64,
-        trust_in_leadership: f64,
-        member_count: usize,
-    }
 
     let inst_states: Vec<InstitutionSnapshot> = sim.institutions.iter().map(|inst| InstitutionSnapshot {
         name: inst.name.clone(),
@@ -189,20 +213,6 @@ fn snapshot_relationship_stages_2000_ticks() {
 fn snapshot_endocrine_state_500_ticks() {
     let sim = run_sim(42, 500);
 
-    #[derive(Debug)]
-    // Fields read by insta::assert_debug_snapshot! via Debug derive, not direct field access.
-    #[expect(dead_code)]
-    struct EndocrineSnapshot {
-        name: String,
-        stress: f64,
-        bonding: f64,
-        dominance: f64,
-        fertility: f64,
-        metabolic_energy: f64,
-        arousal: f64,
-        growth_capacity: f64,
-    }
-
     let endocrine_states: Vec<EndocrineSnapshot> = sim.agents.iter().take(3).map(|a| EndocrineSnapshot {
         name: a.name.clone(),
         stress: a.embodied.endocrine.stress.level.to_f64(),
@@ -222,16 +232,6 @@ fn snapshot_endocrine_state_500_ticks() {
 #[test]
 fn snapshot_attachment_state_1000_ticks() {
     let sim = run_sim(42, 1000);
-
-    #[derive(Debug)]
-    // Fields read by insta::assert_debug_snapshot! via Debug derive, not direct field access.
-    #[expect(dead_code)]
-    struct AttachmentSnapshot {
-        name: String,
-        security: f64,
-        anxiety: f64,
-        avoidance: f64,
-    }
 
     let attachment_states: Vec<AttachmentSnapshot> = sim.agents.iter().take(3).map(|a| AttachmentSnapshot {
         name: a.name.clone(),

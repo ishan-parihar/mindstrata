@@ -1,7 +1,7 @@
 //! Integration tests for Mindstrata.
 
 #[cfg(test)]
-pub mod test_helpers;
+pub(crate) mod test_helpers;
 
 #[cfg(test)]
 mod property_tests;
