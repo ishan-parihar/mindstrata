@@ -36,7 +36,7 @@ fn bench_single_tick(c: &mut Criterion) {
                     |mut sim| {
                         black_box(sim.tick());
                     },
-                    criterion::BatchSize::SmallInput,
+                    criterion::BatchSize::LargeInput,
                 );
             },
         );
@@ -57,7 +57,7 @@ fn bench_100_tick_burst(c: &mut Criterion) {
                     |mut sim| {
                         black_box(sim.run(100));
                     },
-                    criterion::BatchSize::SmallInput,
+                    criterion::BatchSize::LargeInput,
                 );
             },
         );
@@ -78,7 +78,7 @@ fn bench_1000_tick_run(c: &mut Criterion) {
                     |mut sim| {
                         black_box(sim.run(1000));
                     },
-                    criterion::BatchSize::SmallInput,
+                    criterion::BatchSize::LargeInput,
                 );
             },
         );

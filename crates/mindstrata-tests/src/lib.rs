@@ -1,7 +1,12 @@
 //! Integration tests for Mindstrata.
 
+pub mod test_helpers;
+
 #[cfg(test)]
 mod property_tests;
+
+#[cfg(test)]
+mod snapshot_tests;
 
 #[cfg(test)]
 mod golden_replay;
@@ -14,9 +19,6 @@ mod comparison;
 
 #[cfg(test)]
 mod integration_tests;
-
-#[cfg(test)]
-mod snapshot_tests;
 
 #[cfg(test)]
 mod smoke {
