@@ -157,11 +157,10 @@ pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
         capacity: 50,
         inventory: vec![],
     };
-    // temple is the last site — no need to increment site_id after
-    let _ = &mut site_id;
-    // NOTE: debug_assert only fires in debug builds; release silently ignores failure.
+    // Place temple (north of center) — always call place_site, assert in debug only
+    let temple_placed = place_site(world, center_x, center_y.saturating_sub(5), temple);
     debug_assert!(
-        place_site(world, center_x, center_y.saturating_sub(5), temple),
+        temple_placed,
         "Temple placement failed — out of bounds at ({}, {})",
         center_x,
         center_y.saturating_sub(5)
