@@ -94,6 +94,34 @@ impl Default for SensoryAcuity {
     }
 }
 
+/// Tunable parameters for nervous system update.
+///
+/// Grouped into a `Copy` struct to avoid transposition-prone positional args
+/// (Apollo Rust best practices Ch. 1: prefer structured data over positional
+/// args of the same type).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct NervousUpdateParams {
+    /// Sympathetic recovery rate in safety (higher = faster calm-down). Range: 0.01–0.3, default 0.1.
+    pub sympathetic_recovery_rate: Fixed,
+    /// Parasympathetic buildup rate in safety. Range: 0.01–0.2, default 0.06.
+    pub parasympathetic_buildup_rate: Fixed,
+    /// Trauma accumulation rate from sustained high arousal. Range: 0.0001–0.001, default 0.0003.
+    pub trauma_accumulation_rate: Fixed,
+    /// Trauma decay rate per tick (very slow). Range: 0.00001–0.0002, default 0.00005.
+    pub trauma_decay_rate: Fixed,
+}
+
+impl Default for NervousUpdateParams {
+    fn default() -> Self {
+        Self {
+            sympathetic_recovery_rate: Fixed::from_f64(0.1),
+            parasympathetic_buildup_rate: Fixed::from_f64(0.06),
+            trauma_accumulation_rate: Fixed::from_f64(0.0003),
+            trauma_decay_rate: Fixed::from_f64(0.00005),
+        }
+    }
+}
+
 /// Nervous system state — autonomic regulation, arousal, pain, trauma.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NervousSystemState {
@@ -147,18 +175,15 @@ impl NervousSystemState {
         safety_input: Fixed,
         injury_input: Fixed,
         sleep_tick: bool,
-        sympathetic_recovery_rate: Fixed,
-        parasympathetic_buildup_rate: Fixed,
-        trauma_accumulation_rate: Fixed,
-        trauma_decay_rate: Fixed,
+        params: NervousUpdateParams,
     ) {
         // Sympathetic activation from threat
         let sympathetic_delta = threat_input * Fixed::from_f64(0.2);
-        let sympathetic_recovery = self.parasympathetic_tone * sympathetic_recovery_rate;
+        let sympathetic_recovery = self.parasympathetic_tone * params.sympathetic_recovery_rate;
         self.sympathetic_arousal = (self.sympathetic_arousal + sympathetic_delta - sympathetic_recovery).clamp_01();
 
         // Parasympathetic recovery from safety
-        let parasympathetic_buildup = safety_input * parasympathetic_buildup_rate;
+        let parasympathetic_buildup = safety_input * params.parasympathetic_buildup_rate;
         let parasympathetic_drain = self.sympathetic_arousal * Fixed::from_f64(0.05);
         self.parasympathetic_tone = (self.parasympathetic_tone + parasympathetic_buildup - parasympathetic_drain).clamp_01();
 
@@ -167,10 +192,10 @@ impl NervousSystemState {
 
         // Trauma load accumulation from sustained high sympathetic arousal
         if self.sympathetic_arousal > Fixed::from_f64(0.7) {
-            self.trauma_load = (self.trauma_load + trauma_accumulation_rate).clamp_01();
+            self.trauma_load = (self.trauma_load + params.trauma_accumulation_rate).clamp_01();
         }
         // Trauma load decays very slowly
-        self.trauma_load = (self.trauma_load - trauma_decay_rate).max(Fixed::ZERO);
+        self.trauma_load = (self.trauma_load - params.trauma_decay_rate).max(Fixed::ZERO);
 
         // Dissociation risk from extreme trauma
         self.dissociation_risk = (self.trauma_load * Fixed::from_f64(0.8)
@@ -236,10 +261,9 @@ mod tests {
     #[test]
     fn trauma_accumulates_from_sustained_arousal() {
         let mut ns = NervousSystemState::default();
+        let params = NervousUpdateParams::default();
         for _ in 0..100 {
-            ns.update(Fixed::from_f64(0.9), Fixed::ZERO, Fixed::ZERO, false,
-                Fixed::from_f64(0.1), Fixed::from_f64(0.06),
-                Fixed::from_f64(0.0003), Fixed::from_f64(0.00005));
+            ns.update(Fixed::from_f64(0.9), Fixed::ZERO, Fixed::ZERO, false, params);
         }
         assert!(ns.trauma_load > Fixed::ZERO);
     }
@@ -251,10 +275,9 @@ mod tests {
             sympathetic_arousal: Fixed::from_f64(0.8),
             ..NervousSystemState::default()
         };
+        let params = NervousUpdateParams::default();
         for _ in 0..50 {
-            ns.update(Fixed::ZERO, Fixed::from_f64(0.8), Fixed::ZERO, false,
-                Fixed::from_f64(0.1), Fixed::from_f64(0.06),
-                Fixed::from_f64(0.0003), Fixed::from_f64(0.00005));
+            ns.update(Fixed::ZERO, Fixed::from_f64(0.8), Fixed::ZERO, false, params);
         }
         assert!(ns.parasympathetic_tone > Fixed::from_f64(0.1));
     }

@@ -23,6 +23,34 @@ pub enum PubertyStage {
     Complete,
 }
 
+/// Tunable parameters for reproductive system update.
+///
+/// Grouped into a `Copy` struct to avoid transposition-prone positional args
+/// (Apollo Rust best practices Ch. 1: prefer structured data over positional
+/// args of the same type).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct ReproductiveUpdateParams {
+    /// Stress suppression of fertility (0 = no effect, 1 = infertile under stress). Range: 0.0–1.0, default 0.3.
+    pub stress_suppression: Fixed,
+    /// Age-based fertility decline rate per year past 35. Range: 0.01–0.1, default 0.03.
+    pub age_decline_rate: Fixed,
+    /// Gestation rate multiplier (higher = faster pregnancy). Range: 0.5–2.0, default 1.0.
+    pub gestation_rate_mult: Fixed,
+    /// Conception probability multiplier per tick. Range: 0.1–5.0, default 1.0.
+    pub conception_multiplier: Fixed,
+}
+
+impl Default for ReproductiveUpdateParams {
+    fn default() -> Self {
+        Self {
+            stress_suppression: Fixed::from_f64(0.3),
+            age_decline_rate: Fixed::from_f64(0.03),
+            gestation_rate_mult: Fixed::from_f64(1.0),
+            conception_multiplier: Fixed::from_f64(1.0),
+        }
+    }
+}
+
 /// Reproductive state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReproductiveState {
@@ -68,9 +96,8 @@ impl Default for ReproductiveState {
 impl ReproductiveState {
     /// Update reproductive state based on age and hormonal signals.
     ///
-    /// `stress_suppression` controls how much stress reduces fertility (0–1).
-    /// `age_decline_rate` controls fertility decline per year past 35.
-    /// `gestation_rate_mult` scales pregnancy progression speed.
+    /// Uses `ReproductiveUpdateParams` to group tunable parameters,
+    /// preventing transposition errors with 8 positional args of the same type.
     pub fn tick_update(
         &mut self,
         age_years: Fixed,
@@ -78,9 +105,7 @@ impl ReproductiveState {
         stress_level: Fixed,
         bonding_axis: Fixed,
         nutrition: Fixed,
-        stress_suppression: Fixed,
-        age_decline_rate: Fixed,
-        gestation_rate_mult: Fixed,
+        params: ReproductiveUpdateParams,
     ) {
         // Puberty progression based on age
         let puberty_age = Fixed::from_f64(13.0);
@@ -111,10 +136,10 @@ impl ReproductiveState {
             let age_factor = if age_years < Fixed::from_f64(35.0) {
                 Fixed::ONE
             } else {
-                let decline = (age_years - Fixed::from_f64(35.0)) * age_decline_rate;
+                let decline = (age_years - Fixed::from_f64(35.0)) * params.age_decline_rate;
                 (Fixed::ONE - decline).max(Fixed::from_f64(0.1))
             };
-            self.fertility = age_factor * health * (Fixed::ONE - stress_level * stress_suppression);
+            self.fertility = age_factor * health * (Fixed::ONE - stress_level * params.stress_suppression);
             self.libido = (Fixed::from_f64(0.5) + bonding_axis * Fixed::from_f64(0.3)
                 - stress_level * Fixed::from_f64(0.2))
                 .clamp_01();
@@ -122,7 +147,7 @@ impl ReproductiveState {
 
         // Pregnancy progression
         if self.pregnant {
-            let gestation_rate = Fixed::from_f64(0.001) * health * nutrition * gestation_rate_mult;
+            let gestation_rate = Fixed::from_f64(0.001) * health * nutrition * params.gestation_rate_mult;
             self.pregnancy_progress = (self.pregnancy_progress + gestation_rate).clamp_01();
             // Pregnancy increases parental drive
             self.parental_drive = (self.parental_drive + Fixed::from_f64(0.001)).clamp_01();
@@ -181,9 +206,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ONE,
-            Fixed::from_f64(0.3), // stress_suppression default
-            Fixed::from_f64(0.03), // age_decline_rate default
-            Fixed::from_f64(1.0),  // gestation_rate_mult default
+            ReproductiveUpdateParams::default(),
         );
         assert_eq!(r.fertility, Fixed::ZERO);
         assert_eq!(r.puberty_stage, PubertyStage::Prepubescent);
@@ -198,9 +221,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ONE,
-            Fixed::from_f64(0.3),
-            Fixed::from_f64(0.03),
-            Fixed::from_f64(1.0),
+            ReproductiveUpdateParams::default(),
         );
         assert_eq!(r.sexual_maturity, Fixed::ONE);
         assert_eq!(r.puberty_stage, PubertyStage::Complete);
@@ -217,9 +238,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ONE,
-            Fixed::from_f64(0.3),
-            Fixed::from_f64(0.03),
-            Fixed::from_f64(1.0),
+            ReproductiveUpdateParams::default(),
         );
         assert!(r.pregnancy_progress > Fixed::from_f64(0.9));
     }

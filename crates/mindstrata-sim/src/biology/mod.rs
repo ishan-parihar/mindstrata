@@ -223,10 +223,12 @@ impl EmbodiedState {
 
         // 2. Nervous — arousal, pain, trauma
         self.nervous.update(threat_level, social_safety, self.injury, is_sleeping,
-            params.nervous_sympathetic_recovery,
-            params.nervous_parasympathetic_buildup,
-            params.nervous_trauma_accumulation,
-            params.nervous_trauma_decay);
+            nervous::NervousUpdateParams {
+                sympathetic_recovery_rate: params.nervous_sympathetic_recovery,
+                parasympathetic_buildup_rate: params.nervous_parasympathetic_buildup,
+                trauma_accumulation_rate: params.nervous_trauma_accumulation,
+                trauma_decay_rate: params.nervous_trauma_decay,
+            });
 
         // 3. Endocrine — hormonal axes
         let parasympathetic = self.nervous.parasympathetic_tone;
@@ -296,9 +298,12 @@ impl EmbodiedState {
             self.endocrine.stress.level,
             bonding,
             Fixed::from_f64(0.6), // nutrition placeholder
-            params.reproduction_stress_suppression,
-            params.reproduction_age_decline_rate,
-            params.reproduction_gestation_rate,
+            reproductive::ReproductiveUpdateParams {
+                stress_suppression: params.reproduction_stress_suppression,
+                age_decline_rate: params.reproduction_age_decline_rate,
+                gestation_rate_mult: params.reproduction_gestation_rate,
+                conception_multiplier: params.reproduction_conception_multiplier,
+            },
         );
 
         // 10. Development — aging (advance age every 144 ticks = 1 day)
