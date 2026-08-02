@@ -1,0 +1,20 @@
+[package]
+name = "mindstrata-benches"
+description = "Criterion benchmarks for Mindstrata tick-loop and subsystem performance"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mindstrata-core = { workspace = true }
+mindstrata-sim = { workspace = true }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "tick_loop"
+harness = false
+
+[lints]
+workspace = true

@@ -6,6 +6,7 @@ members = [
     "crates/mindstrata-cli",
     "crates/mindstrata-tui",
     "crates/mindstrata-tests",
+    "crates/mindstrata-benches",
 ]
 
 [workspace.package]

@@ -1,0 +1,25 @@
+---
+source: crates/mindstrata-tests/src/snapshot_tests.rs
+assertion_line: 247
+expression: attachment_states
+---
+[
+    AttachmentSnapshot {
+        name: "Anna",
+        security: 1.0,
+        anxiety: 0.0789,
+        avoidance: 0.0526,
+    },
+    AttachmentSnapshot {
+        name: "Bran",
+        security: 0.6294,
+        anxiety: 0.3706,
+        avoidance: 0.2,
+    },
+    AttachmentSnapshot {
+        name: "Cara",
+        security: 0.6587,
+        anxiety: 0.3413,
+        avoidance: 0.2,
+    },
+]
