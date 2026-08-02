@@ -643,7 +643,7 @@ mod tests {
         let budget = CognitiveBudget::focal();
         let mut tracker = CognitiveBudgetTracker::from_budget(&budget);
         for _ in 0..20 {
-            tracker.consume_appraisal();
+            let _ = tracker.consume_appraisal();
         }
         assert!(!tracker.can_appraise());
         tracker.reset(&budget);
@@ -665,8 +665,8 @@ mod tests {
     fn tier_state_reset_tick_budget_works() {
         let mut state = AgentTierState::new(AgentTier::Focal, 0);
         // Exhaust some budget
-        state.budget_tracker.consume_appraisal();
-        state.budget_tracker.consume_appraisal();
+        let _ = state.budget_tracker.consume_appraisal();
+        let _ = state.budget_tracker.consume_appraisal();
         assert_eq!(state.budget_tracker.remaining_appraisals(), 18);
         // Reset tick budget
         state.reset_tick_budget();

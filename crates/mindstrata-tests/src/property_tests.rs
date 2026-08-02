@@ -333,16 +333,16 @@ fn budget_resets_each_tick() {
 
     // Exhaust all budget categories
     for _ in 0..20 {
-        state.budget_tracker.consume_appraisal();
+        let _ = state.budget_tracker.consume_appraisal();
     }
     for _ in 0..10 {
-        state.budget_tracker.consume_memory_op();
+        let _ = state.budget_tracker.consume_memory_op();
     }
     for _ in 0..5 {
-        state.budget_tracker.consume_prospection();
+        let _ = state.budget_tracker.consume_prospection();
     }
     for _ in 0..10 {
-        state.budget_tracker.consume_social_inference();
+        let _ = state.budget_tracker.consume_social_inference();
     }
 
     assert!(!state.budget_tracker.can_appraise());

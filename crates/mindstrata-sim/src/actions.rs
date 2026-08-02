@@ -704,10 +704,10 @@ mod tests {
 
     #[test]
     fn anger_biases_toward_wander() {
-        let mut rng = RngStreams::new(42);
-        let needs = NeedState::default();
-        let personality = make_personality();
-        let identity = IdentityState::default();
+        let _rng = RngStreams::new(42);
+        let _needs = NeedState::default();
+        let _personality = make_personality();
+        let _identity = IdentityState::default();
         let mut dp = make_decision_policy();
         dp.emotional_policy.anger_bias = Fixed::from_f64(0.8);
 
@@ -726,10 +726,10 @@ mod tests {
 
     #[test]
     fn fear_biases_toward_rest() {
-        let mut rng = RngStreams::new(42);
-        let needs = NeedState::default();
-        let personality = make_personality();
-        let identity = IdentityState::default();
+        let _rng = RngStreams::new(42);
+        let _needs = NeedState::default();
+        let _personality = make_personality();
+        let _identity = IdentityState::default();
         let mut dp = make_decision_policy();
         dp.emotional_policy.fear_bias = Fixed::from_f64(0.8);
 
