@@ -229,6 +229,26 @@ pub struct SimParameters {
     /// Attachment security gain per positive interaction.
     pub attachment_security_gain: Fixed,
 
+    // ── Reproduction / Marriage (Phase 5 tuning) ───────────────
+    /// Conception probability multiplier per tick (scales base 0.05).
+    pub reproduction_conception_multiplier: Fixed,
+    /// Gestation rate multiplier (higher = faster pregnancy progression).
+    pub reproduction_gestation_rate: Fixed,
+    /// Stress suppression of fertility (0 = no effect, 1 = infertile under stress).
+    pub reproduction_stress_suppression: Fixed,
+    /// Age-based fertility decline rate per year past 35.
+    pub reproduction_age_decline_rate: Fixed,
+
+    // ── Trauma / Recovery (Phase 5 tuning) ─────────────────────
+    /// Trauma accumulation rate from sustained high arousal.
+    pub nervous_trauma_accumulation: Fixed,
+    /// Trauma decay rate per tick (very slow recovery).
+    pub nervous_trauma_decay: Fixed,
+    /// Sympathetic arousal recovery rate in safety.
+    pub nervous_sympathetic_recovery: Fixed,
+    /// Parasympathetic buildup rate in safety.
+    pub nervous_parasympathetic_buildup: Fixed,
+
     // ── Meme / Cultural (Phase 5 tuning) ──────────────────────
     /// Meme transmission base chance multiplier.
     pub meme_transmission_multiplier: Fixed,
@@ -387,6 +407,18 @@ impl Default for SimParameters {
             attachment_security_gain: Fixed::from_f64(0.005),
 
             // Meme / Cultural (Phase 5 tuning)
+            // Reproduction / Marriage (Phase 5 tuning)
+            reproduction_conception_multiplier: Fixed::from_f64(1.0),
+            reproduction_gestation_rate: Fixed::from_f64(1.0),
+            reproduction_stress_suppression: Fixed::from_f64(0.3),
+            reproduction_age_decline_rate: Fixed::from_f64(0.03),
+
+            // Trauma / Recovery (Phase 5 tuning)
+            nervous_trauma_accumulation: Fixed::from_f64(0.0003),
+            nervous_trauma_decay: Fixed::from_f64(0.00005),
+            nervous_sympathetic_recovery: Fixed::from_f64(0.1),
+            nervous_parasympathetic_buildup: Fixed::from_f64(0.06),
+
             meme_transmission_multiplier: Fixed::from_f64(1.2),
             meme_virality_scaling: Fixed::from_f64(0.5),
             meme_novelty_decay_factor: Fixed::from_f64(0.998),

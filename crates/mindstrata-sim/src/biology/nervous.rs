@@ -147,14 +147,18 @@ impl NervousSystemState {
         safety_input: Fixed,
         injury_input: Fixed,
         sleep_tick: bool,
+        sympathetic_recovery_rate: Fixed,
+        parasympathetic_buildup_rate: Fixed,
+        trauma_accumulation_rate: Fixed,
+        trauma_decay_rate: Fixed,
     ) {
         // Sympathetic activation from threat
         let sympathetic_delta = threat_input * Fixed::from_f64(0.2);
-        let sympathetic_recovery = self.parasympathetic_tone * Fixed::from_f64(0.1);
+        let sympathetic_recovery = self.parasympathetic_tone * sympathetic_recovery_rate;
         self.sympathetic_arousal = (self.sympathetic_arousal + sympathetic_delta - sympathetic_recovery).clamp_01();
 
         // Parasympathetic recovery from safety
-        let parasympathetic_buildup = safety_input * Fixed::from_f64(0.06);
+        let parasympathetic_buildup = safety_input * parasympathetic_buildup_rate;
         let parasympathetic_drain = self.sympathetic_arousal * Fixed::from_f64(0.05);
         self.parasympathetic_tone = (self.parasympathetic_tone + parasympathetic_buildup - parasympathetic_drain).clamp_01();
 
@@ -163,10 +167,10 @@ impl NervousSystemState {
 
         // Trauma load accumulation from sustained high sympathetic arousal
         if self.sympathetic_arousal > Fixed::from_f64(0.7) {
-            self.trauma_load = (self.trauma_load + Fixed::from_f64(0.0003)).clamp_01();
+            self.trauma_load = (self.trauma_load + trauma_accumulation_rate).clamp_01();
         }
         // Trauma load decays very slowly
-        self.trauma_load = (self.trauma_load - Fixed::from_f64(0.00005)).max(Fixed::ZERO);
+        self.trauma_load = (self.trauma_load - trauma_decay_rate).max(Fixed::ZERO);
 
         // Dissociation risk from extreme trauma
         self.dissociation_risk = (self.trauma_load * Fixed::from_f64(0.8)
@@ -233,7 +237,9 @@ mod tests {
     fn trauma_accumulates_from_sustained_arousal() {
         let mut ns = NervousSystemState::default();
         for _ in 0..100 {
-            ns.update(Fixed::from_f64(0.9), Fixed::ZERO, Fixed::ZERO, false);
+            ns.update(Fixed::from_f64(0.9), Fixed::ZERO, Fixed::ZERO, false,
+                Fixed::from_f64(0.1), Fixed::from_f64(0.06),
+                Fixed::from_f64(0.0003), Fixed::from_f64(0.00005));
         }
         assert!(ns.trauma_load > Fixed::ZERO);
     }
@@ -246,7 +252,9 @@ mod tests {
             ..NervousSystemState::default()
         };
         for _ in 0..50 {
-            ns.update(Fixed::ZERO, Fixed::from_f64(0.8), Fixed::ZERO, false);
+            ns.update(Fixed::ZERO, Fixed::from_f64(0.8), Fixed::ZERO, false,
+                Fixed::from_f64(0.1), Fixed::from_f64(0.06),
+                Fixed::from_f64(0.0003), Fixed::from_f64(0.00005));
         }
         assert!(ns.parasympathetic_tone > Fixed::from_f64(0.1));
     }

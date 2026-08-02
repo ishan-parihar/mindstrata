@@ -67,6 +67,10 @@ impl Default for ReproductiveState {
 
 impl ReproductiveState {
     /// Update reproductive state based on age and hormonal signals.
+    ///
+    /// `stress_suppression` controls how much stress reduces fertility (0–1).
+    /// `age_decline_rate` controls fertility decline per year past 35.
+    /// `gestation_rate_mult` scales pregnancy progression speed.
     pub fn tick_update(
         &mut self,
         age_years: Fixed,
@@ -74,6 +78,9 @@ impl ReproductiveState {
         stress_level: Fixed,
         bonding_axis: Fixed,
         nutrition: Fixed,
+        stress_suppression: Fixed,
+        age_decline_rate: Fixed,
+        gestation_rate_mult: Fixed,
     ) {
         // Puberty progression based on age
         let puberty_age = Fixed::from_f64(13.0);
@@ -104,10 +111,10 @@ impl ReproductiveState {
             let age_factor = if age_years < Fixed::from_f64(35.0) {
                 Fixed::ONE
             } else {
-                let decline = (age_years - Fixed::from_f64(35.0)) * Fixed::from_f64(0.03);
+                let decline = (age_years - Fixed::from_f64(35.0)) * age_decline_rate;
                 (Fixed::ONE - decline).max(Fixed::from_f64(0.1))
             };
-            self.fertility = age_factor * health * (Fixed::ONE - stress_level * Fixed::from_f64(0.3));
+            self.fertility = age_factor * health * (Fixed::ONE - stress_level * stress_suppression);
             self.libido = (Fixed::from_f64(0.5) + bonding_axis * Fixed::from_f64(0.3)
                 - stress_level * Fixed::from_f64(0.2))
                 .clamp_01();
@@ -115,7 +122,7 @@ impl ReproductiveState {
 
         // Pregnancy progression
         if self.pregnant {
-            let gestation_rate = Fixed::from_f64(0.001) * health * nutrition;
+            let gestation_rate = Fixed::from_f64(0.001) * health * nutrition * gestation_rate_mult;
             self.pregnancy_progress = (self.pregnancy_progress + gestation_rate).clamp_01();
             // Pregnancy increases parental drive
             self.parental_drive = (self.parental_drive + Fixed::from_f64(0.001)).clamp_01();
@@ -133,6 +140,7 @@ impl ReproductiveState {
     pub fn attempt_conception(
         &mut self,
         partner_fertility: Fixed,
+        conception_multiplier: Fixed,
         rng: &mut impl rand::Rng,
     ) -> bool {
         if self.pregnant || self.sex == BiologicalSex::Male {
@@ -141,10 +149,10 @@ impl ReproductiveState {
         if self.fertility < Fixed::from_f64(0.2) || partner_fertility < Fixed::from_f64(0.2) {
             return false;
         }
-        // Conception probability = product of both fertilities × random factor
+        // Conception probability = product of both fertilities × multiplier × random factor
         let base_prob = (self.fertility * partner_fertility).to_f64();
         let roll: f64 = rng.random();
-        roll < base_prob * 0.05 // low per-tick probability
+        roll < base_prob * 0.05 * conception_multiplier.to_f64()
     }
 
     /// Complete pregnancy — returns true if birth occurs.
@@ -173,6 +181,9 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ONE,
+            Fixed::from_f64(0.3), // stress_suppression default
+            Fixed::from_f64(0.03), // age_decline_rate default
+            Fixed::from_f64(1.0),  // gestation_rate_mult default
         );
         assert_eq!(r.fertility, Fixed::ZERO);
         assert_eq!(r.puberty_stage, PubertyStage::Prepubescent);
@@ -187,6 +198,9 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ONE,
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.03),
+            Fixed::from_f64(1.0),
         );
         assert_eq!(r.sexual_maturity, Fixed::ONE);
         assert_eq!(r.puberty_stage, PubertyStage::Complete);
@@ -203,6 +217,9 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ONE,
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.03),
+            Fixed::from_f64(1.0),
         );
         assert!(r.pregnancy_progress > Fixed::from_f64(0.9));
     }

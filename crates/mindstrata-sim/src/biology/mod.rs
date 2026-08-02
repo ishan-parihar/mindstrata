@@ -222,7 +222,11 @@ impl EmbodiedState {
         self.circadian.tick_update(144, is_sleeping); // 144 ticks per day
 
         // 2. Nervous — arousal, pain, trauma
-        self.nervous.update(threat_level, social_safety, self.injury, is_sleeping);
+        self.nervous.update(threat_level, social_safety, self.injury, is_sleeping,
+            params.nervous_sympathetic_recovery,
+            params.nervous_parasympathetic_buildup,
+            params.nervous_trauma_accumulation,
+            params.nervous_trauma_decay);
 
         // 3. Endocrine — hormonal axes
         let parasympathetic = self.nervous.parasympathetic_tone;
@@ -292,6 +296,9 @@ impl EmbodiedState {
             self.endocrine.stress.level,
             bonding,
             Fixed::from_f64(0.6), // nutrition placeholder
+            params.reproduction_stress_suppression,
+            params.reproduction_age_decline_rate,
+            params.reproduction_gestation_rate,
         );
 
         // 10. Development — aging (advance age every 144 ticks = 1 day)
