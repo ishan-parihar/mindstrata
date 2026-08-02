@@ -99,6 +99,7 @@ impl Default for SensoryAcuity {
 /// Grouped into a `Copy` struct to avoid transposition-prone positional args
 /// (Apollo Rust best practices Ch. 1: prefer structured data over positional
 /// args of the same type).
+#[must_use]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct NervousUpdateParams {
     /// Sympathetic recovery rate in safety (higher = faster calm-down). Range: 0.01–0.3, default 0.1.

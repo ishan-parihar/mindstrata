@@ -1112,21 +1112,18 @@ fn meme_transmission_multiplier_affects_meme_count() {
 // ── Nervous System Sensitivity ────────────────────────────────────
 
 #[test]
-fn nervous_trauma_accumulation_affects_trauma_risk() {
-    // Higher trauma accumulation should produce higher trauma risk after 3000 ticks
+fn nervous_trauma_accumulation_affects_stress_levels() {
+    // Higher trauma accumulation should produce higher average stress after 3000 ticks
     let baseline = run_with_params(42, 3000, |p| {
         p.nervous_trauma_accumulation = Fixed::from_f64(0.0003); // default
     });
     let high_accumulation = run_with_params(42, 3000, |p| {
         p.nervous_trauma_accumulation = Fixed::from_f64(0.003); // 10x higher
     });
-    // Check trauma risk via derived states — higher accumulation should produce higher or equal stress
-    // (trauma_risk is derived from nervous system state, so we check avg_stress as proxy)
-    // Weaker assertion: just verify both run without panic and produce valid metrics
-    assert!(baseline.avg_stress >= 0.0 && baseline.avg_stress <= 2.0,
-        "Baseline stress should be valid: {:.3}", baseline.avg_stress);
-    assert!(high_accumulation.avg_stress >= 0.0 && high_accumulation.avg_stress <= 2.0,
-        "High accumulation stress should be valid: {:.3}", high_accumulation.avg_stress);
+    // Higher trauma accumulation should produce higher or equal stress
+    assert!(high_accumulation.avg_stress >= baseline.avg_stress - 0.05,
+        "Higher trauma accumulation should increase avg stress: baseline={:.3}, high={:.3}",
+        baseline.avg_stress, high_accumulation.avg_stress);
 }
 
 // ── Reproduction Sensitivity ──────────────────────────────────────
@@ -1141,7 +1138,7 @@ fn reproduction_stress_suppression_affects_population() {
         p.reproduction_stress_suppression = Fixed::from_f64(0.9); // very high
     });
     // Higher suppression should produce fewer or equal agents (fewer births)
-    assert!(high_suppression.agent_count <= baseline.agent_count + 2,
+    assert!(high_suppression.agent_count <= baseline.agent_count + 1,
         "Higher stress suppression should reduce population: baseline={}, high={}",
         baseline.agent_count, high_suppression.agent_count);
 }

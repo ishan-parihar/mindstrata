@@ -28,6 +28,7 @@ pub enum PubertyStage {
 /// Grouped into a `Copy` struct to avoid transposition-prone positional args
 /// (Apollo Rust best practices Ch. 1: prefer structured data over positional
 /// args of the same type).
+#[must_use]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct ReproductiveUpdateParams {
     /// Stress suppression of fertility (0 = no effect, 1 = infertile under stress). Range: 0.0–1.0, default 0.3.
