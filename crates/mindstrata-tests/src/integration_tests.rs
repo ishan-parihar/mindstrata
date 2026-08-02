@@ -932,7 +932,6 @@ fn metrics_snapshot_fields_in_valid_ranges() {
 /// - Provenance traces are consistent
 /// - All derived metrics remain in valid ranges
 #[test]
-#[ignore] // Run with --ignored for periodic validation (~70s runtime)
 fn ten_thousand_tick_stability() {
     let config = SimConfig {
         seed: 42,

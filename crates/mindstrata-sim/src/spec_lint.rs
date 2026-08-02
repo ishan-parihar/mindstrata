@@ -32,6 +32,7 @@ pub fn lint_all(specs_dir: &Path) -> Vec<LintIssue> {
     issues.extend(lint_norms(specs_dir));
     issues.extend(lint_propositions(specs_dir));
     issues.extend(lint_systems(specs_dir));
+    issues.extend(lint_data_driven_specs(specs_dir));
     issues
 }
 
@@ -167,6 +168,83 @@ fn lint_propositions(specs_dir: &Path) -> Vec<LintIssue> {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    issues
+}
+
+/// §15.1: Validate data-driven RON spec files exist and are non-empty.
+/// These files document the intended Rust struct mapping for future wiring.
+fn lint_data_driven_specs(specs_dir: &Path) -> Vec<LintIssue> {
+    let mut issues = Vec::new();
+
+    let data_driven_files: &[(&str, &str)] = &[
+        ("biology/hormones.ron", "biology::endocrine::EndocrineState"),
+        ("biology/organs.ron", "biology organ systems"),
+        ("biology/diseases_v2.ron", "health::Disease definitions"),
+        ("biology/life_stages.ron", "biology::development::DevelopmentalStage"),
+        ("biology/reproduction.ron", "biology::reproductive::ReproductiveState"),
+        ("psychology/cognitive_systems.ron", "psychology::cognitive_runtime::CognitiveRuntime"),
+        ("psychology/emotions_v2.ron", "appraisal::DiscreteEmotions"),
+        ("psychology/regulation_strategies.ron", "psychology::emotion_regulation"),
+        ("psychology/identity_frames.ron", "psychology::self_model::IdentityState"),
+        ("psychology/moral_foundations.ron", "psychology::moral_cognition::MoralFoundations"),
+        ("social/courtship.ron", "social::courtship::Courtship"),
+        ("social/marriage.ron", "social::marriage::Marriage"),
+        ("social/kinship.ron", "social::kinship::KinshipGraph"),
+        ("social/status_roles.ron", "social::status_dims::StatusDimensions"),
+        ("culture/rituals.ron", "culture::ritual::Ritual"),
+        ("culture/propaganda.ron", "culture::propaganda::PropagandaCampaign"),
+        ("culture/taboos_v2.ron", "culture taboo definitions"),
+        ("culture/sacred_symbols.ron", "culture::sacred::SacredValues"),
+        ("culture/education.ron", "culture::education"),
+    ];
+
+    for (file, rust_mapping) in data_driven_files {
+        let path = specs_dir.join(file);
+        if !path.exists() {
+            issues.push(LintIssue {
+                severity: LintSeverity::Warning,
+                spec_file: file.to_string(),
+                spec_id: "N/A".into(),
+                message: format!(
+                    "Data-driven spec file missing: {file} (maps to {rust_mapping})"
+                ),
+            });
+            continue;
+        }
+        // Check file is non-empty and contains valid RON syntax
+        match std::fs::read_to_string(&path) {
+            Ok(content) => {
+                if content.trim().is_empty() {
+                    issues.push(LintIssue {
+                        severity: LintSeverity::Warning,
+                        spec_file: file.to_string(),
+                        spec_id: "N/A".into(),
+                        message: format!("Data-driven spec file is empty: {file}"),
+                    });
+                } else {
+                    // Basic RON syntax check: parse as ron::Value
+                    let parse_result: Result<ron::Value, _> = ron::de::from_str(&content);
+                    if let Err(e) = parse_result {
+                        issues.push(LintIssue {
+                            severity: LintSeverity::Warning,
+                            spec_file: file.to_string(),
+                            spec_id: "N/A".into(),
+                            message: format!("RON parse error in {file}: {e}"),
+                        });
+                    }
+                }
+            }
+            Err(e) => {
+                issues.push(LintIssue {
+                    severity: LintSeverity::Warning,
+                    spec_file: file.to_string(),
+                    spec_id: "N/A".into(),
+                    message: format!("Could not read {file}: {e}"),
+                });
             }
         }
     }
