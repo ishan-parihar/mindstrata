@@ -216,6 +216,7 @@ impl EmbodiedState {
         ambient_temperature: Fixed,
         crowding: Fixed,
         hygiene: Fixed,
+        params: &crate::parameters::SimParameters,
     ) {
         // 1. Circadian — advances time of day
         self.circadian.tick_update(144, is_sleeping); // 144 ticks per day
@@ -228,11 +229,14 @@ impl EmbodiedState {
         let acute_stress = self.nervous.pain.effective_pain()
             + self.hunger * Fixed::from_f64(0.3)
             + self.thirst * Fixed::from_f64(0.2);
-        self.endocrine.stress.update(acute_stress, parasympathetic);
+        self.endocrine.stress.update(acute_stress, parasympathetic,
+            params.endocrine_stress_recovery, params.endocrine_stress_chronic_rate,
+            params.endocrine_stress_chronic_recovery);
         self.endocrine.metabolic.energy = self.energy;
         self.endocrine.metabolic.appetite = self.hunger;
         self.endocrine.metabolic.satiety = Fixed::ONE - self.hunger;
-        self.endocrine.arousal.update(self.endocrine.stress.level);
+        self.endocrine.arousal.update(self.endocrine.stress.level,
+            params.endocrine_arousal_rise, params.endocrine_arousal_decay);
 
         // 4. Metabolic — energy, hunger, thermoregulation
         self.metabolic.tick_update(activity_level, ambient_temperature);
@@ -366,6 +370,7 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.3),
             Fixed::from_f64(0.7),
+            &crate::parameters::SimParameters::default(),
         );
         // Should not panic and values should remain in range
         assert!(derived_health_in_range(&embodied));
@@ -384,6 +389,7 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::ZERO,
             Fixed::ONE,
+            &crate::parameters::SimParameters::default(),
         );
         assert!(embodied.nervous.sleep_pressure < Fixed::from_f64(0.8));
     }

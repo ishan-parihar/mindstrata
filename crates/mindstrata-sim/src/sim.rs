@@ -1076,6 +1076,7 @@ impl Simulation {
                 self.agents[i].embodied.tick_update(
                     threat_level, social_safety, is_sleeping,
                     activity_level, ambient_temperature, crowding, hygiene,
+                    &self.params,
                 );
                 // Sync derived body fields from EmbodiedState back to legacy BodyState.
                 // Compute values first to avoid borrow conflicts between embodied and body.

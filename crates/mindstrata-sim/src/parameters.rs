@@ -193,9 +193,51 @@ pub struct SimParameters {
     /// Default price for unknown resources (10.0).
     pub market_default_price: Fixed,
 
-    // ── Cultural ──────────────────────────────────────────────
+    // ── Endocrine (Phase 5 tuning) ─────────────────────────────
+    /// Stress axis recovery rate per tick (higher = faster calm-down).
+    pub endocrine_stress_recovery: Fixed,
+    /// Stress chronic load accumulation rate.
+    pub endocrine_stress_chronic_rate: Fixed,
+    /// Stress chronic load recovery rate.
+    pub endocrine_stress_chronic_recovery: Fixed,
+    /// Bonding axis recovery rate per tick.
+    pub endocrine_bonding_recovery: Fixed,
+    /// Dominance axis response to status change.
+    pub endocrine_dominance_response: Fixed,
+    /// Arousal axis rise factor.
+    pub endocrine_arousal_rise: Fixed,
+    /// Arousal axis decay factor.
+    pub endocrine_arousal_decay: Fixed,
+
+    // ── Attachment (Phase 5 tuning) ────────────────────────────
+    /// Attachment separation distress rate per tick.
+    pub attachment_separation_rate: Fixed,
+    /// Secure reunion recovery factor.
+    pub attachment_secure_recovery: Fixed,
+    /// Anxious reunion recovery factor (slower than secure).
+    pub attachment_anxious_recovery: Fixed,
+    /// Avoidant reunion recovery factor.
+    pub attachment_avoidant_recovery: Fixed,
+    /// Disorganized reunion recovery factor.
+    pub attachment_disorganized_recovery: Fixed,
+    /// Secure comfort effectiveness.
+    pub attachment_secure_comfort: Fixed,
+    /// Anxious comfort effectiveness (partial sooth).
+    pub attachment_anxious_comfort: Fixed,
+    /// Avoidant comfort effectiveness (may reject).
+    pub attachment_avoidant_comfort: Fixed,
+    /// Attachment security gain per positive interaction.
+    pub attachment_security_gain: Fixed,
+
+    // ── Meme / Cultural (Phase 5 tuning) ──────────────────────
     /// Meme transmission base chance multiplier.
     pub meme_transmission_multiplier: Fixed,
+    /// Meme virality scaling factor (how much emotion+identity boosts virality).
+    pub meme_virality_scaling: Fixed,
+    /// Meme novelty decay factor per tick.
+    pub meme_novelty_decay_factor: Fixed,
+    /// Meme mutation rate base.
+    pub meme_mutation_rate_base: Fixed,
     /// Propaganda effectiveness multiplier.
     pub propaganda_effectiveness: Fixed,
     /// Ritual cohesion boost per participation.
@@ -322,11 +364,34 @@ impl Default for SimParameters {
             market_initial_grain_price: Fixed::from_f64(5.0),
             market_initial_water_price: Fixed::from_f64(2.0),
             market_default_price: Fixed::from_f64(10.0),
-            // Cultural
-            meme_transmission_multiplier: Fixed::from_f64(1.0),
-            propaganda_effectiveness: Fixed::from_f64(0.3),
-            ritual_cohesion_boost: Fixed::from_f64(0.1),
-            echo_chamber_emotional_threshold: Fixed::from_f64(0.6),
+            // Endocrine (Phase 5 tuning)
+            endocrine_stress_recovery: Fixed::from_f64(0.05),
+            endocrine_stress_chronic_rate: Fixed::from_f64(0.001),
+            endocrine_stress_chronic_recovery: Fixed::from_f64(0.0005),
+            endocrine_bonding_recovery: Fixed::from_f64(0.02),
+            endocrine_dominance_response: Fixed::from_f64(0.1),
+            endocrine_arousal_rise: Fixed::from_f64(0.3),
+            endocrine_arousal_decay: Fixed::from_f64(0.1),
+
+            // Attachment (Phase 5 tuning)
+            attachment_separation_rate: Fixed::from_f64(0.3),
+            attachment_secure_recovery: Fixed::from_f64(0.3),
+            attachment_anxious_recovery: Fixed::from_f64(0.6),
+            attachment_avoidant_recovery: Fixed::from_f64(0.4),
+            attachment_disorganized_recovery: Fixed::from_f64(0.5),
+            attachment_secure_comfort: Fixed::from_f64(0.3),
+            attachment_anxious_comfort: Fixed::from_f64(0.15),
+            attachment_avoidant_comfort: Fixed::from_f64(0.1),
+            attachment_security_gain: Fixed::from_f64(0.005),
+
+            // Meme / Cultural (Phase 5 tuning)
+            meme_transmission_multiplier: Fixed::from_f64(1.2),
+            meme_virality_scaling: Fixed::from_f64(0.5),
+            meme_novelty_decay_factor: Fixed::from_f64(0.998),
+            meme_mutation_rate_base: Fixed::from_f64(0.1),
+            propaganda_effectiveness: Fixed::from_f64(0.35),
+            ritual_cohesion_boost: Fixed::from_f64(0.12),
+            echo_chamber_emotional_threshold: Fixed::from_f64(0.55),
 
             // Economic
             price_elasticity: Fixed::from_f64(0.5),

@@ -37,17 +37,18 @@ impl Default for StressAxis {
 
 impl StressAxis {
     /// Update stress level based on acute input and recovery.
-    pub fn update(&mut self, acute_input: Fixed, parasympathetic_tone: Fixed) {
-        let recovery_rate = Fixed::from_f64(0.05) * parasympathetic_tone;
+    pub fn update(&mut self, acute_input: Fixed, parasympathetic_tone: Fixed,
+                  recovery_rate: Fixed, chronic_rate: Fixed, chronic_recovery: Fixed) {
+        let recovery = recovery_rate * parasympathetic_tone;
         let acute_delta = acute_input * self.reactivity;
         let chronic_delta = self.chronic_load * Fixed::from_f64(0.1);
-        self.level = (self.level + acute_delta + chronic_delta - recovery_rate).clamp_01();
+        self.level = (self.level + acute_delta + chronic_delta - recovery).clamp_01();
         // Chronic load accumulates slowly from high acute stress
         if self.level > Fixed::from_f64(0.6) {
-            self.chronic_load = (self.chronic_load + Fixed::from_f64(0.001)).clamp_01();
+            self.chronic_load = (self.chronic_load + chronic_rate).clamp_01();
         } else {
             // Chronic load recovers very slowly
-            self.chronic_load = (self.chronic_load - Fixed::from_f64(0.0005)).max(Fixed::ZERO);
+            self.chronic_load = (self.chronic_load - chronic_recovery).max(Fixed::ZERO);
         }
     }
 }
@@ -72,10 +73,9 @@ impl Default for BondingAxis {
 }
 
 impl BondingAxis {
-    pub fn update(&mut self, social_input: Fixed) {
-        let recovery = Fixed::from_f64(0.02);
+    pub fn update(&mut self, social_input: Fixed, recovery_rate: Fixed) {
         let delta = social_input * self.receptivity;
-        self.level = (self.level + delta - recovery).clamp_01();
+        self.level = (self.level + delta - recovery_rate).clamp_01();
     }
 }
 
@@ -96,9 +96,9 @@ impl Default for DominanceAxis {
 }
 
 impl DominanceAxis {
-    pub fn update(&mut self, status_change: Fixed) {
+    pub fn update(&mut self, status_change: Fixed, response_rate: Fixed) {
         // Rises with status gains, falls with status losses
-        self.level = (self.level + status_change * Fixed::from_f64(0.1)
+        self.level = (self.level + status_change * response_rate
             - Fixed::from_f64(0.01))
             .clamp_01();
     }
@@ -168,10 +168,10 @@ impl Default for ArousalAxis {
 }
 
 impl ArousalAxis {
-    pub fn update(&mut self, acute_input: Fixed) {
+    pub fn update(&mut self, acute_input: Fixed, rise_factor: Fixed, decay_factor: Fixed) {
         // Rapid rise, slower decay back to baseline
-        let rise = acute_input * Fixed::from_f64(0.3);
-        let decay = (self.level - self.baseline) * Fixed::from_f64(0.1);
+        let rise = acute_input * rise_factor;
+        let decay = (self.level - self.baseline) * decay_factor;
         self.level = (self.level + rise - decay).clamp_01();
     }
 }
@@ -277,7 +277,7 @@ mod tests {
         };
         let tone = Fixed::from_f64(0.5);
         // Acute input 0, so only recovery happens
-        axis.update(Fixed::ZERO, tone);
+        axis.update(Fixed::ZERO, tone, Fixed::from_f64(0.05), Fixed::from_f64(0.001), Fixed::from_f64(0.0005));
         assert!(axis.level < Fixed::from_f64(0.8));
     }
 
@@ -288,7 +288,7 @@ mod tests {
             ..StressAxis::default()
         };
         let tone = Fixed::from_f64(0.5);
-        axis.update(Fixed::from_f64(0.8), tone);
+        axis.update(Fixed::from_f64(0.8), tone, Fixed::from_f64(0.05), Fixed::from_f64(0.001), Fixed::from_f64(0.0005));
         assert!(axis.level > Fixed::from_f64(0.2));
     }
 
@@ -314,7 +314,7 @@ mod tests {
             baseline: Fixed::from_f64(0.3),
         };
         // No acute input, should decay
-        axis.update(Fixed::ZERO);
+        axis.update(Fixed::ZERO, Fixed::from_f64(0.3), Fixed::from_f64(0.1));
         assert!(axis.level < Fixed::from_f64(0.9));
         assert!(axis.level > axis.baseline);
     }
