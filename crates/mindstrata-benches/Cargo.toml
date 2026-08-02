@@ -10,7 +10,7 @@ mindstrata-core = { workspace = true }
 mindstrata-sim = { workspace = true }
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { workspace = true }
 
 [[bench]]
 name = "tick_loop"

@@ -18,7 +18,8 @@ fn snapshot_agent_metrics_500_ticks() {
     let ms = sim.metrics_snapshot();
 
     #[derive(Debug)]
-    #[allow(dead_code)]
+    // Fields read by insta::assert_debug_snapshot! via Debug derive, not direct field access.
+    #[expect(dead_code)]
     struct Metrics500 {
         avg_hunger: f64,
         avg_thirst: f64,
@@ -53,7 +54,8 @@ fn snapshot_agent_metrics_2000_ticks() {
     let ms = sim.metrics_snapshot();
 
     #[derive(Debug)]
-    #[allow(dead_code)]
+    // Fields read by insta::assert_debug_snapshot! via Debug derive, not direct field access.
+    #[expect(dead_code)]
     struct Metrics2000 {
         avg_hunger: f64,
         avg_thirst: f64,
@@ -86,7 +88,8 @@ fn snapshot_agent_state_1000_ticks() {
     let sim = run_sim(42, 1000);
 
     #[derive(Debug)]
-    #[allow(dead_code)]
+    // Fields read by insta::assert_debug_snapshot! via Debug derive, not direct field access.
+    #[expect(dead_code)]
     struct AgentSnapshot {
         name: String,
         age: f64,
@@ -135,7 +138,8 @@ fn snapshot_institution_state_1000_ticks() {
     let sim = run_sim(42, 1000);
 
     #[derive(Debug)]
-    #[allow(dead_code)]
+    // Fields read by insta::assert_debug_snapshot! via Debug derive, not direct field access.
+    #[expect(dead_code)]
     struct InstitutionSnapshot {
         name: String,
         kind: String,
@@ -186,7 +190,8 @@ fn snapshot_endocrine_state_500_ticks() {
     let sim = run_sim(42, 500);
 
     #[derive(Debug)]
-    #[allow(dead_code)]
+    // Fields read by insta::assert_debug_snapshot! via Debug derive, not direct field access.
+    #[expect(dead_code)]
     struct EndocrineSnapshot {
         name: String,
         stress: f64,
@@ -219,7 +224,8 @@ fn snapshot_attachment_state_1000_ticks() {
     let sim = run_sim(42, 1000);
 
     #[derive(Debug)]
-    #[allow(dead_code)]
+    // Fields read by insta::assert_debug_snapshot! via Debug derive, not direct field access.
+    #[expect(dead_code)]
     struct AttachmentSnapshot {
         name: String,
         security: f64,
