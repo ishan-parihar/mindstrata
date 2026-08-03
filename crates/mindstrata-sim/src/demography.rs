@@ -60,7 +60,10 @@ impl Default for DemographyConfig {
         Self {
             ticks_per_year: 35040,
             elder_death_rate: Fixed::from_f64(0.15),
-            birth_rate: Fixed::from_f64(0.08),
+            // Annual births per couple. ~0.3/yr ≈ one child per 3.3 years,
+            // pre-modern village fertility. (Old 0.08 was rolled raw per tick
+            // in should_birth, flooding the population to the cap instantly.)
+            birth_rate: Fixed::from_f64(0.3),
             max_age: 80.0,
             min_childbearing_age: 18.0,
             max_childbearing_age: 45.0,
@@ -107,21 +110,30 @@ pub fn age_agent(
     // Death probability increases with age and decreases with health.
     // `elder_death_rate` is an annual rate; scale by the elapsed fraction
     // of a year so the roll is a true per-period probability.
-    if new_age_years > 60.0 {
-        let age_factor = Fixed::from_f64(((new_age_years - 60.0) / 20.0).clamp(0.0, 1.0));
-        let health_factor = Fixed::ONE - health;
-        let energy_factor = Fixed::ONE - body_energy;
-        let annual_rate = (config.elder_death_rate * age_factor
-            + health_factor * Fixed::from_f64(0.1)
-            + energy_factor * Fixed::from_f64(0.05))
-            .clamp_01();
-        let elapsed_years =
-            Fixed::from_f64(ticks_elapsed as f64 / config.ticks_per_year as f64);
-        let death_chance = (annual_rate * elapsed_years).clamp_01();
-        (new_age, rng_value < death_chance)
+    //
+    // Health-based mortality applies at ALL ages (not just >60): an agent
+    // whose derived health collapses (severe sickness, starvation, chronic
+    // stress) faces a meaningful death risk even when young. Without this,
+    // populations only ever grow to MAX_POPULATION and then freeze forever,
+    // because nobody reaches age 60 within practical run lengths.
+    let age_factor = if new_age_years > 60.0 {
+        Fixed::from_f64(((new_age_years - 60.0) / 20.0).clamp(0.0, 1.0))
     } else {
-        (new_age, false)
-    }
+        Fixed::ZERO
+    };
+    let health_factor = Fixed::ONE - health;
+    let energy_factor = Fixed::ONE - body_energy;
+    // Health collapse (< 0.25 derived health) is lethal risk at any age.
+    let health_collapse = (Fixed::from_f64(0.25) - health).max(Fixed::ZERO);
+    let annual_rate = (config.elder_death_rate * age_factor
+        + health_factor * Fixed::from_f64(0.1)
+        + health_collapse * Fixed::from_f64(0.5)
+        + energy_factor * Fixed::from_f64(0.05))
+        .clamp_01();
+    let elapsed_years =
+        Fixed::from_f64(ticks_elapsed as f64 / config.ticks_per_year as f64);
+    let death_chance = (annual_rate * elapsed_years).clamp_01();
+    (new_age, rng_value < death_chance)
 }
 
 /// Determine life stage from age.
@@ -148,6 +160,7 @@ pub fn should_birth(
     health: Fixed,
     age: f64,
     existing_children: usize,
+    ticks_elapsed: u64,
     config: &DemographyConfig,
     rng_value: Fixed, // 0..1 random value
 ) -> bool {
@@ -165,7 +178,15 @@ pub fn should_birth(
     let child_penalty = Fixed::from_f64(0.02) * Fixed::from_int(existing_children as i64);
     let effective_rate = (config.birth_rate - child_penalty).max(Fixed::ZERO);
 
-    rng_value < effective_rate
+    // `birth_rate` is an ANNUAL rate (per couple per year). Scale it by the
+    // fraction of a year this demography step covers so the roll is a true
+    // per-period probability. Previously the annual rate was rolled raw every
+    // tick, flooding the population to MAX_POPULATION within the first ~10
+    // ticks of any run (which made demography look frozen at the cap).
+    // Computed in f64 to avoid Fixed's 4-decimal underflow on 1/35040.
+    let elapsed_years = ticks_elapsed as f64 / config.ticks_per_year as f64;
+    let period_prob = effective_rate.to_f64() * elapsed_years;
+    rng_value.to_f64() < period_prob
 }
 
 #[cfg(test)]
@@ -265,28 +286,51 @@ mod tests {
     fn birth_requires_partner() {
         let config = DemographyConfig::default();
         assert!(!should_birth(
-            false, Fixed::ONE, 25.0, 0, &config, Fixed::ZERO,
+            false, Fixed::ONE, 25.0, 0, 10, &config, Fixed::ZERO,
         ));
     }
 
     #[test]
     fn birth_rate_decreases_with_children() {
-        let config = DemographyConfig::default();
+        // Compress the timescale (1 tick = 1/100 year) so the scaled
+        // per-period probabilities are observable in the roll.
+        let config = DemographyConfig {
+            ticks_per_year: 100,
+            ..DemographyConfig::default()
+        };
+        // 10 elapsed ticks = 0.1 year → no-kids rate 0.3*0.1 = 0.03,
+        // five-kids rate (0.3 - 0.1) * 0.1 = 0.02. rng 0.025 discriminates.
         let no_kids = should_birth(
-            true, Fixed::ONE, 25.0, 0, &config, Fixed::from_f64(0.05),
+            true, Fixed::ONE, 25.0, 0, 10, &config, Fixed::from_f64(0.025),
         );
         let many_kids = should_birth(
-            true, Fixed::ONE, 25.0, 5, &config, Fixed::from_f64(0.05),
+            true, Fixed::ONE, 25.0, 5, 10, &config, Fixed::from_f64(0.025),
         );
-        // With 5 children, birth rate should be lower
-        assert!(no_kids || !many_kids); // at least one should differ
+        assert!(no_kids, "0-kid couple should get a birth at 0.025 < 0.03");
+        assert!(!many_kids, "5-kid couple should not at 0.025 > 0.02");
+    }
+
+    #[test]
+    fn birth_rate_scales_with_elapsed_years() {
+        // Regression: the annual rate must be scaled by elapsed-year fraction.
+        // Rolling the full annual rate every tick flooded the population to
+        // MAX_POPULATION within ~10 ticks of any run.
+        let config = DemographyConfig {
+            ticks_per_year: 35040, // real default
+            ..DemographyConfig::default()
+        };
+        // 10 ticks = 0.000285 years → probability ~8.6e-5. rng 0.01 must NOT birth.
+        let too_low = should_birth(
+            true, Fixed::ONE, 25.0, 0, 10, &config, Fixed::from_f64(0.01),
+        );
+        assert!(!too_low, "Annual rate must be scaled per period, not rolled raw");
     }
 
     #[test]
     fn unhealthy_mother_no_birth() {
         let config = DemographyConfig::default();
         assert!(!should_birth(
-            true, Fixed::from_f64(0.1), 25.0, 0, &config, Fixed::ZERO,
+            true, Fixed::from_f64(0.1), 25.0, 0, 10, &config, Fixed::ZERO,
         ));
     }
 }

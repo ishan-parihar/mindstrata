@@ -2230,8 +2230,12 @@ impl Simulation {
         // ── 19. Marriage formation (extracted) ──
         self.tick_marriage_formation(tick_u64, tick);
 
-        // ── 19b. Birth mechanics (extracted) ──
-        self.tick_birth_mechanics(tick_u64, tick);
+        // ── 19b. Birth mechanics (extracted) — demography cadence ──
+        // Births roll on the same 10-tick cadence as aging/mortality so the
+        // annual birth rate is scaled by the correct elapsed-year fraction.
+        if phases.is_deca {
+            self.tick_birth_mechanics(tick_u64, tick);
+        }
 
         // ── §6 + §10.6/§10.7: Kinship & Household daily update ──
         self.tick_kinship_household_daily(tick_u64, phases);
@@ -3786,6 +3790,7 @@ impl Simulation {
                     }).count();
                     let should = demography::should_birth(
                         true, min_health, avg_age, existing_children,
+                        DEMOGRAPHY_TICK_INTERVAL,
                         &self.demography_config, rng_val,
                     );
                     if should && n + new_births.len() < crate::population_cap::MAX_POPULATION {

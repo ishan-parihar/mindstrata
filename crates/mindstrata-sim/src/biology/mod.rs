@@ -320,8 +320,22 @@ impl EmbodiedState {
                 .max(Fixed::ZERO);
         }
 
-        // Sync derived fields back to legacy fields
-        self.health = self.derived_health();
+        // Sync derived fields back to legacy fields.
+        // NOTE: base health is NOT overwritten with the acute derived value.
+        // `derived_health()` subtracts stress/pain/sickness/shock penalties, and
+        // writing it back each tick fed those penalties into the base — since
+        // immune_modifier < 1.0, any sustained stress ratcheted health to 0
+        // permanently (the avg_health metric read ~0.06 while agents were
+        // actually at ~1.0). Base health now recovers slowly and only chronic
+        // factors (injury, sickness) reduce it; acute penalties remain visible
+        // transiently through derived_health().
+        let chronic_damage = (self.injury * Fixed::from_f64(0.5)
+            + self.immune.sickness_level() * Fixed::from_f64(0.3))
+            .clamp_01();
+        let health_target = (Fixed::ONE - chronic_damage).clamp_01();
+        let recovery_rate = Fixed::from_f64(0.002); // slow recovery per tick
+        self.health =
+            (self.health + (health_target - self.health) * recovery_rate).clamp_01();
         self.energy = self.derived_energy();
         self.fatigue = self.derived_fatigue();
         self.sickness = self.immune.sickness_level();
