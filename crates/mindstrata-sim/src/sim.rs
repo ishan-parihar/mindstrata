@@ -4369,6 +4369,61 @@ impl Simulation {
                         }
                     }
                     self.echo_chamber.compute_polarization();
+
+                    // Phase 4: §13.6 feedback — echo chambers reinforce beliefs.
+                    // A cluster's echo strength (cohesion × fusion × outgroup
+                    // hostility / tie penalty) drives daily belief reinforcement:
+                    // members of strong echo chambers have their hottest belief
+                    // nudged toward certainty and their resistance raised
+                    // (closed-mindedness to dissent). This closes the loop that
+                    // §13.6 describes — polarized clusters entrench their own
+                    // beliefs instead of polarization being a dead-end metric.
+                    // Calibrated to the daily cadence (144 ticks/day): a typical
+                    // cohesive village has echo ~0.0014 (cohesion 0.5 × fusion
+                    // 0.3 × hostility 0.14 × tie penalty 1/15), so × 0.5 yields
+                    // ~0.07 confidence/yr — visible entrenchment, not runaway.
+                    // Strong realistic chambers (echo ≤ ~0.06, few cross-ties)
+                    // entrench to certainty in weeks; clamps at 1.0 bound it.
+                    for cluster in &self.echo_chamber.clusters {
+                        let echo = cluster.echo_strength();
+                        // Feedback is proportional to echo — no absolute gate.
+                        // In a cohesive village echo_strength is small (~0.001:
+                        // cohesion 0.5 × fusion 0.3 × hostility 0.14 × tie
+                        // penalty 1/15), so an absolute threshold like 0.01
+                        // would silence the loop everywhere; scaling keeps the
+                        // nudge visible in strong chambers and near-zero in
+                        // weak ones.
+                        if echo <= Fixed::ZERO {
+                            continue;
+                        }
+                        let reinforcement = echo * Fixed::from_f64(0.5);
+                        let resistance_gain = echo * Fixed::from_f64(0.2);
+                        let charge_gain = reinforcement * Fixed::from_f64(0.5);
+                        // NOTE: cluster membership is personality-driven
+                        // (traditionalism + agreeableness, Phase 1), so the
+                        // hottest belief reinforced here may not be the
+                        // pro/anti-institution stance that defines the cluster.
+                        // This approximates §13.6 (chambers entrench beliefs);
+                        // aligning reinforcement with the cluster's orientation
+                        // belief is future work.
+                        for &member in &cluster.members {
+                            if member >= self.agents.len() {
+                                continue;
+                            }
+                            let agent = &mut self.agents[member];
+                            // Reinforce the agent's hottest (most emotionally
+                            // charged) belief — the one the echo chamber amplifies.
+                            if let Some(hot) = agent.beliefs
+                                .iter_mut()
+                                .max_by_key(|b| b.emotional_charge)
+                            {
+                                hot.confidence = (hot.confidence + reinforcement).clamp_01();
+                                hot.emotional_charge = (hot.emotional_charge
+                                    + charge_gain).clamp_01();
+                                hot.resistance = (hot.resistance + resistance_gain).clamp_01();
+                            }
+                        }
+                    }
                 }
             }
             // Architecture-plan-2 §10.8: Clan daily update.
