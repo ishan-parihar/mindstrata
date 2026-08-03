@@ -72,6 +72,14 @@ const PATRONAGE_TRUST_THRESHOLD: Fixed = Fixed::from_raw(3500); // 0.35
 const PATRONAGE_AFFECTION_THRESHOLD: Fixed = Fixed::from_raw(2000); // 0.2
 /// Patronage formation chance multiplier (scaled by trust).
 const PATRONAGE_CHANCE_SCALE: Fixed = Fixed::from_raw(500); // 0.05
+/// §10.9: Patrons transfer a daily stipend (provision × this rate) to
+/// destitute clients — patronage as an economic safety net. Sized small
+/// (0.02) to stay inside the calibrated propaganda/faction envelope:
+/// legitimate_campaign_reaches_effectiveness_gate sits at 0.097 with a 0.05
+/// rate; a faster drip perturbs the council-legitimacy trajectory too much.
+const PATRONAGE_TRANSFER_RATE: Fixed = Fixed::from_raw(200); // 0.02
+/// §10.9: A client is destitute (and eligible for support) below this coin floor.
+const PATRONAGE_DESTITUTION_FLOOR: Fixed = Fixed::from_raw(10_000); // 1.0 coin
 
 // ── Group formation constants (§12.2) ──────────────────────────────
 /// Social cost scale factor (density × this → 0.0–0.2).
@@ -3554,6 +3562,12 @@ impl Simulation {
             .iter()
             .map(|e| e.memories.len() as u64)
             .sum();
+        let patronage_relation_count = self
+            .patronage_registry
+            .relations
+            .iter()
+            .filter(|r| r.active)
+            .count() as u64;
 
         MetricsSnapshot {
             tick: self.current_tick().as_u64(),
@@ -3588,6 +3602,7 @@ impl Simulation {
             noosphere_nodes,
             noosphere_zeitgeist,
             collective_memory_count,
+            patronage_relation_count,
         }
     }
 
@@ -4984,6 +4999,36 @@ impl Simulation {
         );
     }
 
+    /// §10.9: Patrons provision destitute clients — the economic side of
+    /// patronage. When a client's coin falls below the destitution floor and
+    /// the patron can afford the stipend, a small daily transfer moves wealth
+    /// through the social structure (a safety net that softens inequality).
+    /// Deterministic (no RNG): reads are collected, then applied.
+    fn tick_patronage_provision(&mut self) {
+        let mut transfers: Vec<(usize, usize, Fixed)> = Vec::new();
+        for rel in &self.patronage_registry.relations {
+            if !rel.active {
+                continue;
+            }
+            let (patron, client) = (rel.patron, rel.client);
+            if patron >= self.agents.len() || client >= self.agents.len() {
+                continue;
+            }
+            if self.agents[client].wealth.coin >= PATRONAGE_DESTITUTION_FLOOR {
+                continue;
+            }
+            let transfer = rel.provision * PATRONAGE_TRANSFER_RATE;
+            if self.agents[patron].wealth.coin < transfer {
+                continue;
+            }
+            transfers.push((patron, client, transfer));
+        }
+        for (patron, client, transfer) in transfers {
+            self.agents[patron].wealth.coin -= transfer;
+            self.agents[client].wealth.coin += transfer;
+        }
+    }
+
     /// §6 + §10.6/§10.7: Kinship & Household daily update.
     fn tick_kinship_household_daily(&mut self, tick_u64: u64, phases: crate::scheduler::TickPhases) {
         // §10.6: Decay kinship edges daily.
@@ -4995,6 +5040,9 @@ impl Simulation {
             }
             // Architecture-plan-2 §10.9: Tick patronage relations daily.
             self.patronage_registry.daily_update();
+            // §10.9: Patrons provision destitute clients — patronage as an
+            // economic safety net (wealth flows through the social structure).
+            self.tick_patronage_provision();
             // Architecture-plan-2 §13.1: Decay meme novelty daily.
             self.meme_registry.tick_all(self.params.meme_novelty_decay_factor);
             // §17.4: Aggregate meme metrics for large-population observability.
@@ -6624,18 +6672,21 @@ pub struct MetricsSnapshot {
     /// Total shared memories across all groups (§13.5).
     #[serde(default)]
     pub collective_memory_count: u64,
+    /// Active patronage relations (§10.9).
+    #[serde(default)]
+    pub patronage_relation_count: u64,
 }
 
 impl MetricsSnapshot {
     /// §5.1/§19: CSV header for exporting metrics for analysis.
     pub fn csv_header() -> &'static str {
-        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,gini,avg_wealth,median_wealth,total_trades,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds,clan_count,clan_relation_count,cult_count,noosphere_nodes,noosphere_zeitgeist,collective_memory_count"
+        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,gini,avg_wealth,median_wealth,total_trades,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds,clan_count,clan_relation_count,cult_count,noosphere_nodes,noosphere_zeitgeist,collective_memory_count,patronage_relation_count"
     }
 
     /// §5.1/§19: One CSV line for this snapshot.
     pub fn to_csv_line(&self) -> String {
         format!(
-            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             self.tick,
             self.avg_hunger, self.avg_thirst, self.avg_fatigue,
             self.avg_valence, self.avg_joy, self.avg_fear,
@@ -6650,6 +6701,7 @@ impl MetricsSnapshot {
             self.clan_count, self.clan_relation_count, self.cult_count,
             self.noosphere_nodes,
             self.noosphere_zeitgeist, self.collective_memory_count,
+            self.patronage_relation_count,
         )
     }
 }
@@ -7294,5 +7346,54 @@ mod tests {
             sim.clan_registry.get(ca).unwrap().is_ally(cb),
             "peace allows a marriage alliance"
         );
+    }
+
+    /// §10.9: Patrons provision destitute clients — a daily stipend moves
+    /// wealth through the social structure when the client is destitute and
+    /// the patron can afford it; no transfer otherwise.
+    #[test]
+    fn patronage_provision_transfers_wealth_to_destitute_clients() {
+        use crate::social::patronage::PatronageRelation;
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        let (patron, client) = (0usize, 1usize);
+        sim.agents[patron].wealth.coin = Fixed::from_f64(10.0);
+        sim.agents[client].wealth.coin = Fixed::from_f64(0.2);
+        let mut rel = PatronageRelation::new(patron, client, 0);
+        rel.provision = Fixed::from_f64(0.3);
+        sim.patronage_registry.register(rel);
+        let transfer = Fixed::from_f64(0.3) * PATRONAGE_TRANSFER_RATE;
+        sim.tick_patronage_provision();
+        assert!(
+            (sim.agents[client].wealth.coin - (Fixed::from_f64(0.2) + transfer))
+                .to_f64()
+                .abs()
+                < 1e-6,
+            "client must receive the stipend"
+        );
+        assert!(
+            (sim.agents[patron].wealth.coin - (Fixed::from_f64(10.0) - transfer))
+                .to_f64()
+                .abs()
+                < 1e-6,
+            "patron must pay the stipend"
+        );
+        // Non-destitute client → no transfer.
+        sim.agents[client].wealth.coin = Fixed::from_f64(5.0);
+        sim.tick_patronage_provision();
+        assert_eq!(sim.agents[client].wealth.coin.to_f64(), 5.0);
+        // Destitute client but destitute patron → no transfer.
+        sim.agents[client].wealth.coin = Fixed::from_f64(0.2);
+        sim.agents[patron].wealth.coin = Fixed::ZERO;
+        sim.tick_patronage_provision();
+        assert_eq!(sim.agents[client].wealth.coin.to_f64(), 0.2);
     }
 }
