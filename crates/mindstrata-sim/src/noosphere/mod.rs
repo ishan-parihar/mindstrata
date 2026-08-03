@@ -9,11 +9,9 @@
 //! identity-protective cognition, and network topology.
 
 pub mod field;
-pub mod belief_ecology;
 pub mod legitimacy;
 pub mod moral_panic;
 
 pub use field::{NoosphericField, SymbolicNode, SymbolicEdge};
-pub use belief_ecology::{BeliefEcologyNoosphere, NarrativeCluster};
 pub use legitimacy::{LegitimacyField, LegitimacySource};
 pub use moral_panic::{MoralPanic, MoralPanicRegistry, PanicTrigger};
