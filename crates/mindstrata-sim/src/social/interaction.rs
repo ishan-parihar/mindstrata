@@ -200,11 +200,34 @@ pub fn choose_interaction(
     affection: Fixed,
     personality_openness: Fixed,
     personality_agreeableness: Fixed,
+    anger: Fixed,
     rng: &mut RngStreams,
     params: &crate::parameters::SimParameters,
 ) -> InteractionKind {
     let social_rng = rng.get_mut(RngStream::Social);
     let roll: f64 = social_rng.random_range(0.0..1.0);
+
+    // Stress-driven negativity: angry agents (low agreeableness OR elevated
+    // anger) occasionally lash out even at moderate trust. Without this, the
+    // negative-interaction branch was structurally unreachable (low-trust
+    // threshold 0.2 never re-attained after initialization), so trust
+    // ratcheted to 1.0 for every pair and the witness-reputation system had
+    // nothing to witness. Gating on anger keeps conflict correlated with
+    // stress, preserving the stress → conflict coupling the system models.
+    let negativity_prob = if personality_agreeableness < Fixed::from_f64(0.35) {
+        0.10
+    } else if anger > Fixed::from_f64(0.5) {
+        0.12
+    } else {
+        0.0
+    };
+    if roll < negativity_prob {
+        return if roll < negativity_prob * 0.4 {
+            InteractionKind::Threaten
+        } else {
+            InteractionKind::Insult
+        };
+    }
 
     if trust < params.social_low_trust_threshold {
         // Low trust: threaten or avoid
@@ -327,7 +350,7 @@ fn evolve_relationship_kind(rel: &mut Relationship, params: &crate::parameters::
 /// §5.4: Faction in-group bias — members of the same faction get trust bonuses.
 /// §5.1: Bonding and conflict rates from `SimParameters`.
 pub fn system_social_interactions(
-    agents: &[(AgentId, Fixed, Fixed, Fixed)], // (id, openness, agreeableness, extraversion)
+    agents: &[(AgentId, Fixed, Fixed, Fixed, Fixed)], // (id, openness, agreeableness, extraversion, anger)
     agent_positions: &[(i32, i32)],            // §2.4: agent (x, y) positions
     same_faction_matrix: &[Vec<bool>],         // §5.4: same_faction_matrix[i][j] = true if agents i,j share a faction
     relationships: &mut [Relationship],
@@ -340,7 +363,7 @@ pub fn system_social_interactions(
 ) {
     let num_agents = agents.len();
 
-    for (i, (agent_id, openness, agreeableness, extraversion)) in agents.iter().enumerate() {
+    for (i, (agent_id, openness, agreeableness, extraversion, anger)) in agents.iter().enumerate() {
         // Extraversion affects interaction frequency
         let interact_chance = params.social_interaction_base_chance + *extraversion * params.social_extraversion_multiplier;
         let roll = Fixed::from_f64(rng.get_mut(RngStream::Social).random_range(0.0..1.0));
@@ -366,7 +389,7 @@ pub fn system_social_interactions(
 
             // §5.4: In-group/out-group — check if both agents share a faction
             let same_faction = same_faction_matrix[i][target_idx];
-            let kind = choose_interaction(trust, affection, *openness, *agreeableness, rng, params);
+            let kind = choose_interaction(trust, affection, *openness, *agreeableness, *anger, rng, params);
 
             let interaction = Interaction {
                 from: *agent_id,

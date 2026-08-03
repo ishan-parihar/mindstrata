@@ -375,7 +375,7 @@ impl Simulation {
         let rng = RngStreams::new(config.seed);
         let world = World::new(config.world_width, config.world_height);
 
-        Self {
+        let mut sim = Self {
             config,
             params: crate::parameters::SimParameters::default(),
             clock: Clock::new(),
@@ -421,6 +421,42 @@ impl Simulation {
             patronage_registry: crate::social::patronage::PatronageRegistry::new(),
             group_registry: crate::social::group_formation::GroupRegistry::new(),
             exposure_samples: Vec::new(),
+        };
+        sim.seed_initial_memes();
+        sim
+    }
+
+    /// Seed the meme registry with the village's founding memes.
+    ///
+    /// The registry previously started empty, so the meme aggregation and
+    /// spread loops early-returned and no cultural dynamics ever emerged
+    /// (active_meme_count pinned at 0). Seed a small set of culturally
+    /// grounded memes — practical, moral, theological, and political — with
+    /// varied emotional charge and identity relevance so transmission is
+    /// non-trivial. Seeded with `created_tick = 0` so both `new()` and
+    /// `from_snapshot()` produce an identical registry (the snapshot does
+    /// not serialize the meme registry), keeping golden replays deterministic.
+    fn seed_initial_memes(&mut self) {
+        use crate::culture::{Meme, MemeContent};
+        let seeds: &[(&str, MemeContent, f64, f64, f64)] = &[
+            // (description, content, emotional_charge, identity_relevance, mutation_base)
+            ("The river feeds the village; honor it", MemeContent::Theological, 0.6, 0.7, 0.05),
+            ("Hard work before the harvest brings plenty", MemeContent::Moral, 0.4, 0.5, 0.04),
+            ("A famine is coming — the elders say so", MemeContent::Prophecy, 0.8, 0.4, 0.06),
+            ("The council is hoarding the well's water", MemeContent::Political, 0.7, 0.6, 0.07),
+            ("Dry fields mean the spirits are angry", MemeContent::Theological, 0.9, 0.3, 0.08),
+        ];
+        for (i, (desc, content, emotional, identity, mutation)) in seeds.iter().enumerate() {
+            self.meme_registry.register(Meme::new(
+                i,
+                desc.to_string(),
+                *content,
+                Fixed::from_f64(*emotional),
+                Fixed::from_f64(*identity),
+                0, // created_tick — deterministic across new()/from_snapshot()
+                Fixed::from_f64(0.8), // virality scaling
+                Fixed::from_f64(*mutation),
+            ));
         }
     }
 
@@ -495,6 +531,10 @@ impl Simulation {
         };
         // Rebuild the GroupRegistry membership cache (skipped by serde).
         sim.group_registry.rebuild_cache();
+        // Seed the same founding memes as `new()` — the snapshot does not
+        // serialize the meme registry, so replays must re-seed identically
+        // (seeded with created_tick = 0) to stay deterministic.
+        sim.seed_initial_memes();
         sim
     }
 
@@ -1422,6 +1462,21 @@ impl Simulation {
                         }
                     }
                 }
+
+                // §5.1: Legacy relationship mean reversion — trust drifts toward a
+                // neutral baseline so it cannot pin at 1.0 for every pair. Without
+                // this, positive interactions ratcheted all trust to 1.0 once agents
+                // were healthy/wealthy, erasing the differentiation the witness
+                // system produces. `relationship_dormant_decay` was previously dead
+                // parameter. Mean reversion: trust -= (trust - 0.5) * decay per day.
+                if tick_u64.is_multiple_of(144) && self.params.relationship_dormant_decay > Fixed::ZERO {
+                    for rel in &mut self.relationships {
+                        if rel.from == AgentId::new(i as u64) {
+                            let drift = (rel.trust - Fixed::from_f64(0.5)) * self.params.relationship_dormant_decay;
+                            rel.trust = (rel.trust - drift).clamp_01();
+                        }
+                    }
+                }
             }
 
             // ── 1. Need decay (nonlinear pressure, §9.1) ────────────────
@@ -1721,6 +1776,7 @@ impl Simulation {
                             a.personality.openness,
                             a.personality.agreeableness,
                             a.personality.extraversion,
+                            emotions[i].anger,
                         )
                     })
                     .collect();
@@ -2433,7 +2489,13 @@ impl Simulation {
                         let chance = meme.transmission_chance(source_trust, listener_susceptibility, listener_skepticism, self.params.meme_transmission_multiplier);
                         let roll = self.rng.get_mut(RngStream::Social).random_range(0.0f64..1.0);
                         if Fixed::from_f64(roll) < chance {
-                            meme.host_count = meme.host_count.saturating_add(1);
+                            // host_count is "number of hosting agents" — clamp to
+                            // population so repeated transmissions of the same meme
+                            // to the same village can't inflate it past the agent
+                            // count (previously unbounded, made visible once memes
+                            // could actually spread).
+                            let pop = self.agents.len() as u32;
+                            meme.host_count = (meme.host_count.saturating_add(1)).min(pop);
                             meme.novelty = (meme.novelty + nb).clamp_01();
                             sampled += 1;
                             // §17.4: Record exposure sample for meme aggregation.
@@ -3379,7 +3441,13 @@ impl Simulation {
                     let trust = self.relationships.iter()
                         .find(|r| r.from == AgentId::new(i as u64) && r.to == AgentId::new(j as u64))
                         .map_or(Fixed::ZERO, |r| r.trust);
-                    let marriage_chance = attraction_score * health * trust * Fixed::from_f64(0.001);
+                    // Marriage probability: attraction * health * trust, scaled to a
+                    // daily cadence. Previously the 0.001 scalar made the effective
+                    // chance ~1e-4/pair/day — a 12-agent village needed ~20K ticks
+                    // (200 days) to pair everyone off. 0.01 yields a marriage every
+                    // few days of eligible pairs, which is realistic for a small
+                    // pre-modern village without flooding instant marriages.
+                    let marriage_chance = attraction_score * health * trust * Fixed::from_f64(0.01);
                     let rng_val = Fixed::from_f64(
                         self.rng.get_mut(RngStream::Social).random::<f64>()
                     );
