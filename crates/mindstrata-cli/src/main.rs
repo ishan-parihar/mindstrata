@@ -324,12 +324,14 @@ fn main() {
         Commands::Scenario { name, verbose, map } => {
             init_logging(verbose);
 
-            let scenario = if name.as_str() == "riverford" {
-                Scenario::riverford()
-            } else {
-                eprintln!("Unknown scenario: {name}");
-                eprintln!("Available: riverford");
-                std::process::exit(1);
+            let scenario = match name.as_str() {
+                "riverford" => Scenario::riverford(),
+                "drought" => Scenario::drought(),
+                other => {
+                    eprintln!("Unknown scenario: {other}");
+                    eprintln!("Available: riverford, drought");
+                    std::process::exit(1);
+                }
             };
 
             println!("╔══════════════════════════════════════════════╗");

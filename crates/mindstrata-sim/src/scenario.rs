@@ -75,6 +75,36 @@ impl Scenario {
         }
     }
 
+    /// Create the "Drought" scenario — Riverford under a severe drought.
+    ///
+    /// Mirrors `specs/scenarios/drought.ron`: a strong drought shock (0.7) at
+    /// tick 500 tests resource scarcity, legitimacy crisis, and social tension.
+    pub fn drought() -> Self {
+        Self {
+            name: "Drought".into(),
+            description: "Riverford under drought conditions. Tests resource scarcity, \
+                         legitimacy crisis, and social tension."
+                .into(),
+            seed: 42,
+            ticks: 4320,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            shocks: vec![
+                Shock {
+                    at_tick: 200,
+                    kind: ShockKind::Festival,
+                    magnitude: Fixed::from_f64(0.3),
+                },
+                Shock {
+                    at_tick: 500,
+                    kind: ShockKind::Drought,
+                    magnitude: Fixed::from_f64(0.7),
+                },
+            ],
+        }
+    }
+
     /// Convert scenario to simulation config.
     pub fn to_sim_config(&self) -> SimConfig {
         SimConfig {
