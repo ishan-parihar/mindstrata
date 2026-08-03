@@ -1186,6 +1186,69 @@ impl Simulation {
         }
     }
 
+    /// §10.8: Clan membership lookup — which clan holds this agent index
+    /// (core_households stores agent indices). Deterministic registry scan.
+    fn clan_of(&self, agent_idx: usize) -> Option<usize> {
+        self.clan_registry
+            .clans
+            .iter()
+            .find(|c| c.core_households.contains(&agent_idx))
+            .map(|c| c.id)
+    }
+
+    /// §10.8: Marriage forges a clan alliance — the design doc's stated
+    /// alliance source. Symmetric (both clans declare each other);
+    /// declare_ally dedupes and refuses existing enemies.
+    fn forge_clan_alliance(&mut self, a: usize, b: usize, tick: u64) {
+        let ca = match self.clan_of(a) {
+            Some(c) => c,
+            None => return,
+        };
+        let cb = match self.clan_of(b) {
+            Some(c) => c,
+            None => return,
+        };
+        if ca == cb {
+            return;
+        }
+        for clan in self.clan_registry.clans.iter_mut() {
+            if clan.id == ca {
+                clan.declare_ally(cb);
+                clan.last_interaction_tick = tick;
+            } else if clan.id == cb {
+                clan.declare_ally(ca);
+                clan.last_interaction_tick = tick;
+            }
+        }
+    }
+
+    /// §10.8: Repeated violence forges a clan enmity (feud boundary) and
+    /// breaks any existing alliance between the pair. Symmetric.
+    fn forge_clan_enmity(&mut self, a: usize, b: usize, tick: u64) {
+        let ca = match self.clan_of(a) {
+            Some(c) => c,
+            None => return,
+        };
+        let cb = match self.clan_of(b) {
+            Some(c) => c,
+            None => return,
+        };
+        if ca == cb {
+            return;
+        }
+        for clan in self.clan_registry.clans.iter_mut() {
+            if clan.id == ca {
+                clan.allies.retain(|&x| x != cb);
+                clan.declare_enemy(cb);
+                clan.last_interaction_tick = tick;
+            } else if clan.id == cb {
+                clan.allies.retain(|&x| x != ca);
+                clan.declare_enemy(ca);
+                clan.last_interaction_tick = tick;
+            }
+        }
+    }
+
     /// §13.5: Seed the village's founding collective memory (group 0).
     ///
     /// Deterministic (hardcoded narratives, created at tick 0) so fresh and
@@ -3377,6 +3440,17 @@ impl Simulation {
         // §10.8/§12.4: Collective-structure observability — clan count and
         // active cult count.
         let clan_count = self.clan_registry.clans.len() as u64;
+        // §10.8: Distinct inter-clan relations — each alliance/enmity edge is
+        // recorded symmetrically on both clans, so divide by 2.
+        let clan_relation_count = {
+            let edges: usize = self
+                .clan_registry
+                .clans
+                .iter()
+                .map(|c| c.allies.len() + c.enemies.len())
+                .sum();
+            (edges / 2) as u64
+        };
         let cult_count = self.cult_registry.cults.iter().filter(|c| c.active).count() as u64;
         let noosphere_nodes = self.noospheric_field.nodes.len() as u64;
         let noosphere_zeitgeist = self
@@ -3420,6 +3494,7 @@ impl Simulation {
             avg_agent_tier,
             total_active_feuds,
             clan_count,
+            clan_relation_count,
             cult_count,
             noosphere_nodes,
             noosphere_zeitgeist,
@@ -4150,6 +4225,8 @@ impl Simulation {
             for (a, b) in new_marriages {
                 self.agents[a].partner = Some(b);
                 self.agents[b].partner = Some(a);
+                // §10.8: Marriage forges a clan alliance between the spouses' clans.
+                self.forge_clan_alliance(a, b, tick_u64);
                 self.events.push(SimEvent::MarriageFormed {
                     spouse_a: AgentId::new(a as u64),
                     spouse_b: AgentId::new(b as u64),
@@ -6141,6 +6218,8 @@ impl Simulation {
                                 party_b: *target,
                                 tick,
                             });
+                            // §10.8: Repeated violence forges a clan enmity (feud boundary).
+                            self.forge_clan_enmity(a_idx, t_idx, tick_u64);
                         }
                     }
                 }
@@ -6419,6 +6498,9 @@ pub struct MetricsSnapshot {
     /// Number of clans (kinship-based social groups, §10.8).
     #[serde(default)]
     pub clan_count: u64,
+    /// Number of distinct inter-clan relations (alliances + enmities, §10.8).
+    #[serde(default)]
+    pub clan_relation_count: u64,
     /// Number of active cults (high-intensity groups, §12.4).
     #[serde(default)]
     pub cult_count: u64,
@@ -6437,13 +6519,13 @@ pub struct MetricsSnapshot {
 impl MetricsSnapshot {
     /// §5.1/§19: CSV header for exporting metrics for analysis.
     pub fn csv_header() -> &'static str {
-        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,gini,avg_wealth,median_wealth,total_trades,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds,clan_count,cult_count,noosphere_nodes,noosphere_zeitgeist,collective_memory_count"
+        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,gini,avg_wealth,median_wealth,total_trades,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds,clan_count,clan_relation_count,cult_count,noosphere_nodes,noosphere_zeitgeist,collective_memory_count"
     }
 
     /// §5.1/§19: One CSV line for this snapshot.
     pub fn to_csv_line(&self) -> String {
         format!(
-            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             self.tick,
             self.avg_hunger, self.avg_thirst, self.avg_fatigue,
             self.avg_valence, self.avg_joy, self.avg_fear,
@@ -6455,7 +6537,8 @@ impl MetricsSnapshot {
             self.gini, self.avg_wealth, self.median_wealth, self.total_trades,
             self.household_count, self.kinship_edge_count,
             self.avg_agent_tier, self.total_active_feuds,
-            self.clan_count, self.cult_count, self.noosphere_nodes,
+            self.clan_count, self.clan_relation_count, self.cult_count,
+            self.noosphere_nodes,
             self.noosphere_zeitgeist, self.collective_memory_count,
         )
     }
@@ -6880,5 +6963,67 @@ mod tests {
                 .any(|m| m.kind == SharedMemoryKind::Founding && m.event_tick == 1000),
             "faction group must hold its founding myth"
         );
+    }
+
+    /// §10.8: Find two agents in different seeded clans (home-site parity
+    /// seeds 2 clans during populate).
+    fn cross_clan_pair(sim: &Simulation) -> (usize, usize) {
+        let clans = &sim.clan_registry.clans;
+        assert!(clans.len() >= 2, "two clans must be seeded");
+        assert!(!clans[0].core_households.is_empty(), "clan 0 has members");
+        assert!(!clans[1].core_households.is_empty(), "clan 1 has members");
+        (clans[0].core_households[0], clans[1].core_households[0])
+    }
+
+    /// §10.8: Marriage forges a symmetric clan alliance between the spouses'
+    /// clans — the design doc's stated alliance source.
+    #[test]
+    fn marriage_forges_clan_alliance() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        let (a, b) = cross_clan_pair(&sim);
+        let (ca, cb) = (sim.clan_of(a).unwrap(), sim.clan_of(b).unwrap());
+        sim.forge_clan_alliance(a, b, 100);
+        let clan_a = sim.clan_registry.get(ca).unwrap();
+        assert!(clan_a.is_ally(cb), "marriage must ally clan {ca} with {cb}");
+        assert_eq!(clan_a.last_interaction_tick, 100, "interaction tick set");
+        let clan_b = sim.clan_registry.get(cb).unwrap();
+        assert!(clan_b.is_ally(ca), "alliance must be symmetric");
+    }
+
+    /// §10.8: Feud formation forges a symmetric clan enmity and breaks any
+    /// prior marriage alliance between the two clans.
+    #[test]
+    fn feud_forges_clan_enmity_and_breaks_alliance() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        let (a, b) = cross_clan_pair(&sim);
+        let (ca, cb) = (sim.clan_of(a).unwrap(), sim.clan_of(b).unwrap());
+        sim.forge_clan_alliance(a, b, 100);
+        assert!(sim.clan_registry.get(ca).unwrap().is_ally(cb));
+        sim.forge_clan_enmity(a, b, 200);
+        let clan_a = sim.clan_registry.get(ca).unwrap();
+        assert!(clan_a.is_enemy(cb), "feud must forge enmity");
+        assert!(!clan_a.is_ally(cb), "enmity must break the alliance");
+        assert_eq!(clan_a.last_interaction_tick, 200);
+        let clan_b = sim.clan_registry.get(cb).unwrap();
+        assert!(clan_b.is_enemy(ca), "enmity must be symmetric");
+        assert!(!clan_b.is_ally(ca));
     }
 }
