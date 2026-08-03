@@ -181,14 +181,18 @@ impl CollectiveMemory {
     }
 
     /// Decay memories that haven't been rehearsed recently.
-    pub fn tick_decay(&mut self, tick: u64) {
-        let ticks_since_rehearsal = tick.saturating_sub(self.last_rehearsal_tick);
-        if ticks_since_rehearsal > 0 {
-            for mem in &mut self.memories {
-                mem.decay(ticks_since_rehearsal);
-            }
+    pub fn tick_decay(&mut self, _tick: u64) {
+        // The sim calls `tick_all` once per day (daily phase), so decay by a
+        // fixed one-day amount here. Decaying by the FULL ticks-since-rehearsal
+        // on every daily call accumulated quadratically (0.001·t, 0.001·2t, …),
+        // wiping every memory to salience 0 within ~2 weeks — no ritual could
+        // ever sustain them (Iteration 12 fix). At 0.001/day a memory fades
+        // over ~2.7 years without rehearsal, and the monthly ritual rehearse
+        // (+0.05) comfortably outpaces it.
+        for mem in &mut self.memories {
+            mem.decay(1);
         }
-        // Cohesion slowly decays without reinforcement
+        // Cohesion slowly decays without reinforcement.
         self.cohesion = (self.cohesion - Fixed::from_f64(0.001)).max(Fixed::ZERO);
     }
 
@@ -322,5 +326,23 @@ mod tests {
         assert_eq!(reg.entries.len(), 1);
         assert!(reg.get(10).is_some());
         assert!(reg.get(99).is_none());
+    }
+
+    #[test]
+    fn tick_decay_is_linear_not_quadratic() {
+        let mut cm = CollectiveMemory::new(0);
+        cm.add_memory("founding".into(), SharedMemoryKind::Founding, 0, Fixed::ONE);
+        cm.memories[0].salience = Fixed::from_f64(0.5);
+        // 10 daily calls (once per day) must decay by 10 × 0.001, not by the
+        // quadratic sum 0.001·(1+2+…+10) the old full-elapsed decay produced.
+        for t in 1..=10u64 {
+            cm.tick_decay(t);
+        }
+        let actual = cm.memories[0].salience;
+        let expected = Fixed::from_f64(0.49);
+        assert!(
+            (actual - expected).to_f64().abs() < 0.001,
+            "linear daily decay expected {expected:?}, got {actual:?}"
+        );
     }
 }

@@ -5031,6 +5031,7 @@ impl Simulation {
         if phases.is_duodeca {
             let due: Vec<usize> = self.ritual_registry.due_rituals(tick_u64)
                 .into_iter().map(|r| r.id).collect();
+            let ritual_fired = !due.is_empty();
             for ritual_id in due {
                 if let Some(ritual) = self.ritual_registry.rituals.iter_mut().find(|r| r.id == ritual_id) {
                     let bonding = ritual.execute(tick_u64);
@@ -5059,6 +5060,18 @@ impl Simulation {
                         }
                     }
                 }
+            }
+
+            // §13.5: Rituals rehearse the village's collective memory — ritual
+            // repetition is the memory-maintenance mechanism. Without this the
+            // seeded memories only ever decayed (salience → 0 within ~2 weeks;
+            // the daily decay previously accumulated quadratically, fixed in
+            // Iteration 12). Monthly rehearsal (+0.05) outpaces daily decay
+            // (0.001/day), so memories stay vivid while rituals are held.
+            if ritual_fired {
+                self.collective_memory_registry
+                    .get_or_create(0)
+                    .rehearse_all(tick_u64);
             }
 
             // Architecture-plan-2 §12.2: Evaluate group formation pressure.
@@ -6587,5 +6600,38 @@ mod tests {
             post_charge <= entrench_charge,
             "emotional charge should decay after dissolution"
         );
+    }
+
+    /// §13.5: Ritual repetition must sustain the village's collective memory —
+    /// salience stays high over a long run instead of decaying to zero (the
+    /// pre-Iteration-12 quadratic decay wiped memories within ~2 weeks).
+    #[test]
+    fn collective_memories_survive_ritual_rehearsal() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 20_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        // ~1 monthly ritual rehearsal (tick 4320) over 5000 ticks, during which
+        // the daily decay (0.001/day) would have destroyed every memory under
+        // the old quadratic accumulation (~2-week lifespan).
+        sim.run(5000);
+        let village = sim.collective_memory_registry.get(0);
+        assert!(village.is_some(), "village collective memory must be seeded");
+        let memories = &village.unwrap().memories;
+        assert!(!memories.is_empty(), "village memories must exist");
+        for mem in memories {
+            assert!(
+                mem.salience > Fixed::from_f64(0.5),
+                "memory '{}' salience should be sustained by ritual rehearsal, got {}",
+                mem.description,
+                mem.salience.to_f64(),
+            );
+        }
     }
 }
