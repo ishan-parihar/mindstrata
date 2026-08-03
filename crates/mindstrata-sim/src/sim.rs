@@ -1249,6 +1249,63 @@ impl Simulation {
         }
     }
 
+    /// §10.8: Are two agents in mutually enemy clans? (Symmetric by
+    /// construction — forge_clan_enmity declares both ways.)
+    fn clans_are_enemies(&self, a: usize, b: usize) -> bool {
+        let (Some(ca), Some(cb)) = (self.clan_of(a), self.clan_of(b)) else {
+            return false;
+        };
+        if ca == cb {
+            return false;
+        }
+        self.clan_registry.clans.iter().any(|c| c.id == ca && c.is_enemy(cb))
+    }
+
+    /// §10.8: Are two agents in mutually allied clans? (Symmetric by
+    /// construction — forge_clan_alliance declares both ways.)
+    fn clans_are_allies(&self, a: usize, b: usize) -> bool {
+        let (Some(ca), Some(cb)) = (self.clan_of(a), self.clan_of(b)) else {
+            return false;
+        };
+        if ca == cb {
+            return false;
+        }
+        self.clan_registry.clans.iter().any(|c| c.id == ca && c.is_ally(cb))
+    }
+
+    /// §19.5.H/§10.8: Escalation chance after a failed threat. Enemy clans
+    /// escalate at twice the base rate — a feud is a standing state of war,
+    /// so deterrence between enemy clans fails roughly twice as often.
+    /// (Capped at 1.0; keeps the 12-agent-village collective-action
+    /// calibration intact: certainty would let one feud militarize the whole
+    /// village and suppress protest — see factions_emerge_from_grievance.)
+    fn escalation_chance(&self, from_idx: usize, to_idx: usize) -> f64 {
+        if self.clans_are_enemies(from_idx, to_idx) {
+            (self.params.conflict_escalation_chance.to_f64() * 2.0).min(1.0)
+        } else {
+            self.params.conflict_escalation_chance.to_f64()
+        }
+    }
+
+    /// §19.5.H/§10.8: Whether a failed threat escalates to violence. The RNG
+    /// draw happens under exactly the same conditions as the original inline
+    /// logic, so the stream is untouched (replay determinism).
+    fn should_escalate(
+        &mut self,
+        from_idx: usize,
+        to_idx: usize,
+        threat_failed: bool,
+        aggressor_aggression: Fixed,
+    ) -> bool {
+        if !threat_failed
+            || aggressor_aggression <= self.params.conflict_escalation_aggression_threshold
+        {
+            return false;
+        }
+        self.rng.get_mut(RngStream::Social).random::<f64>()
+            < self.escalation_chance(from_idx, to_idx)
+    }
+
     /// §13.5: Seed the village's founding collective memory (group 0).
     ///
     /// Deterministic (hardcoded narratives, created at tick 0) so fresh and
@@ -4211,7 +4268,19 @@ impl Simulation {
                     // (200 days) to pair everyone off. 0.01 yields a marriage every
                     // few days of eligible pairs, which is realistic for a small
                     // pre-modern village without flooding instant marriages.
-                    let marriage_chance = attraction_score * health * trust * Fixed::from_f64(0.01);
+                    // §10.8: Enemy clans do not intermarry (feud boundary =
+                    // marriage boundary); allied clans intermarry preferentially.
+                    // The chance is zeroed rather than skipping the pair, so the
+                    // RNG stream is untouched (replay determinism).
+                    let clan_factor = if self.clans_are_enemies(i, j) {
+                        Fixed::ZERO
+                    } else if self.clans_are_allies(i, j) {
+                        Fixed::from_f64(1.5)
+                    } else {
+                        Fixed::ONE
+                    };
+                    let marriage_chance =
+                        attraction_score * health * trust * Fixed::from_f64(0.01) * clan_factor;
                     let rng_val = Fixed::from_f64(
                         self.rng.get_mut(RngStream::Social).random::<f64>()
                     );
@@ -5764,9 +5833,14 @@ impl Simulation {
                             let threat_failed = target_fear_after < self.params.conflict_escalation_fear_threshold;
                             let aggressor_aggression = self.agents[from_idx].personality.dominance
                                 + self.agents[from_idx].personality.risk_tolerance;
-                            let escalate = threat_failed
-                                && aggressor_aggression > self.params.conflict_escalation_aggression_threshold
-                                && self.rng.get_mut(RngStream::Social).random::<f64>() < self.params.conflict_escalation_chance.to_f64();
+                            // §10.8: Enemy clans escalate failed threats at twice
+                            // the base rate (should_escalate / escalation_chance).
+                            let escalate = self.should_escalate(
+                                from_idx,
+                                to_idx,
+                                threat_failed,
+                                aggressor_aggression,
+                            );
 
                             if escalate {
                                 let violence_result = conflict::resolve_conflict(
@@ -7025,5 +7099,113 @@ mod tests {
         let clan_b = sim.clan_registry.get(cb).unwrap();
         assert!(clan_b.is_enemy(ca), "enmity must be symmetric");
         assert!(!clan_b.is_ally(ca));
+    }
+
+    /// §10.8: The clan-relation predicates — enemy and ally edges are
+    /// symmetric; same-clan members are never enemies/allies of themselves;
+    /// enmity breaks an existing alliance.
+    #[test]
+    fn clan_relation_predicates_are_symmetric() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        let (a, b) = cross_clan_pair(&sim);
+        // Same-clan members are never enemies/allies of their own clan.
+        let clan_a = sim.clan_of(a).unwrap();
+        let same_clan_mate = sim
+            .clan_registry
+            .get(clan_a)
+            .unwrap()
+            .core_households
+            .iter()
+            .copied()
+            .find(|&m| m != a)
+            .expect("clan has another member");
+        assert!(!sim.clans_are_enemies(a, same_clan_mate));
+        assert!(!sim.clans_are_allies(a, same_clan_mate));
+        // Unrelated cross-clan pair: neither enemy nor ally.
+        assert!(!sim.clans_are_enemies(a, b));
+        assert!(!sim.clans_are_allies(a, b));
+        // Forge alliance → allies (both directions), not enemies.
+        sim.forge_clan_alliance(a, b, 10);
+        assert!(sim.clans_are_allies(a, b));
+        assert!(sim.clans_are_allies(b, a));
+        assert!(!sim.clans_are_enemies(a, b));
+        // Forge enmity → enemies (both directions), alliance broken.
+        sim.forge_clan_enmity(a, b, 20);
+        assert!(sim.clans_are_enemies(a, b));
+        assert!(sim.clans_are_enemies(b, a));
+        assert!(!sim.clans_are_allies(a, b));
+    }
+
+    /// §10.8: Enemy clans do not intermarry — the marriage chance is zeroed
+    /// for enemy pairs (feud boundary = marriage boundary), while same-clan
+    /// marriages are unaffected.
+    #[test]
+    fn enemy_clans_do_not_intermarry() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        let (a, b) = cross_clan_pair(&sim);
+        // Declare the two clans mutual enemies before any marriage can form.
+        sim.forge_clan_enmity(a, b, 0);
+        sim.run(5000);
+        // Same-clan marriages must still happen...
+        let any_married = sim.agents.iter().any(|ag| ag.partner.is_some());
+        assert!(any_married, "same-clan marriages must still occur");
+        // ...but no agent may be partnered with a member of an enemy clan.
+        for i in 0..sim.agents.len() {
+            if let Some(j) = sim.agents[i].partner {
+                assert!(
+                    !sim.clans_are_enemies(i, j),
+                    "agent {i} must not marry into an enemy clan"
+                );
+            }
+        }
+    }
+
+    /// §10.8/§19.5.H: Enemy clans escalate failed threats at twice the base
+    /// rate (feud = standing state of war); the escalation chance is a pure
+    /// function of clan relations, and a deterred threat or timid aggressor
+    /// never escalates.
+    #[test]
+    fn enemy_clans_escalate_twice_as_readily() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        let (a, b) = cross_clan_pair(&sim);
+        let base = sim.params.conflict_escalation_chance.to_f64();
+        // Unrelated cross-clan pair: base chance.
+        assert_eq!(sim.escalation_chance(a, b), base);
+        // Enemy clans: twice the base rate, symmetric.
+        sim.forge_clan_enmity(a, b, 0);
+        assert_eq!(sim.escalation_chance(a, b), (base * 2.0).min(1.0));
+        assert_eq!(sim.escalation_chance(b, a), (base * 2.0).min(1.0));
+        // Deterred threat or timid aggressor → no escalation, regardless of
+        // clan relations (aggression must exceed the 1.2 threshold).
+        let aggression = Fixed::from_f64(1.5);
+        assert!(!sim.should_escalate(a, b, false, aggression));
+        assert!(!sim.should_escalate(a, b, true, Fixed::ZERO));
     }
 }
