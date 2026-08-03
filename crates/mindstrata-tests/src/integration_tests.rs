@@ -8,6 +8,66 @@ use mindstrata_core::fixed::Fixed;
 use mindstrata_sim::{Simulation, sim::SimConfig};
 use crate::test_helpers::run_sim;
 
+// ── §31: Mortality / Generational Replacement ─────────────────────
+
+/// §31: Dead agents must be replaced IN PLACE by newborns so the
+/// `AgentId::new(i) == index i` invariant (relationship_v2s O(1) layout,
+/// agent_diseases parallel vec, partner/parent indices) is never broken.
+#[test]
+fn elderly_agents_die_and_are_replaced_in_place() {
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 2000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    let start_count = sim.agents.len();
+
+    // Force the whole population into guaranteed-death territory (past max_age),
+    // so the mortality path is exercised deterministically.
+    let over_80 = Fixed::from_f64(85.0);
+    for agent in &mut sim.agents {
+        agent.age = over_80;
+        agent.body.health = Fixed::from_f64(0.1);
+        agent.body.energy = Fixed::from_f64(0.1);
+    }
+
+    // Run past several demography steps (every 10 ticks).
+    sim.run(200);
+
+    // Agent count must be UNCHANGED — dead agents are replaced in place, never
+    // removed (removal would shift indices and break the AgentId == index invariant).
+    assert_eq!(sim.agents.len(), start_count,
+        "Agent count changed after mass death: {} -> {}", start_count, sim.agents.len());
+
+    // Every slot must now hold a newborn (age ~0), not the forced old age.
+    for (i, agent) in sim.agents.iter().enumerate() {
+        assert!(agent.age.to_f64() < 1.0,
+            "Agent {i} not replaced by newborn after death: age={}", agent.age.to_f64());
+        // Index invariant must hold for every agent.
+        assert!(sim.agents[i].relationship_v2s.len() <= sim.agents.len().saturating_sub(1),
+            "Agent {i} relationship_v2s inconsistent: {} entries for {} agents",
+            sim.agents[i].relationship_v2s.len(), sim.agents.len());
+    }
+
+    // No agent may reference a stale partner/parent that is now a newborn stranger.
+    for agent in &sim.agents {
+        assert!(agent.partner.is_none(),
+            "Replacement newborn must not inherit a partner, got {:?}", agent.partner);
+        assert!(agent.parent_a.is_none() && agent.parent_b.is_none(),
+            "Replacement newborn must not inherit parents, got {:?}/{:?}",
+            agent.parent_a, agent.parent_b);
+    }
+
+    // Death events must have been recorded.
+    let died_events = sim.event_count();
+    assert!(died_events > 0, "Expected AgentDied events in event log");
+}
+
 // ── §18.3: Courtship and Marriage Chain ──────────────────────────
 
 #[test]

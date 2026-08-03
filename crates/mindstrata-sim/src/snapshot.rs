@@ -75,6 +75,8 @@ pub struct Snapshot {
     pub metric_history: Vec<MetricsSnapshot>,
     /// §7.3: Last revolution tick.
     pub last_revolution_tick: u64,
+    /// §7.2: Last moral panic tick (cooldown tracking).
+    pub last_moral_panic_tick: u64,
     /// §4.4: Black market state.
     pub black_market: BlackMarketState,
     /// §19.5.E: Site work ticks.
@@ -87,7 +89,7 @@ pub struct Snapshot {
 /// Version 2 → 3: Added mind_models to AgentBundle.
 /// Version 3 → 4: Added cultural_cognition to AgentBundle.
 /// v3: mind_models, v4: cultural_cognition, v5: decision_policy, v6: group_registry
-pub const SNAPSHOT_VERSION: u32 = 6;
+pub const SNAPSHOT_VERSION: u32 = 7;
 
 /// Bundles all simulation state references needed to capture a snapshot.
 /// Replaces the 21-parameter `capture()` signature with a single struct.
@@ -112,6 +114,8 @@ pub struct CaptureContext<'a> {
     pub knowledge_store: &'a [Knowledge],
     pub metric_history: &'a [MetricsSnapshot],
     pub last_revolution_tick: u64,
+    /// §7.2: Last moral panic tick (cooldown tracking).
+    pub last_moral_panic_tick: u64,
     pub black_market: &'a BlackMarketState,
     pub site_work_ticks: &'a [u32],
     pub group_registry: &'a GroupRegistry,
@@ -144,6 +148,7 @@ impl Snapshot {
             knowledge_store: ctx.knowledge_store.to_vec(),
             metric_history: ctx.metric_history.to_vec(),
             last_revolution_tick: ctx.last_revolution_tick,
+            last_moral_panic_tick: ctx.last_moral_panic_tick,
             black_market: ctx.black_market.clone(),
             site_work_ticks: ctx.site_work_ticks.to_vec(),
             group_registry: ctx.group_registry.clone(),
@@ -339,6 +344,7 @@ mod tests {
             knowledge_store: vec![],
             metric_history: vec![],
             last_revolution_tick: 0,
+            last_moral_panic_tick: 0,
             black_market: crate::black_market::BlackMarketState::default(),
             site_work_ticks: vec![],
             group_registry: crate::social::group_formation::GroupRegistry::new(),

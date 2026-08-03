@@ -77,41 +77,51 @@ pub struct DemographyReport {
     pub agents_migrated: usize,
 }
 
-/// Age an agent by one tick and check for death.
-/// Returns (new_age, died).
+/// Age an agent by `ticks_elapsed` and check for death.
+///
+/// Returns (new_age, died). Death is probabilistic: an agent dies when a
+/// uniform `rng_value` (0..1) falls below the computed death chance for the
+/// elapsed period. This replaces the old deterministic `death_chance > 0`
+/// check which killed every elder instantly, and the per-tick accumulation
+/// which underflowed Fixed's 4-decimal precision (`1/35040` rounds to 0).
+#[must_use]
 pub fn age_agent(
     age_years: Fixed,
     health: Fixed,
     body_energy: Fixed,
+    ticks_elapsed: u64,
     config: &DemographyConfig,
+    rng_value: Fixed, // 0..1 random value
 ) -> (Fixed, bool) {
-    // Accumulate age using integer ticks to avoid Fixed precision loss.
-    // Store age as years with fractional part from tick accumulation.
-    let whole_years = age_years.floor();
-    let fractional = age_years - whole_years;
-    let ticks_per_year_f = Fixed::from_int(config.ticks_per_year as i64);
-    let new_fractional = fractional + Fixed::ONE / ticks_per_year_f;
-    let (carry, new_frac) = if new_fractional >= Fixed::ONE {
-        (1u64, new_fractional - Fixed::ONE)
-    } else {
-        (0u64, new_fractional)
-    };
-    let new_age = whole_years + Fixed::from_int(carry as i64) + new_frac;
+    // Accumulate age as years + the fractional year corresponding to the
+    // ticks elapsed since the last demography step (called every 10 ticks).
+    let increment = Fixed::from_f64(ticks_elapsed as f64 / config.ticks_per_year as f64);
+    let new_age = age_years + increment;
+    let new_age_years = new_age.to_f64();
 
-    // Death probability increases with age and decreases with health
-    let death_chance = if new_age.to_f64() > 60.0 {
-        let age_factor = Fixed::from_f64((new_age.to_f64() - 60.0) / 20.0).clamp_01();
+    // Guaranteed death past max age.
+    if new_age_years > config.max_age {
+        return (new_age, true);
+    }
+
+    // Death probability increases with age and decreases with health.
+    // `elder_death_rate` is an annual rate; scale by the elapsed fraction
+    // of a year so the roll is a true per-period probability.
+    if new_age_years > 60.0 {
+        let age_factor = Fixed::from_f64(((new_age_years - 60.0) / 20.0).clamp(0.0, 1.0));
         let health_factor = Fixed::ONE - health;
         let energy_factor = Fixed::ONE - body_energy;
-        (config.elder_death_rate * age_factor + health_factor * Fixed::from_f64(0.1) + energy_factor * Fixed::from_f64(0.05))
-            .clamp_01()
-    } else if new_age.to_f64() > config.max_age {
-        Fixed::ONE // guaranteed death past max age
+        let annual_rate = (config.elder_death_rate * age_factor
+            + health_factor * Fixed::from_f64(0.1)
+            + energy_factor * Fixed::from_f64(0.05))
+            .clamp_01();
+        let elapsed_years =
+            Fixed::from_f64(ticks_elapsed as f64 / config.ticks_per_year as f64);
+        let death_chance = (annual_rate * elapsed_years).clamp_01();
+        (new_age, rng_value < death_chance)
     } else {
-        Fixed::ZERO
-    };
-
-    (new_age, death_chance > Fixed::ZERO)
+        (new_age, false)
+    }
 }
 
 /// Determine life stage from age.
@@ -180,25 +190,67 @@ mod tests {
         let initial = Fixed::from_f64(30.0);
         let mut age = initial;
         for _ in 0..50 {
-            let (new_age, _) = age_agent(age, Fixed::ONE, Fixed::ONE, &config);
+            let (new_age, _) = age_agent(age, Fixed::ONE, Fixed::ONE, 1, &config, Fixed::ZERO);
             age = new_age;
         }
         assert!(age > initial, "Age should increase after 50 ticks: {} > {}", age.to_f64(), initial.to_f64());
     }
 
     #[test]
-    fn elders_can_die() {
+    fn aging_advances_with_default_ticks_per_year() {
+        // Regression: 1/35040 underflowed Fixed 4-decimal precision, freezing
+        // all ages forever. Age must now advance even at the default tick rate.
         let config = DemographyConfig::default();
-        // Very old agent with low health
-        let (_, died) = age_agent(
-            Fixed::from_f64(79.0),
-            Fixed::from_f64(0.1),
-            Fixed::from_f64(0.1),
-            &config,
-        );
-        // Death is probabilistic but very likely for 79yo with 10% health
-        // Just verify the function doesn't panic
-        let _ = died;
+        let initial = Fixed::from_f64(38.0);
+        let mut age = initial;
+        for _ in 0..3504 { // 35040 ticks = 1 year at 10 ticks per demography step
+            let (new_age, _) = age_agent(age, Fixed::ONE, Fixed::ONE, 10, &config, Fixed::ZERO);
+            age = new_age;
+        }
+        assert!(age > initial, "Age should advance ~1 year over 35040 ticks: {}", age.to_f64());
+    }
+
+    #[test]
+    fn elders_can_die() {
+        // Compress the timescale (1 tick = 1/100 year) so a 10-tick demography
+        // step is a meaningful 0.1-year probability window — otherwise the
+        // per-step death chance (~0.008%) would need ~12,000 rolls to observe.
+        let config = DemographyConfig {
+            ticks_per_year: 100,
+            ..DemographyConfig::default()
+        };
+        // Very old agent with low health — death is probabilistic.
+        let mut deaths = 0u32;
+        for i in 0..1000 {
+            let (_, died) = age_agent(
+                Fixed::from_f64(79.0),
+                Fixed::from_f64(0.1),
+                Fixed::from_f64(0.1),
+                10,
+                &config,
+                Fixed::from_f64(i as f64 / 1000.0),
+            );
+            deaths += u32::from(died);
+        }
+        // Per-step annual rate 0.15*0.95 + 0.09 + 0.045 ≈ 0.28 × 0.1yr ≈ 2.8%
+        // → expected ~28 deaths / 1000. Sanity: some die, not all.
+        assert!(deaths > 0 && deaths < 1000, "Probabilistic death expected: {deaths}/1000");
+    }
+
+    #[test]
+    fn young_healthy_agents_never_die() {
+        let config = DemographyConfig::default();
+        for i in 0..50 {
+            let (_, died) = age_agent(
+                Fixed::from_f64(30.0),
+                Fixed::from_f64(1.0),
+                Fixed::from_f64(1.0),
+                10,
+                &config,
+                Fixed::from_f64(i as f64 / 50.0),
+            );
+            assert!(!died, "30yo healthy agent should never die");
+        }
     }
 
     #[test]

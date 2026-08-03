@@ -17,6 +17,8 @@ pub enum JournalEntryKind {
     CommittedViolence { target: u64, injury: f64 },
     /// §19.5.F: Wealth inherited from a deceased agent.
     Inheritance { heir_count: u64, amount: f64 },
+    /// §31: An agent died (generational replacement fills the slot).
+    Died { age: f64, cause: String },
     /// §19.5.I: Knowledge discovered through work or exploration.
     KnowledgeDiscovered { knowledge_id: u64, name: String },
     /// §19.5.F: Knowledge learned from parent through childhood socialization.

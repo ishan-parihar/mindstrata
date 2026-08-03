@@ -33,6 +33,10 @@ pub const TAX_COLLECTION_INTERVAL: u64 = 100;
 pub const WAGE_PAYMENT_INTERVAL: u64 = 500;
 /// Base wage per role holder.
 pub const BASE_WAGE: f64 = 2.0;
+/// Seed capital for newly created institutions — without a starting treasury,
+/// `pay_wages` (which requires treasury >= total wage cost) could never pay
+/// out, silently destroying wealth via taxation with zero circulation.
+pub const INITIAL_TREASURY: f64 = 100.0;
 
 /// Types of institutions that can exist in the world.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -437,6 +441,13 @@ pub fn default_institutions() -> Vec<Institution> {
         obligations: vec!["Maintain fair prices".into()],
     });
     institutions.push(market);
+
+    // §19.5.C: Seed treasuries so wage payments and public goods can actually
+    // flow. Previously treasuries started at zero and `pay_wages` (insolvency
+    // check) never paid anyone — taxes drained agent wealth with no return.
+    for inst in &mut institutions {
+        inst.treasury = Fixed::from_f64(INITIAL_TREASURY);
+    }
 
     institutions
 }

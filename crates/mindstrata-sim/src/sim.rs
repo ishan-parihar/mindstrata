@@ -43,7 +43,7 @@ use crate::systems::{self, SystemContext};
 use crate::world::{GRAIN_RESOURCE_ID, WATER_RESOURCE_ID, World};
 use crate::world_gen;
 use mindstrata_core::clock::{Clock, Tick};
-use mindstrata_core::event::SimEvent;
+use mindstrata_core::event::{DeathCause, SimEvent};
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::id::{AgentId, EntityId, ResourceId};
 use mindstrata_core::rng::{RngStream, RngStreams};
@@ -55,6 +55,8 @@ use serde::{Deserialize, Serialize};
 pub const EXPECTED_GRAIN_PER_AGENT: u32 = 10;
 /// Skill improvement per tick of practice.
 pub const SKILL_GAIN_PER_TICK: Fixed = Fixed::from_raw(10); // 0.001
+/// Demography runs once per this many ticks (matches `phases.is_deca`).
+const DEMOGRAPHY_TICK_INTERVAL: u64 = 10;
 /// Minimum mutual trust required to initiate a courtship (0.3).
 const COURTSHIP_TRUST_THRESHOLD: Fixed = Fixed::from_raw(3000); // 0.3
 
@@ -287,6 +289,9 @@ pub struct Simulation {
     pub metric_history: Vec<MetricsSnapshot>,
     /// §7.3: Tick when last revolution occurred (for cooldown tracking).
     last_revolution_tick: u64,
+    /// §7.2: Tick when the last moral panic fired — enforces a cooldown so a
+    /// saturated belief-charge loop cannot hammer legitimacy every tick.
+    last_moral_panic_tick: u64,
     /// §4.4: Black market state — activates under scarcity with weak enforcement.
     pub black_market: crate::black_market::BlackMarketState,
     /// Architecture-plan-2 §10.6: Kinship graph — biological, marital, ritual kin.
@@ -351,6 +356,19 @@ impl Simulation {
         a * (n_agents - 1) + if b > a { b - 1 } else { b }
     }
 
+    /// Per-agent position of target `b` inside agent `a`'s `relationship_v2s` vec.
+    ///
+    /// `relationship_v2s[a]` holds one entry per *other* agent, ordered by
+    /// target index with `a` itself skipped. So target `b` sits at position
+    /// `b` when `b < a`, else `b - 1`. This is *not* the same as
+    /// [`Self::relationship_v2_index`], which indexes the legacy flat
+    /// `self.relationships` matrix of `n·(n−1)` entries.
+    #[inline]
+    fn relationship_v2_pos(a: usize, b: usize) -> usize {
+        debug_assert!(a != b, "self-relationship position requested");
+        if b > a { b - 1 } else { b }
+    }
+
     /// Create a new simulation from config.
     pub fn new(config: SimConfig) -> Self {
         let rng = RngStreams::new(config.seed);
@@ -380,6 +398,7 @@ impl Simulation {
             knowledge_store: Vec::new(),
             metric_history: Vec::new(),
             last_revolution_tick: 0,
+            last_moral_panic_tick: 0,
             black_market: crate::black_market::BlackMarketState::default(),
             kinship_graph: crate::social::kinship::KinshipGraph::default(),
             households: Vec::new(),
@@ -450,6 +469,7 @@ impl Simulation {
             knowledge_store: snapshot.knowledge_store,
             metric_history: snapshot.metric_history,
             last_revolution_tick: snapshot.last_revolution_tick,
+            last_moral_panic_tick: snapshot.last_moral_panic_tick,
             black_market: snapshot.black_market,
             kinship_graph: crate::social::kinship::KinshipGraph::default(),
             households: Vec::new(),
@@ -500,6 +520,7 @@ impl Simulation {
             knowledge_store: &self.knowledge_store,
             metric_history: &self.metric_history,
             last_revolution_tick: self.last_revolution_tick,
+            last_moral_panic_tick: self.last_moral_panic_tick,
             black_market: &self.black_market,
             site_work_ticks: &self.site_work_ticks,
             group_registry: &self.group_registry,
@@ -508,6 +529,19 @@ impl Simulation {
 
     /// Populate the world with terrain, sites, and agents.
     pub fn populate(&mut self) {
+        // §31: Clamp requested population to the settlement cap so starting above
+        // MAX_POPULATION can never silently disable the birth system (the birth
+        // gate `n + new_births < MAX_POPULATION` would otherwise never fire).
+        let requested = self.config.num_agents as usize;
+        self.config.num_agents = requested.min(crate::population_cap::MAX_POPULATION) as u32;
+        if self.config.num_agents as usize != requested {
+            tracing::warn!(
+                requested,
+                clamped = self.config.num_agents,
+                "Clamping initial population to MAX_POPULATION"
+            );
+        }
+
         world_gen::generate_village(&mut self.world, &mut self.rng);
 
         let mut populate_rng =
@@ -1138,9 +1172,18 @@ impl Simulation {
                 // Separation distress decays slowly; security stabilizes.
                 // §17: Only agents with relationship updates run attachment decay
                 if phases.is_daily && self.agents[i].agent_tier.tier.runs_relationship_updates() {
-                    self.agents[i].attachment.separation_distress =
-                        (self.agents[i].attachment.separation_distress
-                            * Fixed::from_f64(0.95)).max(Fixed::ZERO);
+                    // §8.1.14: A partnered agent separated from their attachment
+                    // figure accumulates separation distress. Previously distress
+                    // only ever decayed (and reunions barely happen), so the
+                    // attachment → emotion coupling never activated.
+                    let is_partnered = self.agents[i].partner.is_some();
+                    let att = &mut self.agents[i].attachment;
+                    if is_partnered {
+                        let closeness = Fixed::from_f64(0.8);
+                        att.on_separation(closeness, Fixed::from_f64(0.02));
+                    }
+                    att.separation_distress =
+                        (att.separation_distress * Fixed::from_f64(0.95)).max(Fixed::ZERO);
                 }
 
                 // Architecture-plan-2 §8.1.5: Motivation update.
@@ -1712,23 +1755,77 @@ impl Simulation {
             }
 
             // ── 6. Appraisal — emotions from state ────────────────────
+            // §8.1.4: Compute per-agent threat/unfairness exposure from this tick's
+            // events so cognition actually reacts to the world (conflicts, norm
+            // violations, moral panics) instead of only hunger/thirst.
+            let mut threat_exposure: Vec<Fixed> = vec![Fixed::ZERO; self.agents.len()];
+            let mut witnessed_unfairness: Vec<Fixed> = vec![Fixed::ZERO; self.agents.len()];
+            for ev in &ctx.events[pre_tick_events..] {
+                match ev {
+                    SimEvent::ConflictOccurred { aggressor, target, fear_induced, .. } => {
+                        let a = aggressor.as_u64() as usize;
+                        let t = target.as_u64() as usize;
+                        if a < self.agents.len() {
+                            threat_exposure[a] = (threat_exposure[a]
+                                + *fear_induced * Fixed::from_f64(0.5)).clamp_01();
+                        }
+                        if t < self.agents.len() {
+                            threat_exposure[t] = (threat_exposure[t] + *fear_induced).clamp_01();
+                            witnessed_unfairness[t] = (witnessed_unfairness[t]
+                                + Fixed::from_f64(0.1)).clamp_01();
+                        }
+                    }
+                    SimEvent::NormViolated { agent, .. } => {
+                        let idx = agent.as_u64() as usize;
+                        if idx < self.agents.len() {
+                            witnessed_unfairness[idx] = (witnessed_unfairness[idx]
+                                + Fixed::from_f64(0.05)).clamp_01();
+                        }
+                    }
+                    _ => {}
+                }
+            }
             for i in 0..self.agents.len() {
+                let threat = threat_exposure[i];
+                let unfairness = witnessed_unfairness[i];
+                let need_pressure = needs[i].hunger.max(needs[i].thirst);
                 let appraisal = Appraisal {
-                    goal_relevance: needs[i].hunger.max(needs[i].thirst),
-                    goal_congruence: if needs[i].hunger < Fixed::from_f64(0.5) {
+                    goal_relevance: need_pressure.max(threat),
+                    goal_congruence: if threat > Fixed::from_f64(0.2) {
+                        // Under direct threat: strongly goal-incongruent.
+                        -Fixed::from_f64(0.6)
+                    } else if needs[i].hunger < Fixed::from_f64(0.5) {
                         Fixed::from_f64(0.3)
                     } else {
                         Fixed::from_f64(-0.3)
                     },
                     coping_potential: personalities[i].conscientiousness,
                     expectedness: Fixed::from_f64(0.5),
-                    fairness: Fixed::from_f64(0.5),
+                    fairness: if unfairness > Fixed::from_f64(0.05) {
+                        -unfairness // witnessed injustice → anger
+                    } else {
+                        Fixed::from_f64(0.5)
+                    },
                     agency: Agency::Circumstance,
                     social_visibility: Fixed::ZERO,
                     identity_relevance: Fixed::from_f64(0.2),
                 };
 
-                let delta = appraisal::appraise(&appraisal, tick, &self.params);
+                let mut delta = appraisal::appraise(&appraisal, tick, &self.params);
+
+                // §8.1.14: Attachment → emotion — separation distress feeds fear.
+                // Anxious and disorganized styles convert separation into fear
+                // more readily than secure/avoidant styles.
+                let sep = self.agents[i].attachment.separation_distress;
+                if sep > Fixed::ZERO {
+                    let style_factor = match self.agents[i].attachment.style {
+                        crate::psychology::attachment::AttachmentStyle::Anxious
+                        | crate::psychology::attachment::AttachmentStyle::Disorganized => Fixed::from_f64(0.15),
+                        crate::psychology::attachment::AttachmentStyle::Secure
+                        | crate::psychology::attachment::AttachmentStyle::Avoidant => Fixed::from_f64(0.08),
+                    };
+                    delta.fear = (delta.fear + sep * style_factor).clamp_01();
+                }
 
                 emotions[i].fear = (emotions[i].fear + delta.fear).clamp_01();
                 emotions[i].anger = (emotions[i].anger + delta.anger).clamp_01();
@@ -1739,9 +1836,14 @@ impl Simulation {
                 emotions[i].pride = (emotions[i].pride + delta.pride).clamp_01();
                 emotions[i].guilt = (emotions[i].guilt + delta.guilt).clamp_01();
 
+                // §8.1.4: Valence is SIGNED (-1..1). The old `.clamp_01()` floored
+                // negative affect at 0, so fear/anger/sadness could never move
+                // valence below zero — an agent could live through a revolution
+                // while maintaining +0.8 valence. Fixed is signed, so we clamp to
+                // the full range instead.
                 affects[i].valence = (emotions[i].joy - emotions[i].sadness - emotions[i].fear
                     - emotions[i].anger)
-                    .clamp_01();
+                    .clamp(-Fixed::ONE, Fixed::ONE);
                 affects[i].arousal = (emotions[i].fear + emotions[i].anger + emotions[i].joy)
                     * Fixed::from_f64(0.5);
                 // §8.1.4: Apply emotion regulation AFTER appraisal.
@@ -1753,7 +1855,8 @@ impl Simulation {
                         affects[i].valence,
                         affects[i].arousal,
                     );
-                    affects[i].valence = (affects[i].valence + reg_vd).clamp_01();
+                    affects[i].valence = (affects[i].valence + reg_vd)
+                        .clamp(-Fixed::ONE, Fixed::ONE);
                     affects[i].arousal = (affects[i].arousal + reg_ad).clamp_01();
                 }
             }
@@ -2655,8 +2758,22 @@ impl Simulation {
                 })
                 .collect();
             institution.derive_collective_psychology(&member_morales, &member_trusts);
-            // Slow legitimacy decay without reinforcement
-            institution.decay_legitimacy(Fixed::from_f64(0.0001));
+            // §26: Legitimacy is dynamic, not a one-way drain. Unreinforced / empty
+            // institutions decay slowly, but functioning institutions (members present)
+            // regain legitimacy toward their collective morale. Before this fix the
+            // unconditional per-tick decay pinned council legitimacy at 0.000, which
+            // kept the faction-formation trigger (`legitimacy < 0.5`) permanently armed.
+            if institution.members.is_empty() {
+                institution.decay_legitimacy(Fixed::from_f64(0.0001));
+            } else {
+                let target = institution.collective.morale.max(Fixed::from_f64(0.3));
+                let diff = target - institution.legitimacy;
+                if diff > Fixed::ZERO {
+                    institution.increase_legitimacy(diff * Fixed::from_f64(0.002));
+                } else {
+                    institution.decay_legitimacy(Fixed::from_f64(0.0001));
+                }
+            }
 
             // §19.5.C: Process pending policies — move ready ones to active
             institution.process_policies(tick_u64);
@@ -2967,9 +3084,19 @@ impl Simulation {
                 .filter(|i| i.kind == InstitutionKind::Faction)
                 .count();
 
-            // Compute grievance for each agent
+            // Compute grievance for each agent.
+            // §29.2: Factions must be exclusive — an agent already in a faction
+            // cannot be recruited again. Without this, every new faction pulls
+            // from the same grievance pool, producing overlapping memberships
+            // (e.g. 4 factions × 22 members on 48 agents).
+            let already_factioned: std::collections::HashSet<AgentId> =
+                self.institutions.iter()
+                    .filter(|i| i.kind == InstitutionKind::Faction)
+                    .flat_map(|f| f.members.iter().copied())
+                    .collect();
             let market_gini = self.market.inequality;
             let grievances: Vec<(AgentId, Fixed)> = self.agents.iter().enumerate()
+                .filter(|(i, _)| !already_factioned.contains(&AgentId::new(*i as u64)))
                 .map(|(i, agent)| {
                     let g = factions::compute_grievance(
                         agent.derived.resentment,
@@ -3307,6 +3434,322 @@ impl Simulation {
     }
 
     /// Section 19b: Birth mechanics.
+    /// §31: Build a fresh newborn AgentBundle in place of a dead agent.
+    ///
+    /// Because the sim relies on `AgentId::new(i) == index i` (relationship_v2s
+    /// O(1) layout, agent_diseases parallel vec, partner/parent indices), dead
+    /// agents are NOT removed — their slot is repopulated by a newborn child.
+    /// This keeps every index-stable registry consistent.
+
+    /// Foundational beliefs seeded into every agent at populate, and now also
+    /// into newborns (born or replacement) so they can participate in belief
+    /// propagation instead of starting with an empty set.
+    fn foundational_beliefs() -> Vec<Belief> {
+        vec![
+            Belief {
+                proposition_id: 0,
+                confidence: Fixed::from_f64(0.6),
+                emotional_charge: Fixed::ZERO,
+                identity_linkage: Fixed::from_f64(0.3),
+                resistance: Fixed::from_f64(0.5),
+                last_reinforced_tick: 0,
+                source: crate::person::EvidenceSource::PersonalExperience,
+                social_reinforcement: 0,
+                is_accurate: true,
+            },
+            Belief {
+                proposition_id: 1,
+                confidence: Fixed::from_f64(0.5),
+                emotional_charge: Fixed::ZERO,
+                identity_linkage: Fixed::from_f64(0.2),
+                resistance: Fixed::from_f64(0.4),
+                last_reinforced_tick: 0,
+                source: crate::person::EvidenceSource::InstitutionalRecord,
+                social_reinforcement: 0,
+                is_accurate: true,
+            },
+        ]
+    }
+
+    fn build_replacement_newborn(&self, idx: usize, tick_u64: u64) -> AgentBundle {
+        let child_name = format!("Child_{idx}");
+        // Inherit the deceased agent's home and position so the newborn keeps
+        // the family home and village location (generational continuity).
+        let inherited_home = self.agents[idx].home_site;
+        let inherited_position = self.agents[idx].position;
+
+        // Inherit personality traits with noise (deterministic from seed + tick)
+        let mut child_rng = rand_chacha::ChaCha8Rng::seed_from_u64(
+            self.config.seed.wrapping_add(tick_u64).wrapping_add(idx as u64),
+        );
+        let child_personality = Personality::random(&mut child_rng);
+        let child_age = Fixed::from_f64(0.0); // newborn
+        let child_embodied = EmbodiedState::random(child_age, &mut child_rng);
+        let child_attachment_vulnerability =
+            child_embodied.genome.trait_predispositions.attachment_vulnerability;
+        let child_neuroticism = child_personality.neuroticism;
+        let child_openness = child_personality.openness;
+
+        AgentBundle {
+            body: BodyState::from(&child_embodied),
+            needs: NeedState::default(),
+            personality: child_personality,
+            goals: Vec::new(),
+            beliefs: Self::foundational_beliefs(),
+            affect: Affect::default(),
+            emotions: DiscreteEmotions::default(),
+            current_action: ActionKind::Idle,
+            action_progress: 0,
+            name: child_name,
+            position: inherited_position,
+            home_site: inherited_home,
+            memory: MemoryStore::new(200),
+            identity: IdentityState {
+                identities: vec![],
+            },
+            attention: AttentionState::default(),
+            intention: None,
+            routine: DailyRoutine::village_routine(),
+            moral_values: MoralValues::random(&mut child_rng),
+            cognitive: CognitiveState::default(),
+            derived: DerivedMentalState::default(),
+            recent_successes: 0,
+            recent_attempts: 0,
+            age: child_age,
+            wealth: WealthState { coin: Fixed::from_f64(1.0) },
+            conflict: ConflictState::default(),
+            cultural: CulturalState::default(),
+            partner: None,
+            parent_a: None,
+            parent_b: None,
+            feuds: Vec::new(),
+            feud_ticks: Vec::new(),
+            status: StatusState::default(),
+            rejected_goals: Vec::new(),
+            completed_goals: Vec::new(),
+            skills: AgentSkills::default(),
+            embodied: child_embodied,
+            interoception: {
+                let mut inter = crate::psychology::InteroceptiveState::default();
+                inter.initialize_from_personality(child_neuroticism, child_openness, Fixed::ZERO);
+                inter
+            },
+            self_model: crate::psychology::SelfModel::default(),
+            attachment: {
+                let mut att = crate::psychology::AttachmentSystem::default();
+                att.initialize(
+                    Fixed::from_f64(0.7), // high caregiver security for child
+                    Fixed::ZERO,          // no trauma history
+                    child_attachment_vulnerability,
+                );
+                att
+            },
+            emotion_regulation: crate::psychology::EmotionRegulationState::default(),
+            moral_cognition: crate::psychology::MoralCognition::default(),
+            prospection: crate::psychology::ProspectionState::default(),
+            narrative: crate::psychology::NarrativeIdentity::default(),
+            developmental: crate::psychology::DevelopmentalPsychState::default(),
+            psychopathology: crate::psychology::PsychopathologyState::default(),
+            mind_models: crate::psychology::theory_of_mind::MindModels::default(),
+            cultural_cognition: crate::psychology::CulturalCognition::default(),
+            psych_skills: crate::psychology::SkillState::default(),
+            relationship_v2s: Vec::new(),
+            attraction: crate::social::attraction::AttractionModel::default(),
+            status_v2: crate::social::status_dims::StatusDimensions::default(),
+            epistemic: crate::social::epistemic::EpistemicState::default(),
+            cognitive_runtime: crate::psychology::CognitiveRuntime::default(),
+            motivation: crate::psychology::MotivationState::default(),
+            decision_policy: crate::psychology::DecisionPolicy::default(),
+            agent_tier: crate::agent_tier::AgentTierState::new(
+                crate::agent_tier::AgentTier::Secondary, tick_u64,
+            ),
+            narrative_frames: crate::culture::narrative_frame::NarrativeFrameSet::default(),
+            ideology: crate::culture::ideology::Ideology {
+                axes: vec![
+                    crate::culture::ideology::IdeologyAxis { name: "tradition".into(), position: Fixed::from_f64(0.5), conviction: Fixed::from_f64(0.5) },
+                    crate::culture::ideology::IdeologyAxis { name: "authority".into(), position: Fixed::from_f64(0.5), conviction: Fixed::from_f64(0.5) },
+                ],
+                dogmatism: Fixed::from_f64(0.4),
+                echo_chamber_strength: Fixed::from_f64(0.3),
+                polarization_tendency: Fixed::from_f64(0.3),
+            },
+            sacred_values: crate::culture::sacred::SacredValues::default(),
+            education: crate::culture::education::EducationState {
+                learning_aptitude: Fixed::from_f64(0.6),
+                ..crate::culture::education::EducationState::default()
+            },
+        }
+    }
+
+    /// §31: Handle an agent's death via in-place generational replacement.
+    ///
+    /// Runs inheritance, dissolves marriages, clears partner/parent/feud
+    /// references, removes the dead agent from institutions/households/kinship,
+    /// and repopulates the slot with a fresh newborn so index invariants hold.
+    fn handle_agent_death(&mut self, idx: usize, deaths: &[usize], tick_u64: u64, tick: Tick) {
+        let agent_id = AgentId::new(idx as u64);
+        tracing::warn!(
+            agent = self.agents[idx].name.as_str(),
+            age = self.agents[idx].age.to_f64(),
+            tick = tick_u64,
+            "Agent died"
+        );
+
+        // §19.5.F: Inheritance — transfer wealth to spouse and children
+        let inherited_wealth = self.agents[idx].wealth.coin;
+        if inherited_wealth > Fixed::ZERO {
+            let mut heirs: Vec<usize> = Vec::new();
+            // Spouse inherits first — but only if not also dying this tick
+            if let Some(spouse_idx) = self.agents[idx].partner {
+                if spouse_idx < self.agents.len() && !deaths.contains(&spouse_idx) {
+                    heirs.push(spouse_idx);
+                }
+            }
+            // Children inherit second — skip if also dying
+            for child_idx in 0..self.agents.len() {
+                if child_idx != idx && !deaths.contains(&child_idx) {
+                    let is_child = self.agents[child_idx].parent_a == Some(idx)
+                        || self.agents[child_idx].parent_b == Some(idx);
+                    if is_child {
+                        heirs.push(child_idx);
+                    }
+                }
+            }
+            // Split wealth among heirs (or give to a random agent if no heirs)
+            if !heirs.is_empty() {
+                let share = inherited_wealth / Fixed::from_f64(heirs.len() as f64);
+                for &heir_idx in &heirs {
+                    if heir_idx < self.agents.len() {
+                        self.agents[heir_idx].wealth.coin += share;
+                    }
+                }
+            }
+            self.journal.record(tick_u64, agent_id, JournalEntryKind::Inheritance {
+                heir_count: heirs.len() as u64,
+                amount: inherited_wealth.to_f64(),
+            });
+        }
+        self.journal.record(tick_u64, agent_id, JournalEntryKind::Died {
+            age: self.agents[idx].age.to_f64(),
+            cause: "natural".into(),
+        });
+        self.events.push(SimEvent::AgentDied {
+            agent: agent_id,
+            cause: DeathCause::OldAge,
+            tick,
+        });
+
+        // ── Dissolve marriages and pair bonds involving the deceased ──
+        for marriage in &mut self.marriage_registry.marriages {
+            if marriage.active && (marriage.partner_a == idx || marriage.partner_b == idx) {
+                marriage.dissolve(&crate::social::marriage::DissolutionCause::Death(idx));
+            }
+        }
+        self.marriage_registry
+            .pair_bonds
+            .retain(|pb| pb.partner_a != idx && pb.partner_b != idx);
+
+        // ── Clear partner / parent references pointing at the deceased ──
+        for agent in &mut self.agents {
+            if agent.partner == Some(idx) {
+                agent.partner = None;
+            }
+            if agent.parent_a == Some(idx) {
+                agent.parent_a = None;
+            }
+            if agent.parent_b == Some(idx) {
+                agent.parent_b = None;
+            }
+            agent.feuds.retain(|f| *f != idx);
+        }
+
+        // ── Remove from relationships ──
+        self.relationships.retain(|r| r.from != agent_id && r.to != agent_id);
+
+        // ── Remove from institutions (membership + role holders) ──
+        for inst in &mut self.institutions {
+            inst.remove_member(agent_id);
+            for role in &mut inst.roles {
+                if role.holder == Some(agent_id) {
+                    role.holder = None;
+                }
+            }
+        }
+
+        // ── Remove from households ──
+        for hh in &mut self.households {
+            hh.remove_member(idx);
+            if hh.head == Some(idx) {
+                hh.head = hh.members.first().copied();
+            }
+        }
+
+        // ── Remove kinship edges referencing the deceased ──
+        self.kinship_graph
+            .edges
+            .retain(|e| e.from != idx && e.to != idx);
+
+        // ── Remove from faction v2 member lists ──
+        for faction in &mut self.faction_v2_registry.factions {
+            faction.members.retain(|m| *m != idx);
+            if faction.leader == idx {
+                faction.leader = faction.members.first().copied().unwrap_or(usize::MAX);
+            }
+        }
+        // Dissolve factions that lost all members — a `usize::MAX` leader
+        // sentinel would otherwise dangle until the next daily_update.
+        self.faction_v2_registry
+            .factions
+            .retain(|f| !f.members.is_empty());
+
+        // ── Remove from courtships and patronage ──
+        self.active_courtships.retain(|c| c.pursuer != idx && c.pursued != idx);
+        self.patronage_registry
+            .relations
+            .retain(|r| r.patron != idx && r.client != idx);
+
+        // ── In-place generational replacement: a newborn takes the slot ──
+        self.agent_diseases[idx] = Vec::new();
+        self.agents[idx] = self.build_replacement_newborn(idx, tick_u64);
+
+        // Rebuild relationship_v2s for the newborn and for all other agents'
+        // entries pointing at this index (they now reference a stranger).
+        self.rebuild_relationship_v2s_after_death(idx);
+    }
+
+    /// Rebuild the O(1) relationship_v2s matrix around a dead-then-reborn slot.
+    ///
+    /// The dead agent's v2s entries referencing others are replaced with fresh
+    /// stranger-level entries, and every other agent's entry pointing at `idx`
+    /// is reset to stranger level (the old high-trust bonds died with them).
+    fn rebuild_relationship_v2s_after_death(&mut self, idx: usize) {
+        let n = self.agents.len();
+        let agent_id = AgentId::new(idx as u64);
+
+        // Fresh stranger-level v2s for the newborn.
+        let mut v2s = Vec::with_capacity(n.saturating_sub(1));
+        for j in 0..n {
+            if j != idx {
+                v2s.push(RelationshipV2::new(agent_id, AgentId::new(j as u64)));
+            }
+        }
+        self.agents[idx].relationship_v2s = v2s;
+
+        // Reset other agents' entry that points at idx.
+        for j in 0..n {
+            if j == idx {
+                continue;
+            }
+            // In agent j's v2s, the entry for target idx sits at a fixed slot:
+            // targets are ordered 0..n excluding j, so target idx is at
+            // position idx if idx < j else idx - 1.
+            let pos = if idx < j { idx } else { idx - 1 };
+            if let Some(entry) = self.agents[j].relationship_v2s.get_mut(pos) {
+                *entry = RelationshipV2::new(AgentId::new(j as u64), agent_id);
+            }
+        }
+    }
+
     fn tick_birth_mechanics(&mut self, tick_u64: u64, tick: Tick) {
         // ── 19b. §19.5.F Birth mechanics — new agents from partnered couples ──
         {
@@ -3365,7 +3808,7 @@ impl Simulation {
                     needs: NeedState::default(),
                     personality: child_personality,
                     goals: Vec::new(),
-                    beliefs: Vec::new(),
+                    beliefs: Self::foundational_beliefs(),
                     affect: Affect::default(),
                     emotions: DiscreteEmotions::default(),
                     current_action: ActionKind::Idle,
@@ -3732,8 +4175,7 @@ impl Simulation {
                                 if let Some(their_c) = membership[j] {
                                     if my_c != their_c {
                                         // Check relationship trust (i→j)
-                                        let n_agents_local = self.agents.len();
-                                        let idx = Self::relationship_v2_index(i, j, n_agents_local);
+                                        let idx = Self::relationship_v2_pos(i, j);
                                         if idx < self.agents[i].relationship_v2s.len() {
                                             let trust = self.agents[i].relationship_v2s[idx].trust;
                                             if trust > Fixed::from_f64(0.5) {
@@ -3803,7 +4245,7 @@ impl Simulation {
             for i in 0..n_agents {
                 for j in 0..n_agents {
                     if i == j { continue; }
-                    let rv2_idx = Self::relationship_v2_index(i, j, n_agents);
+                    let rv2_idx = Self::relationship_v2_pos(i, j);
                     if rv2_idx >= self.agents[i].relationship_v2s.len() { continue; }
                     let current_stage = self.agents[i].relationship_v2s[rv2_idx].stage;
                     // Short-circuit: skip pairs with 0 interactions at entry-level stages.
@@ -3853,15 +4295,14 @@ impl Simulation {
                             let b = ritual.participants[j];
                             if a < self.agents.len() && b < self.agents.len() {
                                 // Increase trust and affection between participants
-                                let n_agents = self.agents.len();
-                                let idx_a = Self::relationship_v2_index(a, b, n_agents);
+                                let idx_a = Self::relationship_v2_pos(a, b);
                                 if idx_a < self.agents[a].relationship_v2s.len() {
                                     self.agents[a].relationship_v2s[idx_a].trust =
                                         (self.agents[a].relationship_v2s[idx_a].trust + bonding * Fixed::from_f64(0.3)).clamp_01();
                                     self.agents[a].relationship_v2s[idx_a].affection =
                                         (self.agents[a].relationship_v2s[idx_a].affection + bonding * Fixed::from_f64(0.2)).clamp_01();
                                 }
-                                let idx_b = Self::relationship_v2_index(b, a, n_agents);
+                                let idx_b = Self::relationship_v2_pos(b, a);
                                 if idx_b < self.agents[b].relationship_v2s.len() {
                                     self.agents[b].relationship_v2s[idx_b].trust =
                                         (self.agents[b].relationship_v2s[idx_b].trust + bonding * Fixed::from_f64(0.3)).clamp_01();
@@ -3901,7 +4342,7 @@ impl Simulation {
                 let mut peers: Vec<usize> = Vec::new();
                 for j in 0..n_agents {
                     if i == j { continue; }
-                    let rv2_idx = Self::relationship_v2_index(i, j, n_agents);
+                    let rv2_idx = Self::relationship_v2_pos(i, j);
                     if rv2_idx < self.agents[i].relationship_v2s.len()
                         && self.agents[i].relationship_v2s[rv2_idx].trust > Fixed::from_f64(0.5)
                         && self.agents[i].position == self.agents[j].position
@@ -3913,7 +4354,7 @@ impl Simulation {
                 if peers.len() < 2 { continue; }
                 // Check shared identity from relationship_v2 solidarity
                 let shared_identity: Fixed = peers.iter().map(|&j| {
-                    let rv2_idx = Self::relationship_v2_index(i, j, n_agents);
+                    let rv2_idx = Self::relationship_v2_pos(i, j);
                     if rv2_idx < self.agents[i].relationship_v2s.len() {
                         self.agents[i].relationship_v2s[rv2_idx].solidarity
                     } else {
@@ -3936,7 +4377,7 @@ impl Simulation {
                 }).fold(Fixed::ZERO, |acc, s| acc + s) / Fixed::from_int(peers.len() as i64);
                 // Count recent interactions as proxy for repeated interaction
                 let repeated_interaction: Fixed = peers.iter().map(|&j| {
-                    let rv2_idx = Self::relationship_v2_index(i, j, n_agents);
+                    let rv2_idx = Self::relationship_v2_pos(i, j);
                     if rv2_idx < self.agents[i].relationship_v2s.len() {
                         let ic = self.agents[i].relationship_v2s[rv2_idx].interaction_count;
                         // Normalize: 10+ interactions → ~1.0
@@ -3997,9 +4438,17 @@ impl Simulation {
                     // §19.5.E: Use access-checking method to enforce resource access rights.
                     if let Some(farm_idx) = self.world.accessible_farm_with_grain(agent_id, &self.institutions) {
                         let taken = self.world.consume_resource(farm_idx, GRAIN_RESOURCE_ID, amount);
-                        // §13.3: Consumers pay coin for resources consumed
+                        // §13.3: Consumers pay coin for resources consumed. Coin is not
+                        // destroyed — it flows into the Market treasury (which then
+                        // funds wages), closing the wealth-destruction loop.
                         let cost = taken * self.market.price(GRAIN_RESOURCE_ID);
-                        self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - cost).max(Fixed::ZERO);
+                        let paid = cost.min(self.agents[*agent_idx].wealth.coin);
+                        self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - paid).max(Fixed::ZERO);
+                        if let Some(market) = self.institutions.iter_mut()
+                            .find(|i| i.kind == InstitutionKind::Market)
+                        {
+                            market.treasury = (market.treasury + paid).max(Fixed::ZERO);
+                        }
                         self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "grain".into(), amount: taken.to_f64() });
                         taken > Fixed::ZERO
                     } else {
@@ -4016,9 +4465,16 @@ impl Simulation {
                     // §19.5.E: Use access-checking method to enforce resource access rights.
                     if let Some(well_idx) = self.world.accessible_well_with_water(agent_id, &self.institutions) {
                         let taken = self.world.consume_resource(well_idx, WATER_RESOURCE_ID, amount);
-                        // §13.3: Consumers pay coin for water consumed
+                        // §13.3: Consumers pay coin for water consumed. Coin flows into
+                        // the Market treasury instead of vanishing.
                         let cost = taken * self.market.price(WATER_RESOURCE_ID);
-                        self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - cost).max(Fixed::ZERO);
+                        let paid = cost.min(self.agents[*agent_idx].wealth.coin);
+                        self.agents[*agent_idx].wealth.coin = (self.agents[*agent_idx].wealth.coin - paid).max(Fixed::ZERO);
+                        if let Some(market) = self.institutions.iter_mut()
+                            .find(|i| i.kind == InstitutionKind::Market)
+                        {
+                            market.treasury = (market.treasury + paid).max(Fixed::ZERO);
+                        }
                         self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "water".into(), amount: taken.to_f64() });
                         taken > Fixed::ZERO
                     } else {
@@ -4056,33 +4512,22 @@ impl Simulation {
                 }                    ActionKind::Trade => {
                     // §13.3: Agent-to-agent trade — find a nearby seller at a market site
                     let buyer_coin = self.agents[*agent_idx].wealth.coin;
-                    // Find a seller: nearby agent who owns a farm with grain
+                    // Find a nearby counter-party to trade with (any neighbor, not
+                    // only farm-owning ones — home sites are always Houses, so the
+                    // old `home_site.kind == Farm` filter made trade permanently
+                    // impossible).
                     let seller_info = self.agents.iter().enumerate()
                         .find(|(j, a)| {
                             *j != *agent_idx
                                 && self.agents[*agent_idx].position.manhattan_distance(&a.position) <= 3
-                                && a.home_site.is_some() // seller has a home/owned site
                         })
-                        .and_then(|(j, a)| {
-                            // Check if seller's home is a farm with grain
-                            a.home_site.and_then(|hs| {
-                                if hs < self.world.sites.len()
-                                    && self.world.sites[hs].kind == crate::world::SiteKind::Farm
-                                {
-                                    let grain = self.world.sites[hs].inventory.iter()
-                                        .find(|s| s.resource_id == GRAIN_RESOURCE_ID)
-                                        .map_or(Fixed::ZERO, |s| s.quantity);
-                                    if grain > Fixed::ZERO {
-                                        Some((j, hs, grain))
-                                    } else {
-                                        None
-                                    }
-                                } else {
-                                    None
-                                }
-                            })
-                        });
-                    if let Some((seller, farm_idx, _available)) = seller_info {
+                        .map(|(j, _)| j);
+                    // Grain source: an accessible farm with grain (prefer the
+                    // buyer's own accessible farm; fall back to any farm).
+                    let farm_idx = self.world
+                        .accessible_farm_with_grain(agent_id, &self.institutions)
+                        .or_else(|| self.world.farm_with_grain());
+                    if let (Some(seller), Some(farm_idx)) = (seller_info, farm_idx) {
                         let trust = self.relationships.iter()
                             .find(|r| r.from == AgentId::new(*agent_idx as u64) && r.to == AgentId::new(seller as u64))
                             .map_or(Fixed::from_f64(0.5), |r| r.trust);
@@ -4108,6 +4553,10 @@ impl Simulation {
                                     price,
                                     tick,
                                 });
+                                // §13.3: Track volume so the market dashboard and
+                                // inequality metrics reflect real trade activity.
+                                self.market.volume_this_tick = (self.market.volume_this_tick + taken).max(Fixed::ZERO);
+                                self.market.trade_count = self.market.trade_count.saturating_add(1);
                                 self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "grain_via_trade".into(), amount: taken.to_f64() });
                                 // §19.5.J: Record relationship trace — trade builds trust
                                 if let Some(rel) = self.relationships.iter_mut()
@@ -4535,11 +4984,21 @@ impl Simulation {
         // to trigger a moral panic. This happens when many agents hold high-emotion
         // beliefs about an institution, causing sudden legitimacy collapse.
         {
+            // §7.2: Moral panics are discrete crises, not a per-tick loop.
+            // Enforce a cooldown so a saturated belief-charge pool cannot fire a
+            // panic every single tick (previously ~19K events with legitimacy
+            // pinned at 0.000). Between panics the belief charges decay toward
+            // their resting level (see below), letting the crisis resolve.
+            const MORAL_PANIC_COOLDOWN: u64 = 300;
+            let panic_cooldown_ok = tick_u64.saturating_sub(self.last_moral_panic_tick)
+                >= MORAL_PANIC_COOLDOWN;
+
             // Check propositions 0 ("the_market_is_fair") and 1 ("the_council_protects_us")
             let belief_refs: Vec<&Vec<Belief>> = self.agents.iter().map(|a| &a.beliefs).collect();
             for prop_id in 0..=1 {
                 let panic_result = gossip::detect_moral_panic(&belief_refs, prop_id);
-                if panic_result.triggered {
+                if panic_result.triggered && panic_cooldown_ok {
+                    self.last_moral_panic_tick = tick_u64;
                     tracing::warn!(
                         proposition = prop_id,
                         avg_charge = panic_result.avg_charge.to_f64(),
@@ -4571,6 +5030,23 @@ impl Simulation {
                         fear_induced: panic_result.avg_charge,
                         tick,
                     });
+                }
+            }
+
+            // §7.2: Let panic resolve — decay the emotional charge of the
+            // affected propositions so the loop does not re-trigger instantly.
+            if tick_u64.saturating_sub(self.last_moral_panic_tick) < MORAL_PANIC_COOLDOWN
+                && tick_u64.saturating_sub(self.last_moral_panic_tick) > 0
+            {
+                let post_panic_charge = Fixed::from_f64(0.1);
+                for agent in &mut self.agents {
+                    for belief in &mut agent.beliefs {
+                        if belief.proposition_id <= 1 {
+                            belief.emotional_charge = belief
+                                .emotional_charge
+                                .lerp(post_panic_charge, Fixed::from_f64(0.02));
+                        }
+                    }
                 }
             }
         }
@@ -4663,6 +5139,18 @@ impl Simulation {
             }
         }
         for agent in &mut self.agents {
+            // §13.3: Wealth → psychology — poverty produces fear, and relative
+            // deprivation produces resentment. Previously agents could be taxed
+            // down to 0.39 coins with zero emotional feedback, so wealth loss
+            // never registered psychologically.
+            let poverty = (Fixed::from_f64(3.0) - agent.wealth.coin).max(Fixed::ZERO);
+            if poverty > Fixed::ZERO {
+                let poverty_fear = (poverty * Fixed::from_f64(0.05)).clamp_01();
+                agent.emotions.fear = (agent.emotions.fear + poverty_fear).clamp_01();
+                agent.derived.resentment = (agent.derived.resentment
+                    + poverty * Fixed::from_f64(0.02)).clamp_01();
+            }
+
             // §17: Background agents skip derived states — use simple decay instead
             if !agent.agent_tier.tier.runs_belief_updates() {
                 continue;
@@ -4805,8 +5293,8 @@ impl Simulation {
                     let kinship_coeff = self.kinship_graph.coefficient_between(i, j);
 
                     // Compute mutual trust from relationship_v2
-                    let idx_ij = Self::relationship_v2_index(i, j, n);
-                    let idx_ji = Self::relationship_v2_index(j, i, n);
+                    let idx_ij = Self::relationship_v2_pos(i, j);
+                    let idx_ji = Self::relationship_v2_pos(j, i);
                     let trust_ij = if idx_ij < self.agents[i].relationship_v2s.len() {
                         self.agents[i].relationship_v2s[idx_ij].trust
                     } else { Fixed::ZERO };
@@ -4872,7 +5360,7 @@ impl Simulation {
                     // Must not already have a patronage link (O(1) HashSet lookup)
                     if patronage_clients.contains(&j) { continue; }
                     // Check trust from relationship_v2
-                    let rv2_idx = Self::relationship_v2_index(i, j, self.agents.len());
+                    let rv2_idx = Self::relationship_v2_pos(i, j);
                     if rv2_idx >= self.agents[i].relationship_v2s.len() { continue; }
                     let trust = self.agents[i].relationship_v2s[rv2_idx].trust;
                     let affection = self.agents[i].relationship_v2s[rv2_idx].affection;                    // Need moderate trust and positive affect to form patronage
@@ -4939,67 +5427,25 @@ impl Simulation {
         if phases.is_deca { // process demography every 10 ticks to reduce overhead
             let mut deaths = Vec::new();
             for i in 0..self.agents.len() {
+                // §31: Probabilistic death roll — uniform RNG vs age/health-based chance.
+                let roll = Fixed::from_f64(self.rng.get_mut(RngStream::Behavior).random::<f64>());
                 let (new_age, died) = demography::age_agent(
                     self.agents[i].age,
                     self.agents[i].body.health,
                     self.agents[i].body.energy,
+                    DEMOGRAPHY_TICK_INTERVAL,
                     &self.demography_config,
+                    roll,
                 );
                 self.agents[i].age = new_age;
                 if died {
                     deaths.push(i);
                 }
             }
-            // Remove dead agents (in reverse order to preserve indices)
-            for &idx in deaths.iter().rev() {
-                let agent_id = AgentId::new(idx as u64);
-                tracing::warn!(
-                    agent = self.agents[idx].name.as_str(),
-                    age = self.agents[idx].age.to_f64(),
-                    tick = tick_u64,
-                    "Agent died"
-                );                    // §19.5.F: Inheritance — transfer wealth to spouse and children
-                let inherited_wealth = self.agents[idx].wealth.coin;
-                if inherited_wealth > Fixed::ZERO {
-                    let mut heirs: Vec<usize> = Vec::new();
-                    // Spouse inherits first — but only if not also dying this tick
-                    if let Some(spouse_idx) = self.agents[idx].partner {
-                        if spouse_idx < self.agents.len() && !deaths.contains(&spouse_idx) {
-                            heirs.push(spouse_idx);
-                        }
-                    }
-                    // Children inherit second — skip if also dying
-                    for child_idx in 0..self.agents.len() {
-                        if child_idx != idx && !deaths.contains(&child_idx) {
-                            let is_child = self.agents[child_idx].parent_a == Some(idx)
-                                || self.agents[child_idx].parent_b == Some(idx);
-                            if is_child {
-                                heirs.push(child_idx);
-                            }
-                        }
-                    }
-                    // Split wealth among heirs (or give to a random agent if no heirs)
-                    if !heirs.is_empty() {
-                        let share = inherited_wealth / Fixed::from_f64(heirs.len() as f64);
-                        for &heir_idx in &heirs {
-                            if heir_idx < self.agents.len() {
-                                self.agents[heir_idx].wealth.coin += share;
-                            }
-                        }
-                    }
-                    self.journal.record(tick_u64, agent_id, JournalEntryKind::Inheritance {
-                        heir_count: heirs.len() as u64,
-                        amount: inherited_wealth.to_f64(),
-                    });
-                }
-                self.agents.remove(idx);
-                self.agent_diseases.remove(idx);
-                // Remove from relationships
-                self.relationships.retain(|r| r.from != agent_id && r.to != agent_id);
-                // Remove from institutions
-                for inst in &mut self.institutions {
-                    inst.remove_member(agent_id);
-                }
+            // §31: Dead agents are replaced IN PLACE by newborns so the
+            // `AgentId::new(i) == index i` invariant is never broken.
+            for &idx in &deaths {
+                self.handle_agent_death(idx, &deaths, tick_u64, tick);
             }
         }
 
@@ -5010,8 +5456,13 @@ impl Simulation {
 
 }
 
-/// Maximum number of metric snapshots to retain (last MAX_METRIC_HISTORY * 10 ticks).
-const MAX_METRIC_HISTORY: usize = 500;
+/// Maximum number of metric snapshots to retain (recorded every 10 ticks).
+///
+/// Old value 500 silently dropped the first half of any run longer than
+/// 5,000 ticks (ring buffer), so CSV exports started at tick 5010 for a
+/// 10,000-tick run. Raised to 20_000 so a full year of sim time
+/// (~51,840 ticks ≈ 5,184 rows) is preserved in exports.
+const MAX_METRIC_HISTORY: usize = 20_000;
 
 /// A snapshot of key simulation metrics at a specific tick.
 #[derive(Debug, Clone, Serialize, Deserialize)]
