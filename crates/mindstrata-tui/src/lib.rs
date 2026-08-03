@@ -12,6 +12,7 @@ use mindstrata_sim::market::MarketState;
 use mindstrata_sim::psychology::attachment::{AttachmentStyle, CaregivingStyle};
 use mindstrata_sim::institutions::{Institution, InstitutionalRecord};
 use mindstrata_sim::social::clan::ClanRegistry;
+use mindstrata_sim::social::patronage::PatronageRegistry;
 use mindstrata_sim::provenance::CausalProvenance;
 
 /// §6: Agent position marker for map rendering.
@@ -528,6 +529,48 @@ pub fn render_clan_dashboard(clans: &ClanRegistry) -> String {
         if let Some(founder) = clan.founder_memory {
             out.push_str(&format!("  │ Founder: agent {founder}\n"));
         }
+        out.push('\n');
+    }
+
+    out
+}
+
+// ── §10.9: Patronage Dashboard ───────────────────────────────────────
+
+/// §10.9: Render the patronage dashboard — patron-client relations with
+/// provision, loyalty, labor, political support, and satisfaction (the
+/// §10.9 economic safety net activated in Iteration 19).
+pub fn render_patronage_dashboard(registry: &PatronageRegistry) -> String {
+    let mut out = String::new();
+    out.push_str("╔══════════════════════════════════════════╗\n");
+    out.push_str("║  Patronage Dashboard                     ║\n");
+    out.push_str("╚══════════════════════════════════════════╝\n\n");
+
+    if registry.relations.is_empty() {
+        out.push_str("  (no patronage relations)\n");
+        return out;
+    }
+
+    for rel in &registry.relations {
+        if !rel.active {
+            continue;
+        }
+        out.push_str(&format!(
+            "  Agent {} → Client {}  [{} days]\n",
+            rel.patron, rel.client, rel.duration,
+        ));
+        out.push_str(&format!(
+            "  │ Provision: {:.3}  Loyalty: {:.3}  Satisfaction: {:.3}\n",
+            rel.provision.to_f64(),
+            rel.loyalty.to_f64(),
+            rel.satisfaction.to_f64(),
+        ));
+        out.push_str(&format!(
+            "  │ Labor: {:.3}  Polit. support: {:.3}  Dependence: {:.3}\n",
+            rel.labor_contribution.to_f64(),
+            rel.political_support.to_f64(),
+            rel.client_dependence.to_f64(),
+        ));
         out.push('\n');
     }
 

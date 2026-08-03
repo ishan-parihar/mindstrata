@@ -60,6 +60,10 @@ enum Commands {
         #[arg(long)]
         clans: bool,
 
+        /// Show patronage dashboard (patron-client relations, §10.9).
+        #[arg(long)]
+        patronage: bool,
+
         /// Show institutional records for the Council.
         #[arg(long)]
         records: bool,
@@ -120,6 +124,7 @@ fn main() {
             beliefs,
             factions,
             clans,
+            patronage,
             records,
             decisions,
             psychology,
@@ -257,6 +262,12 @@ fn main() {
             if clans {
                 println!();
                 println!("{}", mindstrata_tui::render_clan_dashboard(&sim.clan_registry));
+            }
+
+            // §10.9: Patronage dashboard
+            if patronage {
+                println!();
+                println!("{}", mindstrata_tui::render_patronage_dashboard(&sim.patronage_registry));
             }
 
             // §19.5.J: Institutional records
