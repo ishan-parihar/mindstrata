@@ -32,6 +32,8 @@ pub struct DecisionContext<'a> {
     pub total_grain: Fixed,
     /// World-level water scarcity (0 = abundant, 1 = depleted).
     pub total_water: Fixed,
+    /// Agent's spendable coin — gates Trade utility (broke agents can't buy).
+    pub coin: Fixed,
     /// Aggregate norm pressure from all active norms.
     pub norm_pressure: Fixed,
     // ── Emotional readings ──────────────────────────────────────────
@@ -290,6 +292,7 @@ pub fn compute_utility(
     total_water: Fixed,
     identity: &IdentityState,
     norm_pressure: Fixed,
+    coin: Fixed,
 ) -> Fixed {
     let mut utility = Fixed::ZERO;
 
@@ -340,13 +343,19 @@ pub fn compute_utility(
     };
     utility += normative;
 
-    // §13.3: Trade utility — agents benefit from trade when they have coin and pressing needs
+    // §13.3: Trade utility — agents trade when they have coin to spend and
+    // needs are pressing. Previously this bonus was tiny (ambition*0.3 +
+    // needs*0.4*0.5) so Trade never beat Eat/Drink/Work and the market had
+    // zero volume. Trade is now genuinely competitive — but ONLY for agents
+    // who can afford it: an agent with zero coin must not prefer buying
+    // over eating what it can forage.
     if action.kind == ActionKind::Trade {
-        // Trade is more useful when agent has coin to spend and needs are pressing
-        let coin_pressure = (needs.hunger + needs.thirst) * Fixed::from_f64(0.5);
-        let coin_utility = personality.ambition * Fixed::from_f64(0.3);
-        let need_pressure_bonus = coin_pressure * Fixed::from_f64(0.4);
-        utility += coin_utility + need_pressure_bonus;
+        if coin > Fixed::ZERO {
+            let coin_pressure = (needs.hunger + needs.thirst) * Fixed::from_f64(0.8);
+            let coin_utility = personality.ambition * Fixed::from_f64(0.4);
+            let need_pressure_bonus = coin_pressure * Fixed::from_f64(0.8);
+            utility += coin_utility + need_pressure_bonus;
+        }
     }
 
     utility -= action.energy_cost * Fixed::from_f64(0.5);
@@ -405,7 +414,7 @@ pub fn select_action(
 
     for kind in &candidates {
         let def = kind.definition();
-        let mut utility = compute_utility(&def, ctx.needs, ctx.personality, rng, ctx.total_grain, ctx.total_water, ctx.identity, ctx.norm_pressure);
+        let mut utility = compute_utility(&def, ctx.needs, ctx.personality, rng, ctx.total_grain, ctx.total_water, ctx.identity, ctx.norm_pressure, ctx.coin);
 
         for goal in ctx.active_goals {
             let goal_aligned = matches!(
@@ -485,6 +494,82 @@ mod tests {
     }
 
     #[test]
+    fn broke_hungry_agent_prefers_eat_over_trade() {
+        let mut rng = RngStreams::new(42);
+        let needs = NeedState {
+            hunger: Fixed::from_f64(0.9),
+            thirst: Fixed::from_f64(0.1),
+            ..Default::default()
+        };
+        let personality = make_personality();
+        let identity = IdentityState::default();
+        let dp = make_decision_policy();
+
+        let chosen = select_action(&DecisionContext {
+            needs: &needs,
+            personality: &personality,
+            active_goals: &[],
+            identity: &identity,
+            decision_policy: &dp,
+            total_grain: Fixed::from_f64(0.5),
+            total_water: Fixed::from_f64(0.5),
+            coin: Fixed::ZERO, // broke: cannot afford to buy at the market
+            norm_pressure: Fixed::ZERO,
+            anger: Fixed::ZERO,
+            fear: Fixed::ZERO,
+            joy: Fixed::ZERO,
+            sadness: Fixed::ZERO,
+            stress: Fixed::ZERO,
+            fairness: Fixed::ZERO,
+            authority: Fixed::ZERO,
+            care: Fixed::ZERO,
+            loyalty: Fixed::ZERO,
+        }, &mut rng);
+        assert!(chosen == ActionKind::Eat, "Broke hungry agent should Eat, got {chosen:?}");
+    }
+
+    #[test]
+    fn wealthy_hungry_agent_can_prefer_trade() {
+        let mut rng = RngStreams::new(42);
+        let needs = NeedState {
+            hunger: Fixed::from_f64(0.9),
+            thirst: Fixed::from_f64(0.1),
+            ..Default::default()
+        };
+        let personality = make_personality();
+        let identity = IdentityState::default();
+        let dp = make_decision_policy();
+
+        // High ambition + coin makes market purchase attractive.
+        let mut ambitious = personality;
+        ambitious.ambition = Fixed::from_f64(0.9);
+        let chosen = select_action(&DecisionContext {
+            needs: &needs,
+            personality: &ambitious,
+            active_goals: &[],
+            identity: &identity,
+            decision_policy: &dp,
+            total_grain: Fixed::from_f64(0.5),
+            total_water: Fixed::from_f64(0.5),
+            coin: Fixed::from_f64(20.0),
+            norm_pressure: Fixed::ZERO,
+            anger: Fixed::ZERO,
+            fear: Fixed::ZERO,
+            joy: Fixed::ZERO,
+            sadness: Fixed::ZERO,
+            stress: Fixed::ZERO,
+            fairness: Fixed::ZERO,
+            authority: Fixed::ZERO,
+            care: Fixed::ZERO,
+            loyalty: Fixed::ZERO,
+        }, &mut rng);
+        assert!(
+            chosen == ActionKind::Trade || chosen == ActionKind::Eat,
+            "Wealthy hungry agent should consider Trade, got {chosen:?}"
+        );
+    }
+
+    #[test]
     fn utility_prefers_food_when_hungry() {
         let mut rng = RngStreams::new(42);
         let needs = NeedState {
@@ -504,6 +589,7 @@ mod tests {
             decision_policy: &dp,
             total_grain: Fixed::from_f64(0.5),
             total_water: Fixed::from_f64(0.5),
+            coin: Fixed::ZERO, // broke: hungry agent must eat, not buy
             norm_pressure: Fixed::ZERO,
             anger: Fixed::ZERO,
             fear: Fixed::ZERO,
@@ -515,7 +601,7 @@ mod tests {
             care: Fixed::ZERO,
             loyalty: Fixed::ZERO,
         }, &mut rng);
-        assert!(eat_utility == ActionKind::Eat, "Hungry agent should prefer Eat, got {eat_utility:?}");
+        assert!(eat_utility == ActionKind::Eat, "Broke hungry agent should prefer Eat, got {eat_utility:?}");
     }
 
     #[test]
@@ -593,6 +679,7 @@ mod tests {
             decision_policy: &dp,
             total_grain: Fixed::from_f64(0.1),
             total_water: Fixed::from_f64(0.8),
+            coin: Fixed::ZERO, // broke: cannot afford market grain
             norm_pressure: Fixed::ZERO,
             anger: Fixed::ZERO,
             fear: Fixed::ZERO,
@@ -604,7 +691,7 @@ mod tests {
             care: Fixed::ZERO,
             loyalty: Fixed::ZERO,
         }, &mut rng);
-        assert!(scarce == ActionKind::Eat, "Under grain scarcity, hungry agent should Eat, got {scarce:?}");
+        assert!(scarce == ActionKind::Eat, "Under grain scarcity, broke hungry agent should Eat, got {scarce:?}");
     }
 
     #[test]
@@ -626,6 +713,7 @@ mod tests {
             decision_policy: &dp,
             total_grain: Fixed::from_f64(0.8),
             total_water: Fixed::from_f64(0.1),
+            coin: Fixed::from_f64(5.0),
             norm_pressure: Fixed::ZERO,
             anger: Fixed::ZERO,
             fear: Fixed::ZERO,
@@ -654,8 +742,8 @@ mod tests {
         };
         let no_identity = IdentityState::default();
 
-        let u_farmer = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &farmer_identity, Fixed::ZERO);
-        let u_none = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &no_identity, Fixed::ZERO);
+        let u_farmer = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &farmer_identity, Fixed::ZERO, Fixed::ZERO);
+        let u_none = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &no_identity, Fixed::ZERO, Fixed::ZERO);
 
         assert!(u_farmer > u_none, "Farmer identity should increase Work utility");
     }
@@ -668,8 +756,8 @@ mod tests {
         let identity = IdentityState::default();
 
         // Negative pressure = compliant agent (compute_pressure returns negative for compliant)
-        let no_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO);
-        let compliant_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, -Fixed::from_f64(0.5));
+        let no_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO, Fixed::ZERO);
+        let compliant_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, -Fixed::from_f64(0.5), Fixed::ZERO);
 
         assert!(compliant_pressure > no_pressure, "Compliant (negative) pressure should increase Work utility");
     }
@@ -682,8 +770,8 @@ mod tests {
         let identity = IdentityState::default();
 
         // Positive pressure = violating agent
-        let no_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO);
-        let violating_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::from_f64(0.5));
+        let no_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO, Fixed::ZERO);
+        let violating_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::from_f64(0.5), Fixed::ZERO);
 
         assert!(violating_pressure < no_pressure, "Violating (positive) pressure should decrease Work utility");
     }
@@ -696,8 +784,8 @@ mod tests {
         let identity = IdentityState::default();
 
         // Positive pressure = violating agent prefers idle
-        let no_pressure = compute_utility(&ActionKind::Idle.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO);
-        let violating_pressure = compute_utility(&ActionKind::Idle.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::from_f64(0.5));
+        let no_pressure = compute_utility(&ActionKind::Idle.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO, Fixed::ZERO);
+        let violating_pressure = compute_utility(&ActionKind::Idle.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::from_f64(0.5), Fixed::ZERO);
 
         assert!(violating_pressure > no_pressure, "Violating (positive) pressure should increase Idle utility");
     }

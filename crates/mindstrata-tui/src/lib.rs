@@ -376,11 +376,11 @@ pub fn render_market_dashboard(market: &MarketState) -> String {
          Inequality (Gini): {:.3}\n\
          Avg Wealth:        {:.1}\n\
          Median Wealth:     {:.1}\n\
-         Trade Volume:      {:.1}\n",
+         Trades completed:  {}\n",
         market.inequality.to_f64(),
         market.avg_wealth.to_f64(),
         market.median_wealth.to_f64(),
-        market.volume_this_tick.to_f64(),
+        market.total_trades,
     ));
 
     out

@@ -30,6 +30,12 @@ pub struct PriceTracker {
     pub price_floor: Fixed,
     /// Maximum price ceiling (prevents infinite prices).
     pub price_ceiling: Fixed,
+    /// Stable price anchor — the price a balanced market (demand == supply)
+    /// converges toward. Previously the target was `price * ratio`, a
+    /// degenerate fixed point that decayed to the floor whenever demand <
+    /// supply and to the ceiling whenever demand > supply, so prices never
+    /// hovered at intermediate values.
+    pub anchor_price: Fixed,
     /// Recent transaction prices for trend analysis.
     pub recent_prices: Vec<Fixed>,
     /// Tick of last price update.
@@ -45,6 +51,7 @@ impl Default for PriceTracker {
             elasticity: Fixed::from_f64(0.3),
             price_floor: Fixed::from_f64(1.0),
             price_ceiling: Fixed::from_f64(50.0),
+            anchor_price: Fixed::from_f64(5.0),
             recent_prices: Vec::new(),
             last_update_tick: 0,
         }
@@ -56,6 +63,7 @@ impl PriceTracker {
     pub fn new(initial_price: Fixed) -> Self {
         Self {
             price: initial_price,
+            anchor_price: initial_price,
             ..Default::default()
         }
     }
@@ -82,8 +90,10 @@ impl PriceTracker {
             params.market_no_supply_ratio // no supply → high ratio
         };
 
-        // Price change proportional to imbalance
-        let target_price = self.price * supply_demand_ratio;
+        // Price converges toward `anchor * ratio` (a stable fixed point), not
+        // `price * ratio` (degenerate — decayed to floor/ceiling whenever the
+        // ratio departed from 1.0, making prices inert at the bounds).
+        let target_price = self.anchor_price * supply_demand_ratio;
         let price_delta = (target_price - self.price) * self.elasticity;
         self.price = (self.price + price_delta)
             .max(self.price_floor)
@@ -137,6 +147,10 @@ pub struct MarketState {
     pub recent_volume: Vec<Fixed>,
     /// Number of trades this tick.
     pub trade_count: u32,
+    /// Cumulative number of completed trades over the whole run.
+    /// `trade_count` is reset every tick, so dashboards that read it see 0
+    /// even when the market is active; this counter never resets.
+    pub total_trades: u64,
     /// Gini coefficient (0 = perfect equality, 1 = perfect inequality).
     pub inequality: Fixed,
     /// Average wealth across all agents.
@@ -154,6 +168,7 @@ impl Default for MarketState {
             volume_this_tick: Fixed::ZERO,
             recent_volume: Vec::new(),
             trade_count: 0,
+            total_trades: 0,
             inequality: Fixed::ZERO,
             avg_wealth: Fixed::ZERO,
             median_wealth: Fixed::ZERO,
@@ -238,6 +253,7 @@ pub fn execute_trade(
     // Update market volume
     market.volume_this_tick += quantity;
     market.trade_count += 1;
+    market.total_trades = market.total_trades.saturating_add(1);
 
     TradeResult::Success {
         resource_id,
@@ -283,6 +299,7 @@ pub fn direct_trade(
 
     market.volume_this_tick += quantity;
     market.trade_count += 1;
+    market.total_trades = market.total_trades.saturating_add(1);
 
     TradeResult::Success {
         resource_id,
@@ -312,9 +329,14 @@ pub fn compute_demand(agents: &[(NeedState, WealthState)], resource_id: u64, par
     agents
         .iter()
         .fold(Fixed::ZERO, |acc, (needs, wealth)| {
+            // Linear need pressure scaled by demand weight. The weight is set
+            // to the expected per-agent consumption (EXPECTED_GRAIN_PER_AGENT
+            // ≈ 10), so demand is the same order of magnitude as aggregate
+            // supply — without this, hunger²·2 was ~2 units vs ~100 units of
+            // supply, pinning prices at the floor forever.
             let need_pressure = match resource_id {
-                0 => needs.hunger * needs.hunger * params.market_demand_weight, // grain
-                1 => needs.thirst * needs.thirst * params.market_demand_weight, // water
+                0 => needs.hunger * params.market_demand_weight, // grain
+                1 => needs.thirst * params.market_demand_weight, // water
                 _ => Fixed::ZERO,
             };
             // Only demand if agent can afford something

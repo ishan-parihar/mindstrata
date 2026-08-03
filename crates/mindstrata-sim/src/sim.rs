@@ -1596,6 +1596,7 @@ impl Simulation {
                                 decision_policy: &self.agents[i].decision_policy,
                                 total_grain,
                                 total_water,
+                                coin: self.agents[i].wealth.coin,
                                 norm_pressure: adjusted_pressure,
                                 anger: emotions[i].anger,
                                 fear: emotions[i].fear,
@@ -4506,8 +4507,11 @@ impl Simulation {
                     let productivity = (self.agents[*agent_idx].personality.conscientiousness * Fixed::from_f64(0.05) + skill_bonus).clamp_01();
                     if let Some(farm_idx) = self.world.best_farm_for_work() {
                         self.world.produce_resource(farm_idx, GRAIN_RESOURCE_ID, productivity);
-                        // §13.3: Workers earn coin proportional to productivity
-                        let wage = productivity * self.market.price(GRAIN_RESOURCE_ID) * Fixed::from_f64(0.3);
+                        // §13.3: Workers earn coin proportional to productivity.
+                        // Wage must cover the cost of eating (0.1 × price per
+                        // Eat); the old ×0.3 factor left agents with a net coin
+                        // drain (median wealth collapsed to ~0.1, killing trade).
+                        let wage = productivity * self.market.price(GRAIN_RESOURCE_ID);
                         self.agents[*agent_idx].wealth.coin += wage;
 
                         self.journal.record(tick_u64, agent_id, JournalEntryKind::Worked { productivity: productivity.to_f64() });
@@ -4524,16 +4528,16 @@ impl Simulation {
                     self.journal.record(tick_u64, agent_id, JournalEntryKind::Worshiped);
                     true
                 }                    ActionKind::Trade => {
-                    // §13.3: Agent-to-agent trade — find a nearby seller at a market site
+                    // §13.3: Agent-to-agent trade — find a counter-party to trade with.
+                    // Trade happens at the settlement Market: any other agent within
+                    // a generous radius of the market square counts as a partner.
+                    // The old `distance <= 3` filter made trade effectively
+                    // impossible (agents rarely stood that close), so volume was 0.
                     let buyer_coin = self.agents[*agent_idx].wealth.coin;
-                    // Find a nearby counter-party to trade with (any neighbor, not
-                    // only farm-owning ones — home sites are always Houses, so the
-                    // old `home_site.kind == Farm` filter made trade permanently
-                    // impossible).
                     let seller_info = self.agents.iter().enumerate()
                         .find(|(j, a)| {
                             *j != *agent_idx
-                                && self.agents[*agent_idx].position.manhattan_distance(&a.position) <= 3
+                                && self.agents[*agent_idx].position.manhattan_distance(&a.position) <= 12
                         })
                         .map(|(j, _)| j);
                     // Grain source: an accessible farm with grain (prefer the
@@ -4571,6 +4575,7 @@ impl Simulation {
                                 // inequality metrics reflect real trade activity.
                                 self.market.volume_this_tick = (self.market.volume_this_tick + taken).max(Fixed::ZERO);
                                 self.market.trade_count = self.market.trade_count.saturating_add(1);
+                                self.market.total_trades = self.market.total_trades.saturating_add(1);
                                 self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "grain_via_trade".into(), amount: taken.to_f64() });
                                 // §19.5.J: Record relationship trace — trade builds trust
                                 if let Some(rel) = self.relationships.iter_mut()

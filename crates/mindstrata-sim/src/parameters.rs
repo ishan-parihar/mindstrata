@@ -176,7 +176,9 @@ pub struct SimParameters {
     pub market_no_supply_ratio: Fixed,
     /// Trust discount multiplier for direct trades (0.2).
     pub market_trust_discount: Fixed,
-    /// Demand weight for need pressure calculation (2.0).
+    /// Demand weight for need pressure calculation (10.0 ≈ expected per-agent
+    /// grain consumption, matching EXPECTED_GRAIN_PER_AGENT). This makes
+    /// demand the same order of magnitude as supply so prices can move.
     pub market_demand_weight: Fixed,
     /// Purchasing power divisor (10.0 = coin / 10 = normalized power).
     pub market_purchasing_power_divisor: Fixed,
@@ -378,7 +380,7 @@ impl Default for SimParameters {
             market_price_smoothing: Fixed::from_f64(0.1),
             market_no_supply_ratio: Fixed::from_f64(2.0),
             market_trust_discount: Fixed::from_f64(0.2),
-            market_demand_weight: Fixed::from_f64(2.0),
+            market_demand_weight: Fixed::from_f64(10.0),
             market_purchasing_power_divisor: Fixed::from_f64(10.0),
             market_scarcity_extreme: Fixed::from_f64(2.0),
             market_scarcity_abundance: Fixed::from_f64(0.5),
