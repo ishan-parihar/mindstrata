@@ -1303,6 +1303,12 @@ impl Simulation {
             .map(|a| a.body.fatigue)
             .fold(Fixed::ZERO, |acc, f| acc + f)
             * Fixed::from_f64(1.0 / n_agents as f64);
+        // Dissolution carries member fallout: when a cult dissolves, its
+        // former members lose the belonging that was satisfying their meaning
+        // need (the deficit rebounds into a crisis) and their cult-entrenched
+        // beliefs partially decay. This completes the §12.4 lifecycle:
+        // formation → recruitment → entrenchment → dissolution → fallout.
+        let mut former_members: Vec<usize> = Vec::new();
         for cult in &mut self.cult_registry.cults {
             // leader_competence: no competence model is wired yet, so the
             // leader-failure branch is inert; dissolution is driven by
@@ -1311,6 +1317,26 @@ impl Simulation {
                 && cult.should_dissolve(Fixed::from_f64(0.5), legitimacy, avg_fatigue)
             {
                 cult.active = false;
+                former_members.extend(
+                    std::iter::once(&cult.charismatic_leader)
+                        .chain(cult.members.iter())
+                        .copied(),
+                );
+            }
+        }
+        for i in former_members {
+            if i >= self.agents.len() {
+                continue;
+            }
+            let agent = &mut self.agents[i];
+            // Meaning crisis rebound: belonging was fulfilling the need.
+            agent.needs.meaning =
+                (agent.needs.meaning * Fixed::from_f64(0.5) + Fixed::from_f64(0.5)).clamp_01();
+            // Cult-entrenched beliefs decay once the narrative grip is gone.
+            if let Some(hot) = agent.beliefs.iter_mut().max_by_key(|b| b.emotional_charge) {
+                hot.confidence = (hot.confidence - Fixed::from_f64(0.05)).max(Fixed::ZERO);
+                hot.emotional_charge =
+                    (hot.emotional_charge - Fixed::from_f64(0.05)).max(Fixed::ZERO);
             }
         }
 
@@ -6491,5 +6517,75 @@ mod tests {
             "cult should recruit meaning-starved agents"
         );
         assert!(after_recruit <= 6, "membership should respect the cap");
+    }
+
+    /// §12.4: When a cult dissolves, former members suffer a meaning-crisis
+    /// rebound and their cult-entrenched beliefs decay — the lifecycle's
+    /// closing act.
+    #[test]
+    fn cult_dissolution_causes_member_fallout() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        for inst in &mut sim.institutions {
+            inst.legitimacy = Fixed::from_f64(0.2);
+        }
+        for agent in &mut sim.agents {
+            agent.needs.meaning = Fixed::from_f64(0.9);
+        }
+        sim.tick_cults(3000); // forms the cult
+        let member = sim.cult_registry.cults[0].members[0];
+        // Entrench the member first (dynamics raises confidence/charge).
+        sim.tick_cult_dynamics();
+        let entrench_conf: Fixed = sim.agents[member]
+            .beliefs
+            .iter()
+            .fold(Fixed::ZERO, |acc, b| acc + b.confidence);
+        let entrench_charge: Fixed = sim.agents[member]
+            .beliefs
+            .iter()
+            .fold(Fixed::ZERO, |acc, b| acc + b.emotional_charge);
+        let pre_fallout_meaning = sim.agents[member].needs.meaning;
+        // Force dissolution: high institutional legitimacy + low isolation.
+        for inst in &mut sim.institutions {
+            inst.legitimacy = Fixed::from_f64(0.9);
+        }
+        if let Some(cult) = sim.cult_registry.cults.first_mut() {
+            cult.isolation = Fixed::from_f64(0.1);
+            cult.dependence = Fixed::from_f64(0.3); // keep leader-failure inert
+        }
+        sim.tick_cults(6000); // cooldown passed; dissolution check runs
+        assert!(
+            !sim.cult_registry.cults[0].active,
+            "cult should dissolve under high legitimacy + low isolation"
+        );
+        // Fallout: meaning rebounds into crisis, entrenched beliefs decay.
+        assert!(
+            sim.agents[member].needs.meaning > pre_fallout_meaning,
+            "meaning need should rebound after the cult dissolves"
+        );
+        let post_conf: Fixed = sim.agents[member]
+            .beliefs
+            .iter()
+            .fold(Fixed::ZERO, |acc, b| acc + b.confidence);
+        let post_charge: Fixed = sim.agents[member]
+            .beliefs
+            .iter()
+            .fold(Fixed::ZERO, |acc, b| acc + b.emotional_charge);
+        assert!(
+            post_conf <= entrench_conf,
+            "entrenched beliefs should decay after dissolution"
+        );
+        assert!(
+            post_charge <= entrench_charge,
+            "emotional charge should decay after dissolution"
+        );
     }
 }
