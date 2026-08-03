@@ -56,6 +56,10 @@ enum Commands {
         #[arg(long)]
         factions: bool,
 
+        /// Show clan dashboard (members, alliances, enmities, §10.8).
+        #[arg(long)]
+        clans: bool,
+
         /// Show institutional records for the Council.
         #[arg(long)]
         records: bool,
@@ -115,6 +119,7 @@ fn main() {
             market,
             beliefs,
             factions,
+            clans,
             records,
             decisions,
             psychology,
@@ -246,6 +251,12 @@ fn main() {
             if factions {
                 println!();
                 println!("{}", mindstrata_tui::render_faction_dashboard(&sim.institutions));
+            }
+
+            // §10.8: Clan dashboard
+            if clans {
+                println!();
+                println!("{}", mindstrata_tui::render_clan_dashboard(&sim.clan_registry));
             }
 
             // §19.5.J: Institutional records

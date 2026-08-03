@@ -11,6 +11,7 @@ use mindstrata_sim::person::{Belief, Relationship};
 use mindstrata_sim::market::MarketState;
 use mindstrata_sim::psychology::attachment::{AttachmentStyle, CaregivingStyle};
 use mindstrata_sim::institutions::{Institution, InstitutionalRecord};
+use mindstrata_sim::social::clan::ClanRegistry;
 use mindstrata_sim::provenance::CausalProvenance;
 
 /// §6: Agent position marker for map rendering.
@@ -475,6 +476,59 @@ pub fn render_faction_dashboard(institutions: &[Institution]) -> String {
             inst.collective.morale.to_f64(),
             inst.enforcement_capacity.to_f64(),
         ));
+    }
+
+    out
+}
+
+// ── §10.8: Clan Dashboard ───────────────────────────────────────────
+
+/// §10.8: Render the clan dashboard — membership, prestige, cohesion,
+/// grievance, and the alliance/enmity network (forged by marriages in
+/// tick_marriage_formation and by feuds in tick_social_cluster).
+pub fn render_clan_dashboard(clans: &ClanRegistry) -> String {
+    let mut out = String::new();
+    out.push_str("╔══════════════════════════════════════════╗\n");
+    out.push_str("║  Clan Dashboard                          ║\n");
+    out.push_str("╚══════════════════════════════════════════╝\n\n");
+
+    if clans.clans.is_empty() {
+        out.push_str("  (no clans)\n");
+        return out;
+    }
+
+    for clan in &clans.clans {
+        out.push_str(&format!(
+            "  Clan {} — {} members\n",
+            clan.id,
+            clan.core_households.len(),
+        ));
+        out.push_str(&format!(
+            "  │ Prestige: {:.3}  Cohesion: {:.3}  Grievance: {:.3}\n",
+            clan.prestige.to_f64(),
+            clan.cohesion.to_f64(),
+            clan.grievance.to_f64(),
+        ));
+        if !clan.enemies.is_empty() {
+            let enemies: Vec<String> = clan
+                .enemies
+                .iter()
+                .map(|e| format!("Clan {e}"))
+                .collect();
+            out.push_str(&format!("  │ ⚔ Enemies: {}\n", enemies.join(", ")));
+        } else {
+            out.push_str("  │ ⚔ Enemies: none\n");
+        }
+        if !clan.allies.is_empty() {
+            let allies: Vec<String> = clan.allies.iter().map(|a| format!("Clan {a}")).collect();
+            out.push_str(&format!("  │ 🤝 Allies:  {}\n", allies.join(", ")));
+        } else {
+            out.push_str("  │ 🤝 Allies:  none\n");
+        }
+        if let Some(founder) = clan.founder_memory {
+            out.push_str(&format!("  │ Founder: agent {founder}\n"));
+        }
+        out.push('\n');
     }
 
     out
