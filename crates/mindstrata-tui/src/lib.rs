@@ -9,6 +9,7 @@ use mindstrata_sim::world::{World, Terrain, SiteKind};
 use mindstrata_sim::sim::AgentSummary;
 use mindstrata_sim::person::{Belief, Relationship};
 use mindstrata_sim::market::MarketState;
+use mindstrata_sim::psychology::attachment::{AttachmentStyle, CaregivingStyle};
 use mindstrata_sim::institutions::{Institution, InstitutionalRecord};
 use mindstrata_sim::provenance::CausalProvenance;
 
@@ -114,6 +115,26 @@ pub fn render_event_log(events: &[SimEvent], n: usize) -> String {
     render_event_log_detailed(events, n)
 }
 
+/// §8.1.14: Human-readable label for an attachment style.
+fn attachment_style_name(style: AttachmentStyle) -> &'static str {
+    match style {
+        AttachmentStyle::Secure => "Secure",
+        AttachmentStyle::Anxious => "Anxious",
+        AttachmentStyle::Avoidant => "Avoidant",
+        AttachmentStyle::Disorganized => "Disorganized",
+    }
+}
+
+/// §8.1.14: Human-readable label for a caregiving style.
+fn caregiving_style_name(style: CaregivingStyle) -> &'static str {
+    match style {
+        CaregivingStyle::Sensitive => "Sensitive",
+        CaregivingStyle::Intrusive => "Intrusive",
+        CaregivingStyle::Dismissive => "Dismissive",
+        CaregivingStyle::Frightening => "Frightening",
+    }
+}
+
 /// §17.1: Render agent inspector — detailed single-agent view.
 pub fn render_agent_inspector(summary: &AgentSummary, relationships: &[Relationship]) -> String {
     let agent_id = AgentId::new(summary.index as u64);
@@ -145,6 +166,40 @@ pub fn render_agent_inspector(summary: &AgentSummary, relationships: &[Relations
         summary.current_action,
         if summary.has_intention { "active" } else { "none" },
         summary.attention_budget.to_f64(),
+    ));
+
+    // Show attachment system state (§8.1.14) — style, caregiving, security, anxiety,
+    // avoidance, protest threshold, soothing receptivity, separation distress.
+    let style_str = attachment_style_name(summary.attachment_style);
+    let caregiving_str = caregiving_style_name(summary.attachment_caregiving_style);
+    let sec_bar_len = (summary.attachment_security.to_f64() * 20.0) as usize;
+    let sec_bar: String = "█".repeat(sec_bar_len.min(20)) + &"░".repeat(20 - sec_bar_len.min(20));
+    let anx_bar_len = (summary.attachment_anxiety.to_f64() * 20.0) as usize;
+    let anx_bar: String = "█".repeat(anx_bar_len.min(20)) + &"░".repeat(20 - anx_bar_len.min(20));
+    let avo_bar_len = (summary.attachment_avoidance.to_f64() * 20.0) as usize;
+    let avo_bar: String = "█".repeat(avo_bar_len.min(20)) + &"░".repeat(20 - avo_bar_len.min(20));
+    let prot_bar_len = (summary.attachment_protest_threshold.to_f64() * 20.0) as usize;
+    let prot_bar: String = "█".repeat(prot_bar_len.min(20)) + &"░".repeat(20 - prot_bar_len.min(20));
+    let sooth_bar_len = (summary.attachment_soothing_receptivity.to_f64() * 20.0) as usize;
+    let sooth_bar: String = "█".repeat(sooth_bar_len.min(20)) + &"░".repeat(20 - sooth_bar_len.min(20));
+    let dis_bar_len = (summary.attachment_separation_distress.to_f64() * 20.0) as usize;
+    let dis_bar: String = "█".repeat(dis_bar_len.min(20)) + &"░".repeat(20 - dis_bar_len.min(20));
+    out.push_str(&format!(
+        "\n── Attachment ──\n\
+         Style:      {style_str}\n\
+         Caregiving: {caregiving_str}\n\
+         Security:   {:5.2} [{}]\n\
+         Anxiety:    {:5.2} [{}]\n\
+         Avoidance:  {:5.2} [{}]\n\
+         Protest thr:{:5.2} [{}]\n\
+         Soothing:   {:5.2} [{}]\n\
+         Sep. dist:  {:5.2} [{}]\n",
+        summary.attachment_security.to_f64(), sec_bar,
+        summary.attachment_anxiety.to_f64(), anx_bar,
+        summary.attachment_avoidance.to_f64(), avo_bar,
+        summary.attachment_protest_threshold.to_f64(), prot_bar,
+        summary.attachment_soothing_receptivity.to_f64(), sooth_bar,
+        summary.attachment_separation_distress.to_f64(), dis_bar,
     ));
 
     // Show relationships for this agent
@@ -611,7 +666,6 @@ pub fn render_psychology_inspector(
     agent: &mindstrata_sim::sim::AgentBundle,
 ) -> String {
     use mindstrata_sim::person::{IdentityKind, GoalSource};
-    use mindstrata_sim::psychology::attachment::AttachmentStyle;
     let mut out = String::new();
     out.push_str("╔══════════════════════════════════════════════════════════╗\n");
     out.push_str("║  Psychology Inspector — Full Cognitive Pipeline          ║\n");
@@ -741,16 +795,16 @@ pub fn render_psychology_inspector(
 
     // ── Attachment System (§8.1.14) ──
     out.push_str("── §8.1.14: Attachment System ──\n\n");
-    let style_str = match agent.attachment.style {
-        AttachmentStyle::Secure => "Secure",
-        AttachmentStyle::Anxious => "Anxious",
-        AttachmentStyle::Avoidant => "Avoidant",
-        AttachmentStyle::Disorganized => "Disorganized",
-    };
+    let style_str = attachment_style_name(agent.attachment.style);
+    let caregiving_str = caregiving_style_name(agent.attachment.caregiving_style);
     out.push_str(&format!("  {:<14} {style_str}\n", "Style"));
+    out.push_str(&format!("  {:<14} {caregiving_str}\n", "Caregiving"));
     let att_rows = [
         ("Security", agent.attachment.security),
         ("Anxiety", agent.attachment.anxiety),
+        ("Avoidance", agent.attachment.avoidance),
+        ("Protest thr.", agent.attachment.protest_threshold),
+        ("Soothing", agent.attachment.soothing_receptivity),
         ("Sep. distress", agent.attachment.separation_distress),
     ];
     for (name, val) in &att_rows {

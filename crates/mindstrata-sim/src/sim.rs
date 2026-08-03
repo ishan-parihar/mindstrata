@@ -25,6 +25,7 @@ use crate::biology::EmbodiedState;
 use crate::psychology::InteroceptiveState;
 use crate::psychology::SelfModel;
 use crate::psychology::AttachmentSystem;
+use crate::psychology::attachment::{AttachmentStyle, CaregivingStyle};
 use crate::psychology::EmotionRegulationState;
 use crate::psychology::MoralCognition;
 use crate::psychology::ProspectionState;
@@ -2631,6 +2632,14 @@ impl Simulation {
                 current_action: format!("{:?}", a.current_action),
                 attention_budget: a.attention.budget,
                 has_intention: a.intention.is_some(),
+                attachment_style: a.attachment.style,
+                attachment_security: a.attachment.security,
+                attachment_anxiety: a.attachment.anxiety,
+                attachment_avoidance: a.attachment.avoidance,
+                attachment_protest_threshold: a.attachment.protest_threshold,
+                attachment_soothing_receptivity: a.attachment.soothing_receptivity,
+                attachment_separation_distress: a.attachment.separation_distress,
+                attachment_caregiving_style: a.attachment.caregiving_style,
             })
             .collect()
     }
@@ -5548,4 +5557,20 @@ pub struct AgentSummary {
     pub current_action: String,
     pub attention_budget: Fixed,
     pub has_intention: bool,
+    /// Architecture-plan-2 §8.1.14: Attachment style for the live agent view.
+    pub attachment_style: AttachmentStyle,
+    /// Architecture-plan-2 §8.1.14: Attachment security (0 = insecure, 1 = secure).
+    pub attachment_security: Fixed,
+    /// Architecture-plan-2 §8.1.14: Attachment anxiety.
+    pub attachment_anxiety: Fixed,
+    /// Architecture-plan-2 §8.1.14: Attachment avoidance.
+    pub attachment_avoidance: Fixed,
+    /// Architecture-plan-2 §8.1.14: Protest-behavior threshold.
+    pub attachment_protest_threshold: Fixed,
+    /// Architecture-plan-2 §8.1.14: Receptivity to soothing from others.
+    pub attachment_soothing_receptivity: Fixed,
+    /// Architecture-plan-2 §8.1.14: Separation distress.
+    pub attachment_separation_distress: Fixed,
+    /// Architecture-plan-2 §8.1.14: Caregiving style for the live agent view.
+    pub attachment_caregiving_style: CaregivingStyle,
 }
