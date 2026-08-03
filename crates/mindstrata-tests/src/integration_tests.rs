@@ -1666,6 +1666,59 @@ fn snapshot_restore_reseeds_rituals_and_campaigns() {
     }
 }
 
+/// §10.8/§13.5/§13: The collective-structure registries (clans, collective
+/// memory, noosphere) are not serialized, so both `populate()` (fresh runs)
+/// and `from_snapshot()` (replays) must seed them identically.
+#[test]
+fn collective_structures_seeded_in_fresh_and_restored_runs() {
+    let mut sim = crate::test_helpers::run_sim(42, 1000);
+    let fresh_clans = sim.clan_registry.clans.len();
+    let fresh_memories: usize = sim
+        .collective_memory_registry
+        .entries
+        .iter()
+        .map(|e| e.memories.len())
+        .sum();
+    let fresh_nodes = sim.noospheric_field.nodes.len();
+
+    assert!(
+        fresh_clans >= 2,
+        "clans should be seeded from home-sites, got {fresh_clans}"
+    );
+    assert!(
+        fresh_memories >= 1,
+        "village collective memory should be seeded, got {fresh_memories}"
+    );
+    assert!(
+        fresh_nodes >= 5,
+        "noosphere should mirror the founding memes, got {fresh_nodes}"
+    );
+
+    let snap = sim.capture_snapshot();
+    let restored = Simulation::from_snapshot(snap);
+    assert_eq!(restored.clan_registry.clans.len(), fresh_clans);
+    let restored_memories: usize = restored
+        .collective_memory_registry
+        .entries
+        .iter()
+        .map(|e| e.memories.len())
+        .sum();
+    assert_eq!(restored_memories, fresh_memories);
+    assert_eq!(restored.noospheric_field.nodes.len(), fresh_nodes);
+}
+
+/// §12.4: Cult formation must not fire under a healthy, legitimate regime —
+/// the emergence trigger (low legitimacy + meaning crisis) stays dormant.
+#[test]
+fn cults_do_not_form_under_healthy_institutions() {
+    let sim = crate::test_helpers::run_sim(42, 2000);
+    let active_cults = sim.cult_registry.cults.iter().filter(|c| c.active).count();
+    assert_eq!(
+        active_cults, 0,
+        "no cults should form while institutions stay legitimate"
+    );
+}
+
 
 
 

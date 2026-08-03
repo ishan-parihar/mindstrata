@@ -77,6 +77,9 @@ pub struct Snapshot {
     pub last_revolution_tick: u64,
     /// §7.2: Last moral panic tick (cooldown tracking).
     pub last_moral_panic_tick: u64,
+    /// §12.4: Last cult formation tick (cooldown tracking).
+    #[serde(default)]
+    pub last_cult_formation_tick: u64,
     /// §4.4: Black market state.
     pub black_market: BlackMarketState,
     /// §19.5.E: Site work ticks.
@@ -116,6 +119,8 @@ pub struct CaptureContext<'a> {
     pub last_revolution_tick: u64,
     /// §7.2: Last moral panic tick (cooldown tracking).
     pub last_moral_panic_tick: u64,
+    /// §12.4: Last cult formation tick (cooldown tracking).
+    pub last_cult_formation_tick: u64,
     pub black_market: &'a BlackMarketState,
     pub site_work_ticks: &'a [u32],
     pub group_registry: &'a GroupRegistry,
@@ -149,6 +154,7 @@ impl Snapshot {
             metric_history: ctx.metric_history.to_vec(),
             last_revolution_tick: ctx.last_revolution_tick,
             last_moral_panic_tick: ctx.last_moral_panic_tick,
+            last_cult_formation_tick: ctx.last_cult_formation_tick,
             black_market: ctx.black_market.clone(),
             site_work_ticks: ctx.site_work_ticks.to_vec(),
             group_registry: ctx.group_registry.clone(),
@@ -345,6 +351,7 @@ mod tests {
             metric_history: vec![],
             last_revolution_tick: 0,
             last_moral_panic_tick: 0,
+            last_cult_formation_tick: 0,
             black_market: crate::black_market::BlackMarketState::default(),
             site_work_ticks: vec![],
             group_registry: crate::social::group_formation::GroupRegistry::new(),

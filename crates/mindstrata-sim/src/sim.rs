@@ -293,6 +293,8 @@ pub struct Simulation {
     /// §7.2: Tick when the last moral panic fired — enforces a cooldown so a
     /// saturated belief-charge loop cannot hammer legitimacy every tick.
     last_moral_panic_tick: u64,
+    /// §12.4: Tick when the last cult formed — enforces a formation cooldown.
+    last_cult_formation_tick: u64,
     /// §4.4: Black market state — activates under scarcity with weak enforcement.
     pub black_market: crate::black_market::BlackMarketState,
     /// Architecture-plan-2 §10.6: Kinship graph — biological, marital, ritual kin.
@@ -398,6 +400,7 @@ impl Simulation {
             metric_history: Vec::new(),
             last_revolution_tick: 0,
             last_moral_panic_tick: 0,
+            last_cult_formation_tick: 0,
             black_market: crate::black_market::BlackMarketState::default(),
             kinship_graph: crate::social::kinship::KinshipGraph::default(),
             households: Vec::new(),
@@ -504,6 +507,7 @@ impl Simulation {
             metric_history: snapshot.metric_history,
             last_revolution_tick: snapshot.last_revolution_tick,
             last_moral_panic_tick: snapshot.last_moral_panic_tick,
+            last_cult_formation_tick: snapshot.last_cult_formation_tick,
             black_market: snapshot.black_market,
             kinship_graph: crate::social::kinship::KinshipGraph::default(),
             households: Vec::new(),
@@ -535,6 +539,12 @@ impl Simulation {
         // serialized; `populate()` and `from_snapshot()` must produce
         // identical registries so replays match fresh runs).
         sim.seed_initial_rituals_and_campaigns();
+        // §10.8/§13.5/§13: Re-seed the collective-structure registries
+        // (clans from agent home-sites, village collective memory, meme
+        // concept nodes) so replays match fresh runs.
+        sim.seed_initial_clans();
+        sim.seed_initial_collective_memory();
+        sim.seed_initial_noosphere();
         sim
     }
 
@@ -562,6 +572,7 @@ impl Simulation {
             metric_history: &self.metric_history,
             last_revolution_tick: self.last_revolution_tick,
             last_moral_panic_tick: self.last_moral_panic_tick,
+            last_cult_formation_tick: self.last_cult_formation_tick,
             black_market: &self.black_market,
             site_work_ticks: &self.site_work_ticks,
             group_registry: &self.group_registry,
@@ -1023,6 +1034,13 @@ impl Simulation {
         // early-returned and neither system ever ran — same dead-end class as
         // the empty meme registry fixed in Iteration 2.
         self.seed_initial_rituals_and_campaigns();
+        // §10.8/§13.5/§13: Seed the collective-structure registries (clans
+        // from agent home-sites, the village's founding collective memory,
+        // and noospheric concept nodes mirroring the founding memes) so
+        // fresh runs match replayed runs from snapshots.
+        self.seed_initial_clans();
+        self.seed_initial_collective_memory();
+        self.seed_initial_noosphere();
     }
 
     /// Seed the village's recurring rituals and founding propaganda campaigns.
@@ -1134,6 +1152,242 @@ impl Simulation {
             180, // ~half year (daily tick)
             0,
         ));
+    }
+
+    /// §10.8: Seed the village's founding clans from agent home-sites.
+    ///
+    /// Households are not serialized in snapshots, so this cannot derive
+    /// from `self.households` — it partitions agents by `home_site` parity
+    /// instead. `home_site` IS serialized and identical at the same tick in
+    /// fresh and replayed runs, so `populate()` and `from_snapshot()`
+    /// produce identical registries (same pattern as `seed_initial_memes`).
+    /// Clans are currently observational: `clan_registry.daily_update()`
+    /// decays prestige/cohesion/grievance and `clan_count` is exported.
+    fn seed_initial_clans(&mut self) {
+        use crate::social::clan::Clan;
+        if !self.clan_registry.clans.is_empty() {
+            return;
+        }
+        const CLAN_COUNT: usize = 2;
+        let mut buckets: Vec<Vec<usize>> = vec![Vec::new(); CLAN_COUNT];
+        for (i, agent) in self.agents.iter().enumerate() {
+            let site = agent.home_site.unwrap_or(i);
+            buckets[site % CLAN_COUNT].push(i);
+        }
+        for members in buckets.into_iter().filter(|m| !m.is_empty()) {
+            let clan = Clan::new(
+                self.clan_registry.clans.len(),
+                Some(members[0]), // founder — first member in agent order
+                None,
+                members,
+                0, // formed_tick — identical across new()/from_snapshot()
+            );
+            self.clan_registry.register(clan);
+        }
+    }
+
+    /// §13.5: Seed the village's founding collective memory (group 0).
+    ///
+    /// Deterministic (hardcoded narratives, created at tick 0) so fresh and
+    /// replayed runs match. `collective_memory_registry.tick_all` already
+    /// runs on the daily phase, decaying salience/cohesion — the memory
+    /// system now has content to maintain.
+    fn seed_initial_collective_memory(&mut self) {
+        use crate::culture::SharedMemoryKind;
+        if self
+            .collective_memory_registry
+            .entries
+            .iter()
+            .any(|e| e.group_id == 0 && !e.memories.is_empty())
+        {
+            return;
+        }
+        let village = self.collective_memory_registry.get_or_create(0); // 0 = the village
+        if village.memories.is_empty() {
+            village.add_memory(
+                "The village was founded by the first settlers who followed the river".into(),
+                SharedMemoryKind::Founding,
+                0,
+                Fixed::from_f64(0.8),
+            );
+            village.add_memory(
+                "The last great drought nearly starved the village".into(),
+                SharedMemoryKind::Trauma,
+                0,
+                Fixed::from_f64(0.6),
+            );
+        }
+    }
+
+    /// §13: Seed the noospheric field with symbolic nodes mirroring the
+    /// founding memes, plus associative edges between consecutive concepts.
+    ///
+    /// Deterministic (mirrors the same hardcoded meme list as
+    /// `seed_initial_memes`, at tick 0) so fresh and replayed runs match.
+    /// Without this, `tick_noosphere` ran spreading/decay on an empty field.
+    fn seed_initial_noosphere(&mut self) {
+        use crate::culture::MemeContent;
+        use crate::noosphere::field::{ConceptVector, SymbolicEdge, SymbolicNode};
+        if !self.noospheric_field.nodes.is_empty() {
+            return;
+        }
+        for meme in &self.meme_registry.memes {
+            let mut concept = ConceptVector::default();
+            match meme.content_type {
+                MemeContent::Theological => {
+                    concept.sacredness = meme.sacredness.max(Fixed::from_f64(0.5));
+                    concept.hope = meme.emotional_charge;
+                }
+                MemeContent::Moral => {
+                    concept.loyalty = meme.emotional_charge;
+                    concept.purity = meme.identity_relevance;
+                }
+                MemeContent::Prophecy => {
+                    concept.threat = meme.emotional_charge;
+                    concept.hope = meme.identity_relevance;
+                }
+                MemeContent::Political => {
+                    concept.status = meme.emotional_charge;
+                    concept.freedom = meme.identity_relevance;
+                }
+                _ => {
+                    concept.scarcity = meme.emotional_charge;
+                }
+            }
+            let mut node = SymbolicNode::new(meme.id as u32, concept);
+            node.emotional_charge = meme.emotional_charge;
+            node.identity_relevance = meme.identity_relevance;
+            node.sacredness = meme.sacredness;
+            node.institutional_backing = meme.credibility;
+            self.noospheric_field.add_node(node);
+        }
+        // Associative chain between consecutive founding concepts so
+        // spreading activation propagates between them.
+        let ids: Vec<u32> = self.noospheric_field.nodes.iter().map(|n| n.id).collect();
+        for w in ids.windows(2) {
+            self.noospheric_field.add_edge(SymbolicEdge {
+                from: w[0],
+                to: w[1],
+                weight: Fixed::from_f64(0.4),
+                decay: Fixed::from_f64(0.2),
+            });
+            self.noospheric_field.add_edge(SymbolicEdge {
+                from: w[1],
+                to: w[0],
+                weight: Fixed::from_f64(0.4),
+                decay: Fixed::from_f64(0.2),
+            });
+        }
+    }
+
+    /// §12.4: Daily cult emergence and dissolution.
+    ///
+    /// Previously the cult registry was constructed but never written —
+    /// `register()` had zero call sites, so the §12.4 system was dead.
+    /// Emergence is deterministic (trait-ordered selection, no RNG) so fresh
+    /// and replayed runs match: gated by low institutional legitimacy and a
+    /// meaning deficit among agents, with a formation cooldown.
+    fn tick_cults(&mut self, tick: u64) {
+        // ── Dissolution ──
+        let n_inst = self.institutions.len().max(1);
+        let legitimacy = self
+            .institutions
+            .iter()
+            .map(|i| i.legitimacy)
+            .fold(Fixed::ZERO, |acc, l| acc + l)
+            * Fixed::from_f64(1.0 / n_inst as f64);
+        let n_agents = self.agents.len().max(1);
+        let avg_fatigue = self
+            .agents
+            .iter()
+            .map(|a| a.body.fatigue)
+            .fold(Fixed::ZERO, |acc, f| acc + f)
+            * Fixed::from_f64(1.0 / n_agents as f64);
+        for cult in &mut self.cult_registry.cults {
+            // leader_competence: no competence model is wired yet, so the
+            // leader-failure branch is inert; dissolution is driven by
+            // institutional repression and member exhaustion.
+            if cult.active
+                && cult.should_dissolve(Fixed::from_f64(0.5), legitimacy, avg_fatigue)
+            {
+                cult.active = false;
+            }
+        }
+
+        // ── Emergence ──
+        const CULT_COOLDOWN: u64 = 2880; // ~20 days at 144 ticks/day
+        if tick.saturating_sub(self.last_cult_formation_tick) < CULT_COOLDOWN {
+            return;
+        }
+        if legitimacy > Fixed::from_f64(0.45) {
+            return; // institutions too strong — no fertile ground
+        }
+        // Candidates: agents suffering a meaning deficit.
+        let candidates: Vec<usize> = (0..self.agents.len())
+            .filter(|&i| self.agents[i].needs.meaning > Fixed::from_f64(0.3))
+            .collect();
+        if candidates.len() < 3 {
+            return;
+        }
+        // Charismatic leader: highest extraversion + agreeableness among the
+        // meaning-starved (deterministic: agent order is identical in fresh
+        // and replayed runs).
+        let leader = candidates
+            .iter()
+            .copied()
+            .max_by(|&a, &b| {
+                let sa = self.agents[a].personality.extraversion
+                    + self.agents[a].personality.agreeableness;
+                let sb = self.agents[b].personality.extraversion
+                    + self.agents[b].personality.agreeableness;
+                sa.cmp(&sb)
+            })
+            .unwrap();
+        // Members: other meaning-deficit agents, capped for cost.
+        let members: Vec<usize> = candidates
+            .iter()
+            .copied()
+            .filter(|&i| i != leader)
+            .take(8)
+            .collect();
+        if members.len() < 2 {
+            return;
+        }
+        // Sacred narrative: the hottest active meme.
+        let sacred_id = self
+            .meme_registry
+            .memes
+            .iter()
+            .filter(|m| m.active)
+            .max_by_key(|m| m.emotional_charge)
+            .map(|m| m.id as u32)
+            .unwrap_or(0);
+        let cult = crate::social::cult::CultDynamics::new(leader, sacred_id, tick);
+        self.cult_registry.register(cult);
+        self.last_cult_formation_tick = tick;
+    }
+
+    /// §13: Noospheric field update (every tick) — refresh node metadata from
+    /// the live meme registry, feed meme emotional charge as spreading
+    /// activation, then apply natural decay (the pre-existing behavior).
+    fn tick_noosphere(&mut self) {
+        for meme in &self.meme_registry.memes {
+            let node_id = meme.id as u32;
+            if let Some(node) = self
+                .noospheric_field
+                .nodes
+                .iter_mut()
+                .find(|n| n.id == node_id)
+            {
+                node.emotional_charge = meme.emotional_charge;
+                node.identity_relevance = meme.identity_relevance;
+                node.institutional_backing = meme.credibility;
+            }
+            self.noospheric_field
+                .spread_activation(node_id, meme.emotional_charge * Fixed::from_f64(0.05));
+        }
+        // Natural decay — preserved baseline behavior.
+        self.noospheric_field.decay_all(Fixed::from_f64(0.001));
     }
 
     /// Run the simulation for `n` ticks.
@@ -2904,6 +3158,11 @@ impl Simulation {
             self.agents.iter().map(|a| a.agent_tier.tier.tier_index()).sum::<f64>() * n_inv
         };
         let total_active_feuds: u64 = self.agents.iter().map(|a| a.feuds.len() as u64).sum();
+        // §10.8/§12.4: Collective-structure observability — clan count and
+        // active cult count.
+        let clan_count = self.clan_registry.clans.len() as u64;
+        let cult_count = self.cult_registry.cults.iter().filter(|c| c.active).count() as u64;
+        let noosphere_nodes = self.noospheric_field.nodes.len() as u64;
 
         MetricsSnapshot {
             tick: self.current_tick().as_u64(),
@@ -2932,6 +3191,9 @@ impl Simulation {
             kinship_edge_count,
             avg_agent_tier,
             total_active_feuds,
+            clan_count,
+            cult_count,
+            noosphere_nodes,
         }
     }
 
@@ -4571,8 +4833,9 @@ impl Simulation {
             // Architecture-plan-2 §10.4-§10.5: Marriage registry daily update.
             self.marriage_registry.daily_update();
 
-            // Architecture-plan-2 §12.4: Cult registry daily update.
+            // Architecture-plan-2 §12.4: Cult registry daily update + emergence.
             self.cult_registry.daily_update();
+            self.tick_cults(tick_u64);
 
             // Architecture-plan-2 §13.5: Moral panic daily update.
             self.moral_panic_registry.daily_update();
@@ -4588,8 +4851,9 @@ impl Simulation {
             self.active_courtships.retain(|c| c.active);
         }
 
-        // Architecture-plan-2 §13: Noospheric field natural decay (every tick).
-        self.noospheric_field.decay_all(Fixed::from_f64(0.001));
+        // Architecture-plan-2 §13: Noospheric field — meme-driven spreading
+        // activation plus natural decay (every tick).
+        self.tick_noosphere();
 
         // Per-agent daily updates for new systems.
         if phases.is_daily {
@@ -5898,18 +6162,27 @@ pub struct MetricsSnapshot {
     pub avg_agent_tier: f64,
     /// Number of active feuds across all agents.
     pub total_active_feuds: u64,
+    /// Number of clans (kinship-based social groups, §10.8).
+    #[serde(default)]
+    pub clan_count: u64,
+    /// Number of active cults (high-intensity groups, §12.4).
+    #[serde(default)]
+    pub cult_count: u64,
+    /// Number of symbolic nodes in the noospheric field (§13).
+    #[serde(default)]
+    pub noosphere_nodes: u64,
 }
 
 impl MetricsSnapshot {
     /// §5.1/§19: CSV header for exporting metrics for analysis.
     pub fn csv_header() -> &'static str {
-        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,gini,avg_wealth,median_wealth,total_trades,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds"
+        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,gini,avg_wealth,median_wealth,total_trades,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds,clan_count,cult_count,noosphere_nodes"
     }
 
     /// §5.1/§19: One CSV line for this snapshot.
     pub fn to_csv_line(&self) -> String {
         format!(
-            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             self.tick,
             self.avg_hunger, self.avg_thirst, self.avg_fatigue,
             self.avg_valence, self.avg_joy, self.avg_fear,
@@ -5921,6 +6194,7 @@ impl MetricsSnapshot {
             self.gini, self.avg_wealth, self.median_wealth, self.total_trades,
             self.household_count, self.kinship_edge_count,
             self.avg_agent_tier, self.total_active_feuds,
+            self.clan_count, self.cult_count, self.noosphere_nodes,
         )
     }
 }
@@ -5959,4 +6233,83 @@ pub struct AgentSummary {
     pub attachment_separation_distress: Fixed,
     /// Architecture-plan-2 §8.1.14: Caregiving style for the live agent view.
     pub attachment_caregiving_style: CaregivingStyle,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// §12.4: Cult emergence must fire when institutional legitimacy is low
+    /// and agents suffer a meaning deficit — and the cooldown must prevent
+    /// cult spam. Selection is deterministic (no RNG).
+    #[test]
+    fn cults_emerge_under_low_legitimacy_and_meaning_crisis() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        // Force the §12.4 preconditions: weak institutions + meaning crisis.
+        for inst in &mut sim.institutions {
+            inst.legitimacy = Fixed::from_f64(0.2);
+        }
+        for agent in &mut sim.agents {
+            agent.needs.meaning = Fixed::from_f64(0.9);
+        }
+        let before = sim.cult_registry.cults.iter().filter(|c| c.active).count();
+        sim.tick_cults(3000); // >= CULT_COOLDOWN so formation is not blocked
+        let after = sim.cult_registry.cults.iter().filter(|c| c.active).count();
+        assert!(
+            after > before,
+            "cult should form under low legitimacy + meaning crisis"
+        );
+        assert_eq!(sim.last_cult_formation_tick, 3000);
+        // Cooldown: a second qualifying tick must NOT form another cult.
+        sim.tick_cults(3100);
+        assert_eq!(
+            sim.cult_registry.cults.iter().filter(|c| c.active).count(),
+            after,
+            "cult formation cooldown must prevent cult spam"
+        );
+    }
+
+    /// §13: Noospheric nodes must stay activated by meme-driven spreading
+    /// (total activation rises above the initial 0.3 baseline after one tick).
+    #[test]
+    fn noosphere_spreads_activation_from_memes() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        assert!(
+            !sim.noospheric_field.nodes.is_empty(),
+            "noosphere must be seeded"
+        );
+        let before: Fixed = sim
+            .noospheric_field
+            .nodes
+            .iter()
+            .fold(Fixed::ZERO, |acc, n| acc + n.activation);
+        sim.tick_noosphere();
+        let after: Fixed = sim
+            .noospheric_field
+            .nodes
+            .iter()
+            .fold(Fixed::ZERO, |acc, n| acc + n.activation);
+        assert!(
+            after > before,
+            "meme-driven spreading should raise activation"
+        );
+    }
 }
