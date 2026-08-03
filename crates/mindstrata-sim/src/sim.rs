@@ -80,6 +80,11 @@ const PATRONAGE_CHANCE_SCALE: Fixed = Fixed::from_raw(500); // 0.05
 const PATRONAGE_TRANSFER_RATE: Fixed = Fixed::from_raw(200); // 0.02
 /// §10.9: A client is destitute (and eligible for support) below this coin floor.
 const PATRONAGE_DESTITUTION_FLOOR: Fixed = Fixed::from_raw(10_000); // 1.0 coin
+/// §10.9: Patronage buys political quiescence — client faction grievance is
+/// dampened by dependence × this factor (material security softens
+/// resentment/anger). Sized small to stay inside the calibrated
+/// faction-formation envelope (factions_emerge_from_grievance).
+const PATRONAGE_GRIEVANCE_DAMPEN: Fixed = Fixed::from_raw(600); // 0.06
 
 // ── Group formation constants (§12.2) ──────────────────────────────
 /// Social cost scale factor (density × this → 0.0–0.2).
@@ -4017,6 +4022,28 @@ impl Simulation {
         }        // ── 15. Faction dynamics — grievance, formation, recruitment, protests (Phase 8) ──
     }
 
+    /// §29.2/§10.9: Per-agent faction grievance, dampened when the agent is a
+    /// dependent patronage client — material security from the patron softens
+    /// resentment/anger (the patron buys political quiescence). Deterministic.
+    fn faction_grievance(&self, idx: usize) -> Fixed {
+        let agent = &self.agents[idx];
+        let g = factions::compute_grievance(
+            agent.derived.resentment,
+            agent.emotions.fear,
+            agent.emotions.anger,
+            agent.needs.autonomy,
+            agent.needs.meaning,
+            agent.moral_values.fairness,
+            self.market.inequality,
+        );
+        let dampen = self
+            .patronage_registry
+            .patron_of(idx)
+            .map_or(Fixed::ZERO, |r| r.client_dependence)
+            * PATRONAGE_GRIEVANCE_DAMPEN;
+        (g * (Fixed::ONE - dampen)).max(Fixed::ZERO)
+    }
+
     /// Section 15: Faction dynamics - grievance, formation, recruitment, protests.
     fn tick_faction_dynamics(&mut self, tick_u64: u64, _tick: Tick) {
         // §29.2: Factions emerge from collective grievance. §Phase 8: legitimacy crisis → rebellion or reform.
@@ -4035,21 +4062,9 @@ impl Simulation {
                     .filter(|i| i.kind == InstitutionKind::Faction)
                     .flat_map(|f| f.members.iter().copied())
                     .collect();
-            let market_gini = self.market.inequality;
             let grievances: Vec<(AgentId, Fixed)> = self.agents.iter().enumerate()
                 .filter(|(i, _)| !already_factioned.contains(&AgentId::new(*i as u64)))
-                .map(|(i, agent)| {
-                    let g = factions::compute_grievance(
-                        agent.derived.resentment,
-                        agent.emotions.fear,
-                        agent.emotions.anger,
-                        agent.needs.autonomy,
-                        agent.needs.meaning,
-                        agent.moral_values.fairness,
-                        market_gini,
-                    );
-                    (AgentId::new(i as u64), g)
-                })
+                .map(|(i, _)| (AgentId::new(i as u64), self.faction_grievance(i)))
                 .collect();
 
             // Find council legitimacy (average across councils)
@@ -7395,5 +7410,45 @@ mod tests {
         sim.agents[patron].wealth.coin = Fixed::ZERO;
         sim.tick_patronage_provision();
         assert_eq!(sim.agents[client].wealth.coin.to_f64(), 0.2);
+    }
+
+    /// §10.9: Patronage buys political quiescence — a dependent client's
+    /// faction grievance is dampened by dependence × the dampening factor;
+    /// a zero-dependence client is unaffected.
+    #[test]
+    fn patronage_dampens_client_grievance() {
+        use crate::social::patronage::PatronageRelation;
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        let client = 1usize;
+        // Force a measurable grievance baseline.
+        sim.agents[client].derived.resentment = Fixed::from_f64(0.6);
+        sim.agents[client].emotions.anger = Fixed::from_f64(0.5);
+        let plain = sim.faction_grievance(client);
+        // A patron with high dependence dampens the client's grievance by the
+        // exact dampening factor.
+        let mut rel = PatronageRelation::new(0, client, 0);
+        rel.client_dependence = Fixed::from_f64(0.8);
+        sim.patronage_registry.register(rel);
+        let dampened = sim.faction_grievance(client);
+        let expected = (plain
+            * (Fixed::ONE - Fixed::from_f64(0.8) * PATRONAGE_GRIEVANCE_DAMPEN))
+            .max(Fixed::ZERO);
+        assert_eq!(dampened.to_f64(), expected.to_f64());
+        assert!(dampened < plain, "patronage must dampen client grievance");
+        // A zero-dependence relation dampens nothing.
+        sim.patronage_registry.relations.clear();
+        let mut rel0 = PatronageRelation::new(0, client, 0);
+        rel0.client_dependence = Fixed::ZERO;
+        sim.patronage_registry.register(rel0);
+        assert_eq!(sim.faction_grievance(client).to_f64(), plain.to_f64());
     }
 }
