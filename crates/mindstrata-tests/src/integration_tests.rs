@@ -1299,3 +1299,44 @@ fn reproduction_stress_suppression_affects_population() {
 
 
 
+
+
+
+
+
+#[test]
+fn polarization_index_emerges_from_gossip_fed_beliefs() {
+    // §13.6: polarization must be a live metric, not pinned at 0.0000.
+    // The echo chamber feed previously used affect.arousal / conformity
+    // (both ~0 in calm villages), and the tie-ratio normalization divided
+    // cross-cutting ties by n_clusters*(n_clusters-1) instead of agent
+    // pairs — making tie_ratio > 1 and clamping polarization to zero.
+    // 10K ticks keeps the suite fast; polarization already exceeds 0 at 5K
+    // (probe: 0.062) and rises slowly thereafter.
+    let sim = crate::test_helpers::run_sim(42, 10000);
+    let pol = sim.echo_chamber.polarization_index.to_f64();
+    assert!(
+        pol > 0.0,
+        "polarization should emerge over 10K ticks (got {pol:.4})"
+    );
+    assert!((0.0..=1.0).contains(&pol), "polarization must be in [0,1]");
+}
+
+#[test]
+fn drought_shock_depletes_water_not_grain() {
+    // The Drought shock previously matched resource_id == 0 (GRAIN) — a
+    // drought that destroyed food. It must drain the water supply.
+    use mindstrata_sim::world::WATER_RESOURCE_ID;
+    let scenario = mindstrata_sim::scenario::Scenario::drought();
+    let mut sim = mindstrata_sim::Simulation::from_scenario(scenario);
+    sim.populate();
+    // Run past the drought shock at tick 500.
+    sim.run(1000);
+    let water_left: f64 = sim.world.sites.iter()
+        .flat_map(|s| s.inventory.iter())
+        .filter(|st| st.resource_id == WATER_RESOURCE_ID)
+        .map(|st| st.quantity.to_f64())
+        .sum();
+    // Drought magnitude 0.7 removes 7.0 units from each stocked site.
+    assert!(water_left < 5.0, "drought should deplete water (left {water_left:.1})");
+}
