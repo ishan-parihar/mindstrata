@@ -18,6 +18,8 @@ use serde::{Deserialize, Serialize};
 pub struct CultDynamics {
     /// Index of the charismatic leader.
     pub charismatic_leader: usize,
+    /// Agent indices of the cult's members (excluding the leader).
+    pub members: Vec<usize>,
     /// Sacred narrative meme id that binds the cult.
     pub sacred_narrative_id: u32,
     /// Identity fusion — how much members fuse their self-concept with the group.
@@ -47,6 +49,7 @@ impl CultDynamics {
     pub fn new(leader: usize, sacred_narrative_id: u32, tick: u64) -> Self {
         Self {
             charismatic_leader: leader,
+            members: Vec::new(),
             sacred_narrative_id,
             identity_fusion: Fixed::from_f64(0.3),
             isolation: Fixed::from_f64(0.2),
@@ -58,6 +61,13 @@ impl CultDynamics {
             exit_cost: Fixed::from_f64(0.2),
             formed_tick: tick,
             active: true,
+        }
+    }
+
+    /// Add a member to the cult (deduplicated).
+    pub fn add_member(&mut self, agent: usize) {
+        if !self.members.contains(&agent) {
+            self.members.push(agent);
         }
     }
 

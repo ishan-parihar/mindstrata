@@ -1316,6 +1316,7 @@ impl Simulation {
 
         // ── Emergence ──
         const CULT_COOLDOWN: u64 = 2880; // ~20 days at 144 ticks/day
+        const CULT_FORM_MEMBERS: usize = 4; // initial core (leader + up to 4)
         if tick.saturating_sub(self.last_cult_formation_tick) < CULT_COOLDOWN {
             return;
         }
@@ -1348,7 +1349,7 @@ impl Simulation {
             .iter()
             .copied()
             .filter(|&i| i != leader)
-            .take(8)
+            .take(CULT_FORM_MEMBERS)
             .collect();
         if members.len() < 2 {
             return;
@@ -1362,9 +1363,108 @@ impl Simulation {
             .max_by_key(|m| m.emotional_charge)
             .map(|m| m.id as u32)
             .unwrap_or(0);
-        let cult = crate::social::cult::CultDynamics::new(leader, sacred_id, tick);
+        let mut cult = crate::social::cult::CultDynamics::new(leader, sacred_id, tick);
+        cult.members = members;
         self.cult_registry.register(cult);
         self.last_cult_formation_tick = tick;
+    }
+
+    /// §12.4: Daily cult member dynamics — recruitment and psychological feedback.
+    ///
+    /// Active cults recruit new meaning-starved agents (up to a membership
+    /// cap) and entrench their members: belonging satisfies the meaning need
+    /// (deficit shrinks), the hottest belief gains confidence/charge (cult
+    /// narrative grip), and identity fusion / fear-load are reinforced against
+    /// the daily decay in `CultDynamics::daily_update`. This turns the
+    /// previously observational cult registry (Iteration 9) into an emergent
+    /// force on member psychology. Fully deterministic (agent order, no RNG)
+    /// so fresh and replayed runs match.
+    fn tick_cult_dynamics(&mut self) {
+        let n = self.agents.len();
+        let member_cap = (n / 2).max(4);
+
+        // ── Recruitment ──
+        // Collect (cult_idx, agent_idx) targets under an immutable borrow of
+        // the registry, then apply them to avoid borrow conflicts.
+        let mut recruits: Vec<(usize, usize)> = Vec::new();
+        let active: Vec<usize> = (0..self.cult_registry.cults.len())
+            .filter(|&ci| self.cult_registry.cults[ci].active)
+            .collect();
+        for &ci in &active {
+            let cult = &self.cult_registry.cults[ci];
+            let mut slots = member_cap.saturating_sub(1 + cult.members.len());
+            if slots == 0 {
+                continue;
+            }
+            for i in 0..n {
+                if slots == 0 {
+                    break;
+                }
+                if self.agents[i].needs.meaning <= Fixed::from_f64(0.3) {
+                    continue;
+                }
+                if i == cult.charismatic_leader || cult.members.contains(&i) {
+                    continue;
+                }
+                let already_in = self
+                    .cult_registry
+                    .cults
+                    .iter()
+                    .any(|c| c.active && c.members.contains(&i));
+                if already_in {
+                    continue;
+                }
+                recruits.push((ci, i));
+                slots -= 1;
+            }
+        }
+        for (ci, i) in recruits {
+            self.cult_registry.cults[ci].add_member(i);
+        }
+
+        // ── Member psychological feedback ──
+        // Snapshot (leader, members) per active cult, then apply to agents.
+        let member_sets: Vec<(usize, Vec<usize>)> = self
+            .cult_registry
+            .cults
+            .iter()
+            .filter(|c| c.active)
+            .map(|c| (c.charismatic_leader, c.members.clone()))
+            .collect();
+        for (leader, members) in member_sets {
+            for &i in std::iter::once(&leader).chain(members.iter()) {
+                if i >= n {
+                    continue;
+                }
+                let agent = &mut self.agents[i];
+                // Belonging satisfies the meaning need (deficit shrinks).
+                agent.needs.meaning = (agent.needs.meaning * Fixed::from_f64(0.98)
+                    - Fixed::from_f64(0.01))
+                    .max(Fixed::ZERO);
+                // Entrench the hottest belief — the cult's narrative grip.
+                if let Some(hot) = agent
+                    .beliefs
+                    .iter_mut()
+                    .max_by_key(|b| b.emotional_charge)
+                {
+                    hot.confidence = (hot.confidence + Fixed::from_f64(0.01)).clamp_01();
+                    hot.emotional_charge =
+                        (hot.emotional_charge + Fixed::from_f64(0.01)).clamp_01();
+                }
+            }
+            // Cult-level reinforcement against the daily_update decay.
+            // The leader index uniquely identifies an active cult here.
+            if let Some(cult) = self
+                .cult_registry
+                .cults
+                .iter_mut()
+                .find(|c| c.active && c.charismatic_leader == leader)
+            {
+                cult.identity_fusion =
+                    (cult.identity_fusion + Fixed::from_f64(0.004)).clamp_01();
+                cult.fear_load = (cult.fear_load + Fixed::from_f64(0.002)).clamp_01();
+            }
+        }
     }
 
     /// §13: Noospheric field update (every tick) — refresh node metadata from
@@ -4836,6 +4936,7 @@ impl Simulation {
             // Architecture-plan-2 §12.4: Cult registry daily update + emergence.
             self.cult_registry.daily_update();
             self.tick_cults(tick_u64);
+            self.tick_cult_dynamics();
 
             // Architecture-plan-2 §13.5: Moral panic daily update.
             self.moral_panic_registry.daily_update();
@@ -6311,5 +6412,84 @@ mod tests {
             after > before,
             "meme-driven spreading should raise activation"
         );
+    }
+
+    /// §12.4: Cult belonging must satisfy members' meaning need and entrench
+    /// their beliefs (the cult's narrative grip).
+    #[test]
+    fn cult_members_get_psychological_feedback() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        for inst in &mut sim.institutions {
+            inst.legitimacy = Fixed::from_f64(0.2);
+        }
+        for agent in &mut sim.agents {
+            agent.needs.meaning = Fixed::from_f64(0.9);
+        }
+        sim.tick_cults(3000);
+        let cult = &sim.cult_registry.cults[0];
+        assert!(
+            !cult.members.is_empty(),
+            "cult formation should store its members"
+        );
+        let member = cult.members[0];
+        let pre_meaning = sim.agents[member].needs.meaning;
+        let pre_conf: Fixed = sim.agents[member]
+            .beliefs
+            .iter()
+            .fold(Fixed::ZERO, |acc, b| acc + b.confidence);
+        sim.tick_cult_dynamics();
+        assert!(
+            sim.agents[member].needs.meaning < pre_meaning,
+            "cult belonging should satisfy the meaning need"
+        );
+        let post_conf: Fixed = sim.agents[member]
+            .beliefs
+            .iter()
+            .fold(Fixed::ZERO, |acc, b| acc + b.confidence);
+        assert!(
+            post_conf > pre_conf,
+            "cult should entrench member beliefs"
+        );
+    }
+
+    /// §12.4: Active cults must recruit meaning-starved agents up to the
+    /// membership cap.
+    #[test]
+    fn cults_recruit_meaning_starved_agents() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        for inst in &mut sim.institutions {
+            inst.legitimacy = Fixed::from_f64(0.2);
+        }
+        for agent in &mut sim.agents {
+            agent.needs.meaning = Fixed::from_f64(0.9);
+        }
+        sim.tick_cults(3000);
+        let after_formation = sim.cult_registry.cults[0].members.len();
+        sim.tick_cult_dynamics();
+        let after_recruit = sim.cult_registry.cults[0].members.len();
+        // 12 agents: leader + up to 4 formed members; cap = 12/2 = 6.
+        assert!(
+            after_recruit > after_formation,
+            "cult should recruit meaning-starved agents"
+        );
+        assert!(after_recruit <= 6, "membership should respect the cap");
     }
 }
