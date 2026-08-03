@@ -1273,6 +1273,38 @@ impl Simulation {
         self.clan_registry.clans.iter().any(|c| c.id == ca && c.is_ally(cb))
     }
 
+    /// §10.8/§19.5.G: When every feud that forged a clan enmity has decayed
+    /// (no active feud between any member of the two clans), the enmity
+    /// clears — feuds can heal into peace, and later marriages can forge an
+    /// alliance. Deterministic: clans and agents are scanned in registry
+    /// order, no RNG.
+    fn decay_clan_enmities(&mut self) {
+        let n = self.clan_registry.clans.len();
+        for i in 0..n {
+            for j in (i + 1)..n {
+                if !self.clan_registry.clans[i].is_enemy(j) {
+                    continue;
+                }
+                // Any active feud between a member of clan i and clan j?
+                let active = self.agents.iter().enumerate().any(|(idx, agent)| {
+                    if self.clan_of(idx) != Some(i) {
+                        return false;
+                    }
+                    agent.feuds.iter().any(|&f| self.clan_of(f) == Some(j))
+                });
+                if active {
+                    continue;
+                }
+                if let Some(clan) = self.clan_registry.clans.iter_mut().find(|c| c.id == i) {
+                    clan.clear_enemy(j);
+                }
+                if let Some(clan) = self.clan_registry.clans.iter_mut().find(|c| c.id == j) {
+                    clan.clear_enemy(i);
+                }
+            }
+        }
+    }
+
     /// §19.5.H/§10.8: Escalation chance after a failed threat. Enemy clans
     /// escalate at twice the base rate — a feud is a standing state of war,
     /// so deterrence between enemy clans fails roughly twice as often.
@@ -6317,6 +6349,10 @@ impl Simulation {
             agent.feud_ticks.truncate(keep);
         }
 
+        // §10.8/§19.5.G: Clear clan enmities whose feuds have fully decayed —
+        // a feud that ends can heal into peace (and later, a marriage alliance).
+        self.decay_clan_enmities();
+
         // ── 22. Courtship creation — eligible agents begin romantic courtship ──
         // Architecture-plan-2 §10.4: When two unpartnered adult agents with sufficient
         // attraction and trust interact, a Courtship is initiated.
@@ -7207,5 +7243,56 @@ mod tests {
         let aggression = Fixed::from_f64(1.5);
         assert!(!sim.should_escalate(a, b, false, aggression));
         assert!(!sim.should_escalate(a, b, true, Fixed::ZERO));
+    }
+
+    /// §10.8/§19.5.G: A clan enmity persists while any feud remains between
+    /// the clans' members, and clears (symmetrically) once the feuds decay —
+    /// after which a marriage alliance can form again.
+    #[test]
+    fn clan_enmity_clears_when_feuds_decay() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        let (a, b) = cross_clan_pair(&sim);
+        let (ca, cb) = (sim.clan_of(a).unwrap(), sim.clan_of(b).unwrap());
+        sim.forge_clan_enmity(a, b, 100);
+        assert!(sim.clan_registry.get(ca).unwrap().is_enemy(cb));
+        // An active feud between the clans' members keeps the enmity alive.
+        sim.agents[a].feuds.push(b);
+        sim.agents[a].feud_ticks.push(100);
+        sim.agents[b].feuds.push(a);
+        sim.agents[b].feud_ticks.push(100);
+        sim.decay_clan_enmities();
+        assert!(
+            sim.clan_registry.get(ca).unwrap().is_enemy(cb),
+            "active feud keeps the enmity"
+        );
+        // The feud fully decays → enmity clears both ways.
+        sim.agents[a].feuds.clear();
+        sim.agents[a].feud_ticks.clear();
+        sim.agents[b].feuds.clear();
+        sim.agents[b].feud_ticks.clear();
+        sim.decay_clan_enmities();
+        assert!(
+            !sim.clan_registry.get(ca).unwrap().is_enemy(cb),
+            "decayed feud clears the enmity"
+        );
+        assert!(
+            !sim.clan_registry.get(cb).unwrap().is_enemy(ca),
+            "cleared symmetrically"
+        );
+        // Peace reopens the alliance path: a later marriage can forge one.
+        sim.forge_clan_alliance(a, b, 300);
+        assert!(
+            sim.clan_registry.get(ca).unwrap().is_ally(cb),
+            "peace allows a marriage alliance"
+        );
     }
 }

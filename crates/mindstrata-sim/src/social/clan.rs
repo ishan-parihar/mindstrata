@@ -131,6 +131,16 @@ impl Clan {
         }
     }
 
+    /// §10.8/§19.5.G: Clear an enmity when the underlying feud has fully
+    /// decayed — feuds can heal into peace (and later, alliances). Restores
+    /// a little cohesion (the end of a war commitment).
+    pub fn clear_enemy(&mut self, other: ClanId) {
+        if self.enemies.contains(&other) {
+            self.enemies.retain(|&e| e != other);
+            self.cohesion = (self.cohesion + Fixed::from_f64(0.03)).min(Fixed::ONE);
+        }
+    }
+
     /// Declare alliance with another clan.
     pub fn declare_ally(&mut self, other: ClanId) {
         if !self.allies.contains(&other) && !self.enemies.contains(&other) {
