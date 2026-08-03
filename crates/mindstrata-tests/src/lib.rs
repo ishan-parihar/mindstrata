@@ -22,6 +22,9 @@ mod comparison;
 mod integration_tests;
 
 #[cfg(test)]
+mod agent_lifetime_trace;
+
+#[cfg(test)]
 mod smoke {
     use mindstrata_core::clock::Tick;
     use mindstrata_core::fixed::Fixed;
