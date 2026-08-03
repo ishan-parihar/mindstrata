@@ -323,8 +323,6 @@ pub struct Simulation {
     pub moral_panic_registry: crate::noosphere::MoralPanicRegistry,
     /// Architecture-plan-2 §13: Noospheric field — symbolic concept space.
     pub noospheric_field: crate::noosphere::NoosphericField,
-    /// Architecture-plan-2 §13.6: Belief ecology — population-level polarization.
-    pub belief_ecology: crate::noosphere::BeliefEcologyNoosphere,
     /// Architecture-plan-2 §5.2, §29.2: Faction v2 — upgraded faction dynamics.
     pub faction_v2_registry: crate::social::faction_v2::FactionV2Registry,
     /// Architecture-plan-2 §10.4: Active courtships between agents.
@@ -415,7 +413,6 @@ impl Simulation {
             cult_registry: crate::social::cult::CultRegistry::new(),
             moral_panic_registry: crate::noosphere::MoralPanicRegistry::new(),
             noospheric_field: crate::noosphere::NoosphericField::new(),
-            belief_ecology: crate::noosphere::BeliefEcologyNoosphere::new(),
             faction_v2_registry: crate::social::faction_v2::FactionV2Registry::new(),
             active_courtships: Vec::new(),
             patronage_registry: crate::social::patronage::PatronageRegistry::new(),
@@ -522,7 +519,6 @@ impl Simulation {
             cult_registry: crate::social::cult::CultRegistry::new(),
             moral_panic_registry: crate::noosphere::MoralPanicRegistry::new(),
             noospheric_field: crate::noosphere::NoosphericField::new(),
-            belief_ecology: crate::noosphere::BeliefEcologyNoosphere::new(),
             faction_v2_registry: crate::social::faction_v2::FactionV2Registry::new(),
             active_courtships: Vec::new(),
             patronage_registry: crate::social::patronage::PatronageRegistry::new(),
@@ -1043,9 +1039,12 @@ impl Simulation {
                 );
                 match shock.kind {
                     ShockKind::Drought => {
+                        // A drought dries the water supply (WATER_RESOURCE_ID = 1).
+                        // It previously drained grain (resource_id == 0) — a drought
+                        // that destroys food instead of water.
                         for site in &mut self.world.sites {
                             for stock in &mut site.inventory {
-                                if stock.resource_id == 0 {
+                                if stock.resource_id == WATER_RESOURCE_ID {
                                     stock.quantity =
                                         (stock.quantity - shock.magnitude * Fixed::from_f64(10.0))
                                             .clamp_01();
@@ -4235,11 +4234,30 @@ impl Simulation {
                         };
                         if let Some(cluster) = self.echo_chamber.get_cluster_mut(cluster_id) {
                             cluster.add_member(i);
-                            // Accumulate emotional charge from agent's affect
-                            cluster.emotional_charge = (cluster.emotional_charge
-                                + self.agents[i].affect.arousal * Fixed::from_f64(0.1)).clamp_01();
-                            cluster.identity_fusion = (cluster.identity_fusion
-                                + self.agents[i].personality.conformity * Fixed::from_f64(0.05)).clamp_01();
+                            // §13.6 feed: emotional charge comes from the agent's
+                            // strongest belief — gossip acceptance and meme
+                            // transmission now write real charge into beliefs, so
+                            // polarization tracks cultural dynamics instead of
+                            // affect.arousal (which stays ~0 in calm villages and
+                            // previously pinned polarization at 0.0000 forever).
+                            let belief_charge = self.agents[i].beliefs.iter()
+                                .map(|b| b.emotional_charge)
+                                .fold(Fixed::ZERO, |acc, c| acc.max(c));
+                            // Accumulate WITHOUT clamping: Phase 3 divides by
+                            // member count, so an early clamp would saturate the
+                            // running sum at 1.0 and understate the per-cluster
+                            // average for large clusters (e.g. ~24 members at
+                            // MAX_POPULATION).
+                            cluster.emotional_charge = cluster.emotional_charge
+                                + belief_charge * Fixed::from_f64(0.5);
+                            // Identity fusion from ideological commitment: an
+                            // agent's echo-chamber strength and polarization
+                            // tendency — the actual drivers §13.6 names — rather
+                            // than raw conformity.
+                            let fusion_input = self.agents[i].ideology.echo_chamber_strength
+                                + self.agents[i].ideology.polarization_tendency;
+                            cluster.identity_fusion = cluster.identity_fusion
+                                + fusion_input * Fixed::from_f64(0.5);
                         }
                     }
                     // Phase 2: Compute cross-cutting ties from relationship_v2s.
@@ -4280,10 +4298,10 @@ impl Simulation {
                     for cluster in &mut self.echo_chamber.clusters {
                         let member_count = cluster.members.len() as i64;
                         if member_count > 0 {
-                            cluster.emotional_charge = cluster.emotional_charge
-                                / Fixed::from_int(member_count);
-                            cluster.identity_fusion = cluster.identity_fusion
-                                / Fixed::from_int(member_count);
+                            cluster.emotional_charge = (cluster.emotional_charge
+                                / Fixed::from_int(member_count)).clamp_01();
+                            cluster.identity_fusion = (cluster.identity_fusion
+                                / Fixed::from_int(member_count)).clamp_01();
                             cluster.outgroup_hostility = cluster.cohesion * cluster.identity_fusion;
                         }
                     }
@@ -4303,8 +4321,6 @@ impl Simulation {
             // Architecture-plan-2 §13.5: Moral panic daily update.
             self.moral_panic_registry.daily_update();
 
-            // Architecture-plan-2 §13.6: Belief ecology daily update.
-            self.belief_ecology.daily_update();
             self.faction_v2_registry.daily_update();
             // Architecture-plan-2 §12.2: Peer group daily update — decay cohesion.
             self.group_registry.daily_update();

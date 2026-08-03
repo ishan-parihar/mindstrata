@@ -188,33 +188,49 @@ impl EchoChamberState {
             .fold(Fixed::ZERO, |acc, f| acc + f);
         let avg_fusion = total_fusion / n_clusters;
 
-        // Cross-cutting tie ratio (higher ties = less polarized)
+        // Cross-cutting tie ratio (higher ties = less polarized).
+        // Each cross-cluster high-trust pair is counted once per cluster involved
+        // (2× total), so the denominator is 2 × Σ(sz_a × sz_b) over cluster pairs —
+        // NOT the number of cluster pairs. The old denominator (n_clusters ×
+        // (n_clusters − 1)) undercounted by an order of magnitude once trust
+        // could actually rise, making tie_ratio > 1 and clamping polarization
+        // to 0.0000 forever.
         self.total_cross_cutting_ties = self
             .clusters
             .iter()
             .map(|c| c.cross_cutting_ties)
             .sum();
         let tie_ratio = if self.clusters.len() > 1 {
-            let max_possible = (self.clusters.len() * (self.clusters.len() - 1)) as u32;
-            Fixed::from_int(self.total_cross_cutting_ties as i64)
-                / Fixed::from_int(max_possible as i64)
+            let mut max_possible: u64 = 0;
+            for a in 0..self.clusters.len() {
+                for b in (a + 1)..self.clusters.len() {
+                    let sz_a = self.clusters[a].members.len() as u64;
+                    let sz_b = self.clusters[b].members.len() as u64;
+                    max_possible += sz_a * sz_b * 2; // each pair counted 2×
+                }
+            }
+            if max_possible > 0 {
+                let ratio = self.total_cross_cutting_ties as f64 / max_possible as f64;
+                Fixed::from_f64(ratio.min(1.0))
+            } else {
+                Fixed::ZERO
+            }
         } else {
             Fixed::ZERO
         };
 
         // Additive blend: emotional_charge + fusion + echo chamber contribute,
-        // while cross-cutting ties reduce polarization. Multiplicative alone would
-        // zero the output if any single factor were zero.
-        let w_charge = Fixed::from_f64(0.3);
+        // while cross-cutting ties reduce polarization (per §13.6: polarization =
+        // inter-cluster distance × (1 − cross-ties/max-ties)). Weights sum to 1
+        // so the index is a true 0–1 measure without the old hard 0.67 × 0.5
+        // deflation that kept even strong polarization below ~0.33.
+        let w_charge = Fixed::from_f64(0.4);
         let w_fusion = Fixed::from_f64(0.3);
         let w_echo = Fixed::from_f64(0.3);
         self.polarization_index = (w_charge * avg_emotional_charge
             + w_fusion * avg_fusion
             + w_echo * self.echo_chamber_strength)
-            * (Fixed::ONE - tie_ratio)
-            * (Fixed::ONE / n_clusters).max(Fixed::from_f64(0.5))
-            * Fixed::from_f64(0.67) // normalize blend to [0,1]
-            ;
+            * (Fixed::ONE - tie_ratio);
         self.polarization_index = self.polarization_index.clamp_01();
     }
 
