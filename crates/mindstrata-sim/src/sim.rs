@@ -2770,6 +2770,12 @@ impl Simulation {
         let avg_relationship_quality = quality_sum / rel_n;
         let active_meme_count = self.meme_registry.active_count() as u64;
         let polarization_index = self.echo_chamber.polarization_index.to_f64();
+        // §13.3: Inequality metrics — computed by the market system earlier in
+        // this tick (tick_social_cluster → system_market), so values are fresh.
+        let gini = self.market.inequality.to_f64();
+        let avg_wealth = self.market.avg_wealth.to_f64();
+        let median_wealth = self.market.median_wealth.to_f64();
+        let total_trades = self.market.total_trades;
         let household_count = self.households.len() as u64;
         let kinship_edge_count = self.kinship_graph.active_count() as u64;
         let avg_agent_tier: f64 = if self.agents.is_empty() { 0.0 } else {
@@ -2796,6 +2802,10 @@ impl Simulation {
             avg_relationship_quality,
             active_meme_count,
             polarization_index,
+            gini,
+            avg_wealth,
+            median_wealth,
+            total_trades,
             household_count,
             kinship_edge_count,
             avg_agent_tier,
@@ -5599,6 +5609,18 @@ pub struct MetricsSnapshot {
     pub active_meme_count: u64,
     /// Echo chamber polarization index.
     pub polarization_index: f64,
+    /// Gini coefficient of coin wealth (0 = equality, 1 = inequality).
+    #[serde(default)]
+    pub gini: f64,
+    /// Mean coin wealth across agents.
+    #[serde(default)]
+    pub avg_wealth: f64,
+    /// Median coin wealth across agents.
+    #[serde(default)]
+    pub median_wealth: f64,
+    /// Cumulative completed trades (market activity).
+    #[serde(default)]
+    pub total_trades: u64,
     /// Number of active households.
     pub household_count: u64,
     /// Number of active kinship edges.
@@ -5612,13 +5634,13 @@ pub struct MetricsSnapshot {
 impl MetricsSnapshot {
     /// §5.1/§19: CSV header for exporting metrics for analysis.
     pub fn csv_header() -> &'static str {
-        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds"
+        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,gini,avg_wealth,median_wealth,total_trades,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds"
     }
 
     /// §5.1/§19: One CSV line for this snapshot.
     pub fn to_csv_line(&self) -> String {
         format!(
-            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             self.tick,
             self.avg_hunger, self.avg_thirst, self.avg_fatigue,
             self.avg_valence, self.avg_joy, self.avg_fear,
@@ -5627,6 +5649,7 @@ impl MetricsSnapshot {
             self.avg_stress, self.avg_health,
             self.avg_relationship_trust, self.avg_relationship_quality,
             self.active_meme_count, self.polarization_index,
+            self.gini, self.avg_wealth, self.median_wealth, self.total_trades,
             self.household_count, self.kinship_edge_count,
             self.avg_agent_tier, self.total_active_feuds,
         )

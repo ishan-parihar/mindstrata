@@ -1339,4 +1339,81 @@ fn drought_shock_depletes_water_not_grain() {
         .sum();
     // Drought magnitude 0.7 removes 7.0 units from each stocked site.
     assert!(water_left < 5.0, "drought should deplete water (left {water_left:.1})");
+
+    // Market must react: scarce water (id 1) prices above the grain floor
+    // while grain stays near its floor — prices are alive, not pinned.
+    let grain_price = sim.market.prices.first().map(|p| p.price.to_f64()).unwrap_or(0.0);
+    let water_price = sim.market.prices.get(1).map(|p| p.price.to_f64()).unwrap_or(0.0);
+    assert!(
+        water_price > grain_price,
+        "scarce water should price above grain (water {water_price:.2} vs grain {grain_price:.2})"
+    );
 }
+
+
+
+
+
+#[test]
+fn metrics_csv_exports_real_inequality_tracking() {
+    // §13.3/§19: Gini + wealth distribution must be observable in the metrics
+    // CSV. Previously `market.inequality` was computed and shown in dashboards
+    // but never exported, so long-run inequality trends were invisible.
+    let sim = crate::test_helpers::run_sim(42, 20000);
+    let ms = sim.metrics_snapshot();
+
+    // Gini is a real coefficient in [0, 1] reflecting the coin distribution.
+    let gini = ms.gini;
+    assert!(
+        gini >= 0.0 && gini <= 1.0,
+        "gini out of range: {gini:.4}"
+    );
+    assert!(
+        gini > 0.1,
+        "gini should reflect real inequality after 20K ticks (got {gini:.4})"
+    );
+
+    // Wealth stats are internally consistent: median <= mean for a skewed
+    // right-tail distribution, and both non-negative.
+    let avg = ms.avg_wealth;
+    let med = ms.median_wealth;
+    assert!(avg >= 0.0, "avg_wealth negative: {avg:.2}");
+    assert!(med >= 0.0, "median_wealth negative: {med:.2}");
+    assert!(
+        med <= avg + 1e-9,
+        "median ({med:.2}) should not exceed mean ({avg:.2}) for right-skewed wealth"
+    );
+
+    // Market activity: cumulative trades must be non-trivial (Iter 2 fix
+    // made the market operational; the CSV must expose the activity level).
+    assert!(
+        ms.total_trades > 50,
+        "expected >50 completed trades in 20K ticks, got {}",
+        ms.total_trades
+    );
+
+    // CSV round-trip: header and line stay aligned, and each named column
+    // holds the exact snapshot value (positional check, not just count — a
+    // transposed-field bug in to_csv_line must not slip through).
+    let header = mindstrata_sim::sim::MetricsSnapshot::csv_header();
+    let line = ms.to_csv_line();
+    let header_fields: Vec<&str> = header.split(',').collect();
+    let line_fields: Vec<&str> = line.split(',').collect();
+    assert_eq!(
+        line_fields.len(),
+        header_fields.len(),
+        "CSV line/header column count mismatch"
+    );
+    let cell = |col: &str| -> f64 {
+        let pos = header_fields.iter().position(|h| *h == col)
+            .unwrap_or_else(|| panic!("CSV header missing {col}"));
+        line_fields[pos].parse().unwrap_or_else(|_| panic!("column {col} not numeric"))
+    };
+    assert!((cell("gini") - ms.gini).abs() < 1e-9, "gini column out of position");
+    assert!((cell("avg_wealth") - ms.avg_wealth).abs() < 1e-9, "avg_wealth column out of position");
+    assert!((cell("median_wealth") - ms.median_wealth).abs() < 1e-9, "median_wealth column out of position");
+    assert_eq!(cell("total_trades") as u64, ms.total_trades, "total_trades column out of position");
+}
+
+
+
