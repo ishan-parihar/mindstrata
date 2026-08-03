@@ -1542,6 +1542,70 @@ impl Simulation {
         }
     }
 
+    /// §13.5: Record a famine (scarcity) trauma in the village's collective
+    /// memory when hunger or thirst runs critically high. Episode-guarded:
+    /// a scarcity trauma is not re-recorded while a recent one exists, so
+    /// one crisis yields one memory. Deterministic (reads agent needs).
+    fn record_famine_memory(&mut self, tick: u64) {
+        use crate::culture::SharedMemoryKind;
+        // Episode guard — skip while a *live* scarcity trauma exists. Seeded
+        // origin memories have event_tick == 0 and never block.
+        let recent = self
+            .collective_memory_registry
+            .get(0)
+            .map_or(false, |cm| {
+                cm.memories.iter().any(|m| {
+                    m.kind == SharedMemoryKind::Trauma
+                        && m.event_tick > 0
+                        && tick.saturating_sub(m.event_tick) < 43200 // ~300 days
+                })
+            });
+        if recent {
+            return;
+        }
+        let n = self.agents.len().max(1);
+        let inv = Fixed::from_f64(1.0 / n as f64);
+        let avg_hunger = self
+            .agents
+            .iter()
+            .map(|a| a.needs.hunger)
+            .fold(Fixed::ZERO, |acc, h| acc + h)
+            * inv;
+        let avg_thirst = self
+            .agents
+            .iter()
+            .map(|a| a.needs.thirst)
+            .fold(Fixed::ZERO, |acc, t| acc + t)
+            * inv;
+        let (desc, charge) = if avg_thirst > Fixed::from_f64(0.6) {
+            ("Thirst gripped the village when the wells ran low", 0.8)
+        } else if avg_hunger > Fixed::from_f64(0.6) {
+            ("The village went hungry when the harvest failed", 0.8)
+        } else {
+            return;
+        };
+        self.collective_memory_registry.get_or_create(0).add_memory(
+            desc.into(),
+            SharedMemoryKind::Trauma,
+            tick,
+            Fixed::from_f64(charge),
+        );
+    }
+
+    /// §13.5: Record a faction's founding myth — group 1 + faction id keeps
+    /// faction memory separate from the village's (group 0).
+    fn record_faction_founding_memory(&mut self, faction_id: usize, tick: u64) {
+        use crate::culture::SharedMemoryKind;
+        self.collective_memory_registry
+            .get_or_create(1 + faction_id)
+            .add_memory(
+                "The faction was born of shared grievance against the council".into(),
+                SharedMemoryKind::Founding,
+                tick,
+                Fixed::from_f64(0.7),
+            );
+    }
+
     /// Run the simulation for `n` ticks.
     pub fn run(&mut self, n: u64) {
         for _ in 0..n {
@@ -3321,6 +3385,12 @@ impl Simulation {
             .iter()
             .map(|n| n.effective_activation().to_f64())
             .fold(0.0f64, f64::max);
+        let collective_memory_count = self
+            .collective_memory_registry
+            .entries
+            .iter()
+            .map(|e| e.memories.len() as u64)
+            .sum();
 
         MetricsSnapshot {
             tick: self.current_tick().as_u64(),
@@ -3353,6 +3423,7 @@ impl Simulation {
             cult_count,
             noosphere_nodes,
             noosphere_zeitgeist,
+            collective_memory_count,
         }
     }
 
@@ -3907,6 +3978,9 @@ impl Simulation {
                             tick_u64,
                         );
                         let fv2_id = self.faction_v2_registry.register(fv2);
+                        // §13.5: Factions found their own mythic past — a
+                        // founding memory for group 1 + faction id (0 = village).
+                        self.record_faction_founding_memory(fv2_id, tick_u64);
                         tracing::info!(
                             faction_v2_id = fv2_id,
                             leader = leader.as_u64(),
@@ -4825,6 +4899,9 @@ impl Simulation {
             }
             // Architecture-plan-2 §13.5: Decay collective memory daily.
             self.collective_memory_registry.tick_all(tick_u64);
+            // §13.5: Capture scarcity crises as trauma memories (episode-
+            // guarded — one crisis yields one memory).
+            self.record_famine_memory(tick_u64);
             // Architecture-plan-2 §13.6: Update echo chamber polarization daily.
             // Assign agents to belief clusters based on dominant belief orientation.
             // Agents with similar beliefs cluster together; cross-cutting ties are
@@ -6352,18 +6429,21 @@ pub struct MetricsSnapshot {
     /// (the §13 belief-ecology zeitgeist).
     #[serde(default)]
     pub noosphere_zeitgeist: f64,
+    /// Total shared memories across all groups (§13.5).
+    #[serde(default)]
+    pub collective_memory_count: u64,
 }
 
 impl MetricsSnapshot {
     /// §5.1/§19: CSV header for exporting metrics for analysis.
     pub fn csv_header() -> &'static str {
-        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,gini,avg_wealth,median_wealth,total_trades,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds,clan_count,cult_count,noosphere_nodes,noosphere_zeitgeist"
+        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,gini,avg_wealth,median_wealth,total_trades,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds,clan_count,cult_count,noosphere_nodes,noosphere_zeitgeist,collective_memory_count"
     }
 
     /// §5.1/§19: One CSV line for this snapshot.
     pub fn to_csv_line(&self) -> String {
         format!(
-            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             self.tick,
             self.avg_hunger, self.avg_thirst, self.avg_fatigue,
             self.avg_valence, self.avg_joy, self.avg_fear,
@@ -6376,7 +6456,7 @@ impl MetricsSnapshot {
             self.household_count, self.kinship_edge_count,
             self.avg_agent_tier, self.total_active_feuds,
             self.clan_count, self.cult_count, self.noosphere_nodes,
-            self.noosphere_zeitgeist,
+            self.noosphere_zeitgeist, self.collective_memory_count,
         )
     }
 }
@@ -6719,6 +6799,86 @@ mod tests {
         assert!(
             charge_of(&sim) > before,
             "a hot field must amplify the hottest belief's emotional charge"
+        );
+    }
+
+    /// §13.5: Critical scarcity must be captured as a trauma memory (once per
+    /// episode), so the village's collective memory records real crises.
+    #[test]
+    fn famine_records_trauma_memory() {
+        use crate::culture::SharedMemoryKind;
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 60_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        let live_traumas = |sim: &Simulation| -> usize {
+            sim.collective_memory_registry
+                .get(0)
+                .map_or(0, |cm| {
+                    cm.memories
+                        .iter()
+                        .filter(|m| m.kind == SharedMemoryKind::Trauma && m.event_tick > 0)
+                        .count()
+                })
+        };
+        // Forced scarcity: critical hunger, no thirst.
+        for agent in &mut sim.agents {
+            agent.needs.hunger = Fixed::from_f64(0.9);
+            agent.needs.thirst = Fixed::from_f64(0.1);
+        }
+        sim.record_famine_memory(5000);
+        assert_eq!(live_traumas(&sim), 1, "one scarcity episode → one trauma");
+        assert!(
+            sim.collective_memory_registry
+                .get(0)
+                .unwrap()
+                .memories
+                .iter()
+                .any(|m| m.event_tick == 5000),
+            "famine memory must carry its event tick"
+        );
+        // Same episode (still scarce, recent guard) → no duplicate.
+        sim.record_famine_memory(6000);
+        assert_eq!(live_traumas(&sim), 1, "episode guard must prevent duplicates");
+        // No scarcity → nothing recorded.
+        for agent in &mut sim.agents {
+            agent.needs.hunger = Fixed::ZERO;
+            agent.needs.thirst = Fixed::ZERO;
+        }
+        sim.record_famine_memory(50000);
+        assert_eq!(live_traumas(&sim), 1, "no scarcity → no new memory");
+    }
+
+    /// §13.5: Factions found their own mythic past — group 1 + faction id.
+    #[test]
+    fn faction_founding_myth_recorded() {
+        use crate::culture::SharedMemoryKind;
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.record_faction_founding_memory(3, 1000);
+        let group = sim.collective_memory_registry.get(4);
+        assert!(group.is_some(), "group 1+3 must be created");
+        assert!(
+            group
+                .unwrap()
+                .memories
+                .iter()
+                .any(|m| m.kind == SharedMemoryKind::Founding && m.event_tick == 1000),
+            "faction group must hold its founding myth"
         );
     }
 }
