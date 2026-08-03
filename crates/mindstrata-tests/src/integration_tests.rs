@@ -83,9 +83,19 @@ fn marriage_creates_partnerships() {
 #[test]
 fn children_inherit_genetic_traits() {
     // §18.3: children inherit genetic predispositions
-    let sim = run_sim(42, 3000);
+    // Birth rate is an annual per-couple rate (0.3/yr default); at ~21 days
+    // per 3000 ticks no births would occur. This test verifies *inheritance*,
+    // not demography cadence, so elevate the rate to produce children.
+    let config = SimConfig {
+        seed: 42, max_ticks: 3000, world_width: 16, world_height: 16,
+        num_agents: 12, snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.demography_config.birth_rate = mindstrata_core::fixed::Fixed::from_f64(6.0);
+    sim.run(3000);
     let children: Vec<_> = sim.agents.iter().filter(|a| a.parent_a.is_some()).collect();
-    assert!(!children.is_empty(), "Some children should be born after 3000 ticks");
+    assert!(!children.is_empty(), "Some children should be born after 3000 ticks (elevated birth rate)");
 
     for child in &children {
         let parent_a = &sim.agents[child.parent_a.unwrap()];
@@ -169,13 +179,18 @@ fn stress_reduces_planning_depth() {
     }
 
     // Verify stress degrades planning: every agent with stress > 0.5 should
-    // have planning_depth < 0.6 (stress impairs executive function)
+    // have effective_planning_depth < 0.7 (stress impairs executive function).
+    // `effective_planning_depth()` = base planning_depth × effective_capacity,
+    // and effective_capacity is degraded by stress/fatigue/pain/trauma each
+    // tick via cognitive_runtime.update(). The raw planning_depth is a static
+    // personality trait and must NOT be used here — checking it would falsely
+    // flag high-planning agents whose stress never degrades the base trait.
     for agent in &sim.agents {
         let stress = (agent.emotions.fear + agent.emotions.anger).to_f64();
         if stress > 0.5 {
-            let planning = agent.cognitive_runtime.planning_depth.to_f64();
+            let planning = agent.cognitive_runtime.effective_planning_depth().to_f64();
             assert!(planning < 0.7,
-                "Agent {} with stress={stress:.2} should have planning < 0.7, got {planning:.2}",
+                "Agent {} with stress={stress:.2} should have effective planning < 0.7, got {planning:.2}",
                 agent.name);
         }
     }
@@ -509,6 +524,9 @@ fn children_resemble_parents_statistically() {
         };
         let mut sim = Simulation::new(config);
         sim.populate();
+        // Elevate annual birth rate so children exist within 3000 ticks
+        // (default 0.3/yr would yield ~0 children per seed).
+        sim.demography_config.birth_rate = mindstrata_core::fixed::Fixed::from_f64(6.0);
         sim.run(3000);
 
         for agent in &sim.agents {
@@ -1175,6 +1193,71 @@ fn meme_transmission_multiplier_affects_meme_count() {
         baseline.active_meme_count, high_transmission.active_meme_count);
 }
 
+/// The meme registry must start seeded with the village's founding memes —
+/// previously it began empty so the aggregation/spread loops early-returned
+/// and cultural dynamics never emerged (active_meme_count pinned at 0).
+#[test]
+fn meme_registry_seeds_founding_memes() {
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 3000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    assert!(
+        !sim.meme_registry.memes.is_empty(),
+        "meme registry should be seeded with founding memes"
+    );
+    let seeded = sim.meme_registry.memes.len();
+    sim.run(3000);
+    // Memes must actually spread to agents over the run (host counts grow).
+    let total_hosts: u32 = sim.meme_registry.memes.iter().map(|m| m.host_count).sum();
+    assert!(
+        total_hosts > 0,
+        "seeded memes should gain hosts over 3000 ticks (total_hosts={total_hosts})"
+    );
+    assert!(
+        sim.meme_registry.active_count() == seeded,
+        "all seeded memes should stay active: {} != {seeded}",
+        sim.meme_registry.active_count()
+    );
+}
+
+/// `from_snapshot` must re-seed the same founding memes (the snapshot does
+/// not serialize the registry) so golden replays stay deterministic.
+#[test]
+fn snapshot_restore_reseeds_meme_registry() {
+    use mindstrata_sim::snapshot::Snapshot;
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 3000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.run(500);
+    let snap: Snapshot = sim.capture_snapshot();
+    let restored = Simulation::from_snapshot(snap);
+    assert_eq!(
+        restored.meme_registry.memes.len(),
+        sim.meme_registry.memes.len(),
+        "restored registry should match pre-snapshot meme count"
+    );
+    // Both should have the same founding memes (identical descriptions/charges).
+    for (a, b) in restored.meme_registry.memes.iter().zip(sim.meme_registry.memes.iter()) {
+        assert_eq!(a.description, b.description);
+        assert_eq!(a.emotional_charge, b.emotional_charge);
+        assert_eq!(a.identity_relevance, b.identity_relevance);
+    }
+}
+
 // ── Nervous System Sensitivity ────────────────────────────────────
 
 #[test]
@@ -1208,3 +1291,11 @@ fn reproduction_stress_suppression_affects_population() {
         "Higher stress suppression should reduce population: baseline={}, high={}",
         baseline.agent_count, high_suppression.agent_count);
 }
+
+
+
+
+
+
+
+
