@@ -1503,3 +1503,52 @@ fn revolution_is_regime_change_not_repeat_loop() {
         council.members.len()
     );
 }
+
+
+/// §13.6: Echo chambers reinforce beliefs — the loop is not a dead-end metric.
+/// Clusters rebuilt daily; members of a cluster with echo strength > 0 have
+/// their hottest belief (max emotional charge) nudged toward certainty
+/// (confidence += echo × 0.5) and their resistance raised (echo × 0.2).
+///
+/// Prior to the Phase-4 feedback, polarization was computed and never used —
+/// nothing fed back into agent beliefs. This test verifies that after a
+/// simulated year the *same proposition* that was hottest at t=1000 has grown
+/// in confidence for at least half the original agents (births may append new
+/// agents; we only compare the original cohort by index).
+#[test]
+fn echo_chambers_reinforce_agent_beliefs() {
+    use mindstrata_core::fixed::Fixed;
+    // Clusters stabilize early; capture each original agent's hottest belief
+    // BY PROPOSITION ID (identity-shifting max_by_key at the end would compare
+    // a different belief if a colder proposition overtook the hottest one).
+    let mut sim = crate::test_helpers::run_sim(42, 1000);
+    let original_count = sim.agents.len();
+    let hot_early: Vec<(u64, f64)> = sim.agents.iter().map(|a| {
+        let h = a.beliefs.iter().max_by_key(|b| b.emotional_charge).unwrap();
+        (h.proposition_id, h.confidence.to_f64())
+    }).collect();
+    // A full simulated year: 359 daily feed cycles × echo 0.0014 × 0.5
+    // ≈ 0.25 confidence — measurable above belief blend/decay systems.
+    sim.run(50840);
+    assert!(sim.current_tick().as_u64() >= 51840, "ran a full year");
+    let mut grown = 0;
+    for (i, a) in sim.agents.iter().take(original_count).enumerate() {
+        let (pid, ec) = hot_early[i];
+        let same = a.beliefs.iter().find(|b| b.proposition_id == pid);
+        if let Some(h) = same {
+            if h.confidence.to_f64() > ec + 0.02 {
+                grown += 1;
+            }
+        }
+    }
+    // The whole point of the loop is that MOST members entrench. Requiring
+    // >50% keeps the assertion robust to a few agents whose hottest belief
+    // is also being rewritten by gossip/meme updates.
+    assert!(grown > original_count / 2,
+        "echo-chamber reinforcement should entrench beliefs for most agents: \
+         {grown}/{original_count} grew >0.02 confidence");
+    assert!(sim.echo_chamber.polarization_index > Fixed::ZERO,
+        "polarization index is live");
+}
+
+
