@@ -160,8 +160,16 @@ impl Meme {
     /// Decay novelty each tick (memes become less novel over time).
     pub fn tick_decay(&mut self, novelty_decay_factor: Fixed) {
         self.novelty = (self.novelty * novelty_decay_factor).max(Fixed::ZERO);
-        // Host count slowly decays (memes fade if not reinforced)
-        if self.host_count > 0 {
+        // Hosts fade only once the meme goes stale (novelty collapsed).
+        // Reinforcement IS transmission — every accepted transmission re-boosts
+        // novelty (+0.05 in the spread loop), so an actively-spread meme keeps
+        // its hosts while a neglected meme fades. With the 0.998/day novelty
+        // decay, a meme that receives NO reinforcement crosses the 0.9
+        // staleness threshold after ~2 months of sim time; every transmission
+        // resets that clock. The previous flat -1/day wiped hosts within a day
+        // regardless of novelty, making meme persistence (and therefore
+        // spread) structurally impossible.
+        if self.novelty < Fixed::from_f64(0.9) && self.host_count > 0 {
             self.host_count = self.host_count.saturating_sub(1);
         }
     }
