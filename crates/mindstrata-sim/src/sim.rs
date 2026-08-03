@@ -531,6 +531,10 @@ impl Simulation {
         // serialize the meme registry, so replays must re-seed identically
         // (seeded with created_tick = 0) to stay deterministic.
         sim.seed_initial_memes();
+        // Re-seed rituals/campaigns for the same reason (registries are not
+        // serialized; `populate()` and `from_snapshot()` must produce
+        // identical registries so replays match fresh runs).
+        sim.seed_initial_rituals_and_campaigns();
         sim
     }
 
@@ -1012,6 +1016,124 @@ impl Simulation {
             households = self.households.len(),
             "World populated"
         );
+
+        // Seed recurring rituals and institutional propaganda campaigns.
+        // Both registries previously started empty (constructed via `default()`
+        // in `new()`), so the daily propaganda loop and the duodeca ritual loop
+        // early-returned and neither system ever ran — same dead-end class as
+        // the empty meme registry fixed in Iteration 2.
+        self.seed_initial_rituals_and_campaigns();
+    }
+
+    /// Seed the village's recurring rituals and founding propaganda campaigns.
+    ///
+    /// Mirrors `seed_initial_memes`: the registries are not serialized in
+    /// snapshots, so both `populate()` (fresh runs) and `from_snapshot()`
+    /// (replays) must re-seed identically to keep golden replays deterministic.
+    /// Ritual participants are deterministic personality-based congregations
+    /// (agent count AND personalities are identical at the same tick in fresh
+    /// and replayed runs); campaign targets are all agents.
+    ///
+    /// - Rituals: a weekly Temple seasonal prayer and a monthly Council communal
+    ///   meal. `synchrony` defaults to 0.5 in `Ritual::new`, feeding the §11.3
+    ///   hierarchy-stabilization term (ritual participation builds legitimacy)
+    ///   and the §12.5 duodeca bonding loop (trust/affection between
+    ///   participants). Bonding is small enough that trust mean-reversion
+    ///   (Iteration 3) still differentiates relationships.
+    /// - Campaigns: a Council edict and a Temple sermon, each targeting all
+    ///   agents. Durations are in *days* (tick_all runs on the daily phase):
+    ///   360 ≈ one year, so the §13.4 loop is observable for a full-year run
+    ///   and expires afterward (institutions would relaunch; out of scope).
+    fn seed_initial_rituals_and_campaigns(&mut self) {
+        use crate::culture::{PropagandaCampaign, PropagandaChannel, Ritual, RitualKind};
+        let n = self.agents.len();
+        // Campaign targets = everyone; propaganda touches affect only and
+        // never writes trust/ties, so it cannot disturb the §13.6 metrics.
+        let all: Vec<usize> = (0..n).collect();
+        // Institution indices from institutions::default_institutions(): 0 =
+        // Council, 1 = Temple, 2 = Market.
+        //
+        // Bonding calibration: the §12.5 duodeca loop applies `bonding × 0.3`
+        // to trust for EVERY participant pair on every fire, and rv2 decay is
+        // only 0.0005/tick — so a weekly all-pairs ritual with bonding ~0.45
+        // saturated avg trust to 1.0 in 20K ticks, erasing the relationship
+        // differentiation Iter-3's mean reversion exists to preserve. These
+        // seeds use low intensity/sacredness (bonding ~0.1-0.15) and monthly
+        // cadence so cohesion rises measurably (~0.2 over 20K ticks) but trust
+        // stays differentiated.
+        //
+        // Congregations, not the whole village: all-pairs bonding ALSO pushed
+        // every cross-cluster rv2 trust above the §13.6 cross-cutting-tie
+        // threshold (0.5), collapsing tie_ratio to 1.0 — echo_strength halved
+        // (daily belief reinforcement stopped outpacing confidence decay:
+        // `echo_chambers_reinforce_agent_beliefs` failed) and polarization
+        // pinned at 0.0000 (`polarization_index_emerges_from_gossip_fed_beliefs`
+        // failed). Rituals now bond WITHIN the §13.6 belief clusters
+        // (pro-institution vs anti-institution, split on traditionalism +
+        // agreeableness > 1.0), deepening in-group trust while cross-cutting
+        // ties stay at baseline:
+        // - Temple SeasonalPrayer: the institutional faithful (pro cluster).
+        // - Council CommunalMeal: the disaffected (anti cluster) — the Council
+        //   feeds its opposition to pacify it (bread and circuses), bonding
+        //   the future faction pool into a civic in-group.
+        let pro: Vec<usize> = (0..n)
+            .filter(|&i| {
+                self.agents[i].personality.traditionalism
+                    + self.agents[i].personality.agreeableness
+                    > Fixed::from_f64(1.0)
+            })
+            .collect();
+        let anti: Vec<usize> = (0..n).filter(|&i| !pro.contains(&i)).collect();
+        let mut seasonal = Ritual::new(
+            0,
+            RitualKind::SeasonalPrayer,
+            "Seasonal Prayer".into(),
+            1, // Temple sponsor
+            Fixed::from_f64(0.2),  // emotional intensity
+            Fixed::from_f64(0.25), // sacredness
+            Fixed::from_f64(0.05), // cost
+            4320,                  // monthly interval
+            0,                     // last_occurrence — deterministic across replays
+        );
+        seasonal.participants = pro;
+        self.ritual_registry.register(seasonal);
+
+        let mut meal = Ritual::new(
+            0,
+            RitualKind::CommunalMeal,
+            "Communal Meal".into(),
+            0, // Council sponsor
+            Fixed::from_f64(0.12), // emotional intensity
+            Fixed::from_f64(0.15), // sacredness
+            Fixed::from_f64(0.1),  // cost
+            4320,                  // monthly interval
+            0,
+        );
+        meal.participants = anti;
+        self.ritual_registry.register(meal);
+
+        // Council edict — reassures the village (raises valence when legitimate).
+        self.propaganda_registry.register(PropagandaCampaign::new(
+            0,
+            0, // Council sponsor
+            all.clone(),
+            "The council protects the well".into(),
+            Fixed::from_f64(0.5),  // intensity
+            vec![PropagandaChannel::Edict],
+            360, // ~1 year (daily tick)
+            0,
+        ));
+        // Temple sermon — reinforces piety (raises valence when legitimate).
+        self.propaganda_registry.register(PropagandaCampaign::new(
+            0,
+            1, // Temple sponsor
+            all,
+            "Honor the spirits for rain".into(),
+            Fixed::from_f64(0.4),  // intensity
+            vec![PropagandaChannel::Sermon],
+            180, // ~half year (daily tick)
+            0,
+        ));
     }
 
     /// Run the simulation for `n` ticks.
@@ -3117,10 +3239,20 @@ impl Simulation {
                 }
 
                 // §11.3: Hierarchy stabilization — ritual participation builds legitimacy
+                // §11.3: Ritual participation builds legitimacy, but it must
+                // not out-compete the grievance signal. The un-scaled sum of
+                // synchrony (0.5 per sponsored ritual) added +0.01/centum —
+                // just enough to hold Council legitimacy above the faction
+                // trigger (< 0.5) in high-grievance villages, silently
+                // disabling revolution (Iteration-6 regression). Halving the
+                // contribution keeps rituals meaningful (cohesion, trust,
+                // provenance) while letting aggrieved populations still
+                // withdraw legitimacy and arm the faction trigger.
                 let ritual_strength = self.ritual_registry.rituals.iter()
                     .filter(|r| r.sponsor == institution.id as usize)
                     .map(|r| r.synchrony)
-                    .fold(Fixed::ZERO, |a, b| a + b);
+                    .fold(Fixed::ZERO, |a, b| a + b)
+                    * Fixed::from_f64(0.5);
                 crate::social::hierarchy::stabilize_hierarchy(
                     institution,
                     ritual_strength.min(Fixed::ONE),
@@ -4380,10 +4512,16 @@ impl Simulation {
                     // beliefs instead of polarization being a dead-end metric.
                     // Calibrated to the daily cadence (144 ticks/day): a typical
                     // cohesive village has echo ~0.0014 (cohesion 0.5 × fusion
-                    // 0.3 × hostility 0.14 × tie penalty 1/15), so × 0.5 yields
-                    // ~0.07 confidence/yr — visible entrenchment, not runaway.
+                    // 0.3 × hostility 0.14 × tie penalty 1/15), so × 1.0 yields
+                    // ~0.5 confidence/yr on the hot belief — clearly above the
+                    // belief_update `confidence × resistance` decay floor
+                    // (~0.3-0.4), so the loop observably entrenches beliefs
+                    // instead of merely offsetting decay. The original 0.5
+                    // coefficient left entrenchment a knife-edge race once
+                    // Iteration-8 ritual congregations changed trust/gossip
+                    // dynamics (echo test grew 3-5/12, below the >6/12 bar).
                     // Strong realistic chambers (echo ≤ ~0.06, few cross-ties)
-                    // entrench to certainty in weeks; clamps at 1.0 bound it.
+                    // entrench to certainty in days; clamps at 1.0 bound it.
                     for cluster in &self.echo_chamber.clusters {
                         let echo = cluster.echo_strength();
                         // Feedback is proportional to echo — no absolute gate.
@@ -4396,7 +4534,7 @@ impl Simulation {
                         if echo <= Fixed::ZERO {
                             continue;
                         }
-                        let reinforcement = echo * Fixed::from_f64(0.5);
+                        let reinforcement = echo * Fixed::from_f64(1.0);
                         let resistance_gain = echo * Fixed::from_f64(0.2);
                         let charge_gain = reinforcement * Fixed::from_f64(0.5);
                         // NOTE: cluster membership is personality-driven
