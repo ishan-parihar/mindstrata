@@ -92,7 +92,13 @@ fn children_inherit_genetic_traits() {
     };
     let mut sim = Simulation::new(config);
     sim.populate();
-    sim.demography_config.birth_rate = mindstrata_core::fixed::Fixed::from_f64(6.0);
+    // 60/yr makes births effectively certain: per-deca-roll probability is
+    // 60 × (10/35040) ≈ 0.017, so across 4+ couples and 300 deca ticks the
+    // chance of zero births is negligible even when unrelated sim changes
+    // shift the shared RNG stream position (the test verifies *inheritance*,
+    // not demography cadence — a 6.0/yr rate was borderline and flaked when
+    // the RNG draw order moved).
+    sim.demography_config.birth_rate = mindstrata_core::fixed::Fixed::from_f64(60.0);
     sim.run(3000);
     let children: Vec<_> = sim.agents.iter().filter(|a| a.parent_a.is_some()).collect();
     assert!(!children.is_empty(), "Some children should be born after 3000 ticks (elevated birth rate)");
@@ -304,21 +310,65 @@ fn ritual_participation_builds_legitimacy() {
 
 #[test]
 fn factions_emerge_from_grievance() {
-    // §18.3: faction forms under shared grievance
-    let sim = run_sim(42, 2000);
+    // §18.3: faction forms under shared grievance. Before Iteration 6,
+    // council legitimacy ratcheted to 1.0 (self-reinforcing morale loop +
+    // norm-enforcement boosts), so the legitimacy < 0.5 formation trigger
+    // never armed and zero factions ever formed — this test's conditional
+    // was unreachable. Legitimacy now converges to a grievance-suppressed
+    // target, so high-grievance villages actually form factions.
+    let sim = run_sim(42, 10000);
     let factions: Vec<_> = sim.institutions.iter()
         .filter(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Faction)
         .collect();
-    // After 2000 ticks, at least one faction should have formed
-    // (factions form when agents share grievance and self-organize)
-    if !factions.is_empty() {
-        let faction = &factions[0];
-        assert!(faction.members.len() >= 2,
-            "Faction should have at least 2 members, got {}", faction.members.len());
+    assert!(!factions.is_empty(),
+        "faction should form under shared grievance (seed 42, 10K ticks)");
+    let faction = &factions[0];
+    assert!(faction.members.len() >= 2,
+        "Faction should have at least 2 members, got {}", faction.members.len());
+}
+
+/// §29.2: Faction membership must be exclusive — an agent in one faction
+/// cannot also join another. Before Iteration 6 every new faction pulled
+/// from the same grievance pool, producing overlapping memberships.
+#[test]
+fn faction_memberships_are_exclusive() {
+    for seed in [1u64, 7, 42, 99, 123] {
+        let sim = run_sim(seed, 20000);
+        let factions: Vec<_> = sim.institutions.iter()
+            .filter(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Faction)
+            .collect();
+        let mut members: Vec<usize> = Vec::new();
+        for f in &factions {
+            members.extend(f.members.iter().map(|m| m.as_u64() as usize));
+        }
+        let unique: std::collections::HashSet<usize> = members.iter().copied().collect();
+        assert_eq!(
+            members.len(), unique.len(),
+            "seed {seed}: faction memberships overlap ({} members, {} unique)",
+            members.len(), unique.len()
+        );
     }
-    // Even if no faction formed yet, the simulation should be stable
-    assert!(sim.current_tick().as_u64() >= 2000,
-        "Simulation should run to completion");
+}
+
+/// §29.2/§26: Council legitimacy must respond to popular grievance, not
+/// pin at 1.0. The self-referential morale→legitimacy loop plus additive
+/// norm-enforcement boosts previously ratcheted it to ~1.0 forever.
+#[test]
+fn council_legitimacy_responds_to_grievance() {
+    use mindstrata_sim::institutions::InstitutionKind;
+    let sim = run_sim(42, 20000);
+    let council = sim.institutions.iter()
+        .find(|i| i.kind == InstitutionKind::Council)
+        .expect("council institution should exist");
+    let leg = council.legitimacy.to_f64();
+    assert!(
+        leg < 0.9,
+        "council legitimacy should not pin at ~1.0 under high grievance (got {leg:.3})"
+    );
+    assert!(
+        leg >= 0.0 && leg <= 1.0,
+        "legitimacy out of range: {leg:.3}"
+    );
 }
 
 // ── §18.3: Interconnected Systems ────────────────────────────────
@@ -1417,3 +1467,39 @@ fn metrics_csv_exports_real_inequality_tracking() {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+/// §7.3: A successful revolution is a regime change — the faction dissolves
+/// and its leadership takes the council. Previously the faction kept its
+/// members and morale, so derive_collective_psychology rebuilt its grievance
+/// and it revolted every REVOLUTION_COOLDOWN ticks (6 coups in 1400 ticks).
+#[test]
+fn revolution_is_regime_change_not_repeat_loop() {
+    use mindstrata_sim::institutions::InstitutionKind;
+    let mut sim = mindstrata_sim::sim::Simulation::new(mindstrata_sim::sim::SimConfig {
+        seed: 42, max_ticks: 30000, world_width: 16, world_height: 16,
+        num_agents: 12, snapshot_interval: None,
+    });
+    sim.populate();
+    sim.run(30000);
+    // Faction formation + one revolution occurred (observed at tick 6721).
+    let council = sim.institutions.iter()
+        .find(|i| i.kind == InstitutionKind::Council)
+        .expect("council should exist");
+    // After a coup, faction members transfer to the council — the council
+    // must hold more members than the original 2-4 appointed elders.
+    assert!(
+        council.members.len() >= 5,
+        "after revolution the council should absorb the faction (got {} members)",
+        council.members.len()
+    );
+}
