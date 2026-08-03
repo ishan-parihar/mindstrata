@@ -611,6 +611,7 @@ pub fn render_psychology_inspector(
     agent: &mindstrata_sim::sim::AgentBundle,
 ) -> String {
     use mindstrata_sim::person::{IdentityKind, GoalSource};
+    use mindstrata_sim::psychology::attachment::AttachmentStyle;
     let mut out = String::new();
     out.push_str("╔══════════════════════════════════════════════════════════╗\n");
     out.push_str("║  Psychology Inspector — Full Cognitive Pipeline          ║\n");
@@ -737,6 +738,27 @@ pub fn render_psychology_inspector(
     out.push_str(&format!("  Resilience:   {:5.2}\n", agent.derived.resilience.to_f64()));
     out.push_str(&format!("  Ambition:     {:5.2}\n", agent.derived.ambition.to_f64()));
     out.push_str(&format!("  Resentment:   {:5.2}\n\n", agent.derived.resentment.to_f64()));
+
+    // ── Attachment System (§8.1.14) ──
+    out.push_str("── §8.1.14: Attachment System ──\n\n");
+    let style_str = match agent.attachment.style {
+        AttachmentStyle::Secure => "Secure",
+        AttachmentStyle::Anxious => "Anxious",
+        AttachmentStyle::Avoidant => "Avoidant",
+        AttachmentStyle::Disorganized => "Disorganized",
+    };
+    out.push_str(&format!("  {:<14} {style_str}\n", "Style"));
+    let att_rows = [
+        ("Security", agent.attachment.security),
+        ("Anxiety", agent.attachment.anxiety),
+        ("Sep. distress", agent.attachment.separation_distress),
+    ];
+    for (name, val) in &att_rows {
+        let bar_len = (val.to_f64() * 20.0) as usize;
+        let bar: String = "█".repeat(bar_len.min(20)) + &"░".repeat(20 - bar_len.min(20));
+        out.push_str(&format!("  {:<14} {:5.2} [{}]\n", name, val.to_f64(), bar));
+    }
+    out.push('\n');
 
     // ── Status ──
     out.push_str("── §19.5.G: Status ──\n\n");
