@@ -2817,6 +2817,32 @@ impl Simulation {
     fn tick_institutional_psychology(&mut self, tick_u64: u64, phases: crate::scheduler::TickPhases) {
         // ── 12. Institutional collective psychology derivation ────
         // §23: Derive collective psychology from member states each tick.
+        //
+        // §29.2: Compute the population's average grievance once per tick.
+        // Council legitimacy must reflect popular sentiment. Before this fix,
+        // the recovery target was max(morale, 0.3) with no grievance term — and
+        // since morale = f(legitimacy) (a positive feedback loop), legitimacy
+        // pinned at ~1.0 and the faction-formation trigger (legitimacy < 0.5)
+        // was never armed even when 9/12 agents were above the grievance
+        // threshold. An aggrieved population must withdraw legitimacy from the
+        // council, which is what actually arms the faction trigger.
+        let market_gini = self.market.inequality;
+        let avg_grievance: Fixed = if self.agents.is_empty() {
+            Fixed::ZERO
+        } else {
+            let sum: Fixed = self.agents.iter().map(|a| {
+                factions::compute_grievance(
+                    a.derived.resentment,
+                    a.emotions.fear,
+                    a.emotions.anger,
+                    a.needs.autonomy,
+                    a.needs.meaning,
+                    a.moral_values.fairness,
+                    market_gini,
+                )
+            }).fold(Fixed::ZERO, |a, b| a + b);
+            sum / Fixed::from_int(self.agents.len() as i64)
+        };
         for institution in &mut self.institutions {
             let member_morales: Vec<Fixed> = institution
                 .members
@@ -2851,12 +2877,39 @@ impl Simulation {
             if institution.members.is_empty() {
                 institution.decay_legitimacy(Fixed::from_f64(0.0001));
             } else {
-                let target = institution.collective.morale.max(Fixed::from_f64(0.3));
-                let diff = target - institution.legitimacy;
-                if diff > Fixed::ZERO {
-                    institution.increase_legitimacy(diff * Fixed::from_f64(0.002));
+                // §29.2: An aggrieved population withdraws legitimacy from the
+                // council. Suppress the recovery target proportionally to average
+                // grievance (scale 0.6: grievance 0.8 → target cut ~48%, enough
+                // to arm the faction trigger). Only the Council is exposed to
+                // popular grievance — it is the institution the faction trigger
+                // reads and the one held accountable for governance. Note: in
+                // practice high market inequality (Gini ≈ 0.75) keeps avg
+                // grievance above 0.5 in most villages, so the council's
+                // equilibrium legitimacy sits below 0.5 and factions form in
+                // unequal settlements — which is the intended emergent signal.
+                let suppression = if institution.kind == institutions::InstitutionKind::Council {
+                    (Fixed::ONE - avg_grievance * Fixed::from_f64(0.6)).clamp_01()
                 } else {
-                    institution.decay_legitimacy(Fixed::from_f64(0.0001));
+                    Fixed::ONE
+                };
+                let target = (institution.collective.morale.max(Fixed::from_f64(0.3))
+                    * suppression).clamp_01();
+                // §26: Converge symmetrically toward the target. The old code
+                // rose at 0.002×gap but decayed at a fixed 0.0001/tick, so
+                // legitimacy ratcheted to 1.0 early (before grievance builds)
+                // and ritual/norm-enforcement boosts kept it pinned there —
+                // the faction trigger (legitimacy < 0.5) never re-armed.
+                let diff = target - institution.legitimacy;
+                // Convergence rate: 0.01/tick ≈ 70-tick half-life. The old
+                // 0.002 rate let additive boosts (norm enforcement +0.0025/violation,
+                // ritual stabilization +0.02/centum) dominate the decay gradient,
+                // so legitimacy ratcheted to 1.0 and the faction trigger never
+                // re-armed. At 0.01 the grievance-suppressed target is actually
+                // tracked instead of being overwhelmed.
+                if diff > Fixed::ZERO {
+                    institution.increase_legitimacy(diff * Fixed::from_f64(0.01));
+                } else {
+                    institution.decay_legitimacy(-diff * Fixed::from_f64(0.01));
                 }
             }
 
@@ -5199,21 +5252,44 @@ impl Simulation {
                         tick = tick_u64,
                         "§7.3: Revolution! Faction seizes control"
                     );
-                    // Council loses all legitimacy
+                    // §7.3: A successful coup is a regime change — the faction
+                    // becomes the new establishment. The old council is deposed
+                    // and its seats taken by the faction's leadership; the
+                    // faction itself dissolves (it achieved its goal). Previously
+                    // the faction merely gained legitimacy and kept its members,
+                    // so derive_collective_psychology rebuilt its morale from
+                    // member valence + legitimacy each tick and it revolted again
+                    // every REVOLUTION_COOLDOWN ticks (6 coups in 1400 ticks
+                    // observed). With the faction dissolved, a fresh grievance
+                    // cycle must build a new faction to revolt again.
+                    let faction_members = self.institutions[inst_idx].members.clone();
+                    let faction_roles = self.institutions[inst_idx].roles.clone();
+                    let leader_id = self.institutions[inst_idx]
+                        .get_role_holder("Leader")
+                        .unwrap_or_else(|| AgentId::new(inst_idx as u64));
+                    // §5.2: Deactivate the matching FactionV2 record — the
+                    // institution is being dissolved, so the registry must not
+                    // keep reporting an active faction (stale threat/agent-tier).
+                    self.faction_v2_registry
+                        .deactivate_by_leader(leader_id.as_u64() as usize);
+                    self.institutions.retain(|i| i.kind != InstitutionKind::Faction);
+                    // The faction leadership becomes the new council.
                     for inst in &mut self.institutions {
                         if inst.kind == InstitutionKind::Council {
-                            inst.legitimacy = Fixed::ZERO;
-                            inst.collective.morale = Fixed::from_f64(0.1);
+                            inst.members = faction_members.clone();
+                            for role in &faction_roles {
+                                inst.add_role(role.clone());
+                            }
+                            inst.legitimacy = Fixed::from_f64(0.5);
+                            inst.collective.morale = Fixed::from_f64(0.5);
                         }
                     }
-                    // Faction gains legitimacy
-                    self.institutions[inst_idx].legitimacy = Fixed::from_f64(0.6);
-                    self.institutions[inst_idx].collective.morale = Fixed::from_f64(0.8);
                     // Track revolution tick for cooldown
                     self.last_revolution_tick = tick_u64;
-                    // Record revolution event
+                    // Record revolution event (leader captured before the
+                    // faction was dissolved by the retain above)
                     self.events.push(SimEvent::ConflictOccurred {
-                        aggressor: self.institutions[inst_idx].get_role_holder("Leader").unwrap_or(AgentId::new(0)),
+                        aggressor: leader_id,
                         target: AgentId::new(0),
                         kind: ConflictKind::Revolution,
                         injury: Fixed::ZERO,

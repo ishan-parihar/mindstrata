@@ -208,6 +208,20 @@ impl FactionV2Registry {
             .collect()
     }
 
+    /// Deactivate every faction whose leader matches `leader`.
+    ///
+    /// Used after a successful revolution: the faction institution dissolves
+    /// (its members take the council), so its FactionV2 record must not keep
+    /// reporting an active faction that no longer exists as an institution
+    /// (that would feed stale threat/agent-tier state).
+    pub fn deactivate_by_leader(&mut self, leader: usize) {
+        for faction in &mut self.factions {
+            if faction.leader == leader {
+                faction.active = false;
+            }
+        }
+    }
+
     /// Daily update for all active factions.
     pub fn daily_update(&mut self) {
         for faction in &mut self.factions {
