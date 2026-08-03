@@ -1516,6 +1516,32 @@ impl Simulation {
         self.noospheric_field.decay_all(Fixed::from_f64(0.001));
     }
 
+    /// §13: Daily belief-ecology projection — the noosphere feeds back into
+    /// individual psychology, closing the loop that previously ran one-way
+    /// (memes/beliefs → nodes only). The field's most-activated node is the
+    /// dominant symbolic mood (the "zeitgeist"); project it onto every
+    /// agent's hottest belief as a small, capped emotional-charge boost so
+    /// the collective atmosphere amplifies conviction. Structurally distinct
+    /// from the §13.6 echo chamber: that is per-cluster (who you are tied
+    /// to); this is global (the mood of the whole field). Deterministic.
+    fn tick_noosphere_belief_projection(&mut self) {
+        let zeitgeist = self
+            .noospheric_field
+            .nodes
+            .iter()
+            .map(|n| n.effective_activation())
+            .fold(Fixed::ZERO, |acc, a| acc.max(a));
+        if zeitgeist <= Fixed::from_f64(0.4) {
+            return; // dormant field — no atmospheric pressure
+        }
+        let boost = zeitgeist * Fixed::from_f64(0.0005);
+        for agent in &mut self.agents {
+            if let Some(hot) = agent.beliefs.iter_mut().max_by_key(|b| b.emotional_charge) {
+                hot.emotional_charge = (hot.emotional_charge + boost).clamp_01();
+            }
+        }
+    }
+
     /// Run the simulation for `n` ticks.
     pub fn run(&mut self, n: u64) {
         for _ in 0..n {
@@ -3289,6 +3315,12 @@ impl Simulation {
         let clan_count = self.clan_registry.clans.len() as u64;
         let cult_count = self.cult_registry.cults.iter().filter(|c| c.active).count() as u64;
         let noosphere_nodes = self.noospheric_field.nodes.len() as u64;
+        let noosphere_zeitgeist = self
+            .noospheric_field
+            .nodes
+            .iter()
+            .map(|n| n.effective_activation().to_f64())
+            .fold(0.0f64, f64::max);
 
         MetricsSnapshot {
             tick: self.current_tick().as_u64(),
@@ -3320,6 +3352,7 @@ impl Simulation {
             clan_count,
             cult_count,
             noosphere_nodes,
+            noosphere_zeitgeist,
         }
     }
 
@@ -4952,6 +4985,10 @@ impl Simulation {
                     }
                 }
             }
+            // §13: Noosphere belief-ecology projection (daily, after the echo
+            // chamber feed) — the zeitgeist amplifies conviction.
+            self.tick_noosphere_belief_projection();
+
             // Architecture-plan-2 §10.8: Clan daily update.
             // Decay grievance, adjust cohesion, decay myth belief.
             self.clan_registry.daily_update();
@@ -6311,18 +6348,22 @@ pub struct MetricsSnapshot {
     /// Number of symbolic nodes in the noospheric field (§13).
     #[serde(default)]
     pub noosphere_nodes: u64,
+    /// Peak activation of the noospheric field — the dominant symbolic mood
+    /// (the §13 belief-ecology zeitgeist).
+    #[serde(default)]
+    pub noosphere_zeitgeist: f64,
 }
 
 impl MetricsSnapshot {
     /// §5.1/§19: CSV header for exporting metrics for analysis.
     pub fn csv_header() -> &'static str {
-        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,gini,avg_wealth,median_wealth,total_trades,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds,clan_count,cult_count,noosphere_nodes"
+        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,gini,avg_wealth,median_wealth,total_trades,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds,clan_count,cult_count,noosphere_nodes,noosphere_zeitgeist"
     }
 
     /// §5.1/§19: One CSV line for this snapshot.
     pub fn to_csv_line(&self) -> String {
         format!(
-            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             self.tick,
             self.avg_hunger, self.avg_thirst, self.avg_fatigue,
             self.avg_valence, self.avg_joy, self.avg_fear,
@@ -6335,6 +6376,7 @@ impl MetricsSnapshot {
             self.household_count, self.kinship_edge_count,
             self.avg_agent_tier, self.total_active_feuds,
             self.clan_count, self.cult_count, self.noosphere_nodes,
+            self.noosphere_zeitgeist,
         )
     }
 }
@@ -6633,5 +6675,50 @@ mod tests {
                 mem.salience.to_f64(),
             );
         }
+    }
+
+    /// §13: The noosphere zeitgeist must feed back into agents — a hot field
+    /// amplifies the hottest belief's emotional charge; a dormant field
+    /// changes nothing.
+    #[test]
+    fn noosphere_zeitgeist_amplifies_conviction() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        // Dormant field: zero activation and backing → zeitgeist 0 → no-op.
+        for node in &mut sim.noospheric_field.nodes {
+            node.activation = Fixed::ZERO;
+            node.institutional_backing = Fixed::ZERO;
+        }
+        let charge_of = |sim: &Simulation| -> Fixed {
+            sim.agents[0]
+                .beliefs
+                .iter()
+                .fold(Fixed::ZERO, |acc, b| acc + b.emotional_charge)
+        };
+        let before = charge_of(&sim);
+        sim.tick_noosphere_belief_projection();
+        assert_eq!(
+            charge_of(&sim),
+            before,
+            "a dormant field must not project onto beliefs"
+        );
+        // Hot field: peak activation on every node → the zeitgeist amplifies
+        // the hottest belief.
+        for node in &mut sim.noospheric_field.nodes {
+            node.activation = Fixed::ONE;
+        }
+        sim.tick_noosphere_belief_projection();
+        assert!(
+            charge_of(&sim) > before,
+            "a hot field must amplify the hottest belief's emotional charge"
+        );
     }
 }
