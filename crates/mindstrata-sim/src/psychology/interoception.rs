@@ -92,6 +92,36 @@ impl InteroceptiveState {
         tone.clamp_01()
     }
 
+    /// §8.1: The *felt* need deficit — how much of the raw body-need deficit the
+    /// agent registers after interoceptive filtering (awareness scales the
+    /// signal, `negative_bias` amplifies distress).
+    ///
+    /// Baseline-corrected against [`Self::default`]: the default configuration is
+    /// an exact no-op, so only personality-driven deviation (e.g. `negative_bias`
+    /// from neuroticism) changes behavior. This keeps the simulation calibration
+    /// transparent while making the §8.1 filters genuinely behavioral — an
+    /// anxious agent feels the same hunger as more dire, feeding higher
+    /// depression risk downstream.
+    pub fn felt_need_deficit(
+        &self,
+        hunger: Fixed,
+        thirst: Fixed,
+        fatigue: Fixed,
+        safety: Fixed,
+    ) -> Fixed {
+        let raw = (hunger + thirst + fatigue + safety) * Fixed::from_f64(0.25);
+        let felt = (self.felt_hunger(hunger) + self.felt_thirst(thirst)
+            + self.felt_fatigue(fatigue) + safety)
+            * Fixed::from_f64(0.25);
+        let baseline = Self::default();
+        let baseline_felt = (baseline.felt_hunger(hunger) + baseline.felt_thirst(thirst)
+            + baseline.felt_fatigue(fatigue) + safety)
+            * Fixed::from_f64(0.25);
+        // Amplify the deviation-from-default distortion so it is behaviorally
+        // visible while remaining exactly zero at the baseline configuration.
+        (raw + (felt - baseline_felt) * Fixed::from_f64(2.0)).clamp_01()
+    }
+
     /// Initialize interoceptive state from personality traits and trauma history.
     /// Should be called once at agent creation, not per tick, since personality
     /// traits are static and trauma_load changes slowly.
@@ -125,6 +155,47 @@ mod tests {
         };
         let felt = state.felt_hunger(Fixed::from_f64(0.5));
         assert!(felt > Fixed::from_f64(0.3));
+    }
+
+    #[test]
+    fn felt_need_deficit_is_identity_at_default_configuration() {
+        let state = InteroceptiveState::default();
+        let (h, t, f, s) = (
+            Fixed::from_f64(0.6),
+            Fixed::from_f64(0.4),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.3),
+        );
+        let raw = (h + t + f + s) * Fixed::from_f64(0.25);
+        let felt = state.felt_need_deficit(h, t, f, s);
+        assert_eq!(felt, raw, "default interoception must be an exact no-op");
+    }
+
+    #[test]
+    fn felt_need_deficit_amplifies_with_negative_bias() {
+        let (h, t, f, s) = (
+            Fixed::from_f64(0.6),
+            Fixed::from_f64(0.4),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.3),
+        );
+        let raw = (h + t + f + s) * Fixed::from_f64(0.25);
+        let low = InteroceptiveState {
+            negative_bias: Fixed::from_f64(0.0),
+            ..InteroceptiveState::default()
+        };
+        let high = InteroceptiveState {
+            negative_bias: Fixed::from_f64(0.9),
+            ..InteroceptiveState::default()
+        };
+        assert!(
+            low.felt_need_deficit(h, t, f, s) < raw,
+            "low bias numbs the felt deficit"
+        );
+        assert!(
+            high.felt_need_deficit(h, t, f, s) > raw,
+            "high bias amplifies the felt deficit"
+        );
     }
 
     #[test]

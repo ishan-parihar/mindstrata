@@ -6318,7 +6318,16 @@ impl Simulation {
                 continue;
             }
             let stress = agent.emotions.fear + agent.emotions.anger;
-            let need_deficit_avg = (agent.needs.hunger + agent.needs.thirst + agent.needs.fatigue + agent.needs.safety) * Fixed::from_f64(0.25);
+            // §8.1: Interoception filters what the agent *feels* of its raw need
+            // deficit — anxious (high negative-bias) agents register the same body
+            // state as more dire, feeding higher depression risk downstream.
+            // Mean-zero at the default interoceptive configuration.
+            let need_deficit_avg = agent.interoception.felt_need_deficit(
+                agent.needs.hunger,
+                agent.needs.thirst,
+                agent.needs.fatigue,
+                agent.needs.safety,
+            );
             let social_support = Fixed::ONE - agent.needs.social;
             let success_rate = if agent.recent_attempts > 0 {
                 Fixed::from_int(agent.recent_successes as i64) / Fixed::from_int(agent.recent_attempts as i64)
@@ -7175,6 +7184,68 @@ mod tests {
         }
         sim.record_famine_memory(50000);
         assert_eq!(live_traumas(&sim), 1, "no scarcity → no new memory");
+    }
+
+    /// §8.1: Interoceptive filters must reach behavior — an anxious agent
+    /// (high negative_bias) feels the same body deficit as more dire, so its
+    /// depression risk accumulates faster than a low-bias agent's under
+    /// identical material conditions.
+    #[test]
+    fn interoception_filters_feed_depression_risk() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 60_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut anxious = Simulation::new(config.clone());
+        anxious.populate();
+        let mut calm = Simulation::new(config);
+        calm.populate();
+        // Identical material conditions: a real need deficit in every agent.
+        for sim in [&mut anxious, &mut calm] {
+            for agent in &mut sim.agents {
+                agent.needs.hunger = Fixed::from_f64(0.7);
+                agent.needs.thirst = Fixed::from_f64(0.7);
+                agent.needs.fatigue = Fixed::from_f64(0.7);
+                agent.needs.safety = Fixed::from_f64(0.7);
+            }
+        }
+        // Only the interoceptive lens differs: anxious amplifies distress.
+        for agent in &mut anxious.agents {
+            agent.interoception.negative_bias = Fixed::from_f64(0.9);
+        }
+        for agent in &mut calm.agents {
+            agent.interoception.negative_bias = Fixed::from_f64(0.0);
+        }
+        // Converge the derived states over many updates (no tick machinery).
+        for _ in 0..500 {
+            anxious.tick_derived_states_and_beliefs(0, 1);
+            calm.tick_derived_states_and_beliefs(0, 1);
+        }
+        let anxious_risk = anxious.agents[0].derived.depression_risk;
+        let calm_risk = calm.agents[0].derived.depression_risk;
+        assert!(
+            anxious_risk > calm_risk,
+            "anxious agents must accumulate higher depression risk from the \
+             same needs (got {anxious_risk} vs {calm_risk})"
+        );
+        // The felt deficit itself is monotone in bias (unit-level check).
+        let felt_high = anxious.agents[0].interoception.felt_need_deficit(
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.7),
+        );
+        let felt_low = calm.agents[0].interoception.felt_need_deficit(
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.7),
+        );
+        assert!(felt_high > felt_low, "high bias must yield a higher felt deficit");
     }
 
     /// §13.5: Factions found their own mythic past — group 1 + faction id.
