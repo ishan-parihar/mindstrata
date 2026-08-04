@@ -208,11 +208,50 @@ impl SelfModel {
             }
         }
     }
+
+    /// Reconcile self-esteem with the narrative balance (deterministic,
+    /// mean-reverting). A redemption/heroism-heavy narrative supports
+    /// self-esteem; contamination/victimhood erodes it. Converges slowly so
+    /// self-esteem tracks the long-run story rather than daily noise.
+    pub fn reconcile_self_esteem(&mut self) {
+        let positive_balance = self.narrative.redemption_script + self.narrative.heroism_script;
+        let negative_balance = self.narrative.contamination_script + self.narrative.victimhood_script;
+        let balance = positive_balance - negative_balance; // range ≈ −2..2
+        let target = (Fixed::from_f64(0.5) + balance * Fixed::from_f64(0.125)).clamp_01();
+        self.self_esteem = self.self_esteem + (target - self.self_esteem) * Fixed::from_f64(0.05);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// §8.1: Self-esteem must drift toward the narrative-consistent level.
+    #[test]
+    fn reconcile_self_esteem_tracks_narrative_balance() {
+        // A contamination/victimhood-heavy narrative erodes self-esteem.
+        let mut sm = SelfModel::default();
+        sm.narrative.contamination_script = Fixed::from_f64(0.9);
+        sm.narrative.redemption_script = Fixed::from_f64(0.1);
+        sm.narrative.heroism_script = Fixed::from_f64(0.1);
+        sm.narrative.victimhood_script = Fixed::from_f64(0.8);
+        let start = sm.self_esteem;
+        for _ in 0..50 {
+            sm.reconcile_self_esteem();
+        }
+        assert!(sm.self_esteem < start, "eroded narrative lowers self-esteem");
+        assert!(sm.self_esteem < Fixed::from_f64(0.5));
+        // A redemption/heroism-heavy narrative lifts self-esteem.
+        let mut sm2 = SelfModel::default();
+        sm2.narrative.redemption_script = Fixed::from_f64(1.0);
+        sm2.narrative.heroism_script = Fixed::from_f64(1.0);
+        sm2.narrative.contamination_script = Fixed::ZERO;
+        sm2.narrative.victimhood_script = Fixed::ZERO;
+        for _ in 0..50 {
+            sm2.reconcile_self_esteem();
+        }
+        assert!(sm2.self_esteem > Fixed::from_f64(0.5));
+    }
 
     #[test]
     fn identity_linkage_returns_max_strength() {

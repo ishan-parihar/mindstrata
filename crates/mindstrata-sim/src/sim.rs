@@ -86,6 +86,13 @@ const PATRONAGE_DESTITUTION_FLOOR: Fixed = Fixed::from_raw(10_000); // 1.0 coin
 /// faction-formation envelope (factions_emerge_from_grievance).
 const PATRONAGE_GRIEVANCE_DAMPEN: Fixed = Fixed::from_raw(600); // 0.06
 
+// ── Self-model constants (§8.1) ────────────────────────────────────
+/// Regulation-capacity support per unit of self-esteem deviation from the
+/// 0.5 baseline. Zero at baseline (the default self-model), so early
+/// simulation is untouched; a coherent self-model (high self-esteem from a
+/// redemptive narrative) sustains emotional regulation.
+const SELF_MODEL_REGULATION_GAIN: Fixed = Fixed::from_raw(2000); // 0.2
+
 // ── Group formation constants (§12.2) ──────────────────────────────
 /// Social cost scale factor (density × this → 0.0–0.2).
 const GROUP_SOCIAL_COST_SCALE: Fixed = Fixed::from_raw(2000); // 0.2
@@ -2041,8 +2048,11 @@ impl Simulation {
                         });
                     }
                     reg_strategies.push(regulation_strategy);
+                    // §8.1: A healthy self-model (high self-esteem earned from
+                    // a redemptive narrative) sustains regulation capacity.
+                    let self_support = self_esteem_support(self.agents[i].self_model.self_esteem);
                     self.agents[i].emotion_regulation.update_capacity(
-                        stress, need_fatigue, social_support,
+                        stress, need_fatigue, social_support + self_support,
                     );
                 } else {
                     // §17: Background/secondary agents use default regulation strategy
@@ -2116,6 +2126,12 @@ impl Simulation {
                         );
                     }
                     self.agents[i].narrative.update_theme();
+                    // §8.1: The self-model tracks the same life events, and
+                    // self-esteem mean-reverts toward the narrative balance.
+                    self.agents[i].self_model.update_narrative(
+                        negative_events, positive_event_magnitude, social_support,
+                    );
+                    self.agents[i].self_model.reconcile_self_esteem();
                     let _ = self.agents[i].agent_tier.budget_tracker.consume_appraisal();
                 }
 
@@ -6757,9 +6773,55 @@ pub struct AgentSummary {
     pub attachment_caregiving_style: CaregivingStyle,
 }
 
+/// §8.1: Regulation-capacity support contributed by self-esteem (deviation
+/// from the 0.5 baseline × gain). Zero at baseline; positive for healthy
+/// self-models, negative for eroded ones. Pure and deterministic.
+fn self_esteem_support(self_esteem: Fixed) -> Fixed {
+    (self_esteem - Fixed::from_f64(0.5)) * SELF_MODEL_REGULATION_GAIN
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// §8.1: Self-esteem support is zero at baseline and signed around it.
+    #[test]
+    fn self_esteem_support_is_zero_at_baseline() {
+        assert_eq!(self_esteem_support(Fixed::from_f64(0.5)), Fixed::ZERO);
+        assert!(self_esteem_support(Fixed::from_f64(0.9)) > Fixed::ZERO);
+        assert!(self_esteem_support(Fixed::from_f64(0.1)) < Fixed::ZERO);
+    }
+
+    /// §8.1: The self-model must track life events — previously constructed
+    /// but never updated (a dead system). After 500 ticks the focal agents'
+    /// self-esteem must have drifted from the 0.5 baseline as their
+    /// narratives (and the self-model's parallel narrative) form.
+    #[test]
+    fn self_model_tracks_life_events() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        for _ in 0..500 {
+            sim.tick();
+        }
+        let any_drift = sim.agents.iter().any(|a| {
+            let d = a.self_model.self_esteem - Fixed::from_f64(0.5);
+            d > Fixed::from_f64(0.005)
+                || d < -Fixed::from_f64(0.005)
+                || a.self_model.narrative.contamination_script != Fixed::from_f64(0.2)
+        });
+        assert!(
+            any_drift,
+            "self_model must update from life events (was a dead system)"
+        );
+    }
 
     /// §12.4: Cult emergence must fire when institutional legitimacy is low
     /// and agents suffer a meaning deficit — and the cooldown must prevent
