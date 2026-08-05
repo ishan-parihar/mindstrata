@@ -1914,9 +1914,78 @@ fn sickness_depresses_work_output() {
     );
 }
 
+// ── §7.2.3 / §7.2.7: Skeletal + Digestive Systems ────────────────
 
+/// Iter 38: the skeletal (mobility) and digestive (gut-health) systems must be
+/// EXACTLY neutral through a calibrated riverford run — identity multipliers
+/// (1.0) that only move under elder frailty, severe injury, malnutrition, or
+/// spoiled food, none of which occur in the baseline horizon. This is the
+/// zero-drift contract: adding the systems must not perturb calibrated runs.
+#[test]
+fn skeletal_and_digestive_stay_neutral_in_calibrated_run() {
+    let riverford = mindstrata_sim::scenario::Scenario::riverford();
+    let mut sim = mindstrata_sim::Simulation::from_scenario(riverford);
+    sim.populate();
+    sim.run(300);
 
+    for agent in &sim.agents {
+        assert_eq!(
+            agent.embodied.skeletal.effective_mobility(),
+            mindstrata_core::fixed::Fixed::ONE,
+            "skeletal mobility must stay exactly 1.0 in a calibrated run"
+        );
+        assert_eq!(
+            agent.embodied.skeletal.health_factor(),
+            mindstrata_core::fixed::Fixed::ONE,
+            "skeletal health factor must stay exactly 1.0 in a calibrated run"
+        );
+        assert_eq!(
+            agent.embodied.digestive.effective_digestion(),
+            mindstrata_core::fixed::Fixed::ONE,
+            "digestive factor must stay exactly 1.0 in a calibrated run"
+        );
+    }
+}
 
+/// Iter 38: the new biological systems must reach the BODY facade the sim
+/// actually drives from. Drive the REAL causal inputs — elder frailty (age 100
+/// → structural integrity loss) and gut damage (gut_health 0.5, which the
+/// digestive tick does not reset) — then verify the sim syncs the penalties
+/// into the derived body state. NOTE: integrity is a *derived* field that
+/// recovers to 1.0 below the frailty age (by design), so poking it directly
+/// would be overwritten; aging is the honest lever.
+#[test]
+fn skeletal_and_digestive_penalties_reach_body_facade() {
+    let riverford = mindstrata_sim::scenario::Scenario::riverford();
+    let mut sim = mindstrata_sim::Simulation::from_scenario(riverford);
+    sim.populate();
+    sim.run(10); // settle into the tick loop
+
+    // Assert on embodied.derived_health/derived_energy — the values the new
+    // multipliers actually feed. (body.health is re-managed afterward by
+    // health.rs's system_health — the documented separate track — so it is not
+    // the right observable for the biological wiring.)
+    let baseline_health = sim.agents[0].embodied.derived_health();
+    let baseline_energy = sim.agents[0].embodied.derived_energy();
+
+    // Elder frailty: age past the 60-year onset erodes structural integrity.
+    sim.agents[0].age = mindstrata_core::fixed::Fixed::from_f64(100.0);
+    sim.agents[0].embodied.age = mindstrata_core::fixed::Fixed::from_f64(100.0);
+    // Gut damage persists across ticks (digestive tick does not reset it).
+    sim.agents[0].embodied.digestive.gut_health = mindstrata_core::fixed::Fixed::from_f64(0.5);
+    sim.run(1);
+
+    assert!(
+        sim.agents[0].embodied.derived_health() < baseline_health,
+        "elder frailty must lower derived health ({} vs {baseline_health})",
+        sim.agents[0].embodied.derived_health()
+    );
+    assert!(
+        sim.agents[0].embodied.derived_energy() < baseline_energy,
+        "gut damage must lower derived energy ({} vs {baseline_energy})",
+        sim.agents[0].embodied.derived_energy()
+    );
+}
 
 #[test]
 fn metrics_csv_exports_real_inequality_tracking() {

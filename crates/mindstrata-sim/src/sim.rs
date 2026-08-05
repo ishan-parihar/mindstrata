@@ -5924,6 +5924,16 @@ impl Simulation {
                             market.treasury = (market.treasury + paid).max(Fixed::ZERO);
                         }
                         self.journal.record(tick_u64, agent_id, JournalEntryKind::Consumed { resource: "grain".into(), amount: taken.to_f64() });
+                        // §7.2.7: Food enters the digestive system. Quality 0.6
+                        // matches the sim-wide nutrition placeholder — good food,
+                        // so effective_digestion stays exactly 1.0 (zero drift);
+                        // a future spoilage mechanism can lower it.
+                        if taken > Fixed::ZERO {
+                            self.agents[*agent_idx]
+                                .embodied
+                                .digestive
+                                .consume_food(Fixed::from_f64(0.6));
+                        }
                         taken > Fixed::ZERO
                     } else {
                         // §19.5.D: Theft detection — no accessible farm, but inaccessible farms with grain exist?
@@ -5973,7 +5983,14 @@ impl Simulation {
                     // calibrated baseline runs don't drift; only outbreaks bite.
                     let sickness_factor =
                         health::work_impairment(&self.agent_diseases[*agent_idx]);
-                    let productivity = base * sickness_factor;
+                    // §7.2.3: Frailty/injury depresses output too — mobility is
+                    // exactly 1.0 for healthy adults, so calibrated runs carry
+                    // zero drift; elders and the severely injured produce less.
+                    let mobility_factor = self.agents[*agent_idx]
+                        .embodied
+                        .skeletal
+                        .effective_mobility();
+                    let productivity = base * sickness_factor * mobility_factor;
                     if let Some(farm_idx) = self.world.best_farm_for_work() {
                         self.world.produce_resource(farm_idx, GRAIN_RESOURCE_ID, productivity);
                         // §13.3: Workers earn coin proportional to productivity.

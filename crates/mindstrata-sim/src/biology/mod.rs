@@ -20,6 +20,7 @@
 pub mod cardiovascular;
 pub mod circadian;
 pub mod development;
+pub mod digestive;
 pub mod endocrine;
 pub mod genome;
 pub mod immune;
@@ -28,6 +29,7 @@ pub mod musculoskeletal;
 pub mod nervous;
 pub mod reproductive;
 pub mod respiratory;
+pub mod skeletal;
 
 use mindstrata_core::fixed::Fixed;
 use rand::Rng;
@@ -36,6 +38,7 @@ use serde::{Deserialize, Serialize};
 pub use cardiovascular::CardiovascularState;
 pub use circadian::CircadianState;
 pub use development::DevelopmentalState;
+pub use digestive::DigestiveState;
 pub use endocrine::EndocrineState;
 pub use genome::Genome;
 pub use immune::ImmuneState;
@@ -44,6 +47,7 @@ pub use musculoskeletal::MuscularState;
 pub use nervous::NervousSystemState;
 pub use reproductive::ReproductiveState;
 pub use respiratory::RespiratoryState;
+pub use skeletal::SkeletalState;
 
 /// EmbodiedState — the full biological substrate of an agent.
 ///
@@ -78,12 +82,25 @@ pub struct EmbodiedState {
     pub cardiovascular: CardiovascularState,
     /// Respiratory system — exertion, disease vulnerability.
     pub respiratory: RespiratoryState,
-    /// Immune system — disease resistance, inflammation.
-    pub immune: ImmuneState,
-    /// Musculoskeletal system — strength, fatigue, conditioning.
+/// Immune system — disease resistance, inflammation.
+pub immune: ImmuneState,    /// Musculoskeletal system — strength, fatigue, conditioning.
     pub muscular: MuscularState,
-    /// Reproductive system — fertility, puberty, pregnancy.
-    pub reproductive: ReproductiveState,
+    /// Skeletal system (§7.2.3) — frame, bone density, integrity, fracture risk,
+    /// chronic pain. Exactly neutral at baseline (identity multipliers); only
+    /// elder frailty, severe injury, or malnutrition move it.
+    /// `#[serde(default)]`: added in Iter 38, so snapshots captured before it
+    /// still deserialize (deterministic-replay mandate for old saves).
+    #[serde(default)]
+    pub skeletal: SkeletalState,
+    /// Digestive system (§7.2.7) — stomach contents, absorption, gut health,
+    /// nausea, satiety. Exactly neutral at baseline; only spoiled food or
+    /// prolonged under-eating moves it.
+    /// `#[serde(default)]`: added in Iter 38, so snapshots captured before it
+    /// still deserialize (deterministic-replay mandate for old saves).
+    #[serde(default)]
+    pub digestive: DigestiveState,
+/// Reproductive system — fertility, puberty, pregnancy.
+pub reproductive: ReproductiveState,
     /// Circadian system — sleep/wake cycle, alertness.
     pub circadian: CircadianState,
     /// Developmental system — life stage, aging, milestones.
@@ -124,6 +141,8 @@ impl EmbodiedState {
             respiratory: RespiratoryState::default(),
             immune: ImmuneState::default(),
             muscular: MuscularState::default(),
+            skeletal: SkeletalState::from_age(age),
+            digestive: DigestiveState::default(),
             reproductive: ReproductiveState {
                 sex: match genome.sex {
                     genome::Sex::Male => reproductive::BiologicalSex::Male,
@@ -153,6 +172,10 @@ impl EmbodiedState {
     /// Derived health from biological subsystems.
     /// Maps immune_strength to 0.7–1.0 range so default genome (0.6) → 0.88.
     /// This ensures default agents start near full health like the legacy BodyState.
+    ///
+    /// §7.2.3: Multiplied by the skeletal `health_factor` — exactly 1.0 for a
+    /// healthy adult, so calibrated runs are untouched; elder frailty, chronic
+    /// pain, or compromised structural integrity drain health.
     pub fn derived_health(&self) -> Fixed {
         let base = self.health;
         let immune_modifier = Fixed::from_f64(0.7)
@@ -161,11 +184,17 @@ impl EmbodiedState {
         let pain_penalty = self.nervous.pain.effective_pain() * Fixed::from_f64(0.1);
         let sickness_penalty = self.immune.sickness_level() * Fixed::from_f64(0.15);
         let shock_penalty = self.cardiovascular.shock_risk * Fixed::from_f64(0.1);
-        (base * immune_modifier - stress_penalty - pain_penalty - sickness_penalty - shock_penalty)
+        let skeletal_factor = self.skeletal.health_factor();
+        ((base * immune_modifier - stress_penalty - pain_penalty - sickness_penalty - shock_penalty)
+            * skeletal_factor)
             .clamp_01()
     }
 
     /// Derived energy from metabolic, cardiovascular, and sleep state.
+    ///
+    /// §7.2.7: Multiplied by the digestive `effective_digestion` — exactly 1.0
+    /// for a healthy gut, so calibrated runs are untouched; spoiled food or
+    /// gut damage depress available energy.
     pub fn derived_energy(&self) -> Fixed {
         let base = self.energy;
         let sleep_penalty = self.nervous.sleep_pressure * Fixed::from_f64(0.3);
@@ -173,7 +202,9 @@ impl EmbodiedState {
         let metabolic_boost = self.endocrine.metabolic.energy * Fixed::from_f64(0.2);
         let cardio_boost = self.cardiovascular.effective_stamina() * Fixed::from_f64(0.1);
         let fatigue_penalty = self.muscular.fatigue * Fixed::from_f64(0.15);
-        (base - sleep_penalty - stress_penalty + metabolic_boost + cardio_boost - fatigue_penalty)
+        let digestion_factor = self.digestive.effective_digestion();
+        ((base - sleep_penalty - stress_penalty + metabolic_boost + cardio_boost - fatigue_penalty)
+            * digestion_factor)
             .clamp_01()
     }
 
@@ -289,6 +320,16 @@ impl EmbodiedState {
             if is_sleeping { Fixed::ONE } else { Fixed::from_f64(0.2) },
             age_modifier,
         );
+
+        // 8b. Skeletal (§7.2.3) — frailty, fracture, malnutrition
+        self.skeletal.tick_update(
+            self.age,
+            self.injury,
+            Fixed::from_f64(0.6), // nutrition quality placeholder
+        );
+
+        // 8c. Digestive (§7.2.7) — stomach processing, gut health
+        self.digestive.tick_update();
 
         // 9. Reproductive — fertility, pregnancy
         let bonding = self.endocrine.bonding.level;
