@@ -2067,6 +2067,14 @@ impl Simulation {
                     let witnessed_violations = (emotions[i].anger * Fixed::from_f64(0.6)
                         + emotions[i].fear * Fixed::from_f64(0.2))
                         .clamp_01();
+                    // §8.1.7: Sacred values amplify witnessed violations — the
+                    // same observed violation triggers proportionally more moral
+                    // outrage the more sacred the agent's values are. Zero-at-zero
+                    // anchor: no violations -> no amplification (typical calm
+                    // agents are unaffected; only moral events diverge).
+                    let witnessed_violations = self.agents[i]
+                        .sacred_values
+                        .amplify_witnessed_violations(witnessed_violations);
                     let personal_violations = (emotions[i].guilt * Fixed::from_f64(0.4)
                         + emotions[i].shame * Fixed::from_f64(0.3))
                         .clamp_01();
@@ -6357,7 +6365,13 @@ impl Simulation {
             } else {
                 Fixed::from_f64(0.5)
             };
-            let justice_perception = agent.moral_values.fairness;
+            // §8.1.7 -> §22: Outrage at witnessed violations of sacred values
+            // erodes perceived justice — the world feels less fair when what an
+            // agent holds sacred is violated — feeding derived.resentment.
+            // Mean-zero at zero outrage (fairness unchanged for calm agents).
+            let justice_perception = (agent.moral_values.fairness
+                - agent.moral_cognition.moral_emotions.outrage * Fixed::from_f64(0.3))
+                .clamp_01();
             // §5.1: Use configurable smoothing/accumulation from SimParameters
             agent.derived.compute(
                 &crate::person::MentalStateInput {
@@ -7355,6 +7369,42 @@ mod tests {
             mean_resistance(&punitive) > mean_resistance(&baseline),
             "punitive narrative frames must slow belief-resistance decay: \
              rigid agents should retain higher resistance at tick 200"
+        );
+    }
+
+    #[test]
+    fn sacred_value_outrage_erodes_justice_into_resentment() {
+        // Identical sims; only the accumulated moral outrage differs. Agents
+        // outraged by witnessed violations of sacred values must perceive less
+        // justice and accumulate more resentment over the same horizon.
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 60_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut outraged = Simulation::new(config.clone());
+        outraged.populate();
+        let mut calm = Simulation::new(config);
+        calm.populate();
+        // The amplification hop is pinned by the sacred.rs unit tests; here we
+        // drive the read-back hop directly: outrage accumulated from witnessed
+        // sacred-value violations erodes justice_perception.
+        for agent in &mut outraged.agents {
+            agent.moral_cognition.moral_emotions.outrage = Fixed::from_f64(0.9);
+        }
+        for _ in 0..500 {
+            outraged.tick_derived_states_and_beliefs(0, 1);
+            calm.tick_derived_states_and_beliefs(0, 1);
+        }
+        let outraged_resentment = outraged.agents[0].derived.resentment;
+        let calm_resentment = calm.agents[0].derived.resentment;
+        assert!(
+            outraged_resentment > calm_resentment,
+            "moral outrage from violated sacred values must erode justice into \
+             resentment (got {outraged_resentment} vs {calm_resentment})"
         );
     }
 

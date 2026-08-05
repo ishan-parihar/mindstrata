@@ -121,6 +121,20 @@ impl SacredValues {
         self.values.iter().find(|v| v.name == name)
     }
 
+    /// Amplify a witnessed violation by how sacred the agent's values are.
+    ///
+    /// §8.1.7: "Violation triggers moral outrage proportional to sacredness."
+    /// Returns the witnessed-violation magnitude fed into moral cognition —
+    /// higher sacredness amplifies the same observed violation into more
+    /// outrage. Zero-at-zero anchor: no violations -> no amplification, so
+    /// typical calm agents are unaffected and only moral events diverge.
+    pub fn amplify_witnessed_violations(&self, witnessed: Fixed) -> Fixed {
+        if witnessed <= Fixed::ZERO {
+            return Fixed::ZERO;
+        }
+        (witnessed + self.total_violation_outrage(witnessed) * Fixed::from_f64(0.5)).clamp_01()
+    }
+
     /// Add a sacred value (or strengthen existing).
     pub fn add_or_strengthen(&mut self, name: String, sacredness: Fixed, identity_linkage: Fixed) {
         if let Some(existing) = self.values.iter_mut().find(|v| v.name == name) {
@@ -164,5 +178,24 @@ mod tests {
         sv.add_or_strengthen("family".into(), Fixed::from_f64(0.9), Fixed::from_f64(0.9));
         let outrage = sv.total_violation_outrage(Fixed::from_f64(0.5));
         assert!(outrage > Fixed::ZERO);
+    }
+
+    #[test]
+    fn amplification_is_zero_at_zero_violations() {
+        let mut sv = SacredValues::default();
+        sv.add_or_strengthen("honor".into(), Fixed::from_f64(0.9), Fixed::from_f64(0.9));
+        assert_eq!(sv.amplify_witnessed_violations(Fixed::ZERO), Fixed::ZERO);
+    }
+
+    #[test]
+    fn amplification_is_monotone_in_sacredness() {
+        let mut low = SacredValues::default();
+        low.add_or_strengthen("honor".into(), Fixed::from_f64(0.1), Fixed::from_f64(0.1));
+        let mut high = SacredValues::default();
+        high.add_or_strengthen("honor".into(), Fixed::from_f64(0.9), Fixed::from_f64(0.9));
+        let witnessed = Fixed::from_f64(0.4);
+        assert!(high.amplify_witnessed_violations(witnessed) > low.amplify_witnessed_violations(witnessed));
+        // Amplification never shrinks the witnessed magnitude.
+        assert!(low.amplify_witnessed_violations(witnessed) >= witnessed);
     }
 }
