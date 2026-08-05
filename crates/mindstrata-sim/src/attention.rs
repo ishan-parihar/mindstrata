@@ -19,12 +19,30 @@ use serde::{Deserialize, Serialize};
 ///
 /// Controls which events the agent notices and appraises.
 /// §22.5: "Agents cannot appraise everything."
+///
+/// §8.1.2 (AP2): this is the cognitive gateway — upgraded with the three
+/// perceptual-bias dimensions (threat, social, novelty), the salience
+/// competition record, and the plan's `attention_capacity()` naming for the
+/// budget. The biases and the salience map are write-only observational
+/// state (Iteration 41): they are recomputed from existing agent state by
+/// pure functions (no RNG) and never feed back into `compute_salience`, so
+/// calibrated runs carry zero drift.
+///
+/// Generalization note: the plan's signature emergent effects — "fearful
+/// agents notice threats", "hungry agents notice food" — are today hardcoded
+/// as flat boosts inside [`AttentionState::event_relevance`] (negative affect
+/// → threat +0.2, hunger/thirst → resource +0.3). The bias dimensions
+/// generalize those hardcoded paths: the documented consumer is a future
+/// iteration that replaces the flat boosts with the per-agent bias
+/// dimensions (individually calibrated to stay inside the zero-drift
+/// envelope). Until then the biases are observational.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttentionState {
     /// Current focus — what the agent is paying attention to.
     pub focus: AttentionFocus,
     /// Attention budget: how much cognitive capacity is available (0..1).
     /// Depleted by stress, fatigue, emotional overwhelm.
+    /// §8.1.2: exposed as `attention_capacity()`.
     pub budget: Fixed,
     /// Habituation levels per event category (repeated stimuli become less salient).
     pub habituation: Habituation,
@@ -33,6 +51,26 @@ pub struct AttentionState {
     pub salience_bias: Fixed,
     /// Residual attention from the last tick (carries over).
     pub residual: Fixed,
+    /// §8.1.2: Threat bias — hypervigilance toward threats. 0.5 is the neutral
+    /// anchor; rises with fear, anger, and trauma risk (trauma-triggered
+    /// hypervigilance). Observational state.
+    #[serde(default = "default_neutral_bias")]
+    pub threat_bias: Fixed,
+    /// §8.1.2: Social bias — attention to other agents (lovers notice each
+    /// other). Rises with extraversion and attachment security.
+    #[serde(default = "default_neutral_bias")]
+    pub social_bias: Fixed,
+    /// §8.1.2: Novelty bias — attention to new stimuli (open agents notice
+    /// more). Rises with openness.
+    #[serde(default = "default_neutral_bias")]
+    pub novelty_bias: Fixed,
+    /// §8.1.2: The salience competition record — this tick's percepts ranked
+    /// by computed salience (bounded to [`SALIENCE_MAP_CAPACITY`], cleared each
+    /// tick). Records every percept the gateway processed — including losers
+    /// below the memory-encoding threshold, so the winners (salience ≥ 0.2) are
+    /// identifiable within the competition. Observational state.
+    #[serde(default)]
+    pub salience_map: Vec<SalientItem>,
 }
 
 /// What the agent is currently focused on.
@@ -48,6 +86,12 @@ pub enum AttentionFocus {
     Scanning,
 }
 
+/// The neutral anchor (0.5) for the perceptual biases — identity-at-baseline
+/// reference, also the serde default for pre-Iter-41 snapshots.
+fn default_neutral_bias() -> Fixed {
+    Fixed::from_raw(5000)
+}
+
 impl Default for AttentionState {
     fn default() -> Self {
         Self {
@@ -56,6 +100,10 @@ impl Default for AttentionState {
             habituation: Habituation::default(),
             salience_bias: Fixed::from_f64(0.5),
             residual: Fixed::ZERO,
+            threat_bias: Fixed::from_raw(5000),
+            social_bias: Fixed::from_raw(5000),
+            novelty_bias: Fixed::from_raw(5000),
+            salience_map: Vec::new(),
         }
     }
 }
@@ -73,6 +121,58 @@ pub struct Habituation {
     /// Habituation to emotional events.
     pub emotional: Fixed,
 }
+
+/// §8.1.2: The percept category of an event — mirrors the habituation
+/// categories, so each percept maps to the dimension it habituates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum PerceptKind {
+    /// Interactions (talk, trade, help, gossip — non-threatening).
+    Social,
+    /// Threats and insults.
+    Threat,
+    /// Eating and drinking.
+    Resource,
+    /// Relationship changes.
+    Emotional,
+    /// Everything else.
+    Other,
+}
+
+impl PerceptKind {
+    /// Classify a simulation event into its percept category — mirrors the
+    /// `event_habituation` match so classification is always consistent.
+    #[must_use]
+    pub fn of(event: &SimEvent) -> PerceptKind {
+        match event {
+            SimEvent::InteractionOccurred {
+                kind: InteractionKind::Threaten | InteractionKind::Insult,
+                ..
+            } => PerceptKind::Threat,
+            SimEvent::InteractionOccurred { .. } => PerceptKind::Social,
+            SimEvent::AgentAte { .. } | SimEvent::AgentDrank { .. } => PerceptKind::Resource,
+            SimEvent::RelationshipChanged { .. } => PerceptKind::Emotional,
+            _ => PerceptKind::Other,
+        }
+    }
+}
+
+/// §8.1.2: One entry in the salience competition — an event that competed for
+/// the agent's attention this tick and the salience it scored.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SalientItem {
+    /// The percept category.
+    pub kind: PerceptKind,
+    /// The other agent involved, when the percept is agent-mediated.
+    pub agent: Option<AgentId>,
+    /// Computed salience (0..1) — the competition score.
+    pub salience: Fixed,
+    /// Tick the percept occurred.
+    pub tick: u64,
+}
+
+/// §8.1.2: Maximum entries kept in the salience competition record — the top
+/// winners, by computed salience.
+pub const SALIENCE_MAP_CAPACITY: usize = 8;
 
 impl AttentionState {
     /// Compute the salience of an event for this agent.
@@ -253,6 +353,63 @@ impl AttentionState {
         self.habituation.emotional = (self.habituation.emotional - rate).max(Fixed::ZERO);
     }
 
+    /// §8.1.2: The plan's name for the attention capacity — the existing budget.
+    #[must_use]
+    pub fn attention_capacity(&self) -> Fixed {
+        self.budget
+    }
+
+    /// §8.1.2: Recompute the perceptual biases from existing agent state.
+    ///
+    /// Pure and deterministic (no RNG), write-only observational state — so
+    /// this cannot perturb calibrated runs. threat_bias rises with fear, anger,
+    /// and trauma risk (trauma-triggered hypervigilance); social_bias with
+    /// extraversion and attachment security; novelty_bias with openness. All
+    /// stay within [0.3, 0.7] around the 0.5 neutral anchor.
+    pub fn recompute_biases(
+        &mut self,
+        fear: Fixed,
+        anger: Fixed,
+        trauma_risk: Fixed,
+        extraversion: Fixed,
+        openness: Fixed,
+        attachment_security: Fixed,
+    ) {
+        let threat_input = fear + anger + trauma_risk;
+        self.threat_bias = (Fixed::from_raw(5000)
+            + (threat_input - Fixed::ONE) * Fixed::from_f64(0.2))
+            .clamp(Fixed::from_f64(0.3), Fixed::from_f64(0.7));
+        self.social_bias = (Fixed::from_raw(5000)
+            + (extraversion - Fixed::from_f64(0.5)) * Fixed::from_f64(0.3)
+            + (attachment_security - Fixed::from_f64(0.5)) * Fixed::from_f64(0.2))
+            .clamp(Fixed::from_f64(0.3), Fixed::from_f64(0.7));
+        self.novelty_bias = (Fixed::from_raw(5000)
+            + (openness - Fixed::from_f64(0.5)) * Fixed::from_f64(0.3))
+            .clamp(Fixed::from_f64(0.3), Fixed::from_f64(0.7));
+    }
+
+    /// §8.1.2: Record a percept into the salience competition. Keeps the top
+    /// [`SALIENCE_MAP_CAPACITY`] entries by computed salience, always sorted
+    /// descending so the ranking contract is uniform at any size.
+    pub fn record_salience(
+        &mut self,
+        kind: PerceptKind,
+        agent: Option<AgentId>,
+        salience: Fixed,
+        tick: u64,
+    ) {
+        self.salience_map.push(SalientItem {
+            kind,
+            agent,
+            salience,
+            tick,
+        });
+        self.salience_map.sort_by(|a, b| b.salience.cmp(&a.salience));
+        if self.salience_map.len() > SALIENCE_MAP_CAPACITY {
+            self.salience_map.truncate(SALIENCE_MAP_CAPACITY);
+        }
+    }
+
     /// Replenish attention budget (rest, low stress).
     pub fn replenish_budget(&mut self, stress: Fixed, fatigue: Fixed) {
         let replenishment = Fixed::from_f64(0.05) * (Fixed::ONE - stress) * (Fixed::ONE - fatigue);
@@ -392,5 +549,113 @@ mod tests {
 
         attention.replenish_budget(Fixed::ZERO, Fixed::ZERO); // no stress, no fatigue
         assert!(attention.budget > initial - Fixed::from_f64(0.3));
+    }
+
+    // ── §8.1.2: Perception and Attention upgrade ───────────────────
+
+    #[test]
+    fn perception_biases_default_to_neutral() {
+        let attention = AttentionState::default();
+        assert_eq!(attention.threat_bias, Fixed::from_f64(0.5));
+        assert_eq!(attention.social_bias, Fixed::from_f64(0.5));
+        assert_eq!(attention.novelty_bias, Fixed::from_f64(0.5));
+        assert!(attention.salience_map.is_empty());
+        assert_eq!(attention.attention_capacity(), attention.budget);
+    }
+
+    #[test]
+    fn threat_bias_rises_with_fear_and_trauma() {
+        let mut attention = AttentionState::default();
+        attention.recompute_biases(
+            Fixed::from_f64(0.9), // fear
+            Fixed::from_f64(0.5), // anger
+            Fixed::from_f64(0.7), // trauma_risk
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+        );
+        assert!(attention.threat_bias > Fixed::from_f64(0.5));
+        assert!(attention.threat_bias <= Fixed::from_f64(0.7));
+        // Calm agents sit at (or below) the neutral anchor.
+        attention.recompute_biases(
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+        );
+        assert!(attention.threat_bias < Fixed::from_f64(0.5));
+    }
+
+    #[test]
+    fn social_bias_rises_with_extraversion_and_security() {
+        let mut attention = AttentionState::default();
+        attention.recompute_biases(
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::from_f64(0.9), // extraversion
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.9), // attachment security
+        );
+        assert!(attention.social_bias > Fixed::from_f64(0.5));
+        assert!(attention.social_bias <= Fixed::from_f64(0.7));
+    }
+
+    #[test]
+    fn novelty_bias_rises_with_openness() {
+        let mut attention = AttentionState::default();
+        attention.recompute_biases(
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.9), // openness
+            Fixed::from_f64(0.5),
+        );
+        assert!(attention.novelty_bias > Fixed::from_f64(0.5));
+        assert!(attention.novelty_bias <= Fixed::from_f64(0.7));
+    }
+
+    #[test]
+    fn salience_map_keeps_top_percepts() {
+        let mut attention = AttentionState::default();
+        let scores = [0.1, 0.9, 0.4, 0.7, 0.2, 0.8, 0.3, 0.6, 0.5, 0.95];
+        for (i, s) in scores.iter().enumerate() {
+            attention.record_salience(
+                PerceptKind::Social,
+                Some(AgentId::new(i as u64)),
+                Fixed::from_f64(*s),
+                i as u64,
+            );
+        }
+        // Bounded to the top SALIENCE_MAP_CAPACITY winners, sorted descending.
+        assert_eq!(attention.salience_map.len(), SALIENCE_MAP_CAPACITY);
+        assert!(attention.salience_map[0].salience == Fixed::from_f64(0.95));
+        assert!(attention.salience_map.iter().all(|s| s.salience >= Fixed::from_f64(0.3)));
+        let mut prev = Fixed::ONE;
+        for item in &attention.salience_map {
+            assert!(item.salience <= prev);
+            prev = item.salience;
+        }
+    }
+
+    #[test]
+    fn percept_kind_classifies_events() {
+        let threat = SimEvent::InteractionOccurred {
+            from: AgentId::new(0),
+            to: AgentId::new(1),
+            kind: InteractionKind::Threaten,
+            tick: Tick::new(1),
+        };
+        assert_eq!(PerceptKind::of(&threat), PerceptKind::Threat);
+        let talk = SimEvent::InteractionOccurred {
+            from: AgentId::new(0),
+            to: AgentId::new(1),
+            kind: InteractionKind::Talk,
+            tick: Tick::new(1),
+        };
+        assert_eq!(PerceptKind::of(&talk), PerceptKind::Social);
     }
 }

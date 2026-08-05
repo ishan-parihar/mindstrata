@@ -2126,6 +2126,62 @@ fn speech_acts_recorded_from_interactions() {
     }
 }
 
+// ── §8.1.2: Perception and Attention upgrade ─────────────────────
+
+/// Iter 41: the §8.1.2 upgrade adds the perceptual-bias dimensions and the
+/// salience-competition record to the existing attention gateway. The biases
+/// must be recomputed from agent state (varying across agents, not dead
+/// neutral), the salience map must record real competition, and the whole
+/// thing must stay observational (zero drift — validated by the full suite).
+#[test]
+fn perception_biases_and_salience_map_populated() {
+    use mindstrata_sim::attention::{PerceptKind, SALIENCE_MAP_CAPACITY};
+
+    let riverford = mindstrata_sim::scenario::Scenario::riverford();
+    let mut sim = mindstrata_sim::Simulation::from_scenario(riverford);
+    sim.populate();
+    sim.run(4320);
+
+    // Biases live in [0.3, 0.7], anchor at 0.5, and vary across agents rather
+    // than all sitting at neutral (a uniform bias = dead computation).
+    let mut distinct_threat = std::collections::HashSet::new();
+    for agent in &sim.agents {
+        let t = agent.attention.threat_bias.to_f64();
+        assert!((0.3..=0.7).contains(&t), "threat_bias {t} out of range");
+        assert!((0.3..=0.7).contains(&agent.attention.social_bias.to_f64()));
+        assert!((0.3..=0.7).contains(&agent.attention.novelty_bias.to_f64()));
+        distinct_threat.insert((t * 1000.0).round() as i64);
+    }
+    assert!(
+        distinct_threat.len() > 1,
+        "threat_bias must vary across agents (all identical = dead computation)"
+    );
+
+    // The salience competition record is populated from real percepts, bounded,
+    // and well-formed (salience in [0,1], ticks inside the run).
+    let maps: Vec<_> = sim
+        .agents
+        .iter()
+        .filter(|a| !a.attention.salience_map.is_empty())
+        .collect();
+    assert!(
+        !maps.is_empty(),
+        "salience_map must be populated (was empty)"
+    );
+    let kinds: std::collections::HashSet<PerceptKind> = maps
+        .iter()
+        .flat_map(|a| a.attention.salience_map.iter().map(|s| s.kind))
+        .collect();
+    assert!(!kinds.is_empty(), "salience competition must classify percepts");
+    for agent in &sim.agents {
+        assert!(agent.attention.salience_map.len() <= SALIENCE_MAP_CAPACITY);
+        for item in &agent.attention.salience_map {
+            assert!((0.0..=1.0).contains(&item.salience.to_f64()));
+            assert!(item.tick <= 4320, "percept tick {} beyond run", item.tick);
+        }
+    }
+}
+
 #[test]
 fn metrics_csv_exports_real_inequality_tracking() {
     // §13.3/§19: Gini + wealth distribution must be observable in the metrics

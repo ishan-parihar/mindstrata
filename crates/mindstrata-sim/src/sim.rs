@@ -11,7 +11,7 @@ use crate::belief_update;
 use crate::journal::{EventJournal, JournalEntryKind};
 use crate::memory::{MemoryKind, MemoryStore, MemoryTag};
 use crate::norms::{self, NormRegistry};
-use crate::attention::AttentionState;
+use crate::attention::{AttentionState, PerceptKind};
 use crate::demography;
 use crate::ecology;
 use crate::factions;
@@ -6238,6 +6238,9 @@ impl Simulation {
             {
                 continue;
             }
+            // §8.1.2: Fresh salience competition each tick — the map records
+            // this tick's percepts, not a rolling top-N.
+            agent.attention.salience_map.clear();
             for ev in &self.events[pre_tick_events..] {
                 // §22.5: Attention computes salience based on intensity, novelty, relevance
                 let salience = agent.attention.compute_salience(
@@ -6245,6 +6248,25 @@ impl Simulation {
                     AgentId::new(i as u64),
                     &agent.needs,
                     &agent.affect,
+                );
+
+                // §8.1.2: Record the percept into the salience competition
+                // (write-only observational state — keeps the top percepts by
+                // computed salience, so the salience gate itself is untouched).
+                let percept_agent = match ev {
+                    SimEvent::InteractionOccurred { from, to, .. } => {
+                        Some(if from.as_u64() == i as u64 { *to } else { *from })
+                    }
+                    SimEvent::AgentAte { agent: a, .. }
+                    | SimEvent::AgentDrank { agent: a, .. }
+                    | SimEvent::RelationshipChanged { from: a, .. } => Some(*a),
+                    _ => None,
+                };
+                agent.attention.record_salience(
+                    PerceptKind::of(ev),
+                    percept_agent,
+                    salience,
+                    tick_u64,
                 );
 
                 // Only encode events that exceed the attention threshold
@@ -6313,6 +6335,17 @@ impl Simulation {
             agent.attention.decay_habituation(Fixed::from_f64(0.005));
             let stress = agent.emotions.fear + agent.emotions.anger;
             agent.attention.replenish_budget(stress, agent.needs.fatigue);
+            // §8.1.2: Recompute the perceptual biases from current agent state
+            // (pure function, no RNG — write-only observational state, so
+            // calibrated trajectories are untouched).
+            agent.attention.recompute_biases(
+                agent.emotions.fear,
+                agent.emotions.anger,
+                agent.derived.trauma_risk,
+                agent.personality.extraversion,
+                agent.personality.openness,
+                agent.attachment.security,
+            );
 
             // §19.5.G: Update status from current wealth and social connections
             agent.status.wealth_status = (agent.wealth.coin / Fixed::from_f64(20.0)).clamp_01();
