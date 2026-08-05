@@ -1215,6 +1215,79 @@ fn tick_throughput_regression_gate() {
     assert!(!sim.metric_history.is_empty(), "metrics should be recorded");
 }
 
+// ── §18.3: Multi-Seed Long-Horizon Macro Health ──────────────────
+
+/// §18.3: Macro-health invariants must hold across the canonical seed set at
+/// long horizons. The 10K stability test covers one seed; this sweep runs the
+/// same finite-value/bounded-state checks on seeds 1, 7, 42, 99, 123 at 15K
+/// ticks each — catching seed-specific failures (a seed whose RNG stream
+/// pushes a state out of bounds, a faction loop that degrades one world only)
+/// that single-seed tests cannot see.
+#[test]
+fn multi_seed_long_horizon_macro_health() {
+    for seed in [1u64, 7, 42, 99, 123] {
+        let config = SimConfig {
+            seed,
+            max_ticks: 15_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(15_000);
+
+        // Bounded population — no explosion or collapse.
+        assert!(
+            (12..=100).contains(&sim.agents.len()),
+            "seed {seed}: agent count unreasonable after 15K ticks: {}",
+            sim.agents.len()
+        );
+
+        // Every agent: finite, in-range core state.
+        for (i, agent) in sim.agents.iter().enumerate() {
+            assert!(agent.body.health.to_f64().is_finite(),
+                "seed {seed} agent {i}: non-finite health");
+            assert!(agent.body.health >= Fixed::ZERO && agent.body.health <= Fixed::ONE,
+                "seed {seed} agent {i}: health {} out of [0,1]", agent.body.health.to_f64());
+            assert!(agent.age.to_f64().is_finite(),
+                "seed {seed} agent {i}: non-finite age");
+            assert!(agent.age >= Fixed::ZERO && agent.age < Fixed::from_f64(200.0),
+                "seed {seed} agent {i}: age {} out of range", agent.age.to_f64());
+            assert!(agent.wealth.coin >= Fixed::ZERO,
+                "seed {seed} agent {i}: negative wealth {}", agent.wealth.coin.to_f64());
+            assert!(agent.embodied.endocrine.stress.level >= Fixed::ZERO
+                && agent.embodied.endocrine.stress.level <= Fixed::ONE,
+                "seed {seed} agent {i}: stress {} out of [0,1]",
+                agent.embodied.endocrine.stress.level.to_f64());
+            assert!(agent.attachment.anxiety >= Fixed::ZERO && agent.attachment.anxiety <= Fixed::ONE,
+                "seed {seed} agent {i}: anxiety {} out of [0,1]", agent.attachment.anxiety.to_f64());
+            assert!(agent.relationship_v2s.len() < sim.agents.len(),
+                "seed {seed} agent {i}: {} relationship edges for {} agents (must be < N)",
+                agent.relationship_v2s.len(), sim.agents.len());
+        }
+
+        // Institutions: finite, in-range legitimacy.
+        for (i, inst) in sim.institutions.iter().enumerate() {
+            assert!(inst.legitimacy.to_f64().is_finite(),
+                "seed {seed} institution {i}: non-finite legitimacy");
+            assert!(inst.legitimacy >= Fixed::ZERO && inst.legitimacy <= Fixed::ONE,
+                "seed {seed} institution {i}: legitimacy {} out of [0,1]",
+                inst.legitimacy.to_f64());
+        }
+
+        // The world must be alive: events happened and metrics were recorded.
+        assert!(sim.event_count() > 0, "seed {seed}: no events in 15K ticks");
+        assert!(!sim.metric_history.is_empty(),
+            "seed {seed}: no metric history in 15K ticks");
+        let last = sim.metric_history.last().expect("metric_history empty");
+        assert!((0.0..=1.0).contains(&last.polarization_index),
+            "seed {seed}: polarization {} out of [0,1]", last.polarization_index);
+        assert!(last.agent_count > 0, "seed {seed}: zero final agent count");
+    }
+}
+
 
 // ── §19 Phase 5: Parameter-Sensitivity Integration Tests ─────────
 // These tests prove the tuning pipeline is functional (not just wired)
