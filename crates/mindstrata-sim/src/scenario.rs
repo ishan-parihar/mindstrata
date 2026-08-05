@@ -45,6 +45,8 @@ pub enum ShockKind {
     Drought,
     /// Destroy stored grain (food crisis).
     Famine,
+    /// Seed a virulent epidemic into the population (mortality crisis).
+    Pestilence,
     /// Boost morale temporarily.
     Festival,
 }
@@ -132,6 +134,38 @@ impl Scenario {
                 Shock {
                     at_tick: 500,
                     kind: ShockKind::Famine,
+                    magnitude: Fixed::from_f64(0.7),
+                },
+            ],
+        }
+    }
+
+    /// Create the "Pestilence" scenario — Riverford under a virulent epidemic.
+    ///
+    /// Mirrors `specs/scenarios/pestilence.ron`: a strong pestilence shock
+    /// (0.7) at tick 500 seeds the Epidemic disease into most of the
+    /// population, testing mortality, generational replacement, and social
+    /// breakdown under a plague.
+    pub fn pestilence() -> Self {
+        Self {
+            name: "Pestilence".into(),
+            description: "Riverford under a virulent epidemic. Tests mortality, \
+                         generational replacement, and social breakdown under a plague."
+                .into(),
+            seed: 42,
+            ticks: 4320,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            shocks: vec![
+                Shock {
+                    at_tick: 200,
+                    kind: ShockKind::Festival,
+                    magnitude: Fixed::from_f64(0.3),
+                },
+                Shock {
+                    at_tick: 500,
+                    kind: ShockKind::Pestilence,
                     magnitude: Fixed::from_f64(0.7),
                 },
             ],

@@ -1623,6 +1623,82 @@ fn storage_overflow_bleeds_excess_grain_back_to_capacity() {
     assert!(grain >= 0.0, "grain stock must stay non-negative");
 }
 
+#[test]
+fn pestilence_kills_more_agents_than_riverford() {
+    // Iter 35: the Pestilence shock seeds a virulent Epidemic into the
+    // population; block 17b spreads it by proximity, block 17 drains health,
+    // and the §31 health-based death roll (which applies at all ages) converts
+    // the outbreak into elevated mortality. Deaths are counted via journal
+    // Died entries under an identical 4320-tick horizon.
+    use mindstrata_sim::journal::JournalEntryKind;
+    let count_deaths = |sim: &mindstrata_sim::Simulation| -> usize {
+        sim.journal()
+            .entries_in_range(0, u64::MAX)
+            .iter()
+            .filter(|e| matches!(e.kind, JournalEntryKind::Died { .. }))
+            .count()
+    };
+
+    let pestilence = mindstrata_sim::scenario::Scenario::pestilence();
+    let mut sim = mindstrata_sim::Simulation::from_scenario(pestilence);
+    sim.populate();
+    sim.run(4320);
+    let plague_deaths = count_deaths(&sim);
+
+    let riverford = mindstrata_sim::scenario::Scenario::riverford();
+    let mut sim_r = mindstrata_sim::Simulation::from_scenario(riverford);
+    sim_r.populate();
+    sim_r.run(4320);
+    let baseline_deaths = count_deaths(&sim_r);
+
+    assert!(
+        plague_deaths > baseline_deaths,
+        "pestilence must kill more than riverford \
+         (pestilence {plague_deaths} vs riverford {baseline_deaths})"
+    );
+    assert!(
+        plague_deaths > 0,
+        "pestilence should claim lives (got {plague_deaths})"
+    );
+}
+
+#[test]
+fn pestilence_seeds_epidemic_outbreak() {
+    // The shock must genuinely infect agents: mid-outbreak (tick 1000, well
+    // inside the 800-tick epidemic window that starts at the tick-500 shock)
+    // far more agents carry the Epidemic disease than the riverford baseline.
+    use mindstrata_sim::health::DiseaseKind;
+    let infected_count = |sim: &mindstrata_sim::Simulation| -> usize {
+        sim.agent_diseases
+            .iter()
+            .filter(|ds| ds.iter().any(|d| d.kind == DiseaseKind::Epidemic))
+            .count()
+    };
+
+    let pestilence = mindstrata_sim::scenario::Scenario::pestilence();
+    let mut sim = mindstrata_sim::Simulation::from_scenario(pestilence);
+    sim.populate();
+    sim.run(1000);
+    let infected = infected_count(&sim);
+
+    let riverford = mindstrata_sim::scenario::Scenario::riverford();
+    let mut sim_r = mindstrata_sim::Simulation::from_scenario(riverford);
+    sim_r.populate();
+    sim_r.run(1000);
+    let baseline = infected_count(&sim_r);
+
+    assert!(
+        infected > baseline,
+        "pestilence must spread the epidemic beyond riverford \
+         (pestilence {infected} vs riverford {baseline} carriers)"
+    );
+    assert!(
+        infected >= 4,
+        "pestilence should infect a large share of the population \
+         mid-outbreak (got {infected}/12)"
+    );
+}
+
 
 
 

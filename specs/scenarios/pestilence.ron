@@ -1,0 +1,27 @@
+// §46 Scenario DSL — Pestilence Scenario
+// Extends riverford with a virulent epidemic shock at tick 500.
+// The shock seeds the Epidemic disease into most of the population;
+// the existing health-drain, contagion-spread, and health-based death
+// rolls convert the outbreak into elevated mortality.
+
+Scenario(
+    name: "Pestilence",
+    description: "Riverford under a virulent epidemic. Tests mortality, generational replacement, and social breakdown under a plague.",
+    seed: 42,
+    ticks: 4320,
+    world_width: 16,
+    world_height: 16,
+    num_agents: 12,
+    shocks: [
+        Shock(
+            at_tick: 200,
+            kind: Festival,
+            magnitude: 0.3,
+        ),
+        Shock(
+            at_tick: 500,
+            kind: Pestilence,
+            magnitude: 0.7,
+        ),
+    ],
+)

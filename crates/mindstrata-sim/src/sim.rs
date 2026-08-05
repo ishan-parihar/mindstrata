@@ -1859,6 +1859,87 @@ impl Simulation {
                             }
                         }
                     }
+                    ShockKind::Pestilence => {
+                        // A pestilence strikes in two composed waves, both routed
+                        // through EXISTING machinery rather than fabricated:
+                        //  1. IMMEDIATE MORTALITY — a seeded roll with
+                        //     p = magnitude × (1 − health × 0.5) is deadly at
+                        //     every health level yet deadlier for the weak
+                        //     (health 1.0 → 0.35 vs health 0.5 → 0.525 at
+                        //     mag 0.7). Deaths flow
+                        //     through handle_agent_death — the same path the §31
+                        //     demography pass uses — so inheritance, journaling,
+                        //     event recording, social cleanup, and in-place
+                        //     newborn replacement all stay consistent. This is
+                        //     safe here: the shock block runs before the
+                        //     SystemContext borrow (self is fully mutable), and
+                        //     the dead are replaced IN PLACE so the
+                        //     AgentId == index invariant survives.
+                        //  2. SURVIVING EPIDEMIC — survivors (and the newborns
+                        //     who replaced the dead) carry a virulent Epidemic
+                        //     that block 17b spreads by proximity contagion and
+                        //     block 17 drains health from over its 800-tick course.
+                        // Copy the magnitude first: handle_agent_death borrows
+                        // self mutably, so `shock` (borrowing self.scenario) must
+                        // not be live across those calls.
+                        let magnitude = shock.magnitude;
+                        let n = self.agents.len();
+                        let mut deaths: Vec<usize> = Vec::new();
+                        for i in 0..n {
+                            let health = self.agents[i].body.health;
+                            let p = magnitude * (Fixed::ONE - health * Fixed::from_f64(0.5));
+                            let roll = Fixed::from_f64(
+                                self.rng.get_mut(RngStream::Behavior).random::<f64>(),
+                            );
+                            if roll < p {
+                                deaths.push(i);
+                            }
+                        }
+                        tracing::warn!(
+                            deaths = deaths.len(),
+                            "Pestilence: immediate mortality wave"
+                        );
+                        // Note: the newborns that replace the dead run the
+                        // remainder of this tick's systems (the demography path
+                        // kills at tick end instead) — an accepted divergence,
+                        // invisible to calibrated runs since no existing
+                        // scenario carries a Pestilence shock.
+                        for &idx in &deaths {
+                            self.handle_agent_death(
+                                idx,
+                                &deaths,
+                                tick_u64,
+                                tick,
+                                DeathCause::Disease,
+                            );
+                        }
+                        // Seed the virulent epidemic: every agent rolls an
+                        // independent infection check (p = magnitude), so the
+                        // selection is index-fair — a plague spares no one.
+                        let mut infected = 0usize;
+                        for i in 0..n {
+                            let roll = Fixed::from_f64(
+                                self.rng.get_mut(RngStream::Behavior).random::<f64>(),
+                            );
+                            if roll < magnitude {
+                                let already = self.agent_diseases[i]
+                                    .iter()
+                                    .any(|d| d.kind == health::DiseaseKind::Epidemic);
+                                if !already {
+                                    self.agent_diseases[i].push(health::ActiveDisease {
+                                        kind: health::DiseaseKind::Epidemic,
+                                        ticks_infected: 0,
+                                        severity_modifier: Fixed::ONE, // virulent strain
+                                    });
+                                    infected += 1;
+                                }
+                            }
+                        }
+                        tracing::debug!(
+                            infected = infected,
+                            "Pestilence: epidemic seeded into the population"
+                        );
+                    }
                     ShockKind::Festival => {
                         for agent in &mut self.agents {
                             agent.emotions.joy =
@@ -4687,7 +4768,14 @@ impl Simulation {
     /// Runs inheritance, dissolves marriages, clears partner/parent/feud
     /// references, removes the dead agent from institutions/households/kinship,
     /// and repopulates the slot with a fresh newborn so index invariants hold.
-    fn handle_agent_death(&mut self, idx: usize, deaths: &[usize], tick_u64: u64, tick: Tick) {
+    fn handle_agent_death(
+        &mut self,
+        idx: usize,
+        deaths: &[usize],
+        tick_u64: u64,
+        tick: Tick,
+        cause: DeathCause,
+    ) {
         let agent_id = AgentId::new(idx as u64);
         tracing::warn!(
             agent = self.agents[idx].name.as_str(),
@@ -4730,13 +4818,17 @@ impl Simulation {
                 amount: inherited_wealth.to_f64(),
             });
         }
+        let cause_label = match cause {
+            DeathCause::Disease => "disease",
+            _ => "natural",
+        };
         self.journal.record(tick_u64, agent_id, JournalEntryKind::Died {
             age: self.agents[idx].age.to_f64(),
-            cause: "natural".into(),
+            cause: cause_label.into(),
         });
         self.events.push(SimEvent::AgentDied {
             agent: agent_id,
-            cause: DeathCause::OldAge,
+            cause,
             tick,
         });
 
@@ -6880,7 +6972,7 @@ impl Simulation {
             // §31: Dead agents are replaced IN PLACE by newborns so the
             // `AgentId::new(i) == index i` invariant is never broken.
             for &idx in &deaths {
-                self.handle_agent_death(idx, &deaths, tick_u64, tick);
+                self.handle_agent_death(idx, &deaths, tick_u64, tick, DeathCause::OldAge);
             }
         }
 
