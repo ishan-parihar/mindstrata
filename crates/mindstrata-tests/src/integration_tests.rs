@@ -1178,6 +1178,43 @@ fn ten_thousand_tick_stability() {
         "Final agent_count should be positive");
 }
 
+// ── §18.5: Benchmark Regression Gate ──────────────────────────────
+
+/// §18.5: Wall-clock regression gate for the tick loop.
+///
+/// The criterion benchmarks (§18.5, `mindstrata-benches`) provide precise
+/// measurements; this gate provides the CI-safe tripwire: a 24-agent,
+/// 2000-tick run must complete within a generous budget. Locally measured
+/// (debug profile): ~2.25s, so the 30s budget leaves ~13x headroom — it
+/// catches order-of-magnitude regressions (an accidental O(n²) loop, a
+/// per-tick allocation explosion, a system accidentally ticking per agent
+/// per tick) without flaking on slow shared CI runners.
+#[test]
+fn tick_throughput_regression_gate() {
+    use std::time::Instant;
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 2000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 24,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    let start = Instant::now();
+    sim.run(2000);
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed.as_secs_f64() < 30.0,
+        "tick loop regression: 2000 ticks at 24 agents took {elapsed:?} (budget 30s)"
+    );
+    // Sanity: the run must actually have advanced the clock (a degenerate
+    // early-return that skips systems would trivially pass the budget).
+    assert_eq!(sim.current_tick().as_u64(), 2000);
+    assert!(!sim.metric_history.is_empty(), "metrics should be recorded");
+}
+
 
 // ── §19 Phase 5: Parameter-Sensitivity Integration Tests ─────────
 // These tests prove the tuning pipeline is functional (not just wired)

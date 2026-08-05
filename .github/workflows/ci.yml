@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test + lint + bench gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      # Lenient clippy: the workspace carries pre-existing pedantic/missing-docs
+      # warnings; denying them all would fail the first CI run. This reports
+      # warnings and fails only on hard errors.
+      - name: Clippy (workspace, all targets)
+        run: cargo clippy --workspace --all-targets
+
+      - name: Full workspace test suite (incl. §18.5 tick regression gate)
+        run: cargo test --workspace
+
+      - name: Benchmarks compile (§18.5 — criterion regression harness)
+        run: cargo bench -p mindstrata-benches --no-run
+
+      - name: Tick-loop regression gate (explicit run)
+        run: cargo test -p mindstrata-tests tick_throughput_regression_gate
