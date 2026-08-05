@@ -36,6 +36,7 @@ pub mod interaction;
 pub mod kinship;
 pub mod marriage;
 pub mod patronage;
+pub mod relational_power;
 pub mod relationship_stages;
 pub mod relationship_v2;
 pub mod status_dims;

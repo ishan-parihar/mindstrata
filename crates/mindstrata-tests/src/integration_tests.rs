@@ -1987,6 +1987,87 @@ fn skeletal_and_digestive_penalties_reach_body_facade() {
     );
 }
 
+// ── §11.2: Relational Power ────────────────────────────────────────
+
+/// Iter 39: `power_balance` was declared on RelationshipV2 but never written
+/// (dead field). The daily pass must now populate it with real asymmetric
+/// values — proving the §11.2 RelationalPower computation is live. Also verify
+/// the sign convention: when A is the Elder (high authority) and B is a
+/// commoner, A's power over B must be more positive than B's power over A
+/// (the directed pair must be asymmetric, not all zero).
+#[test]
+fn relational_power_balance_is_populated_and_asymmetric() {
+    let riverford = mindstrata_sim::scenario::Scenario::riverford();
+    let mut sim = mindstrata_sim::Simulation::from_scenario(riverford);
+    sim.populate();
+    sim.run(4320); // > one 144-tick day — the daily power pass must have run
+
+    // Collect all directed power balances; must not be all zero (the dead-field
+    // regression guard) and must span both signs (real asymmetry).
+    let balances: Vec<f64> = sim
+        .agents
+        .iter()
+        .flat_map(|a| a.relationship_v2s.iter().map(|r| r.power_balance.to_f64()))
+        .collect();
+    assert!(!balances.is_empty());
+    let nonzero = balances.iter().filter(|&&b| b.abs() > 1e-4).count();
+    assert!(
+        nonzero > 0,
+        "power_balance must be populated by the daily pass (was a dead field)"
+    );
+    let positive = balances.iter().filter(|&&b| b > 1e-4).count();
+    let negative = balances.iter().filter(|&&b| b < -1e-4).count();
+    assert!(
+        positive > 0 && negative > 0,
+        "power_balance must show both directions of asymmetry (pos {positive}, neg {negative})"
+    );
+    // Clamp contract (§11.2): every balance lives in [-1, 1] so values are
+    // directly comparable across relationships and agents.
+    assert!(
+        balances.iter().all(|b| b.abs() <= 1.0001),
+        "power_balance must be clamped to [-1, 1]"
+    );
+    // Sign-convention regression net: for the agent pair with the largest status
+    // gap, the higher-status agent must hold the more positive balance over the
+    // lower-status one. Deliberately NOT an exact antisymmetry assert — the §11.2
+    // formula models interdependence (emotional leverage and alternatives carry
+    // different coefficients), so A's power over B is not the exact negative of
+    // B's power over A; the status-driven components make this directional
+    // inequality the meaningful contract.
+    let statuses: Vec<f64> = sim
+        .agents
+        .iter()
+        .map(|a| a.status_v2.effective_status().to_f64())
+        .collect();
+    let (mut hi, mut lo, mut gap) = (0usize, 0usize, f64::MIN);
+    for i in 0..statuses.len() {
+        for j in 0..statuses.len() {
+            let d = (statuses[i] - statuses[j]).abs();
+            if d > gap {
+                gap = d;
+                hi = i;
+                lo = j;
+            }
+        }
+    }
+    if gap > 1e-3 {
+        let bal = |from: usize, to: usize| -> f64 {
+            sim.agents[from]
+                .relationship_v2s
+                .iter()
+                .find(|r| r.to.as_u64() == to as u64)
+                .map_or(0.0, |r| r.power_balance.to_f64())
+        };
+        let hi_over_lo = bal(hi, lo);
+        let lo_over_hi = bal(lo, hi);
+        assert!(
+            hi_over_lo > lo_over_hi,
+            "sign convention: higher status must hold more positive balance \
+             (hi {hi}->lo {lo} = {hi_over_lo} vs lo->hi = {lo_over_hi}, gap {gap})"
+        );
+    }
+}
+
 #[test]
 fn metrics_csv_exports_real_inequality_tracking() {
     // §13.3/§19: Gini + wealth distribution must be observable in the metrics

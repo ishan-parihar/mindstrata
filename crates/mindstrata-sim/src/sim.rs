@@ -2396,6 +2396,53 @@ impl Simulation {
                 }
             }
 
+            // §11.2: Recompute relational power balance on the daily boundary.
+            // Fills `RelationshipV2.power_balance`, declared since Iter 1 but
+            // never written — the dead-field class this closes. Purely a
+            // function of existing relationship + status state (no RNG), so it
+            // cannot perturb calibrated runs; the field is not consumed
+            // downstream or by agent_summaries().
+            if tick_u64 > 0 && tick_u64.is_multiple_of(144) {
+                let n = self.agents.len();
+                let statuses: Vec<Fixed> = (0..n)
+                    .map(|i| self.agents[i].status_v2.effective_status())
+                    .collect();
+                for i in 0..n {
+                    let rel_count = self.agents[i].relationship_v2s.len();
+                    for pos in 0..rel_count {
+                        let (dependence_a_on_b, to_idx) = {
+                            let rv2 = &self.agents[i].relationship_v2s[pos];
+                            (rv2.dependence, rv2.to.as_u64() as usize)
+                        };
+                        if to_idx >= n || to_idx == i {
+                            // Defensive: population never creates self-relationships
+                            // (the i == j pair is skipped), but guard anyway —
+                            // relationship_v2_pos debug_asserts a != b and would
+                            // silently misbehave in release.
+                            continue;
+                        }
+                        // B's reverse view toward A: relationship_v2_pos(b, a).
+                        let rev_pos = Self::relationship_v2_pos(to_idx, i);
+                        let (commitment_b_to_a, attachment_b_to_a, fear_b_of_a,
+                             obligation_b_to_a, moral_debt_b_to_a) = {
+                            let rev = &self.agents[to_idx].relationship_v2s[rev_pos];
+                            (rev.commitment, rev.attachment_security, rev.fear,
+                             rev.obligation, rev.moral_debt)
+                        };
+                        let status_advantage = statuses[i] - statuses[to_idx];
+                        self.agents[i].relationship_v2s[pos].update_power_balance(
+                            dependence_a_on_b,
+                            commitment_b_to_a,
+                            attachment_b_to_a,
+                            status_advantage,
+                            fear_b_of_a,
+                            obligation_b_to_a,
+                            moral_debt_b_to_a,
+                        );
+                    }
+                }
+            }
+
             // ── 1. Need decay (nonlinear pressure, §9.1) ────────────────
             // §5.1: Use configurable parameters for decay rates.
             let params = self.params;

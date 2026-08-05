@@ -181,6 +181,34 @@ impl RelationshipV2 {
             .clamp_01()
     }
 
+    /// §11.2: Recompute the power balance of this directed relationship from
+    /// B's dependence on A (commitment/attachment), A's status advantage over
+    /// B, B's fear of A, and the moral obligations B owes A.
+    ///
+    /// `power_balance` was declared but never written (the dead-field class
+    /// Iteration 39 closes). Positive = A dominates B; negative = B dominates A.
+    pub fn update_power_balance(
+        &mut self,
+        dependence_a_on_b: Fixed,
+        commitment_b_to_a: Fixed,
+        attachment_b_to_a: Fixed,
+        status_advantage: Fixed,
+        fear_b_of_a: Fixed,
+        obligation_b_to_a: Fixed,
+        moral_debt_b_to_a: Fixed,
+    ) {
+        let power = crate::social::relational_power::RelationalPower::compute(
+            dependence_a_on_b,
+            commitment_b_to_a,
+            attachment_b_to_a,
+            status_advantage,
+            fear_b_of_a,
+            obligation_b_to_a,
+            moral_debt_b_to_a,
+        );
+        self.power_balance = power.power_balance();
+    }
+
     pub fn record_positive(&mut self, tick: u64, magnitude: Fixed) {
         let vol = self.volatility;
         self.trust = (self.trust + magnitude * vol * Fixed::from_f64(0.02)).clamp_01();
