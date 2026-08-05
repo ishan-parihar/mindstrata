@@ -39,6 +39,7 @@ pub mod patronage;
 pub mod relational_power;
 pub mod relationship_stages;
 pub mod relationship_v2;
+pub mod speech_act;
 pub mod status_dims;
 
 // Re-export key types for convenient access
@@ -58,4 +59,5 @@ pub use marriage::{Marriage, MarriageRegistry, PairBond, RomanticStage};
 pub use patronage::{PatronageRegistry, PatronageRelation};
 pub use relationship_stages::{try_advance_stage, try_regress_stage};
 pub use relationship_v2::{RelationshipV2, RelationshipStage};
+pub use speech_act::{ActDomain, RelationalIntent, SpeechAct, SpeechActKind, SpeechEffect, SPEECH_LOG_CAPACITY};
 pub use status_dims::StatusDimensions;

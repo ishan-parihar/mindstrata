@@ -44,7 +44,7 @@ use crate::systems::{self, SystemContext};
 use crate::world::{GRAIN_RESOURCE_ID, WATER_RESOURCE_ID, World};
 use crate::world_gen;
 use mindstrata_core::clock::{Clock, Tick};
-use mindstrata_core::event::{DeathCause, SimEvent};
+use mindstrata_core::event::{DeathCause, InteractionKind, SimEvent};
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::id::{AgentId, EntityId, ResourceId};
 use mindstrata_core::rng::{RngStream, RngStreams};
@@ -242,6 +242,12 @@ pub struct AgentBundle {
     pub psych_skills: PsychSkillState,
     /// Architecture-plan-2 §10.2: Enriched relationship model.
     pub relationship_v2s: Vec<RelationshipV2>,
+    /// Architecture-plan-2 §8.1.11: Bounded log of speech acts the agent has
+    /// performed — the structured linguistic frame on the interaction system.
+    /// Write-only observational state (Iteration 40); `#[serde(default)]` so
+    /// pre-Iter-40 snapshots restore.
+    #[serde(default)]
+    pub speech_log: Vec<crate::social::speech_act::SpeechAct>,
     /// Architecture-plan-2 §10.4: Attraction model for potential partners.
     pub attraction: AttractionModel,
     /// Architecture-plan-2 §11.1: Multi-dimensional status.
@@ -782,6 +788,7 @@ impl Simulation {
                 cultural_cognition: crate::psychology::CulturalCognition::default(),
                 psych_skills: crate::psychology::SkillState::default(),
                 relationship_v2s: Vec::new(), // populated after agents are created
+                speech_log: Vec::new(),
                 attraction: crate::social::attraction::AttractionModel::default(),
                 status_v2: crate::social::status_dims::StatusDimensions::default(),
                 epistemic: epistemic_state,
@@ -2774,6 +2781,53 @@ impl Simulation {
                     self.params.conflict_escalation_rate,
                     &self.params,
                 );
+
+                // §8.1.11: Record speech acts — the structured linguistic frame
+                // on the interaction system just run. Every InteractionOccurred
+                // event this tick is interpreted into a SpeechAct and pushed onto
+                // the speaker's bounded speech_log. Write-only observational
+                // state (Iteration 40), so this cannot perturb calibrated runs.
+                // Verified invariant: only process_interaction emits
+                // InteractionOccurred (update_witnesses mutates witness
+                // relationships directly and emits nothing), so every such event
+                // in the window is a genuine speaker act.
+                let mut spoken: Vec<(u64, u64, InteractionKind)> = Vec::new();
+                for ev in &ctx.events[pre_tick_events..] {
+                    if let SimEvent::InteractionOccurred { from, to, kind, .. } = ev {
+                        spoken.push((from.as_u64(), to.as_u64(), *kind));
+                    }
+                }
+                if !spoken.is_empty() {
+                    let n = self.agents.len();
+                    for (from_u, to_u, kind) in spoken {
+                        let fi = from_u as usize;
+                        if fi >= n {
+                            continue;
+                        }
+                        // Tone from current affect valence (0..1, 0.5 neutral).
+                        let tone = (self.agents[fi].affect.valence + Fixed::ONE)
+                            / Fixed::from_f64(2.0);
+                        // Credibility from the speaker's trust in the listener.
+                        let credibility = self
+                            .relationships
+                            .iter()
+                            .find(|r| r.from.as_u64() == from_u && r.to.as_u64() == to_u)
+                            .map_or(Fixed::from_f64(0.5), |r| r.trust);
+                        let act = crate::social::speech_act::SpeechAct::from_interaction(
+                            kind,
+                            AgentId::new(from_u),
+                            AgentId::new(to_u),
+                            tone,
+                            credibility,
+                            tick_u64,
+                        );
+                        let log = &mut self.agents[fi].speech_log;
+                        log.push(act);
+                        if log.len() > crate::social::speech_act::SPEECH_LOG_CAPACITY {
+                            log.remove(0);
+                        }
+                    }
+                }
             }
 
             // ── 6. Appraisal — emotions from state ────────────────────
@@ -4782,6 +4836,7 @@ impl Simulation {
             cultural_cognition: crate::psychology::CulturalCognition::default(),
             psych_skills: crate::psychology::SkillState::default(),
             relationship_v2s: Vec::new(),
+            speech_log: Vec::new(),
             attraction: crate::social::attraction::AttractionModel::default(),
             status_v2: crate::social::status_dims::StatusDimensions::default(),
             epistemic: crate::social::epistemic::EpistemicState::default(),
@@ -5108,6 +5163,7 @@ impl Simulation {
                     cultural_cognition: crate::psychology::CulturalCognition::default(),
                     psych_skills: crate::psychology::SkillState::default(),
                     relationship_v2s: Vec::new(),
+            speech_log: Vec::new(),
                     attraction: crate::social::attraction::AttractionModel::default(),
                     status_v2: crate::social::status_dims::StatusDimensions::default(),
                     epistemic: crate::social::epistemic::EpistemicState::default(),

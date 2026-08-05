@@ -2068,6 +2068,64 @@ fn relational_power_balance_is_populated_and_asymmetric() {
     }
 }
 
+// ── §8.1.11: Speech Acts ──────────────────────────────────────────
+
+/// Iter 40: interactions must be recorded as structured speech acts on the
+/// speaker's `speech_log` — the §8.1.11 "language should be action" upgrade.
+/// The log is write-only observational state, so records must be well-formed
+/// (ranges bounded, grounded kinds, no self-talk) and populated at all.
+#[test]
+fn speech_acts_recorded_from_interactions() {
+    use mindstrata_sim::social::speech_act::{SpeechAct, SpeechActKind, SPEECH_LOG_CAPACITY};
+
+    let riverford = mindstrata_sim::scenario::Scenario::riverford();
+    let mut sim = mindstrata_sim::Simulation::from_scenario(riverford);
+    sim.populate();
+    sim.run(4320);
+
+    let logs: Vec<&SpeechAct> = sim.agents.iter().flat_map(|a| a.speech_log.iter()).collect();
+    assert!(
+        !logs.is_empty(),
+        "speech_log must be populated by the interaction system (was empty)"
+    );
+    // Bounded per agent.
+    for agent in &sim.agents {
+        assert!(agent.speech_log.len() <= SPEECH_LOG_CAPACITY);
+    }
+    // Well-formed records: tone/credibility in [0,1], non-negative cost,
+    // tick inside the run, and never self-directed.
+    for act in &logs {
+        assert!(
+            (0.0..=1.0).contains(&act.emotional_tone.to_f64()),
+            "tone {} out of range",
+            act.emotional_tone
+        );
+        assert!((0.0..=1.0).contains(&act.credibility.to_f64()));
+        assert!(act.social_cost.to_f64() >= 0.0);
+        assert!(act.tick <= 4320, "recorded act tick {} beyond run", act.tick);
+        assert_ne!(act.speaker, act.listener);
+    }
+    // Grounded in the live interaction vocabulary (the 8 produced kinds).
+    let produced: std::collections::HashSet<SpeechActKind> =
+        logs.iter().map(|a| a.act).collect();
+    for kind in produced {
+        assert!(
+            matches!(
+                kind,
+                SpeechActKind::Inform
+                    | SpeechActKind::Promise
+                    | SpeechActKind::Threaten
+                    | SpeechActKind::Request
+                    | SpeechActKind::Gossip
+                    | SpeechActKind::Reassure
+                    | SpeechActKind::Insult
+                    | SpeechActKind::Persuade
+            ),
+            "unexpected speech act kind {kind:?} produced by the interaction system"
+        );
+    }
+}
+
 #[test]
 fn metrics_csv_exports_real_inequality_tracking() {
     // §13.3/§19: Gini + wealth distribution must be observable in the metrics
