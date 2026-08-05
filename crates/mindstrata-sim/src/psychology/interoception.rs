@@ -122,6 +122,23 @@ impl InteroceptiveState {
         (raw + (felt - baseline_felt) * Fixed::from_f64(2.0)).clamp_01()
     }
 
+    /// §8.1: Emotion-regulation efficacy scale — how much the body's
+    /// embodiment of the current emotion resists cognitive regulation.
+    ///
+    /// High interoceptive sensitivity means emotions are felt more intensely
+    /// in the body, so cognitive strategies bite less; low sensitivity leaves
+    /// emotions "cognitive", so regulation works better. Baseline-corrected
+    /// against the default sensitivity (0.5): returns exactly 1.0 (a no-op) at
+    /// the baseline, so only personality-driven deviation changes behavior.
+    pub fn regulation_scale(&self, valence: Fixed, arousal: Fixed) -> Fixed {
+        let tone = self.emotional_body_tone(valence, arousal);
+        let deviation = self.sensitivity - Fixed::from_f64(0.5);
+        // ±~16% at the extremes of the initialized sensitivity range [0.3, 0.6]
+        // combined with intense emotion; the clamp is defensive only.
+        (Fixed::ONE - deviation * tone * Fixed::from_f64(2.0))
+            .clamp(Fixed::from_f64(0.5), Fixed::from_f64(1.5))
+    }
+
     /// Initialize interoceptive state from personality traits and trauma history.
     /// Should be called once at agent creation, not per tick, since personality
     /// traits are static and trauma_load changes slowly.
@@ -196,6 +213,36 @@ mod tests {
             high.felt_need_deficit(h, t, f, s) > raw,
             "high bias amplifies the felt deficit"
         );
+    }
+
+    #[test]
+    fn regulation_scale_is_identity_at_default_sensitivity() {
+        let state = InteroceptiveState::default();
+        let scale = state.regulation_scale(Fixed::from_f64(0.4), Fixed::from_f64(0.6));
+        assert_eq!(scale, Fixed::ONE, "default sensitivity must not change regulation");
+    }
+
+    #[test]
+    fn regulation_scale_penalizes_high_sensitivity() {
+        let high = InteroceptiveState {
+            sensitivity: Fixed::from_f64(0.9),
+            ..InteroceptiveState::default()
+        };
+        let low = InteroceptiveState {
+            sensitivity: Fixed::from_f64(0.1),
+            ..InteroceptiveState::default()
+        };
+        let (v, a) = (Fixed::from_f64(0.5), Fixed::from_f64(0.6));
+        assert!(
+            high.regulation_scale(v, a) < Fixed::ONE,
+            "embodied emotions resist regulation"
+        );
+        assert!(
+            low.regulation_scale(v, a) > Fixed::ONE,
+            "detached emotions regulate more easily"
+        );
+        // No emotion → no modulation, regardless of sensitivity.
+        assert_eq!(high.regulation_scale(Fixed::ZERO, Fixed::ZERO), Fixed::ONE);
     }
 
     #[test]

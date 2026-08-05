@@ -2680,14 +2680,21 @@ impl Simulation {
                 // Now apply_strategy() uses the fresh, appraisal-derived affect values
                 // as input — the skill-scaled boost is computed from the correct target state.
                 if i < reg_strategies.len() {
+                    // §8.1: Embodied emotions (high body tone from interoceptive
+                    // sensitivity) resist cognitive regulation — scale the
+                    // strategy's effect. Mean-zero at the default sensitivity.
+                    let reg_scale = self.agents[i].interoception.regulation_scale(
+                        affects[i].valence,
+                        affects[i].arousal,
+                    );
                     let (reg_vd, reg_ad) = self.agents[i].emotion_regulation.apply_strategy(
                         reg_strategies[i],
                         affects[i].valence,
                         affects[i].arousal,
                     );
-                    affects[i].valence = (affects[i].valence + reg_vd)
+                    affects[i].valence = (affects[i].valence + reg_vd * reg_scale)
                         .clamp(-Fixed::ONE, Fixed::ONE);
-                    affects[i].arousal = (affects[i].arousal + reg_ad).clamp_01();
+                    affects[i].arousal = (affects[i].arousal + reg_ad * reg_scale).clamp_01();
                 }
             }
 
@@ -7246,6 +7253,49 @@ mod tests {
             Fixed::from_f64(0.7),
         );
         assert!(felt_high > felt_low, "high bias must yield a higher felt deficit");
+    }
+
+    /// §8.1: Embodied emotions must resist regulation in the live tick —
+    /// high-sensitivity agents retain more arousal than low-sensitivity agents
+    /// under identical conditions, because their emotions are felt more
+    /// intensely in the body and cognitive strategies bite less.
+    #[test]
+    fn emotional_body_tone_resists_regulation_in_tick() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 60_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut embodied = Simulation::new(config.clone());
+        embodied.populate();
+        let mut detached = Simulation::new(config);
+        detached.populate();
+        for agent in &mut embodied.agents {
+            agent.interoception.sensitivity = Fixed::from_f64(0.9);
+        }
+        for agent in &mut detached.agents {
+            agent.interoception.sensitivity = Fixed::from_f64(0.1);
+        }
+        for _ in 0..500 {
+            embodied.tick();
+            detached.tick();
+        }
+        let mean_arousal = |sim: &Simulation| -> Fixed {
+            let n = sim.agents.len();
+            let total = sim
+                .agents
+                .iter()
+                .fold(Fixed::ZERO, |acc, a| acc + a.affect.arousal);
+            total / Fixed::from_int(n as i64)
+        };
+        assert!(
+            mean_arousal(&embodied) > mean_arousal(&detached),
+            "embodied emotions must resist regulation: high-sensitivity agents \
+             should retain more arousal than low-sensitivity agents"
+        );
     }
 
     /// §13.5: Factions found their own mythic past — group 1 + faction id.
