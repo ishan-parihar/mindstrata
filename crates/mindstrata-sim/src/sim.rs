@@ -86,6 +86,12 @@ const PATRONAGE_DESTITUTION_FLOOR: Fixed = Fixed::from_raw(10_000); // 1.0 coin
 /// faction-formation envelope (factions_emerge_from_grievance).
 const PATRONAGE_GRIEVANCE_DAMPEN: Fixed = Fixed::from_raw(600); // 0.06
 
+/// §11.1: Perceived legitimacy modulates faction grievance — a point of
+/// legitimacy deviation from the 0.5 mean-zero anchor shifts grievance by
+/// this factor. Sized small to stay inside the calibrated faction-formation
+/// envelope (mirrors PATRONAGE_GRIEVANCE_DAMPEN sizing).
+const LEGITIMACY_GRIEVANCE_DAMPEN: Fixed = Fixed::from_raw(500); // 0.05
+
 // ── Self-model constants (§8.1) ────────────────────────────────────
 /// Regulation-capacity support per unit of self-esteem deviation from the
 /// 0.5 baseline. Zero at baseline (the default self-model), so early
@@ -259,6 +265,12 @@ pub struct AgentBundle {
     pub sacred_values: crate::culture::sacred::SacredValues,
     /// Architecture-plan-2 §8.1.18: Education state for knowledge transmission.
     pub education: crate::culture::education::EducationState,
+    /// Architecture-plan-2 §11.1: Perceived legitimacy of the council — built
+    /// by ritual participation, eroded by witnessed violations. Mean-zero at
+    /// `new(0.5)`: the faction-grievance dampen is unchanged until the field
+    /// actually moves with ritual/scandal events.
+    #[serde(default)]
+    pub legitimacy_field: crate::noosphere::LegitimacyField,
 }
 
 /// §4.2: Skill levels that improve through repeated practice.
@@ -802,6 +814,8 @@ impl Simulation {
                     sv.add_or_strengthen("community_safety".into(), Fixed::from_f64(populate_rng.random_range(0.3..0.7)), Fixed::from_f64(populate_rng.random_range(0.2..0.6)));
                     sv
                 },
+                // §11.1: Perceived legitimacy starts at the mean-zero anchor.
+                legitimacy_field: crate::noosphere::LegitimacyField::new(Fixed::from_f64(0.5)),
                 education: crate::culture::education::EducationState {
                     teaching_skill: Fixed::from_f64(populate_rng.random_range(0.1..0.5)),
                     learning_aptitude: Fixed::from_f64(populate_rng.random_range(0.3..0.8)),
@@ -2075,6 +2089,13 @@ impl Simulation {
                     let witnessed_violations = self.agents[i]
                         .sacred_values
                         .amplify_witnessed_violations(witnessed_violations);
+                    // §11.1: Witnessed violations erode perceived legitimacy —
+                    // the council that fails to prevent wrongdoing loses its
+                    // perceived rightfulness. Zero-at-zero anchor: no violations
+                    // -> no erosion.
+                    self.agents[i]
+                        .legitimacy_field
+                        .scandal_damage(witnessed_violations);
                     let personal_violations = (emotions[i].guilt * Fixed::from_f64(0.4)
                         + emotions[i].shame * Fixed::from_f64(0.3))
                         .clamp_01();
@@ -4088,6 +4109,15 @@ impl Simulation {
             .patron_of(idx)
             .map_or(Fixed::ZERO, |r| r.client_dependence)
             * PATRONAGE_GRIEVANCE_DAMPEN;
+        // §11.1: Perceived legitimacy of the council modulates grievance — an
+        // agent who believes the council rules rightfully is quiescent (dampen),
+        // one who sees it as illegitimate is more grievance-prone (amplify, so
+        // the dampen term must stay signed — the grievance is clamped below).
+        // Mean-zero at the 0.5 construction anchor: no effect until the field
+        // moves with ritual participation or witnessed violations.
+        let legitimacy_deviation =
+            agent.legitimacy_field.overall - Fixed::from_f64(0.5);
+        let dampen = dampen + legitimacy_deviation * LEGITIMACY_GRIEVANCE_DAMPEN;
         (g * (Fixed::ONE - dampen)).max(Fixed::ZERO)
     }
 
@@ -4600,6 +4630,7 @@ impl Simulation {
                 polarization_tendency: Fixed::from_f64(0.3),
             },
             sacred_values: crate::culture::sacred::SacredValues::default(),
+            legitimacy_field: crate::noosphere::LegitimacyField::new(Fixed::from_f64(0.5)),
             education: crate::culture::education::EducationState {
                 learning_aptitude: Fixed::from_f64(0.6),
                 ..crate::culture::education::EducationState::default()
@@ -4914,6 +4945,7 @@ impl Simulation {
                         polarization_tendency: Fixed::from_f64(0.3),
                     },
                     sacred_values: crate::culture::sacred::SacredValues::default(),
+                    legitimacy_field: crate::noosphere::LegitimacyField::new(Fixed::from_f64(0.5)),
                     education: crate::culture::education::EducationState {
                         learning_aptitude: Fixed::from_f64(0.6),
                         ..crate::culture::education::EducationState::default()
@@ -5437,8 +5469,17 @@ impl Simulation {
             for ritual_id in due {
                 if let Some(ritual) = self.ritual_registry.rituals.iter_mut().find(|r| r.id == ritual_id) {
                     let bonding = ritual.execute(tick_u64);
+                    // §11.1: Ritual participation builds perceived legitimacy —
+                    // communal ritual rehearses the rightfulness of the order.
+                    // Zero-at-zero anchor: no ritual -> no boost.
+                    let ritual_legitimacy = bonding;
                     // Apply bonding to all participant pairs
                     for i in 0..ritual.participants.len() {
+                        // Boost each participant's perceived legitimacy once.
+                        let p = ritual.participants[i];
+                        if p < self.agents.len() {
+                            self.agents[p].legitimacy_field.ritual_boost(ritual_legitimacy);
+                        }
                         for j in (i + 1)..ritual.participants.len() {
                             let a = ritual.participants[i];
                             let b = ritual.participants[j];
@@ -7743,5 +7784,45 @@ mod tests {
         rel0.client_dependence = Fixed::ZERO;
         sim.patronage_registry.register(rel0);
         assert_eq!(sim.faction_grievance(client).to_f64(), plain.to_f64());
+    }
+
+    /// §11.1: Perceived legitimacy modulates faction grievance — a deviation
+    /// of `overall` from the 0.5 construction anchor dampens (above) or
+    /// amplifies (below) grievance by the exact dampening factor; the anchor
+    /// itself is a no-op.
+    #[test]
+    fn perceived_legitimacy_modulates_faction_grievance() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        let agent = 1usize;
+        // Force a measurable grievance baseline.
+        sim.agents[agent].derived.resentment = Fixed::from_f64(0.6);
+        sim.agents[agent].emotions.anger = Fixed::from_f64(0.5);
+        // Mean-zero anchor: the fresh field (overall == 0.5) dampens nothing.
+        let plain = sim.faction_grievance(agent);
+        // High perceived legitimacy quiesces the agent by the exact factor.
+        sim.agents[agent].legitimacy_field.overall = Fixed::from_f64(0.9);
+        let dampened = sim.faction_grievance(agent);
+        let expected = (plain
+            * (Fixed::ONE - Fixed::from_f64(0.4) * LEGITIMACY_GRIEVANCE_DAMPEN))
+            .max(Fixed::ZERO);
+        assert_eq!(dampened.to_f64(), expected.to_f64());
+        assert!(dampened < plain, "high legitimacy must dampen grievance");
+        // Low perceived legitimacy amplifies grievance symmetrically.
+        sim.agents[agent].legitimacy_field.overall = Fixed::from_f64(0.1);
+        let amplified = sim.faction_grievance(agent);
+        let expected_amp = (plain
+            * (Fixed::ONE + Fixed::from_f64(0.4) * LEGITIMACY_GRIEVANCE_DAMPEN))
+            .max(Fixed::ZERO);
+        assert_eq!(amplified.to_f64(), expected_amp.to_f64());
+        assert!(amplified > plain, "low legitimacy must amplify grievance");
     }
 }
