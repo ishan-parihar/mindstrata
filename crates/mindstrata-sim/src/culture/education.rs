@@ -23,8 +23,11 @@ pub struct EducationEvent {
     pub teacher: usize,
     /// Index of the student agent.
     pub student: usize,
-    /// Knowledge id being transmitted.
-    pub knowledge_id: u32,
+    /// Knowledge id being transmitted. `u64` to match the sim's knowledge
+    /// store (CulturalState.knowledge: Vec<u64>) — the education module was
+    /// originally written with `u32` ids and never wired in; alignment is a
+    /// precondition of the apprenticeship pass.
+    pub knowledge_id: u64,
     /// Quality of the teaching (0–1).
     pub quality: Fixed,
     /// Student's learning rate (depends on aptitude, motivation, relationship).
@@ -39,9 +42,9 @@ pub struct EducationEvent {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct EducationState {
     /// Knowledge ids this agent has learned.
-    pub learned: Vec<u32>,
+    pub learned: Vec<u64>,
     /// Knowledge ids this agent is currently learning (in progress).
-    pub in_progress: Vec<u32>,
+    pub in_progress: Vec<u64>,
     /// Teaching skill — how well this agent can teach others (0–1).
     pub teaching_skill: Fixed,
     /// Learning aptitude — how quickly this agent learns (0–1).
@@ -76,7 +79,7 @@ impl EducationState {
     }
 
     /// Check if this agent has learned a specific knowledge id.
-    pub fn has_learned(&self, knowledge_id: u32) -> bool {
+    pub fn has_learned(&self, knowledge_id: u64) -> bool {
         self.learned.contains(&knowledge_id)
     }
 
@@ -122,7 +125,7 @@ impl EducationState {
 pub fn attempt_teaching(
     teacher_idx: usize,
     student_idx: usize,
-    knowledge_id: u32,
+    knowledge_id: u64,
     teacher_education: &EducationState,
     student_education: &EducationState,
     knowledge_familiarity: Fixed,

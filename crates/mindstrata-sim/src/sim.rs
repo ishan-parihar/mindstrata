@@ -5483,6 +5483,12 @@ impl Simulation {
                 // §8.1.18: Education daily update
                 agent.education.daily_update();
             }
+            // §8.1.18: Apprenticeship pass — deliberate knowledge transmission.
+            // The education module (attempt_teaching/record_learning) was fully
+            // implemented but never called from the tick loop; this pass makes
+            // adults teach knowledge they hold to agents who lack it, through
+            // the teaching-skill × relationship-quality pipeline.
+            self.run_apprenticeship_pass(tick_u64, Tick::new(tick_u64));
         }
 
         // Architecture-plan-2 §12.5: Execute due rituals every 12 ticks (~2 hours).
@@ -5648,6 +5654,104 @@ impl Simulation {
 
     }
 
+    /// §8.1.18: Apprenticeship pass — deliberate knowledge transmission.
+    ///
+    /// Runs once daily. Each agent attempts to learn one knowledge item they
+    /// lack, taught by an agent who holds it with sufficient teaching skill
+    /// and a warm relationship. Deterministic: the teacher with the highest
+    /// teaching skill is picked (no RNG), the transfer succeeds when the
+    /// learning rate clears the `attempt_teaching` threshold, and success
+    /// feeds the §8.1.7 desacralization chain (acquired knowledge is evidence
+    /// exposure) — the same hook gossip uses.
+    fn run_apprenticeship_pass(&mut self, tick_u64: u64, tick: Tick) {
+        let n = self.agents.len();
+        if n < 2 {
+            return;
+        }
+        for student in 0..n {
+            // Find the first knowledge in store order that this student lacks
+            // AND for which a capable teacher exists. Scanning candidates
+            // (rather than teaching only the first missing item) is essential:
+            // a student missing several items may only have a teacher for one.
+            let mut chosen: Option<(u64, usize, u32)> = None;
+            for knowledge in &self.knowledge_store {
+                let knowledge_id = knowledge.id;
+                if self.agents[student].education.has_learned(knowledge_id) { continue; }
+                // Pick the best teacher among agents who hold this knowledge,
+                // can teach, and share a relationship with the student.
+                let mut best: Option<(usize, Fixed)> = None;
+                for teacher in 0..n {
+                    if teacher == student { continue; }
+                    if !self.agents[teacher].education.has_learned(knowledge_id) { continue; }
+                    if self.agents[teacher].education.teaching_skill < Fixed::from_f64(0.3) { continue; }
+                    let rel_quality = self.relationship_quality(teacher, student);
+                    if rel_quality < Fixed::from_f64(0.1) { continue; }
+                    let skill = self.agents[teacher].education.teaching_skill;
+                    if best.is_none_or(|(_, s)| skill > s) {
+                        best = Some((teacher, skill));
+                    }
+                }
+                if let Some((teacher, _)) = best {
+                    chosen = Some((knowledge_id, teacher, knowledge.holders));
+                    break;
+                }
+            }
+            let Some((knowledge_id, teacher, holders)) = chosen else { continue };
+
+            // Familiarity: how broadly held the knowledge is (holders / agents).
+            let familiarity = Fixed::from_f64(holders as f64 / n as f64).clamp_01();
+            let rel_quality = self.relationship_quality(teacher, student);
+            let event = crate::culture::education::attempt_teaching(
+                teacher, student, knowledge_id,
+                &self.agents[teacher].education,
+                &self.agents[student].education,
+                familiarity, rel_quality, tick_u64,
+            );
+
+            self.agents[student].education.record_learning(event.clone());
+            self.agents[teacher].education.record_teaching(event.clone());
+            if event.success {
+                // The student now holds the knowledge in both education state
+                // and the shared cultural knowledge vector.
+                if !self.agents[student].cultural.knowledge.contains(&knowledge_id) {
+                    self.agents[student].cultural.knowledge.push(knowledge_id);
+                }
+                if let Some(k) = self.knowledge_store.iter_mut().find(|k| k.id == knowledge_id) {
+                    k.holders += 1;
+                }
+                // §8.1.7: Acquired knowledge is evidence exposure — learning
+                // desacralizes in proportion to the learning rate and the
+                // student's reasoning capacity (same hook as gossip transfer).
+                let reasoning = self.agents[student].cognitive.executive_capacity;
+                self.agents[student]
+                    .sacred_values
+                    .desacralize_through_exposure(event.learning_rate, reasoning);
+                self.events.push(SimEvent::KnowledgeTransferred {
+                    source: AgentId::new(teacher as u64),
+                    target: AgentId::new(student as u64),
+                    knowledge_id,
+                    tick,
+                });
+                self.provenance.record_institutional(crate::provenance::InstitutionalTrace {
+                    institution_name: "Apprenticeship".into(), tick: tick_u64,
+                    decision_kind: "apprenticeship_teaching".into(),
+                    description: format!(
+                        "Agent {teacher} taught knowledge {knowledge_id} to Agent {student}"
+                    ),
+                    affected: vec![AgentId::new(teacher as u64), AgentId::new(student as u64)],
+                    success: true,
+                });
+            }
+        }
+    }
+
+    /// Relationship quality (0–1) between two agents, from the source's
+    /// relationship_v2 view; defaults to a neutral 0.5 when absent.
+    fn relationship_quality(&self, from: usize, to: usize) -> Fixed {
+        self.agents[from].relationship_v2s.iter()
+            .find(|r| r.to.as_u64() as usize == to)
+            .map_or(Fixed::from_f64(0.5), |r| (r.trust + r.affection) * Fixed::from_f64(0.5))
+    }
 
     /// Section 4b: Resource operations, journal recording, intention tracking.
     fn tick_resource_operations(&mut self, action_starts: &[(usize, ActionKind)], _pre_tick_events: usize, tick_u64: u64, tick: Tick) {
@@ -7584,6 +7688,87 @@ mod tests {
         assert_eq!(
             after, before,
             "no knowledge acquisition must leave sacredness untouched"
+        );
+    }
+
+    /// §8.1.18: The apprenticeship pass transmits knowledge from a capable
+    /// teacher to a willing student. Agent 0 holds knowledge id 2 (Herbal
+    /// Medicine) with high teaching skill; Agent 1 lacks it with high
+    /// learning aptitude. The pass must transfer it, record both education
+    /// events, and bump the knowledge-store holder count.
+    #[test]
+    fn apprenticeship_transfers_knowledge_from_teacher_to_student() {
+        use crate::culture::education::EducationEvent;
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 2,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        // Teacher: knows id 2, can teach.
+        sim.agents[0].education.learned = vec![2];
+        sim.agents[0].education.teaching_skill = Fixed::from_f64(0.9);
+        sim.agents[0].education.teaching_patience = Fixed::from_f64(0.8);
+        // Student: lacks id 2, learns fast.
+        sim.agents[1].education.learning_aptitude = Fixed::from_f64(0.9);
+        sim.agents[1].cultural.knowledge.retain(|&k| k != 2);
+        // A warm relationship makes the transfer reliable.
+        if let Some(r) = sim.relationships.iter_mut().find(|r| r.from.as_u64() == 0 && r.to.as_u64() == 1) {
+            r.trust = Fixed::from_f64(0.9);
+            r.affection = Fixed::from_f64(0.8);
+        }
+        let holders_before = sim.knowledge_store.iter().find(|k| k.id == 2).map(|k| k.holders).unwrap_or(0);
+        sim.run_apprenticeship_pass(1, Tick::new(1));
+        assert!(
+            sim.agents[1].education.has_learned(2),
+            "student must learn the taught knowledge"
+        );
+        assert!(
+            sim.agents[1].cultural.knowledge.contains(&2),
+            "student's cultural knowledge must include id 2"
+        );
+        let teach_ok = sim.agents[0].education.teaching_events.iter()
+            .any(|e: &EducationEvent| e.knowledge_id == 2 && e.success);
+        assert!(teach_ok, "teacher must record a successful teaching event");
+        let learn_ok = sim.agents[1].education.learning_events.iter()
+            .any(|e: &EducationEvent| e.knowledge_id == 2 && e.success);
+        assert!(learn_ok, "student must record a successful learning event");
+        let holders_after = sim.knowledge_store.iter().find(|k| k.id == 2).map(|k| k.holders).unwrap_or(0);
+        assert!(holders_after >= holders_before + 1, "knowledge holder count must grow");
+    }
+
+    /// §8.1.18 zero-at-zero companion: when nobody in the village can teach a
+    /// knowledge item (no capable teacher), the pass transfers nothing — the
+    /// education system stays inert until a qualified teacher exists.
+    #[test]
+    fn apprenticeship_no_teacher_transfers_nothing() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 2,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        // Nobody knows id 2 (or can teach it) — student lacks it.
+        sim.agents[0].education.learned.clear();
+        sim.agents[1].education.learned.clear();
+        sim.agents[0].education.teaching_skill = Fixed::from_f64(0.1);
+        let before = sim.agents[1].cultural.knowledge.len();
+        sim.run_apprenticeship_pass(1, Tick::new(1));
+        assert_eq!(
+            sim.agents[1].cultural.knowledge.len(), before,
+            "no teacher means no transfer"
+        );
+        assert!(
+            !sim.agents[1].education.has_learned(2),
+            "student must not learn without a teacher"
         );
     }
 
