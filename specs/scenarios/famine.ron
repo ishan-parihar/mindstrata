@@ -1,0 +1,24 @@
+// §46 Scenario DSL — Famine Scenario
+// Extends riverford with a grain-destroying famine shock at tick 500.
+
+Scenario(
+    name: "Famine",
+    description: "Riverford under a grain famine. Tests food scarcity, hunger, and social tension.",
+    seed: 42,
+    ticks: 4320,
+    world_width: 16,
+    world_height: 16,
+    num_agents: 12,
+    shocks: [
+        Shock(
+            at_tick: 200,
+            kind: Festival,
+            magnitude: 0.3,
+        ),
+        Shock(
+            at_tick: 500,
+            kind: Famine,
+            magnitude: 0.7,
+        ),
+    ],
+)

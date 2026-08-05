@@ -1548,6 +1548,81 @@ fn drought_shock_depletes_water_not_grain() {
     );
 }
 
+#[test]
+fn famine_shock_depletes_grain_more_than_riverford() {
+    // The Famine shock (Iter 34) destroys stored grain — the food-crisis
+    // counterpart to Drought's water drain. Same proportional semantics: a
+    // 70% drain must genuinely differentiate the scenario from riverford's
+    // gentler 30% drought.
+    use mindstrata_sim::world::GRAIN_RESOURCE_ID;
+    let famine = mindstrata_sim::scenario::Scenario::famine();
+    let mut sim = mindstrata_sim::Simulation::from_scenario(famine);
+    sim.populate();
+    sim.run(1000);
+    let grain_left: f64 = sim.world.sites.iter()
+        .flat_map(|s| s.inventory.iter())
+        .filter(|st| st.resource_id == GRAIN_RESOURCE_ID)
+        .map(|st| st.quantity.to_f64())
+        .sum();
+    // Farm (100) + Market (50) = 150 initial grain; a 70% proportional famine
+    // drain leaves ~45 right after the shock, so the survivor must be far
+    // below half of the starting supply.
+    assert!(
+        grain_left < 75.0,
+        "famine should deplete grain proportionally (left {grain_left:.1})"
+    );
+
+    // Regression guard (Iter 29 semantics): famine must leave *less* grain
+    // than riverford under the identical horizon.
+    let riverford = mindstrata_sim::scenario::Scenario::riverford();
+    let mut sim_r = mindstrata_sim::Simulation::from_scenario(riverford);
+    sim_r.populate();
+    sim_r.run(1000);
+    let riverford_grain: f64 = sim_r.world.sites.iter()
+        .flat_map(|s| s.inventory.iter())
+        .filter(|st| st.resource_id == GRAIN_RESOURCE_ID)
+        .map(|st| st.quantity.to_f64())
+        .sum();
+    assert!(
+        grain_left < riverford_grain,
+        "famine must deplete grain more than riverford \
+         (famine {grain_left:.1} vs riverford {riverford_grain:.1})"
+    );
+}
+
+#[test]
+fn storage_overflow_bleeds_excess_grain_back_to_capacity() {
+    // Iter 33 validation at scale: a farm stocked far beyond its capacity
+    // (e.g. a bumper harvest) must bleed back toward the cap through the
+    // per-tick overflow pass instead of staying bloated indefinitely.
+    use mindstrata_sim::world::{GRAIN_RESOURCE_ID, SiteKind};
+    let scenario = mindstrata_sim::scenario::Scenario::riverford();
+    let mut sim = mindstrata_sim::Simulation::from_scenario(scenario);
+    sim.populate();
+    let farm_idx = sim.world.sites.iter()
+        .position(|s| s.kind == SiteKind::Farm)
+        .unwrap();
+    let capacity = sim.world.sites[farm_idx].storage_capacity;
+    // Bumper harvest: 2100 total (100 seed + 2000 produced) vs 500 capacity.
+    sim.world
+        .produce_resource(farm_idx, GRAIN_RESOURCE_ID, Fixed::from_f64(2000.0));
+    sim.run(1000);
+    let grain: f64 = sim.world.sites[farm_idx].inventory.iter()
+        .filter(|st| st.resource_id == GRAIN_RESOURCE_ID)
+        .map(|st| st.quantity.to_f64())
+        .sum();
+    // The overflow bleed (1% of the excess per tick in spring) decays the
+    // overflow exponentially (~125-tick time constant): after 1000 ticks the
+    // stock must be well back toward capacity, far below the 2100 peak.
+    assert!(
+        grain < 1000.0,
+        "overflow must bleed excess grain back toward capacity \
+         (left {grain:.1}, cap {:.0})",
+        capacity.to_f64()
+    );
+    assert!(grain >= 0.0, "grain stock must stay non-negative");
+}
+
 
 
 

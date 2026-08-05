@@ -349,9 +349,10 @@ fn main() {
             let scenario = match name.as_str() {
                 "riverford" => Scenario::riverford(),
                 "drought" => Scenario::drought(),
+                "famine" => Scenario::famine(),
                 other => {
                     eprintln!("Unknown scenario: {other}");
-                    eprintln!("Available: riverford, drought");
+                    eprintln!("Available: riverford, drought, famine");
                     std::process::exit(1);
                 }
             };

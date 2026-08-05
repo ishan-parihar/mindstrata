@@ -41,8 +41,10 @@ pub struct Shock {
 /// Types of scenario shocks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ShockKind {
-    /// Reduce food availability.
+    /// Reduce water availability.
     Drought,
+    /// Destroy stored grain (food crisis).
+    Famine,
     /// Boost morale temporarily.
     Festival,
 }
@@ -99,6 +101,37 @@ impl Scenario {
                 Shock {
                     at_tick: 500,
                     kind: ShockKind::Drought,
+                    magnitude: Fixed::from_f64(0.7),
+                },
+            ],
+        }
+    }
+
+    /// Create the "Famine" scenario — Riverford under a grain famine.
+    ///
+    /// Mirrors `specs/scenarios/famine.ron`: a strong famine shock (0.7) at
+    /// tick 500 destroys most stored grain, testing food scarcity, hunger,
+    /// and social tension under scarcity.
+    pub fn famine() -> Self {
+        Self {
+            name: "Famine".into(),
+            description: "Riverford under a grain famine. Tests food scarcity, \
+                         hunger, and social tension."
+                .into(),
+            seed: 42,
+            ticks: 4320,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            shocks: vec![
+                Shock {
+                    at_tick: 200,
+                    kind: ShockKind::Festival,
+                    magnitude: Fixed::from_f64(0.3),
+                },
+                Shock {
+                    at_tick: 500,
+                    kind: ShockKind::Famine,
                     magnitude: Fixed::from_f64(0.7),
                 },
             ],

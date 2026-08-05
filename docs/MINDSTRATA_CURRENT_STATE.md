@@ -532,7 +532,7 @@ All systems wired into deterministic tick loop with proper ordering.
 | Psychology | cognitive_systems, emotions_v2, regulation_strategies, identity_frames, moral_foundations | Psychological data |
 | Social | courtship, marriage, kinship, status_roles | Social data |
 | Culture | rituals, propaganda, taboos_v2, sacred_symbols, education | Cultural data |
-| Scenarios | riverford.ron, drought.ron | Simulation scenarios |
+| Scenarios | riverford.ron, drought.ron, famine.ron | Simulation scenarios |
 
 All data-driven specs are validated by `spec_lint.rs` for existence and non-emptiness.
 
@@ -545,20 +545,21 @@ All data-driven specs are validated by `spec_lint.rs` for existence and non-empt
 | Test Category | Count | Purpose |
 |---|---|---|
 | Unit tests (sim) | 559 | Per-system correctness |
-| Integration tests | 116 | Full simulation runs (100–10,000 ticks, multi-seed macro health) |
+| Integration tests | 118 | Full simulation runs (100–10,000 ticks, multi-seed macro health, scenario battery) |
 | Core unit tests | 20 | Kernel correctness |
 | Property tests | included in above | Proptest: determinism, bounds |
 | Golden replay | 1 | Identical output from same seed |
 | 10K-tick stability | 1 | Long-running simulation stability |
 | Multi-seed macro health | 1 | 5 seeds × 15K ticks, every invariant (Iter 31) |
 | Tick-throughput gate | 1 | 24 agents/2000 ticks < 30s (Iter 30) |
-| **Total** | **695** | |
+| Scenario battery | 3 | drought/famine vs riverford differentiation (Iter 29/34) |
+| **Total** | **697** | |
 
 ### 9.2 Quality Metrics
 
 | Metric | Value |
 |---|---|
-| Tests passing | 695/695 (100%) |
+| Tests passing | 697/697 (100%) |
 | Clippy warnings | 0 |
 | Unsafe code | 0 (`unsafe_code = "forbid"`) |
 | TODO/FIXME comments | 0 |
@@ -652,4 +653,4 @@ cargo test -p mindstrata-sim spec_lint
 
 ---
 
-*This document reflects the codebase state as of August 5, 2026. The simulation engine has been upgraded with Architecture Plan 2 implementations: embodied biology, structured psychology, rich social relationships, cultural systems, and noospheric fields. All systems are integrated into a deterministic tick loop with level-of-detail cognition and causal provenance tracking. Iterations 22–28 completed the crate-wide dead-system sweep; Iteration 29 fixed the scenario system (declared tick horizons honored; drought drains water proportionally); Iteration 30 wired the benchmark regression gate + first CI pipeline; Iteration 31 added the multi-seed long-horizon macro-health sweep; Iteration 32 revived the education system via the apprenticeship pass; Iteration 33 brought the material/storage layer alive (site storage capacity with overflow spoilage).*
+*This document reflects the codebase state as of August 5, 2026. The simulation engine has been upgraded with Architecture Plan 2 implementations: embodied biology, structured psychology, rich social relationships, cultural systems, and noospheric fields. All systems are integrated into a deterministic tick loop with level-of-detail cognition and causal provenance tracking. Iterations 22–28 completed the crate-wide dead-system sweep; Iteration 29 fixed the scenario system (declared tick horizons honored; drought drains water proportionally); Iteration 30 wired the benchmark regression gate + first CI pipeline; Iteration 31 added the multi-seed long-horizon macro-health sweep; Iteration 32 revived the education system via the apprenticeship pass; Iteration 33 brought the material/storage layer alive (site storage capacity with overflow spoilage); Iteration 34 added the Famine food-crisis scenario (ShockKind::Famine, proportional grain drain), a famine-vs-riverford differentiation test, and a bumper-harvest storage-bleed test validating Iter 33 at scale.*

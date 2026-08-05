@@ -1843,6 +1843,22 @@ impl Simulation {
                             }
                         }
                     }
+                    ShockKind::Famine => {
+                        // A famine destroys the grain supply (GRAIN_RESOURCE_ID).
+                        // Same proportional-drain semantics as Drought: a fixed
+                        // absolute drain would be drowned out by the farm's large
+                        // stock, so the magnitude must scale with the stocked
+                        // quantity to genuinely differentiate scenarios.
+                        for site in &mut self.world.sites {
+                            for stock in &mut site.inventory {
+                                if stock.resource_id == GRAIN_RESOURCE_ID {
+                                    stock.quantity =
+                                        (stock.quantity * (Fixed::ONE - shock.magnitude))
+                                            .max(Fixed::ZERO);
+                                }
+                            }
+                        }
+                    }
                     ShockKind::Festival => {
                         for agent in &mut self.agents {
                             agent.emotions.joy =
