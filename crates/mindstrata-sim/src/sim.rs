@@ -3375,6 +3375,18 @@ impl Simulation {
                         if let Some(k) = self.knowledge_store.iter_mut().find(|k| k.id == kid) {
                             k.holders += 1;
                         }
+                        // §8.1.7: Successful knowledge acquisition is evidence
+                        // exposure — the absorbed knowledge desacralizes the
+                        // recipient's sacred values in proportion to absorption
+                        // strength (acceptance) and reasoning capacity
+                        // (executive function). Zero-at-zero anchor: no
+                        // acquisition -> no pressure, and the internal >0.1
+                        // gate inside attempt_desacred keeps very sacred values
+                        // inert (only mid-sacredness values slowly secularize).
+                        let reasoning = self.agents[ti].cognitive.executive_capacity;
+                        self.agents[ti]
+                            .sacred_values
+                            .desacralize_through_exposure(acceptance, reasoning);
                         self.events.push(SimEvent::KnowledgeTransferred {
                             source: from, target: to, knowledge_id: kid, tick,
                         });
@@ -7446,6 +7458,119 @@ mod tests {
             outraged_resentment > calm_resentment,
             "moral outrage from violated sacred values must erode justice into \
              resentment (got {outraged_resentment} vs {calm_resentment})"
+        );
+    }
+
+    /// §8.1.7: Successful knowledge acquisition is evidence exposure — the
+    /// absorbed knowledge desacralizes the learner's sacred values in
+    /// proportion to absorption strength (acceptance) × reasoning capacity
+    /// (executive function). Fabricates a gossip interaction and runs the
+    /// diffusion block directly (the Iter-23 idiom).
+    #[test]
+    fn knowledge_acquisition_desacralizes_sacred_values() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 2,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        // Deterministic diffusion setup: source (0) knows exactly one item
+        // that target (1) lacks, so the RNG pick is forced to that item.
+        sim.agents[0].cultural.knowledge = vec![1]; // Well Maintenance
+        sim.agents[1].cultural.knowledge = vec![0]; // Crop Rotation
+        if let Some(r) = sim.relationships.iter_mut().find(|r| r.from.as_u64() == 0 && r.to.as_u64() == 1) {
+            r.trust = Fixed::from_f64(0.9); // acceptance = 0.9*0.5 + openness*0.5 > 0.5
+        }
+        sim.agents[1].cognitive.executive_capacity = Fixed::from_f64(0.9);
+        // A mid-sacredness value (should erode) and a maximally sacred value
+        // (must stay inert — resistance gate inside attempt_desacred).
+        sim.agents[1].sacred_values.values.clear();
+        sim.agents[1]
+            .sacred_values
+            .add_or_strengthen("mid_sacred".into(), Fixed::from_f64(0.5), Fixed::from_f64(0.3));
+        sim.agents[1]
+            .sacred_values
+            .add_or_strengthen("very_sacred".into(), Fixed::from_f64(0.95), Fixed::from_f64(0.9));
+        let mid_before = sim.agents[1].sacred_values.values[0].sacredness;
+        let sacred_before = sim.agents[1].sacred_values.values[1].sacredness;
+        // Fabricate a gossip interaction and run the diffusion block directly.
+        sim.events.push(SimEvent::InteractionOccurred {
+            from: AgentId::new(0),
+            to: AgentId::new(1),
+            kind: mindstrata_core::event::InteractionKind::Gossip,
+            tick: Tick::new(1),
+        });
+        sim.tick_gossip_and_knowledge(0, 1, Tick::new(1));
+        assert!(
+            sim.agents[1].cultural.knowledge.contains(&1),
+            "gossip must transfer the knowledge item"
+        );
+        let mid_after = sim.agents[1].sacred_values.values[0].sacredness;
+        assert!(
+            mid_after < mid_before,
+            "absorbing new knowledge must erode mid-sacredness values \
+             (got {mid_after} vs {mid_before})"
+        );
+        let sacred_after = sim.agents[1].sacred_values.values[1].sacredness;
+        assert_eq!(
+            sacred_after, sacred_before,
+            "very sacred values must resist desacralization"
+        );
+    }
+
+    /// §8.1.7 zero-at-zero companion: when no knowledge is acquired (the
+    /// target already knows the item), no evidence exposure occurs and
+    /// sacredness is untouched — desacralization is driven strictly by
+    /// successful acquisition.
+    #[test]
+    fn no_knowledge_acquisition_keeps_sacred_values() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 2,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        // Target already knows the item → the transfer branch never fires.
+        sim.agents[0].cultural.knowledge = vec![1];
+        sim.agents[1].cultural.knowledge = vec![1];
+        if let Some(r) = sim.relationships.iter_mut().find(|r| r.from.as_u64() == 0 && r.to.as_u64() == 1) {
+            r.trust = Fixed::from_f64(0.9);
+        }
+        sim.agents[1].cognitive.executive_capacity = Fixed::from_f64(0.9);
+        sim.agents[1].sacred_values.values.clear();
+        sim.agents[1]
+            .sacred_values
+            .add_or_strengthen("mid_sacred".into(), Fixed::from_f64(0.5), Fixed::from_f64(0.3));
+        let before = sim.agents[1].sacred_values.values[0].sacredness;
+        sim.events.push(SimEvent::InteractionOccurred {
+            from: AgentId::new(0),
+            to: AgentId::new(1),
+            kind: mindstrata_core::event::InteractionKind::Gossip,
+            tick: Tick::new(1),
+        });
+        sim.tick_gossip_and_knowledge(0, 1, Tick::new(1));
+        assert_eq!(
+            sim.agents[1]
+                .cultural
+                .knowledge
+                .iter()
+                .filter(|&&k| k == 1)
+                .count(),
+            1,
+            "already-known knowledge is not transferred again"
+        );
+        let after = sim.agents[1].sacred_values.values[0].sacredness;
+        assert_eq!(
+            after, before,
+            "no knowledge acquisition must leave sacredness untouched"
         );
     }
 

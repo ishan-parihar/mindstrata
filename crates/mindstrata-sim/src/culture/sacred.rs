@@ -144,6 +144,28 @@ impl SacredValues {
             self.values.push(SacredValue::new(name, sacredness, identity_linkage));
         }
     }
+
+    /// Desacralize through exposure and reasoning — the §8.1.7 lifecycle
+    /// promise: "sacred values can be desacred through exposure and
+    /// reasoning." Applies the same evidence × reasoning pressure to every
+    /// held value; each value's internal `> 0.1` gate keeps very sacred
+    /// values (high resistance) inert while mid-sacredness values erode a
+    /// little per exposure — a slow secularization drift, not a flip.
+    ///
+    /// Returns the number of values that were fully desacred (sacredness
+    /// dropped below the 0.1 threshold). Zero-at-zero anchor: zero evidence
+    /// or zero reasoning yields zero pressure, so typical calm agents are
+    /// untouched; only sustained high-absorption learning by high-reasoning
+    /// agents secularizes them.
+    pub fn desacralize_through_exposure(&mut self, evidence_strength: Fixed, reasoning_capacity: Fixed) -> usize {
+        let mut fully_desacred = 0;
+        for value in &mut self.values {
+            if value.attempt_desacred(evidence_strength, reasoning_capacity) {
+                fully_desacred += 1;
+            }
+        }
+        fully_desacred
+    }
 }
 
 #[cfg(test)]
@@ -169,6 +191,49 @@ mod tests {
         let initial = sv.sacredness;
         sv.attempt_desacred(Fixed::from_f64(0.8), Fixed::from_f64(0.8));
         assert!(sv.sacredness < initial);
+    }
+
+    #[test]
+    fn desacred_is_zero_at_zero_evidence() {
+        let mut sv = SacredValue::new("test".into(), Fixed::from_f64(0.5), Fixed::from_f64(0.3));
+        let initial = sv.sacredness;
+        // No evidence (or no reasoning capacity) must not move sacredness.
+        sv.attempt_desacred(Fixed::ZERO, Fixed::from_f64(0.8));
+        assert_eq!(sv.sacredness, initial, "zero evidence must not desacred");
+        sv.attempt_desacred(Fixed::from_f64(0.8), Fixed::ZERO);
+        assert_eq!(sv.sacredness, initial, "zero reasoning must not desacred");
+    }
+
+    #[test]
+    fn very_sacred_value_resists_desacralization() {
+        // A maximally sacred, identity-linked value has resistance ~0.9,
+        // so even strong evidence × reasoning stays under the gate.
+        let mut sv = SacredValue::new("divine_law".into(), Fixed::from_f64(0.95), Fixed::from_f64(0.9));
+        let initial = sv.sacredness;
+        sv.attempt_desacred(Fixed::from_f64(1.0), Fixed::from_f64(1.0));
+        assert_eq!(sv.sacredness, initial, "very sacred values resist secularization");
+    }
+
+    #[test]
+    fn desacralize_through_exposure_applies_to_all_values() {
+        let mut sv = SacredValues::default();
+        sv.add_or_strengthen("mid_sacred".into(), Fixed::from_f64(0.5), Fixed::from_f64(0.3));
+        sv.add_or_strengthen("very_sacred".into(), Fixed::from_f64(0.95), Fixed::from_f64(0.9));
+        let mid_before = sv.values[0].sacredness;
+        let sacred_before = sv.values[1].sacredness;
+        let fully = sv.desacralize_through_exposure(Fixed::from_f64(0.8), Fixed::from_f64(0.8));
+        assert!(sv.values[0].sacredness < mid_before, "mid-sacredness value erodes");
+        assert_eq!(sv.values[1].sacredness, sacred_before, "very sacred value resists");
+        // Pressure is too small to fully desacred a 0.5 value in one shot.
+        assert_eq!(fully, 0);
+    }
+
+    #[test]
+    fn desacralize_through_exposure_counts_fully_desacred() {
+        let mut sv = SacredValues::default();
+        sv.add_or_strengthen("nearly_profane".into(), Fixed::from_f64(0.12), Fixed::from_f64(0.1));
+        let fully = sv.desacralize_through_exposure(Fixed::from_f64(1.0), Fixed::from_f64(1.0));
+        assert_eq!(fully, 1, "a value pushed below 0.1 sacredness counts as desacred");
     }
 
     #[test]
