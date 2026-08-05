@@ -172,6 +172,51 @@ impl Scenario {
         }
     }
 
+    /// Create the "Collapse" scenario — Riverford under a staggered cascade.
+    ///
+    /// Mirrors `specs/scenarios/collapse.ron`: drought (0.6) at tick 500,
+    /// famine (0.6) at tick 800, then pestilence (0.6) at tick 1100. Each
+    /// crisis lands on a population already weakened by the previous one, so
+    /// the compound outcome (hunger-driven health collapse amplifying the
+    /// plague's mortality) exceeds any single crisis — the scenario battery's
+    /// compound-emergence stress test.
+    pub fn collapse() -> Self {
+        Self {
+            name: "Collapse".into(),
+            description: "Riverford under a staggered cascade of drought, famine, and \
+                         pestilence. Tests compound emergence when crises stack \
+                         on a weakened population."
+                .into(),
+            seed: 42,
+            ticks: 4320,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            shocks: vec![
+                Shock {
+                    at_tick: 200,
+                    kind: ShockKind::Festival,
+                    magnitude: Fixed::from_f64(0.3),
+                },
+                Shock {
+                    at_tick: 500,
+                    kind: ShockKind::Drought,
+                    magnitude: Fixed::from_f64(0.6),
+                },
+                Shock {
+                    at_tick: 800,
+                    kind: ShockKind::Famine,
+                    magnitude: Fixed::from_f64(0.6),
+                },
+                Shock {
+                    at_tick: 1100,
+                    kind: ShockKind::Pestilence,
+                    magnitude: Fixed::from_f64(0.6),
+                },
+            ],
+        }
+    }
+
     /// Convert scenario to simulation config.
     pub fn to_sim_config(&self) -> SimConfig {
         SimConfig {

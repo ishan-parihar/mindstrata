@@ -351,9 +351,10 @@ fn main() {
                 "drought" => Scenario::drought(),
                 "famine" => Scenario::famine(),
                 "pestilence" => Scenario::pestilence(),
+                "collapse" => Scenario::collapse(),
                 other => {
                     eprintln!("Unknown scenario: {other}");
-                    eprintln!("Available: riverford, drought, famine, pestilence");
+                    eprintln!("Available: riverford, drought, famine, pestilence, collapse");
                     std::process::exit(1);
                 }
             };

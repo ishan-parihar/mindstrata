@@ -1699,6 +1699,169 @@ fn pestilence_seeds_epidemic_outbreak() {
     );
 }
 
+#[test]
+fn collapse_compounds_crises_beyond_pestilence_alone() {
+    // Iter 36: the Collapse scenario stacks famine before pestilence. The
+    // famine at tick 800 drives hunger up and health down (malnutrition
+    // decay), so when the SAME pestilence shock (0.6) lands at tick 1100,
+    // its health-weighted mortality roll p = mag × (1 − health × 0.5) hits a
+    // weaker population — compound emergence: the cascade must kill more
+    // than pestilence alone under the identical 4320-tick horizon.
+    use mindstrata_sim::journal::JournalEntryKind;
+    use mindstrata_sim::scenario::{Scenario, Shock, ShockKind};
+    let count_deaths = |sim: &mindstrata_sim::Simulation| -> usize {
+        sim.journal()
+            .entries_in_range(0, u64::MAX)
+            .iter()
+            .filter(|e| matches!(e.kind, JournalEntryKind::Died { .. }))
+            .count()
+    };
+
+    let collapse = Scenario::collapse();
+    let mut sim = mindstrata_sim::Simulation::from_scenario(collapse);
+    sim.populate();
+    sim.run(4320);
+    let collapse_deaths = count_deaths(&sim);
+
+    // Control A: the same pestilence shock spec with NO preceding crises.
+    let pestilence_only = Scenario {
+        name: "PestilenceOnly".into(),
+        description: "Pestilence without preceding crises (test control)".into(),
+        seed: 42,
+        ticks: 4320,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        shocks: vec![
+            Shock {
+                at_tick: 200,
+                kind: ShockKind::Festival,
+                magnitude: Fixed::from_f64(0.3),
+            },
+            Shock {
+                at_tick: 1100,
+                kind: ShockKind::Pestilence,
+                magnitude: Fixed::from_f64(0.6),
+            },
+        ],
+    };
+    let mut sim_p = mindstrata_sim::Simulation::from_scenario(pestilence_only);
+    sim_p.populate();
+    sim_p.run(4320);
+    let solo_deaths = count_deaths(&sim_p);
+
+    // Control B: the drought but NOT the famine — isolates the famine as
+    // the only variable collapse adds over it, so the extra mortality is
+    // attributable to famine-weakened health specifically.
+    let famineless = Scenario {
+        name: "Famineless".into(),
+        description: "Drought + pestilence without famine (test control)".into(),
+        seed: 42,
+        ticks: 4320,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        shocks: vec![
+            Shock {
+                at_tick: 200,
+                kind: ShockKind::Festival,
+                magnitude: Fixed::from_f64(0.3),
+            },
+            Shock {
+                at_tick: 500,
+                kind: ShockKind::Drought,
+                magnitude: Fixed::from_f64(0.6),
+            },
+            Shock {
+                at_tick: 1100,
+                kind: ShockKind::Pestilence,
+                magnitude: Fixed::from_f64(0.6),
+            },
+        ],
+    };
+    let mut sim_f = mindstrata_sim::Simulation::from_scenario(famineless);
+    sim_f.populate();
+    sim_f.run(4320);
+    let famineless_deaths = count_deaths(&sim_f);
+
+    // Observed on seed 42: collapse 3 > famineless 2 > solo 2 — the famine
+    // adds the decisive death. (Delaying the pestilence past the famine's
+    // health-erosion window INVERTS the effect: starvation culls and
+    // newborn-replaces the weak, so a later plague hits a healthier
+    // population — the 1100 window is where the cascade compounds.)
+    assert!(
+        collapse_deaths > famineless_deaths,
+        "famine (not drought) must be what amplifies the plague's toll \
+         (collapse {collapse_deaths} vs famineless {famineless_deaths})"
+    );
+    assert!(
+        collapse_deaths > solo_deaths,
+        "collapse must also beat pestilence alone \
+         (collapse {collapse_deaths} vs solo {solo_deaths})"
+    );
+    assert!(
+        collapse_deaths > 0,
+        "collapse should claim lives (got {collapse_deaths})"
+    );
+}
+
+#[test]
+fn collapse_devastates_water_and_grain_beyond_riverford() {
+    // Iter 36: the collapse's 0.6 drought must leave less water than
+    // riverford's 0.3 drought at the same 4320-tick horizon, and its 0.6
+    // famine at tick 800 must leave less grain than riverford right after
+    // the shock window (measured at tick 1000, mirroring the famine test —
+    // at longer horizons riverford depletes its own grain and the axes
+    // invert, so the post-famine window is the honest comparison).
+    use mindstrata_sim::world::{GRAIN_RESOURCE_ID, WATER_RESOURCE_ID};
+    let sum_resource = |sim: &mindstrata_sim::Simulation, id: u64| -> f64 {
+        sim.world
+            .sites
+            .iter()
+            .flat_map(|s| s.inventory.iter())
+            .filter(|st| st.resource_id == id)
+            .map(|st| st.quantity.to_f64())
+            .sum()
+    };
+
+    let collapse = mindstrata_sim::scenario::Scenario::collapse();
+    let mut sim = mindstrata_sim::Simulation::from_scenario(collapse);
+    sim.populate();
+    sim.run(4320);
+    let collapse_water = sum_resource(&sim, WATER_RESOURCE_ID);
+
+    let riverford = mindstrata_sim::scenario::Scenario::riverford();
+    let mut sim_r = mindstrata_sim::Simulation::from_scenario(riverford);
+    sim_r.populate();
+    sim_r.run(4320);
+    let riverford_water = sum_resource(&sim_r, WATER_RESOURCE_ID);
+
+    assert!(
+        collapse_water < riverford_water,
+        "0.6 drought must leave less water than 0.3 \
+         (collapse {collapse_water:.1} vs riverford {riverford_water:.1})"
+    );
+
+    // Grain comparison in the immediate post-famine window (tick 1000).
+    let collapse = mindstrata_sim::scenario::Scenario::collapse();
+    let mut sim2 = mindstrata_sim::Simulation::from_scenario(collapse);
+    sim2.populate();
+    sim2.run(1000);
+    let collapse_grain = sum_resource(&sim2, GRAIN_RESOURCE_ID);
+
+    let riverford = mindstrata_sim::scenario::Scenario::riverford();
+    let mut sim_r2 = mindstrata_sim::Simulation::from_scenario(riverford);
+    sim_r2.populate();
+    sim_r2.run(1000);
+    let riverford_grain = sum_resource(&sim_r2, GRAIN_RESOURCE_ID);
+
+    assert!(
+        collapse_grain < riverford_grain,
+        "0.6 famine must leave less grain than riverford \
+         (collapse {collapse_grain:.1} vs riverford {riverford_grain:.1})"
+    );
+}
+
 
 
 

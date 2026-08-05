@@ -1,0 +1,39 @@
+// §46 Scenario DSL — Collapse Scenario
+// Riverford under a staggered crisis cascade. Each shock lands on a
+// population already weakened by the previous one: drought (water) at
+// tick 500, famine (grain) at tick 800, pestilence (mortality) at 1100.
+// The pestilence lands inside the famine's health-erosion window (before
+// starvation culls and newborn-replaces the weak, which would otherwise
+// blunt the plague) — compound emergence is the stress-test target.
+
+Scenario(
+    name: "Collapse",
+    description: "Riverford under a staggered cascade of drought, famine, and pestilence. Tests compound emergence when crises stack on a weakened population.",
+    seed: 42,
+    ticks: 4320,
+    world_width: 16,
+    world_height: 16,
+    num_agents: 12,
+    shocks: [
+        Shock(
+            at_tick: 200,
+            kind: Festival,
+            magnitude: 0.3,
+        ),
+        Shock(
+            at_tick: 500,
+            kind: Drought,
+            magnitude: 0.6,
+        ),
+        Shock(
+            at_tick: 800,
+            kind: Famine,
+            magnitude: 0.6,
+        ),
+        Shock(
+            at_tick: 1100,
+            kind: Pestilence,
+            magnitude: 0.6,
+        ),
+    ],
+)

@@ -2,7 +2,7 @@
 
 **Prepared for:** Lead Game Designer  
 **Date:** August 5, 2026  
-**Codebase Version:** 37,797 lines of Rust across 5 crates, 699 tests passing, 0 clippy warnings
+**Codebase Version:** 37,797 lines of Rust across 5 crates, 701 tests passing, 0 clippy warnings
 
 ---
 
@@ -31,7 +31,7 @@ Mindstrata is a **deterministic, emergent human-society simulation** written in 
 
 **Current scale:**
 - 37,797 lines of Rust source code
-- 699 automated tests (property tests, golden replays, statistical emergence, integration, 10K-tick stability)
+- 701 automated tests (property tests, golden replays, statistical emergence, integration, 10K-tick stability)
 - 60+ simulation modules covering biology, psychology, social dynamics, economics, ecology, demography, health, conflict, culture, institutions, and noospheric fields
 - Deterministic replay from any seed
 - CLI with agent psychology inspector, CSV metrics export, scenario runner
@@ -512,7 +512,7 @@ All systems wired into deterministic tick loop with proper ordering.
 `AgentTier`, `CognitiveBudgetTracker`, tier-gated psychology.
 
 ### §18 Testing ✅
-699 tests including 10K-tick stability, multi-seed long-horizon macro health, golden baseline, property tests.
+701 tests including 10K-tick stability, multi-seed long-horizon macro health, golden baseline, property tests.
 
 ### Known Remaining Gaps (<1%)
 
@@ -532,7 +532,7 @@ All systems wired into deterministic tick loop with proper ordering.
 | Psychology | cognitive_systems, emotions_v2, regulation_strategies, identity_frames, moral_foundations | Psychological data |
 | Social | courtship, marriage, kinship, status_roles | Social data |
 | Culture | rituals, propaganda, taboos_v2, sacred_symbols, education | Cultural data |
-| Scenarios | riverford.ron, drought.ron, famine.ron, pestilence.ron | Simulation scenarios |
+| Scenarios | riverford.ron, drought.ron, famine.ron, pestilence.ron, collapse.ron | Simulation scenarios |
 
 All data-driven specs are validated by `spec_lint.rs` for existence and non-emptiness.
 
@@ -545,14 +545,14 @@ All data-driven specs are validated by `spec_lint.rs` for existence and non-empt
 | Test Category | Count | Purpose |
 |---|---|---|
 | Unit tests (sim) | 559 | Per-system correctness |
-| Integration tests | 120 | Full simulation runs (100–10,000 ticks, multi-seed macro health, scenario battery) |
+| Integration tests | 122 | Full simulation runs (100–10,000 ticks, multi-seed macro health, scenario battery) |
 | Core unit tests | 20 | Kernel correctness |
 | Property tests | included in above | Proptest: determinism, bounds |
 | Golden replay | 1 | Identical output from same seed |
 | 10K-tick stability | 1 | Long-running simulation stability |
 | Multi-seed macro health | 1 | 5 seeds × 15K ticks, every invariant (Iter 31) |
 | Tick-throughput gate | 1 | 24 agents/2000 ticks < 30s (Iter 30) |
-| Scenario battery | 4 | drought/famine/pestilence vs riverford differentiation (Iter 29/34/35) |
+| Scenario battery | 5 | drought/famine/pestilence vs riverford differentiation + collapse compound emergence (Iter 29/34/35/36) |
 | **Total** | **697** | |
 
 ### 9.2 Quality Metrics
@@ -653,4 +653,4 @@ cargo test -p mindstrata-sim spec_lint
 
 ---
 
-*This document reflects the codebase state as of August 5, 2026. The simulation engine has been upgraded with Architecture Plan 2 implementations: embodied biology, structured psychology, rich social relationships, cultural systems, and noospheric fields. All systems are integrated into a deterministic tick loop with level-of-detail cognition and causal provenance tracking. Iterations 22–28 completed the crate-wide dead-system sweep; Iteration 29 fixed the scenario system (declared tick horizons honored; drought drains water proportionally); Iteration 30 wired the benchmark regression gate + first CI pipeline; Iteration 31 added the multi-seed long-horizon macro-health sweep; Iteration 32 revived the education system via the apprenticeship pass; Iteration 33 brought the material/storage layer alive (site storage capacity with overflow spoilage); Iteration 34 added the Famine food-crisis scenario (ShockKind::Famine, proportional grain drain), a famine-vs-riverford differentiation test, and a bumper-harvest storage-bleed test validating Iter 33 at scale; Iteration 35 added the Pestilence mortality-crisis scenario (ShockKind::Pestilence — an immediate health-weighted mortality wave routed through the §31 death machinery, plus a virulent epidemic seeding that block 17b spreads), with a deaths-differentiation test and an outbreak-spread test.*
+*This document reflects the codebase state as of August 5, 2026. The simulation engine has been upgraded with Architecture Plan 2 implementations: embodied biology, structured psychology, rich social relationships, cultural systems, and noospheric fields. All systems are integrated into a deterministic tick loop with level-of-detail cognition and causal provenance tracking. Iterations 22–28 completed the crate-wide dead-system sweep; Iteration 29 fixed the scenario system (declared tick horizons honored; drought drains water proportionally); Iteration 30 wired the benchmark regression gate + first CI pipeline; Iteration 31 added the multi-seed long-horizon macro-health sweep; Iteration 32 revived the education system via the apprenticeship pass; Iteration 33 brought the material/storage layer alive (site storage capacity with overflow spoilage); Iteration 34 added the Famine food-crisis scenario (ShockKind::Famine, proportional grain drain), a famine-vs-riverford differentiation test, and a bumper-harvest storage-bleed test validating Iter 33 at scale; Iteration 35 added the Pestilence mortality-crisis scenario (ShockKind::Pestilence — an immediate health-weighted mortality wave routed through the §31 death machinery, plus a virulent epidemic seeding that block 17b spreads), with a deaths-differentiation test and an outbreak-spread test; Iteration 36 added the Collapse scenario — a staggered cascade (drought 0.6@500, famine 0.6@800, pestilence 0.6@1100) that proves compound emergence: the same pestilence shock kills more when famine has already weakened health, with a multi-axis scarcity test and the scenario battery now at 5.*
