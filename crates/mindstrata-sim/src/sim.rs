@@ -3008,6 +3008,9 @@ impl Simulation {
             }
         }
 
+        // ── 10b. Storage overflow — goods stored beyond a site's capacity rot/spill ──
+        self.apply_storage_overflow();
+
         // ── 11. Norm evaluation (extracted) ──
         self.tick_norm_evaluation(pre_tick_events, tick_u64, tick);
 
@@ -5663,6 +5666,38 @@ impl Simulation {
     /// learning rate clears the `attempt_teaching` threshold, and success
     /// feeds the §8.1.7 desacralization chain (acquired knowledge is evidence
     /// exposure) — the same hook gossip uses.
+    /// §19.5.E: Sites have finite storage — goods stored beyond a site's
+    /// storage capacity are exposed and spoil at 10x the base seasonal rate.
+    /// Transparent while inventories stay under capacity; binds only when
+    /// production outpaces consumption (bountiful harvests rot without
+    /// adequate storage, creating boom-bust scarcity pressure).
+    fn apply_storage_overflow(&mut self) {
+        let resource_defs = &self.world.resources;
+        let spoilage_modifier = self.season.current.spoilage_modifier();
+        for site in &mut self.world.sites {
+            let mut storage = logistics::StorageCapacity::new(site.storage_capacity);
+            storage.update_from_inventory(&site.inventory);
+            let overflow = storage.current_used - site.storage_capacity;
+            if overflow > Fixed::ZERO && storage.current_used > Fixed::ZERO {
+                // Every stock shares the overflow burden proportionally; the
+                // exposed portion decays at 10x the normal spoilage rate.
+                let spill_ratio = overflow / storage.current_used;
+                for stock in &mut site.inventory {
+                    if let Some(res_def) = resource_defs.iter().find(|r| r.id == stock.resource_id) {
+                        if res_def.perishable && res_def.spoilage_rate > Fixed::ZERO {
+                            let loss = stock.quantity
+                                * spill_ratio
+                                * res_def.spoilage_rate
+                                * Fixed::from_f64(10.0)
+                                * spoilage_modifier;
+                            stock.quantity = (stock.quantity - loss).max(Fixed::ZERO);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fn run_apprenticeship_pass(&mut self, tick_u64: u64, tick: Tick) {
         let n = self.agents.len();
         if n < 2 {
@@ -7739,6 +7774,95 @@ mod tests {
         assert!(learn_ok, "student must record a successful learning event");
         let holders_after = sim.knowledge_store.iter().find(|k| k.id == 2).map(|k| k.holders).unwrap_or(0);
         assert!(holders_after >= holders_before + 1, "knowledge holder count must grow");
+    }
+
+    #[test]
+    fn storage_overflow_rots_exposed_grain_only() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 2,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        let farm_idx = sim
+            .world
+            .sites
+            .iter()
+            .position(|s| s.kind == crate::world::SiteKind::Farm)
+            .unwrap();
+        let stored = sim.world.sites[farm_idx].inventory[0].quantity;
+        // Pump the farm far past its 500-unit storage capacity.
+        sim.world
+            .produce_resource(farm_idx, GRAIN_RESOURCE_ID, Fixed::from_f64(600.0));
+        let before = sim.world.sites[farm_idx].inventory[0].quantity;
+        sim.apply_storage_overflow();
+        let after = sim.world.sites[farm_idx].inventory[0].quantity;
+        assert!(after < before, "overflowing grain must rot");
+        assert!(
+            after > Fixed::from_f64(500.0),
+            "only the exposed overflow rots, never the stored grain"
+        );
+        assert_eq!(stored, Fixed::from_f64(100.0), "farm seeds 100 grain");
+    }
+
+    #[test]
+    fn storage_under_capacity_is_transparent() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 2,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        let farm_idx = sim
+            .world
+            .sites
+            .iter()
+            .position(|s| s.kind == crate::world::SiteKind::Farm)
+            .unwrap();
+        let before = sim.world.sites[farm_idx].inventory[0].quantity;
+        sim.apply_storage_overflow();
+        assert_eq!(
+            sim.world.sites[farm_idx].inventory[0].quantity,
+            before,
+            "under-capacity storage must not lose goods"
+        );
+    }
+
+    #[test]
+    fn storage_overflow_does_not_rot_non_perishables() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 2,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        let well_idx = sim
+            .world
+            .sites
+            .iter()
+            .position(|s| s.kind == crate::world::SiteKind::Well)
+            .unwrap();
+        sim.world
+            .produce_resource(well_idx, WATER_RESOURCE_ID, Fixed::from_f64(5000.0));
+        let before = sim.world.sites[well_idx].inventory[0].quantity;
+        sim.apply_storage_overflow();
+        assert_eq!(
+            sim.world.sites[well_idx].inventory[0].quantity,
+            before,
+            "water is non-perishable: overflow must not destroy it"
+        );
     }
 
     /// §8.1.18 zero-at-zero companion: when nobody in the village can teach a

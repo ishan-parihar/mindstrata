@@ -584,6 +584,7 @@ mod smoke {
             name: "Private Farm".into(),
             owner: Some(owner_id),
             capacity: 10,
+            storage_capacity: Fixed::from_f64(500.0),
             inventory: vec![ResourceStock {
                 resource_id: GRAIN_RESOURCE_ID,
                 quantity: Fixed::from_f64(50.0),
@@ -609,6 +610,7 @@ mod smoke {
             name: "Public Well".into(),
             owner: None,
             capacity: 20,
+            storage_capacity: Fixed::from_f64(1000.0),
             inventory: vec![ResourceStock {
                 resource_id: 1, // WATER_RESOURCE_ID
                 quantity: Fixed::from_f64(100.0),

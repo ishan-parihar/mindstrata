@@ -117,6 +117,9 @@ pub struct Site {
     pub name: String,
     pub owner: Option<EntityId>,
     pub capacity: u32,
+    /// Maximum total resource units this site can store before overflow
+    /// spoilage kicks in (§19.5.E "Storage").
+    pub storage_capacity: Fixed,
     pub inventory: Vec<ResourceStock>,
 }
 

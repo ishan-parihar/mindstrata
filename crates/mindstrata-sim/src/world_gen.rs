@@ -73,6 +73,7 @@ pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
             name: format!("House {}", i + 1),
             owner: None,
             capacity: 4,
+            storage_capacity: Fixed::from_f64(200.0),
             inventory: vec![],
         };
         if place_site(world, hx, hy, site) {
@@ -87,6 +88,7 @@ pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
         name: "Village Farm".into(),
         owner: None,
         capacity: 10,
+        storage_capacity: Fixed::from_f64(500.0),
         inventory: vec![ResourceStock {
             resource_id: GRAIN_RESOURCE_ID,
             quantity: Fixed::from_f64(100.0),
@@ -105,6 +107,7 @@ pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
         name: "Village Well".into(),
         owner: None,
         capacity: 20,
+        storage_capacity: Fixed::from_f64(1000.0),
         inventory: vec![ResourceStock {
             resource_id: 1, // WATER_RESOURCE_ID
             quantity: Fixed::from_f64(200.0),
@@ -123,6 +126,7 @@ pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
         name: "Village Market".into(),
         owner: None,
         capacity: 30,
+        storage_capacity: Fixed::from_f64(1500.0),
         inventory: vec![
             ResourceStock {
                 resource_id: GRAIN_RESOURCE_ID,
@@ -155,6 +159,7 @@ pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
         name: "Village Temple".into(),
         owner: None,
         capacity: 50,
+        storage_capacity: Fixed::from_f64(300.0),
         inventory: vec![],
     };
     // Place temple (north of center) — always call place_site, assert in debug only
