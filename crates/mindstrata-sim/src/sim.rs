@@ -2132,6 +2132,12 @@ impl Simulation {
                         negative_events, positive_event_magnitude, social_support,
                     );
                     self.agents[i].self_model.reconcile_self_esteem();
+                    // §8.1.17: The same life events reshape the meaning-making
+                    // frames themselves — suffering crystallizes punitive frames
+                    // and erodes just-world optimism, success does the reverse.
+                    self.agents[i].narrative_frames.daily_update(
+                        negative_events, positive_event_magnitude,
+                    );
                     let _ = self.agents[i].agent_tier.budget_tracker.consume_appraisal();
                 }
 
@@ -2714,11 +2720,21 @@ impl Simulation {
 
             // ── 8. Belief resistance decay ────────────────────────────
             // §5.1: Use configurable decay rate from SimParameters.
+            // §8.1.17: Narrative frames modulate belief rigidity — agents whose
+            // meaning-making frames resist countervailing evidence (punitive,
+            // curse, just-world frames) hold their beliefs longer. Mean-zero
+            // at the default frame set (resistance_to_update == 0.5 exactly),
+            // so decay is unchanged for typical agents and only diverges as
+            // frames drift with life experience.
             let belief_resistance_decay = self.params.belief_resistance_decay;
             for agent_beliefs in &mut self.agents {
+                let rigidity = agent_beliefs.narrative_frames.resistance_to_update();
+                let rigidity_deviation = rigidity - Fixed::from_f64(0.5);
+                let scaled_decay = (belief_resistance_decay * (Fixed::ONE - rigidity_deviation))
+                    .max(Fixed::ZERO);
                 belief_update::decay_belief_resistance(
                     &mut agent_beliefs.beliefs,
-                    belief_resistance_decay,
+                    scaled_decay,
                     &self.params,
                 );
             }
@@ -7295,6 +7311,50 @@ mod tests {
             mean_arousal(&embodied) > mean_arousal(&detached),
             "embodied emotions must resist regulation: high-sensitivity agents \
              should retain more arousal than low-sensitivity agents"
+        );
+    }
+
+    #[test]
+    fn punitive_narrative_frames_slow_belief_resistance_decay() {
+        // Identical sims; only the narrative frames differ. Default frames are
+        // the mean-zero anchor (decay unchanged); punitive frames must slow
+        // the resistance decay so beliefs stay more rigid at the same horizon.
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 60_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut punitive = Simulation::new(config.clone());
+        punitive.populate();
+        let mut baseline = Simulation::new(config);
+        baseline.populate();
+        for agent in &mut punitive.agents {
+            agent.narrative_frames.punishment_as_justice = Fixed::from_f64(1.0);
+        }
+        // Converge over the transient window where resistance has not yet
+        // bottomed out at the 0.3 baseline floor.
+        for _ in 0..200 {
+            punitive.tick();
+            baseline.tick();
+        }
+        let mean_resistance = |sim: &Simulation| -> Fixed {
+            let mut total = Fixed::ZERO;
+            let mut count = 0;
+            for agent in &sim.agents {
+                for belief in &agent.beliefs {
+                    total += belief.resistance;
+                    count += 1;
+                }
+            }
+            total / Fixed::from_int(count.max(1) as i64)
+        };
+        assert!(
+            mean_resistance(&punitive) > mean_resistance(&baseline),
+            "punitive narrative frames must slow belief-resistance decay: \
+             rigid agents should retain higher resistance at tick 200"
         );
     }
 
