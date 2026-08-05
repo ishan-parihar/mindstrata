@@ -1820,12 +1820,25 @@ impl Simulation {
                         // A drought dries the water supply (WATER_RESOURCE_ID = 1).
                         // It previously drained grain (resource_id == 0) — a drought
                         // that destroys food instead of water.
+                        //
+                        // The drain is proportional to the stocked quantity, not a
+                        // fixed magnitude × 10: the village well starts with 200
+                        // water, so an absolute drain of 3.0 vs 7.0 was a 1.5% vs
+                        // 3.5% difference — both drowned out by agent consumption,
+                        // making riverford (0.3) and drought (0.7) indistinguishable.
+                        // A proportional drain leaves 70% vs 30% of remaining water,
+                        // so the shock magnitude now genuinely differentiates.
+                        //
+                        // NB: no `.clamp_01()` here — a well holding 200 water is
+                        // legitimately above 1.0, and clamping to [0,1] would erase
+                        // the magnitude difference (60 and 140 both → 1.0). We only
+                        // floor at zero to keep quantities non-negative.
                         for site in &mut self.world.sites {
                             for stock in &mut site.inventory {
                                 if stock.resource_id == WATER_RESOURCE_ID {
                                     stock.quantity =
-                                        (stock.quantity - shock.magnitude * Fixed::from_f64(10.0))
-                                            .clamp_01();
+                                        (stock.quantity * (Fixed::ONE - shock.magnitude))
+                                            .max(Fixed::ZERO);
                                 }
                             }
                         }

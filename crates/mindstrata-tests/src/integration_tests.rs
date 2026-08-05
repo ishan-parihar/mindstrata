@@ -1395,16 +1395,46 @@ fn drought_shock_depletes_water_not_grain() {
         .filter(|st| st.resource_id == WATER_RESOURCE_ID)
         .map(|st| st.quantity.to_f64())
         .sum();
-    // Drought magnitude 0.7 removes 7.0 units from each stocked site.
-    assert!(water_left < 5.0, "drought should deplete water (left {water_left:.1})");
-
-    // Market must react: scarce water (id 1) prices above the grain floor
-    // while grain stays near its floor — prices are alive, not pinned.
-    let grain_price = sim.market.prices.first().map(|p| p.price.to_f64()).unwrap_or(0.0);
-    let water_price = sim.market.prices.get(1).map(|p| p.price.to_f64()).unwrap_or(0.0);
+    // Drought magnitude 0.7 drains 70% of each stocked site's water
+    // (proportional drain, not a fixed amount — see §46 shock semantics).
+    // Well (200) + Market (200) = 400 initial water; 70% drain leaves ~120
+    // before further consumption, so the surviving stock must be well under
+    // half of the initial supply. (The old `< 5.0` bound was calibrated to a
+    // buggy `clamp_01()` that collapsed every stock to ≤1.0.)
     assert!(
-        water_price > grain_price,
-        "scarce water should price above grain (water {water_price:.2} vs grain {grain_price:.2})"
+        water_left < 150.0,
+        "drought should deplete water proportionally (left {water_left:.1})"
+    );
+
+    // Regression guard: the drought scenario must leave *less* water than
+    // riverford under the identical horizon. A fixed `magnitude × 10` drain
+    // (3.0 vs 7.0 on a 200-unit well) made the two scenarios indistinguishable;
+    // the proportional drain keeps them meaningfully different.
+    let riverford = mindstrata_sim::scenario::Scenario::riverford();
+    let mut sim_r = mindstrata_sim::Simulation::from_scenario(riverford);
+    sim_r.populate();
+    sim_r.run(1000);
+    let riverford_water: f64 = sim_r.world.sites.iter()
+        .flat_map(|s| s.inventory.iter())
+        .filter(|st| st.resource_id == WATER_RESOURCE_ID)
+        .map(|st| st.quantity.to_f64())
+        .sum();
+    assert!(
+        water_left < riverford_water,
+        "drought must deplete water more than riverford (drought {water_left:.1} vs riverford {riverford_water:.1})"
+    );
+
+    // Market must react to the *magnitude* of scarcity: a 70% drought must
+    // leave water scarcer than a 30% drought, so the drought run's water
+    // price must be at least riverford's. (The old `water > grain` check was
+    // calibrated to a buggy `clamp_01()` that collapsed the well to ≤1 unit,
+    // creating artificial near-zero water — not a real scarcity signal.)
+    let drought_water_price = sim.market.prices.get(1).map(|p| p.price.to_f64()).unwrap_or(0.0);
+    let riverford_water_price = sim_r.market.prices.get(1).map(|p| p.price.to_f64()).unwrap_or(0.0);
+    assert!(
+        drought_water_price >= riverford_water_price,
+        "stronger drought must not price water below weaker drought \
+         (drought {drought_water_price:.2} vs riverford {riverford_water_price:.2})"
     );
 }
 

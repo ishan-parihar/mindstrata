@@ -1,7 +1,7 @@
 # Mindstrata — Current State Technical Document
 
 **Prepared for:** Lead Game Designer  
-**Date:** August 2, 2026  
+**Date:** August 5, 2026  
 **Codebase Version:** 37,797 lines of Rust across 5 crates, 613+ tests passing, 0 clippy warnings
 
 ---
@@ -35,7 +35,7 @@ Mindstrata is a **deterministic, emergent human-society simulation** written in 
 - 60+ simulation modules covering biology, psychology, social dynamics, economics, ecology, demography, health, conflict, culture, institutions, and noospheric fields
 - Deterministic replay from any seed
 - CLI with agent psychology inspector, CSV metrics export, scenario runner
-- Architecture Plan 2 (AP2.md) ~98% complete
+- Architecture Plan 2 (AP2.md) ~99% complete (dead-system sweep Iter 22–28 finished)
 
 **Comparable to:** A hybrid of The Sims (individual psychology), Cities: Skylines (settlements/economy), Age of Empires (historical scale/factions), and Dwarf Fortress (deep emergent simulation) — but with the differentiator of a full cognitive pipeline for every agent.
 
@@ -473,7 +473,7 @@ Validates RON specs against code, validates 19 data-driven spec files
 
 ## 7. Architecture Plan 2 Implementation Status
 
-The AP2.md plan is **~98% complete**. All major systems are implemented and integrated into the tick loop.
+The AP2.md plan is **~99% complete**. All major systems are implemented and integrated into the tick loop, and the final dead-system sweep (Iterations 22–28) brought every flagged unused subsystem alive: SelfModel, Interoception, emotional body tone, narrative frames, sacred values + violation outrage, LegitimacyField, and the desacralization lifecycle.
 
 ### §6 Multi-Timescale Scheduler ✅
 10 formalized phases with `TickPhases::compute()`.
@@ -514,9 +514,9 @@ All systems wired into deterministic tick loop with proper ordering.
 ### §18 Testing ✅
 613+ tests including 10K-tick stability, golden baseline, property tests.
 
-### Known Remaining Gaps (~2%)
+### Known Remaining Gaps (<1%)
 
-1. **No benchmarks** — tick loop lacks criterion benchmarks for performance regression detection.
+1. **Benchmarks not yet run as CI gate** — `mindstrata-benches` exists with 5 criterion benchmarks (single_tick, 100_tick_burst, 1000_tick_run, metrics_snapshot, agent_summaries), but no automated regression gate wires them into CI.
 2. **Some plan modules under different names** — `pain.rs` → integrated in `nervous.rs`; `attention_v2.rs` → root `attention.rs`; etc.
 
 ---
@@ -544,25 +544,25 @@ All data-driven specs are validated by `spec_lint.rs` for existence and non-empt
 
 | Test Category | Count | Purpose |
 |---|---|---|
-| Unit tests (sim) | 508 | Per-system correctness |
-| Integration tests | 85 | Full simulation runs (100–10,000 ticks) |
+| Unit tests (sim) | 554 | Per-system correctness |
+| Integration tests | 114 | Full simulation runs (100–10,000 ticks) |
 | Core unit tests | 20 | Kernel correctness |
 | Property tests | included in above | Proptest: determinism, bounds |
 | Golden replay | 1 | Identical output from same seed |
 | 10K-tick stability | 1 | Long-running simulation stability |
-| **Total** | **614** | |
+| **Total** | **688** | |
 
 ### 9.2 Quality Metrics
 
 | Metric | Value |
 |---|---|
-| Tests passing | 614/614 (100%) |
+| Tests passing | 688/688 (100%) |
 | Clippy warnings | 0 |
 | Unsafe code | 0 (`unsafe_code = "forbid"`) |
 | TODO/FIXME comments | 0 |
 | Determinism | Verified by golden replay |
 | 10K-tick stability | Passes (~12s standalone) |
-| Commits | 285 |
+| Commits | 344 |
 
 ---
 
@@ -650,4 +650,4 @@ cargo test -p mindstrata-sim spec_lint
 
 ---
 
-*This document reflects the codebase state as of August 2, 2026. The simulation engine has been upgraded with Architecture Plan 2 implementations: embodied biology, structured psychology, rich social relationships, cultural systems, and noospheric fields. All systems are integrated into a deterministic tick loop with level-of-detail cognition and causal provenance tracking.*
+*This document reflects the codebase state as of August 5, 2026. The simulation engine has been upgraded with Architecture Plan 2 implementations: embodied biology, structured psychology, rich social relationships, cultural systems, and noospheric fields. All systems are integrated into a deterministic tick loop with level-of-detail cognition and causal provenance tracking. Iterations 22–28 completed the crate-wide dead-system sweep, and Iteration 29 fixed the scenario system (declared tick horizons honored; drought drains water proportionally so scenario magnitudes genuinely differentiate).*

@@ -369,12 +369,17 @@ fn main() {
             println!("  Shocks:  {}", scenario.shocks.len());
             println!();
 
+            // Run the scenario's declared horizon — not a hardcoded 1000.
+            // Previously every scenario was truncated to 1000 ticks, which
+            // silently ignored `ticks` (e.g. drought declares 4320) and
+            // collapsed the scenarios into near-identical outcomes.
+            let scenario_ticks = scenario.ticks;
             let mut sim = Simulation::from_scenario(scenario);
             sim.populate();
 
-            println!("Running simulation...");
+            println!("Running {scenario_ticks} ticks...");
             let start = std::time::Instant::now();
-            sim.run(1000); // run the scenario's ticks
+            sim.run(scenario_ticks);
             let elapsed = start.elapsed();
 
             print_results(&sim, elapsed);
