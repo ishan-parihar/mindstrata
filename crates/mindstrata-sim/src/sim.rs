@@ -5963,7 +5963,17 @@ impl Simulation {
                 ActionKind::Work => {
                     // §4.2: Productivity = base (conscientiousness) + skill bonus
                     let skill_bonus = self.agents[*agent_idx].skills.farming * Fixed::from_f64(0.02);
-                    let productivity = (self.agents[*agent_idx].personality.conscientiousness * Fixed::from_f64(0.05) + skill_bonus).clamp_01();
+                    let base = (self.agents[*agent_idx].personality.conscientiousness
+                        * Fixed::from_f64(0.05)
+                        + skill_bonus)
+                        .clamp_01();
+                    // §7.5: Sickness depresses output — a plague must hurt the
+                    // food economy, not just the population. Healthy agents are
+                    // untouched (work_impairment = 1.0 with no diseases), so
+                    // calibrated baseline runs don't drift; only outbreaks bite.
+                    let sickness_factor =
+                        health::work_impairment(&self.agent_diseases[*agent_idx]);
+                    let productivity = base * sickness_factor;
                     if let Some(farm_idx) = self.world.best_farm_for_work() {
                         self.world.produce_resource(farm_idx, GRAIN_RESOURCE_ID, productivity);
                         // §13.3: Workers earn coin proportional to productivity.

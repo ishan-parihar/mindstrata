@@ -199,6 +199,23 @@ pub fn system_health(
     });
 }
 
+/// Productivity multiplier for an agent carrying `diseases`.
+///
+/// §7.5/§4.2: Sick agents work at reduced output — each disease's effective
+/// severity costs half its value in productivity, floored at 20% so a
+/// severely ill agent can still drag themselves to the field. Healthy agents
+/// (no diseases) return 1.0 unchanged, so calibrated baseline runs carry no
+/// drift; the penalty only bites under outbreaks (pestilence, famine
+/// malnutrition, wound infections from violence).
+#[must_use]
+pub fn work_impairment(diseases: &[ActiveDisease]) -> Fixed {
+    let mut total_severity = Fixed::ZERO;
+    for disease in diseases {
+        total_severity += disease.effective_severity();
+    }
+    (Fixed::ONE - total_severity * Fixed::from_f64(0.5)).max(Fixed::from_f64(0.2))
+}
+
 /// Apply injury from a conflict interaction.
 pub fn apply_injury(
     health: &mut Fixed,
@@ -299,5 +316,50 @@ mod tests {
         }
 
         assert!(diseases.is_empty());
+    }
+
+    #[test]
+    fn work_impairment_is_one_for_healthy() {
+        // A healthy agent (no diseases) works at full productivity — this is
+        // what keeps calibrated baseline runs free of drift.
+        let factor = work_impairment(&[]);
+        assert!(
+            factor == Fixed::ONE,
+            "healthy agent must work at full output (got {})",
+            factor.to_f64()
+        );
+    }
+
+    #[test]
+    fn work_impairment_reduces_output_for_sick() {
+        // A virulent Epidemic (severity_modifier 1.0 at peak severity 0.7)
+        // costs half its severity in productivity: 1 − 0.7×0.5 = 0.65.
+        let mut epidemic = ActiveDisease::new(DiseaseKind::Epidemic);
+        epidemic.severity_modifier = Fixed::ONE;
+        epidemic.ticks_infected = 200; // inside the severity ramp
+        let factor = work_impairment(&[epidemic]);
+        assert!(
+            factor < Fixed::ONE,
+            "a sick agent must work less (got {})",
+            factor.to_f64()
+        );
+        assert!(factor >= Fixed::from_f64(0.2), "must respect the floor");
+    }
+
+    #[test]
+    fn work_impairment_respects_floor_for_stacked_diseases() {
+        // Three peak-severity epidemics (total severity 2.1) drive the
+        // multiplier to the 0.2 floor rather than below zero.
+        let sick = vec![ActiveDisease {
+            kind: DiseaseKind::Epidemic,
+            ticks_infected: 264, // 1/3 of the 800-tick duration = severity peak
+            severity_modifier: Fixed::ONE,
+        }; 3];
+        let factor = work_impairment(&sick);
+        assert!(
+            factor == Fixed::from_f64(0.2),
+            "stacked diseases must floor at 0.2 (got {})",
+            factor.to_f64()
+        );
     }
 }
