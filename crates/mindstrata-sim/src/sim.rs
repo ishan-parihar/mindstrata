@@ -209,6 +209,11 @@ pub struct AgentBundle {
     pub cognitive: CognitiveState,
     /// §22: Derived mental states — trauma, depression, ambition, resilience, resentment.
     pub derived: DerivedMentalState,
+    /// §10.1: The agent's perceived relational fields (sensory / social /
+    /// noospheric), refreshed on the daily cadence. Observational — no
+    /// decisional consumer wired yet, so calibrated runs carry zero drift.
+    #[serde(default)]
+    pub relational_fields: crate::social::relational_field::RelationalFields,
     /// Track success rate for derived mental state computation.
     pub recent_successes: u32,
     pub recent_attempts: u32,
@@ -774,6 +779,7 @@ impl Simulation {
                 moral_values: MoralValues::random(&mut populate_rng),
                 cognitive: CognitiveState::default(),
                 derived: DerivedMentalState::default(),
+                relational_fields: Default::default(),
                 recent_successes: 0,
                 recent_attempts: 0,
                 age: agent_age,
@@ -5188,6 +5194,7 @@ impl Simulation {
             moral_values: MoralValues::random(&mut child_rng),
             cognitive: CognitiveState::default(),
             derived: DerivedMentalState::default(),
+            relational_fields: Default::default(),
             recent_successes: 0,
             recent_attempts: 0,
             age: child_age,
@@ -5516,6 +5523,7 @@ impl Simulation {
                     moral_values: MoralValues::random(&mut child_rng),
                     cognitive: CognitiveState::default(),
                     derived: DerivedMentalState::default(),
+                    relational_fields: Default::default(),
                     recent_successes: 0,
                     recent_attempts: 0,
                     age: child_age,
@@ -7640,6 +7648,101 @@ impl Simulation {
             }
         }
 
+        // §10.1: Refresh each agent's three relational fields (sensory /
+        // social / noospheric) on the daily cadence.
+        self.refresh_relational_fields();
+    }
+
+    /// §10.1: Refresh each agent's three relational fields.
+    ///
+    /// Sensory: proximity (agents within `PERCEPTION_RADIUS`) and the
+    /// perceived emotional expression of neighbors (mean (fear+anger)/2).
+    /// Social: the relationship-graph summary (mean trust, mean obligation,
+    /// kin-stage count, highest peer status). Noospheric: held beliefs
+    /// (mean confidence, hottest emotional charge), perceived legitimacy, and
+    /// the world's collective fear.
+    ///
+    /// Deterministic: index-order iteration, no RNG, no hash-map iteration.
+    /// Observational: no decisional consumer is wired yet, so calibrated runs
+    /// carry zero drift.
+    fn refresh_relational_fields(&mut self) {
+        use crate::social::relational_field::{RelationalFields, PERCEPTION_RADIUS};
+        let n = self.agents.len();
+        if n == 0 {
+            return;
+        }
+        let collective_fear = self
+            .agents
+            .iter()
+            .map(|a| a.emotions.fear)
+            .fold(Fixed::ZERO, |acc, f| acc + f)
+            / Fixed::from_int(n as i64);
+        // Single-pass accumulation per agent — no intermediate Vec allocations
+        // (this runs per agent per daily tick; the plan targets large
+        // populations, §17.4).
+        for i in 0..n {
+            // ── Sensory field: neighbor scan accumulates count / min distance /
+            // stress sum / max peer status in one pass. ──
+            let mut nearby_count: u32 = 0;
+            let mut nearest = i32::MAX;
+            let mut stress_sum = Fixed::ZERO;
+            let mut peer_status = Fixed::ZERO;
+            for j in 0..n {
+                if i == j {
+                    continue;
+                }
+                let d = self.agents[i].position.manhattan_distance(&self.agents[j].position);
+                if d <= PERCEPTION_RADIUS {
+                    nearby_count += 1;
+                    nearest = nearest.min(d);
+                    stress_sum = stress_sum
+                        + (self.agents[j].emotions.fear + self.agents[j].emotions.anger)
+                            * Fixed::from_f64(0.5);
+                    peer_status = peer_status.max(self.agents[j].status_v2.effective_status());
+                }
+            }
+            // ── Social field ──
+            let mut trust_sum = Fixed::ZERO;
+            let mut oblig_sum = Fixed::ZERO;
+            let mut kin_count: u32 = 0;
+            for r in &self.agents[i].relationship_v2s {
+                trust_sum = trust_sum + r.trust;
+                oblig_sum = oblig_sum + r.obligation;
+                if crate::social::relationship_stages::is_kin_stage(r.stage) {
+                    kin_count += 1;
+                }
+            }
+            let rel_count = self.agents[i].relationship_v2s.len().max(1);
+            // ── Noospheric field ──
+            let mut belief_sum = Fixed::ZERO;
+            let mut hottest_charge = Fixed::ZERO;
+            for b in &self.agents[i].beliefs {
+                belief_sum = belief_sum + b.confidence;
+                hottest_charge = hottest_charge.max(b.emotional_charge);
+            }
+            let belief_count = self.agents[i].beliefs.len().max(1);
+            self.agents[i].relational_fields = RelationalFields {
+                nearby_agents: nearby_count,
+                nearest_closeness: if nearest == i32::MAX {
+                    Fixed::ZERO
+                } else {
+                    RelationalFields::closeness(nearest)
+                },
+                perceived_stress: if nearby_count == 0 {
+                    Fixed::ZERO
+                } else {
+                    stress_sum / Fixed::from_int(nearby_count as i64)
+                },
+                social_trust: trust_sum / Fixed::from_int(rel_count as i64),
+                social_obligation: oblig_sum / Fixed::from_int(rel_count as i64),
+                kin_count,
+                peer_status,
+                belief_confidence: belief_sum / Fixed::from_int(belief_count as i64),
+                hottest_charge,
+                legitimacy_perceived: self.agents[i].legitimacy_field.overall,
+                collective_fear,
+            };
+        }
     }
 
     /// Sections 18-21: Feud tracking, market, demography, conflict, carrying cost.

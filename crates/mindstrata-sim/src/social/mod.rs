@@ -53,6 +53,8 @@ pub use group_formation::{
     derive_group_attachment_style, GroupAttachmentStyle, GroupCandidate, GroupId,
     GroupRegistry, GroupType, PeerGroup,
 };
+pub mod relational_field;
+pub use relational_field::{RelationalFields, PERCEPTION_RADIUS};
 pub use household::Household;
 pub use interaction::{
     process_interaction, select_interaction_target, system_social_interactions, Interaction,

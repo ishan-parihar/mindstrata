@@ -3785,6 +3785,71 @@ fn cult_forms_under_crisis_then_dissolves_on_betrayal() {
     );
 }
 
+/// §10.1 (AP2): The three relational fields (sensory / social / noospheric)
+/// must be refreshed on the daily cadence, stay in range, and be
+/// seed-deterministic (RNG-free derivations on a fixed world).
+#[test]
+fn relational_fields_refresh_deterministically() {
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 1000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config.clone());
+    sim.populate();
+    // Before any daily tick the snapshot is the empty default.
+    assert!(sim
+        .agents
+        .iter()
+        .all(|a| a.relational_fields.nearby_agents == 0));
+    sim.run(1000);
+
+    // Every field stays in range; the sensory field is non-degenerate (12
+    // agents on a 16×16 world with manhattan radius 5 → neighbors exist).
+    for (i, agent) in sim.agents.iter().enumerate() {
+        let f = &agent.relational_fields;
+        assert!((0.0..=1.0).contains(&f.nearest_closeness.to_f64()),
+            "agent {i}: nearest_closeness out of [0,1]");
+        assert!((0.0..=1.0).contains(&f.perceived_stress.to_f64()),
+            "agent {i}: perceived_stress out of [0,1]");
+        assert!((0.0..=1.0).contains(&f.social_trust.to_f64()),
+            "agent {i}: social_trust out of [0,1]");
+        assert!((0.0..=1.0).contains(&f.social_obligation.to_f64()),
+            "agent {i}: social_obligation out of [0,1]");
+        assert!((0.0..=1.0).contains(&f.peer_status.to_f64()),
+            "agent {i}: peer_status out of [0,1]");
+        assert!((0.0..=1.0).contains(&f.belief_confidence.to_f64()),
+            "agent {i}: belief_confidence out of [0,1]");
+        assert!((0.0..=1.0).contains(&f.hottest_charge.to_f64()),
+            "agent {i}: hottest_charge out of [0,1]");
+        assert!((0.0..=1.0).contains(&f.legitimacy_perceived.to_f64()),
+            "agent {i}: legitimacy_perceived out of [0,1]");
+        assert!((0.0..=1.0).contains(&f.collective_fear.to_f64()),
+            "agent {i}: collective_fear out of [0,1]");
+        assert!(f.kin_count <= sim.agents.len() as u32,
+            "agent {i}: kin_count implausible");
+    }
+    // On the deterministic 16×16 world, all 12 agents are within manhattan
+    // radius 5 of another agent; if this ever fails, the layout drifted.
+    assert!(
+        sim.agents
+            .iter()
+            .all(|a| a.relational_fields.nearby_agents > 0),
+        "every agent must perceive at least one neighbor after a daily refresh"
+    );
+
+    // Seed-determinism: same seed → byte-identical relational fields.
+    let mut sim2 = Simulation::new(config);
+    sim2.populate();
+    sim2.run(1000);
+    for (a1, a2) in sim.agents.iter().zip(sim2.agents.iter()) {
+        assert_eq!(a1.relational_fields, a2.relational_fields);
+    }
+}
+
 
 
 
