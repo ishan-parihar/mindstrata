@@ -5065,6 +5065,15 @@ impl Simulation {
                     self.agents[b].wealth.coin,
                 );
                 self.marriage_registry.marriages.push(marriage);
+                // §10.4 (AP2): Instantiate the romantic pair bond the marriage
+                // institutionalizes. The bond was previously NEVER created in
+                // production — the `pair_bonds` registry stayed empty and the
+                // whole romantic subsystem (bond_strength / strain /
+                // jealousy_load dynamics) was dead code. It forms 1:1 with
+                // marriages and evolves in the daily `tick_pair_bonds` pass.
+                self.marriage_registry
+                    .pair_bonds
+                    .push(crate::social::marriage::PairBond::new_married(a, b, tick_u64));
                 // Marriage boosts trust and affection
                 // §19.5.J: Record marriage relationship traces
                 if let Some(rel) = self.relationships.iter_mut()
@@ -5792,6 +5801,68 @@ impl Simulation {
         }
     }
 
+    /// §10.4 (AP2): Daily pair-bond dynamics.
+    ///
+    /// Pair bonds form 1:1 with marriages in the daily social pass; here we
+    /// charge each bond's jealousy load from the partners' appraised jealousy
+    /// emotion (weighted by relationship dependence) and drive the
+    /// post-marriage romantic-stage ladder (Married → HouseholdFormed →
+    /// Parenthood → Strain ↔ Stabilization). Effects are observational: the
+    /// plan's jealousy-driven breakup (should_dissolve) is a decisional
+    /// consumer reserved for a future behavioral iteration — this pass writes
+    /// only to `pair_bonds`, which no behavioral system reads, so the golden
+    /// baseline is byte-identical.
+    fn tick_pair_bonds(&mut self, tick_u64: u64) {
+        let n = self.agents.len();
+        if n == 0 {
+            return;
+        }
+        // Precompute canonical shared-child parent pairs once per pass
+        // (O(n) once, O(bonds) lookups — §17.4 population scale discipline).
+        let parent_pairs: Vec<(usize, usize)> = self
+            .agents
+            .iter()
+            .filter_map(|ag| {
+                let (pa, pb) = (ag.parent_a?, ag.parent_b?);
+                Some((pa.min(pb), pa.max(pb)))
+            })
+            .collect();
+        for bond in &mut self.marriage_registry.pair_bonds {
+            let a = bond.partner_a;
+            let b = bond.partner_b;
+            if a >= n || b >= n {
+                continue;
+            }
+            // Dependence = trust from a's perspective of b (the same v1
+            // relationship layer the marriage pass uses).
+            let trust = self
+                .relationships
+                .iter()
+                .find(|r| r.from == AgentId::new(a as u64) && r.to == AgentId::new(b as u64))
+                .map_or(Fixed::ZERO, |r| r.trust);
+            // Appraised jealousy already folds attachment anxiety, status
+            // threat and fear of abandonment into one emotion (appraisal.rs).
+            let jealousy = (self.agents[a].emotions.jealousy
+                + self.agents[b].emotions.jealousy)
+                * Fixed::from_f64(0.5);
+            bond.charge_jealousy(jealousy, trust);
+            // Effects (§10.4): sustained jealousy load strains the bond; a
+            // calm, trusting bond gets a small maintenance boost (calibrated
+            // small — a large magnitude saturated bond_strength to 1.0 within
+            // ~40 days, erasing bond differentiation; 0.1 keeps the
+            // equilibrium ~0.002/day so healthy bonds plateau near ~0.8 and
+            // stay differentiated).
+            if bond.jealousy_load > Fixed::from_f64(0.6) {
+                bond.record_negative(tick_u64, bond.jealousy_load - Fixed::from_f64(0.6));
+            } else if bond.jealousy_load < Fixed::from_f64(0.2) && trust > Fixed::from_f64(0.5) {
+                bond.record_positive(tick_u64, Fixed::from_f64(0.1));
+            }
+            // Shared children drive the Parenthood stage of the ladder.
+            let has_children = parent_pairs.contains(&(a.min(b), a.max(b)));
+            bond.advance_stage(has_children);
+        }
+    }
+
     /// §6 + §10.6/§10.7: Kinship & Household daily update.
     fn tick_kinship_household_daily(&mut self, tick_u64: u64, phases: crate::scheduler::TickPhases) {
         // §10.6: Decay kinship edges daily.
@@ -6119,6 +6190,12 @@ impl Simulation {
 
             // Architecture-plan-2 §10.4-§10.5: Marriage registry daily update.
             self.marriage_registry.daily_update();
+            // §10.4 (AP2): Pair-bond dynamics — charge jealousy from the
+            // partners' live emotional + relational state, advance the
+            // romantic stage. (Decay runs inside daily_update above; writes
+            // go only to `pair_bonds`, which no behavioral system reads, so
+            // the golden baseline is untouched.)
+            self.tick_pair_bonds(tick_u64);
 
             // Architecture-plan-2 §12.4: Cult registry daily update + emergence.
             self.cult_registry.daily_update();

@@ -3207,6 +3207,105 @@ fn marriage_institution_instantiated_in_production_runs() {
 }
 
 #[test]
+fn pair_bonds_form_with_marriages_and_dynamics_run() {
+    // §10.4 (AP2): The romantic pair-bond subsystem was dead code —
+    // `PairBond::new` was only exercised by unit tests, so the registry's
+    // `pair_bonds` vec stayed empty in production and bond_strength / strain /
+    // jealousy_load never evolved. Pair bonds now form 1:1 with marriages in
+    // the daily social pass and are charged daily by `tick_pair_bonds`.
+    let mut sim = run_sim(42, 2000);
+
+    assert!(
+        !sim.marriage_registry.pair_bonds.is_empty(),
+        "pair bonds must form with marriages in production runs"
+    );
+
+    use mindstrata_sim::social::marriage::RomanticStage;
+    for pb in &sim.marriage_registry.pair_bonds {
+        // 1:1 alignment — every bond backs a marriage on the same partner pair.
+        let matched = sim.marriage_registry.marriages.iter().any(|m| {
+            (m.partner_a == pb.partner_a && m.partner_b == pb.partner_b)
+                || (m.partner_a == pb.partner_b && m.partner_b == pb.partner_a)
+        });
+        assert!(matched, "every pair bond must back a marriage");
+        assert!(
+            pb.bond_strength >= Fixed::ZERO && pb.bond_strength <= Fixed::ONE,
+            "bond_strength must stay bounded"
+        );
+        assert!(
+            pb.jealousy_load >= Fixed::ZERO && pb.jealousy_load <= Fixed::ONE,
+            "jealousy_load must stay bounded"
+        );
+        // Bonds initialize at Married and only ever take post-marriage stages
+        // (never the pre-marriage ladder rungs).
+        assert!(
+            matches!(
+                pb.stage,
+                RomanticStage::Married
+                    | RomanticStage::HouseholdFormed
+                    | RomanticStage::Parenthood
+                    | RomanticStage::Stabilization
+                    | RomanticStage::Strain
+            ),
+            "bond stage must be post-marriage, got {:?}",
+            pb.stage
+        );
+    }
+
+    // Dynamics keep running over further daily ticks. Jealousy load is a
+    // *derived* signal: in a peaceful village the appraised jealousy emotion
+    // is legitimately ~0 (the plan's jealousy sources — attachment anxiety,
+    // status threat, rival attraction — fire under threat, which unit tests
+    // cover deterministically via charge_jealousy). What the integration run
+    // must prove is that the daily pass touches every bond: advance_stage
+    // promotes Married → HouseholdFormed unconditionally on the first daily
+    // tick, so after 10 more days every bond formed before tick 2000 must
+    // have progressed.
+    sim.run(1440);
+    assert!(
+        sim.marriage_registry
+            .pair_bonds
+            .iter()
+            .all(|pb| pb.stage != RomanticStage::Married),
+        "daily pair-bond pass must advance every bond past Married"
+    );
+    // Conditional implication: if any agent has both parents set (a shared
+    // child exists), then some bond must have reached Parenthood — the stage
+    // ladder consumes the parent-pair signal.
+    let any_children = sim
+        .agents
+        .iter()
+        .any(|a| a.parent_a.is_some() && a.parent_b.is_some());
+    let with_parenthood = sim
+        .marriage_registry
+        .pair_bonds
+        .iter()
+        .filter(|pb| matches!(pb.stage, RomanticStage::Parenthood))
+        .count();
+    assert!(
+        with_parenthood > 0 || !any_children,
+        "if shared children exist, a bond must reach Parenthood"
+    );
+
+    // Seed determinism: same seed → byte-identical pair-bond end-state.
+    let mut sim2 = run_sim(42, 2000);
+    sim2.run(1440);
+    // to_f64 sums are deterministic within one process (same operations, same
+    // binary) — sufficient for a seed-determinism equality check.
+    let key = |s: &Simulation| {
+        s.marriage_registry
+            .pair_bonds
+            .iter()
+            .map(|pb| {
+                pb.partner_a as f64 + pb.partner_b as f64 + pb.bond_strength.to_f64()
+                    + pb.jealousy_load.to_f64() + pb.strain.to_f64() + pb.stage as usize as f64
+            })
+            .sum::<f64>()
+    };
+    assert_eq!(key(&sim), key(&sim2), "§10.4 pair-bond end-state must be seed-deterministic");
+}
+
+#[test]
 fn status_institutional_rank_populates_across_run() {
     // §11.1 (AP2): StatusDimensions must expose the plan's ten components —
     // institutional_rank was the missing tenth. It is derived daily from the

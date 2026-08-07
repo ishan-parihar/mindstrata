@@ -208,6 +208,16 @@ impl PairBond {
         }
     }
 
+    /// §10.4 (AP2): Create the pair bond that forms with a marriage — the
+    /// couple is already wed, so the bond starts at the Married stage with
+    /// the marriage-era strength baseline (not the courtship-era 0.3).
+    pub fn new_married(partner_a: usize, partner_b: usize, tick: u64) -> Self {
+        let mut bond = Self::new(partner_a, partner_b, tick);
+        bond.stage = RomanticStage::Married;
+        bond.bond_strength = Fixed::from_f64(0.6);
+        bond
+    }
+
     /// Record a positive interaction within the bond.
     pub fn record_positive(&mut self, tick: u64, magnitude: Fixed) {
         self.bond_strength = (self.bond_strength + magnitude * Fixed::from_f64(0.02)).clamp_01();
@@ -239,6 +249,60 @@ impl PairBond {
     /// Check if the bond should dissolve.
     pub fn should_dissolve(&self) -> bool {
         self.bond_strength < Fixed::from_f64(0.1) && self.strain > Fixed::from_f64(0.8)
+    }
+
+    /// §10.4 (AP2): Charge jealousy load from the partners' appraised
+    /// jealousy emotion, weighted by relationship dependence.
+    ///
+    /// The appraisal layer already folds attachment anxiety, status threat
+    /// and fear of abandonment into the jealousy emotion; dependence
+    /// (partner trust) determines how heavily that threat lands on the bond.
+    pub fn charge_jealousy(&mut self, jealousy_emotion: Fixed, dependence: Fixed) {
+        let weight = Fixed::from_f64(0.35) + Fixed::from_f64(0.65) * dependence;
+        self.jealousy_load = (self.jealousy_load
+            + jealousy_emotion * weight * Fixed::from_f64(0.15))
+            .clamp_01();
+    }
+
+    /// §10.4 (AP2): Advance the post-marriage romantic-stage ladder.
+    ///
+    /// Married → HouseholdFormed → Parenthood (once a shared child exists) →
+    /// Strain when jealousy/strain load is high; Strain → Stabilization on
+    /// reconciliation (strain low). Separation / widowhood are decisional
+    /// outcomes reserved for a future behavioral iteration.
+    pub fn advance_stage(&mut self, has_children: bool) {
+        self.stage = match self.stage {
+            RomanticStage::Married => RomanticStage::HouseholdFormed,
+            RomanticStage::HouseholdFormed => {
+                if has_children {
+                    RomanticStage::Parenthood
+                } else {
+                    RomanticStage::HouseholdFormed
+                }
+            }
+            RomanticStage::Parenthood => {
+                if self.strain > Fixed::from_f64(0.6) {
+                    RomanticStage::Strain
+                } else {
+                    RomanticStage::Parenthood
+                }
+            }
+            RomanticStage::Strain => {
+                if self.strain < Fixed::from_f64(0.35) {
+                    RomanticStage::Stabilization
+                } else {
+                    RomanticStage::Strain
+                }
+            }
+            RomanticStage::Stabilization => {
+                if self.strain > Fixed::from_f64(0.6) {
+                    RomanticStage::Strain
+                } else {
+                    RomanticStage::Stabilization
+                }
+            }
+            other => other,
+        };
     }
 }
 
@@ -486,6 +550,64 @@ mod tests {
         let mut bond = PairBond::new(0, 1, 0);
         bond.record_negative(10, Fixed::from_f64(0.5));
         assert!(bond.strain > Fixed::ZERO);
+    }
+
+    #[test]
+    fn pair_bond_jealousy_charges_with_dependence() {
+        // §10.4: dependence (partner trust) amplifies how hard the appraised
+        // jealousy emotion lands on the bond.
+        let mut low = PairBond::new(0, 1, 0);
+        low.charge_jealousy(Fixed::from_f64(0.5), Fixed::ZERO);
+        let mut high = PairBond::new(0, 1, 0);
+        high.charge_jealousy(Fixed::from_f64(0.5), Fixed::ONE);
+        assert!(high.jealousy_load > low.jealousy_load,
+            "dependence must amplify jealousy charge");
+        assert!(high.jealousy_load > Fixed::ZERO && high.jealousy_load <= Fixed::ONE);
+    }
+
+    #[test]
+    fn pair_bond_jealousy_load_clamps_at_one() {
+        let mut bond = PairBond::new(0, 1, 0);
+        for _ in 0..50 {
+            bond.charge_jealousy(Fixed::ONE, Fixed::ONE);
+        }
+        assert_eq!(bond.jealousy_load, Fixed::ONE);
+    }
+
+    #[test]
+    fn pair_bond_jealousy_load_decays_daily() {
+        let mut bond = PairBond::new(0, 1, 0);
+        bond.jealousy_load = Fixed::from_f64(0.5);
+        bond.daily_update();
+        assert!(bond.jealousy_load < Fixed::from_f64(0.5) && bond.jealousy_load > Fixed::ZERO);
+    }
+
+    #[test]
+    fn pair_bond_stage_advances_post_marriage_ladder() {
+        // §10.4: Married → HouseholdFormed → Parenthood → Strain, and
+        // reconciliation back to Stabilization once strain abates.
+        let mut bond = PairBond::new(0, 1, 0);
+        bond.stage = RomanticStage::Married;
+        bond.advance_stage(false);
+        assert_eq!(bond.stage, RomanticStage::HouseholdFormed);
+        bond.advance_stage(true);
+        assert_eq!(bond.stage, RomanticStage::Parenthood);
+        bond.strain = Fixed::from_f64(0.7);
+        bond.advance_stage(true);
+        assert_eq!(bond.stage, RomanticStage::Strain);
+        bond.strain = Fixed::from_f64(0.2);
+        bond.advance_stage(true);
+        assert_eq!(bond.stage, RomanticStage::Stabilization);
+    }
+
+    #[test]
+    fn pair_bond_dissolves_on_strength_collapse_and_strain() {
+        let mut bond = PairBond::new(0, 1, 0);
+        bond.bond_strength = Fixed::from_f64(0.05);
+        bond.strain = Fixed::from_f64(0.9);
+        assert!(bond.should_dissolve());
+        bond.strain = Fixed::from_f64(0.5);
+        assert!(!bond.should_dissolve());
     }
 
     #[test]
