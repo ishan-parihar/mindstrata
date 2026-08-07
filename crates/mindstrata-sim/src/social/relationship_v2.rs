@@ -98,6 +98,109 @@ pub fn stage_progression_threshold(stage: RelationshipStage) -> Fixed {
     }
 }
 
+/// §10.2 (AP2): Public relationship label — the §10.3 taxonomy.
+///
+/// General social stages, the negative branch, and the kin branch map 1:1
+/// onto [`RelationshipStage`]; the authority branch (patron/client, lord/
+/// vassal, master/apprentice, priest/layperson, elder/junior, guard/citizen)
+/// is derived from institutional role expectations. The public label is what
+/// the community sees; the private label (see [`RelationshipV2::derive_private_label`])
+/// is the emotionally honest view and can diverge from it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
+pub enum RelationshipLabel {
+    #[default]
+    Unnoticed,
+    Noticed,
+    Acquaintance,
+    Familiar,
+    Neighbor,
+    Friend,
+    CloseFriend,
+    Confidant,
+    Ally,
+    Disliked,
+    Rival,
+    Enemy,
+    Nemesis,
+    Kin,
+    ParentChild,
+    Sibling,
+    Cousin,
+    InLaw,
+    PatronClient,
+    LordVassal,
+    MasterApprentice,
+    PriestLayperson,
+    ElderJunior,
+    GuardCitizen,
+}
+
+/// §10.2 (AP2): Expected role in this relationship — the §10.3 authority
+/// branch. Derived from the relationship stage and structural links (kin vs
+/// authority vs peer). `None` when no asymmetric role is expected.
+///
+/// Only `None`/`Caregiver`/`Ally` are currently derived (kin stages); the
+/// authority variants (patron/client, lord/vassal, etc.) are reserved
+/// taxonomy for future institutional-role wiring — not live behavior yet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
+pub enum RoleExpectation {
+    #[default]
+    None,
+    PatronClient,
+    LordVassal,
+    MasterApprentice,
+    PriestLayperson,
+    ElderJunior,
+    GuardCitizen,
+    Provider,
+    Caregiver,
+    Protector,
+    Ally,
+}
+
+/// §10.2 (AP2): Kind of betrayal recorded in a relationship's history.
+///
+/// Only `Violence` is currently constructed in production (the sim conflict
+/// path); the remaining variants are reserved taxonomy for future betrayal
+/// mechanics (infidelity, abandonment, theft, deception, broken vows,
+/// disloyalty) — not live behavior yet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum BetrayalKind {
+    Infidelity,
+    Abandonment,
+    Theft,
+    Deception,
+    Violence,
+    BrokenVow,
+    Disloyalty,
+}
+
+/// §10.2 (AP2): A recorded betrayal event (bounded history).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct BetrayalEvent {
+    pub tick: u64,
+    pub kind: BetrayalKind,
+    pub magnitude: Fixed,
+}
+
+/// §10.2 (AP2): Kind of reconciliation that repaired a relationship.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum ReconciliationKind {
+    Apology,
+    Reparation,
+    Mediation,
+    SharedRitual,
+    PublicAmends,
+}
+
+/// §10.2 (AP2): A recorded reconciliation event (bounded history).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ReconciliationEvent {
+    pub tick: u64,
+    pub kind: ReconciliationKind,
+    pub magnitude: Fixed,
+}
+
 /// A rich directed relationship between two agents.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RelationshipV2 {
@@ -135,6 +238,47 @@ pub struct RelationshipV2 {
     pub last_update_tick: u64,
     /// Whether this relationship has pending changes that need processing.
     pub dirty: bool,
+
+    // ── §10.2 (AP2): Identity and meaning ─────────────────────────────
+    /// Expected role in this relationship (authority/kin branch of §10.3).
+    #[serde(default)]
+    pub role_expectation: RoleExpectation,
+    /// Public label — what the community sees (§10.3 taxonomy).
+    #[serde(default)]
+    pub public_label: RelationshipLabel,
+    /// Private label — the emotionally honest view, which can diverge from
+    /// the public label (resentment downgrades it toward the negative branch).
+    #[serde(default)]
+    pub private_label: RelationshipLabel,
+
+    // ── §10.2 (AP2): Structure ────────────────────────────────────────
+    /// Kinship closeness (0 = stranger, 1 = immediate family). Derived from
+    /// the kin stage branch.
+    #[serde(default)]
+    pub kinship_coefficient: Fixed,
+    /// Shared household index, when both agents co-reside.
+    #[serde(default)]
+    pub household_link: Option<usize>,
+    /// Shared faction index, when both belong to the same faction.
+    #[serde(default)]
+    pub faction_link: Option<usize>,
+    /// Shared institution id, when both hold membership in the same body.
+    #[serde(default)]
+    pub institutional_link: Option<u64>,
+
+    // ── §10.2 (AP2): History ──────────────────────────────────────────
+    /// Accumulated weight of positive history (0–1).
+    #[serde(default)]
+    pub positive_memory_weight: Fixed,
+    /// Accumulated weight of negative history (0–1).
+    #[serde(default)]
+    pub negative_memory_weight: Fixed,
+    /// Bounded log of betrayal events (most recent 16).
+    #[serde(default)]
+    pub betrayal_history: Vec<BetrayalEvent>,
+    /// Bounded log of reconciliation events (most recent 16).
+    #[serde(default)]
+    pub reconciliation_history: Vec<ReconciliationEvent>,
 }
 
 impl RelationshipV2 {
@@ -169,6 +313,17 @@ impl RelationshipV2 {
             volatility: Fixed::from_f64(0.5),
             last_update_tick: 0,
             dirty: false,
+            role_expectation: RoleExpectation::None,
+            public_label: RelationshipLabel::default(),
+            private_label: RelationshipLabel::default(),
+            kinship_coefficient: Fixed::ZERO,
+            household_link: None,
+            faction_link: None,
+            institutional_link: None,
+            positive_memory_weight: Fixed::ZERO,
+            negative_memory_weight: Fixed::ZERO,
+            betrayal_history: Vec::new(),
+            reconciliation_history: Vec::new(),
         }
     }
 
@@ -215,6 +370,9 @@ impl RelationshipV2 {
         self.affection = (self.affection + magnitude * vol * Fixed::from_f64(0.015)).clamp_01();
         self.gratitude = (self.gratitude + magnitude * Fixed::from_f64(0.01)).clamp_01();
         self.resentment = (self.resentment - magnitude * Fixed::from_f64(0.005)).max(Fixed::ZERO);
+        // §10.2: positive history accumulates into the memory weight.
+        self.positive_memory_weight =
+            (self.positive_memory_weight + magnitude * Fixed::from_f64(0.01)).clamp_01();
         self.last_positive_tick = tick;
         self.last_update_tick = tick;
         self.dirty = true;
@@ -227,10 +385,142 @@ impl RelationshipV2 {
         self.affection = (self.affection - magnitude * vol * Fixed::from_f64(0.02)).max(Fixed::ZERO);
         self.resentment = (self.resentment + magnitude * Fixed::from_f64(0.02)).clamp_01();
         self.fear = (self.fear + magnitude * Fixed::from_f64(0.01)).clamp_01();
+        // §10.2: negative history accumulates into the memory weight.
+        self.negative_memory_weight =
+            (self.negative_memory_weight + magnitude * Fixed::from_f64(0.01)).clamp_01();
         self.last_negative_tick = tick;
         self.last_update_tick = tick;
         self.dirty = true;
         self.interaction_count += 1;
+    }
+
+    /// §10.2: Public label derived deterministically from the current stage
+    /// (§10.3 taxonomy — general, negative, and kin branches map 1:1).
+    pub fn derive_public_label(&self) -> RelationshipLabel {
+        match self.stage {
+            RelationshipStage::Unnoticed => RelationshipLabel::Unnoticed,
+            RelationshipStage::Noticed => RelationshipLabel::Noticed,
+            RelationshipStage::Acquaintance => RelationshipLabel::Acquaintance,
+            RelationshipStage::Familiar => RelationshipLabel::Familiar,
+            RelationshipStage::Neighbor => RelationshipLabel::Neighbor,
+            RelationshipStage::Friend => RelationshipLabel::Friend,
+            RelationshipStage::CloseFriend => RelationshipLabel::CloseFriend,
+            RelationshipStage::Confidant => RelationshipLabel::Confidant,
+            RelationshipStage::Ally => RelationshipLabel::Ally,
+            RelationshipStage::Disliked => RelationshipLabel::Disliked,
+            RelationshipStage::Rival => RelationshipLabel::Rival,
+            RelationshipStage::Enemy => RelationshipLabel::Enemy,
+            RelationshipStage::Nemesis => RelationshipLabel::Nemesis,
+            RelationshipStage::Kin => RelationshipLabel::Kin,
+            RelationshipStage::ParentChild => RelationshipLabel::ParentChild,
+            RelationshipStage::Sibling => RelationshipLabel::Sibling,
+            RelationshipStage::Cousin => RelationshipLabel::Cousin,
+            RelationshipStage::InLaw => RelationshipLabel::InLaw,
+        }
+    }
+
+    /// §10.2: Private label — the emotionally honest view. Starts from the
+    /// public label, then resentment dominating trust downgrades it toward
+    /// the negative branch (a "friend" the agent privately resents is labeled
+    /// Disliked; a Rival becomes an Enemy). Deterministic, no RNG.
+    pub fn derive_private_label(&self) -> RelationshipLabel {
+        let public = self.derive_public_label();
+        if self.resentment > self.trust && self.resentment > Fixed::from_f64(0.4) {
+            match public {
+                RelationshipLabel::Unnoticed
+                | RelationshipLabel::Noticed
+                | RelationshipLabel::Acquaintance
+                | RelationshipLabel::Familiar
+                | RelationshipLabel::Neighbor
+                | RelationshipLabel::Friend
+                | RelationshipLabel::CloseFriend
+                | RelationshipLabel::Confidant
+                | RelationshipLabel::Ally
+                | RelationshipLabel::Kin => RelationshipLabel::Disliked,
+                RelationshipLabel::Disliked => RelationshipLabel::Rival,
+                RelationshipLabel::Rival => RelationshipLabel::Enemy,
+                RelationshipLabel::Enemy => RelationshipLabel::Nemesis,
+                other => other,
+            }
+        } else {
+            public
+        }
+    }
+
+    /// §10.2: Role expectation from the §10.3 authority/kin branch — kin
+    /// stages imply caregiving/alliance roles; peers expect none.
+    pub fn derive_role_expectation(&self) -> RoleExpectation {
+        match self.stage {
+            RelationshipStage::ParentChild => RoleExpectation::Caregiver,
+            RelationshipStage::Sibling => RoleExpectation::Ally,
+            RelationshipStage::Kin | RelationshipStage::Cousin | RelationshipStage::InLaw => {
+                RoleExpectation::Ally
+            }
+            _ => RoleExpectation::None,
+        }
+    }
+
+    /// §10.2: Kinship coefficient — blood closeness implied by the kin stage
+    /// branch (0 = stranger, 1 = immediate family).
+    pub fn derive_kinship_coefficient(&self) -> Fixed {
+        match self.stage {
+            RelationshipStage::ParentChild => Fixed::from_f64(0.8),
+            RelationshipStage::Sibling => Fixed::from_f64(0.5),
+            RelationshipStage::Kin => Fixed::from_f64(0.5),
+            RelationshipStage::Cousin => Fixed::from_f64(0.25),
+            RelationshipStage::InLaw => Fixed::from_f64(0.3),
+            _ => Fixed::ZERO,
+        }
+    }
+
+    /// §10.2: Refresh the identity layer (public/private labels, role
+    /// expectation, kinship coefficient) from current state. Deterministic —
+    /// a pure function of existing fields, so calibrated runs stay
+    /// byte-identical.
+    pub fn update_identity_metadata(&mut self) {
+        self.public_label = self.derive_public_label();
+        self.private_label = self.derive_private_label();
+        self.role_expectation = self.derive_role_expectation();
+        self.kinship_coefficient = self.derive_kinship_coefficient();
+    }
+
+    /// §10.2: Record a betrayal event into the bounded history and raise the
+    /// negative memory weight. Only touches the new §10.2 fields — the trust/
+    /// affection damage is applied by the conflict system that calls this, so
+    /// calibrated runs stay byte-identical.
+    pub fn record_betrayal(&mut self, tick: u64, kind: BetrayalKind, magnitude: Fixed) {
+        const MAX_BETRAYALS: usize = 16;
+        if self.betrayal_history.len() >= MAX_BETRAYALS {
+            self.betrayal_history.remove(0);
+        }
+        self.betrayal_history.push(BetrayalEvent {
+            tick,
+            kind,
+            magnitude,
+        });
+        self.negative_memory_weight =
+            (self.negative_memory_weight + magnitude).clamp_01();
+    }
+
+    /// §10.2: Record a reconciliation event into the bounded history and
+    /// raise the positive memory weight. Only touches new §10.2 fields.
+    pub fn record_reconciliation(
+        &mut self,
+        tick: u64,
+        kind: ReconciliationKind,
+        magnitude: Fixed,
+    ) {
+        const MAX_RECONCILIATIONS: usize = 16;
+        if self.reconciliation_history.len() >= MAX_RECONCILIATIONS {
+            self.reconciliation_history.remove(0);
+        }
+        self.reconciliation_history.push(ReconciliationEvent {
+            tick,
+            kind,
+            magnitude,
+        });
+        self.positive_memory_weight =
+            (self.positive_memory_weight + magnitude).clamp_01();
     }
 
     pub fn decay(&mut self, ticks_elapsed: u64) {
@@ -373,5 +663,117 @@ mod tests {
         r.clear_dirty(10);
         assert!(!r.dirty);
         assert_eq!(r.last_update_tick, 10);
+    }
+
+    // ── §10.2 Relationship Identity + History Tests ───────────────────
+
+    #[test]
+    fn new_initializes_section_10_2_fields() {
+        let r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        assert_eq!(r.public_label, RelationshipLabel::Unnoticed);
+        assert_eq!(r.private_label, RelationshipLabel::Unnoticed);
+        assert_eq!(r.role_expectation, RoleExpectation::None);
+        assert_eq!(r.kinship_coefficient, Fixed::ZERO);
+        assert_eq!(r.household_link, None);
+        assert_eq!(r.faction_link, None);
+        assert_eq!(r.institutional_link, None);
+        assert!(r.betrayal_history.is_empty());
+        assert!(r.reconciliation_history.is_empty());
+    }
+
+    #[test]
+    fn public_label_follows_stage() {
+        let mut r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        r.stage = RelationshipStage::Friend;
+        assert_eq!(r.derive_public_label(), RelationshipLabel::Friend);
+        r.stage = RelationshipStage::Enemy;
+        assert_eq!(r.derive_public_label(), RelationshipLabel::Enemy);
+        r.stage = RelationshipStage::Sibling;
+        assert_eq!(r.derive_public_label(), RelationshipLabel::Sibling);
+    }
+
+    #[test]
+    fn private_label_downgrades_under_resentment() {
+        let mut r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        // Public: Friend. Private: also Friend while resentment is low.
+        r.stage = RelationshipStage::Friend;
+        r.trust = Fixed::from_f64(0.7);
+        r.resentment = Fixed::from_f64(0.1);
+        assert_eq!(r.derive_private_label(), RelationshipLabel::Friend);
+        // Resentment dominates trust → the private view downgrades.
+        r.trust = Fixed::from_f64(0.2);
+        r.resentment = Fixed::from_f64(0.6);
+        assert_eq!(r.derive_private_label(), RelationshipLabel::Disliked);
+        // A public Rival with high resentment becomes privately an Enemy.
+        r.stage = RelationshipStage::Rival;
+        assert_eq!(r.derive_private_label(), RelationshipLabel::Enemy);
+    }
+
+    #[test]
+    fn role_expectation_derived_from_kin_stage() {
+        let mut r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        r.stage = RelationshipStage::ParentChild;
+        assert_eq!(r.derive_role_expectation(), RoleExpectation::Caregiver);
+        r.stage = RelationshipStage::Sibling;
+        assert_eq!(r.derive_role_expectation(), RoleExpectation::Ally);
+        r.stage = RelationshipStage::Friend;
+        assert_eq!(r.derive_role_expectation(), RoleExpectation::None);
+    }
+
+    #[test]
+    fn kinship_coefficient_derived_from_kin_stage() {
+        let mut r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        r.stage = RelationshipStage::ParentChild;
+        assert!(r.derive_kinship_coefficient() > Fixed::from_f64(0.7));
+        r.stage = RelationshipStage::Cousin;
+        assert!(r.derive_kinship_coefficient() > Fixed::ZERO);
+        r.stage = RelationshipStage::Friend;
+        assert_eq!(r.derive_kinship_coefficient(), Fixed::ZERO);
+    }
+
+    #[test]
+    fn update_identity_metadata_fills_all_fields() {
+        let mut r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        r.stage = RelationshipStage::Friend;
+        r.update_identity_metadata();
+        assert_eq!(r.public_label, RelationshipLabel::Friend);
+        assert_eq!(r.private_label, RelationshipLabel::Friend);
+        assert_eq!(r.role_expectation, RoleExpectation::None);
+        assert_eq!(r.kinship_coefficient, Fixed::ZERO);
+    }
+
+    #[test]
+    fn record_betrayal_appends_and_raises_negative_weight() {
+        let mut r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        r.record_betrayal(10, BetrayalKind::Violence, Fixed::from_f64(0.3));
+        assert_eq!(r.betrayal_history.len(), 1);
+        assert_eq!(r.betrayal_history[0].kind, BetrayalKind::Violence);
+        assert_eq!(r.betrayal_history[0].tick, 10);
+        assert!(r.negative_memory_weight > Fixed::ZERO);
+        // Does not touch trust (conflict system applies the damage).
+        assert_eq!(r.trust, Fixed::from_f64(0.4));
+    }
+
+    #[test]
+    fn record_reconciliation_appends_and_raises_positive_weight() {
+        let mut r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        r.record_reconciliation(20, ReconciliationKind::Apology, Fixed::from_f64(0.5));
+        assert_eq!(r.reconciliation_history.len(), 1);
+        assert_eq!(r.reconciliation_history[0].kind, ReconciliationKind::Apology);
+        assert_eq!(r.reconciliation_history[0].tick, 20);
+        assert!(r.positive_memory_weight > Fixed::ZERO);
+    }
+
+    #[test]
+    fn histories_are_bounded() {
+        let mut r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        for t in 0..40u64 {
+            r.record_betrayal(t, BetrayalKind::Theft, Fixed::from_f64(0.1));
+            r.record_reconciliation(t, ReconciliationKind::Mediation, Fixed::from_f64(0.1));
+        }
+        assert_eq!(r.betrayal_history.len(), 16, "betrayal history capped at 16");
+        assert_eq!(r.reconciliation_history.len(), 16, "reconciliation history capped at 16");
+        // The most recent event survives (FIFO eviction).
+        assert_eq!(r.betrayal_history.last().map(|e| e.tick), Some(39));
     }
 }

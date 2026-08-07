@@ -2993,6 +2993,88 @@ fn neural_like_runtime_is_live_deterministic_and_bounded() {
         "neural-like end-state must be seed-deterministic");
 }
 
+/// §10.2: RelationshipV2 identity metadata + structural links + betrayal
+/// history populate across a real run, and the §10.2 end-state is
+/// seed-deterministic (labels, role expectations, links are pure functions
+/// of existing state — no RNG).
+#[test]
+fn relationship_identity_fields_populate_across_run() {
+    let sim = run_sim(42, 2000);
+
+    // Labels/role/kinship metadata must be populated (stages progress past
+    // Unnoticed during a run, so public labels leave the default).
+    let mut labels_seen = std::collections::BTreeSet::new();
+    let mut any_role_expectation = false;
+    for agent in &sim.agents {
+        for rv2 in &agent.relationship_v2s {
+            labels_seen.insert(rv2.public_label);
+            if rv2.role_expectation != mindstrata_sim::social::relationship_v2::RoleExpectation::None {
+                any_role_expectation = true;
+            }
+            // Identity metadata must be internally consistent: public label
+            // always equals the deterministic stage derivation.
+            assert_eq!(
+                rv2.public_label,
+                rv2.derive_public_label(),
+                "public_label must match stage derivation"
+            );
+            assert_eq!(
+                rv2.kinship_coefficient,
+                rv2.derive_kinship_coefficient(),
+                "kinship_coefficient must match stage derivation"
+            );
+        }
+    }
+    // At least one relationship must have left the default Unnoticed label.
+    assert!(
+        labels_seen
+            .iter()
+            .any(|l| *l != mindstrata_sim::social::relationship_v2::RelationshipLabel::Unnoticed),
+        "some relationships must progress past Unnoticed, saw: {labels_seen:?}"
+    );
+
+    // Some households exist and agents within them share household_link.
+    let any_household_link = sim.agents.iter().any(|a| {
+        a.relationship_v2s.iter().any(|rv2| rv2.household_link.is_some())
+    });
+    assert!(any_household_link, "household_link must populate for co-resident agents");
+
+    // Betrayal history: threats/violence occurred in the run, so some v2
+    // betrayal histories must be non-empty (violence path records them).
+    let total_betrayals: usize = sim.agents.iter()
+        .map(|a| a.relationship_v2s.iter().map(|rv2| rv2.betrayal_history.len()).sum::<usize>())
+        .sum();
+    assert!(total_betrayals > 0, "violence must record betrayal events, got {total_betrayals}");
+
+    // Reconciliation history: betrayals that recovered trust (daily pass)
+    // must have recorded Apology events — the betrayal→reconciliation arc
+    // closes in live runs.
+    let total_reconciliations: usize = sim.agents.iter()
+        .map(|a| a.relationship_v2s.iter().map(|rv2| rv2.reconciliation_history.len()).sum::<usize>())
+        .sum();
+    assert!(
+        total_reconciliations > 0,
+        "recovered betrayals must record reconciliation events, got {total_reconciliations}"
+    );
+
+    // Determinism: same seed → identical §10.2 end-state.
+    let sim2 = run_sim(42, 2000);
+    let sum1: f64 = sim.agents.iter()
+        .flat_map(|a| a.relationship_v2s.iter())
+        .map(|rv2| rv2.negative_memory_weight.to_f64()
+            + rv2.positive_memory_weight.to_f64()
+            + rv2.kinship_coefficient.to_f64())
+        .sum();
+    let sum2: f64 = sim2.agents.iter()
+        .flat_map(|a| a.relationship_v2s.iter())
+        .map(|rv2| rv2.negative_memory_weight.to_f64()
+            + rv2.positive_memory_weight.to_f64()
+            + rv2.kinship_coefficient.to_f64())
+        .sum();
+    assert!((sum1 - sum2).abs() < 1e-9,
+        "§10.2 relationship identity end-state must be seed-deterministic");
+}
+
 
 
 

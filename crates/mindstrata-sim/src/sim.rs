@@ -2541,6 +2541,104 @@ impl Simulation {
                 }
             }
 
+            // §10.2 (AP2): Relationship identity metadata + structural links,
+            // refreshed on the daily boundary. Fills the plan-mandated fields
+            // the struct was missing: public/private labels (§10.3 taxonomy),
+            // role expectation (authority/kin branch), kinship coefficient,
+            // and the shared household/faction/institution links. Purely a
+            // deterministic function of existing state (no RNG) that only
+            // writes the new §10.2 fields, so calibrated runs stay
+            // byte-identical.
+            if tick_u64 > 0 && tick_u64.is_multiple_of(144) {
+                let n = self.agents.len();
+                // First-match memberships per agent (deterministic).
+                let agent_household: Vec<Option<usize>> = (0..n)
+                    .map(|i| {
+                        self.households
+                            .iter()
+                            .find(|h| h.members.contains(&i))
+                            .map(|h| h.id)
+                    })
+                    .collect();
+                let agent_faction: Vec<Option<usize>> = (0..n)
+                    .map(|i| {
+                        self.faction_v2_registry
+                            .factions
+                            .iter()
+                            .position(|f| f.active && f.members.contains(&i))
+                    })
+                    .collect();
+                let agent_institution: Vec<Option<u64>> = (0..n)
+                    .map(|i| {
+                        let id = AgentId::new(i as u64);
+                        self.institutions
+                            .iter()
+                            .find(|inst| inst.members.iter().any(|m| *m == id))
+                            .map(|inst| inst.id)
+                    })
+                    .collect();
+                for i in 0..n {
+                    let rel_count = self.agents[i].relationship_v2s.len();
+                    for pos in 0..rel_count {
+                        let to_idx = self.agents[i].relationship_v2s[pos].to.as_u64() as usize;
+                        if to_idx >= n || to_idx == i {
+                            continue;
+                        }
+                        let rv2 = &mut self.agents[i].relationship_v2s[pos];
+                        rv2.update_identity_metadata();
+                        // §10.2: Reconciliation — when a betrayal has been
+                        // repaired by recovered trust (no reconciliation since
+                        // the last betrayal, trust back above 0.5), record one
+                        // Apology event. Deterministic, writes only new §10.2
+                        // fields (magnitude ∝ recovered trust), so calibrated
+                        // runs stay byte-identical. This closes the plan's
+                        // betrayal→reconciliation arc in live runs.
+                        {
+                            let last_betrayal_tick = rv2
+                                .betrayal_history
+                                .last()
+                                .map(|e| e.tick)
+                                .unwrap_or(0);
+                            let last_reconciliation_tick = rv2
+                                .reconciliation_history
+                                .last()
+                                .map(|e| e.tick)
+                                .unwrap_or(0);
+                            if last_betrayal_tick > last_reconciliation_tick
+                                && rv2.trust > Fixed::from_f64(0.5)
+                            {
+                                rv2.record_reconciliation(
+                                    tick_u64,
+                                    crate::social::relationship_v2::ReconciliationKind::Apology,
+                                    rv2.trust,
+                                );
+                            }
+                        }
+                        rv2.household_link = if agent_household[i].is_some()
+                            && agent_household[i] == agent_household[to_idx]
+                        {
+                            agent_household[i]
+                        } else {
+                            None
+                        };
+                        rv2.faction_link = if agent_faction[i].is_some()
+                            && agent_faction[i] == agent_faction[to_idx]
+                        {
+                            agent_faction[i]
+                        } else {
+                            None
+                        };
+                        rv2.institutional_link = if agent_institution[i].is_some()
+                            && agent_institution[i] == agent_institution[to_idx]
+                        {
+                            agent_institution[i]
+                        } else {
+                            None
+                        };
+                    }
+                }
+            }
+
             // ── 1. Need decay (nonlinear pressure, §9.1) ────────────────
             // §5.1: Use configurable parameters for decay rates.
             let params = self.params;
@@ -6824,6 +6922,29 @@ impl Simulation {
                                             new_affection: rel.affection,
                                             description: format!("Fear response — trust dropped ({} -> {})", old_trust.to_f64(), rel.trust.to_f64()),
                                         });
+                                    }
+                                    // §10.2 (AP2): Record the violence as a betrayal in
+                                    // both directions of the RelationshipV2 history
+                                    // (bounded, new fields only — the trust/affection
+                                    // damage is applied above, so calibrated runs stay
+                                    // byte-identical).
+                                    if from_idx != to_idx {
+                                        let f_pos = Self::relationship_v2_pos(from_idx, to_idx);
+                                        let t_pos = Self::relationship_v2_pos(to_idx, from_idx);
+                                        if f_pos < self.agents[from_idx].relationship_v2s.len() {
+                                            self.agents[from_idx].relationship_v2s[f_pos].record_betrayal(
+                                                tick_u64,
+                                                crate::social::relationship_v2::BetrayalKind::Violence,
+                                                violence_result.fear_induced,
+                                            );
+                                        }
+                                        if t_pos < self.agents[to_idx].relationship_v2s.len() {
+                                            self.agents[to_idx].relationship_v2s[t_pos].record_betrayal(
+                                                tick_u64,
+                                                crate::social::relationship_v2::BetrayalKind::Violence,
+                                                violence_result.fear_induced,
+                                            );
+                                        }
                                     }
                                     // Record in journal
                                     self.journal.record(tick_u64, from_id, JournalEntryKind::CommittedViolence {
