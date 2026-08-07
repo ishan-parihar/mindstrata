@@ -1251,14 +1251,43 @@ impl Simulation {
             let site = agent.home_site.unwrap_or(i);
             buckets[site % CLAN_COUNT].push(i);
         }
+        let meme_count = self.meme_registry.memes.len();
         for members in buckets.into_iter().filter(|m| !m.is_empty()) {
-            let clan = Clan::new(
-                self.clan_registry.clans.len(),
+            let clan_id = self.clan_registry.clans.len();
+            let mut clan = Clan::new(
+                clan_id,
                 Some(members[0]), // founder — first member in agent order
                 None,
                 members,
                 0, // formed_tick — identical across new()/from_snapshot()
             );
+            // §10.8: Founding identity — each clan adopts a founding myth
+            // drawn deterministically from the village meme pool (memes are
+            // re-seeded before clans in both populate() and from_snapshot(),
+            // so the same meme id is chosen in fresh and replayed runs) plus
+            // an honor code derived from it. This makes the plan's "myths
+            // justify identity / elders preserve honor codes" layer live from
+            // formation instead of leaving `myths`/`honor_codes` empty.
+            if meme_count > 0 {
+                if let Some(m) = self.meme_registry.memes.get(clan_id % meme_count) {
+                    clan.add_myth(
+                        format!("Founding myth: {}", m.description),
+                        m.credibility,
+                        m.emotional_charge,
+                        matches!(
+                            m.content_type,
+                            crate::culture::MemeContent::Accusation
+                                | crate::culture::MemeContent::Conspiracy
+                        ),
+                    );
+                    clan.add_honor_code(
+                        format!("Honor the founding principle: {}", m.description),
+                        (Fixed::from_f64(0.4) + m.identity_relevance * Fixed::from_f64(0.3))
+                            .clamp_01(),
+                        (m.emotional_charge * Fixed::from_f64(0.25)).clamp_01(),
+                    );
+                }
+            }
             self.clan_registry.register(clan);
         }
     }
@@ -6205,8 +6234,11 @@ impl Simulation {
             self.tick_noosphere_belief_projection();
 
             // Architecture-plan-2 §10.8: Clan daily update.
-            // Decay grievance, adjust cohesion, decay myth belief.
+            // Decay grievance, adjust cohesion, decay myth belief — then let
+            // the clan's living identity (myths + honor codes) feed cohesion
+            // and prestige back.
             self.clan_registry.daily_update();
+            self.clan_registry.myth_resonance_day();
 
             // Architecture-plan-2 §10.4-§10.5: Marriage registry daily update.
             self.marriage_registry.daily_update();

@@ -182,6 +182,36 @@ impl Clan {
         self.cohesion = (self.cohesion + cohesion_drift).clamp_01();
     }
 
+    /// §10.8: Daily myth resonance — a clan's living identity (myth belief ×
+    /// emotional charge plus honor-code strength) reinforces cohesion, which
+    /// in turn sustains prestige. Tiny deterministic coefficients; the
+    /// identity layer is observational (no behavioral consumer reads these
+    /// fields yet) but the myth/honor-code layer now visibly drives clan
+    /// dynamics instead of sitting structurally empty.
+    pub fn myth_resonance_day(&mut self) {
+        let myth_strength: Fixed = self
+            .myths
+            .iter()
+            .map(|m| m.belief_strength * m.emotional_charge)
+            .fold(Fixed::ZERO, |a, b| a + b);
+        let honor_strength: Fixed = self
+            .honor_codes
+            .iter()
+            .map(|h| h.strength)
+            .fold(Fixed::ZERO, |a, b| a + b);
+        let identity_boost = myth_strength * Fixed::from_f64(0.002)
+            + honor_strength * Fixed::from_f64(0.001);
+        if identity_boost <= Fixed::ZERO {
+            // No living identity → no resonance (cohesion/prestige stay put).
+            return;
+        }
+        // Prestige is computed from the pre-boost cohesion so the two
+        // effects don't double-count the same identity input.
+        let cohesion_before = self.cohesion;
+        self.cohesion = (self.cohesion + identity_boost).clamp_01();
+        self.prestige = (self.prestige + cohesion_before * Fixed::from_f64(0.0002)).clamp_01();
+    }
+
     /// Compute clan power — combination of prestige, cohesion, and household count.
     /// Household contribution is normalized to [0, 1] before weighting.
     pub fn power(&self) -> Fixed {
@@ -237,6 +267,13 @@ impl ClanRegistry {
     pub fn daily_update(&mut self) {
         for clan in &mut self.clans {
             clan.daily_update();
+        }
+    }
+
+    /// §10.8: Daily myth resonance for all clans (call after `daily_update`).
+    pub fn myth_resonance_day(&mut self) {
+        for clan in &mut self.clans {
+            clan.myth_resonance_day();
         }
     }
 }
@@ -366,5 +403,34 @@ mod tests {
 
         let myth = &clan.myths[0];
         assert!(myth.belief_strength < Fixed::from_f64(0.8), "Myth belief should decay without reinforcement");
+    }
+
+    // ── §10.8 Clan identity (myth resonance) tests ────────────────────
+
+    /// Living myths and honored codes visibly lift cohesion and prestige.
+    #[test]
+    fn clan_myth_resonance_lifts_cohesion_and_prestige() {
+        let mut clan = Clan::new(0, Some(0), None, vec![0], 0);
+        clan.add_myth("The river sustains us".into(), Fixed::from_f64(0.9), Fixed::from_f64(0.8), false);
+        clan.add_honor_code("Honor the elders".into(), Fixed::from_f64(0.6), Fixed::from_f64(0.4));
+        let cohesion_before = clan.cohesion;
+        let prestige_before = clan.prestige;
+        clan.myth_resonance_day();
+        assert!(clan.cohesion > cohesion_before, "myth resonance must lift cohesion");
+        assert!(clan.prestige > prestige_before, "myth resonance must lift prestige");
+        // Still bounded.
+        assert!(clan.cohesion <= Fixed::ONE && clan.prestige <= Fixed::ONE);
+    }
+
+    /// A clan with no identity layer has no resonance (cohesion AND prestige
+    /// stay put — prestige must not drift without a living myth).
+    #[test]
+    fn clan_without_identity_has_no_resonance() {
+        let mut clan = Clan::new(0, None, None, vec![0], 0);
+        let cohesion_before = clan.cohesion;
+        let prestige_before = clan.prestige;
+        clan.myth_resonance_day();
+        assert_eq!(clan.cohesion, cohesion_before);
+        assert_eq!(clan.prestige, prestige_before);
     }
 }

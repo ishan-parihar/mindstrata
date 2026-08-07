@@ -4009,6 +4009,76 @@ fn meme_mutation_wired_and_parameter_gated() {
     );
 }
 
+/// §10.8 (AP2): Clan identity — every clan must carry a founding myth and
+/// honor code (previously structurally empty: `add_myth`/`add_honor_code`
+/// had no production callers), the identity layer must visibly feed cohesion
+/// via daily myth resonance, myth belief must decay without reinforcement,
+/// and the whole clan state must be seed-deterministic.
+#[test]
+fn clan_identity_myths_and_honor_codes_live() {
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 3000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config.clone());
+    sim.populate();
+    sim.run(3000);
+
+    let clans = &sim.clan_registry.clans;
+    assert!(!clans.is_empty(), "clans must be seeded");
+    // Identity layer is live from formation.
+    assert!(
+        clans.iter().all(|c| !c.myths.is_empty()),
+        "every clan must have a founding myth"
+    );
+    assert!(
+        clans.iter().all(|c| !c.honor_codes.is_empty()),
+        "every clan must have an honor code"
+    );
+    // Distinct clans adopt distinct founding myths (clan_id % meme_count).
+    if clans.len() >= 2 {
+        assert_ne!(
+            clans[0].myths[0].description, clans[1].myths[0].description,
+            "clans should adopt distinct founding myths"
+        );
+    }
+    // Myth resonance: living myths lift at least one clan's cohesion above
+    // the 0.5 baseline (enmity can pull others below it).
+    assert!(
+        clans.iter().any(|c| c.cohesion > Fixed::from_f64(0.5)),
+        "myth resonance should lift at least one clan's cohesion above baseline"
+    );
+    // Myth belief decays from the seed credibility (0.5) without reinforcement.
+    assert!(
+        clans.iter().all(|c| c.myths[0].belief_strength < Fixed::from_f64(0.5)),
+        "myth belief should decay from the initial credibility"
+    );
+
+    // Determinism: an identical second run reproduces the same clan identity.
+    let mut sim2 = Simulation::new(config);
+    sim2.populate();
+    sim2.run(3000);
+    let key = |s: &mindstrata_sim::Simulation| {
+        s.clan_registry
+            .clans
+            .iter()
+            .map(|c| {
+                (
+                    c.cohesion,
+                    c.prestige,
+                    c.grievance,
+                    c.myths[0].belief_strength,
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(key(&sim), key(&sim2), "clan identity must be seed-deterministic");
+}
+
 
 
 
