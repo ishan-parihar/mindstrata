@@ -529,16 +529,28 @@ fn friendships_correlate_with_proximity_across_seeds() {
                 let j = rv2.to.as_u64() as usize;
                 if j < sim.agents.len() {
                     let dist = agent.position.manhattan_distance(&sim.agents[j].position);
-                    let stage = rv2.stage as u32;
+                    let stage = rv2.stage;
+                    // §10.3 authority stages (PatronClient, MasterApprentice,
+                    // PriestLayperson, ElderJunior) are ASSIGNED from structural
+                    // relationships (patronage/apprenticeship/cult/household),
+                    // NOT grown through proximity-driven interaction — so they
+                    // must be EXCLUDED from the social-progression count. The
+                    // authority pass runs after the transition pass and only
+                    // labels pairs still at the social baseline, so far pairs
+                    // (which interact less) would otherwise be rescued into
+                    // "progressed" by the structural overlay, diluting the
+                    // proximity signal this invariant measures.
+                    let progressed = (stage as u32) >= RelationshipStage::Acquaintance as u32
+                        && !mindstrata_sim::social::relationship_stages::is_authority_stage(stage);
                     // Use <= 2 for close (same area) and >= 6 for far (different areas)
                     if dist <= 2 {
                         close_total += 1;
-                        if stage >= RelationshipStage::Acquaintance as u32 {
+                        if progressed {
                             close_progressed += 1;
                         }
                     } else if dist >= 6 {
                         far_total += 1;
-                        if stage >= RelationshipStage::Acquaintance as u32 {
+                        if progressed {
                             far_progressed += 1;
                         }
                     }
@@ -2904,7 +2916,7 @@ fn snapshot_restore_reseeds_rituals_and_campaigns() {
 /// and `from_snapshot()` (replays) must seed them identically.
 #[test]
 fn collective_structures_seeded_in_fresh_and_restored_runs() {
-    let mut sim = crate::test_helpers::run_sim(42, 1000);
+    let sim = crate::test_helpers::run_sim(42, 1000);
     let fresh_clans = sim.clan_registry.clans.len();
     let fresh_memories: usize = sim
         .collective_memory_registry
@@ -3214,12 +3226,12 @@ fn relationship_identity_fields_populate_across_run() {
     // Labels/role/kinship metadata must be populated (stages progress past
     // Unnoticed during a run, so public labels leave the default).
     let mut labels_seen = std::collections::BTreeSet::new();
-    let mut any_role_expectation = false;
+    let mut role_expectations_seen = 0usize;
     for agent in &sim.agents {
         for rv2 in &agent.relationship_v2s {
             labels_seen.insert(rv2.public_label);
             if rv2.role_expectation != mindstrata_sim::social::relationship_v2::RoleExpectation::None {
-                any_role_expectation = true;
+                role_expectations_seen += 1;
             }
             // Identity metadata must be internally consistent: public label
             // always equals the deterministic stage derivation.
@@ -3241,6 +3253,12 @@ fn relationship_identity_fields_populate_across_run() {
             .iter()
             .any(|l| *l != mindstrata_sim::social::relationship_v2::RelationshipLabel::Unnoticed),
         "some relationships must progress past Unnoticed, saw: {labels_seen:?}"
+    );
+    // Some relationships carry a role expectation (the §10.3 authority branch
+    // assigns them from structural producers; social stages derive them too).
+    assert!(
+        role_expectations_seen > 0,
+        "some relationships must carry a role expectation, saw {role_expectations_seen}"
     );
 
     // Some households exist and agents within them share household_link.
@@ -3976,6 +3994,201 @@ fn cousin_stage_derived_from_shared_grandparent() {
 }
 
 
+/// §10.3 (Iteration 70): the authority branch (Patron/Client, Lord/Vassal,
+/// Master/Apprentice, Priest/Layperson, Elder/Junior, Guard/Citizen) existed
+/// only as reserved `RelationshipLabel`/`RoleExpectation` variants — no
+/// `RelationshipStage` variants, no label arms, and no derivation, so no
+/// authority relationship was ever labeled. The daily pass now assigns the
+/// four stages with live producers: PatronClient from the patronage registry,
+/// MasterApprentice from the student's most recent successful teaching event,
+/// PriestLayperson from cult leadership, ElderJunior from household headship.
+/// LordVassal and GuardCitizen have no producer institutions yet (reserved).
+#[test]
+fn authority_stages_assigned_from_live_producers() {
+    use mindstrata_core::id::AgentId;
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::social::relationship_v2::RelationshipStage;
+
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 300,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 8,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.run(144); // one daily tick so v2 stages stabilize
+
+    // (a) Patronage: patron 0 → client 1.
+    sim.patronage_registry
+        .relations
+        .push(mindstrata_sim::social::patronage::PatronageRelation::new(0, 1, 150));
+    // (b) Apprenticeship: agent 2 most recently learned from teacher 3.
+    sim.agents[2]
+        .education
+        .learning_events
+        .push(mindstrata_sim::culture::education::EducationEvent {
+            teacher: 3,
+            student: 2,
+            knowledge_id: 7,
+            quality: Fixed::from_f64(0.8),
+            learning_rate: Fixed::from_f64(0.5),
+            tick: 150,
+            success: true,
+        });
+    // (c) Cult: leader 4 with member 5.
+    let mut cult = mindstrata_sim::social::cult::CultDynamics::new(4, 1, 150);
+    cult.members.push(5);
+    sim.cult_registry.cults.push(cult);
+    // (d) Household: head 6 with member 7.
+    let mut hh = mindstrata_sim::social::household::Household::new(6, Some(0), 150);
+    hh.members.push(7);
+    sim.households.push(hh);
+
+    // Pin the four producer pairs to the social baseline (Unnoticed) so the
+    // authority pass — which only labels pairs that have NOT yet socially
+    // progressed — deterministically assigns them. Zeroing interaction_count
+    // too keeps the transition pass (which runs BEFORE the authority pass)
+    // from advancing the pinned pairs during the final daily tick.
+    for (a, b) in [(0, 1), (1, 0), (3, 2), (2, 3), (4, 5), (5, 4), (6, 7), (7, 6)] {
+        if let Some(rv2) = sim.agents[a]
+            .relationship_v2s
+            .iter_mut()
+            .find(|r| r.to == AgentId::new(b as u64))
+        {
+            rv2.stage = RelationshipStage::Unnoticed;
+            rv2.interaction_count = 0;
+        }
+    }
+
+    sim.run(144); // next daily tick → the authority-assignment pass runs
+
+    let stage_between = |sim: &mindstrata_sim::sim::Simulation, a: usize, b: usize| {
+        sim.agents[a]
+            .relationship_v2s
+            .iter()
+            .find(|r| r.to == AgentId::new(b as u64))
+            .map(|r| r.stage)
+    };
+
+    // PatronClient, both directions.
+    assert_eq!(
+        stage_between(&sim, 0, 1),
+        Some(RelationshipStage::PatronClient),
+        "patron→client must be labeled PatronClient"
+    );
+    assert_eq!(
+        stage_between(&sim, 1, 0),
+        Some(RelationshipStage::PatronClient),
+        "client→patron must be labeled PatronClient"
+    );
+    // MasterApprentice: teacher 3 → student 2.
+    assert_eq!(
+        stage_between(&sim, 3, 2),
+        Some(RelationshipStage::MasterApprentice),
+        "teacher→student must be labeled MasterApprentice"
+    );
+    // PriestLayperson: leader 4 → member 5.
+    assert_eq!(
+        stage_between(&sim, 4, 5),
+        Some(RelationshipStage::PriestLayperson),
+        "cult leader→member must be labeled PriestLayperson"
+    );
+    // ElderJunior: head 6 → member 7.
+    assert_eq!(
+        stage_between(&sim, 6, 7),
+        Some(RelationshipStage::ElderJunior),
+        "household head→member must be labeled ElderJunior"
+    );
+    // Unaffected pairs keep their social stage (no leakage into non-authority).
+    assert_ne!(
+        stage_between(&sim, 0, 2),
+        Some(RelationshipStage::PatronClient),
+        "non-patronage pair must not be mislabeled"
+    );
+
+    // The identity layer carries the authority label + role expectation.
+    let rv2 = sim.agents[0]
+        .relationship_v2s
+        .iter()
+        .find(|r| r.to == AgentId::new(1))
+        .expect("patron→client rv2");
+    assert_eq!(
+        rv2.public_label,
+        mindstrata_sim::social::relationship_v2::RelationshipLabel::PatronClient
+    );
+    assert_eq!(
+        rv2.role_expectation,
+        mindstrata_sim::social::relationship_v2::RoleExpectation::PatronClient
+    );
+    assert!(
+        mindstrata_sim::social::relationship_stages::is_authority_stage(rv2.stage)
+    );
+}
+
+/// §10.3 (AP2, Iteration 70): an authority label whose producer disappears is
+/// orphaned — the terminal stage would otherwise persist forever, since the
+/// transition pass skips authority stages. (Death rebuilds all rv2s, but a
+/// registry cleanup or disbanding does not.) The daily pass resets orphaned
+/// authority labels to the social baseline, mirroring the kin-stage reset.
+#[test]
+fn orphaned_authority_stage_resets_when_producer_removed() {
+    use mindstrata_core::id::AgentId;
+    use mindstrata_sim::social::relationship_v2::RelationshipStage;
+
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 300,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 6,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.run(144);
+
+    // Patronage bond between 0 (patron) and 1 (client), pinned to the baseline
+    // so the authority pass deterministically labels it on the next daily tick.
+    sim.patronage_registry
+        .relations
+        .push(mindstrata_sim::social::patronage::PatronageRelation::new(0, 1, 150));
+    for (a, b) in [(0usize, 1usize), (1usize, 0usize)] {
+        if let Some(rv2) = sim.agents[a]
+            .relationship_v2s
+            .iter_mut()
+            .find(|r| r.to == AgentId::new(b as u64))
+        {
+            rv2.stage = RelationshipStage::Unnoticed;
+            rv2.interaction_count = 0;
+        }
+    }
+    sim.run(144);
+    let stage_between = |sim: &mindstrata_sim::sim::Simulation, a: usize, b: usize| {
+        sim.agents[a]
+            .relationship_v2s
+            .iter()
+            .find(|r| r.to == AgentId::new(b as u64))
+            .map(|r| r.stage)
+    };
+    assert_eq!(
+        stage_between(&sim, 0, 1),
+        Some(RelationshipStage::PatronClient),
+        "live producer must label patron→client"
+    );
+
+    // The producer disappears via registry cleanup (no death-path rv2 rebuild).
+    sim.patronage_registry.relations.clear();
+    sim.run(144); // next daily pass → orphan reset fires
+    assert_eq!(
+        stage_between(&sim, 0, 1),
+        Some(RelationshipStage::Unnoticed),
+        "orphaned authority label must return to the social baseline"
+    );
+}
+
 /// §10.6 (AP2): Births must mirror parent/child and sibling links into the
 /// kinship graph — the graph was previously only seeded at populate (where
 /// initial adults have no parents), so the entire kinship system had no edges
@@ -4492,49 +4705,3 @@ fn jealous_bond_dissolution_dissolves_marriage() {
         "the jealous bond must dissolve its marriage and be removed from the registry"
     );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

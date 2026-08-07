@@ -35,6 +35,13 @@ pub fn min_interactions_for_stage(stage: RelationshipStage) -> u32 {
         RelationshipStage::Cousin => 0,
         RelationshipStage::InLaw => 0,
         RelationshipStage::AncestorDescendant => 0,
+        // §10.3 authority stages are assigned, not advanced
+        RelationshipStage::PatronClient => 0,
+        RelationshipStage::LordVassal => 0,
+        RelationshipStage::MasterApprentice => 0,
+        RelationshipStage::PriestLayperson => 0,
+        RelationshipStage::ElderJunior => 0,
+        RelationshipStage::GuardCitizen => 0,
     }
 }
 
@@ -60,6 +67,13 @@ pub fn trust_threshold_for_stage(stage: RelationshipStage) -> Fixed {
         RelationshipStage::Cousin => Fixed::from_f64(0.35),
         RelationshipStage::InLaw => Fixed::from_f64(0.3),
         RelationshipStage::AncestorDescendant => Fixed::from_f64(0.35),
+        // §10.3 authority branch
+        RelationshipStage::PatronClient => Fixed::from_f64(0.45),
+        RelationshipStage::LordVassal => Fixed::from_f64(0.5),
+        RelationshipStage::MasterApprentice => Fixed::from_f64(0.4),
+        RelationshipStage::PriestLayperson => Fixed::from_f64(0.4),
+        RelationshipStage::ElderJunior => Fixed::from_f64(0.35),
+        RelationshipStage::GuardCitizen => Fixed::from_f64(0.4),
     }
 }
 
@@ -85,6 +99,13 @@ pub fn affection_threshold_for_stage(stage: RelationshipStage) -> Fixed {
         RelationshipStage::Cousin => Fixed::from_f64(0.2),
         RelationshipStage::InLaw => Fixed::from_f64(0.15),
         RelationshipStage::AncestorDescendant => Fixed::from_f64(0.2),
+        // §10.3 authority branch
+        RelationshipStage::PatronClient => Fixed::from_f64(0.2),
+        RelationshipStage::LordVassal => Fixed::from_f64(0.1),
+        RelationshipStage::MasterApprentice => Fixed::from_f64(0.15),
+        RelationshipStage::PriestLayperson => Fixed::from_f64(0.2),
+        RelationshipStage::ElderJunior => Fixed::from_f64(0.25),
+        RelationshipStage::GuardCitizen => Fixed::from_f64(0.1),
     }
 }
 
@@ -110,6 +131,13 @@ pub fn obligation_multiplier_for_stage(stage: RelationshipStage) -> Fixed {
         RelationshipStage::Cousin => Fixed::from_f64(0.25),
         RelationshipStage::InLaw => Fixed::from_f64(0.2),
         RelationshipStage::AncestorDescendant => Fixed::from_f64(0.4),
+        // §10.3 authority branch: authority ties carry real obligation.
+        RelationshipStage::PatronClient => Fixed::from_f64(0.6),
+        RelationshipStage::LordVassal => Fixed::from_f64(0.8),
+        RelationshipStage::MasterApprentice => Fixed::from_f64(0.5),
+        RelationshipStage::PriestLayperson => Fixed::from_f64(0.4),
+        RelationshipStage::ElderJunior => Fixed::from_f64(0.3),
+        RelationshipStage::GuardCitizen => Fixed::from_f64(0.5),
     }
 }
 
@@ -140,6 +168,21 @@ pub fn is_kin_stage(stage: RelationshipStage) -> bool {
             | RelationshipStage::Cousin
             | RelationshipStage::InLaw
             | RelationshipStage::AncestorDescendant
+    )
+}
+
+/// §10.3 (AP2): Is this stage an authority-branch stage (assigned from
+/// structural relationships — patronage, apprenticeship, cult leadership,
+/// household headship — not advanced by the social progression machinery)?
+pub fn is_authority_stage(stage: RelationshipStage) -> bool {
+    matches!(
+        stage,
+        RelationshipStage::PatronClient
+            | RelationshipStage::LordVassal
+            | RelationshipStage::MasterApprentice
+            | RelationshipStage::PriestLayperson
+            | RelationshipStage::ElderJunior
+            | RelationshipStage::GuardCitizen
     )
 }
 
@@ -302,5 +345,44 @@ mod tests {
         rv2.stage = s;
         assert_eq!(rv2.derive_kinship_coefficient(), Fixed::from_f64(0.25));
         assert_eq!(rv2.derive_role_expectation(), super::super::relationship_v2::RoleExpectation::Caregiver);
+    }
+
+    #[test]
+    fn authority_stages_are_assigned_not_advanced() {
+        use super::super::relationship_v2::{RelationshipLabel, RoleExpectation};
+        let authority = [
+            RelationshipStage::PatronClient,
+            RelationshipStage::LordVassal,
+            RelationshipStage::MasterApprentice,
+            RelationshipStage::PriestLayperson,
+            RelationshipStage::ElderJunior,
+            RelationshipStage::GuardCitizen,
+        ];
+        for &s in &authority {
+            assert!(is_authority_stage(s), "{s:?} must be recognized as authority");
+            assert!(!is_kin_stage(s), "{s:?} must not be a kin stage");
+            // Assigned, not advanced.
+            assert_eq!(min_interactions_for_stage(s), 0);
+            assert_eq!(s.next_positive(), None, "{s:?} must not advance");
+            assert_eq!(s.next_negative(), None, "{s:?} must not regress");
+            // Tables are populated (not zero/None dead arms).
+            assert!(trust_threshold_for_stage(s) > Fixed::ZERO);
+            assert!(affection_threshold_for_stage(s) > Fixed::ZERO);
+            assert!(obligation_multiplier_for_stage(s) > Fixed::ZERO);
+            assert!(s.base_trust() > Fixed::ZERO);
+        }
+        // Identity layer: label + role expectation follow the stage.
+        let mut rv2 = super::super::relationship_v2::RelationshipV2::new(
+            mindstrata_core::id::AgentId::new(0),
+            mindstrata_core::id::AgentId::new(1),
+        );
+        rv2.stage = RelationshipStage::PatronClient;
+        assert_eq!(
+            rv2.derive_public_label(),
+            RelationshipLabel::PatronClient
+        );
+        assert_eq!(rv2.derive_role_expectation(), RoleExpectation::PatronClient);
+        // Authority is not blood kin.
+        assert_eq!(rv2.derive_kinship_coefficient(), Fixed::ZERO);
     }
 }

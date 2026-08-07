@@ -6444,8 +6444,11 @@ impl Simulation {
                     // No advancement is possible without interactions; regression only matters
                     // for Established+ stages or when fear is high.
                     let interactions = self.agents[i].relationship_v2s[rv2_idx].interaction_count;
-                    // Kin stages are assigned, not advanced — skip them outright.
-                    if crate::social::relationship_stages::is_kin_stage(current_stage) {
+                    // Kin and authority stages are assigned, not advanced —
+                    // skip them outright.
+                    if crate::social::relationship_stages::is_kin_stage(current_stage)
+                        || crate::social::relationship_stages::is_authority_stage(current_stage)
+                    {
                         continue;
                     }
                     if interactions == 0
@@ -6464,6 +6467,112 @@ impl Simulation {
                         current_stage, trust, fear,
                     ) {
                         self.agents[i].relationship_v2s[rv2_idx].stage = new_stage;
+                    }
+                }
+            }
+            // Architecture-plan-2 §10.3: Authority-stage assignment. The
+            // authority branch (patron/client, lord/vassal, master/apprentice,
+            // priest/layperson, elder/junior, guard/citizen) labels bonds that
+            // are *structural* — created by the patronage registry, the
+            // apprenticeship learning records, cult leadership, and household
+            // headship — rather than grown through social interaction. The
+            // pass runs AFTER the transition pass so pairs that can socially
+            // progress do so first; only pairs still at the social baseline
+            // (Unnoticed/Noticed) receive the structural label. Authority
+            // stages are terminal (never advanced) and are written
+            // symmetrically, so both directions carry the authority label.
+            // LordVassal and GuardCitizen have no live producer yet (reserved
+            // taxonomy). Deterministic Vec scans in registry order, no RNG.
+            // Note: the pass runs before run_apprenticeship_pass, so learning
+            // events created by today's apprenticeship pass are labeled on the
+            // NEXT daily tick (a self-healing one-tick lag). When a pair
+            // belongs to multiple producers, the last-applying producer wins
+            // (household > cult > apprenticeship > patronage).
+            {
+                let mut authority_pairs: Vec<(usize, usize, crate::social::relationship_v2::RelationshipStage)> =
+                    Vec::new();
+                // Patronage: patron ↔ client.
+                for rel in &self.patronage_registry.relations {
+                    let p = rel.patron;
+                    let c = rel.client;
+                    authority_pairs.push((p, c, crate::social::relationship_v2::RelationshipStage::PatronClient));
+                    authority_pairs.push((c, p, crate::social::relationship_v2::RelationshipStage::PatronClient));
+                }
+                // Apprenticeship: each learning event labels teacher ↔ student.
+                for agent in &self.agents {
+                    for ev in &agent.education.learning_events {
+                        let t = ev.teacher;
+                        let s = ev.student;
+                        authority_pairs.push((t, s, crate::social::relationship_v2::RelationshipStage::MasterApprentice));
+                        authority_pairs.push((s, t, crate::social::relationship_v2::RelationshipStage::MasterApprentice));
+                    }
+                }
+                // Cults: charismatic leader ↔ members.
+                for cult in &self.cult_registry.cults {
+                    let l = cult.charismatic_leader;
+                    for &m in &cult.members {
+                        authority_pairs.push((l, m, crate::social::relationship_v2::RelationshipStage::PriestLayperson));
+                        authority_pairs.push((m, l, crate::social::relationship_v2::RelationshipStage::PriestLayperson));
+                    }
+                }
+                // Households: head ↔ members.
+                for hh in &self.households {
+                    if let Some(head) = hh.head {
+                        for &m in &hh.members {
+                            if m == head {
+                                continue;
+                            }
+                            authority_pairs.push((head, m, crate::social::relationship_v2::RelationshipStage::ElderJunior));
+                            authority_pairs.push((m, head, crate::social::relationship_v2::RelationshipStage::ElderJunior));
+                        }
+                    }
+                }
+                // Apply: baseline gate, then write the authority label.
+                for &(a, b, stage) in &authority_pairs {
+                    if a >= self.agents.len() || b >= self.agents.len() {
+                        continue;
+                    }
+                    let rv2_idx = Self::relationship_v2_pos(a, b);
+                    if rv2_idx >= self.agents[a].relationship_v2s.len() {
+                        continue;
+                    }
+                    let rv2 = &mut self.agents[a].relationship_v2s[rv2_idx];
+                    // Only label pairs that have not already socially progressed.
+                    if !matches!(
+                        rv2.stage,
+                        crate::social::relationship_v2::RelationshipStage::Unnoticed
+                            | crate::social::relationship_v2::RelationshipStage::Noticed
+                    ) {
+                        continue;
+                    }
+                    rv2.stage = stage;
+                    rv2.update_identity_metadata();
+                }
+                // Orphaned authority stage: the producer disappeared without a
+                // death-path rv2 rebuild. (Death itself fully rebuilds v2s in
+                // rebuild_relationship_v2s_after_death, but a cult disbanding,
+                // household dissolution, or registry cleanup leaves the
+                // terminal authority label behind — and since the transition
+                // pass skips authority stages, nothing else would ever reset
+                // it.) Mirror the kin-stage orphan reset: any authority label
+                // whose pair no longer has a live producer returns to the
+                // social baseline.
+                let produced: std::collections::BTreeSet<(usize, usize)> =
+                    authority_pairs.iter().map(|&(a, b, _)| (a, b)).collect();
+                for i in 0..self.agents.len() {
+                    let mut reset: Vec<usize> = Vec::new();
+                    for (idx, rv2) in self.agents[i].relationship_v2s.iter().enumerate() {
+                        if crate::social::relationship_stages::is_authority_stage(rv2.stage)
+                            && !produced.contains(&(i, rv2.to.as_u64() as usize))
+                        {
+                            reset.push(idx);
+                        }
+                    }
+                    for idx in reset {
+                        let rv2 = &mut self.agents[i].relationship_v2s[idx];
+                        rv2.stage =
+                            crate::social::relationship_v2::RelationshipStage::Unnoticed;
+                        rv2.update_identity_metadata();
                     }
                 }
             }

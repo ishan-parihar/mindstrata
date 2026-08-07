@@ -34,6 +34,21 @@ pub enum RelationshipStage {
     InLaw,
     /// §10.3 (AP2): Grandparent/grandchild (or further linear ancestor) ties.
     AncestorDescendant,
+    // §10.3 (AP2): Authority branch — assigned from structural relationships
+    // (patronage, apprenticeship, cult leadership, household headship), not
+    // advanced by the social progression machinery.
+    /// Patron/client — protection for support (patronage registry).
+    PatronClient,
+    /// Lord/vassal — fealty for land/security (no live producer yet — reserved).
+    LordVassal,
+    /// Master/apprentice — knowledge transmission (education learning events).
+    MasterApprentice,
+    /// Priest/layperson — spiritual leadership (cult charismatic leader).
+    PriestLayperson,
+    /// Elder/junior — seniority within a household (household head).
+    ElderJunior,
+    /// Guard/citizen — protection duty (no live producer yet — reserved).
+    GuardCitizen,
 }
 
 impl RelationshipStage {
@@ -82,6 +97,13 @@ impl RelationshipStage {
             Self::Cousin => Fixed::from_f64(0.5),
             Self::InLaw => Fixed::from_f64(0.45),
             Self::AncestorDescendant => Fixed::from_f64(0.45),
+            // §10.3 authority branch: trust baselines for authority ties.
+            Self::PatronClient => Fixed::from_f64(0.6),
+            Self::LordVassal => Fixed::from_f64(0.6),
+            Self::MasterApprentice => Fixed::from_f64(0.55),
+            Self::PriestLayperson => Fixed::from_f64(0.55),
+            Self::ElderJunior => Fixed::from_f64(0.5),
+            Self::GuardCitizen => Fixed::from_f64(0.5),
         }
     }
 }
@@ -421,6 +443,13 @@ impl RelationshipV2 {
             RelationshipStage::Cousin => RelationshipLabel::Cousin,
             RelationshipStage::InLaw => RelationshipLabel::InLaw,
             RelationshipStage::AncestorDescendant => RelationshipLabel::AncestorDescendant,
+            // §10.3 authority branch: each assigned stage carries its label.
+            RelationshipStage::PatronClient => RelationshipLabel::PatronClient,
+            RelationshipStage::LordVassal => RelationshipLabel::LordVassal,
+            RelationshipStage::MasterApprentice => RelationshipLabel::MasterApprentice,
+            RelationshipStage::PriestLayperson => RelationshipLabel::PriestLayperson,
+            RelationshipStage::ElderJunior => RelationshipLabel::ElderJunior,
+            RelationshipStage::GuardCitizen => RelationshipLabel::GuardCitizen,
         }
     }
 
@@ -462,6 +491,13 @@ impl RelationshipV2 {
             RelationshipStage::Kin | RelationshipStage::Cousin | RelationshipStage::InLaw => {
                 RoleExpectation::Ally
             }
+            // §10.3 authority branch: each stage maps onto its role expectation.
+            RelationshipStage::PatronClient => RoleExpectation::PatronClient,
+            RelationshipStage::LordVassal => RoleExpectation::LordVassal,
+            RelationshipStage::MasterApprentice => RoleExpectation::MasterApprentice,
+            RelationshipStage::PriestLayperson => RoleExpectation::PriestLayperson,
+            RelationshipStage::ElderJunior => RoleExpectation::ElderJunior,
+            RelationshipStage::GuardCitizen => RoleExpectation::GuardCitizen,
             _ => RoleExpectation::None,
         }
     }
