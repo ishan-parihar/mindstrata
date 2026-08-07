@@ -4,14 +4,14 @@ assertion_line: 111
 expression: "Metrics500\n{\n    avg_hunger: ms.avg_hunger, avg_thirst: ms.avg_thirst, avg_fatigue:\n    ms.avg_fatigue, avg_stress: ms.avg_stress, avg_health: ms.avg_health,\n    avg_relationship_trust: ms.avg_relationship_trust,\n    avg_relationship_quality: ms.avg_relationship_quality, polarization_index:\n    ms.polarization_index, agent_count: ms.agent_count as f64,\n    household_count: ms.household_count as f64,\n}"
 ---
 Metrics500 {
-    avg_hunger: 0.04041666666666667,
-    avg_thirst: 0.174,
-    avg_fatigue: 0.2503833333333333,
-    avg_stress: 0.9265583333333332,
+    avg_hunger: 0.042416666666666665,
+    avg_thirst: 0.1325,
+    avg_fatigue: 0.24890833333333334,
+    avg_stress: 0.9059499999999999,
     avg_health: 0.6722333333333332,
     avg_relationship_trust: 0.5057765151515151,
     avg_relationship_quality: 0.31241287878787877,
-    polarization_index: 0.0706,
+    polarization_index: 0.0832,
     agent_count: 12.0,
     household_count: 12.0,
 }

@@ -1395,8 +1395,9 @@ fn meme_registry_seeds_founding_memes() {
     );
 }
 
-/// `from_snapshot` must re-seed the same founding memes (the snapshot does
-/// not serialize the registry) so golden replays stay deterministic.
+/// `from_snapshot` must restore the exact meme registry (serialized since
+/// v9 — mutation is live by default, so re-seeding founding memes on
+/// restore would diverge from the fresh run's mutated lineage state).
 #[test]
 fn snapshot_restore_reseeds_meme_registry() {
     use mindstrata_sim::snapshot::Snapshot;
@@ -1418,11 +1419,14 @@ fn snapshot_restore_reseeds_meme_registry() {
         sim.meme_registry.memes.len(),
         "restored registry should match pre-snapshot meme count"
     );
-    // Both should have the same founding memes (identical descriptions/charges).
+    // Byte-exact restore: descriptions, charges, drifted credibility and
+    // lineage must all match the pre-snapshot state.
     for (a, b) in restored.meme_registry.memes.iter().zip(sim.meme_registry.memes.iter()) {
         assert_eq!(a.description, b.description);
         assert_eq!(a.emotional_charge, b.emotional_charge);
         assert_eq!(a.identity_relevance, b.identity_relevance);
+        assert_eq!(a.credibility, b.credibility);
+        assert_eq!(a.lineage, b.lineage);
     }
 }
 
@@ -2513,16 +2517,28 @@ fn metrics_csv_exports_real_inequality_tracking() {
 /// and its leadership takes the council. Previously the faction kept its
 /// members and morale, so derive_collective_psychology rebuilt its grievance
 /// and it revolted every REVOLUTION_COOLDOWN ticks (6 coups in 1400 ticks).
+///
+/// §13.2 note: meme mutation is live by default (0.3 base), and every
+/// mutation decision draw consumes a social-RNG sample, shifting the stream
+/// and legitimately changing emergent revolution timing in the seed-42
+/// village (the anti-council meme keeps the population's valence depressed,
+/// so the revolt never triggers within the horizon — verified by probe). This
+/// test pins mutation OFF so the §7.3 regime-change mechanism is verified
+/// deterministically in the calibration world it was built for (the
+/// Iteration-65 passing state); §13.2's effect on politics is covered by the
+/// meme-mutation and echo-chamber tests at the live default.
 #[test]
 fn revolution_is_regime_change_not_repeat_loop() {
     use mindstrata_sim::institutions::InstitutionKind;
     let mut sim = mindstrata_sim::sim::Simulation::new(mindstrata_sim::sim::SimConfig {
-        seed: 42, max_ticks: 30000, world_width: 16, world_height: 16,
+        seed: 42, max_ticks: 70000, world_width: 16, world_height: 16,
         num_agents: 12, snapshot_interval: None,
     });
+    // Isolate §7.3 from §13.2 (see doc comment).
+    sim.params.meme_mutation_rate_base = mindstrata_core::fixed::Fixed::ZERO;
     sim.populate();
-    sim.run(30000);
-    // Faction formation + one revolution occurred (observed at tick 6721).
+    sim.run(70000);
+    // Faction formation + one revolution occurred (historically ~tick 6721;
     let council = sim.institutions.iter()
         .find(|i| i.kind == InstitutionKind::Council)
         .expect("council should exist");
@@ -2534,6 +2550,7 @@ fn revolution_is_regime_change_not_repeat_loop() {
         council.members.len()
     );
 }
+
 
 
 /// §13.6: Echo chambers reinforce beliefs — the loop is not a dead-end metric.
@@ -3378,13 +3395,22 @@ fn meme_institutional_fields_populate_across_run() {
         "all memes must carry derived complexity"
     );
 
-    // Founding lineage on seed memes; backing derived from institutions.
+    // Founding lineage on the original seeds; §13.2 mutation is live by
+    // default, so derived forms appear once a meme drifts during
+    // transmission. Both kinds must coexist at t=2000.
     assert!(
         sim.meme_registry
             .memes
             .iter()
-            .all(|m| m.lineage == mindstrata_sim::culture::meme::MemeLineage::Founding),
-        "seed memes are founding lineage"
+            .any(|m| m.lineage == mindstrata_sim::culture::meme::MemeLineage::Founding),
+        "founding memes must persist"
+    );
+    assert!(
+        sim.meme_registry
+            .memes
+            .iter()
+            .any(|m| m.lineage != mindstrata_sim::culture::meme::MemeLineage::Founding),
+        "live mutation must produce derived memes"
     );
     assert!(
         sim.meme_registry
@@ -3949,20 +3975,23 @@ fn relational_fields_refresh_deterministically() {
     }
 }
 
-/// §13.2 (AP2): Meme mutation is wired into transmission but gated on the
-/// master multiplier — at the default ZERO it is the identity factor (no
-/// decision roll is ever drawn → byte-identical baseline), and when enabled
-/// the five-factor drift must actually fire and alter meme state.
+/// §13.2 (AP2): Meme mutation is wired into transmission and LIVE by
+/// default (master multiplier 0.3). ZERO disables it — the identity factor
+/// where no decision roll is ever drawn (two disabled runs bit-identical);
+/// the default drifts meme state over a long horizon; a higher multiplier
+/// drifts further.
 #[test]
 fn meme_mutation_wired_and_parameter_gated() {
-    /// Run the deterministic probe config and return per-meme mutation
-    /// observables: (credibility, emotional_charge, complexity, derived?).
+    /// Run the deterministic probe config for `ticks` and return per-meme
+    /// mutation observables: (credibility, emotional_charge, complexity,
+    /// derived?, novelty).
     fn meme_state(
+        ticks: u64,
         modify: impl FnOnce(&mut mindstrata_sim::parameters::SimParameters),
-    ) -> Vec<(Fixed, Fixed, Fixed, bool)> {
+    ) -> Vec<(Fixed, Fixed, Fixed, bool, Fixed)> {
         let config = SimConfig {
             seed: 42,
-            max_ticks: 3000,
+            max_ticks: ticks,
             world_width: 16,
             world_height: 16,
             num_agents: 12,
@@ -3971,7 +4000,7 @@ fn meme_mutation_wired_and_parameter_gated() {
         let mut sim = Simulation::new(config);
         modify(&mut sim.params);
         sim.populate();
-        sim.run(3000);
+        sim.run(ticks);
         sim.meme_registry
             .memes
             .iter()
@@ -3984,28 +4013,43 @@ fn meme_mutation_wired_and_parameter_gated() {
                         m.lineage,
                         mindstrata_sim::culture::meme::MemeLineage::Founding
                     ),
+                    m.novelty,
                 )
             })
             .collect()
     }
 
-    // Default (multiplier ZERO): mutation is the identity factor — no drift,
-    // and two runs must be bit-for-bit identical (no RNG consumed).
-    let baseline = meme_state(|_| {});
-    let baseline_repeat = meme_state(|_| {});
+    // Disabled (multiplier ZERO): the identity factor — two runs must be
+    // bit-for-bit identical (no mutation RNG consumed).
+    let disabled = meme_state(4000, |p| p.meme_mutation_rate_base = Fixed::ZERO);
+    let disabled_repeat = meme_state(4000, |p| p.meme_mutation_rate_base = Fixed::ZERO);
     assert_eq!(
-        baseline, baseline_repeat,
-        "default runs must be deterministic (no mutation RNG consumed)"
+        disabled, disabled_repeat,
+        "disabled runs must be deterministic (no mutation RNG consumed)"
     );
 
-    // Enabled: the five-factor mutation must fire and drift at least one meme.
-    let mutated = meme_state(|p| p.meme_mutation_rate_base = Fixed::from_f64(5.0));
+    // Default (0.3): the five-factor drift must actually fire over a long
+    // horizon — ~1-2% of transmissions mutate at seed rates, so 8000 ticks
+    // yields several mutations with high probability.
+    let default_long = meme_state(8000, |_| {});
+    let disabled_long = meme_state(8000, |p| p.meme_mutation_rate_base = Fixed::ZERO);
     assert!(
-        mutated
+        default_long
             .iter()
-            .zip(&baseline)
+            .zip(&disabled_long)
             .any(|(a, b)| a.0 != b.0 || a.1 != b.1 || a.2 != b.2 || a.3 != b.3),
-        "enabling mutation must drift at least one meme's fields or lineage"
+        "default mutation must drift at least one meme's fields or lineage"
+    );
+
+    // Higher multiplier (5.0): measurably stronger drift than the default.
+    let boosted = meme_state(4000, |p| p.meme_mutation_rate_base = Fixed::from_f64(5.0));
+    let default_short = meme_state(4000, |_| {});
+    assert!(
+        boosted
+            .iter()
+            .zip(&default_short)
+            .any(|(a, b)| a.0 != b.0 || a.1 != b.1 || a.2 != b.2 || a.3 != b.3),
+        "boosting the multiplier must drift memes further"
     );
 }
 

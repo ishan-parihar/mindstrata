@@ -4,13 +4,13 @@ assertion_line: 131
 expression: "Metrics2000\n{\n    avg_hunger: ms.avg_hunger, avg_thirst: ms.avg_thirst, avg_fatigue:\n    ms.avg_fatigue, avg_stress: ms.avg_stress, avg_health: ms.avg_health,\n    avg_relationship_trust: ms.avg_relationship_trust, polarization_index:\n    ms.polarization_index, agent_count: ms.agent_count as f64,\n    household_count: ms.household_count as f64,\n}"
 ---
 Metrics2000 {
-    avg_hunger: 0.05283333333333332,
-    avg_thirst: 0.19616666666666666,
-    avg_fatigue: 0.3223666666666667,
-    avg_stress: 1.0007416666666664,
+    avg_hunger: 0.03899999999999999,
+    avg_thirst: 0.2015,
+    avg_fatigue: 0.3640083333333333,
+    avg_stress: 0.9950666666666665,
     avg_health: 0.6555666666666666,
     avg_relationship_trust: 0.5007765151515152,
-    polarization_index: 0.078,
+    polarization_index: 0.0941,
     agent_count: 12.0,
     household_count: 12.0,
 }

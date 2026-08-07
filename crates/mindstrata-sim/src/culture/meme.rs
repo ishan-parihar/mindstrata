@@ -265,13 +265,21 @@ impl Meme {
     /// properties, so no extra RNG draws are needed — the caller already
     /// rolled the decision draw for `should_mutate[_scaled]`.
     pub fn mutate(&mut self, magnitude: Fixed) {
+        // §13.2: The per-fire drift is intentionally subtle — ⅓ of the
+        // magnitude-coefficient scale. The master multiplier is live by
+        // default (0.3) and every successful transmission re-checks mutation,
+        // so frequently-transmitted memes drift repeatedly over a year;
+        // aggressive per-fire erosion (the original 0.3/0.25/0.15 scale)
+        // collapsed credibility and killed echo-chamber reinforcement.
+        // Sized so cumulative drift stays observable without dominating the
+        // +0.05/transmission novelty-reinforcement loop.
         // Credibility erodes as the meme drifts from its origin.
-        self.credibility = (self.credibility - magnitude * Fixed::from_f64(0.3)).clamp_01();
+        self.credibility = (self.credibility - magnitude * Fixed::from_f64(0.1)).clamp_01();
         // Emotional charge drifts up (emotional exaggeration).
         self.emotional_charge =
-            (self.emotional_charge + magnitude * Fixed::from_f64(0.25)).clamp_01();
+            (self.emotional_charge + magnitude * Fixed::from_f64(0.08)).clamp_01();
         // Complexity drifts down (narrative simplification).
-        self.complexity = (self.complexity - magnitude * Fixed::from_f64(0.15)).clamp_01();
+        self.complexity = (self.complexity - magnitude * Fixed::from_f64(0.05)).clamp_01();
         // A mutated meme is a derived form of its own founding content: flip
         // the lineage and count generations so the drift is observable.
         // `parent` anchors the meme's founding id — the form it drifted

@@ -86,13 +86,27 @@ pub struct Snapshot {
     pub site_work_ticks: Vec<u32>,
     /// Architecture-plan-2 §12.2: Peer group registry.
     pub group_registry: GroupRegistry,
+    /// §13.5: Collective memories (village baseline + dynamic group entries).
+    /// Serde default keeps pre-v8 snapshots loadable (`from_bytes` only
+    /// warns on version mismatch, so missing fields must deserialize).
+    #[serde(default)]
+    pub collective_memory_registry: crate::culture::CollectiveMemoryRegistry,
+    /// §13.1/§13.2: Meme registry — serialized since v9 so replays restore
+    /// the exact mutated lineage state (mutation is live by default, so
+    /// re-seeding founding memes on restore would diverge from the fresh
+    /// run's meme dynamics). Serde default keeps pre-v9 snapshots loadable;
+    /// those restore an empty registry and fall back to re-seeding.
+    #[serde(default)]
+    pub meme_registry: crate::culture::MemeRegistry,
 }
 
 /// Version of the snapshot format.
 /// Version 2 → 3: Added mind_models to AgentBundle.
 /// Version 3 → 4: Added cultural_cognition to AgentBundle.
-/// v3: mind_models, v4: cultural_cognition, v5: decision_policy, v6: group_registry
-pub const SNAPSHOT_VERSION: u32 = 7;
+/// v3: mind_models, v4: cultural_cognition, v5: decision_policy, v6: group_registry,
+/// v8: collective_memory_registry (dynamic group memories),
+/// v9: meme_registry (mutated lineage state)
+pub const SNAPSHOT_VERSION: u32 = 9;
 
 /// Bundles all simulation state references needed to capture a snapshot.
 /// Replaces the 21-parameter `capture()` signature with a single struct.
@@ -124,6 +138,8 @@ pub struct CaptureContext<'a> {
     pub black_market: &'a BlackMarketState,
     pub site_work_ticks: &'a [u32],
     pub group_registry: &'a GroupRegistry,
+    pub collective_memory_registry: &'a crate::culture::CollectiveMemoryRegistry,
+    pub meme_registry: &'a crate::culture::MemeRegistry,
 }
 
 impl Snapshot {
@@ -158,6 +174,8 @@ impl Snapshot {
             black_market: ctx.black_market.clone(),
             site_work_ticks: ctx.site_work_ticks.to_vec(),
             group_registry: ctx.group_registry.clone(),
+            collective_memory_registry: ctx.collective_memory_registry.clone(),
+            meme_registry: ctx.meme_registry.clone(),
         }
     }
 
@@ -355,6 +373,8 @@ mod tests {
             black_market: crate::black_market::BlackMarketState::default(),
             site_work_ticks: vec![],
             group_registry: crate::social::group_formation::GroupRegistry::new(),
+            collective_memory_registry: crate::culture::CollectiveMemoryRegistry::default(),
+            meme_registry: crate::culture::MemeRegistry::default(),
         }
     }
 

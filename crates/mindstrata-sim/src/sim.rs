@@ -583,12 +583,19 @@ impl Simulation {
             black_market: snapshot.black_market,
             kinship_graph: crate::social::kinship::KinshipGraph::default(),
             households: Vec::new(),
-            meme_registry: crate::culture::MemeRegistry::default(),
+            // §13.2: Serialized since v9 — restore the exact mutated lineage
+            // state; pre-v9 snapshots deserialize an empty registry and fall
+            // back to re-seeding founding memes below.
+            meme_registry: if snapshot.meme_registry.memes.is_empty() {
+                crate::culture::MemeRegistry::default()
+            } else {
+                snapshot.meme_registry
+            },
             meme_aggregator: crate::culture::MemeAggregator::default(),
             propaganda_registry: crate::culture::PropagandaRegistry::default(),
             ritual_registry: crate::culture::RitualRegistry::default(),
             rumor_registry: crate::culture::RumorRegistry::default(),
-            collective_memory_registry: crate::culture::CollectiveMemoryRegistry::default(),
+            collective_memory_registry: snapshot.collective_memory_registry,
             echo_chamber: crate::culture::EchoChamberState::new(),
             clan_registry: crate::social::clan::ClanRegistry::new(),
             marriage_registry: crate::social::marriage::MarriageRegistry::new(),
@@ -603,10 +610,13 @@ impl Simulation {
         };
         // Rebuild the GroupRegistry membership cache (skipped by serde).
         sim.group_registry.rebuild_cache();
-        // Seed the same founding memes as `new()` — the snapshot does not
-        // serialize the meme registry, so replays must re-seed identically
-        // (seeded with created_tick = 0) to stay deterministic.
-        sim.seed_initial_memes();
+        // §13.2: Memes are serialized in the snapshot (v9+), so replays
+        // restore the exact mutated lineage state. Pre-v9 snapshots carry an
+        // empty registry and fall back to re-seeding the founding memes
+        // (created_tick = 0) to stay deterministic.
+        if sim.meme_registry.memes.is_empty() {
+            sim.seed_initial_memes();
+        }
         // Re-seed rituals/campaigns for the same reason (registries are not
         // serialized; `populate()` and `from_snapshot()` must produce
         // identical registries so replays match fresh runs).
@@ -648,6 +658,8 @@ impl Simulation {
             black_market: &self.black_market,
             site_work_ticks: &self.site_work_ticks,
             group_registry: &self.group_registry,
+            collective_memory_registry: &self.collective_memory_registry,
+            meme_registry: &self.meme_registry,
         })
     }
 
@@ -3919,9 +3931,12 @@ impl Simulation {
                             // the five-factor drift (memory error, emotional
                             // exaggeration, identity bias, narrative
                             // simplification, audience tailoring). Gated on the
-                            // master multiplier: at the default ZERO the
-                            // decision draw is never consumed, so the golden
-                            // baseline stays byte-identical.
+                            // master multiplier: at ZERO no mutation ever fires
+                            // and the decision draw is not consumed (the
+                            // identity factor that pinned the golden baseline
+                            // while the feature was off — the baseline has
+                            // since been intentionally recalibrated with the
+                            // feature live at 0.3).
                             if self.params.meme_mutation_rate_base > Fixed::ZERO {
                                 let m_roll = self
                                     .rng
