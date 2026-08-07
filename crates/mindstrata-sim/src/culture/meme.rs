@@ -59,8 +59,31 @@ pub enum MemeContent {
     Taboo,
     /// Joke or humor.
     Joke,
+    /// Song or chant.
+    Song,
     /// Slogan or rallying cry.
     Slogan,
+    /// Rumor — unverified social claim.
+    Rumor,
+}
+
+/// §13.1 (AP2): Lineage of a meme — how it descended from its ancestors.
+///
+/// The plan models memes as evolving populations: every meme either founds
+/// a lineage or is derived from a parent through mutation. Tracks the
+/// parent id and generation depth for mutation-rate and complexity studies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum MemeLineage {
+    /// A founding meme with no parent.
+    #[default]
+    Founding,
+    /// Derived from a parent meme via mutation.
+    Derived {
+        /// Parent meme id.
+        parent: usize,
+        /// Generations removed from the founding meme.
+        generations: u32,
+    },
 }
 
 /// A meme — a self-replicating cultural unit.
@@ -90,6 +113,20 @@ pub struct Meme {
     pub host_count: u32,
     /// Sacredness (0 = mundane, 1 = sacred). Sacred memes resist mutation.
     pub sacredness: Fixed,
+    /// §13.1 (AP2): How complex the meme is — complex memes are harder to
+    /// transmit faithfully. Derived deterministically from content type.
+    #[serde(default)]
+    pub complexity: Fixed,
+    /// §13.1 (AP2): Lineage — founding or derived from a parent.
+    #[serde(default)]
+    pub lineage: MemeLineage,
+    /// §13.1 (AP2): Institution backing this meme (amplifies transmission).
+    #[serde(default)]
+    pub institutional_backing: Option<u64>,
+    /// §13.1 (AP2): Suppression level (0 = free, 1 = fully suppressed).
+    /// Gates transmission: `× (1 - suppression)`.
+    #[serde(default)]
+    pub suppression_level: Fixed,
     /// Tick when this meme was created.
     pub created_tick: u64,
     /// Whether this meme is currently active (can be suppressed).
@@ -108,6 +145,24 @@ impl Meme {
         virality_scaling: Fixed,
         mutation_rate_base: Fixed,
     ) -> Self {
+        // §13.1 (AP2): Complexity is derived deterministically from content
+        // type (no RNG) — abstract/sacred content is more complex than
+        // practical/social content.
+        let complexity = match content_type {
+            MemeContent::Theological
+            | MemeContent::Conspiracy
+            | MemeContent::Prophecy
+            | MemeContent::Historical => Fixed::from_f64(0.7),
+            MemeContent::Political | MemeContent::Moral | MemeContent::Taboo => {
+                Fixed::from_f64(0.5)
+            }
+            MemeContent::Accusation | MemeContent::Praise | MemeContent::Rumor => {
+                Fixed::from_f64(0.3)
+            }
+            MemeContent::Practical | MemeContent::Joke | MemeContent::Song | MemeContent::Slogan => {
+                Fixed::from_f64(0.2)
+            }
+        };
         Self {
             id,
             description,
@@ -121,6 +176,10 @@ impl Meme {
             mutation_rate: mutation_rate_base,
             host_count: 0,
             sacredness: Fixed::ZERO,
+            complexity,
+            lineage: MemeLineage::Founding,
+            institutional_backing: None,
+            suppression_level: Fixed::ZERO,
             created_tick: tick,
             active: true,
         }
@@ -140,13 +199,17 @@ impl Meme {
         skepticism: Fixed,
         transmission_multiplier: Fixed,
     ) -> Fixed {
+        // §13.1 (AP2): suppression_level gates transmission (`× (1 - suppression)`)
+        // exactly as the plan's formula specifies. With suppression ZERO this is
+        // the identity factor, so the golden baseline stays byte-identical.
+        let suppression_factor = Fixed::ONE - self.suppression_level;
         let base = self.credibility * source_trust
             * self.emotional_charge
             * self.identity_relevance
             * self.novelty
             * self.virality
             * listener_susceptibility;
-        (base * (Fixed::ONE - skepticism) * transmission_multiplier).clamp_01()
+        (base * (Fixed::ONE - skepticism) * transmission_multiplier * suppression_factor).clamp_01()
     }
 
     /// Should this meme mutate during transmission?
@@ -286,6 +349,111 @@ mod tests {
         reg.register(m1);
         reg.register(m2);
         assert_eq!(reg.active_count(), 1);
+    }
+
+    // ── §13.1 Meme deepen-it tests ───────────────────────────────────
+
+    #[test]
+    fn new_meme_defaults_institutional_fields() {
+        let m = Meme::new(0, "t".into(), MemeContent::Moral, Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        assert_eq!(m.lineage, MemeLineage::Founding);
+        assert_eq!(m.institutional_backing, None);
+        assert_eq!(m.suppression_level, Fixed::ZERO);
+        assert!(m.complexity > Fixed::ZERO, "complexity derived from content type");
+    }
+
+    #[test]
+    fn complexity_derived_by_content_type() {
+        // §13.1: abstract/sacred content is more complex than practical.
+        let theological = Meme::new(0, "t".into(), MemeContent::Theological, Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        let practical = Meme::new(0, "p".into(), MemeContent::Practical, Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        assert!(theological.complexity > practical.complexity);
+    }
+
+    #[test]
+    fn suppression_reduces_transmission() {
+        // §13.1: suppression gates transmission `× (1 - suppression)`;
+        // zero suppression is the identity (baseline-compatible).
+        let base = Meme::new(0, "t".into(), MemeContent::Moral, Fixed::from_f64(0.8), Fixed::from_f64(0.6), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        let free = base.transmission_chance(Fixed::from_f64(0.9), Fixed::ONE, Fixed::ZERO, Fixed::ONE);
+        let mut suppressed = base.clone();
+        suppressed.suppression_level = Fixed::from_f64(0.7);
+        let gated = suppressed.transmission_chance(Fixed::from_f64(0.9), Fixed::ONE, Fixed::ZERO, Fixed::ONE);
+        assert!(gated < free, "suppressed meme transmits less");
+        // Zero suppression is identity: free == unsuppressed baseline.
+        assert_eq!(free, base.transmission_chance(Fixed::from_f64(0.9), Fixed::ONE, Fixed::ZERO, Fixed::ONE));
+    }
+
+    #[test]
+    fn lineage_derived_tracks_parent_and_generations() {
+        let mut derived = Meme::new(0, "d".into(), MemeContent::Rumor, Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        derived.lineage = MemeLineage::Derived { parent: 3, generations: 2 };
+        assert_eq!(derived.lineage, MemeLineage::Derived { parent: 3, generations: 2 });
+    }
+
+    #[test]
+    fn institutional_fields_serde_roundtrip() {
+        let mut m = Meme::new(0, "t".into(), MemeContent::Political, Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        m.lineage = MemeLineage::Derived { parent: 1, generations: 3 };
+        m.institutional_backing = Some(7);
+        m.suppression_level = Fixed::from_f64(0.4);
+        let json = serde_json::to_string(&m).unwrap();
+        let restored: Meme = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.lineage, m.lineage);
+        assert_eq!(restored.institutional_backing, Some(7));
+        assert_eq!(restored.suppression_level, m.suppression_level);
+        assert_eq!(restored.complexity, m.complexity);
+    }
+
+    #[test]
+    fn meme_content_covers_plan_taxonomy() {
+        // §13.1: the plan lists rumor/insult/praise/theological/political/moral/
+        // conspiracy/prophecy/historical/practical/taboo/joke/song/slogan —
+        // the enum must expose all of them (Song + Rumor were added).
+        let variants = [
+            MemeContent::Accusation,
+            MemeContent::Praise,
+            MemeContent::Theological,
+            MemeContent::Political,
+            MemeContent::Moral,
+            MemeContent::Conspiracy,
+            MemeContent::Prophecy,
+            MemeContent::Historical,
+            MemeContent::Practical,
+            MemeContent::Taboo,
+            MemeContent::Joke,
+            MemeContent::Song,
+            MemeContent::Slogan,
+            MemeContent::Rumor,
+        ];
+        assert_eq!(variants.len(), 14);
+    }
+
+    #[test]
+    fn old_save_without_institutional_fields_restores_defaults() {
+        // A save from before the §13.1 fields existed must deserialize to
+        // sensible defaults. Fixed serializes as raw scaled i64 (SCALE=10_000).
+        let old_json = r#"{
+            "id": 0,
+            "description": "old",
+            "content_type": "Moral",
+            "emotional_charge": 5000,
+            "identity_relevance": 5000,
+            "moral_charge": 0,
+            "credibility": 5000,
+            "novelty": 10000,
+            "virality": 5000,
+            "mutation_rate": 1000,
+            "host_count": 0,
+            "sacredness": 0,
+            "created_tick": 0,
+            "active": true
+        }"#;
+        let restored: Meme = serde_json::from_str(old_json).unwrap();
+        assert_eq!(restored.lineage, MemeLineage::Founding);
+        assert_eq!(restored.institutional_backing, None);
+        assert_eq!(restored.suppression_level, Fixed::ZERO);
+        assert_eq!(restored.complexity, Fixed::ZERO);
     }
 
     // ── §13.2 Agent-specific meme propagation tests ──────────────────

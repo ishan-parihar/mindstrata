@@ -5722,6 +5722,30 @@ impl Simulation {
             self.tick_patronage_provision();
             // Architecture-plan-2 §13.1: Decay meme novelty daily.
             self.meme_registry.tick_all(self.params.meme_novelty_decay_factor);
+            // §13.1 (AP2): Derive institutional_backing deterministically — a
+            // meme is backed by the first institution whose domain matches its
+            // content type (theological→temple, political/moral→council,
+            // practical→market). Only the new field is written (no RNG), so
+            // the golden baseline stays byte-identical. Suppression stays at
+            // its default ZERO today; campaign wiring can raise it later.
+            {
+                let temple = self.institutions.iter().find(|i| i.kind == InstitutionKind::Temple).map(|i| i.id);
+                let council = self.institutions.iter().find(|i| i.kind == InstitutionKind::Council).map(|i| i.id);
+                let market = self.institutions.iter().find(|i| i.kind == InstitutionKind::Market).map(|i| i.id);
+                for meme in &mut self.meme_registry.memes {
+                    meme.institutional_backing = match meme.content_type {
+                        crate::culture::meme::MemeContent::Theological
+                        | crate::culture::meme::MemeContent::Prophecy
+                        | crate::culture::meme::MemeContent::Historical => temple,
+                        crate::culture::meme::MemeContent::Political
+                        | crate::culture::meme::MemeContent::Moral
+                        | crate::culture::meme::MemeContent::Slogan => council,
+                        crate::culture::meme::MemeContent::Practical
+                        | crate::culture::meme::MemeContent::Rumor => market,
+                        _ => None,
+                    };
+                }
+            }
             // §17.4: Aggregate meme metrics for large-population observability.
             self.wire_meme_aggregation(tick_u64);
             // Architecture-plan-2 §13.3: Decay rumor prevalence daily.

@@ -3260,6 +3260,68 @@ fn status_institutional_rank_populates_across_run() {
     );
 }
 
+#[test]
+fn meme_institutional_fields_populate_across_run() {
+    // §13.1 (AP2): Meme must carry the plan's institutional dimensions —
+    // complexity (derived from content type at construction), lineage,
+    // institutional_backing (derived daily from matching institutions), and
+    // suppression_level (wired into transmission_chance as ×(1 - suppression)).
+    let sim = run_sim(42, 2000);
+
+    assert!(!sim.meme_registry.memes.is_empty(), "memes must exist");
+
+    // Every meme carries a non-zero complexity (derived at construction).
+    assert!(
+        sim.meme_registry
+            .memes
+            .iter()
+            .all(|m| m.complexity > mindstrata_core::fixed::Fixed::ZERO),
+        "all memes must carry derived complexity"
+    );
+
+    // Founding lineage on seed memes; backing derived from institutions.
+    assert!(
+        sim.meme_registry
+            .memes
+            .iter()
+            .all(|m| m.lineage == mindstrata_sim::culture::meme::MemeLineage::Founding),
+        "seed memes are founding lineage"
+    );
+    assert!(
+        sim.meme_registry
+            .memes
+            .iter()
+            .any(|m| m.institutional_backing.is_some()),
+        "theological/political/moral memes must be institutionally backed"
+    );
+    assert!(
+        sim.meme_registry
+            .memes
+            .iter()
+            .all(|m| m.suppression_level == mindstrata_core::fixed::Fixed::ZERO),
+        "suppression stays at default zero absent campaign wiring"
+    );
+
+    // Determinism: same seed → identical §13.1 meme end-state.
+    let sim2 = run_sim(42, 2000);
+    let sum1: u64 = sim
+        .meme_registry
+        .memes
+        .iter()
+        .map(|m| {
+            m.id as u64 + m.institutional_backing.unwrap_or(0) + m.host_count as u64
+        })
+        .sum();
+    let sum2: u64 = sim2
+        .meme_registry
+        .memes
+        .iter()
+        .map(|m| m.id as u64 + m.institutional_backing.unwrap_or(0) + m.host_count as u64)
+        .sum();
+    assert_eq!(sum1, sum2, "§13.1 meme end-state must be seed-deterministic");
+}
+
+
 
 
 
