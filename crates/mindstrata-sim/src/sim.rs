@@ -5632,8 +5632,22 @@ impl Simulation {
         // §10.7: Tick household dynamics (cohesion, conflict, reputation).
         if phases.is_daily {
             self.kinship_graph.decay_daily();
+            // §10.7 (AP2): Refresh household roles + traditions — the plan's
+            // division-of-labor and `traditions: Vec<PracticeId>` dimensions.
+            // Deterministic pure functions of existing agent state (no RNG),
+            // writing only the new §10.7 fields, so calibrated runs stay
+            // byte-identical.
+            let ages: Vec<Fixed> = self.agents.iter().map(|a| a.age).collect();
+            let partners: Vec<Option<usize>> = self.agents.iter().map(|a| a.partner).collect();
+            let practices: Vec<Vec<u64>> = self
+                .agents
+                .iter()
+                .map(|a| a.cultural.practices.clone())
+                .collect();
             for household in &mut self.households {
                 household.tick_update();
+                household.derive_roles(&ages, &partners);
+                household.collect_traditions(&practices);
             }
             // Architecture-plan-2 §10.9: Tick patronage relations daily.
             self.patronage_registry.daily_update();

@@ -33,7 +33,12 @@ use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 
 /// Role within a household.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// §10.7 (AP2): the plan's `Household` carries `roles: Vec<HouseholdRole>`;
+/// this enum was declared but never stored on a household (dead code) until
+/// Iteration 53 wired it — roles are derived deterministically from agent
+/// state each daily pass and stored parallel to `members`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum HouseholdRole {
     /// Head of household (decision-maker).
     Head,
@@ -72,6 +77,17 @@ pub struct Household {
     pub reputation: Fixed,
     /// Tick when household was formed.
     pub founded_tick: u64,
+    /// §10.7 (AP2): Role of each member, parallel to `members` — the plan's
+    /// division-of-labor dimension. Derived deterministically from agent
+    /// state (head, partner, age) on the daily pass; `#[serde(default)]` so
+    /// pre-Iter-53 saves restore.
+    #[serde(default)]
+    pub roles: Vec<HouseholdRole>,
+    /// §10.7 (AP2): PracticeIds this household collectively maintains — the
+    /// plan's `traditions` dimension. The deterministic union of members'
+    /// known practices (sorted), refreshed on the daily pass.
+    #[serde(default)]
+    pub traditions: Vec<u64>,
 }
 
 impl Household {
@@ -88,22 +104,65 @@ impl Household {
             conflict: Fixed::ZERO,
             reputation: Fixed::from_f64(0.5),
             founded_tick: tick,
+            roles: vec![HouseholdRole::Head],
+            traditions: Vec::new(),
         }
     }
 
-    /// Add a member to the household.
+    /// Add a member to the household (default role: Adult).
     pub fn add_member(&mut self, agent: usize) {
         if !self.members.contains(&agent) {
             self.members.push(agent);
+            self.roles.push(HouseholdRole::Adult);
         }
     }
 
-    /// Remove a member from the household.
+    /// Remove a member from the household (and their role).
     pub fn remove_member(&mut self, agent: usize) {
-        self.members.retain(|&m| m != agent);
+        if let Some(pos) = self.members.iter().position(|&m| m == agent) {
+            self.members.remove(pos);
+            self.roles.remove(pos);
+        }
         if self.head == Some(agent) {
             self.head = self.members.first().copied();
         }
+    }
+
+    /// §10.7 (AP2): Deterministically derive each member's role from agent
+    /// state — head → Head, head's spouse → Partner, minors → Child, elders
+    /// (>55) → Elder, everyone else Adult. Writes only the new `roles` field
+    /// from a pure function of existing state (no RNG), so calibrated runs
+    /// stay byte-identical.
+    pub fn derive_roles(&mut self, ages: &[Fixed], partners: &[Option<usize>]) {
+        let mut roles = Vec::with_capacity(self.members.len());
+        for &member in &self.members {
+            let role = if self.head == Some(member) {
+                HouseholdRole::Head
+            } else if self.head.is_some() && partners.get(member) == Some(&self.head) {
+                HouseholdRole::Partner
+            } else if ages.get(member).is_some_and(|age| *age < Fixed::from_f64(14.0)) {
+                HouseholdRole::Child
+            } else if ages.get(member).is_some_and(|age| *age > Fixed::from_f64(55.0)) {
+                HouseholdRole::Elder
+            } else {
+                HouseholdRole::Adult
+            };
+            roles.push(role);
+        }
+        self.roles = roles;
+    }
+
+    /// §10.7 (AP2): Deterministically recompute the household's traditions as
+    /// the sorted union of members' known practice ids — the plan's
+    /// `traditions: Vec<PracticeId>` dimension. Writes only the new field.
+    pub fn collect_traditions(&mut self, practices_by_agent: &[Vec<u64>]) {
+        let mut seen = std::collections::BTreeSet::new();
+        for &member in &self.members {
+            if let Some(practices) = practices_by_agent.get(member) {
+                seen.extend(practices.iter().copied());
+            }
+        }
+        self.traditions = seen.into_iter().collect();
     }
 
     /// Number of members.
@@ -226,5 +285,75 @@ mod tests {
             h.tick_update();
         }
         assert!(h.cohesion >= Fixed::from_f64(0.1));
+    }
+
+    // ── §10.7 Roles + Traditions Tests ────────────────────────────────
+
+    #[test]
+    fn new_household_has_head_role() {
+        let h = Household::new(0, None, 0);
+        assert_eq!(h.roles, vec![HouseholdRole::Head]);
+        assert!(h.traditions.is_empty());
+    }
+
+    #[test]
+    fn add_member_keeps_roles_parallel() {
+        let mut h = Household::new(0, None, 0);
+        h.add_member(1);
+        h.add_member(2);
+        assert_eq!(h.members.len(), h.roles.len());
+        assert_eq!(h.roles[1], HouseholdRole::Adult);
+    }
+
+    #[test]
+    fn remove_member_removes_role_too() {
+        let mut h = Household::new(0, None, 0);
+        h.add_member(1);
+        h.remove_member(1);
+        assert_eq!(h.members, vec![0]);
+        assert_eq!(h.roles, vec![HouseholdRole::Head]);
+    }
+
+    #[test]
+    fn derive_roles_assigns_by_state() {
+        let mut h = Household::new(0, None, 0);
+        h.add_member(1); // partner
+        h.add_member(2); // child
+        h.add_member(3); // elder
+        h.add_member(4); // adult
+        let ages = vec![
+            Fixed::from_f64(40.0), // 0 head
+            Fixed::from_f64(38.0), // 1 partner
+            Fixed::from_f64(8.0),  // 2 child
+            Fixed::from_f64(70.0), // 3 elder
+            Fixed::from_f64(30.0), // 4 adult
+        ];
+        let partners = vec![Some(1usize), Some(0), None, None, None];
+        h.derive_roles(&ages, &partners);
+        assert_eq!(h.roles[0], HouseholdRole::Head);
+        assert_eq!(h.roles[1], HouseholdRole::Partner);
+        assert_eq!(h.roles[2], HouseholdRole::Child);
+        assert_eq!(h.roles[3], HouseholdRole::Elder);
+        assert_eq!(h.roles[4], HouseholdRole::Adult);
+    }
+
+    #[test]
+    fn collect_traditions_unions_member_practices_sorted() {
+        let mut h = Household::new(0, None, 0);
+        h.add_member(1);
+        let practices = vec![vec![3u64, 1], vec![2], vec![]];
+        h.collect_traditions(&practices);
+        assert_eq!(h.traditions, vec![1, 2, 3], "sorted union of member practices");
+    }
+
+    #[test]
+    fn traditions_drop_when_members_change() {
+        let mut h = Household::new(0, None, 0);
+        h.add_member(1);
+        h.collect_traditions(&[vec![1u64], vec![2]]);
+        assert_eq!(h.traditions, vec![1, 2]);
+        h.remove_member(1);
+        h.collect_traditions(&[vec![1u64], vec![2]]);
+        assert_eq!(h.traditions, vec![1], "traditions recompute from remaining members");
     }
 }

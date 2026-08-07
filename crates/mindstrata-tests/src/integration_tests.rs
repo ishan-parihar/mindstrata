@@ -3075,6 +3075,65 @@ fn relationship_identity_fields_populate_across_run() {
         "§10.2 relationship identity end-state must be seed-deterministic");
 }
 
+/// §10.7: Household roles + traditions populate across a real run (roles
+/// parallel to members, traditions = sorted union of member practices), and
+/// the §10.7 end-state is seed-deterministic (pure functions of agent state).
+#[test]
+fn household_roles_and_traditions_populate_across_run() {
+    let sim = run_sim(42, 2000);
+
+    assert!(!sim.households.is_empty(), "households must exist");
+    for household in &sim.households {
+        // roles stay parallel to members and every member has one.
+        assert_eq!(
+            household.members.len(),
+            household.roles.len(),
+            "household {} roles must parallel members",
+            household.id
+        );
+        for (i, &member) in household.members.iter().enumerate() {
+            // Every member must have a deterministically valid role.
+            let valid = matches!(
+                household.roles[i],
+                mindstrata_sim::social::household::HouseholdRole::Head
+                    | mindstrata_sim::social::household::HouseholdRole::Partner
+                    | mindstrata_sim::social::household::HouseholdRole::Adult
+                    | mindstrata_sim::social::household::HouseholdRole::Child
+                    | mindstrata_sim::social::household::HouseholdRole::Elder
+                    | mindstrata_sim::social::household::HouseholdRole::Dependent
+            );
+            assert!(valid, "member {member} has a valid role");
+            // The head member carries the Head role.
+            if household.head == Some(member) {
+                assert_eq!(
+                    household.roles[i],
+                    mindstrata_sim::social::household::HouseholdRole::Head,
+                    "household head must hold the Head role"
+                );
+            }
+        }
+        // Traditions are sorted and de-duplicated (BTreeSet invariant).
+        let mut sorted = household.traditions.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(
+            household.traditions, sorted,
+            "household {} traditions must be sorted and deduped",
+            household.id
+        );
+    }
+
+    // Determinism: same seed → identical §10.7 end-state.
+    let sim2 = run_sim(42, 2000);
+    let sum1: usize = sim.households.iter()
+        .map(|h| h.roles.iter().map(|r| *r as usize).sum::<usize>() + h.traditions.len())
+        .sum();
+    let sum2: usize = sim2.households.iter()
+        .map(|h| h.roles.iter().map(|r| *r as usize).sum::<usize>() + h.traditions.len())
+        .sum();
+    assert_eq!(sum1, sum2, "§10.7 household end-state must be seed-deterministic");
+}
+
 
 
 
