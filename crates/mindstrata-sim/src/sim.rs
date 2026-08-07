@@ -1531,14 +1531,79 @@ impl Simulation {
         // need (the deficit rebounds into a crisis) and their cult-entrenched
         // beliefs partially decay. This completes the §12.4 lifecycle:
         // formation → recruitment → entrenchment → dissolution → fallout.
+        // Economic stress — the same scarcity proxy the motivation system uses
+        // (world totals vs expected per-capita rations, ~line 2176).
+        let expected_food = crate::sim::EXPECTED_GRAIN_PER_AGENT as i64
+            * self.agents.len() as i64;
+        let expected_water = crate::sim::EXPECTED_WATER_PER_AGENT as i64
+            * self.agents.len() as i64;
+        let food_scarcity = (Fixed::ONE
+            - self.world.total_food() / Fixed::from_int(expected_food.max(1)))
+            .clamp_01();
+        let water_scarcity = (Fixed::ONE
+            - self.world.total_water() / Fixed::from_int(expected_water.max(1)))
+            .clamp_01();
+        let economic_stress = food_scarcity.max(water_scarcity);
+
         let mut former_members: Vec<usize> = Vec::new();
         for cult in &mut self.cult_registry.cults {
-            // leader_competence: no competence model is wired yet, so the
-            // leader-failure branch is inert; dissolution is driven by
-            // institutional repression and member exhaustion.
-            if cult.active
-                && cult.should_dissolve(Fixed::from_f64(0.5), legitimacy, avg_fatigue)
-            {
+            // §12.4: compute the full dissolution signal set. Leader competence
+            // is proxied by the leader's conscientiousness (no dedicated
+            // competence model); prophecy disconfirmation fires when the
+            // sacred meme's credibility collapses or the meme vanishes;
+            // internal betrayal fires when most members' meaning need is
+            // satisfied (belonging no longer binds them) — note `needs.meaning`
+            // is a DEFICIT scale: HIGH = craving, LOW = satisfied = betrayal
+            // risk; rival narrative pressure is the excess emotional charge of
+            // the hottest competing meme over the sacred one.
+            let leader_competence = self
+                .agents
+                .get(cult.charismatic_leader)
+                .map_or(Fixed::from_f64(0.5), |a| a.personality.conscientiousness);
+            let prophecy_disconfirmed = self
+                .meme_registry
+                .memes
+                .iter()
+                .find(|m| m.id == cult.sacred_narrative_id as usize)
+                .is_none_or(|m| {
+                    !m.active || m.credibility < Fixed::from_f64(0.3)
+                });
+            let member_count = cult.members.len().max(1);
+            let satisfied = cult
+                .members
+                .iter()
+                .filter(|&&m| {
+                    self.agents
+                        .get(m)
+                        .is_some_and(|a| a.needs.meaning <= Fixed::from_f64(0.2))
+                })
+                .count();
+            let internal_betrayal = satisfied > member_count / 2;
+            let sacred_charge = self
+                .meme_registry
+                .memes
+                .iter()
+                .find(|m| m.id == cult.sacred_narrative_id as usize)
+                .map_or(Fixed::ZERO, |m| m.emotional_charge);
+            let rival_charge = self
+                .meme_registry
+                .memes
+                .iter()
+                .filter(|m| m.active && m.id != cult.sacred_narrative_id as usize)
+                .map(|m| m.emotional_charge)
+                .fold(Fixed::ZERO, Fixed::max);
+            let rival_narrative_pressure = (rival_charge - sacred_charge).clamp_01();
+            let signals = crate::social::cult::CultDissolutionSignals {
+                leader_competence,
+                institutional_legitimacy: legitimacy,
+                member_average_fatigue: avg_fatigue,
+                cult_age_ticks: tick.saturating_sub(cult.formed_tick),
+                prophecy_disconfirmed,
+                internal_betrayal,
+                rival_narrative_pressure,
+                economic_stress,
+            };
+            if cult.active && cult.should_dissolve(&signals) {
                 cult.active = false;
                 former_members.extend(
                     std::iter::once(&cult.charismatic_leader)

@@ -3706,6 +3706,85 @@ fn peer_group_attachment_styles_scale_upward() {
     assert!(disorganized.cohesion < secure.cohesion);
 }
 
+/// §12.4 (AP2): Full cult lifecycle — formation under low legitimacy + meaning
+/// crisis, betrayal-driven dissolution once members' meaning need is satisfied
+/// (belonging no longer binds them), and the member fallout rebound.
+///
+/// The meaning-deficit precondition is re-asserted one tick before the daily
+/// tick 2880 (>= CULT_COOLDOWN) because the sim's own need dynamics satisfy
+/// the deficit over successive daily ticks; a single daily tick preserves it.
+#[test]
+fn cult_forms_under_crisis_then_dissolves_on_betrayal() {
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 20_000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    // §12.4 preconditions: weak institutions + meaning crisis.
+    for inst in &mut sim.institutions {
+        inst.legitimacy = Fixed::from_f64(0.2);
+    }
+    for agent in &mut sim.agents {
+        agent.needs.meaning = Fixed::from_f64(0.9);
+    }
+    sim.run(2879);
+    // Re-assert immediately before the daily tick 2880 (cooldown satisfied:
+    // 2880 >= CULT_COOLDOWN).
+    for inst in &mut sim.institutions {
+        inst.legitimacy = Fixed::from_f64(0.2);
+    }
+    for agent in &mut sim.agents {
+        agent.needs.meaning = Fixed::from_f64(0.9);
+    }
+    sim.run(1); // tick 2880 → cult emergence fires
+    // Loud guard: if CULT_COOLDOWN ever changes, this test must fail loudly
+    // instead of silently no longer exercising formation.
+    assert_eq!(sim.current_tick().as_u64(), 2880, "formation window moved");
+    let active: Vec<usize> = sim
+        .cult_registry
+        .cults
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| c.active)
+        .map(|(i, _)| i)
+        .collect();
+    assert!(
+        !active.is_empty(),
+        "cult must form under low legitimacy + meaning crisis"
+    );
+
+    // Capture the membership before dissolution for the fallout assertion.
+    let former: Vec<usize> = {
+        let cult = &sim.cult_registry.cults[active[0]];
+        std::iter::once(&cult.charismatic_leader)
+            .chain(cult.members.iter())
+            .copied()
+            .collect()
+    };
+    // Internal betrayal: satisfy every member's meaning need — belonging no
+    // longer binds them, so dependence collapses.
+    for m in &former {
+        sim.agents[*m].needs.meaning = Fixed::from_f64(0.05);
+    }
+    sim.run(144); // next daily tick 3024 → betrayal-driven dissolution + fallout
+    let still_active = sim.cult_registry.cults.iter().filter(|c| c.active).count();
+    assert_eq!(
+        still_active, 0,
+        "satisfied members must trigger betrayal dissolution"
+    );
+    assert!(
+        former
+            .iter()
+            .any(|&m| sim.agents[m].needs.meaning > Fixed::from_f64(0.3)),
+        "dissolution fallout must rebound former members' meaning need"
+    );
+}
+
 
 
 
