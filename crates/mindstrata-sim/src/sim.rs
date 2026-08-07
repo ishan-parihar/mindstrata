@@ -6568,6 +6568,16 @@ impl Simulation {
             // memories and erode their accuracy (recording distortion events).
             agent.memory.reconsolidate(tick_u64, agent.emotions.anger, agent.emotions.joy);
 
+            // §8.1.3: Retrieval reconstructs — the most accessible trace
+            // (salience argmax: strength + charge/2 + identity/4) is recalled
+            // and re-encoded under the current emotional state: rehearsal
+            // strengthens it while an emotion-mismatched reconstruction erodes
+            // accuracy and records a RetrievalReconstruction distortion event.
+            // High-charge (traumatic) traces always win the argmax, so they
+            // intrude preferentially. Deterministic (no RNG), purely
+            // observational memory state — calibrated runs stay byte-identical.
+            agent.memory.retrieve_and_reconsolidate(tick_u64, agent.emotions.anger, agent.emotions.joy);
+
             // §4.2: Skill improvement — agents improve skills through repeated practice.
             // Small increments per tick; skills cap at 1.0.
             let skill_gain = SKILL_GAIN_PER_TICK;

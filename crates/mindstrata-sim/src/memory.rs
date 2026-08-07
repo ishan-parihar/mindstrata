@@ -13,10 +13,11 @@
 //! `accuracy`, `valence`, `identity_relevance`, `social_sharedness`,
 //! `last_rehearsed`, and a `distortion_history` of [`DistortionEvent`]s.
 //!
-//! This module is **write-only observational state**: nothing in the sim
-//! reads memory for decisions, and memory is excluded from snapshot
-//! projections and the golden baseline, so enriching the derivation is
-//! drift-free by construction.
+//! This module is **observational state**: nothing in the sim reads memory
+//! for decisions (retrieval is wired as maintenance — intrusive recall
+//! strengthens and distorts traces without feeding action selection), and
+//! memory is excluded from snapshot projections and the golden baseline, so
+//! enriching the derivation is drift-free by construction.
 //!
 //! Kind producers this iteration:
 //! - `Somatic` — bodily events (eating, drinking, resting).
@@ -81,6 +82,9 @@ pub enum DistortionCause {
     EmotionalReconsolidation,
     /// Retrieval reconstructed the trace (introducing error).
     Rehearsal,
+    /// §8.1.3: Salience-driven intrusive recall rebuilt the trace under the
+    /// current emotional state ("retrieval reconstructs").
+    RetrievalReconstruction,
 }
 
 /// A single recorded distortion applied to a memory trace.
@@ -173,6 +177,34 @@ impl MemoryTrace {
             self.distortion_history.remove(0);
         }
     }
+}
+
+/// §8.1.3: A reconstructed memory — the output of salience-driven retrieval.
+/// Retrieval is reconstructive (the plan's "retrieval reconstructs"): the
+/// recalled trace is rebuilt under the current emotional state, so its
+/// recalled strength and accuracy differ from the stored values.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RetrievedMemory {
+    pub id: MemoryId,
+    pub kind: MemoryKind,
+    pub tag: MemoryTag,
+    pub tick: u64,
+    pub valence: Fixed,
+    pub other_agent: Option<u32>,
+    /// Stored strength amplified by emotional charge, mood congruence, and
+    /// current arousal (charged traces recall as stronger than they are).
+    pub reconstructed_strength: Fixed,
+    /// Stored accuracy eroded by current arousal (an aroused state
+    /// reconstructs less faithfully).
+    pub reconstructed_accuracy: Fixed,
+}
+
+/// §8.1.3: Deterministic accessibility score — strength plus emotional charge
+/// and identity relevance (trauma/identity-linked traces intrude more). No
+/// RNG, so retrieval order is reproducible across runs.
+fn retrieval_score(m: &MemoryTrace) -> Fixed {
+    m.strength + m.emotional_charge * Fixed::HALF
+        + m.identity_relevance * Fixed::from_f64(0.25)
 }
 
 /// The memory store for an agent.
@@ -377,6 +409,103 @@ impl MemoryStore {
         }
     }
 
+    /// §8.1.3: Salience-driven retrieval — reconstruct the `limit` most
+    /// accessible traces. Deterministic: stable descending sort on
+    /// `retrieval_score` (Fixed has total order), ties keep encoding order
+    /// (oldest first). Reconstruction applies the current emotional state:
+    /// mood-congruent traces recall stronger, arousal inflates recalled
+    /// strength and erodes recalled accuracy. Read-only — no state changes.
+    pub fn retrieve_salient(
+        &self,
+        valence_bias: Fixed,
+        arousal: Fixed,
+        limit: usize,
+    ) -> Vec<RetrievedMemory> {
+        let mut ranked: Vec<&MemoryTrace> = self.episodes.iter().collect();
+        ranked.sort_by(|a, b| retrieval_score(b).cmp(&retrieval_score(a)));
+        ranked.truncate(limit);
+        let arousal = arousal.clamp_01();
+        ranked
+            .into_iter()
+            .map(|m| {
+                let congruent = (m.valence > Fixed::ZERO && valence_bias > Fixed::ZERO)
+                    || (m.valence < Fixed::ZERO && valence_bias < Fixed::ZERO)
+                    || valence_bias == Fixed::ZERO;
+                let congruence_boost = if congruent { Fixed::from_f64(0.1) } else { Fixed::ZERO };
+                RetrievedMemory {
+                    id: m.id,
+                    kind: m.kind,
+                    tag: m.tag,
+                    tick: m.tick,
+                    valence: m.valence,
+                    other_agent: m.other_agent,
+                    reconstructed_strength: (m.strength
+                        + m.emotional_charge * Fixed::from_f64(0.2)
+                        + congruence_boost
+                        + arousal * Fixed::from_f64(0.05))
+                        .clamp_01(),
+                    reconstructed_accuracy: (m.accuracy
+                        * (Fixed::ONE - arousal * Fixed::from_f64(0.02)))
+                        .clamp(Fixed::from_f64(0.01), Fixed::ONE),
+                }
+            })
+            .collect()
+    }    /// §8.1.3: Intrusive retrieval + reconsolidation — the single most
+    /// accessible trace (salience argmax, deterministic, ties → earliest) is
+    /// recalled and re-encoded under the current emotional state. Purely
+    /// observational memory state, no RNG — calibrated runs stay
+    /// byte-identical.
+    ///
+    /// Mechanics (the plan's §8.1.3 emergent effects):
+    /// - "rehearsal strengthens" — `rehearsal_count`, `last_rehearsed`, and
+    ///   `strength` all advance on recall;
+    /// - "retrieval reconstructs" — an emotion-mismatched reconstruction
+    ///   erodes accuracy and records a
+    ///   [`DistortionCause::RetrievalReconstruction`] event;
+    /// - "trauma memories become intrusive" — high-charge traces always win
+    ///   the argmax. The argmax trace saturates over time and keeps winning,
+    ///   a deliberate single-trace fixation mirroring intrusive-memory
+    ///   dynamics (recency suppression is a future refinement). Ties resolve
+    ///   to the most recently encoded trace (`Iterator::max_by` returns the
+    ///   last maximum).
+    pub fn retrieve_and_reconsolidate(&mut self, current_tick: u64, anger: Fixed, joy: Fixed) {
+        let Some(idx) = self
+            .episodes
+            .iter()
+            .enumerate()
+            .max_by(|a, b| retrieval_score(a.1).cmp(&retrieval_score(b.1)))
+            .map(|(i, _)| i)
+        else {
+            return;
+        };
+        let mem = &mut self.episodes[idx];
+        mem.rehearsal_count = mem.rehearsal_count.saturating_add(1);
+        mem.last_rehearsed = current_tick;
+        let charge = mem.emotional_charge;
+        mem.strength = (mem.strength + Fixed::from_f64(0.002) * charge).clamp_01();
+        // Reconstruction error follows the fit between the current emotion
+        // and the trace's valence (mismatch distorts, match leaves accuracy).
+        let distortion = match () {
+            () if mem.valence < Fixed::ZERO => {
+                anger.clamp_01() * Fixed::from_f64(0.002)
+            }
+            () if mem.valence > Fixed::ZERO => {
+                joy.clamp_01() * Fixed::from_f64(0.001)
+            }
+            () => Fixed::ZERO,
+        };
+        if distortion > Fixed::ZERO {
+            mem.accuracy = (mem.accuracy - distortion).clamp(Fixed::from_f64(0.01), Fixed::ONE);
+            mem.record_distortion(
+                current_tick,
+                DistortionCause::RetrievalReconstruction,
+                -distortion,
+            );
+        }
+        // Retrieval recharges the trace's emotional charge slightly.
+        mem.emotional_charge = (mem.emotional_charge + Fixed::from_f64(0.001)).clamp_01();
+    }
+
     fn evict_weakest(&mut self) {
         if let Some(min_idx) = self
             .episodes
@@ -569,5 +698,137 @@ mod tests {
         assert_eq!(trace.distortion_history.len(), 1);
         assert_eq!(trace.distortion_history[0].cause, DistortionCause::Rehearsal);
         assert!(trace.accuracy < Fixed::ONE, "retrieval reconstructs — slight accuracy erosion");
+    }
+
+    #[test]
+    fn retrieve_salient_selects_highest_charge_and_is_deterministic() {
+        let mut store = MemoryStore::new(100);
+        // Weak mundane trace.
+        store.encode(
+            MemoryKind::Semantic,
+            5,
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.1),
+            None,
+            MemoryTag::LearnedKnowledge,
+        );
+        // Strong emotionally-charged (traumatic) trace — must intrude first.
+        // Salience 0.9 is the unambiguous argmax (encode auto-upgrades
+        // salience ≥ 0.4 + charge ≥ 0.6 to Flashbulb, so expect id 1).
+        store.encode(
+            MemoryKind::Traumatic,
+            9,
+            Fixed::from_f64(0.9),
+            Fixed::from_f64(0.9),
+            None,
+            MemoryTag::ThreatenedBy,
+        );
+        // Mid trace.
+        store.encode(
+            MemoryKind::Episodic,
+            12,
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.4),
+            None,
+            MemoryTag::LifeEvent,
+        );
+
+        let first = store.retrieve_salient(Fixed::ZERO, Fixed::ZERO, 3);
+        assert_eq!(first.len(), 3);
+        assert_eq!(
+            first[0].id, 1,
+            "highest-charge trace must be retrieved first (trauma intrudes)"
+        );
+        // Deterministic — no RNG, identical result on re-query.
+        let second = store.retrieve_salient(Fixed::ZERO, Fixed::ZERO, 3);
+        assert_eq!(first, second, "retrieval must be deterministic");
+    }
+
+    #[test]
+    fn retrieve_salient_reconstruction_reflects_arousal() {
+        let mut store = MemoryStore::new(100);
+        // Moderate values so neither reconstruction saturates at 1.0.
+        store.encode(
+            MemoryKind::Emotional,
+            5,
+            Fixed::from_f64(0.4),
+            Fixed::from_f64(0.3),
+            None,
+            MemoryTag::HelpedBy,
+        );
+        let calm = store.retrieve_salient(Fixed::from_f64(0.5), Fixed::ZERO, 1);
+        let aroused = store.retrieve_salient(Fixed::from_f64(0.5), Fixed::ONE, 1);
+        assert!(
+            aroused[0].reconstructed_strength > calm[0].reconstructed_strength,
+            "arousal amplifies recalled strength"
+        );
+        assert!(
+            aroused[0].reconstructed_accuracy < calm[0].reconstructed_accuracy,
+            "arousal distorts reconstructed accuracy"
+        );
+    }
+
+    #[test]
+    fn retrieve_and_reconsolidate_strengthens_and_distorts_under_anger() {
+        let mut store = MemoryStore::new(100);
+        store.encode(
+            MemoryKind::Traumatic,
+            5,
+            Fixed::from_f64(0.6),
+            Fixed::from_f64(0.8),
+            None,
+            MemoryTag::ThreatenedBy,
+        );
+        let before = store.episodes[0].clone();
+        store.retrieve_and_reconsolidate(123, Fixed::from_f64(0.9), Fixed::ZERO);
+        let after = &store.episodes[0];
+        assert_eq!(after.rehearsal_count, before.rehearsal_count + 1, "retrieval rehearses");
+        assert_eq!(after.last_rehearsed, 123);
+        assert!(after.strength > before.strength, "rehearsal strengthens");
+        assert!(after.emotional_charge > before.emotional_charge, "retrieval recharges");
+        assert!(after.accuracy < before.accuracy, "angry reconstruction erodes accuracy");
+        assert!(
+            after
+                .distortion_history
+                .iter()
+                .any(|d| d.cause == DistortionCause::RetrievalReconstruction),
+            "a retrieval-reconstruction distortion event must be recorded"
+        );
+    }
+
+    #[test]
+    fn retrieve_and_reconsolidate_rehearses_neutral_traces_without_distortion() {
+        let mut store = MemoryStore::new(100);
+        // Neutral valence (Episodic) — retrieval rehearses and strengthens
+        // but records no reconstruction distortion (mood has no mismatch).
+        store.encode(
+            MemoryKind::Episodic,
+            5,
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.3),
+            None,
+            MemoryTag::LifeEvent,
+        );
+        let before = store.episodes[0].clone();
+        store.retrieve_and_reconsolidate(123, Fixed::ONE, Fixed::ONE);
+        let after = &store.episodes[0];
+        assert_eq!(after.rehearsal_count, before.rehearsal_count + 1, "retrieval rehearses neutral traces");
+        assert_eq!(after.last_rehearsed, 123);
+        assert!(after.strength > before.strength, "rehearsal strengthens");
+        assert_eq!(after.accuracy, before.accuracy, "neutral reconstruction leaves accuracy intact");
+        assert!(
+            !after
+                .distortion_history
+                .iter()
+                .any(|d| d.cause == DistortionCause::RetrievalReconstruction),
+            "no distortion event for neutral traces"
+        );
+    }
+
+    #[test]
+    fn retrieve_and_reconsolidate_is_inert_on_empty_store() {
+        let mut store = MemoryStore::new(100);
+        store.retrieve_and_reconsolidate(123, Fixed::ONE, Fixed::ONE);
+        assert_eq!(store.episodes.len(), 0);
     }
 }

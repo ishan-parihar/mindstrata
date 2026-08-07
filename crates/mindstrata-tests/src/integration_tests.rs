@@ -2911,6 +2911,34 @@ fn temperament_is_populated_deterministic_and_bounded() {
         "temperament end-state must be seed-deterministic");
 }
 
+#[test]
+fn memory_retrieval_fires_live_and_is_deterministic() {
+    // §8.1.3 "retrieval reconstructs": intrusive recall must have fired —
+    // at least one agent holds a RetrievalReconstruction distortion event
+    // (traumatic/high-charge traces win the salience argmax every tick).
+    let count_retrieval_events = |sim: &mindstrata_sim::sim::Simulation| -> usize {
+        sim.agents
+            .iter()
+            .flat_map(|a| a.memory.episodes.iter())
+            .filter(|m| {
+                m.distortion_history.iter().any(|d| {
+                    d.cause == mindstrata_sim::memory::DistortionCause::RetrievalReconstruction
+                })
+            })
+            .count()
+    };
+
+    let sim = run_sim(42, 2000);
+    let total = count_retrieval_events(&sim);
+    assert!(total > 0,
+        "intrusive retrieval must fire across a real run, got {total}");
+
+    // Determinism: same seed → identical retrieval end-state.
+    let sim2 = run_sim(42, 2000);
+    let total2 = count_retrieval_events(&sim2);
+    assert_eq!(total, total2, "retrieval end-state must be seed-deterministic");
+}
+
 
 
 
