@@ -2553,6 +2553,108 @@ fn revolution_is_regime_change_not_repeat_loop() {
 
 
 
+/// §10.6 (AP2): Marriage must write real kinship consequences — the Spouse
+/// tie between the couple and InLaw ties connecting each spouse to the
+/// other's parents/siblings — which the §10.3 daily kin-stage pass then maps
+/// onto the InLaw relationship stage. Previously marriage created ZERO
+/// kinship edges (only the institution's kin_alliance metadata), so the
+/// Iteration-58 limitation "the InLaw stage is reachable only if such edges
+/// exist" held in production.
+#[test]
+fn marriage_forges_spouse_and_inlaw_kinship() {
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_core::id::AgentId;
+    use mindstrata_sim::social::kinship::KinshipLink;
+    use mindstrata_sim::social::relationship_v2::RelationshipStage;
+
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 40000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+
+    // Construct kin edges for the two adults who will marry: agent 0's
+    // family (parents 2,3; sibling 4) and agent 1's family (parent 5).
+    for p in [2usize, 3] {
+        sim.kinship_graph.add_link(p, 0, KinshipLink::ParentChild, 0);
+        sim.kinship_graph.add_link(0, p, KinshipLink::ParentChild, 0);
+    }
+    sim.kinship_graph.add_link(0, 4, KinshipLink::Sibling, 0);
+    sim.kinship_graph.add_link(5, 1, KinshipLink::ParentChild, 0);
+    sim.kinship_graph.add_link(1, 5, KinshipLink::ParentChild, 0);
+
+    // Force the (0,1) marriage deterministically. marriage_chance =
+    // attraction × health × trust × 0.01 × clan_factor, so: zero every OTHER
+    // pair's trust (chance 0 — only (0,1) eligible); trust/affection 1.0 on
+    // the pair; health 1.0 (health = mean of the pair's body.health);
+    // identical agreeableness (personality_attraction → 1.0); adjacent
+    // positions (physical_attraction → ~1.0). Resulting chance ≈ 0.6 × 1.0 ×
+    // 1.0 × 0.01 ≈ 0.006/day — fires within a few hundred days (deterministic
+    // seed; bounded loop asserts it).
+    sim.agents[0].body.health = Fixed::ONE;
+    sim.agents[1].body.health = Fixed::ONE;
+    sim.agents[0].personality.agreeableness = Fixed::from_f64(0.5);
+    sim.agents[1].personality.agreeableness = Fixed::from_f64(0.5);
+    sim.agents[0].position = mindstrata_sim::sim::Position::new(1, 1);
+    sim.agents[1].position = mindstrata_sim::sim::Position::new(1, 2);
+    // Same age (the marriage gate skips pairs with age_diff > 15).
+    sim.agents[0].age = Fixed::from_f64(30.0);
+    sim.agents[1].age = Fixed::from_f64(30.0);
+    for r in sim.relationships.iter_mut() {
+        if (r.from == AgentId::new(0) && r.to == AgentId::new(1))
+            || (r.from == AgentId::new(1) && r.to == AgentId::new(0))
+        {
+            r.trust = Fixed::ONE;
+            r.affection = Fixed::ONE;
+        } else {
+            r.trust = Fixed::ZERO;
+            r.affection = Fixed::ZERO;
+        }
+    }
+    let mut married = false;
+    let mut steps = 0;
+    while !married && steps < 900 {
+        sim.run(144); // one daily cycle (tick_marriage_formation runs daily)
+        steps += 1;
+        married = sim.agents[0].partner == Some(1) && sim.agents[1].partner == Some(0);
+    }
+    assert!(married, "pair (0,1) must marry each other within the window (steps={steps})");
+
+    // Spouse tie written to the kinship graph (both directions).
+    assert_eq!(sim.kinship_graph.link_between(0, 1), Some(KinshipLink::Spouse));
+    assert_eq!(sim.kinship_graph.link_between(1, 0), Some(KinshipLink::Spouse));
+    // In-law ties: 1 ↔ 0's parents (2,3) and sibling (4).
+    for k in [2usize, 3, 4] {
+        assert_eq!(
+            sim.kinship_graph.link_between(1, k),
+            Some(KinshipLink::InLaw),
+            "1↔{k} must be in-law"
+        );
+        assert_eq!(sim.kinship_graph.link_between(k, 1), Some(KinshipLink::InLaw));
+    }
+    // 0 ↔ 1's parent (5).
+    assert_eq!(sim.kinship_graph.link_between(0, 5), Some(KinshipLink::InLaw));
+    assert_eq!(sim.kinship_graph.link_between(5, 0), Some(KinshipLink::InLaw));
+
+    // Run a further daily pass so the §10.3 kin-stage assignment fires and
+    // map the InLaw edges onto the InLaw relationship stage (agent 1's v2
+    // position of agent 2 = b-1 when b > a: 2 > 1 → pos 1).
+    sim.run(144);
+    let stage_1_view_2 = sim.agents[1].relationship_v2s[1].stage;
+    assert_eq!(
+        stage_1_view_2,
+        RelationshipStage::InLaw,
+        "the kin-stage pass must map the InLaw edge onto the InLaw stage"
+    );
+    let stage_2_view_1 = sim.agents[2].relationship_v2s[1].stage; // 1 < 2 → pos 1
+    assert_eq!(stage_2_view_1, RelationshipStage::InLaw);
+}
+
 /// §13.6: Echo chambers reinforce beliefs — the loop is not a dead-end metric.
 /// Clusters rebuilt daily; members of a cluster with echo strength > 0 have
 /// their hottest belief (max emotional charge) nudged toward certainty

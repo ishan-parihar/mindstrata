@@ -196,6 +196,75 @@ impl KinshipGraph {
         !self.are_close_kin(a, b)
     }
 
+    /// §10.6 (AP2): Record the kinship consequences of a marriage.
+    ///
+    /// Creates the directed Spouse tie between the couple (both directions)
+    /// and InLaw ties between each spouse and the other's **direct biological
+    /// kin** — parents, children, and siblings. The graph stores ParentChild
+    /// edges in BOTH directions (parent→child and child→parent), so a parent
+    /// and a child are indistinguishable from a single edge; treating all
+    /// direct biological kin as family-by-marriage is the faithful reading
+    /// the data model supports (step-children are in-laws in this model). All
+    /// marital edges carry coefficient ZERO: they are inert for the §10.6
+    /// incest taboo (`coefficient_between` / `can_marry` — biological
+    /// relatedness only) and for transitive relatedness, so the only
+    /// behavioral reach is the §10.3 kin-stage assignment pass, which maps
+    /// InLaw edges onto the InLaw relationship stage (observational labels).
+    /// Deterministic edge insertion (deduped), no RNG.
+    pub fn add_marital_links(&mut self, a: usize, b: usize, tick: u64) {
+        // Capture each spouse's family BEFORE adding the new edges, so the
+        // fresh Spouse/InLaw ties never appear in their own in-law sets.
+        let fam_a = self.family_of(a);
+        let fam_b = self.family_of(b);
+
+        // Spouse ties (the graph is directed — add both directions).
+        self.add_link(a, b, KinshipLink::Spouse, tick);
+        self.add_link(b, a, KinshipLink::Spouse, tick);
+
+        // In-law ties: each spouse is in-law to the other's direct kin.
+        for &k in &fam_b {
+            if k != a {
+                self.add_link(a, k, KinshipLink::InLaw, tick);
+                self.add_link(k, a, KinshipLink::InLaw, tick);
+            }
+        }
+        for &k in &fam_a {
+            if k != b {
+                self.add_link(b, k, KinshipLink::InLaw, tick);
+                self.add_link(k, b, KinshipLink::InLaw, tick);
+            }
+        }
+    }
+
+    /// Direct biological kin of `x` — parents, children, and siblings — the
+    /// family-by-blood set a marriage makes into in-laws. Deterministic:
+    /// scans the active edges in insertion order, deduped.
+    fn family_of(&self, x: usize) -> Vec<usize> {
+        let mut fam: Vec<usize> = Vec::new();
+        for e in self.edges.iter().filter(|e| e.active) {
+            let kin = match e.link {
+                // Both directions exist (parent→child and child→parent), so
+                // any ParentChild neighbor of x is direct biological kin.
+                KinshipLink::ParentChild | KinshipLink::Sibling => {
+                    if e.from == x {
+                        Some(e.to)
+                    } else if e.to == x {
+                        Some(e.from)
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            };
+            if let Some(k) = kin {
+                if k != x && !fam.contains(&k) {
+                    fam.push(k);
+                }
+            }
+        }
+        fam
+    }
+
     /// Decay all kinship edges (called daily).
     pub fn decay_daily(&mut self) {
         for edge in &mut self.edges {
@@ -289,5 +358,59 @@ mod tests {
         g.add_link(0, 1, KinshipLink::ParentChild, 0);
         g.add_link(2, 3, KinshipLink::ParentChild, 0);
         assert_eq!(g.transitive_coefficient(0, 3), Fixed::ZERO);
+    }
+
+    // ── §10.6 Marital kinship links ──────────────────────────────────
+
+    #[test]
+    fn marital_links_connect_spouses_and_in_laws() {
+        let mut g = KinshipGraph::default();
+        // a = 0: parents 2,3 and sibling 4.
+        for p in [2usize, 3] {
+            g.add_link(p, 0, KinshipLink::ParentChild, 0);
+            g.add_link(0, p, KinshipLink::ParentChild, 0);
+        }
+        g.add_link(0, 4, KinshipLink::Sibling, 0); // mirrored automatically
+        // b = 1: parent 5 and sibling 6.
+        g.add_link(5, 1, KinshipLink::ParentChild, 0);
+        g.add_link(1, 5, KinshipLink::ParentChild, 0);
+        g.add_link(1, 6, KinshipLink::Sibling, 0); // mirrored automatically
+
+        g.add_marital_links(0, 1, 100);
+
+        assert_eq!(g.link_between(0, 1), Some(KinshipLink::Spouse));
+        assert_eq!(g.link_between(1, 0), Some(KinshipLink::Spouse));
+        // b is in-law to a's parents and sibling (both directions).
+        for k in [2usize, 3, 4] {
+            assert_eq!(g.link_between(1, k), Some(KinshipLink::InLaw), "1↔{k}");
+            assert_eq!(g.link_between(k, 1), Some(KinshipLink::InLaw), "{k}↔1");
+        }
+        // a is in-law to b's parent and sibling (both directions).
+        for k in [5usize, 6] {
+            assert_eq!(g.link_between(0, k), Some(KinshipLink::InLaw), "0↔{k}");
+            assert_eq!(g.link_between(k, 0), Some(KinshipLink::InLaw), "{k}↔0");
+        }
+        // Marital edges are non-biological: inert for the incest taboo.
+        assert_eq!(g.coefficient_between(1, 2), Fixed::ZERO);
+        assert!(g.can_marry(1, 2), "in-law ties must not block courtship via coefficient");
+    }
+
+    #[test]
+    fn marital_links_include_children_as_family_with_no_self_edges() {
+        let mut g = KinshipGraph::default();
+        // a = 0 has child 7 — family-by-marriage of b = 1 in this model (the
+        // graph cannot distinguish parent from child: ParentChild edges are
+        // stored both directions).
+        g.add_link(0, 7, KinshipLink::ParentChild, 0);
+        g.add_link(7, 0, KinshipLink::ParentChild, 0);
+
+        g.add_marital_links(0, 1, 50);
+
+        assert_eq!(g.link_between(0, 1), Some(KinshipLink::Spouse));
+        assert_eq!(g.link_between(1, 7), Some(KinshipLink::InLaw));
+        assert_eq!(g.link_between(7, 1), Some(KinshipLink::InLaw));
+        // No self-edges.
+        assert_eq!(g.link_between(0, 0), None);
+        assert_eq!(g.link_between(1, 1), None);
     }
 }

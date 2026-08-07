@@ -5138,6 +5138,17 @@ impl Simulation {
                 self.marriage_registry
                     .pair_bonds
                     .push(crate::social::marriage::PairBond::new_married(a, b, tick_u64));
+                // §10.6 (AP2): Marriage writes real kinship consequences —
+                // Spouse ties between the couple and InLaw ties to each
+                // other's parents/siblings. Previously marriage created NO
+                // kinship edges (only the institution's kin_alliance
+                // metadata), so the Spouse link and the §10.3 InLaw stage
+                // were unreachable in production. All marital edges carry
+                // coefficient ZERO (inert for the incest taboo; their only
+                // reach is the observational kin-stage pass), and initial
+                // adults hold no kin edges, so default runs see only inert
+                // Spouse ties — the golden baseline stays byte-identical.
+                self.kinship_graph.add_marital_links(a, b, tick_u64);
                 // Marriage boosts trust and affection
                 // §19.5.J: Record marriage relationship traces
                 if let Some(rel) = self.relationships.iter_mut()
