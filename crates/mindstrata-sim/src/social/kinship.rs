@@ -107,6 +107,17 @@ impl KinshipGraph {
     }
 
     /// Get all active outgoing kinship edges for a given agent.
+    /// §10.3 (AP2): Find the kinship link between two agents, scanning both
+    /// directions (edges are directed — populate writes parent→child, so a
+    /// child→parent lookup needs the reverse scan). Returns the first matching
+    /// link; deterministic given the deterministic edge insertion order.
+    pub fn link_between(&self, a: usize, b: usize) -> Option<KinshipLink> {
+        self.edges
+            .iter()
+            .find(|e| (e.from == a && e.to == b) || (e.from == b && e.to == a))
+            .map(|e| e.link)
+    }
+
     pub fn kin_of(&self, agent: usize) -> Vec<&KinshipEdge> {
         self.edges.iter()
             .filter(|e| e.active && e.from == agent)

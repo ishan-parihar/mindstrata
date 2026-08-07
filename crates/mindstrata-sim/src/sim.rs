@@ -5556,6 +5556,33 @@ impl Simulation {
                     });
                 }
 
+                // §10.6 (AP2): Mirror the new family into the kinship graph.
+                // Previously only populate-time edges were created — and the
+                // initial adults have no parents — so the graph stayed empty
+                // for the entire run: no parent/child edges on birth, no
+                // sibling edges, and the §10.3 kin stages + kinship-coefficient
+                // social gates had no edges to work with. Wired here,
+                // deterministically (no RNG): parent↔child links in both
+                // directions, plus sibling links to every prior child of
+                // either parent.
+                self.kinship_graph.add_link(parent_a, child_idx, crate::social::kinship::KinshipLink::ParentChild, tick_u64);
+                self.kinship_graph.add_link(parent_b, child_idx, crate::social::kinship::KinshipLink::ParentChild, tick_u64);
+                self.kinship_graph.add_link(child_idx, parent_a, crate::social::kinship::KinshipLink::ParentChild, tick_u64);
+                self.kinship_graph.add_link(child_idx, parent_b, crate::social::kinship::KinshipLink::ParentChild, tick_u64);
+                for k in 0..child_idx {
+                    if k == parent_a || k == parent_b {
+                        continue;
+                    }
+                    let shares = self.agents[k].parent_a == Some(parent_a)
+                        || self.agents[k].parent_b == Some(parent_a)
+                        || self.agents[k].parent_a == Some(parent_b)
+                        || self.agents[k].parent_b == Some(parent_b);
+                    if shares {
+                        self.kinship_graph.add_link(child_idx, k, crate::social::kinship::KinshipLink::Sibling, tick_u64);
+                        self.kinship_graph.add_link(k, child_idx, crate::social::kinship::KinshipLink::Sibling, tick_u64);
+                    }
+                }
+
                 // Disease tracking for new agent
                 self.agent_diseases.push(Vec::new());
 
@@ -6045,6 +6072,88 @@ impl Simulation {
 
         // Per-agent daily updates for new systems.
         if phases.is_daily {
+            // §10.3 (AP2): Assign kin-branch stages from the kinship graph.
+            // The stage tables' contract is "Kin stages are assigned, not
+            // advanced" — but nothing ever wired the assignment. This pass
+            // assigns ParentChild/Sibling/InLaw from direct kinship links and
+            // AncestorDescendant from 2-hop ancestry (grandparent ↔ grandchild),
+            // refreshing the derived identity metadata (labels, role
+            // expectation, kinship coefficient) for the pairs it touches.
+            // Deterministic Vec scans, no RNG; only writes pairs not already
+            // at a kin stage, so non-kin behavior is untouched and the golden
+            // baseline stays byte-identical (default runs have no kin edges).
+            {
+                let n_agents = self.agents.len();
+                for i in 0..n_agents {
+                    for j in 0..n_agents {
+                        if i == j {
+                            continue;
+                        }
+                        let rv2_idx = Self::relationship_v2_pos(i, j);
+                        if rv2_idx >= self.agents[i].relationship_v2s.len() {
+                            continue;
+                        }
+                        let current = self.agents[i].relationship_v2s[rv2_idx].stage;
+                        // Direct kinship link: assign (or confirm) its kin stage.
+                        if let Some(link) = self.kinship_graph.link_between(i, j) {
+                            if let Some(stage) =
+                                crate::social::relationship_stages::kin_stage_for_link(link)
+                            {
+                                if current != stage {
+                                    let rv2 =
+                                        &mut self.agents[i].relationship_v2s[rv2_idx];
+                                    rv2.stage = stage;
+                                    rv2.update_identity_metadata();
+                                }
+                                continue;
+                            }
+                        }
+                        // No direct link: 2-hop ancestry — j is a grandparent of
+                        // i (or i of j) when a parent of i is a child of j (or
+                        // vice versa).
+                        let parents_of = |x: usize| -> Vec<usize> {
+                            self.kinship_graph
+                                .edges
+                                .iter()
+                                .filter(|e| {
+                                    e.link
+                                        == crate::social::kinship::KinshipLink::ParentChild
+                                        && e.to == x
+                                })
+                                .map(|e| e.from)
+                                .collect()
+                        };
+                        let gps_i = parents_of(i)
+                            .iter()
+                            .flat_map(|&p| parents_of(p))
+                            .collect::<Vec<usize>>();
+                        let gps_j = parents_of(j)
+                            .iter()
+                            .flat_map(|&p| parents_of(p))
+                            .collect::<Vec<usize>>();
+                        if gps_i.contains(&j) || gps_j.contains(&i) {
+                            let rv2 = &mut self.agents[i].relationship_v2s[rv2_idx];
+                            rv2.stage = crate::social::relationship_v2::RelationshipStage::
+                                AncestorDescendant;
+                            rv2.update_identity_metadata();
+                            continue;
+                        }
+                        // Orphaned kin stage: the link was removed (death clears
+                        // edges at sim.rs ~5312, and the deceased's slot is
+                        // replaced in place by a stranger). A terminal kin stage
+                        // must not permanently mislabel a stranger — reset to
+                        // the undifferentiated default. (Checked AFTER the 2-hop
+                        // scan so genuine grandparent chains — which have no
+                        // direct link — are not misread as orphaned.)
+                        if crate::social::relationship_stages::is_kin_stage(current) {
+                            let rv2 = &mut self.agents[i].relationship_v2s[rv2_idx];
+                            rv2.stage =
+                                crate::social::relationship_v2::RelationshipStage::Unnoticed;
+                            rv2.update_identity_metadata();
+                        }
+                    }
+                }
+            }
             // Architecture-plan-2 §10.3: Relationship stage transitions.
             // Evaluate whether any RelationshipV2 should advance or regress based on
             // interaction count, trust, and affection. Runs once daily for all pairs.
@@ -6059,6 +6168,10 @@ impl Simulation {
                     // No advancement is possible without interactions; regression only matters
                     // for Established+ stages or when fear is high.
                     let interactions = self.agents[i].relationship_v2s[rv2_idx].interaction_count;
+                    // Kin stages are assigned, not advanced — skip them outright.
+                    if crate::social::relationship_stages::is_kin_stage(current_stage) {
+                        continue;
+                    }
                     if interactions == 0
                         && matches!(current_stage, crate::social::relationship_v2::RelationshipStage::Unnoticed | crate::social::relationship_v2::RelationshipStage::Noticed | crate::social::relationship_v2::RelationshipStage::Disliked) {
                             continue;

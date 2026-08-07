@@ -8,6 +8,7 @@
 //! depend on interaction count, trust, affection, fear, and context.
 
 use mindstrata_core::fixed::Fixed;
+use super::kinship::KinshipLink;
 use super::relationship_v2::RelationshipStage;
 
 /// Minimum interaction count to advance beyond each stage.
@@ -33,6 +34,7 @@ pub fn min_interactions_for_stage(stage: RelationshipStage) -> u32 {
         RelationshipStage::Sibling => 0,
         RelationshipStage::Cousin => 0,
         RelationshipStage::InLaw => 0,
+        RelationshipStage::AncestorDescendant => 0,
     }
 }
 
@@ -57,6 +59,7 @@ pub fn trust_threshold_for_stage(stage: RelationshipStage) -> Fixed {
         RelationshipStage::Sibling => Fixed::from_f64(0.5),
         RelationshipStage::Cousin => Fixed::from_f64(0.35),
         RelationshipStage::InLaw => Fixed::from_f64(0.3),
+        RelationshipStage::AncestorDescendant => Fixed::from_f64(0.35),
     }
 }
 
@@ -81,6 +84,7 @@ pub fn affection_threshold_for_stage(stage: RelationshipStage) -> Fixed {
         RelationshipStage::Sibling => Fixed::from_f64(0.3),
         RelationshipStage::Cousin => Fixed::from_f64(0.2),
         RelationshipStage::InLaw => Fixed::from_f64(0.15),
+        RelationshipStage::AncestorDescendant => Fixed::from_f64(0.2),
     }
 }
 
@@ -105,7 +109,38 @@ pub fn obligation_multiplier_for_stage(stage: RelationshipStage) -> Fixed {
         RelationshipStage::Sibling => Fixed::from_f64(0.5),
         RelationshipStage::Cousin => Fixed::from_f64(0.25),
         RelationshipStage::InLaw => Fixed::from_f64(0.2),
+        RelationshipStage::AncestorDescendant => Fixed::from_f64(0.4),
     }
+}
+
+/// §10.3 (AP2): Map a kinship-graph link onto the kin-branch stage it
+/// implies. `Spouse` maps to `None` — marriage is a separate institution
+/// (§10.5), not a kin stage; ritual/structural kin (adoptive, godparent,
+/// oath-sibling) map to the generic `Kin` stage.
+pub fn kin_stage_for_link(link: KinshipLink) -> Option<RelationshipStage> {
+    match link {
+        KinshipLink::ParentChild => Some(RelationshipStage::ParentChild),
+        KinshipLink::Sibling => Some(RelationshipStage::Sibling),
+        KinshipLink::InLaw => Some(RelationshipStage::InLaw),
+        KinshipLink::Adoptive
+        | KinshipLink::Godparent
+        | KinshipLink::OathSibling => Some(RelationshipStage::Kin),
+        KinshipLink::Spouse => None,
+    }
+}
+
+/// §10.3 (AP2): Is this stage a kin-branch stage (assigned from the kinship
+/// graph, not advanced by the social progression machinery)?
+pub fn is_kin_stage(stage: RelationshipStage) -> bool {
+    matches!(
+        stage,
+        RelationshipStage::Kin
+            | RelationshipStage::ParentChild
+            | RelationshipStage::Sibling
+            | RelationshipStage::Cousin
+            | RelationshipStage::InLaw
+            | RelationshipStage::AncestorDescendant
+    )
 }
 
 /// Try to advance a relationship stage based on current metrics.
@@ -205,5 +240,67 @@ mod tests {
         let low = obligation_multiplier_for_stage(RelationshipStage::Acquaintance);
         let high = obligation_multiplier_for_stage(RelationshipStage::Confidant);
         assert!(high > low);
+    }
+
+    #[test]
+    fn kin_stage_mapping_covers_all_links() {
+        use super::super::kinship::KinshipLink;
+        assert_eq!(
+            kin_stage_for_link(KinshipLink::ParentChild),
+            Some(RelationshipStage::ParentChild)
+        );
+        assert_eq!(
+            kin_stage_for_link(KinshipLink::Sibling),
+            Some(RelationshipStage::Sibling)
+        );
+        assert_eq!(
+            kin_stage_for_link(KinshipLink::InLaw),
+            Some(RelationshipStage::InLaw)
+        );
+        assert_eq!(
+            kin_stage_for_link(KinshipLink::Adoptive),
+            Some(RelationshipStage::Kin)
+        );
+        assert_eq!(
+            kin_stage_for_link(KinshipLink::OathSibling),
+            Some(RelationshipStage::Kin)
+        );
+        // Marriage is an institution, not a kin stage.
+        assert_eq!(kin_stage_for_link(KinshipLink::Spouse), None);
+    }
+
+    #[test]
+    fn kin_stages_are_not_advanceable() {
+        for stage in [
+            RelationshipStage::Kin,
+            RelationshipStage::ParentChild,
+            RelationshipStage::Sibling,
+            RelationshipStage::Cousin,
+            RelationshipStage::InLaw,
+            RelationshipStage::AncestorDescendant,
+        ] {
+            assert!(is_kin_stage(stage));
+            assert_eq!(stage.next_positive(), None, "{stage:?} must not advance");
+            assert_eq!(stage.next_negative(), None, "{stage:?} must not regress");
+            assert_eq!(min_interactions_for_stage(stage), 0);
+        }
+    }
+
+    #[test]
+    fn ancestor_descendant_has_kin_tables() {
+        let s = RelationshipStage::AncestorDescendant;
+        assert!(trust_threshold_for_stage(s) > Fixed::ZERO);
+        assert!(affection_threshold_for_stage(s) > Fixed::ZERO);
+        assert!(obligation_multiplier_for_stage(s) > Fixed::ZERO);
+        // Grandparent ties carry the cousin-level kinship coefficient (0.25)
+        // via the relationship-v2 derivation — close family, more distant
+        // than parent-child (0.8) or sibling (0.5).
+        let mut rv2 = super::super::relationship_v2::RelationshipV2::new(
+            mindstrata_core::id::AgentId::new(0),
+            mindstrata_core::id::AgentId::new(1),
+        );
+        rv2.stage = s;
+        assert_eq!(rv2.derive_kinship_coefficient(), Fixed::from_f64(0.25));
+        assert_eq!(rv2.derive_role_expectation(), super::super::relationship_v2::RoleExpectation::Caregiver);
     }
 }

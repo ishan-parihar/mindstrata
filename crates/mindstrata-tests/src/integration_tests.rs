@@ -3420,6 +3420,217 @@ fn collective_memory_and_echo_chamber_plan_fields() {
     );
 }
 
+/// §10.3/§10.6 (AP2): The kin branch of the relationship-stage taxonomy must
+/// be instantiated from the kinship graph — kin stages assigned to
+/// relationship_v2s (ParentChild/Sibling from direct links, AncestorDescendant
+/// from 2-hop ancestry), identity metadata refreshed, and births mirroring
+/// into the graph so the §10.6 kinship system has edges to work with.
+#[test]
+fn kin_stages_instantiated_from_kinship_graph() {
+    use mindstrata_core::id::AgentId;
+    use mindstrata_sim::social::kinship::KinshipLink;
+    use mindstrata_sim::social::relationship_v2::RelationshipStage;
+
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 300,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 8,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config.clone());
+    sim.populate();
+    sim.run(144); // one daily tick so v2 stages stabilize
+
+    // Wire a family directly into the kinship graph: grandparent g, parent p,
+    // child c, second child s of the same parent (sibling of c).
+    let (g, p, c, s) = (3usize, 4usize, 5usize, 6usize);
+    sim.kinship_graph.add_link(p, c, KinshipLink::ParentChild, 150);
+    sim.kinship_graph.add_link(c, p, KinshipLink::ParentChild, 150);
+    sim.kinship_graph.add_link(g, p, KinshipLink::ParentChild, 150);
+    sim.kinship_graph.add_link(p, g, KinshipLink::ParentChild, 150);
+    sim.kinship_graph.add_link(p, s, KinshipLink::ParentChild, 150);
+    sim.kinship_graph.add_link(s, p, KinshipLink::ParentChild, 150);
+    sim.kinship_graph.add_link(c, s, KinshipLink::Sibling, 150);
+    sim.kinship_graph.add_link(s, c, KinshipLink::Sibling, 150);
+
+    sim.run(144); // next daily tick → the kin-assignment pass runs
+
+    let stage_between = |sim: &mindstrata_sim::sim::Simulation, a: usize, b: usize| {
+        sim.agents[a]
+            .relationship_v2s
+            .iter()
+            .find(|r| r.to == AgentId::new(b as u64))
+            .map(|r| r.stage)
+    };
+
+    // Direct links → kin stages, in BOTH directions (edges are directed).
+    assert_eq!(
+        stage_between(&sim, p, c),
+        Some(RelationshipStage::ParentChild),
+        "parent→child must be labeled ParentChild"
+    );
+    assert_eq!(
+        stage_between(&sim, c, p),
+        Some(RelationshipStage::ParentChild),
+        "child→parent must be labeled ParentChild"
+    );
+    assert_eq!(
+        stage_between(&sim, c, s),
+        Some(RelationshipStage::Sibling),
+        "sibling pairs must be labeled Sibling"
+    );
+    // 2-hop ancestry → AncestorDescendant, both directions.
+    assert_eq!(
+        stage_between(&sim, g, c),
+        Some(RelationshipStage::AncestorDescendant),
+        "grandparent→grandchild must be AncestorDescendant"
+    );
+    assert_eq!(
+        stage_between(&sim, c, g),
+        Some(RelationshipStage::AncestorDescendant),
+        "grandchild→grandparent must be AncestorDescendant"
+    );
+    // Non-kin pairs are untouched by the assignment pass.
+    assert_ne!(
+        stage_between(&sim, 0, 1),
+        Some(RelationshipStage::ParentChild),
+        "stranger pair must not be mislabeled as kin"
+    );
+
+    // Identity metadata refreshes with the stage (label + coefficient).
+    let rv2 = sim.agents[p]
+        .relationship_v2s
+        .iter()
+        .find(|r| r.to == AgentId::new(c as u64))
+        .expect("parent-child rv2");
+    assert_eq!(
+        rv2.public_label,
+        mindstrata_sim::social::relationship_v2::RelationshipLabel::ParentChild
+    );
+    assert!(
+        rv2.kinship_coefficient > mindstrata_core::fixed::Fixed::ZERO,
+        "kin stage must carry a non-zero kinship coefficient"
+    );
+
+    // Determinism: same seed + same manual edges → identical stage end-state.
+    let mut sim2 = Simulation::new(config);
+    sim2.populate();
+    sim2.run(144);
+    for (a, b, link) in [
+        (p, c, KinshipLink::ParentChild),
+        (c, p, KinshipLink::ParentChild),
+        (g, p, KinshipLink::ParentChild),
+        (p, g, KinshipLink::ParentChild),
+        (p, s, KinshipLink::ParentChild),
+        (s, p, KinshipLink::ParentChild),
+        (c, s, KinshipLink::Sibling),
+        (s, c, KinshipLink::Sibling),
+    ] {
+        sim2.kinship_graph.add_link(a, b, link, 150);
+    }
+    sim2.run(144);
+    for a in 0..8 {
+        for b in 0..8 {
+            if a == b {
+                continue;
+            }
+            assert_eq!(
+                stage_between(&sim, a, b),
+                stage_between(&sim2, a, b),
+                "kin-stage end-state must be seed-deterministic ({a}→{b})"
+            );
+        }
+    }
+
+    // Death-path hygiene: when the kinship link is removed (death clears
+    // edges and the slot is replaced by a stranger), the terminal kin stage
+    // must not permanently mislabel the stranger — the next daily pass resets
+    // it out of the kin branch.
+    sim.kinship_graph.edges.clear();
+    sim.run(144);
+    for a in 0..8 {
+        for b in 0..8 {
+            if a == b {
+                continue;
+            }
+            if let Some(stage) = stage_between(&sim, a, b) {
+                assert!(
+                    !mindstrata_sim::social::relationship_stages::is_kin_stage(stage),
+                    "orphaned kin stage must be reset after edge removal ({a}→{b} = {stage:?})"
+                );
+            }
+        }
+    }
+}
+
+/// §10.6 (AP2): Births must mirror parent/child and sibling links into the
+/// kinship graph — the graph was previously only seeded at populate (where
+/// initial adults have no parents), so the entire kinship system had no edges
+/// to work with in production.
+#[test]
+fn births_mirror_into_kinship_graph() {
+    use mindstrata_core::fixed::Fixed;
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 3000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    // Elevate birth rate so children are born within the window (the default
+    // 0.3/yr would produce ~0 births in 3000 ticks).
+    sim.demography_config.birth_rate = Fixed::from_f64(60.0);
+    sim.run(3000);
+
+    let children: Vec<usize> = sim
+        .agents
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| a.parent_a.is_some())
+        .map(|(i, _)| i)
+        .collect();
+    assert!(!children.is_empty(), "children must be born with elevated rate");
+
+    // Every child has parent/child kinship edges in the graph.
+    for &child in &children {
+        let parent_a = sim.agents[child].parent_a.expect("parent_a set");
+        assert!(
+            sim.kinship_graph.link_between(parent_a, child).is_some(),
+            "birth must wire parent_a↔child kinship edges (child {child})"
+        );
+        assert!(
+            sim.kinship_graph.coefficient_between(parent_a, child) > Fixed::ZERO,
+            "parent↔child coefficient must be non-zero after birth"
+        );
+    }
+
+    // Sibling edges: children sharing a parent are linked as Sibling.
+    let siblings: Vec<(usize, usize)> = sim
+        .agents
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| a.parent_a.is_some())
+        .map(|(i, a)| (i, a.parent_a.unwrap()))
+        .collect();
+    for a in 0..siblings.len() {
+        for b in (a + 1)..siblings.len() {
+            if siblings[a].1 == siblings[b].1 && siblings[a].0 != siblings[b].0 {
+                assert!(
+                    sim.kinship_graph.link_between(siblings[a].0, siblings[b].0).is_some(),
+                    "same-parent children must be wired as siblings ({} vs {})",
+                    siblings[a].0,
+                    siblings[b].0
+                );
+            }
+        }
+    }
+}
+
 
 
 

@@ -32,6 +32,8 @@ pub enum RelationshipStage {
     Sibling,
     Cousin,
     InLaw,
+    /// §10.3 (AP2): Grandparent/grandchild (or further linear ancestor) ties.
+    AncestorDescendant,
 }
 
 impl RelationshipStage {
@@ -79,6 +81,7 @@ impl RelationshipStage {
             Self::Sibling => Fixed::from_f64(0.7),
             Self::Cousin => Fixed::from_f64(0.5),
             Self::InLaw => Fixed::from_f64(0.45),
+            Self::AncestorDescendant => Fixed::from_f64(0.45),
         }
     }
 }
@@ -127,6 +130,7 @@ pub enum RelationshipLabel {
     Sibling,
     Cousin,
     InLaw,
+    AncestorDescendant,
     PatronClient,
     LordVassal,
     MasterApprentice,
@@ -416,6 +420,7 @@ impl RelationshipV2 {
             RelationshipStage::Sibling => RelationshipLabel::Sibling,
             RelationshipStage::Cousin => RelationshipLabel::Cousin,
             RelationshipStage::InLaw => RelationshipLabel::InLaw,
+            RelationshipStage::AncestorDescendant => RelationshipLabel::AncestorDescendant,
         }
     }
 
@@ -452,6 +457,7 @@ impl RelationshipV2 {
     pub fn derive_role_expectation(&self) -> RoleExpectation {
         match self.stage {
             RelationshipStage::ParentChild => RoleExpectation::Caregiver,
+            RelationshipStage::AncestorDescendant => RoleExpectation::Caregiver,
             RelationshipStage::Sibling => RoleExpectation::Ally,
             RelationshipStage::Kin | RelationshipStage::Cousin | RelationshipStage::InLaw => {
                 RoleExpectation::Ally
@@ -469,6 +475,7 @@ impl RelationshipV2 {
             RelationshipStage::Kin => Fixed::from_f64(0.5),
             RelationshipStage::Cousin => Fixed::from_f64(0.25),
             RelationshipStage::InLaw => Fixed::from_f64(0.3),
+            RelationshipStage::AncestorDescendant => Fixed::from_f64(0.25),
             _ => Fixed::ZERO,
         }
     }
