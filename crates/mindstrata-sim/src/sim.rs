@@ -6401,6 +6401,19 @@ impl Simulation {
                             rv2.update_identity_metadata();
                             continue;
                         }
+                        // First cousins share a grandparent: both are 2 hops
+                        // above the same ancestor (both are grandchildren of
+                        // the same person). Siblings are caught by the direct-
+                        // link branch above, and an uncle/niece pair does NOT
+                        // share a grandparent (the uncle's grandparents are
+                        // the niece's great-grandparents), so this scan cannot
+                        // misfire on the collateral-ascendant direction.
+                        if gps_i.iter().any(|&g| gps_j.contains(&g)) {
+                            let rv2 = &mut self.agents[i].relationship_v2s[rv2_idx];
+                            rv2.stage = crate::social::relationship_v2::RelationshipStage::Cousin;
+                            rv2.update_identity_metadata();
+                            continue;
+                        }
                         // Orphaned kin stage: the link was removed (death clears
                         // edges at sim.rs ~5312, and the deceased's slot is
                         // replaced in place by a stranger). A terminal kin stage

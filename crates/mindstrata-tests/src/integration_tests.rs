@@ -3883,6 +3883,99 @@ fn kin_stages_instantiated_from_kinship_graph() {
     }
 }
 
+/// §10.3/§10.6 (Iteration 69): the Cousin stage tables/labels were fully
+/// wired but nothing ever derived the stage — first cousins (children of two
+/// siblings) never got labeled, so `Cousin` was unreachable in production.
+/// The daily kin-stage pass now assigns it via a shared-grandparent scan:
+/// two agents are first cousins when both are 2 hops above the same ancestor.
+#[test]
+fn cousin_stage_derived_from_shared_grandparent() {
+    use mindstrata_core::id::AgentId;
+    use mindstrata_sim::social::kinship::KinshipLink;
+    use mindstrata_sim::social::relationship_v2::RelationshipStage;
+
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 300,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 8,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.run(144); // one daily tick so v2 stages stabilize
+
+    // Wire a family: grandparent g has children p1 and p2 (siblings); p1 has
+    // child c1, p2 has child c2 — so c1 and c2 are first cousins. Agent u is
+    // p1's sibling via a DIFFERENT parent (an uncle to c1, not a grandparent
+    // link) to prove the scan cannot mislabel collateral-ascendants.
+    let (g, p1, p2, c1, c2, u) = (2usize, 3usize, 4usize, 5usize, 6usize, 7usize);
+    for (parent, child) in [(g, p1), (g, p2), (g, u), (p1, c1), (p2, c2)] {
+        sim.kinship_graph.add_link(parent, child, KinshipLink::ParentChild, 150);
+        sim.kinship_graph.add_link(child, parent, KinshipLink::ParentChild, 150);
+    }
+    // p1, p2 and u are all children of g (siblings). u is therefore an uncle
+    // to c1/c2 — a collateral-ascendant who shares g's parent lineage but is
+    // NOT a shared grandparent of c1/c2 (u's grandparents are one more hop
+    // up), so the cousin scan must not misfire on u↔c1.
+    for (a, b) in [(p1, p2), (p2, p1), (p1, u), (u, p1), (p2, u), (u, p2)] {
+        sim.kinship_graph.add_link(a, b, KinshipLink::Sibling, 150);
+    }
+
+    sim.run(144); // next daily tick → the kin-assignment pass runs
+
+    let stage_between = |sim: &mindstrata_sim::sim::Simulation, a: usize, b: usize| {
+        sim.agents[a]
+            .relationship_v2s
+            .iter()
+            .find(|r| r.to == AgentId::new(b as u64))
+            .map(|r| r.stage)
+    };
+
+    // First cousins share a grandparent → Cousin, in BOTH directions.
+    assert_eq!(
+        stage_between(&sim, c1, c2),
+        Some(RelationshipStage::Cousin),
+        "c1→c2 must be labeled Cousin (shared grandparent g)"
+    );
+    assert_eq!(
+        stage_between(&sim, c2, c1),
+        Some(RelationshipStage::Cousin),
+        "c2→c1 must be labeled Cousin (shared grandparent g)"
+    );
+    // Uncle/niece (u ↔ c1): u is a sibling of p1 (wired above with u's own
+    // ParentChild edge from g, so u's grandparent set is genuinely non-empty
+    // — this is not a degenerate empty-set pass). The shared-grandparent scan
+    // must NOT misfire on this collateral-ascendant pair (the uncle's
+    // grandparents are the niece's great-grandparents, one hop further up).
+    assert_eq!(
+        stage_between(&sim, p1, u),
+        Some(RelationshipStage::Sibling),
+        "wired sibling pair p1↔u must be labeled Sibling (direct-link-first)"
+    );
+    assert_ne!(
+        stage_between(&sim, u, c1),
+        Some(RelationshipStage::Cousin),
+        "uncle→niece must not be mislabeled Cousin"
+    );
+    assert_ne!(
+        stage_between(&sim, u, c2),
+        Some(RelationshipStage::Cousin),
+        "uncle→niece (c2) must not be mislabeled Cousin"
+    );
+
+    // The Cousin stage carries the kin-branch metadata (label + coefficient).
+    let rv2 = sim.agents[c1]
+        .relationship_v2s
+        .iter()
+        .find(|r| r.to == AgentId::new(c2 as u64))
+        .expect("c1→c2 relationship exists");
+    assert_eq!(rv2.stage, RelationshipStage::Cousin);
+    assert_eq!(rv2.derive_kinship_coefficient(), Fixed::from_f64(0.25));
+}
+
+
 /// §10.6 (AP2): Births must mirror parent/child and sibling links into the
 /// kinship graph — the graph was previously only seeded at populate (where
 /// initial adults have no parents), so the entire kinship system had no edges
