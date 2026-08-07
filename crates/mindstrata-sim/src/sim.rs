@@ -5910,6 +5910,37 @@ impl Simulation {
             let has_children = parent_pairs.contains(&(a.min(b), a.max(b)));
             bond.advance_stage(has_children);
         }
+        // §10.4 (AP2): Jealousy-driven breakup — the decisional consumer.
+        // A bond crushed past the dissolution threshold (strength < 0.1 AND
+        // strain > 0.8) ends its marriage: the marriage record is dissolved
+        // with the Separation cause (legitimacy damaged, strain maxed — the
+        // history stays in the registry with active=false) and the bond
+        // itself is removed so it cannot re-fire daily. Pairs are collected
+        // first and applied after the loop (no reentrant borrow of the
+        // registry). In peaceful villages jealousy stays ~0 so this never
+        // fires — the golden baseline stays byte-identical.
+        let dissolving: Vec<(usize, usize)> = self
+            .marriage_registry
+            .pair_bonds
+            .iter()
+            .filter(|pb| pb.should_dissolve())
+            .map(|pb| (pb.partner_a.min(pb.partner_b), pb.partner_a.max(pb.partner_b)))
+            .collect();
+        if !dissolving.is_empty() {
+            for (a, b) in &dissolving {
+                if let Some(m) = self.marriage_registry.marriages.iter_mut().find(|m| {
+                    m.active
+                        && ((m.partner_a == *a && m.partner_b == *b)
+                            || (m.partner_a == *b && m.partner_b == *a))
+                }) {
+                    m.dissolve(&crate::social::marriage::DissolutionCause::Separation);
+                }
+            }
+            self.marriage_registry.pair_bonds.retain(|pb| {
+                let pair = (pb.partner_a.min(pb.partner_b), pb.partner_a.max(pb.partner_b));
+                !dissolving.contains(&pair)
+            });
+        }
     }
 
     /// §6 + §10.6/§10.7: Kinship & Household daily update.

@@ -4079,6 +4079,90 @@ fn clan_identity_myths_and_honor_codes_live() {
     assert_eq!(key(&sim), key(&sim2), "clan identity must be seed-deterministic");
 }
 
+/// §10.4 (AP2): The jealousy-driven breakup decisional consumer — a bond
+/// crushed past the dissolution threshold (strength < 0.1 AND strain > 0.8)
+/// dissolves its marriage (Separation cause, record kept inactive) and is
+/// removed from the registry. Deterministic, and byte-inert for peaceful
+/// runs (jealousy stays ~0 there, so nothing reaches the threshold).
+#[test]
+fn jealous_bond_dissolution_dissolves_marriage() {
+    fn drive(seed: u64) -> (usize, usize, bool) {
+        let config = SimConfig {
+            seed,
+            max_ticks: 3000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(3000);
+        // Marriages (and their 1:1 bonds) have formed by tick 2000 (§10.5).
+        assert!(
+            !sim.marriage_registry.pair_bonds.is_empty(),
+            "pair bonds must have formed by tick 3000"
+        );
+        let (a, b) = {
+            let bond = &sim.marriage_registry.pair_bonds[0];
+            (bond.partner_a, bond.partner_b)
+        };
+        // Capture the marriage's legitimacy BEFORE the forced breakup — the
+        // Separation cause is the only one that subtracts exactly 0.2, so
+        // the post-dissolution drop discriminates it from Divorce (halves)
+        // and Annulment (subtracts 0.3).
+        let legitimacy_before = sim
+            .marriage_registry
+            .marriages
+            .iter()
+            .find(|m| (m.partner_a == a && m.partner_b == b)
+                || (m.partner_a == b && m.partner_b == a))
+            .map(|m| m.legitimacy)
+            .unwrap_or(Fixed::ZERO);
+        // Force the bond well past the dissolution threshold — far enough
+        // that the daily decay (strain ×0.98) and strength drift toward 0.5
+        // cannot rescue it, and a high jealousy load guarantees the negative
+        // charge pass pushes it further down.
+        sim.marriage_registry.pair_bonds[0].bond_strength = Fixed::from_f64(0.001);
+        sim.marriage_registry.pair_bonds[0].strain = Fixed::from_f64(1.0);
+        sim.marriage_registry.pair_bonds[0].jealousy_load = Fixed::from_f64(0.95);
+        // Continue 144 ticks: at least one daily pass (a multiple of 144)
+        // runs within the window.
+        sim.run(144);
+        let dissolved = sim
+            .marriage_registry
+            .marriages
+            .iter()
+            .any(|m| {
+                ((m.partner_a == a && m.partner_b == b)
+                    || (m.partner_a == b && m.partner_b == a))
+                    && !m.active
+            });
+        let bond_removed = sim.marriage_registry.find_bond(a, b).is_none();
+        // Separation signature: legitimacy fell by exactly ~0.2 (subtract,
+        // clamped), not halved (Divorce) and not by 0.3 (Annulment).
+        let legitimacy_after = sim
+            .marriage_registry
+            .marriages
+            .iter()
+            .find(|m| (m.partner_a == a && m.partner_b == b)
+                || (m.partner_a == b && m.partner_b == a))
+            .map(|m| m.legitimacy)
+            .unwrap_or(Fixed::ZERO);
+        let separation_signature = legitimacy_after < legitimacy_before
+            && legitimacy_after >= legitimacy_before - Fixed::from_f64(0.25);
+        (a, b, dissolved && bond_removed && separation_signature)
+    }
+
+    let (a1, b1, ok1) = drive(42);
+    let (a2, b2, ok2) = drive(42);
+    assert_eq!((a1, b1), (a2, b2), "bond pair must be seed-deterministic");
+    assert!(
+        ok1 && ok2,
+        "the jealous bond must dissolve its marriage and be removed from the registry"
+    );
+}
+
 
 
 
