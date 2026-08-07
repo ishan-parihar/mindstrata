@@ -6280,19 +6280,19 @@ impl Simulation {
                     SimEvent::AgentAte { agent: a, .. } if a.as_u64() == i as u64 => {
                         if agent.agent_tier.budget_tracker.can_memory_op() {
                             let _ = agent.agent_tier.budget_tracker.consume_memory_op();
-                            agent.memory.encode(MemoryKind::Consumption, tick_u64, salience, emotional, None, MemoryTag::AteFood);
+                            agent.memory.encode(MemoryKind::Somatic, tick_u64, salience, emotional, None, MemoryTag::AteFood);
                         }
                     }
                     SimEvent::AgentDrank { agent: a, .. } if a.as_u64() == i as u64 => {
                         if agent.agent_tier.budget_tracker.can_memory_op() {
                             let _ = agent.agent_tier.budget_tracker.consume_memory_op();
-                            agent.memory.encode(MemoryKind::Consumption, tick_u64, salience, emotional, None, MemoryTag::DrankWater);
+                            agent.memory.encode(MemoryKind::Somatic, tick_u64, salience, emotional, None, MemoryTag::DrankWater);
                         }
                     }
                     SimEvent::AgentRested { agent: a, .. } if a.as_u64() == i as u64 => {
                         if agent.agent_tier.budget_tracker.can_memory_op() {
                             let _ = agent.agent_tier.budget_tracker.consume_memory_op();
-                            agent.memory.encode(MemoryKind::Positive, tick_u64, salience, emotional, None, MemoryTag::Rested);
+                            agent.memory.encode(MemoryKind::Emotional, tick_u64, salience, emotional, None, MemoryTag::Rested);
                         }
                     }
                     SimEvent::InteractionOccurred { from, to, kind, .. } => {
@@ -6306,8 +6306,8 @@ impl Simulation {
                                 _ => MemoryTag::TalkedTo,
                             };
                             let kind = match kind {
-                                mindstrata_core::event::InteractionKind::Threaten | mindstrata_core::event::InteractionKind::Insult => MemoryKind::Negative,
-                                mindstrata_core::event::InteractionKind::Help | mindstrata_core::event::InteractionKind::Comfort => MemoryKind::Positive,
+                                mindstrata_core::event::InteractionKind::Threaten | mindstrata_core::event::InteractionKind::Insult => MemoryKind::Traumatic,
+                                mindstrata_core::event::InteractionKind::Help | mindstrata_core::event::InteractionKind::Comfort => MemoryKind::Emotional,
                                 _ => MemoryKind::Social,
                             };
                             if agent.agent_tier.budget_tracker.can_memory_op() {
@@ -6326,7 +6326,7 @@ impl Simulation {
             }
             // Probabilistic memory rehearsal (every 10 ticks)
             if phases.is_deca {
-                agent.memory.rehearse_random(self.rng.get_mut(RngStream::Behavior));
+                agent.memory.rehearse_random(tick_u64, self.rng.get_mut(RngStream::Behavior));
             }
             // Decay memories
             agent.memory.decay(tick_u64);
@@ -6362,8 +6362,9 @@ impl Simulation {
             }
             agent.status.recompute();
 
-            // §22: Memory reconsolidation — current emotions bias recalled memories
-            agent.memory.reconsolidate(agent.emotions.anger, agent.emotions.joy);
+            // §22 / §8.1.3: Memory reconsolidation — current emotions bias recalled
+            // memories and erode their accuracy (recording distortion events).
+            agent.memory.reconsolidate(tick_u64, agent.emotions.anger, agent.emotions.joy);
 
             // §4.2: Skill improvement — agents improve skills through repeated practice.
             // Small increments per tick; skills cap at 1.0.

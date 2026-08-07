@@ -2182,6 +2182,84 @@ fn perception_biases_and_salience_map_populated() {
     }
 }
 
+// ── §8.1.3: Learning and Memory System ────────────────────────────
+
+/// Iter 43: the plan's nine-kind `MemoryKind` taxonomy + `MemoryTrace`
+/// properties must be live in real runs. The module is write-only
+/// observational state (nothing reads memory for decisions, and memory is
+/// excluded from snapshot projections), so these are structural assertions:
+/// (1) the sim produces Somatic/Emotional/Traumatic/Social traces from real
+/// events, (2) vivid events upgrade to Flashbulb, (3) every trace carries the
+/// plan's derived properties (accuracy starts at 1.0, sensory_richness and
+/// valence follow kind, social traces are shared), and (4) angry agents'
+/// reconsolidation records distortion events that erode accuracy.
+#[test]
+fn memory_system_produces_plan_taxonomy_and_trace_properties() {
+    use mindstrata_sim::memory::{DistortionCause, MemoryKind};
+
+    let riverford = mindstrata_sim::scenario::Scenario::riverford();
+    let mut sim = mindstrata_sim::Simulation::from_scenario(riverford);
+    sim.populate();
+    sim.run(4320);
+
+    // Every agent's store must carry the plan's trace shape.
+    let mut kind_seen = std::collections::HashSet::new();
+    let mut flashbulb_seen = false;
+    let mut distortion_seen = false;
+    for agent in &sim.agents {
+        for trace in &agent.memory.episodes {
+            kind_seen.insert(trace.kind);
+            // Plan property: encoding derives sensory richness from salience + charge.
+            assert!(trace.sensory_richness > Fixed::ZERO, "{} has empty sensory richness", agent.name);
+            // Plan property: accuracy starts at 1.0 and only erodes via distortion.
+            assert!(trace.accuracy > Fixed::ZERO && trace.accuracy <= Fixed::ONE);
+            // Plan property: valence sign follows the kind (Flashbulb is
+            // derived and inherits its base kind's sign, so it is not forced
+            // either way here — the unit tests cover the sign inheritance).
+            match trace.kind {
+                MemoryKind::Traumatic => assert!(trace.valence < Fixed::ZERO),
+                MemoryKind::Emotional => assert!(trace.valence >= Fixed::ZERO),
+                _ => {}
+            }
+            if trace.kind == MemoryKind::Flashbulb {
+                flashbulb_seen = true;
+            }
+            // Plan property: social traces (shared with another agent) are marked shared.
+            if trace.other_agent.is_some() && trace.kind != MemoryKind::Flashbulb {
+                assert_eq!(trace.social_sharedness, Fixed::ONE);
+            }
+            // Plan mechanic: emotion distorts — reconsolidation records events
+            // (anger is high at baseline end, so Traumatic traces must show it).
+            for ev in &trace.distortion_history {
+                if ev.cause == DistortionCause::EmotionalReconsolidation {
+                    distortion_seen = true;
+                }
+            }
+        }
+    }
+
+    // The sim's event mix must produce the wired kinds and the derived
+    // Flashbulb. Somatic traces (eating/drinking) are deliberately NOT
+    // asserted — low emotional charge means they decay fast (the lossy
+    // memory design) and rarely survive a 4320-tick run; they are covered
+    // by unit tests. Emotional/help, Traumatic/threat and Social/talk
+    // memories carry enough charge to persist.
+    assert!(kind_seen.contains(&MemoryKind::Social), "no Social traces in run");
+    assert!(kind_seen.contains(&MemoryKind::Emotional), "no Emotional traces in run");
+    assert!(
+        kind_seen.contains(&MemoryKind::Traumatic),
+        "no Traumatic traces in run"
+    );
+    assert!(
+        flashbulb_seen,
+        "no Flashbulb traces — vivid encoding upgrade never fired"
+    );
+    assert!(
+        distortion_seen,
+        "no emotional-reconsolidation distortion events — anger bias never recorded"
+    );
+}
+
 // ── §7.2.6: Pregnancy State ───────────────────────────────────────
 
 /// Iter 42: the plan's `Option<PregnancyState>` shape. In real runs the
