@@ -2444,6 +2444,23 @@ impl Simulation {
                 self.agents[i].status_v2.decay();
                 // Sync authority from existing institutional role_status
                 self.agents[i].status_v2.authority = self.agents[i].status.role_status;
+                // §11.1 (AP2): Derive institutional_rank from the agent's highest
+                // institutional role authority (deterministic scan of the
+                // institutions registry — no RNG). Zero when the agent holds no
+                // institutional role. Only the new field is written, so the
+                // golden baseline stays byte-identical.
+                let agent_id = AgentId::new(i as u64);
+                let mut best_role_authority = Fixed::ZERO;
+                for institution in &self.institutions {
+                    for role in &institution.roles {
+                        if role.holder == Some(agent_id)
+                            && role.authority > best_role_authority
+                        {
+                            best_role_authority = role.authority;
+                        }
+                    }
+                }
+                self.agents[i].status_v2.institutional_rank = best_role_authority;
                 if avg_wealth > Fixed::ZERO {
                     self.agents[i].status_v2.wealth_rank =
                         (self.agents[i].wealth.coin / avg_wealth * Fixed::from_f64(0.5)).clamp_01();

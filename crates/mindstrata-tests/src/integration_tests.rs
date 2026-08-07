@@ -3206,6 +3206,61 @@ fn marriage_institution_instantiated_in_production_runs() {
     assert_eq!(sum1, sum2, "§10.5 marriage end-state must be seed-deterministic");
 }
 
+#[test]
+fn status_institutional_rank_populates_across_run() {
+    // §11.1 (AP2): StatusDimensions must expose the plan's ten components —
+    // institutional_rank was the missing tenth. It is derived daily from the
+    // agent's highest institutional role authority, so role-holders (council
+    // elders, priests, merchants) must carry non-zero rank in real runs while
+    // plain agents stay at zero.
+    let sim = run_sim(42, 2000);
+
+    assert!(!sim.institutions.is_empty(), "institutions must exist");
+
+    // Find every agent who holds an institutional role with non-zero authority.
+    let mut role_holders: Vec<usize> = Vec::new();
+    for institution in &sim.institutions {
+        for role in &institution.roles {
+            if role.authority > mindstrata_core::fixed::Fixed::ZERO {
+                if let Some(holder) = role.holder {
+                    let idx = holder.as_u64() as usize;
+                    if !role_holders.contains(&idx) {
+                        role_holders.push(idx);
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        !role_holders.is_empty(),
+        "some agents must hold institutional roles with authority"
+    );
+    assert!(
+        role_holders.iter().any(|&idx| {
+            sim.agents[idx].status_v2.institutional_rank > mindstrata_core::fixed::Fixed::ZERO
+        }),
+        "institutional role holders must carry non-zero institutional_rank"
+    );
+
+    // Determinism: same seed → identical §11.1 end-state.
+    let sim2 = run_sim(42, 2000);
+    let sum1: f64 = sim
+        .agents
+        .iter()
+        .map(|a| a.status_v2.institutional_rank.to_f64())
+        .sum();
+    let sum2: f64 = sim2
+        .agents
+        .iter()
+        .map(|a| a.status_v2.institutional_rank.to_f64())
+        .sum();
+    assert!(
+        (sum1 - sum2).abs() < 1e-9,
+        "§11.1 institutional_rank end-state must be seed-deterministic"
+    );
+}
+
+
 
 
 
