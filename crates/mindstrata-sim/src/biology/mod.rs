@@ -30,6 +30,7 @@ pub mod nervous;
 pub mod reproductive;
 pub mod respiratory;
 pub mod skeletal;
+pub mod thermal;
 
 use mindstrata_core::fixed::Fixed;
 use rand::Rng;
@@ -48,6 +49,7 @@ pub use nervous::NervousSystemState;
 pub use reproductive::ReproductiveState;
 pub use respiratory::RespiratoryState;
 pub use skeletal::SkeletalState;
+pub use thermal::ThermalState;
 
 /// EmbodiedState — the full biological substrate of an agent.
 ///
@@ -76,7 +78,8 @@ pub struct EmbodiedState {
     pub endocrine: EndocrineState,
     /// Nervous system — arousal, pain, trauma.
     pub nervous: NervousSystemState,
-    /// Metabolic system — energy, hunger, thermoregulation.
+    /// Metabolic system — energy, hunger, hydration (thermoregulation now
+    /// lives in the dedicated `thermal: ThermalState` field, Iter 45).
     pub metabolic: MetabolicState,
     /// Cardiovascular system — stamina, shock, fitness.
     pub cardiovascular: CardiovascularState,
@@ -103,6 +106,11 @@ pub immune: ImmuneState,    /// Musculoskeletal system — strength, fatigue, co
 pub reproductive: ReproductiveState,
     /// Circadian system — sleep/wake cycle, alertness.
     pub circadian: CircadianState,
+    /// Thermoregulation (§7.3.3) — body temperature, cold/heat stress.
+    /// `#[serde(default)]`: added in Iter 45 (extracted from MetabolicState),
+    /// so pre-Iter-45 snapshots still restore.
+    #[serde(default)]
+    pub thermal: ThermalState,
     /// Developmental system — life stage, aging, milestones.
     pub development: DevelopmentalState,
     /// Current health (0–1).
@@ -151,6 +159,7 @@ impl EmbodiedState {
                 ..ReproductiveState::default()
             },
             circadian: CircadianState::default(),
+            thermal: ThermalState::default(),
             development,
             health: Fixed::from_f64(0.9) + Fixed::from_f64(rng.random_range(0.0..0.1)),
             energy: Fixed::from_f64(0.7) + Fixed::from_f64(rng.random_range(0.0..0.2)),
@@ -275,8 +284,13 @@ impl EmbodiedState {
         self.endocrine.arousal.update(self.endocrine.stress.level,
             params.endocrine_arousal_rise, params.endocrine_arousal_decay);
 
-        // 4. Metabolic — energy, hunger, thermoregulation
-        self.metabolic.tick_update(activity_level, ambient_temperature);
+        // 4. Metabolic — energy, hunger (thermoregulation now in ThermalState)
+        self.metabolic.tick_update(activity_level);
+
+        // 4b. Thermal — body temperature homeostasis, cold/heat stress.
+        // Runs immediately after metabolic with the post-update energy
+        // reserves (identical to the pre-Iter-45 inlined block).
+        self.thermal.tick_update(ambient_temperature, self.metabolic.energy_reserves);
 
         // 5. Cardiovascular — fitness, shock
         let age_modifier = self.development.physical_modifier();
@@ -291,7 +305,7 @@ impl EmbodiedState {
         // 6. Respiratory — exertion, disease
         self.respiratory.tick_update(
             activity_level,
-            self.metabolic.cold_stress,
+            self.thermal.cold_stress,
             Fixed::ZERO, // smoke exposure (placeholder)
             Fixed::ZERO, // damp housing (placeholder)
             age_modifier,

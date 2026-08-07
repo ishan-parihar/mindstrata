@@ -2334,6 +2334,54 @@ fn motivation_full_formula_and_roster_are_live() {
     );
 }
 
+// ── §7.3.3: Thermoregulation ─────────────────────────────────────
+
+/// Iter 45: the plan's `ThermalState` (body_temperature, cold_stress,
+/// heat_stress) extracted from `MetabolicState` into `EmbodiedState` to
+/// match the §7.4 integrated body architecture. In a temperate riverford
+/// run (ambient 0.5 = thermoneutral), every agent must carry the plan's
+/// thermoneutral baseline (body temperature 0.5, zero stress) — the same
+/// values the pre-Iter-45 inlined metabolic block produced, proving the
+/// extraction is byte-identical.
+#[test]
+fn thermal_state_live_with_thermoneutral_baseline() {
+    use mindstrata_core::fixed::Fixed;
+
+    let riverford = mindstrata_sim::scenario::Scenario::riverford();
+    let mut sim = mindstrata_sim::Simulation::from_scenario(riverford);
+    sim.populate();
+    sim.run(4320);
+
+    for agent in &sim.agents {
+        let t = &agent.embodied.thermal;
+        // Plan §7.3.3: thermoneutral baseline (ambient 0.5, temperate default).
+        assert!(
+            (t.body_temperature - Fixed::from_f64(0.5)).abs() <= Fixed::from_f64(0.01),
+            "agent {} drifted from thermoneutral: {}",
+            agent.name,
+            t.body_temperature.to_f64()
+        );
+        assert!(
+            t.cold_stress <= Fixed::from_f64(0.02) && t.heat_stress <= Fixed::from_f64(0.02),
+            "agent {} developed thermal stress at temperate ambient",
+            agent.name
+        );
+    }
+
+    // The respiratory consumer reads from the extracted field — pin the
+    // rewiring exactly: at thermoneutral ambient (cold_stress = 0) the
+    // pre-Iter-45 wiring produced respiratory irritation of exactly 0, and
+    // the extraction must reproduce that.
+    for agent in &sim.agents {
+        assert_eq!(
+            agent.embodied.respiratory.irritation,
+            Fixed::ZERO,
+            "agent {} respiratory irritation drifted from the pre-extraction value",
+            agent.name
+        );
+    }
+}
+
 // ── §7.2.6: Pregnancy State ───────────────────────────────────────
 
 /// Iter 42: the plan's `Option<PregnancyState>` shape. In real runs the

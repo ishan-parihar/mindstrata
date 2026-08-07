@@ -19,12 +19,6 @@ pub struct MetabolicState {
     pub demand: Fixed,
     /// Satiety signal (0 = starving, 1 = completely full).
     pub satiety: Fixed,
-    /// Body temperature analog (0.45 = hypothermic, 0.5 = normal, 0.55 = febrile).
-    pub body_temperature: Fixed,
-    /// Cold stress (0 = comfortable, 1 = dangerously cold).
-    pub cold_stress: Fixed,
-    /// Heat stress (0 = comfortable, 1 = dangerously hot).
-    pub heat_stress: Fixed,
     /// Hydration level (0 = severely dehydrated, 1 = fully hydrated).
     pub hydration: Fixed,
 }
@@ -37,9 +31,6 @@ impl Default for MetabolicState {
             basal_rate: Fixed::from_f64(0.01),
             demand: Fixed::from_f64(0.01),
             satiety: Fixed::from_f64(0.5),
-            body_temperature: Fixed::from_f64(0.5),
-            cold_stress: Fixed::ZERO,
-            heat_stress: Fixed::ZERO,
             hydration: Fixed::from_f64(0.8),
         }
     }
@@ -47,7 +38,8 @@ impl Default for MetabolicState {
 
 impl MetabolicState {
     /// Consume energy each tick. Returns energy actually expended.
-    pub fn tick_update(&mut self, activity_level: Fixed, ambient_temperature: Fixed) {
+    /// Thermoregulation moved to `ThermalState::tick_update` (Iter 45).
+    pub fn tick_update(&mut self, activity_level: Fixed) {
         // Total demand = basal + activity-driven
         let activity_demand = activity_level * Fixed::from_f64(0.02);
         self.demand = self.basal_rate + activity_demand;
@@ -71,24 +63,6 @@ impl MetabolicState {
 
         // Satiety decays over time
         self.satiety = (self.satiety - Fixed::from_f64(0.003)).clamp_01();
-
-        // Thermoregulation
-        let temp_delta = ambient_temperature - self.body_temperature;
-        self.cold_stress = if temp_delta < -Fixed::from_f64(0.05) {
-            (-temp_delta - Fixed::from_f64(0.05)).clamp_01()
-        } else {
-            Fixed::ZERO
-        };
-        self.heat_stress = if temp_delta > Fixed::from_f64(0.05) {
-            (temp_delta - Fixed::from_f64(0.05)).clamp_01()
-        } else {
-            Fixed::ZERO
-        };
-        // Body temperature drifts toward ambient (slowed by metabolic regulation)
-        let metabolic_warmth = self.energy_reserves * Fixed::from_f64(0.01);
-        self.body_temperature = (self.body_temperature + temp_delta * Fixed::from_f64(0.001)
-            - metabolic_warmth * self.cold_stress * Fixed::from_f64(0.001))
-            .clamp_01();
 
         // Hydration depletes slowly
         self.hydration = (self.hydration - Fixed::from_f64(0.002)).clamp_01();
@@ -130,7 +104,7 @@ mod tests {
     fn energy_depletes_with_activity() {
         let mut m = MetabolicState::default();
         let initial = m.energy_reserves;
-        m.tick_update(Fixed::from_f64(0.8), Fixed::from_f64(0.5));
+        m.tick_update(Fixed::from_f64(0.8));
         assert!(m.energy_reserves < initial);
     }
 
@@ -149,12 +123,5 @@ mod tests {
         let mut m = MetabolicState::default();
         m.hydration = Fixed::from_f64(0.1);
         assert!(m.in_crisis());
-    }
-
-    #[test]
-    fn cold_stress_from_low_temperature() {
-        let mut m = MetabolicState::default();
-        m.tick_update(Fixed::ZERO, Fixed::from_f64(0.1)); // very cold
-        assert!(m.cold_stress > Fixed::ZERO);
     }
 }
