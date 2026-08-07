@@ -78,12 +78,18 @@ pub struct Personality {
     pub traditionalism: Fixed,
     pub dominance: Fixed,
     pub impulsivity: Fixed,
+    /// §8.1.6: Biologically-rooted temperament layer (the state-trait dynamics
+    /// target). Derived deterministically from the traits at construction,
+    /// then reshaped by the plasticity pass. Observational — no decision
+    /// consumer reads it yet, so calibrated runs stay byte-identical.
+    #[serde(default)]
+    pub temperament: Temperament,
 }
 
 impl Personality {
     /// Generate a random personality using the given RNG.
     pub fn random(rng: &mut impl Rng) -> Self {
-        Self {
+        let mut p = Self {
             openness: Fixed::from_f64(rng.random_range(0.0..1.0)),
             conscientiousness: Fixed::from_f64(rng.random_range(0.0..1.0)),
             extraversion: Fixed::from_f64(rng.random_range(0.0..1.0)),
@@ -96,7 +102,151 @@ impl Personality {
             traditionalism: Fixed::from_f64(rng.random_range(0.0..1.0)),
             dominance: Fixed::from_f64(rng.random_range(0.0..1.0)),
             impulsivity: Fixed::from_f64(rng.random_range(0.0..1.0)),
+            // §8.1.6: Temperament is derived deterministically from the 12
+            // drawn traits — zero extra RNG draws keeps seeded runs byte-identical.
+            temperament: Temperament::default(),
+        };
+        p.temperament = Temperament::from_traits(&p);
+        p
+    }
+}
+
+/// §8.1.6: Biologically-rooted temperament layer — the plan's seven
+/// temperament dimensions. Derived deterministically from the 12 stable
+/// traits at construction (zero extra RNG draws preserves seeded-run
+/// byte-identity), then slowly reshaped by `plastic_update` as the agent
+/// accumulates life experience. Observational: no decision system reads
+/// temperament yet (consumers are a future behavioral iteration), so
+/// calibrated runs remain byte-identical.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct Temperament {
+    /// Reactivity — how quickly the agent responds to stress.
+    pub reactivity: Fixed,
+    /// Soothability — how quickly the agent recovers after stress.
+    pub soothability: Fixed,
+    /// Sociability — drive to engage socially.
+    pub sociability: Fixed,
+    /// Persistence — goal adherence under difficulty.
+    pub persistence: Fixed,
+    /// Sensitivity — perceptual/emotional sensitivity.
+    pub sensitivity: Fixed,
+    /// Regularity — rhythm/regularity of daily patterns.
+    pub regularity: Fixed,
+    /// Approach/withdrawal — 0 = withdrawal, 1 = approach.
+    pub approach_withdrawal: Fixed,
+}
+
+/// §8.1.6: Per-tick state-trait dynamics signals consumed by
+/// `Temperament::plastic_update`. Every field is a deterministic function of
+/// existing agent state — no RNG, no writes to decision-read state — so the
+/// plasticity pass cannot disturb calibrated runs.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PlasticitySignals {
+    /// Repeated expression of stress this tick (0..1) — builds reactivity/sensitivity.
+    pub repeated_stress: Fixed,
+    /// Recovery / positive engagement this tick (0..1) — builds soothability.
+    pub recovery: Fixed,
+    /// Social engagement this tick (0..1) — builds sociability.
+    pub social_engagement: Fixed,
+    /// Goal striving this tick (0..1) — builds persistence.
+    pub goal_striving: Fixed,
+    /// Identity integration (self-model coherence, 0..1).
+    pub identity_integration: Fixed,
+    /// Agent age in years — drives developmental plasticity (younger = more plastic).
+    pub age_years: Fixed,
+}
+
+impl Temperament {
+    /// §8.1.6: Deterministic mapping from the stable trait constitution.
+    /// Each dimension is a weighted blend of existing traits with
+    /// coefficients summing to 1 (no division, no RNG).
+    pub fn from_traits(t: &Personality) -> Self {
+        Self {
+            reactivity: (Fixed::from_f64(0.6) * t.neuroticism
+                + Fixed::from_f64(0.4) * t.impulsivity)
+                .clamp_01(),
+            soothability: (Fixed::from_f64(0.4) * t.agreeableness
+                + Fixed::from_f64(0.3) * (Fixed::ONE - t.neuroticism)
+                + Fixed::from_f64(0.3) * t.conformity)
+                .clamp_01(),
+            sociability: (Fixed::from_f64(0.6) * t.extraversion
+                + Fixed::from_f64(0.4) * t.agreeableness)
+                .clamp_01(),
+            persistence: (Fixed::from_f64(0.6) * t.conscientiousness
+                + Fixed::from_f64(0.4) * t.ambition)
+                .clamp_01(),
+            sensitivity: (Fixed::from_f64(0.5) * t.openness
+                + Fixed::from_f64(0.5) * t.neuroticism)
+                .clamp_01(),
+            regularity: (Fixed::from_f64(0.5) * t.conscientiousness
+                + Fixed::from_f64(0.5) * t.traditionalism)
+                .clamp_01(),
+            approach_withdrawal: (Fixed::from_f64(0.6) * t.extraversion
+                + Fixed::from_f64(0.4) * t.risk_tolerance)
+                .clamp_01(),
         }
+    }
+
+    /// §8.1.6: Trait plasticity — the plan's formula
+    /// `trait_change = repeated_state_expression × identity_integration ×
+    /// social_reinforcement × developmental_plasticity`, applied to the
+    /// mutable temperament layer: each dimension is pushed by its repeatedly
+    /// expressed state signal and pulled back toward the stable trait-derived
+    /// baseline (continuous equilibrium: `x → baseline + signal`), both at
+    /// the same `rate`. At the Fixed 10 000 scale the pull term needs a
+    /// deviation of roughly a third to move, so the true regime is a deadband
+    /// around `baseline + signal` rather than a point; likewise the effective
+    /// plasticity cutoff lands near age 56 (the rate's sub-resolution tail),
+    /// where the developmental term still rounds above zero but the products
+    /// truncate. Deviations below ~0.0001 are inert by design. Every dimension
+    /// is clamped to 0..1. The 12 core traits are intentionally immutable
+    /// here — temperament consumers must be wired (future behavioral
+    /// iteration) before core traits can move without breaking byte-identical
+    /// calibration.
+    pub fn plastic_update(&mut self, baseline: &Temperament, s: &PlasticitySignals) {
+        // Developmental plasticity decays with age — full at birth, zero at 70.
+        let developmental = (Fixed::ONE
+            - (s.age_years / Fixed::from_f64(70.0)).clamp_01())
+            .clamp_01();
+        let integration = s.identity_integration.clamp_01();
+        if developmental <= Fixed::ZERO || integration <= Fixed::ZERO {
+            return;
+        }
+        // Social reinforcement amplifies the absorption of experience.
+        let reinforcement =
+            Fixed::ONE + Fixed::HALF * s.social_engagement.clamp_01();
+        let rate = developmental * integration * reinforcement * Fixed::from_f64(0.0005);
+        if rate <= Fixed::ZERO {
+            return;
+        }
+        let stress = s.repeated_stress.clamp_01();
+        let recovery = s.recovery.clamp_01();
+        let social = s.social_engagement.clamp_01();
+        let striving = s.goal_striving.clamp_01();
+        // Push from repeated state expression; pull toward the baseline.
+        self.reactivity = (self.reactivity + stress * rate
+            + (baseline.reactivity - self.reactivity) * rate)
+            .clamp_01();
+        self.soothability = (self.soothability + recovery * rate
+            + (baseline.soothability - self.soothability) * rate)
+            .clamp_01();
+        self.sociability = (self.sociability + social * rate
+            + (baseline.sociability - self.sociability) * rate)
+            .clamp_01();
+        self.persistence = (self.persistence + striving * rate
+            + (baseline.persistence - self.persistence) * rate)
+            .clamp_01();
+        // Sensitivity is driven by total arousal exposure (stress + recovery).
+        self.sensitivity = (self.sensitivity + (stress + recovery) * rate
+            + (baseline.sensitivity - self.sensitivity) * rate)
+            .clamp_01();
+        // Routinized striving builds regularity; social engagement builds approach.
+        self.regularity = (self.regularity + striving * rate
+            + (baseline.regularity - self.regularity) * rate)
+            .clamp_01();
+        self.approach_withdrawal = (self.approach_withdrawal + social * rate
+            + (baseline.approach_withdrawal - self.approach_withdrawal) * rate)
+            .clamp_01();
     }
 }
 
@@ -648,4 +798,138 @@ pub struct Relationship {
     pub last_positive_tick: u64,
     /// §19.5.G: Last negative interaction tick (for rivalry formation).
     pub last_negative_tick: u64,
+}
+
+#[cfg(test)]
+mod temperament_tests {
+    use super::*;
+
+    fn base_personality() -> Personality {
+        Personality {
+            openness: Fixed::from_f64(0.5),
+            conscientiousness: Fixed::from_f64(0.5),
+            extraversion: Fixed::from_f64(0.5),
+            agreeableness: Fixed::from_f64(0.5),
+            neuroticism: Fixed::from_f64(0.5),
+            risk_tolerance: Fixed::from_f64(0.5),
+            conformity: Fixed::from_f64(0.5),
+            ambition: Fixed::from_f64(0.5),
+            altruism: Fixed::from_f64(0.5),
+            traditionalism: Fixed::from_f64(0.5),
+            dominance: Fixed::from_f64(0.5),
+            impulsivity: Fixed::from_f64(0.5),
+            temperament: Temperament::default(),
+        }
+    }
+
+    fn signals(identity_integration: Fixed, age_years: Fixed) -> PlasticitySignals {
+        PlasticitySignals {
+            repeated_stress: Fixed::from_f64(0.8),
+            recovery: Fixed::from_f64(0.2),
+            social_engagement: Fixed::from_f64(0.5),
+            goal_striving: Fixed::from_f64(0.5),
+            identity_integration,
+            age_years,
+        }
+    }
+
+    #[test]
+    fn temperament_derivation_is_deterministic_and_bounded() {
+        let a = base_personality();
+        let b = base_personality();
+        let ta = Temperament::from_traits(&a);
+        let tb = Temperament::from_traits(&b);
+        assert_eq!(ta, tb, "same traits must derive the same temperament");
+        // All seven dimensions strictly inside (0, 1) for mid traits.
+        assert!(ta.reactivity > Fixed::ZERO && ta.reactivity < Fixed::ONE);
+        assert!(ta.soothability > Fixed::ZERO && ta.soothability < Fixed::ONE);
+        assert!(ta.sociability > Fixed::ZERO && ta.sociability < Fixed::ONE);
+        assert!(ta.persistence > Fixed::ZERO && ta.persistence < Fixed::ONE);
+        assert!(ta.sensitivity > Fixed::ZERO && ta.sensitivity < Fixed::ONE);
+        assert!(ta.regularity > Fixed::ZERO && ta.regularity < Fixed::ONE);
+        assert!(ta.approach_withdrawal > Fixed::ZERO && ta.approach_withdrawal < Fixed::ONE);
+    }
+
+    #[test]
+    fn temperament_reactivity_follows_neuroticism_and_impulsivity() {
+        let low = base_personality();
+        let mut high = base_personality();
+        high.neuroticism = Fixed::ONE;
+        high.impulsivity = Fixed::ONE;
+        let tl = Temperament::from_traits(&low);
+        let th = Temperament::from_traits(&high);
+        assert!(
+            th.reactivity > tl.reactivity,
+            "reactivity must rise with neuroticism/impulsivity"
+        );
+    }
+
+    #[test]
+    fn plastic_update_preserves_core_traits_and_builds_reactivity_under_stress() {
+        let p = base_personality();
+        let before = p.clone();
+        let baseline = Temperament::from_traits(&p);
+        let mut t = baseline;
+        let r0 = t.reactivity;
+        let s = signals(Fixed::ONE, Fixed::from_f64(20.0));
+        for _ in 0..500 {
+            t.plastic_update(&baseline, &s);
+        }
+        assert!(
+            t.reactivity > r0,
+            "repeated stress must build reactivity over time"
+        );
+        // The 12 core traits are untouched by construction — assert the invariant.
+        assert_eq!(p.openness, before.openness);
+        assert_eq!(p.conscientiousness, before.conscientiousness);
+        assert_eq!(p.extraversion, before.extraversion);
+        assert_eq!(p.agreeableness, before.agreeableness);
+        assert_eq!(p.neuroticism, before.neuroticism);
+        assert_eq!(p.risk_tolerance, before.risk_tolerance);
+        assert_eq!(p.conformity, before.conformity);
+        assert_eq!(p.ambition, before.ambition);
+        assert_eq!(p.altruism, before.altruism);
+        assert_eq!(p.traditionalism, before.traditionalism);
+        assert_eq!(p.dominance, before.dominance);
+        assert_eq!(p.impulsivity, before.impulsivity);
+        // Temperament stays bounded.
+        assert!(t.reactivity <= Fixed::ONE && t.sociability <= Fixed::ONE);
+    }
+
+    #[test]
+    fn plastic_update_is_inert_without_identity_integration_or_in_old_age() {
+        let p = base_personality();
+        let baseline = Temperament::from_traits(&p);
+        let mut t = baseline;
+        let snapshot = t;
+        // Zero identity integration → zero rate, no matter the stress.
+        let quiet = signals(Fixed::ZERO, Fixed::from_f64(20.0));
+        t.plastic_update(&baseline, &quiet);
+        assert_eq!(t, snapshot, "no identity integration → no plasticity");
+        // Maximum age → developmental plasticity = 0.
+        let old = signals(Fixed::ONE, Fixed::from_f64(70.0));
+        t.plastic_update(&baseline, &old);
+        assert_eq!(t, snapshot, "old age → no plasticity");
+    }
+
+    #[test]
+    fn plastic_update_delta_scales_with_developmental_plasticity() {
+        let p = base_personality();
+        let baseline = Temperament::from_traits(&p);
+        let mut young = baseline;
+        let mut elderly = baseline;
+        let s_young = signals(Fixed::ONE, Fixed::from_f64(20.0));
+        // Age 55 (dev = 0.2143) keeps the elderly rate above the Fixed
+        // sub-resolution tail — both sides must move for the comparison to be
+        // meaningful (at 60+ the elderly rate truncates to zero entirely).
+        let s_old = signals(Fixed::ONE, Fixed::from_f64(55.0));
+        for _ in 0..100 {
+            young.plastic_update(&baseline, &s_young);
+            elderly.plastic_update(&baseline, &s_old);
+        }
+        assert!(
+            young.reactivity > elderly.reactivity,
+            "younger agents must show more trait plasticity"
+        );
+    }
 }

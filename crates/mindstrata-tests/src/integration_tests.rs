@@ -2865,6 +2865,52 @@ fn expanded_emotion_families_are_live_across_real_run() {
     assert!(core_live > 0, "core emotions remain live");
 }
 
+#[test]
+fn temperament_is_populated_deterministic_and_bounded() {
+    let sim = run_sim(42, 2000);
+    assert!(!sim.agents.is_empty());
+
+    // All seven dimensions populated (strictly positive baselines) and bounded.
+    for a in &sim.agents {
+        let t = &a.personality.temperament;
+        assert!(t.reactivity > Fixed::ZERO && t.reactivity <= Fixed::ONE,
+            "reactivity out of (0,1]: {}", t.reactivity.to_f64());
+        assert!(t.soothability > Fixed::ZERO && t.soothability <= Fixed::ONE);
+        assert!(t.sociability > Fixed::ZERO && t.sociability <= Fixed::ONE);
+        assert!(t.persistence > Fixed::ZERO && t.persistence <= Fixed::ONE);
+        assert!(t.sensitivity > Fixed::ZERO && t.sensitivity <= Fixed::ONE);
+        assert!(t.regularity > Fixed::ZERO && t.regularity <= Fixed::ONE);
+        assert!(t.approach_withdrawal > Fixed::ZERO && t.approach_withdrawal <= Fixed::ONE);
+    }
+
+    // Temperament must vary across the population (different constitutions).
+    let reactivities: Vec<f64> = sim.agents
+        .iter()
+        .map(|a| a.personality.temperament.reactivity.to_f64())
+        .collect();
+    let min = reactivities.iter().copied().fold(f64::INFINITY, f64::min);
+    let max = reactivities.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    assert!(max - min > 0.05,
+        "temperament must vary across agents, range {:.3}", max - min);
+
+    // The 12 decision-read core traits stay in range (plasticity invariant).
+    for a in &sim.agents {
+        assert!(a.personality.conscientiousness > Fixed::ZERO);
+        assert!(a.personality.neuroticism > Fixed::ZERO);
+    }
+
+    // Determinism: same seed → identical temperament end-state.
+    let sim2 = run_sim(42, 2000);
+    let sum1: f64 = sim.agents.iter()
+        .map(|a| a.personality.temperament.reactivity.to_f64())
+        .sum();
+    let sum2: f64 = sim2.agents.iter()
+        .map(|a| a.personality.temperament.reactivity.to_f64())
+        .sum();
+    assert!((sum1 - sum2).abs() < 1e-9,
+        "temperament end-state must be seed-deterministic");
+}
+
 
 
 

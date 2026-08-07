@@ -755,6 +755,7 @@ mod smoke {
             traditionalism: Fixed::from_f64(0.5),
             dominance: Fixed::from_f64(0.5),
             impulsivity: Fixed::from_f64(0.5),
+            temperament: mindstrata_sim::person::Temperament::default(),
         };
         assert!(bm.can_participate(&risk_taker),
             "High risk tolerance + low conformity should participate");

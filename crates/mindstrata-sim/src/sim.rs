@@ -3104,6 +3104,39 @@ impl Simulation {
                 );
             }
 
+            // ── 9. Trait plasticity (§8.1.6 state-trait dynamics) ──────
+            // Temperament dimensions slowly reshape from repeated life
+            // experience (stress, recovery, social engagement, goal striving),
+            // gated by identity integration (self-model coherence) and
+            // developmental plasticity (youth). Writes ONLY the observational
+            // temperament layer — the 12 decision-read core traits are
+            // untouched, so calibrated runs remain byte-identical.
+            for (i, agent) in self.agents.iter_mut().enumerate() {
+                let attempts = agent.recent_attempts;
+                // Stay entirely in the Fixed domain (project doctrine — all
+                // simulation values use Fixed for cross-platform determinism).
+                let goal_striving = if attempts > 0 {
+                    (Fixed::from_int(agent.recent_successes as i64)
+                        / Fixed::from_int(attempts as i64))
+                        .clamp_01()
+                } else {
+                    Fixed::ZERO
+                };
+                let signals = crate::person::PlasticitySignals {
+                    // Arousal is the in-scope physiological stress proxy
+                    // ((fear + anger + joy) × 0.5 from the appraisal block).
+                    repeated_stress: affects[i].arousal,
+                    recovery: affects[i].valence.clamp_01(),
+                    social_engagement: (emotions[i].trust + emotions[i].joy)
+                        * Fixed::from_f64(0.5),
+                    goal_striving,
+                    identity_integration: agent.self_model.coherence,
+                    age_years: agent.age,
+                };
+                let baseline = crate::person::Temperament::from_traits(&agent.personality);
+                agent.personality.temperament.plastic_update(&baseline, &signals);
+            }
+
             // ── Write back (std::mem::take avoids cloning) ────────────
             for (i, agent) in self.agents.iter_mut().enumerate() {
                 agent.body = std::mem::take(&mut bodies[i]);
