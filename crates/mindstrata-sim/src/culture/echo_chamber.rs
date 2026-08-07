@@ -21,6 +21,8 @@
 //!   - social sorting
 //! ```
 
+use std::collections::BTreeMap;
+
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 
@@ -110,6 +112,12 @@ pub struct EchoChamberState {
     pub echo_chamber_strength: Fixed,
     /// Total cross-cutting ties across all clusters.
     pub total_cross_cutting_ties: u32,
+    /// §13.6 (AP2): Narrative dominance — how strongly each meme narrative
+    /// dominates the pool (meme id → dominance 0–1). A `BTreeMap` (not the
+    /// plan's `HashMap`) keeps serialization and iteration deterministic.
+    /// Derived by the sim's daily meme pass.
+    #[serde(default)]
+    pub narrative_dominance: BTreeMap<u64, Fixed>,
     /// Next cluster id.
     next_id: usize,
 }
@@ -121,6 +129,7 @@ impl Default for EchoChamberState {
             polarization_index: Fixed::ZERO,
             echo_chamber_strength: Fixed::ZERO,
             total_cross_cutting_ties: 0,
+            narrative_dominance: BTreeMap::new(),
             next_id: 0,
         }
     }
@@ -370,5 +379,26 @@ mod tests {
         assert_eq!(id, 0);
         assert!(state.get_cluster(0).is_some());
         assert!(state.get_cluster(1).is_none());
+    }
+
+    #[test]
+    fn narrative_dominance_defaults_to_empty() {
+        let state = EchoChamberState::new();
+        assert!(state.narrative_dominance.is_empty());
+    }
+
+    #[test]
+    fn narrative_dominance_serde_roundtrip_and_old_save_restore() {
+        let mut state = EchoChamberState::new();
+        state.narrative_dominance.insert(3, Fixed::from_f64(0.7));
+        state.narrative_dominance.insert(1, Fixed::from_f64(0.4));
+        // BTreeMap keys serialize in sorted order — deterministic JSON.
+        let json = serde_json::to_string(&state).unwrap();
+        let back: EchoChamberState = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.narrative_dominance, state.narrative_dominance);
+        // Old save without the field (e.g. pre-Iteration-57) restores empty.
+        let old = r#"{"clusters":[],"polarization_index":0,"echo_chamber_strength":0,"total_cross_cutting_ties":0,"next_id":0}"#;
+        let restored: EchoChamberState = serde_json::from_str(old).unwrap();
+        assert!(restored.narrative_dominance.is_empty());
     }
 }

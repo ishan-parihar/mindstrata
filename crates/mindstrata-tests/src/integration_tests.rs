@@ -3321,6 +3321,105 @@ fn meme_institutional_fields_populate_across_run() {
     assert_eq!(sum1, sum2, "§13.1 meme end-state must be seed-deterministic");
 }
 
+/// §13.5/§13.6 (AP2): CollectiveMemory's derived plan fields (traumas,
+/// sacred_events, founding_myths) and EchoChamberState's narrative_dominance
+/// must populate across a run, mirror their source data, and stay
+/// seed-deterministic.
+#[test]
+fn collective_memory_and_echo_chamber_plan_fields() {
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::culture::SharedMemoryKind;
+
+    let sim = run_sim(42, 2000);
+
+    // Village collective memory exists and its derived views mirror the
+    // shared-memory log: traumas ← Trauma memories, sacred_events ← Sacred.
+    let cm = sim
+        .collective_memory_registry
+        .get(0)
+        .expect("village collective memory must exist");
+    let trauma_count = cm
+        .memories
+        .iter()
+        .filter(|m| m.kind == SharedMemoryKind::Trauma)
+        .count();
+    let sacred_count = cm
+        .memories
+        .iter()
+        .filter(|m| m.kind == SharedMemoryKind::Sacred)
+        .count();
+    assert_eq!(
+        cm.traumas.len(),
+        trauma_count,
+        "traumas view must mirror Trauma memories ({} vs {})",
+        cm.traumas.len(),
+        trauma_count
+    );
+    assert_eq!(
+        cm.sacred_events.len(),
+        sacred_count,
+        "sacred_events view must mirror Sacred memories"
+    );
+    // The seeded drought trauma guarantees at least one derived trauma.
+    assert!(!cm.traumas.is_empty(), "seeded drought trauma must appear in derived traumas");
+    for t in &cm.traumas {
+        assert!(
+            t.severity >= Fixed::ZERO && t.severity <= Fixed::ONE,
+            "trauma severity {} out of [0,1]",
+            t.severity.to_f64()
+        );
+        assert!(
+            t.active == (t.severity > Fixed::from_f64(mindstrata_sim::culture::ACTIVE_TRAUMA_SALIENCE_THRESHOLD)),
+            "trauma active flag must follow severity"
+        );
+    }
+
+    // Echo chamber carries narrative dominance keyed by real meme ids, in [0,1].
+    assert!(
+        !sim.echo_chamber.narrative_dominance.is_empty(),
+        "narrative_dominance must populate from the meme pool"
+    );
+    for (&meme_id, &dominance) in &sim.echo_chamber.narrative_dominance {
+        assert!(
+            sim.meme_registry
+                .memes
+                .iter()
+                .any(|m| m.id as u64 == meme_id),
+            "narrative_dominance key {meme_id} must reference a real meme"
+        );
+        assert!(
+            dominance >= Fixed::ZERO && dominance <= Fixed::ONE,
+            "narrative dominance {} out of [0,1]",
+            dominance.to_f64()
+        );
+    }
+
+    // Determinism: same seed → identical derived end-state (BTreeMap and
+    // Vec<SharedTrauma> are PartialEq, so compare directly).
+    let sim2 = run_sim(42, 2000);
+    let cm2 = sim2
+        .collective_memory_registry
+        .get(0)
+        .expect("village collective memory must exist");
+    assert_eq!(
+        sim.echo_chamber.narrative_dominance,
+        sim2.echo_chamber.narrative_dominance,
+        "§13.6 narrative dominance must be seed-deterministic"
+    );
+    assert_eq!(
+        cm.traumas, cm2.traumas,
+        "§13.5 derived traumas must be seed-deterministic"
+    );
+    assert_eq!(
+        cm.sacred_events, cm2.sacred_events,
+        "§13.5 sacred events must be seed-deterministic"
+    );
+    assert_eq!(
+        cm.founding_myths, cm2.founding_myths,
+        "§13.5 founding myths must be seed-deterministic"
+    );
+}
+
 
 
 

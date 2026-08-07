@@ -34,7 +34,7 @@ pub mod ritual;
 pub mod rumor_v2;
 pub mod sacred;
 
-pub use collective_memory::{CollectiveMemory, CollectiveMemoryRegistry, SharedMemory, SharedMemoryKind};
+pub use collective_memory::{ACTIVE_TRAUMA_SALIENCE_THRESHOLD, CollectiveMemory, CollectiveMemoryRegistry, SharedMemory, SharedMemoryKind, SharedTrauma};
 pub use echo_chamber::{BeliefCluster as EchoBeliefCluster, EchoChamberState};
 pub use education::{EducationState, EducationEvent};
 pub use ideology::{BeliefEcology, BeliefCluster, Ideology, IdeologyAxis};

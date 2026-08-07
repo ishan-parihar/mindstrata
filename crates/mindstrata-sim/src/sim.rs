@@ -5746,6 +5746,26 @@ impl Simulation {
                     };
                 }
             }
+            // §13.6 (AP2): Derive narrative dominance from the meme pool — a
+            // narrative dominates when it is both credible and viral. A
+            // BTreeMap (vs the plan's HashMap) keeps the ordering deterministic
+            // for serialization. Only the new field is written (no RNG).
+            self.echo_chamber.narrative_dominance = self
+                .meme_registry
+                .memes
+                .iter()
+                .map(|m| (m.id as u64, (m.credibility * m.virality).clamp_01()))
+                .collect();
+            // §13.5 (AP2): Derive the village's founding myths — memes
+            // carrying the group's origin narrative (Historical content) are
+            // the founding myths (plan types this `Vec<MemeId>`).
+            self.collective_memory_registry.get_or_create(0).founding_myths =
+                self.meme_registry
+                    .memes
+                    .iter()
+                    .filter(|m| m.content_type == crate::culture::meme::MemeContent::Historical)
+                    .map(|m| m.id as u64)
+                    .collect();
             // §17.4: Aggregate meme metrics for large-population observability.
             self.wire_meme_aggregation(tick_u64);
             // Architecture-plan-2 §13.3: Decay rumor prevalence daily.
@@ -6152,6 +6172,14 @@ impl Simulation {
                 self.collective_memory_registry
                     .get_or_create(0)
                     .rehearse_all(tick_u64);
+            }
+
+            // §13.5 (AP2): Refresh the derived plan fields (traumas,
+            // sacred_events) from the shared-memory log. Deterministic — reads
+            // only memories, writes only the new fields, so the golden baseline
+            // stays byte-identical.
+            for cm in &mut self.collective_memory_registry.entries {
+                cm.refresh_derived_views();
             }
 
             // Architecture-plan-2 §12.2: Evaluate group formation pressure.

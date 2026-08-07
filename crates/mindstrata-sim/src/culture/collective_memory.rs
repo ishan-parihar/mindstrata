@@ -18,6 +18,7 @@
 //!   - unused memories decay over generations
 //! ```
 
+use mindstrata_core::event::EventId;
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 
@@ -44,6 +45,25 @@ pub struct SharedMemory {
     pub distortion_level: Fixed,
     /// Whether this memory is a founding myth (core to group identity).
     pub is_founding_myth: bool,
+}
+
+/// §13.5 (AP2): A collective trauma — an event of shared suffering that
+/// binds a group (disaster, famine, massacre). Derived by the sim's daily
+/// pass from `SharedMemory` records of kind `Trauma`.
+/// Salience above which a derived trauma is considered actively referenced.
+/// Single-sourced so `refresh_derived_views` and consumers agree.
+pub const ACTIVE_TRAUMA_SALIENCE_THRESHOLD: f64 = 0.1;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SharedTrauma {
+    /// Description of the traumatic event.
+    pub description: String,
+    /// Tick when the event occurred.
+    pub event_tick: u64,
+    /// Severity of the trauma (0 = minor hardship, 1 = existential catastrophe).
+    pub severity: Fixed,
+    /// Whether the trauma is still actively referenced by the group.
+    pub active: bool,
 }
 
 /// Category of shared memory.
@@ -109,6 +129,18 @@ pub struct CollectiveMemory {
     pub group_id: usize,
     /// All shared memories.
     pub memories: Vec<SharedMemory>,
+    /// §13.5 (AP2): Founding myths — meme ids carrying the group's origin
+    /// narratives. Derived by the sim's daily meme pass from memes with
+    /// `MemeContent::Historical` (the plan types this `Vec<MemeId>`).
+    #[serde(default)]
+    pub founding_myths: Vec<u64>,
+    /// §13.5 (AP2): Shared traumas — collective suffering events.
+    #[serde(default)]
+    pub traumas: Vec<SharedTrauma>,
+    /// §13.5 (AP2): Sacred events that must be remembered (revelation,
+    /// miracle, covenant). Derived from `Sacred`-kind memories.
+    #[serde(default)]
+    pub sacred_events: Vec<EventId>,
     /// Agent IDs considered heroes by this group.
     pub heroes: Vec<usize>,
     /// Agent IDs considered villains by this group.
@@ -127,12 +159,40 @@ impl CollectiveMemory {
         Self {
             group_id,
             memories: Vec::new(),
+            founding_myths: Vec::new(),
+            traumas: Vec::new(),
+            sacred_events: Vec::new(),
             heroes: Vec::new(),
             villains: Vec::new(),
             last_rehearsal_tick: 0,
             cohesion: Fixed::from_f64(0.5),
             next_id: 0,
         }
+    }
+
+    /// §13.5 (AP2): Recompute the derived plan fields (`traumas`,
+    /// `sacred_events`) from the shared-memory log. `founding_myths` is
+    /// derived by the sim's daily meme pass (it references the meme
+    /// registry). Deterministic: reads only `memories`, writes only the new
+    /// fields, so the golden baseline stays byte-identical.
+    pub fn refresh_derived_views(&mut self) {
+        self.traumas = self
+            .memories
+            .iter()
+            .filter(|m| m.kind == SharedMemoryKind::Trauma)
+            .map(|m| SharedTrauma {
+                description: m.description.clone(),
+                event_tick: m.event_tick,
+                severity: m.salience,
+                active: m.salience > Fixed::from_f64(ACTIVE_TRAUMA_SALIENCE_THRESHOLD),
+            })
+            .collect();
+        self.sacred_events = self
+            .memories
+            .iter()
+            .filter(|m| m.kind == SharedMemoryKind::Sacred)
+            .map(|m| EventId::new(m.id as u64))
+            .collect();
     }
 
     /// Add a new shared memory to this group.
@@ -344,5 +404,55 @@ mod tests {
             (actual - expected).to_f64().abs() < 0.001,
             "linear daily decay expected {expected:?}, got {actual:?}"
         );
+    }
+
+    #[test]
+    fn refresh_derived_views_maps_trauma_memories_to_shared_traumas() {
+        let mut cm = CollectiveMemory::new(0);
+        cm.add_memory("drought".into(), SharedMemoryKind::Trauma, 500, Fixed::from_f64(0.9));
+        cm.add_memory("victory".into(), SharedMemoryKind::Triumph, 600, Fixed::from_f64(0.8));
+        cm.memories[0].salience = Fixed::from_f64(0.7);
+        cm.refresh_derived_views();
+        assert_eq!(cm.traumas.len(), 1);
+        assert_eq!(cm.traumas[0].description, "drought");
+        assert_eq!(cm.traumas[0].event_tick, 500);
+        assert_eq!(cm.traumas[0].severity, Fixed::from_f64(0.7));
+        assert!(cm.traumas[0].active);
+    }
+
+    #[test]
+    fn refresh_derived_views_maps_sacred_memories_to_event_ids() {
+        let mut cm = CollectiveMemory::new(0);
+        let id = cm.add_memory("covenant".into(), SharedMemoryKind::Sacred, 900, Fixed::ONE);
+        cm.add_memory("routine".into(), SharedMemoryKind::Moral, 950, Fixed::from_f64(0.3));
+        cm.refresh_derived_views();
+        assert_eq!(cm.sacred_events.len(), 1);
+        assert_eq!(cm.sacred_events[0], EventId::new(id as u64));
+    }
+
+    #[test]
+    fn inactive_trauma_when_salience_fades() {
+        let mut cm = CollectiveMemory::new(0);
+        cm.add_memory("famine".into(), SharedMemoryKind::Trauma, 100, Fixed::from_f64(0.9));
+        cm.memories[0].salience = Fixed::from_f64(0.05);
+        cm.refresh_derived_views();
+        assert_eq!(cm.traumas.len(), 1);
+        assert!(!cm.traumas[0].active);
+    }
+
+    #[test]
+    fn plan_fields_default_empty_and_old_save_restores() {
+        let cm = CollectiveMemory::new(7);
+        assert!(cm.founding_myths.is_empty());
+        assert!(cm.traumas.is_empty());
+        assert!(cm.sacred_events.is_empty());
+        // Old save without the three new fields restores via serde(default).
+        // `Fixed` serializes as its raw scaled i64 (SCALE = 10_000), so
+        // cohesion 0.5 is the literal 5000.
+        let old = r#"{"group_id":7,"memories":[],"heroes":[],"villains":[],"last_rehearsal_tick":0,"cohesion":5000,"next_id":0}"#;
+        let restored: CollectiveMemory = serde_json::from_str(old).unwrap();
+        assert!(restored.founding_myths.is_empty());
+        assert!(restored.traumas.is_empty());
+        assert!(restored.sacred_events.is_empty());
     }
 }
