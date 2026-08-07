@@ -6380,11 +6380,23 @@ impl Simulation {
                 };
                 if candidate.should_form() {
                     // Architecture-plan-2 §12.2: Register the formed peer group.
-                    let group = crate::social::group_formation::PeerGroup::from_candidate(
+                    let mut group = crate::social::group_formation::PeerGroup::from_candidate(
                         &candidate,
                         self.group_registry.groups.len(),
                         tick_u64,
                     );
+                    // §12.3: individual attachment styles scale upward — the
+                    // group takes the modal member style, which drives its
+                    // cohesion dynamics.
+                    let member_styles: Vec<_> = candidate
+                        .members
+                        .iter()
+                        .map(|&m| self.agents[m].attachment.style)
+                        .collect();
+                    group.attachment_style =
+                        crate::social::group_formation::derive_group_attachment_style(
+                            &member_styles,
+                        );
                     let group_id = self.group_registry.register(group);
                     tracing::info!(
                         group_id = group_id,

@@ -49,7 +49,10 @@ pub use courtship::Courtship;
 pub use cult::{CultDynamics, CultRegistry};
 pub use epistemic::EpistemicState;
 pub use faction_v2::{FactionV2, FactionV2Registry};
-pub use group_formation::{GroupCandidate, GroupType, GroupRegistry, PeerGroup, GroupId};
+pub use group_formation::{
+    derive_group_attachment_style, GroupAttachmentStyle, GroupCandidate, GroupId,
+    GroupRegistry, GroupType, PeerGroup,
+};
 pub use household::Household;
 pub use interaction::{
     process_interaction, select_interaction_target, system_social_interactions, Interaction,

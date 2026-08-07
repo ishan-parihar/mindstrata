@@ -17,6 +17,7 @@
 //!   - institutional_suppression
 //! ```
 
+use crate::psychology::attachment::AttachmentStyle;
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -83,6 +84,73 @@ pub enum GroupType {
     Warband,
 }
 
+/// Group-level attachment style — §12.3: individual attachment styles scale
+/// upward to whole groups.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash, Serialize, Deserialize)]
+pub enum GroupAttachmentStyle {
+    /// Trusts leadership, repairs conflict, provides support, tolerates dissent.
+    #[default]
+    Secure,
+    /// Demands reassurance, fears abandonment, clings to leaders, panics under
+    /// uncertainty.
+    Anxious,
+    /// Suppresses emotion, fragments under stress, distrusts dependence,
+    /// isolates members.
+    Avoidant,
+    /// Oscillates between devotion and betrayal — volatile leadership, trauma
+    /// bonding, prone to purges.
+    Disorganized,
+}
+
+impl GroupAttachmentStyle {
+    /// Cohesion retained per daily tick (§12.3 behavior).
+    ///
+    /// Secure groups hold together best; anxious groups lose cohesion slightly
+    /// faster under uncertainty; avoidant groups fragment under stress;
+    /// disorganized groups are the most volatile.
+    pub fn cohesion_retention(self) -> Fixed {
+        match self {
+            GroupAttachmentStyle::Secure => Fixed::from_f64(0.996),
+            GroupAttachmentStyle::Anxious => Fixed::from_f64(0.995),
+            GroupAttachmentStyle::Avoidant => Fixed::from_f64(0.993),
+            GroupAttachmentStyle::Disorganized => Fixed::from_f64(0.990),
+        }
+    }
+}
+
+/// Aggregate individual attachment styles into a group-level style (§12.3).
+///
+/// Uses the modal (most prevalent) style; ties resolve to the earlier variant
+/// in Secure > Anxious > Avoidant > Disorganized priority order.
+/// Deterministic: iterates a slice, no RNG, no hash-map iteration.
+pub fn derive_group_attachment_style(member_styles: &[AttachmentStyle]) -> GroupAttachmentStyle {
+    if member_styles.is_empty() {
+        return GroupAttachmentStyle::Secure;
+    }
+    let mut counts = [0usize; 4];
+    for style in member_styles {
+        match style {
+            AttachmentStyle::Secure => counts[0] += 1,
+            AttachmentStyle::Anxious => counts[1] += 1,
+            AttachmentStyle::Avoidant => counts[2] += 1,
+            AttachmentStyle::Disorganized => counts[3] += 1,
+        }
+    }
+    let mut best = GroupAttachmentStyle::Secure;
+    let mut best_count = counts[0];
+    for (idx, candidate_style) in [
+        (1, GroupAttachmentStyle::Anxious),
+        (2, GroupAttachmentStyle::Avoidant),
+        (3, GroupAttachmentStyle::Disorganized),
+    ] {
+        if counts[idx] > best_count {
+            best = candidate_style;
+            best_count = counts[idx];
+        }
+    }
+    best
+}
+
 /// Type alias for group registry IDs.
 pub type GroupId = usize;
 
@@ -103,6 +171,9 @@ pub struct PeerGroup {
     pub formed_tick: u64,
     pub last_interaction_tick: u64,
     pub active: bool,
+    /// Group-level attachment style — modal aggregate of member styles (§12.3).
+    #[serde(default)]
+    pub attachment_style: GroupAttachmentStyle,
 }
 
 impl PeerGroup {
@@ -127,12 +198,17 @@ impl PeerGroup {
             formed_tick: tick,
             last_interaction_tick: tick,
             active: true,
+            // Callers derive the modal member style (sim.rs formation pass);
+            // Secure is the neutral default for direct constructions.
+            attachment_style: GroupAttachmentStyle::Secure,
         }
     }
 
-    /// Daily update — decay cohesion and check dissolution.
+    /// Daily update — decay cohesion (style-dependent, §12.3) and check
+    /// dissolution.
     pub fn daily_update(&mut self) {
-        self.cohesion = (self.cohesion * Fixed::from_f64(0.995)).clamp_01();
+        self.cohesion =
+            (self.cohesion * self.attachment_style.cohesion_retention()).clamp_01();
         if self.cohesion < Fixed::from_f64(0.1) || self.members.len() < 2 {
             self.active = false;
         }
@@ -355,6 +431,7 @@ mod tests {
             formed_tick: 0,
             last_interaction_tick: 0,
             active: true,
+            attachment_style: GroupAttachmentStyle::Secure,
         };
         group.daily_update();
         assert!(!group.active);
@@ -431,7 +508,7 @@ mod tests {
     fn group_registry_dissolution_removes_from_cache() {
         let mut reg = GroupRegistry::new();
         // Register a group with very low cohesion so it dissolves on daily_update.
-        let mut group = PeerGroup {
+        let group = PeerGroup {
             id: 0,
             members: vec![0, 1],
             leader: Some(0),
@@ -442,6 +519,7 @@ mod tests {
             formed_tick: 0,
             last_interaction_tick: 0,
             active: true,
+            attachment_style: GroupAttachmentStyle::Secure,
         };
         reg.register(group);
         assert!(reg.agent_in_active_group(0));
@@ -452,5 +530,99 @@ mod tests {
         assert!(!reg.agent_in_active_group(0));
         assert!(!reg.agent_in_active_group(1));
         assert!(!reg.groups[0].active);
+    }
+
+    #[test]
+    fn group_attachment_style_derives_modal_member_style() {
+        use crate::psychology::attachment::AttachmentStyle::{
+            Anxious, Avoidant, Disorganized, Secure,
+        };
+        // Majority anxious → Anxious.
+        assert_eq!(
+            derive_group_attachment_style(&[Secure, Anxious, Anxious, Avoidant]),
+            GroupAttachmentStyle::Anxious
+        );
+        // Majority avoidant → Avoidant.
+        assert_eq!(
+            derive_group_attachment_style(&[Avoidant, Avoidant, Secure, Disorganized]),
+            GroupAttachmentStyle::Avoidant
+        );
+        // All disorganized → Disorganized.
+        assert_eq!(
+            derive_group_attachment_style(&[Disorganized, Disorganized]),
+            GroupAttachmentStyle::Disorganized
+        );
+        // Empty → Secure default.
+        assert_eq!(
+            derive_group_attachment_style(&[]),
+            GroupAttachmentStyle::Secure
+        );
+    }
+
+    #[test]
+    fn group_attachment_style_ties_resolve_to_higher_priority() {
+        use crate::psychology::attachment::AttachmentStyle::{
+            Anxious, Avoidant, Secure,
+        };
+        // 1v1v1v1 tie → Secure (highest priority).
+        assert_eq!(
+            derive_group_attachment_style(&[Secure, Anxious, Avoidant]),
+            GroupAttachmentStyle::Secure
+        );
+        // 2v2 tie Anxious vs Avoidant → Anxious.
+        assert_eq!(
+            derive_group_attachment_style(&[Anxious, Anxious, Avoidant, Avoidant]),
+            GroupAttachmentStyle::Anxious
+        );
+    }
+
+    #[test]
+    fn group_attachment_style_retention_ordering_is_secure_first() {
+        let secure = GroupAttachmentStyle::Secure.cohesion_retention();
+        let anxious = GroupAttachmentStyle::Anxious.cohesion_retention();
+        let avoidant = GroupAttachmentStyle::Avoidant.cohesion_retention();
+        let disorganized = GroupAttachmentStyle::Disorganized.cohesion_retention();
+        // Secure holds cohesion best; disorganized worst.
+        assert!(secure > anxious);
+        assert!(anxious > avoidant);
+        assert!(avoidant > disorganized);
+    }
+
+    #[test]
+    fn disorganized_groups_lose_cohesion_faster_than_secure() {
+        let candidate = GroupCandidate {
+            members: vec![0, 1, 2],
+            shared_grievance: Fixed::from_f64(0.7),
+            shared_identity: Fixed::from_f64(0.6),
+            emotional_synchrony: Fixed::from_f64(0.5),
+            repeated_interaction: Fixed::from_f64(0.4),
+            leadership_gravity: Fixed::from_f64(0.3),
+            external_threat: Fixed::from_f64(0.6),
+            social_cost: Fixed::from_f64(0.1),
+            institutional_suppression: Fixed::from_f64(0.1),
+            identified_tick: 0,
+        };
+        let mut secure = PeerGroup::from_candidate(&candidate, 0, 0);
+        secure.attachment_style = GroupAttachmentStyle::Secure;
+        let mut disorganized = PeerGroup::from_candidate(&candidate, 1, 0);
+        disorganized.attachment_style = GroupAttachmentStyle::Disorganized;
+        secure.cohesion = Fixed::from_f64(0.9);
+        disorganized.cohesion = Fixed::from_f64(0.9);
+        for _ in 0..10 {
+            secure.daily_update();
+            disorganized.daily_update();
+        }
+        assert!(disorganized.cohesion < secure.cohesion);
+        assert!(secure.active);
+        assert!(disorganized.active);
+    }
+
+    #[test]
+    fn peer_group_attachment_style_old_snapshots_default_to_secure() {
+        // Old snapshots (no field) must deserialize to Secure. Fixed values
+        // are the raw scaled i64 (0.5 → 5000).
+        let json = r#"{"id":0,"members":[0,1],"leader":0,"group_type":"PeerGroup","shared_grievance":0,"shared_identity":0,"cohesion":5000,"formed_tick":0,"last_interaction_tick":0,"active":true}"#;
+        let group: PeerGroup = serde_json::from_str(json).unwrap();
+        assert_eq!(group.attachment_style, GroupAttachmentStyle::Secure);
     }
 }

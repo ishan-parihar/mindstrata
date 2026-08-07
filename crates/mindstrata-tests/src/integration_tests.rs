@@ -3631,6 +3631,81 @@ fn births_mirror_into_kinship_graph() {
     }
 }
 
+/// §12.3 (AP2): Individual attachment styles scale upward to groups — the
+/// group-level style is the modal member style and drives cohesion dynamics.
+#[test]
+fn peer_group_attachment_styles_scale_upward() {
+    use mindstrata_sim::social::group_formation::{
+        derive_group_attachment_style, GroupAttachmentStyle, GroupCandidate, PeerGroup,
+    };
+
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 300,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 8,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+
+    use mindstrata_sim::psychology::attachment::AttachmentStyle;
+
+    // §12.3: the group-level style is the tie-priority winner of the member
+    // styles (the same rule the formation pass applies in sim.rs).
+    let s0 = sim.agents[0].attachment.style;
+    let s1 = sim.agents[1].attachment.style;
+    let derived = derive_group_attachment_style(&[s0, s1]);
+    // Two members: unanimous non-secure → that style; any tie or
+    // secure-involved mix resolves to Secure by the documented priority order
+    // (Secure > Anxious > Avoidant > Disorganized).
+    let expected = match (s0, s1) {
+        (AttachmentStyle::Anxious, AttachmentStyle::Anxious) => GroupAttachmentStyle::Anxious,
+        (AttachmentStyle::Avoidant, AttachmentStyle::Avoidant) => {
+            GroupAttachmentStyle::Avoidant
+        }
+        (AttachmentStyle::Disorganized, AttachmentStyle::Disorganized) => {
+            GroupAttachmentStyle::Disorganized
+        }
+        _ => GroupAttachmentStyle::Secure,
+    };
+    assert_eq!(derived, expected);
+
+    // A group tagged with the derived style loses cohesion monotonically.
+    let candidate = GroupCandidate {
+        members: vec![0, 1],
+        shared_grievance: Fixed::from_f64(0.7),
+        shared_identity: Fixed::from_f64(0.6),
+        emotional_synchrony: Fixed::from_f64(0.5),
+        repeated_interaction: Fixed::from_f64(0.4),
+        leadership_gravity: Fixed::from_f64(0.3),
+        external_threat: Fixed::from_f64(0.6),
+        social_cost: Fixed::from_f64(0.1),
+        institutional_suppression: Fixed::from_f64(0.1),
+        identified_tick: 0,
+    };
+    let mut group = PeerGroup::from_candidate(&candidate, 0, 0);
+    group.attachment_style = derived;
+    let initial = group.cohesion;
+    group.daily_update();
+    assert!(group.cohesion < initial);
+
+    // Style-dependent decay: disorganized groups fragment strictly faster
+    // than secure groups (§12.3 avoidant/disorganized stress fragmentation).
+    let mut secure = PeerGroup::from_candidate(&candidate, 1, 0);
+    secure.attachment_style = GroupAttachmentStyle::Secure;
+    let mut disorganized = PeerGroup::from_candidate(&candidate, 2, 0);
+    disorganized.attachment_style = GroupAttachmentStyle::Disorganized;
+    secure.cohesion = initial;
+    disorganized.cohesion = initial;
+    for _ in 0..5 {
+        secure.daily_update();
+        disorganized.daily_update();
+    }
+    assert!(disorganized.cohesion < secure.cohesion);
+}
+
 
 
 
