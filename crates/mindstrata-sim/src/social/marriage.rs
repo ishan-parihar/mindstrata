@@ -105,6 +105,51 @@ pub enum MarriageType {
     Remarriage,
 }
 
+/// §10.5 (AP2): How a marriage holds property between the spouses.
+///
+/// The plan treats property arrangement as an explicit institutional
+/// dimension of marriage alongside legitimacy and religious sanction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub enum PropertyArrangement {
+    /// No formal arrangement recorded.
+    #[default]
+    None,
+    /// Each spouse retains separate property.
+    Separate,
+    /// Resources pooled into the shared household.
+    CommunalPool,
+    /// Bride's family paid a dowry to the groom's family.
+    Dowry,
+    /// Groom's family paid a bride-price to the bride's family.
+    BridePrice,
+}
+
+/// §10.5 (AP2): A vow sworn at the marriage ceremony.
+///
+/// Vows are institutional commitments — breaking them damages legitimacy.
+/// Note: `Protection` and `TillDeath` are reserved taxonomy variants — the
+/// deterministic `derive_institution` mapping only emits Fidelity/Provision/
+/// Care/Honor/Obedience today; the reserved variants exist for future
+/// ceremony-type wiring (e.g. martial or religious orders).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize)]
+pub enum Vow {
+    /// Fidelity — sexual and emotional exclusivity.
+    #[default]
+    Fidelity,
+    /// Provision — support the household economically.
+    Provision,
+    /// Protection — defend the spouse and children.
+    Protection,
+    /// Honor — uphold the family's reputation.
+    Honor,
+    /// Care — tend to the spouse in sickness and old age.
+    Care,
+    /// Obedience — defer to the household head.
+    Obedience,
+    /// Till-death — permanence of the bond.
+    TillDeath,
+}
+
 /// A PairBond — the core romantic/sexual relationship between two agents.
 ///
 /// Architecture §10.4: Pair-bonding emerges from repeated positive interaction,
@@ -208,6 +253,12 @@ pub enum DissolutionCause {
     Annulment,
     /// Exile of one partner.
     Exile(usize),
+    /// One partner abandoned the household without consent.
+    Abandonment(usize),
+    /// Legal divorce — community-recognized dissolution.
+    Divorce,
+    /// Dissolution by religious sanction (e.g. temple annulment).
+    ReligiousSanction,
 }
 
 /// A Marriage — an institutional bond between agents.
@@ -239,6 +290,16 @@ pub struct Marriage {
     pub formed_tick: u64,
     /// Whether the marriage is currently active.
     pub active: bool,
+    /// §10.5 (AP2): Kin links forged between the spouses' families
+    /// (Spouse / InLaw from the kinship graph).
+    #[serde(default)]
+    pub kin_alliance: Vec<crate::social::kinship::KinshipLink>,
+    /// §10.5 (AP2): How property is held between the spouses.
+    #[serde(default)]
+    pub property_arrangement: PropertyArrangement,
+    /// §10.5 (AP2): Vows sworn at the ceremony.
+    #[serde(default)]
+    pub vows: Vec<Vow>,
 }
 
 impl Marriage {
@@ -261,7 +322,38 @@ impl Marriage {
             strain: Fixed::ZERO,
             formed_tick: tick,
             active: true,
+            kin_alliance: Vec::new(),
+            property_arrangement: PropertyArrangement::None,
+            vows: Vec::new(),
         }
+    }
+
+    /// §10.5 (AP2): Derive the institutional dimensions deterministically.
+    ///
+    /// Property arrangement follows the wealth gap between the spouses
+    /// (no RNG — replay-deterministic); vows follow the marriage type.
+    /// The kin alliance is supplied from the kinship graph by the caller.
+    pub fn derive_institution(
+        &mut self,
+        kin_alliance: Vec<crate::social::kinship::KinshipLink>,
+        wealth_a: Fixed,
+        wealth_b: Fixed,
+    ) {
+        self.kin_alliance = kin_alliance;
+        let gap = (wealth_a - wealth_b).abs();
+        self.property_arrangement = if wealth_a > wealth_b && gap > Fixed::from_f64(0.5) {
+            PropertyArrangement::BridePrice
+        } else if wealth_b > wealth_a && gap > Fixed::from_f64(0.5) {
+            PropertyArrangement::Dowry
+        } else {
+            PropertyArrangement::CommunalPool
+        };
+        self.vows = match self.marriage_type {
+            MarriageType::Arranged => vec![Vow::Obedience, Vow::Honor, Vow::Fidelity],
+            MarriageType::Chosen => vec![Vow::Fidelity, Vow::Care, Vow::Honor],
+            MarriageType::Shotgun => vec![Vow::Provision, Vow::Care],
+            MarriageType::Remarriage => vec![Vow::Fidelity, Vow::Provision],
+        };
     }
 
     /// Daily update — decay strain, stabilize recognition.
@@ -294,6 +386,21 @@ impl Marriage {
             }
             DissolutionCause::Exile(_) => {
                 self.legitimacy = (self.legitimacy * Fixed::from_f64(0.5)).clamp_01();
+            }
+            DissolutionCause::Abandonment(_) => {
+                // Abandonment is a public shame — recognition and legitimacy fall.
+                self.legitimacy = (self.legitimacy - Fixed::from_f64(0.25)).max(Fixed::ZERO);
+                self.community_recognition =
+                    (self.community_recognition - Fixed::from_f64(0.15)).max(Fixed::ZERO);
+            }
+            DissolutionCause::Divorce => {
+                // Legal divorce halves legitimacy.
+                self.legitimacy = (self.legitimacy * Fixed::from_f64(0.5)).clamp_01();
+            }
+            DissolutionCause::ReligiousSanction => {
+                // Religious sanction revokes the blessing entirely.
+                self.religious_sanction = Fixed::ZERO;
+                self.legitimacy = (self.legitimacy - Fixed::from_f64(0.4)).max(Fixed::ZERO);
             }
         }
     }
@@ -396,5 +503,145 @@ mod tests {
         assert!(registry.find_bond(0, 1).is_some());
         assert!(registry.find_bond(1, 0).is_some());
         assert!(registry.find_bond(0, 2).is_none());
+    }
+
+    #[test]
+    fn marriage_new_initializes_institutional_fields_empty() {
+        let m = Marriage::new(0, 1, MarriageType::Chosen, 100);
+        assert!(m.kin_alliance.is_empty(), "no kin alliance before derivation");
+        assert_eq!(
+            m.property_arrangement,
+            PropertyArrangement::None,
+            "no arrangement before derivation"
+        );
+        assert!(m.vows.is_empty(), "no vows before derivation");
+    }
+
+    #[test]
+    fn derive_institution_populates_all_dimensions() {
+        let mut m = Marriage::new(2, 3, MarriageType::Chosen, 100);
+        m.derive_institution(
+            vec![
+                crate::social::kinship::KinshipLink::Spouse,
+                crate::social::kinship::KinshipLink::InLaw,
+            ],
+            Fixed::from_f64(10.0),
+            Fixed::from_f64(10.0),
+        );
+        assert_eq!(
+            m.kin_alliance,
+            vec![
+                crate::social::kinship::KinshipLink::Spouse,
+                crate::social::kinship::KinshipLink::InLaw,
+            ],
+            "kin alliance carries the Spouse/InLaw links"
+        );
+        assert_eq!(
+            m.property_arrangement,
+            PropertyArrangement::CommunalPool,
+            "equal wealth pools resources"
+        );
+        assert_eq!(
+            m.vows,
+            vec![Vow::Fidelity, Vow::Care, Vow::Honor],
+            "Chosen marriages swear fidelity/care/honor"
+        );
+    }
+
+    #[test]
+    fn derive_institution_wealth_gap_selects_bride_price_or_dowry() {
+        let mut groom_richer = Marriage::new(0, 1, MarriageType::Arranged, 100);
+        groom_richer.derive_institution(
+            Vec::new(),
+            Fixed::from_f64(20.0),
+            Fixed::from_f64(5.0),
+        );
+        assert_eq!(
+            groom_richer.property_arrangement,
+            PropertyArrangement::BridePrice,
+            "groom richer → bride-price paid to bride's family"
+        );
+
+        let mut bride_richer = Marriage::new(0, 1, MarriageType::Arranged, 100);
+        bride_richer.derive_institution(
+            Vec::new(),
+            Fixed::from_f64(5.0),
+            Fixed::from_f64(20.0),
+        );
+        assert_eq!(
+            bride_richer.property_arrangement,
+            PropertyArrangement::Dowry,
+            "bride richer → dowry paid by bride's family"
+        );
+    }
+
+    #[test]
+    fn dissolution_causes_cover_plan_list() {
+        // §10.5 plan: death, abandonment, annulment, divorce, exile, religious
+        // sanction — all six must have a dissolve() arm.
+        let causes = [
+            DissolutionCause::Death(0),
+            DissolutionCause::Abandonment(0),
+            DissolutionCause::Annulment,
+            DissolutionCause::Divorce,
+            DissolutionCause::Exile(0),
+            DissolutionCause::ReligiousSanction,
+        ];
+        for cause in causes {
+            let mut m = Marriage::new(0, 1, MarriageType::Chosen, 100);
+            m.dissolve(&cause);
+            assert!(!m.active, "{cause:?} must dissolve the marriage");
+        }
+        // Religious sanction revokes the blessing.
+        let mut m = Marriage::new(0, 1, MarriageType::Chosen, 100);
+        m.religious_sanction = Fixed::from_f64(0.8);
+        m.dissolve(&DissolutionCause::ReligiousSanction);
+        assert_eq!(m.religious_sanction, Fixed::ZERO);
+        // Abandonment damages recognition.
+        let mut m = Marriage::new(0, 1, MarriageType::Chosen, 100);
+        m.community_recognition = Fixed::from_f64(0.7);
+        m.dissolve(&DissolutionCause::Abandonment(0));
+        assert!(m.community_recognition < Fixed::from_f64(0.7));
+    }
+
+    #[test]
+    fn institutional_fields_serde_roundtrip() {
+        let mut m = Marriage::new(0, 1, MarriageType::Remarriage, 100);
+        m.derive_institution(
+            vec![crate::social::kinship::KinshipLink::InLaw],
+            Fixed::from_f64(5.0),
+            Fixed::from_f64(20.0),
+        );
+        let json = serde_json::to_string(&m).unwrap();
+        let restored: Marriage = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.kin_alliance, m.kin_alliance);
+        assert_eq!(restored.property_arrangement, m.property_arrangement);
+        assert_eq!(restored.vows, m.vows);
+        assert_eq!(restored.active, m.active);
+    }
+
+    #[test]
+    fn old_save_without_institutional_fields_restores_defaults() {
+        // A save from before the §10.5 fields existed must deserialize to
+        // sensible defaults (serde(default) on each new field).
+        // Fixed serializes as raw scaled i64 (SCALE = 10_000), so
+        // 0.6 → 6000, 0.3 → 3000.
+        let old_json = r#"{
+            "partner_a": 0,
+            "partner_b": 1,
+            "marriage_type": "Chosen",
+            "legitimacy": 6000,
+            "household_id": null,
+            "children": [],
+            "community_recognition": 3000,
+            "religious_sanction": 0,
+            "strain": 0,
+            "formed_tick": 100,
+            "active": true
+        }"#;
+        let restored: Marriage = serde_json::from_str(old_json).unwrap();
+        assert!(restored.kin_alliance.is_empty());
+        assert_eq!(restored.property_arrangement, PropertyArrangement::None);
+        assert!(restored.vows.is_empty());
     }
 }

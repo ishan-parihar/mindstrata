@@ -3134,6 +3134,79 @@ fn household_roles_and_traditions_populate_across_run() {
     assert_eq!(sum1, sum2, "§10.7 household end-state must be seed-deterministic");
 }
 
+#[test]
+fn marriage_institution_instantiated_in_production_runs() {
+    // §10.5 (AP2): Marriage is an institution, not just a partner pointer.
+    // Previously `Marriage::new` was only exercised by unit tests — the
+    // formation pass set `agent.partner` and fired an event but never pushed
+    // a Marriage into the registry, so the death-dissolve and daily_update
+    // passes iterated empty vecs. This test proves the record is now created
+    // and its institutional dimensions (kin alliance, property arrangement,
+    // vows) populate in real runs.
+    let sim = run_sim(42, 2000);
+
+    assert!(
+        !sim.marriage_registry.marriages.is_empty(),
+        "marriages must be instantiated in production runs"
+    );
+
+    // At least one active marriage with institutional dimensions derived.
+    let active = sim
+        .marriage_registry
+        .marriages
+        .iter()
+        .filter(|m| m.active)
+        .collect::<Vec<_>>();
+    assert!(!active.is_empty(), "some marriages remain active after 2000 ticks");
+    assert!(
+        active.iter().any(|m| !m.kin_alliance.is_empty()),
+        "marriages must carry kin alliance (Spouse/InLaw links)"
+    );
+    assert!(
+        active.iter().any(|m| !m.vows.is_empty()),
+        "marriages must carry sworn vows"
+    );
+    assert!(
+        active.iter().any(|m| {
+            m.property_arrangement
+                != mindstrata_sim::social::marriage::PropertyArrangement::None
+        }),
+        "marriages must carry a property arrangement"
+    );
+
+    // Legitimacy / recognition / sanction are the plan's institution fields
+    // and must be non-trivial once a marriage is live.
+    assert!(
+        active.iter().any(|m| m.legitimacy > Fixed::ZERO),
+        "legitimacy must be non-zero on live marriages"
+    );
+
+    // Determinism: same seed → identical §10.5 end-state.
+    let sim2 = run_sim(42, 2000);
+    let sum1: usize = sim
+        .marriage_registry
+        .marriages
+        .iter()
+        .map(|m| {
+            m.partner_a + m.partner_b + m.kin_alliance.len() + m.vows.len()
+                + (m.property_arrangement as usize)
+                + if m.active { 1 } else { 0 }
+        })
+        .sum();
+    let sum2: usize = sim2
+        .marriage_registry
+        .marriages
+        .iter()
+        .map(|m| {
+            m.partner_a + m.partner_b + m.kin_alliance.len() + m.vows.len()
+                + (m.property_arrangement as usize)
+                + if m.active { 1 } else { 0 }
+        })
+        .sum();
+    assert_eq!(sum1, sum2, "§10.5 marriage end-state must be seed-deterministic");
+}
+
+
 
 
 

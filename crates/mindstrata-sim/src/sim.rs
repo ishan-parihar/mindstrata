@@ -4928,6 +4928,55 @@ impl Simulation {
                     spouse_b: AgentId::new(b as u64),
                     tick,
                 });
+                // §10.5 (AP2): Marriage is an institution, not just a partner
+                // pointer — instantiate the Marriage record with its institutional
+                // dimensions, deterministically derived (no RNG, so the golden
+                // baseline stays byte-identical; only new registry entries are
+                // written, nothing pre-existing is touched).
+                let marriage_type = if self.active_courtships.iter().any(|c| {
+                    (c.pursuer == a && c.pursued == b)
+                        || (c.pursuer == b && c.pursued == a)
+                }) {
+                    crate::social::marriage::MarriageType::Chosen
+                } else if self.marriage_registry.marriages.iter().any(|m| {
+                    !m.active
+                        && (m.partner_a == a
+                            || m.partner_b == a
+                            || m.partner_a == b
+                            || m.partner_b == b)
+                }) {
+                    crate::social::marriage::MarriageType::Remarriage
+                } else {
+                    crate::social::marriage::MarriageType::Arranged
+                };
+                let mut marriage =
+                    crate::social::marriage::Marriage::new(a, b, marriage_type, tick_u64);
+                // Kin alliance: the marriage itself forges a Spouse tie between
+                // the families; existing InLaw edges involving either spouse are
+                // folded in (deduped, deterministic edge order).
+                let mut kin_alliance =
+                    vec![crate::social::kinship::KinshipLink::Spouse];
+                for edge in &self.kinship_graph.edges {
+                    let touches = edge.from == a
+                        || edge.from == b
+                        || edge.to == a
+                        || edge.to == b;
+                    if touches
+                        && matches!(
+                            edge.link,
+                            crate::social::kinship::KinshipLink::InLaw
+                        )
+                        && !kin_alliance.contains(&edge.link)
+                    {
+                        kin_alliance.push(edge.link);
+                    }
+                }
+                marriage.derive_institution(
+                    kin_alliance,
+                    self.agents[a].wealth.coin,
+                    self.agents[b].wealth.coin,
+                );
+                self.marriage_registry.marriages.push(marriage);
                 // Marriage boosts trust and affection
                 // §19.5.J: Record marriage relationship traces
                 if let Some(rel) = self.relationships.iter_mut()
