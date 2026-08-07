@@ -98,6 +98,14 @@ pub struct Snapshot {
     /// those restore an empty registry and fall back to re-seeding.
     #[serde(default)]
     pub meme_registry: crate::culture::MemeRegistry,
+    /// §10.6: Kinship graph — serialized since v10 so replays restore the
+    /// Spouse/InLaw edges forged by marriages and the ParentChild/Sibling
+    /// edges mirrored at birth. Serde default keeps pre-v10 snapshots
+    /// loadable; those restore an empty graph, identical to the pre-v10
+    /// replay behavior (edges are inert at coefficient 0 today, but any
+    /// future behavioral consumer must not inherit a divergent restore path).
+    #[serde(default)]
+    pub kinship_graph: crate::social::kinship::KinshipGraph,
 }
 
 /// Version of the snapshot format.
@@ -105,8 +113,9 @@ pub struct Snapshot {
 /// Version 3 → 4: Added cultural_cognition to AgentBundle.
 /// v3: mind_models, v4: cultural_cognition, v5: decision_policy, v6: group_registry,
 /// v8: collective_memory_registry (dynamic group memories),
-/// v9: meme_registry (mutated lineage state)
-pub const SNAPSHOT_VERSION: u32 = 9;
+/// v9: meme_registry (mutated lineage state),
+/// v10: kinship_graph (marriage/birth-forged edges)
+pub const SNAPSHOT_VERSION: u32 = 10;
 
 /// Bundles all simulation state references needed to capture a snapshot.
 /// Replaces the 21-parameter `capture()` signature with a single struct.
@@ -140,6 +149,7 @@ pub struct CaptureContext<'a> {
     pub group_registry: &'a GroupRegistry,
     pub collective_memory_registry: &'a crate::culture::CollectiveMemoryRegistry,
     pub meme_registry: &'a crate::culture::MemeRegistry,
+    pub kinship_graph: &'a crate::social::kinship::KinshipGraph,
 }
 
 impl Snapshot {
@@ -176,6 +186,7 @@ impl Snapshot {
             group_registry: ctx.group_registry.clone(),
             collective_memory_registry: ctx.collective_memory_registry.clone(),
             meme_registry: ctx.meme_registry.clone(),
+            kinship_graph: ctx.kinship_graph.clone(),
         }
     }
 
@@ -375,6 +386,7 @@ mod tests {
             group_registry: crate::social::group_formation::GroupRegistry::new(),
             collective_memory_registry: crate::culture::CollectiveMemoryRegistry::default(),
             meme_registry: crate::culture::MemeRegistry::default(),
+            kinship_graph: crate::social::kinship::KinshipGraph::default(),
         }
     }
 

@@ -581,7 +581,10 @@ impl Simulation {
             last_moral_panic_tick: snapshot.last_moral_panic_tick,
             last_cult_formation_tick: snapshot.last_cult_formation_tick,
             black_market: snapshot.black_market,
-            kinship_graph: crate::social::kinship::KinshipGraph::default(),
+            // §10.6: Serialized since v10 — restore the exact marriage/birth-
+            // forged edges; pre-v10 snapshots deserialize an empty graph (the
+            // serde default), identical to the pre-v10 replay behavior.
+            kinship_graph: snapshot.kinship_graph,
             households: Vec::new(),
             // §13.2: Serialized since v9 — restore the exact mutated lineage
             // state; pre-v9 snapshots deserialize an empty registry and fall
@@ -660,6 +663,7 @@ impl Simulation {
             group_registry: &self.group_registry,
             collective_memory_registry: &self.collective_memory_registry,
             meme_registry: &self.meme_registry,
+            kinship_graph: &self.kinship_graph,
         })
     }
 

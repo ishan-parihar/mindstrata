@@ -1430,6 +1430,97 @@ fn snapshot_restore_reseeds_meme_registry() {
     }
 }
 
+/// §10.6 (Iteration 68): the kinship graph is serialized in the snapshot
+/// (v10+), so a restore replays with the exact marriage/birth-forged edges —
+/// ParentChild, Sibling, Spouse, and InLaw alike. Pre-v10 snapshots restore
+/// an empty graph (serde default), matching the pre-v10 replay behavior.
+#[test]
+fn snapshot_restore_preserves_kinship_graph_edges() {
+    use mindstrata_core::fixed::Fixed;
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 3000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    // Elevate birth rate so ParentChild/Sibling edges exist at capture time.
+    sim.demography_config.birth_rate = Fixed::from_f64(60.0);
+    sim.run(3000);
+
+    // Forge Spouse/InLaw edges directly (the Iter-67 asymmetry: marriage-
+    // formed edges were lost on restore) so the byte-exact check covers the
+    // exact class of edges this iteration closes.
+    sim.kinship_graph.add_marital_links(0, 1, 100);
+
+    assert!(
+        !sim.kinship_graph.edges.is_empty(),
+        "elevated birth rate must produce kinship edges"
+    );
+
+    let snap = sim.capture_snapshot();
+    let restored = Simulation::from_snapshot(snap);
+
+    // Byte-exact restore: every edge's full state must match.
+    assert_eq!(
+        restored.kinship_graph.edges.len(),
+        sim.kinship_graph.edges.len(),
+        "restored kinship graph must have the same edge count"
+    );
+    for (a, b) in restored
+        .kinship_graph
+        .edges
+        .iter()
+        .zip(sim.kinship_graph.edges.iter())
+    {
+        assert_eq!(a.from, b.from, "edge from mismatch");
+        assert_eq!(a.to, b.to, "edge to mismatch");
+        assert_eq!(a.link, b.link, "edge link mismatch");
+        assert_eq!(a.coefficient, b.coefficient, "edge coefficient mismatch");
+        assert_eq!(a.strength, b.strength, "edge strength mismatch");
+        assert_eq!(a.created_tick, b.created_tick, "edge created_tick mismatch");
+        assert_eq!(a.active, b.active, "edge active mismatch");
+    }
+
+    // The exact Iter-67 asymmetry is closed: Spouse and InLaw edges forged by
+    // marriage survive the restore (pre-v10 replays dropped them entirely).
+    let spouse_links = |g: &mindstrata_sim::social::kinship::KinshipGraph| {
+        g.edges
+            .iter()
+            .filter(|e| e.active && e.link == mindstrata_sim::social::kinship::KinshipLink::Spouse)
+            .count()
+    };
+    let inlaw_links = |g: &mindstrata_sim::social::kinship::KinshipGraph| {
+        g.edges
+            .iter()
+            .filter(|e| e.active && e.link == mindstrata_sim::social::kinship::KinshipLink::InLaw)
+            .count()
+    };
+    assert!(spouse_links(&restored.kinship_graph) >= 2, "both Spouse directions must restore");
+    assert!(inlaw_links(&restored.kinship_graph) >= 2, "InLaw ties must restore");
+    assert_eq!(spouse_links(&restored.kinship_graph), spouse_links(&sim.kinship_graph));
+    assert_eq!(inlaw_links(&restored.kinship_graph), inlaw_links(&sim.kinship_graph));
+
+    // The restored graph must still drive the live kin-stage machinery:
+    // every ParentChild edge in the pre-snapshot graph still resolves.
+    let live_parent_children: usize = sim
+        .kinship_graph
+        .edges
+        .iter()
+        .filter(|e| e.active && e.link == mindstrata_sim::social::kinship::KinshipLink::ParentChild)
+        .count();
+    let restored_parent_children: usize = restored
+        .kinship_graph
+        .edges
+        .iter()
+        .filter(|e| e.active && e.link == mindstrata_sim::social::kinship::KinshipLink::ParentChild)
+        .count();
+    assert_eq!(restored_parent_children, live_parent_children);
+}
+
 // ── Nervous System Sensitivity ────────────────────────────────────
 
 #[test]
