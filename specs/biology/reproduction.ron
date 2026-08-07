@@ -1,6 +1,7 @@
 // Maps to: biology::reproductive::ReproductiveState
 // §7.2.6 Sexual / Reproductive System — defines reproduction mechanics.
 // Used by biology/reproductive.rs to model fertility, pregnancy, and birth.
+// Pregnancy section feeds biology::reproductive::PregnancyState (Iteration 42).
 
 Reproduction(
     // Puberty stages (§7.2.6)

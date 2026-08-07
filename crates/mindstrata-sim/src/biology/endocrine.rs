@@ -104,30 +104,6 @@ impl DominanceAxis {
     }
 }
 
-/// Fertility axis — reproductive state modulation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FertilityAxis {
-    /// Current fertility level.
-    pub level: Fixed,
-    /// Libido.
-    pub libido: Fixed,
-    /// Whether agent is pregnant.
-    pub pregnant: bool,
-    /// Pregnancy progress (0–1, 1 = birth).
-    pub pregnancy_progress: Fixed,
-}
-
-impl Default for FertilityAxis {
-    fn default() -> Self {
-        Self {
-            level: Fixed::from_f64(0.5),
-            libido: Fixed::from_f64(0.3),
-            pregnant: false,
-            pregnancy_progress: Fixed::ZERO,
-        }
-    }
-}
-
 /// Metabolic axis — energy processing, hunger, satiety.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetabolicAxis {
@@ -200,7 +176,6 @@ pub struct EndocrineState {
     pub stress: StressAxis,
     pub bonding: BondingAxis,
     pub dominance: DominanceAxis,
-    pub fertility: FertilityAxis,
     pub metabolic: MetabolicAxis,
     pub arousal: ArousalAxis,
     pub growth: GrowthAxis,
@@ -222,7 +197,6 @@ impl EndocrineState {
             dominance: DominanceAxis {
                 level: Fixed::from_f64(rng.random_range(0.2..0.6)),
             },
-            fertility: FertilityAxis::default(),
             metabolic: MetabolicAxis {
                 energy: Fixed::from_f64(rng.random_range(0.5..0.8)),
                 appetite: Fixed::from_f64(rng.random_range(0.2..0.5)),

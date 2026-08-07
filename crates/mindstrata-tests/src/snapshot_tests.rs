@@ -218,7 +218,10 @@ fn snapshot_endocrine_state_500_ticks() {
         stress: a.embodied.endocrine.stress.level.to_f64(),
         bonding: a.embodied.endocrine.bonding.level.to_f64(),
         dominance: a.embodied.endocrine.dominance.level.to_f64(),
-        fertility: a.embodied.endocrine.fertility.level.to_f64(),
+        // Iter 42: the endocrine FertilityAxis was dead state (never updated,
+        // never read) and was removed per the YAGNI directive; the live
+        // fertility lives on the reproductive system.
+        fertility: a.embodied.reproductive.fertility.to_f64(),
         metabolic_energy: a.embodied.endocrine.metabolic.energy.to_f64(),
         arousal: a.embodied.endocrine.arousal.level.to_f64(),
         growth_capacity: a.embodied.endocrine.growth.capacity.to_f64(),

@@ -2182,6 +2182,59 @@ fn perception_biases_and_salience_map_populated() {
     }
 }
 
+// ── §7.2.6: Pregnancy State ───────────────────────────────────────
+
+/// Iter 42: the plan's `Option<PregnancyState>` shape. In real runs the
+/// biological pregnancy lifecycle is dormant (births flow through the
+/// probabilistic demography path, and conception would perturb the RNG
+/// stream), so every agent's pregnancy must be None — while the reproductive
+/// dynamics (maturity, fertility) run live via `EmbodiedState::tick_update`.
+/// This documents both halves of the system honestly.
+#[test]
+fn pregnancy_state_refactor_keeps_lifecycle_dormant() {
+    use mindstrata_sim::biology::reproductive::gestation_stage_of;
+    use mindstrata_core::fixed::Fixed;
+
+    let riverford = mindstrata_sim::scenario::Scenario::riverford();
+    let mut sim = mindstrata_sim::Simulation::from_scenario(riverford);
+    sim.populate();
+    sim.run(4320);
+
+    // Conception is not wired into the sim — no agent may be pregnant.
+    for agent in &sim.agents {
+        assert!(
+            agent.embodied.reproductive.pregnancy.is_none(),
+            "agent {} became pregnant — the lifecycle must stay dormant (demography drives births)",
+            agent.name
+        );
+    }
+    // The reproductive dynamics ARE live: adults reach full maturity and hold
+    // meaningful fertility (tick_update runs every tick via EmbodiedState).
+    let adults: Vec<_> = sim.agents.iter().filter(|a| a.age.to_f64() >= 18.0).collect();
+    assert!(!adults.is_empty());
+    for a in &adults {
+        assert!(
+            a.embodied.reproductive.sexual_maturity.to_f64() >= 0.99,
+            "adult {} not fully mature ({})",
+            a.name,
+            a.embodied.reproductive.sexual_maturity
+        );
+    }
+    let fertile = adults
+        .iter()
+        .filter(|a| a.embodied.reproductive.fertility.to_f64() > 0.1)
+        .count();
+    assert!(
+        fertile > 0,
+        "no adult holds meaningful fertility — tick_update dynamics are dead"
+    );
+    // Stage helper sanity: FullTerm requires full progress.
+    assert_ne!(
+        gestation_stage_of(Fixed::from_f64(0.99)),
+        mindstrata_sim::biology::reproductive::GestationStage::FullTerm
+    );
+}
+
 #[test]
 fn metrics_csv_exports_real_inequality_tracking() {
     // §13.3/§19: Gini + wealth distribution must be observable in the metrics

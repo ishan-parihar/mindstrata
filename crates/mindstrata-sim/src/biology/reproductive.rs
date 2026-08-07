@@ -51,6 +51,57 @@ impl Default for ReproductiveUpdateParams {
     }
 }
 
+/// §7.2.6: Gestation stage derived from progress — Early < 0.33, Mid < 0.66,
+/// Late < 1.0, FullTerm at 1.0 (birth due).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GestationStage {
+    Early,
+    Mid,
+    Late,
+    FullTerm,
+}
+
+/// §7.2.6: First-class pregnancy state — the plan's `Option<PregnancyState>`
+/// inside `ReproductiveState`. Iteration 42 upgraded the flat
+/// `pregnant: bool + pregnancy_progress: Fixed` pair into this struct.
+///
+/// Zero-drift note: the biological pregnancy lifecycle (conception →
+/// gestation → birth) is currently dormant — births flow through the
+/// probabilistic demography path (§31 `should_birth`), and `attempt_conception`
+/// is not yet wired into the sim (it draws RNG and would perturb calibrated
+/// trajectories). So in real runs `pregnancy` stays `None`, and the richer
+/// fields here are observational state for the future calibrated conception
+/// wiring.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PregnancyState {
+    /// Gestation progress (0 = conception, 1 = birth) — maps 1:1 from the old
+    /// `pregnancy_progress` field.
+    pub gestation_progress: Fixed,
+    /// Derived gestation stage.
+    pub gestation_stage: GestationStage,
+    /// Maternal strain from pregnancy (0..1) — observational, tracks gestation.
+    pub maternal_strain: Fixed,
+    /// Complication risk (0..1) — observational; rises with maternal age and
+    /// poor health (reproduction.ron: health_risk_base + elder risk).
+    pub complications_risk: Fixed,
+    /// Tick when conception occurred.
+    pub conception_tick: u64,
+}
+
+impl PregnancyState {
+    /// Start a pregnancy at conception.
+    #[must_use]
+    pub fn new(conception_tick: u64) -> Self {
+        Self {
+            gestation_progress: Fixed::ZERO,
+            gestation_stage: GestationStage::Early,
+            maternal_strain: Fixed::ZERO,
+            complications_risk: Fixed::from_f64(0.05),
+            conception_tick,
+        }
+    }
+}
+
 /// Reproductive state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReproductiveState {
@@ -66,10 +117,10 @@ pub struct ReproductiveState {
     pub libido: Fixed,
     /// Pair-bond strength with current partner (0 = none, 1 = deep bond).
     pub pair_bond_strength: Fixed,
-    /// Whether currently pregnant.
-    pub pregnant: bool,
-    /// Pregnancy progress (0 = conception, 1 = birth).
-    pub pregnancy_progress: Fixed,
+    /// §7.2.6: Current pregnancy, if any. `None` in real runs today (the
+    /// lifecycle is dormant — see [`PregnancyState`]).
+    #[serde(default)]
+    pub pregnancy: Option<PregnancyState>,
     /// Number of children born.
     pub children_born: u32,
     /// Parental drive (0 = none, 1 = strong desire for children).
@@ -85,8 +136,7 @@ impl Default for ReproductiveState {
             fertility: Fixed::ZERO,
             libido: Fixed::ZERO,
             pair_bond_strength: Fixed::ZERO,
-            pregnant: false,
-            pregnancy_progress: Fixed::ZERO,
+            pregnancy: None,
             children_born: 0,
             parental_drive: Fixed::from_f64(0.3),
         }
@@ -145,10 +195,25 @@ impl ReproductiveState {
                 .clamp_01();
         }
 
-        // Pregnancy progression
-        if self.pregnant {
+        // Pregnancy progression (§7.2.6) — identical gestation dynamics to the
+        // pre-Iter-42 flat `pregnancy_progress`, now inside `Option<PregnancyState>`.
+        if let Some(p) = &mut self.pregnancy {
             let gestation_rate = Fixed::from_f64(0.001) * health * nutrition * params.gestation_rate_mult;
-            self.pregnancy_progress = (self.pregnancy_progress + gestation_rate).clamp_01();
+            p.gestation_progress = (p.gestation_progress + gestation_rate).clamp_01();
+            p.gestation_stage = gestation_stage_of(p.gestation_progress);
+            // Observational maternal burden (never consumed — zero drift):
+            // strain tracks gestation; complication risk rises with maternal
+            // age and poor health (reproduction.ron health_risk_base 0.05).
+            p.maternal_strain = (p.gestation_progress * Fixed::from_f64(0.4)).clamp_01();
+            let age_penalty = if age_years > Fixed::from_f64(35.0) {
+                (age_years - Fixed::from_f64(35.0)) * Fixed::from_f64(0.005)
+            } else {
+                Fixed::ZERO
+            };
+            p.complications_risk = (Fixed::from_f64(0.05)
+                + (Fixed::ONE - health) * Fixed::from_f64(0.3)
+                + age_penalty)
+                .clamp(Fixed::from_f64(0.05), Fixed::from_f64(0.8));
             // Pregnancy increases parental drive
             self.parental_drive = (self.parental_drive + Fixed::from_f64(0.001)).clamp_01();
         }
@@ -162,13 +227,18 @@ impl ReproductiveState {
 
     /// Attempt conception (called when reproductive-age adults pair-bond).
     /// Returns true if conception occurs.
+    ///
+    /// NOTE (Iteration 42): not yet called from the sim — wiring it would
+    /// introduce RNG draws (and a second birth path) that perturb calibrated
+    /// trajectories; births remain demography-driven (§31). The documented
+    /// consumer is a future calibrated conception wiring.
     pub fn attempt_conception(
         &mut self,
         partner_fertility: Fixed,
         conception_multiplier: Fixed,
         rng: &mut impl rand::Rng,
     ) -> bool {
-        if self.pregnant || self.sex == BiologicalSex::Male {
+        if self.pregnancy.is_some() || self.sex == BiologicalSex::Male {
             return false;
         }
         if self.fertility < Fixed::from_f64(0.2) || partner_fertility < Fixed::from_f64(0.2) {
@@ -182,14 +252,31 @@ impl ReproductiveState {
 
     /// Complete pregnancy — returns true if birth occurs.
     pub fn complete_pregnancy(&mut self) -> bool {
-        if self.pregnant && self.pregnancy_progress >= Fixed::ONE {
-            self.pregnant = false;
-            self.pregnancy_progress = Fixed::ZERO;
+        let full_term = matches!(
+            self.pregnancy.as_ref().map(|p| p.gestation_progress),
+            Some(progress) if progress >= Fixed::ONE
+        );
+        if full_term {
+            self.pregnancy = None;
             self.children_born += 1;
             true
         } else {
             false
         }
+    }
+}
+
+/// §7.2.6: Derive the gestation stage from progress.
+#[must_use]
+pub fn gestation_stage_of(progress: Fixed) -> GestationStage {
+    if progress >= Fixed::ONE {
+        GestationStage::FullTerm
+    } else if progress >= Fixed::from_f64(0.66) {
+        GestationStage::Late
+    } else if progress >= Fixed::from_f64(0.33) {
+        GestationStage::Mid
+    } else {
+        GestationStage::Early
     }
 }
 
@@ -228,10 +315,20 @@ mod tests {
     }
 
     #[test]
+    fn pregnancy_defaults_to_none() {
+        let r = ReproductiveState::default();
+        assert!(r.pregnancy.is_none());
+    }
+
+    #[test]
     fn pregnancy_progresses() {
-        let mut r = ReproductiveState::default();
-        r.pregnant = true;
-        r.pregnancy_progress = Fixed::from_f64(0.9);
+        let mut r = ReproductiveState {
+            pregnancy: Some(PregnancyState::new(0)),
+            ..ReproductiveState::default()
+        };
+        if let Some(p) = &mut r.pregnancy {
+            p.gestation_progress = Fixed::from_f64(0.9);
+        }
         r.tick_update(
             Fixed::from_f64(25.0),
             Fixed::ONE,
@@ -240,6 +337,126 @@ mod tests {
             Fixed::ONE,
             ReproductiveUpdateParams::default(),
         );
-        assert!(r.pregnancy_progress > Fixed::from_f64(0.9));
+        let p = r.pregnancy.as_ref().expect("pregnancy persists");
+        assert!(p.gestation_progress > Fixed::from_f64(0.9));
+        // Observational burden tracks gestation.
+        assert!(p.maternal_strain > Fixed::ZERO);
+        assert!(p.complications_risk >= Fixed::from_f64(0.05));
+    }
+
+    #[test]
+    fn gestation_stage_derivation() {
+        assert_eq!(gestation_stage_of(Fixed::ZERO), GestationStage::Early);
+        assert_eq!(gestation_stage_of(Fixed::from_f64(0.32)), GestationStage::Early);
+        assert_eq!(gestation_stage_of(Fixed::from_f64(0.5)), GestationStage::Mid);
+        assert_eq!(gestation_stage_of(Fixed::from_f64(0.9)), GestationStage::Late);
+        assert_eq!(gestation_stage_of(Fixed::ONE), GestationStage::FullTerm);
+    }
+
+    #[test]
+    fn complete_pregnancy_clears_on_full_term() {
+        let mut r = ReproductiveState {
+            pregnancy: Some(PregnancyState {
+                gestation_progress: Fixed::from_f64(0.9),
+                ..PregnancyState::new(0)
+            }),
+            ..ReproductiveState::default()
+        };
+        assert!(!r.complete_pregnancy(), "not full term yet");
+        assert!(r.pregnancy.is_some());
+        // Advance to full term through the field rather than reassigning the
+        // outer struct (keeps clippy::field_reassign_with_default quiet).
+        if let Some(p) = &mut r.pregnancy {
+            p.gestation_progress = Fixed::ONE;
+        }
+        assert!(r.complete_pregnancy());
+        assert!(r.pregnancy.is_none());
+        assert_eq!(r.children_born, 1);
+    }
+
+    #[test]
+    fn conception_blocked_when_pregnant() {
+        use rand::SeedableRng;
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(7);
+        let mut r = ReproductiveState {
+            sex: BiologicalSex::Female,
+            fertility: Fixed::ONE,
+            pregnancy: Some(PregnancyState::new(0)),
+            ..ReproductiveState::default()
+        };
+        assert!(!r.attempt_conception(Fixed::ONE, Fixed::ONE, &mut rng));
+    }
+
+    #[test]
+    fn pregnancy_lifecycle_round_trips_via_tick_updates() {
+        use rand::SeedableRng;
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(7);
+        let mut r = ReproductiveState {
+            sex: BiologicalSex::Female,
+            fertility: Fixed::ONE,
+            pregnancy: Some(PregnancyState::new(0)),
+            ..ReproductiveState::default()
+        };
+        // Walk the full gestation purely through tick_update increments
+        // (rate 0.001/tick at health = nutrition = 1, multiplier = 1 →
+        // ~1000 ticks to term), proving the `>= Fixed::ONE` boundary is
+        // reached on the incremental path — not only when progress is
+        // set to 1.0 by hand.
+        for _ in 0..1001 {
+            r.tick_update(
+                Fixed::from_f64(25.0),
+                Fixed::ONE,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ONE,
+                ReproductiveUpdateParams::default(),
+            );
+        }
+        let progress = r
+            .pregnancy
+            .as_ref()
+            .expect("pregnancy persists through gestation")
+            .gestation_progress;
+        assert!(
+            progress >= Fixed::ONE,
+            "gestation must reach full term via increments (got {progress})"
+        );
+        assert!(r.complete_pregnancy(), "full term completes");
+        assert!(r.pregnancy.is_none(), "slot cleared");
+        assert_eq!(r.children_born, 1);
+        // The Option lifecycle round-trips: a fresh conception is now possible.
+        let reconceived = (0..300).any(|_| r.attempt_conception(Fixed::ONE, Fixed::ONE, &mut rng));
+        assert!(reconceived, "re-conception possible after full-term completion");
+    }
+
+    #[test]
+    fn maternal_age_raises_complication_risk() {
+        let mut young = ReproductiveState {
+            pregnancy: Some(PregnancyState::new(0)),
+            ..ReproductiveState::default()
+        };
+        young.tick_update(
+            Fixed::from_f64(25.0),
+            Fixed::from_f64(0.9),
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ONE,
+            ReproductiveUpdateParams::default(),
+        );
+        let mut elder = ReproductiveState {
+            pregnancy: Some(PregnancyState::new(0)),
+            ..ReproductiveState::default()
+        };
+        elder.tick_update(
+            Fixed::from_f64(45.0),
+            Fixed::from_f64(0.9),
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ONE,
+            ReproductiveUpdateParams::default(),
+        );
+        let young_risk = young.pregnancy.unwrap().complications_risk;
+        let elder_risk = elder.pregnancy.unwrap().complications_risk;
+        assert!(elder_risk > young_risk, "elder mothers carry higher risk");
     }
 }
