@@ -3949,6 +3949,66 @@ fn relational_fields_refresh_deterministically() {
     }
 }
 
+/// §13.2 (AP2): Meme mutation is wired into transmission but gated on the
+/// master multiplier — at the default ZERO it is the identity factor (no
+/// decision roll is ever drawn → byte-identical baseline), and when enabled
+/// the five-factor drift must actually fire and alter meme state.
+#[test]
+fn meme_mutation_wired_and_parameter_gated() {
+    /// Run the deterministic probe config and return per-meme mutation
+    /// observables: (credibility, emotional_charge, complexity, derived?).
+    fn meme_state(
+        modify: impl FnOnce(&mut mindstrata_sim::parameters::SimParameters),
+    ) -> Vec<(Fixed, Fixed, Fixed, bool)> {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 3000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        modify(&mut sim.params);
+        sim.populate();
+        sim.run(3000);
+        sim.meme_registry
+            .memes
+            .iter()
+            .map(|m| {
+                (
+                    m.credibility,
+                    m.emotional_charge,
+                    m.complexity,
+                    !matches!(
+                        m.lineage,
+                        mindstrata_sim::culture::meme::MemeLineage::Founding
+                    ),
+                )
+            })
+            .collect()
+    }
+
+    // Default (multiplier ZERO): mutation is the identity factor — no drift,
+    // and two runs must be bit-for-bit identical (no RNG consumed).
+    let baseline = meme_state(|_| {});
+    let baseline_repeat = meme_state(|_| {});
+    assert_eq!(
+        baseline, baseline_repeat,
+        "default runs must be deterministic (no mutation RNG consumed)"
+    );
+
+    // Enabled: the five-factor mutation must fire and drift at least one meme.
+    let mutated = meme_state(|p| p.meme_mutation_rate_base = Fixed::from_f64(5.0));
+    assert!(
+        mutated
+            .iter()
+            .zip(&baseline)
+            .any(|(a, b)| a.0 != b.0 || a.1 != b.1 || a.2 != b.2 || a.3 != b.3),
+        "enabling mutation must drift at least one meme's fields or lineage"
+    );
+}
+
 
 
 

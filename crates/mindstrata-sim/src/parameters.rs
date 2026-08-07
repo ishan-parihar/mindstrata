@@ -258,7 +258,10 @@ pub struct SimParameters {
     pub meme_virality_scaling: Fixed,
     /// Meme novelty decay factor per tick.
     pub meme_novelty_decay_factor: Fixed,
-    /// Meme mutation rate base.
+    /// Meme mutation master multiplier (§13.2) — scales each meme's
+    /// per-transmission mutation rate. ZERO disables mutation entirely:
+    /// the decision roll is never drawn, keeping the golden baseline
+    /// byte-identical.
     pub meme_mutation_rate_base: Fixed,
     /// Propaganda effectiveness multiplier.
     pub propaganda_effectiveness: Fixed,
@@ -424,7 +427,7 @@ impl Default for SimParameters {
             meme_transmission_multiplier: Fixed::from_f64(1.2),
             meme_virality_scaling: Fixed::from_f64(0.5),
             meme_novelty_decay_factor: Fixed::from_f64(0.998),
-            meme_mutation_rate_base: Fixed::from_f64(0.1),
+            meme_mutation_rate_base: Fixed::ZERO,
             propaganda_effectiveness: Fixed::from_f64(0.35),
             propaganda_resistance_growth: Fixed::from_f64(0.002),
             ritual_cohesion_boost: Fixed::from_f64(0.12),

@@ -3886,6 +3886,26 @@ impl Simulation {
                             meme.host_count = (meme.host_count.saturating_add(1)).min(pop);
                             meme.novelty = (meme.novelty + nb).clamp_01();
                             sampled += 1;
+                            // §13.2 (AP2): Meme mutation during transmission —
+                            // the five-factor drift (memory error, emotional
+                            // exaggeration, identity bias, narrative
+                            // simplification, audience tailoring). Gated on the
+                            // master multiplier: at the default ZERO the
+                            // decision draw is never consumed, so the golden
+                            // baseline stays byte-identical.
+                            if self.params.meme_mutation_rate_base > Fixed::ZERO {
+                                let m_roll = self
+                                    .rng
+                                    .get_mut(RngStream::Social)
+                                    .random_range(0.0f64..1.0);
+                                if meme.should_mutate_scaled(
+                                    Fixed::from_f64(m_roll),
+                                    self.params.meme_mutation_rate_base,
+                                ) {
+                                    let magnitude = meme.mutation_magnitude();
+                                    meme.mutate(magnitude);
+                                }
+                            }
                             // §17.4: Record exposure sample for meme aggregation.
                             let meme_ids = [meme.id];
                             self.meme_aggregator.sample_exposures(

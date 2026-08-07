@@ -214,10 +214,78 @@ impl Meme {
 
     /// Should this meme mutate during transmission?
     ///
-    /// Sacred memes are resistant to mutation.
+    /// Sacred memes are resistant to mutation. Delegates to
+    /// [`should_mutate_scaled`](Self::should_mutate_scaled) with an identity
+    /// multiplier, so the sacredness-resistance logic lives in one place.
     pub fn should_mutate(&self, rng_val: Fixed) -> bool {
-        let effective_rate = self.mutation_rate * (Fixed::ONE - self.sacredness);
+        self.should_mutate_scaled(rng_val, Fixed::ONE)
+    }
+
+    /// `should_mutate` with an external rate multiplier (§13.2 master gate).
+    ///
+    /// At a multiplier of ZERO no mutation ever fires — the identity factor
+    /// that keeps the golden baseline byte-identical when the feature is
+    /// disabled.
+    pub fn should_mutate_scaled(&self, rng_val: Fixed, rate_multiplier: Fixed) -> bool {
+        let effective_rate = self.mutation_rate * (Fixed::ONE - self.sacredness) * rate_multiplier;
         rng_val < effective_rate
+    }
+
+    /// §13.2 (AP2): fold the five mutation sources into one drift magnitude.
+    ///
+    /// ```text
+    /// mutation = memory_error + emotional_exaggeration + identity_bias
+    ///         + narrative_simplification + audience_tailoring
+    /// ```
+    /// Each source maps onto a meme property; the coefficients are scaled so
+    /// the theoretical maximum sum is exactly 1.0 (0.3+0.25+0.2+0.15+0.1),
+    /// preserving fine gradation instead of saturating the clamp:
+    ///   - memory_error: complex memes degrade in transmission (1 − complexity)
+    ///   - emotional_exaggeration: charged memes distort further (emotional_charge)
+    ///   - identity_bias: identity-salient memes warp toward the in-group (identity_relevance)
+    ///   - narrative_simplification: complex narratives get flattened (complexity)
+    ///   - audience_tailoring: viral memes adapt to their listeners (virality)
+    pub fn mutation_magnitude(&self) -> Fixed {
+        let memory_error = (Fixed::ONE - self.complexity) * Fixed::from_f64(0.3);
+        let emotional_exaggeration = self.emotional_charge * Fixed::from_f64(0.25);
+        let identity_bias = self.identity_relevance * Fixed::from_f64(0.2);
+        let narrative_simplification = self.complexity * Fixed::from_f64(0.15);
+        let audience_tailoring = self.virality * Fixed::from_f64(0.1);
+        (memory_error
+            + emotional_exaggeration
+            + identity_bias
+            + narrative_simplification
+            + audience_tailoring)
+            .clamp_01()
+    }
+
+    /// Apply a mutation to this meme (drift during transmission).
+    ///
+    /// Deterministic: the drift magnitudes derive from the meme's own
+    /// properties, so no extra RNG draws are needed — the caller already
+    /// rolled the decision draw for `should_mutate[_scaled]`.
+    pub fn mutate(&mut self, magnitude: Fixed) {
+        // Credibility erodes as the meme drifts from its origin.
+        self.credibility = (self.credibility - magnitude * Fixed::from_f64(0.3)).clamp_01();
+        // Emotional charge drifts up (emotional exaggeration).
+        self.emotional_charge =
+            (self.emotional_charge + magnitude * Fixed::from_f64(0.25)).clamp_01();
+        // Complexity drifts down (narrative simplification).
+        self.complexity = (self.complexity - magnitude * Fixed::from_f64(0.15)).clamp_01();
+        // A mutated meme is a derived form of its own founding content: flip
+        // the lineage and count generations so the drift is observable.
+        // `parent` anchors the meme's founding id — the form it drifted
+        // from — not a separate creator meme (in-place drift, no spawning).
+        self.lineage = match &self.lineage {
+            MemeLineage::Founding => MemeLineage::Derived {
+                parent: self.id,
+                generations: 1,
+            },
+            MemeLineage::Derived { parent, generations } => MemeLineage::Derived {
+                parent: *parent,
+                generations: generations + 1,
+            },
+        };
     }
 
     /// Decay novelty each tick (memes become less novel over time).
@@ -543,5 +611,59 @@ mod tests {
             "Suspicion floor of 0.2 not enforced: {}", perfect_sus.to_f64());
         assert!(perfect_sus <= Fixed::ONE,
             "Suspicion should not exceed 1.0: {}", perfect_sus.to_f64());
+    }
+
+    // ── §13.2 Meme mutation tests ────────────────────────────────────
+
+    /// A zero multiplier is the identity factor: no mutation ever fires.
+    #[test]
+    fn should_mutate_scaled_zero_multiplier_never_mutates() {
+        let m = Meme::new(0, "t".into(), MemeContent::Rumor,
+            Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.5));
+        // multiplier ZERO → identity factor → never mutates, even at rng 0.
+        assert!(!m.should_mutate_scaled(Fixed::ZERO, Fixed::ZERO));
+        // multiplier ONE with rng 0 → mutates (0 < 0.5).
+        assert!(m.should_mutate_scaled(Fixed::ZERO, Fixed::ONE));
+    }
+
+    /// Sacred memes resist mutation (rate × (1 − sacredness)).
+    #[test]
+    fn sacred_memes_resist_mutation() {
+        let mut m = Meme::new(0, "t".into(), MemeContent::Theological,
+            Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.5));
+        m.sacredness = Fixed::from_f64(0.9);
+        // effective rate = 0.5 × (1 − 0.9) = 0.05
+        assert!(!m.should_mutate(Fixed::from_f64(0.2)));
+        assert!(m.should_mutate(Fixed::from_f64(0.04)));
+    }
+
+    /// The five-factor magnitude is bounded to [0, 1] and strong for
+    /// charged, identity-relevant, viral memes.
+    #[test]
+    fn mutation_magnitude_is_bounded_and_derived_from_five_sources() {
+        let m = Meme::new(0, "t".into(), MemeContent::Conspiracy,
+            Fixed::from_f64(0.8), Fixed::from_f64(0.7), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        let mag = m.mutation_magnitude();
+        assert!(mag > Fixed::ZERO && mag <= Fixed::ONE);
+        // A highly charged, identity-relevant, viral meme drifts strongly.
+        assert!(mag > Fixed::from_f64(0.5));
+    }
+
+    /// Mutation drifts credibility down / emotional charge up and records
+    /// the derived lineage with an incrementing generation count.
+    #[test]
+    fn mutate_drifts_fields_and_records_lineage() {
+        let mut m = Meme::new(0, "t".into(), MemeContent::Rumor,
+            Fixed::from_f64(0.2), Fixed::from_f64(0.2), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        let mag = m.mutation_magnitude();
+        let cred_before = m.credibility;
+        let charge_before = m.emotional_charge;
+        m.mutate(mag);
+        assert!(m.credibility <= cred_before);
+        assert!(m.emotional_charge >= charge_before);
+        assert_eq!(m.lineage, MemeLineage::Derived { parent: 0, generations: 1 });
+        // Second mutation increments the generation count.
+        m.mutate(mag);
+        assert_eq!(m.lineage, MemeLineage::Derived { parent: 0, generations: 2 });
     }
 }
