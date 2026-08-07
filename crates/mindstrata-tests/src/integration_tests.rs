@@ -2742,6 +2742,55 @@ fn cults_do_not_form_under_healthy_institutions() {
     );
 }
 
+// ── §8.1.3: Memory Taxonomy Producer Wiring ─────────────────────
+
+/// §8.1.3: The Procedural and Semantic memory slots — dormant since the
+/// nine-kind taxonomy landed (Iteration 43) — must fire from their live
+/// producers: skill practice crossing a 0.1-proficiency milestone
+/// (Procedural) and successful apprenticeship (Semantic). Verifies both
+/// encoders are wired into the tick loop, not just defined.
+#[test]
+fn memory_taxonomy_slots_procedural_and_semantic_fire_live() {
+    use mindstrata_sim::memory::{MemoryKind, MemoryTag};
+
+    // ── Semantic: force a capable teacher → willing student (the sim.rs
+    // unit-test recipe) and run to a daily boundary (the apprenticeship pass
+    // fires when tick % 144 == 0). Teaching success is deterministic
+    // (learning_rate > 0.3), so the student's Semantic encode must fire on
+    // the first successful pass.
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 10_000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 2,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.agents[0].education.learned = vec![2];
+    sim.agents[0].education.teaching_skill = Fixed::from_f64(0.9);
+    sim.agents[0].education.teaching_patience = Fixed::from_f64(0.8);
+    sim.agents[1].education.learning_aptitude = Fixed::from_f64(0.9);
+    sim.agents[1].cultural.knowledge.retain(|&k| k != 2);
+    sim.run(288);
+    let semantic = sim.agents[1].memory.episodes.iter()
+        .filter(|t| t.kind == MemoryKind::Semantic && t.tag == MemoryTag::LearnedKnowledge)
+        .count();
+    assert!(semantic > 0,
+        "successful apprenticeship must encode a Semantic memory, got {semantic}");
+
+    // ── Procedural: a plain long run — agents work constantly, so at least
+    // one crosses a 0.1 farming milestone (~100 practice ticks each).
+    let long = run_sim(42, 2000);
+    let procedural = long.agents.iter()
+        .flat_map(|a| a.memory.episodes.iter())
+        .filter(|t| t.kind == MemoryKind::Procedural && t.tag == MemoryTag::SkillMastered)
+        .count();
+    assert!(procedural > 0,
+        "skill practice must encode Procedural memories, got {procedural}");
+}
+
 
 
 

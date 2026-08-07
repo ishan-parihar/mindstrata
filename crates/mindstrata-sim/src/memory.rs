@@ -152,6 +152,10 @@ pub enum MemoryTag {
     InsultedBy,
     GossipedAbout,
     TradedWith,
+    /// §8.1.3: Skill practice crossed a proficiency milestone (Procedural).
+    SkillMastered,
+    /// §8.1.3: Successfully acquired new knowledge (Semantic).
+    LearnedKnowledge,
 }
 
 impl MemoryTrace {

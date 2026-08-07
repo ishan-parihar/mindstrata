@@ -59,6 +59,15 @@ pub const EXPECTED_GRAIN_PER_AGENT: u32 = 10;
 pub const EXPECTED_WATER_PER_AGENT: u32 = 10;
 /// Skill improvement per tick of practice.
 pub const SKILL_GAIN_PER_TICK: Fixed = Fixed::from_raw(10); // 0.001
+
+/// §8.1.3: Whether a practice tick carried a skill across a 0.1-proficiency
+/// boundary — the milestone that warrants a Procedural memory. Integer raw
+/// math (tenth = SCALE/10) keeps the gate exactly deterministic; tenth-step
+/// precision keeps encodes sparse (~100 practice ticks apart at 0.001/tick).
+fn skill_milestone_crossed(before: Fixed, after: Fixed) -> bool {
+    const TENTH: i64 = 1000; // 0.1 at the SCALE = 10 000 fixed-point scale
+    before < after && before.to_raw() / TENTH != after.to_raw() / TENTH
+}
 /// Demography runs once per this many ticks (matches `phases.is_deca`).
 const DEMOGRAPHY_TICK_INTERVAL: u64 = 10;
 /// Minimum mutual trust required to initiate a courtship (0.3).
@@ -6024,6 +6033,26 @@ impl Simulation {
                     affected: vec![AgentId::new(teacher as u64), AgentId::new(student as u64)],
                     success: true,
                 });
+
+                // §8.1.3: Semantic memory — successfully acquiring knowledge is
+                // the canonical semantic episode. Naturally sparse (one pass per
+                // tick, success needs a capable teacher and a warm relationship),
+                // so the 200-capacity store is not flooded.
+                let learner = &mut self.agents[student];
+                if learner.agent_tier.tier.runs_memory_encoding()
+                    && learner.agent_tier.budget_tracker.can_memory_op()
+                {
+                    let _ = learner.agent_tier.budget_tracker.consume_memory_op();
+                    let emotional = learner.affect.arousal * Fixed::from_f64(0.6) + Fixed::from_f64(0.1);
+                    learner.memory.encode(
+                        MemoryKind::Semantic,
+                        tick_u64,
+                        Fixed::from_f64(0.4),
+                        emotional,
+                        Some(teacher as u32),
+                        MemoryTag::LearnedKnowledge,
+                    );
+                }
             }
         }
     }
@@ -6406,17 +6435,35 @@ impl Simulation {
             // §4.2: Skill improvement — agents improve skills through repeated practice.
             // Small increments per tick; skills cap at 1.0.
             let skill_gain = SKILL_GAIN_PER_TICK;
-            match agent.current_action {
-                crate::actions::ActionKind::Work => {
-                    agent.skills.farming = (agent.skills.farming + skill_gain).clamp_01();
-                }
-                crate::actions::ActionKind::Trade => {
-                    agent.skills.trading = (agent.skills.trading + skill_gain).clamp_01();
-                }
+            // §8.1.3: Procedural memory — practice crossing a 0.1-proficiency
+            // milestone encodes the mastered routine (sparse by design: with a
+            // 0.001 gain a milestone needs ~100 practice ticks, keeping the
+            // 200-capacity store focused on the vivid events).
+            let practiced: Option<&mut Fixed> = match agent.current_action {
+                crate::actions::ActionKind::Work => Some(&mut agent.skills.farming),
+                crate::actions::ActionKind::Trade => Some(&mut agent.skills.trading),
                 crate::actions::ActionKind::Socialize | crate::actions::ActionKind::Worship => {
-                    agent.skills.social = (agent.skills.social + skill_gain).clamp_01();
+                    Some(&mut agent.skills.social)
                 }
-                _ => {}
+                _ => None,
+            };
+            if let Some(skill) = practiced {
+                let before = *skill;
+                *skill = (before + skill_gain).clamp_01();
+                if skill_milestone_crossed(before, *skill)
+                    && agent.agent_tier.budget_tracker.can_memory_op()
+                {
+                    let _ = agent.agent_tier.budget_tracker.consume_memory_op();
+                    let emotional = agent.affect.arousal * Fixed::from_f64(0.6) + Fixed::from_f64(0.1);
+                    agent.memory.encode(
+                        MemoryKind::Procedural,
+                        tick_u64,
+                        Fixed::from_f64(0.3),
+                        emotional,
+                        None,
+                        MemoryTag::SkillMastered,
+                    );
+                }
             }
         }
 
@@ -8033,6 +8080,18 @@ mod tests {
             after, before,
             "no knowledge acquisition must leave sacredness untouched"
         );
+    }
+
+    /// §8.1.3: The milestone gate fires only when practice crosses a 0.1
+    /// proficiency boundary — never on sub-step progress or on the cap plateau.
+    #[test]
+    fn skill_milestone_crossed_fires_only_on_tenth_boundaries() {
+        assert!(skill_milestone_crossed(Fixed::from_f64(0.099), Fixed::from_f64(0.100)));
+        assert!(skill_milestone_crossed(Fixed::from_f64(0.050), Fixed::from_f64(0.100)));
+        assert!(!skill_milestone_crossed(Fixed::from_f64(0.100), Fixed::from_f64(0.149)));
+        assert!(!skill_milestone_crossed(Fixed::from_f64(0.250), Fixed::from_f64(0.259)));
+        assert!(!skill_milestone_crossed(Fixed::from_f64(0.000), Fixed::from_f64(0.099)));
+        assert!(!skill_milestone_crossed(Fixed::from_f64(1.0), Fixed::from_f64(1.0)));
     }
 
     /// §8.1.18: The apprenticeship pass transmits knowledge from a capable
