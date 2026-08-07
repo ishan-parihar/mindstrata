@@ -2791,6 +2791,48 @@ fn memory_taxonomy_slots_procedural_and_semantic_fire_live() {
         "skill practice must encode Procedural memories, got {procedural}");
 }
 
+// ── §8.1.3: Memory Taxonomy Completion (Episodic + Cultural) ─────
+
+/// §8.1.3: The final two taxonomy slots — Episodic (narrative life events)
+/// and Cultural (ritual participation) — must fire from their live producers,
+/// completing the nine-kind taxonomy (every kind now encodes).
+#[test]
+fn memory_taxonomy_slots_episodic_and_cultural_fire_live() {
+    use mindstrata_sim::memory::{MemoryKind, MemoryTag};
+
+    // ── Episodic: the narrative block integrates life events every tick in
+    // riverford (probe: ~3600 events/agent over 2000 ticks), so the chapter
+    // gate (every 100th event) must have fired for the Focal agents.
+    let sim = run_sim(42, 2000);
+    let episodic = sim.agents.iter()
+        .flat_map(|a| a.memory.episodes.iter())
+        .filter(|t| t.kind == MemoryKind::Episodic && t.tag == MemoryTag::LifeEvent)
+        .count();
+    assert!(episodic > 0,
+        "narrative chapter milestones must encode Episodic memories, got {episodic}");
+
+    // ── Cultural: the seeded rituals fire on their monthly interval
+    // (is_due at tick 4320), so a run past the first occurrence must
+    // encode participation for every participant.
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 4500,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.run(4500);
+    let cultural = sim.agents.iter()
+        .flat_map(|a| a.memory.episodes.iter())
+        .filter(|t| t.kind == MemoryKind::Cultural && t.tag == MemoryTag::RitualParticipated)
+        .count();
+    assert!(cultural > 0,
+        "ritual participation must encode Cultural memories, got {cultural}");
+}
+
 
 
 

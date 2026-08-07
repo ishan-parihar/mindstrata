@@ -156,6 +156,10 @@ pub enum MemoryTag {
     SkillMastered,
     /// §8.1.3: Successfully acquired new knowledge (Semantic).
     LearnedKnowledge,
+    /// §8.1.3: A 100-event life-story chapter closed (Episodic).
+    LifeEvent,
+    /// §8.1.3: Participated in a shared ritual (Cultural).
+    RitualParticipated,
 }
 
 impl MemoryTrace {

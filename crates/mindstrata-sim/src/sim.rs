@@ -68,6 +68,18 @@ fn skill_milestone_crossed(before: Fixed, after: Fixed) -> bool {
     const TENTH: i64 = 1000; // 0.1 at the SCALE = 10 000 fixed-point scale
     before < after && before.to_raw() / TENTH != after.to_raw() / TENTH
 }
+
+/// §8.1.3: Integrated-life-event count that closes an Episodic chapter.
+const EPISODIC_CHAPTER_EVENTS: u32 = 100;
+
+/// §8.1.3: Whether a narrative tick carried the agent's integrated-life-event
+/// count across an [`EPISODIC_CHAPTER_EVENTS`]-event chapter boundary — the
+/// milestone that warrants an Episodic memory. The narrative block fires every
+/// tick in riverford runs (probe: ~3600 events per agent over 2000 ticks), so
+/// the chapter gate keeps encodes sparse without a stateful cooldown.
+fn life_chapter_crossed(before: u32, after: u32) -> bool {
+    before / EPISODIC_CHAPTER_EVENTS != after / EPISODIC_CHAPTER_EVENTS
+}
 /// Demography runs once per this many ticks (matches `phases.is_deca`).
 const DEMOGRAPHY_TICK_INTERVAL: u64 = 10;
 /// Minimum mutual trust required to initiate a courtship (0.3).
@@ -2304,6 +2316,7 @@ impl Simulation {
                     } else {
                         Fixed::ZERO
                     };
+                    let events_before = self.agents[i].narrative.events_integrated;
                     if negative_events > Fixed::ZERO {
                         self.agents[i].narrative.interpret_negative_event(
                             negative_events,
@@ -2318,6 +2331,32 @@ impl Simulation {
                         );
                     }
                     self.agents[i].narrative.update_theme();
+                    // §8.1.3: Episodic memory — every chapter boundary of
+                    // integrated life events closes a chapter worth remembering
+                    // (sparse by design; salience scales with the current
+                    // event's emotional magnitude, so crises recall louder).
+                    // The block is Focal-only (runs_narrative), a subset of
+                    // the memory-encoding tiers, so no extra tier gate needed.
+                    let events_after = self.agents[i].narrative.events_integrated;
+                    if life_chapter_crossed(events_before, events_after)
+                        && self.agents[i].agent_tier.budget_tracker.can_memory_op()
+                    {
+                        let _ = self.agents[i].agent_tier.budget_tracker.consume_memory_op();
+                        let event_magnitude = negative_events.max(positive_event_magnitude);
+                        // Ceiling is 0.6 by construction: negative_events ≤ 0.2
+                        // ((fear+sadness)×0.1) → 1.5×0.2+0.3; positive ≤ 0.1 → 0.45.
+                        let salience = event_magnitude * Fixed::from_f64(1.5) + Fixed::from_f64(0.3);
+                        let emotional =
+                            self.agents[i].affect.arousal * Fixed::from_f64(0.6) + Fixed::from_f64(0.1);
+                        self.agents[i].memory.encode(
+                            MemoryKind::Episodic,
+                            tick_u64,
+                            salience,
+                            emotional,
+                            None,
+                            MemoryTag::LifeEvent,
+                        );
+                    }
                     // §8.1: The self-model tracks the same life events, and
                     // self-esteem mean-reverts toward the narrative balance.
                     self.agents[i].self_model.update_narrative(
@@ -5770,6 +5809,30 @@ impl Simulation {
                         let p = ritual.participants[i];
                         if p < self.agents.len() {
                             self.agents[p].legitimacy_field.ritual_boost(ritual_legitimacy);
+                            // §8.1.3: Cultural memory — shared ritual
+                            // participation is the canonical cultural episode
+                            // (sparse: rituals fire on their interval; salience
+                            // follows the ritual's intensity and sacredness).
+                            let participant = &mut self.agents[p];
+                            if participant.agent_tier.tier.runs_memory_encoding()
+                                && participant.agent_tier.budget_tracker.can_memory_op()
+                            {
+                                let _ = participant.agent_tier.budget_tracker.consume_memory_op();
+                                let salience = ((ritual.emotional_intensity + ritual.sacredness)
+                                    * Fixed::from_f64(0.8))
+                                    .clamp_01();
+                                let emotional = participant.affect.arousal
+                                    * Fixed::from_f64(0.6)
+                                    + Fixed::from_f64(0.1);
+                                participant.memory.encode(
+                                    MemoryKind::Cultural,
+                                    tick_u64,
+                                    salience,
+                                    emotional,
+                                    None,
+                                    MemoryTag::RitualParticipated,
+                                );
+                            }
                         }
                         for j in (i + 1)..ritual.participants.len() {
                             let a = ritual.participants[i];
@@ -8080,6 +8143,18 @@ mod tests {
             after, before,
             "no knowledge acquisition must leave sacredness untouched"
         );
+    }
+
+    /// §8.1.3: The chapter gate fires only when the integrated-life-event
+    /// count crosses a 100-event boundary — never on sub-chapter progress.
+    #[test]
+    fn life_chapter_crossed_fires_only_on_centenary_boundaries() {
+        assert!(life_chapter_crossed(99, 100));
+        assert!(life_chapter_crossed(199, 201));
+        assert!(!life_chapter_crossed(0, 99));
+        assert!(!life_chapter_crossed(100, 100));
+        assert!(!life_chapter_crossed(100, 149));
+        assert!(!life_chapter_crossed(250, 259));
     }
 
     /// §8.1.3: The milestone gate fires only when practice crosses a 0.1
