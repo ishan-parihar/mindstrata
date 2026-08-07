@@ -2939,6 +2939,60 @@ fn memory_retrieval_fires_live_and_is_deterministic() {
     assert_eq!(total, total2, "retrieval end-state must be seed-deterministic");
 }
 
+#[test]
+fn neural_like_runtime_is_live_deterministic_and_bounded() {
+    let sim = run_sim(42, 2000);
+    assert!(!sim.agents.is_empty());
+
+    // §9.2 spreading activation fired: riverford's fear drives the threat
+    // dimension, which associates to shame/safety.
+    let activated = sim.agents.iter()
+        .filter(|a| a.neural_like.network.activation.threat > Fixed::ZERO
+            || a.neural_like.network.activation.shame > Fixed::ZERO)
+        .count();
+    assert!(activated > 0, "spreading activation must fire, got {activated}");
+
+    // §9.2 predictive error fired: some agent registered a non-zero surprise.
+    let surprised = sim.agents.iter()
+        .filter(|a| a.neural_like.expectation.last_prediction_error > Fixed::ZERO)
+        .count();
+    assert!(surprised > 0, "predictive error must fire, got {surprised}");
+
+    // §9.2 RL values learned: some agent's components moved off the 0.5 default.
+    let learned = sim.agents.iter()
+        .filter(|a| a.neural_like.values.need_relief != Fixed::from_f64(0.5)
+            || a.neural_like.values.social_reward != Fixed::from_f64(0.5))
+        .count();
+    assert!(learned > 0, "action values must learn from outcomes, got {learned}");
+
+    // §9.2 script grammar: every partnered agent's courtship script advanced.
+    let partnered = sim.agents.iter().filter(|a| a.partner.is_some()).count();
+    let scripts_advanced = sim.agents.iter()
+        .filter(|a| a.neural_like.script.as_ref().map_or(false, |s| s.current_step > 0))
+        .count();
+    assert_eq!(scripts_advanced, partnered,
+        "every partnered agent's courtship script must advance");
+
+    // Bounded end-state.
+    for a in &sim.agents {
+        assert!(a.neural_like.network.activation.threat <= Fixed::ONE);
+        assert!(a.neural_like.expectation.expectation <= Fixed::ONE);
+    }
+
+    // Determinism: same seed → identical neural-like end-state.
+    let sim2 = run_sim(42, 2000);
+    let sum1: f64 = sim.agents.iter()
+        .map(|a| a.neural_like.network.activation.threat.to_f64()
+            + a.neural_like.expectation.last_prediction_error.to_f64())
+        .sum();
+    let sum2: f64 = sim2.agents.iter()
+        .map(|a| a.neural_like.network.activation.threat.to_f64()
+            + a.neural_like.expectation.last_prediction_error.to_f64())
+        .sum();
+    assert!((sum1 - sum2).abs() < 1e-9,
+        "neural-like end-state must be seed-deterministic");
+}
+
 
 
 

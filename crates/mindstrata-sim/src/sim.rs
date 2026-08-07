@@ -285,6 +285,11 @@ pub struct AgentBundle {
     pub motivation: crate::psychology::MotivationState,
     /// Architecture-plan-2 §8.1.20: Decision policy integrating all psychology into action.
     pub decision_policy: crate::psychology::DecisionPolicy,
+    /// Architecture-plan-2 §9.2: Deterministic neural-like runtime — concept
+    /// embeddings, spreading activation, predictive error, RL action values,
+    /// and script grammar (observational state).
+    #[serde(default)]
+    pub neural_like: crate::psychology::neural_like::NeuralLikeState,
     /// Architecture-plan-2 §17: Agent tier for level-of-detail simulation.
     pub agent_tier: crate::agent_tier::AgentTierState,
     /// Architecture-plan-2 §8.1.17: Narrative frames for event interpretation.
@@ -818,6 +823,7 @@ impl Simulation {
                 epistemic: epistemic_state,
                 cognitive_runtime: crate::psychology::CognitiveRuntime::from_personality(&personality_clone),
                 motivation: crate::psychology::MotivationState::from_personality(&personality_clone),
+                neural_like: crate::psychology::neural_like::NeuralLikeState::default(),
                 decision_policy: crate::psychology::DecisionPolicy::from_personality(
                     personality_clone.neuroticism,
                     personality_clone.extraversion,
@@ -5000,6 +5006,7 @@ impl Simulation {
             epistemic: crate::social::epistemic::EpistemicState::default(),
             cognitive_runtime: crate::psychology::CognitiveRuntime::default(),
             motivation: crate::psychology::MotivationState::default(),
+            neural_like: crate::psychology::neural_like::NeuralLikeState::default(),
             decision_policy: crate::psychology::DecisionPolicy::default(),
             agent_tier: crate::agent_tier::AgentTierState::new(
                 crate::agent_tier::AgentTier::Secondary, tick_u64,
@@ -5327,7 +5334,8 @@ impl Simulation {
                     epistemic: crate::social::epistemic::EpistemicState::default(),
                     cognitive_runtime: crate::psychology::CognitiveRuntime::default(),
                     motivation: crate::psychology::MotivationState::default(),
-                    decision_policy: crate::psychology::DecisionPolicy::default(),
+                    neural_like: crate::psychology::neural_like::NeuralLikeState::default(),
+            decision_policy: crate::psychology::DecisionPolicy::default(),
                     agent_tier: crate::agent_tier::AgentTierState::new(
                         crate::agent_tier::AgentTier::Secondary, tick_u64,
                     ),
@@ -6423,6 +6431,24 @@ impl Simulation {
                 _ => Fixed::from_f64(0.02),
             };
             self.agents[*agent_idx].decision_policy.learn_from_outcome(action_succeeded, action_cost);
+
+            // §9.2: Neural-like RL values — learn the plan's four value
+            // components from the outcome (observational state).
+            let (need, emotional, social, identity) = match action {
+                ActionKind::Work => (0.4, 0.0, 0.0, 0.1),
+                ActionKind::Eat | ActionKind::Drink => (0.5, 0.1, 0.0, 0.0),
+                ActionKind::Socialize => (0.0, 0.1, 0.4, 0.0),
+                ActionKind::Worship => (0.0, 0.2, 0.1, 0.3),
+                ActionKind::Trade => (0.2, 0.0, 0.1, 0.1),
+                _ => (0.05, 0.05, 0.05, 0.05),
+            };
+            self.agents[*agent_idx].neural_like.values.learn_from_outcome(
+                action_succeeded,
+                Fixed::from_f64(need),
+                Fixed::from_f64(emotional),
+                Fixed::from_f64(social),
+                Fixed::from_f64(identity),
+            );
         }
 
     }
@@ -6577,6 +6603,51 @@ impl Simulation {
             // intrude preferentially. Deterministic (no RNG), purely
             // observational memory state — calibrated runs stay byte-identical.
             agent.memory.retrieve_and_reconsolidate(tick_u64, agent.emotions.anger, agent.emotions.joy);
+
+            // §9.2: Deterministic neural-like runtime (observational state —
+            // activations, prediction errors, and learned values accumulate
+            // but no decision system reads them yet, so calibrated runs stay
+            // byte-identical). The concept vector is derived deterministically
+            // from the agent's live state (no RNG).
+            let concepts = crate::psychology::neural_like::ConceptVector {
+                safety: Fixed::ONE - agent.emotions.fear,
+                sacredness: if agent.cultural.ideology.is_some() {
+                    Fixed::from_f64(0.5)
+                } else {
+                    Fixed::ZERO
+                },
+                status: agent.status.social_status,
+                kinship: if agent.partner.is_some() || agent.parent_a.is_some() {
+                    Fixed::from_f64(0.5)
+                } else {
+                    Fixed::ZERO
+                },
+                scarcity: Fixed::ONE - agent.needs.safety,
+                threat: agent.emotions.fear,
+                purity: agent.moral_values.purity,
+                freedom: Fixed::ONE - agent.personality.conformity,
+                loyalty: agent.moral_values.loyalty,
+                pleasure: agent.emotions.joy,
+                shame: agent.emotions.shame,
+                hope: agent.emotions.hope,
+            };
+            agent.neural_like.network.spread(concepts, Fixed::from_f64(0.8));
+            // Predictive error: observe the current success rate as the
+            // outcome of the agent's recent attempts.
+            let attempts = agent.recent_attempts;
+            if attempts > 0 {
+                let success_rate = Fixed::from_int(agent.recent_successes as i64)
+                    / Fixed::from_int(attempts as i64);
+                agent.neural_like.expectation.observe(success_rate);
+            }
+            // §9.2 script grammar: partnered agents replay the courtship script
+            // as an observational narrative track (no behavioral effect).
+            if agent.partner.is_some() {
+                let script = agent.neural_like.script.get_or_insert_with(
+                    crate::psychology::neural_like::BehaviorScript::courtship,
+                );
+                script.next_step();
+            }
 
             // §4.2: Skill improvement — agents improve skills through repeated practice.
             // Small increments per tick; skills cap at 1.0.
