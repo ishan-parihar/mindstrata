@@ -2833,6 +2833,38 @@ fn memory_taxonomy_slots_episodic_and_cultural_fire_live() {
         "ritual participation must encode Cultural memories, got {cultural}");
 }
 
+// ── §8.1.4: Expanded Emotion Families ───────────────────────────
+
+/// §8.1.4: "Expand beyond 8 emotions" — the plan's 22-family roster must be
+/// live in real runs: the deepened appraisal dimensions derive from live
+/// state, so the forecasted-affect pole (hope) and the recovery pole (relief)
+/// must be populated across the population, while the 8 core emotions keep
+/// driving the unchanged valence/arousal consumers.
+#[test]
+fn expanded_emotion_families_are_live_across_real_run() {
+    let sim = run_sim(42, 2000);
+
+    let positive_sum: f64 = sim.agents.iter().map(|a| {
+        a.emotions.hope.to_f64()
+            + a.emotions.relief.to_f64()
+            + a.emotions.gratitude.to_f64()
+            + a.emotions.tenderness.to_f64()
+            + a.emotions.nostalgia.to_f64()
+    }).sum();
+    assert!(positive_sum > 0.0,
+        "the expanded positive emotion families must be populated, total {positive_sum:.3}");
+
+    let hopeful = sim.agents.iter().filter(|a| a.emotions.hope > Fixed::ZERO).count();
+    assert!(hopeful > 0,
+        "signed future implication must produce hope in at least some agents, got {hopeful}");
+
+    // The 8 core emotions still drive valence/arousal (unchanged consumers).
+    let core_live = sim.agents.iter()
+        .filter(|a| a.emotions.fear > Fixed::ZERO || a.emotions.joy > Fixed::ZERO)
+        .count();
+    assert!(core_live > 0, "core emotions remain live");
+}
+
 
 
 

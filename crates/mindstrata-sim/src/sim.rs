@@ -2950,6 +2950,16 @@ impl Simulation {
                 let threat = threat_exposure[i];
                 let unfairness = witnessed_unfairness[i];
                 let need_pressure = needs[i].hunger.max(needs[i].thirst);
+                // §8.1.4: Deepened appraisal dimensions — derived from live
+                // agent state (sacredness, attachment, status, narrative).
+                let max_sacredness = self.agents[i]
+                    .sacred_values
+                    .values
+                    .iter()
+                    .fold(Fixed::ZERO, |acc, v| acc.max(v.sacredness));
+                let separation_distress = self.agents[i].attachment.separation_distress;
+                let status_hold = self.agents[i].status_v2.authority;
+                let coherence = self.agents[i].narrative.coherence;
                 let appraisal = Appraisal {
                     goal_relevance: need_pressure.max(threat),
                     goal_congruence: if threat > Fixed::from_f64(0.2) {
@@ -2970,6 +2980,19 @@ impl Simulation {
                     agency: Agency::Circumstance,
                     social_visibility: Fixed::ZERO,
                     identity_relevance: Fixed::from_f64(0.2),
+                    sacredness_violation: (unfairness * max_sacredness).clamp_01(),
+                    attachment_threat: separation_distress,
+                    status_threat: (threat * (Fixed::ONE - status_hold)).clamp_01(),
+                    purity_violation: (unfairness * (Fixed::ONE - emotions[i].trust)).clamp_01(),
+                    // Felt control erodes under threat — distinct from the raw
+                    // conscientiousness that feeds coping_potential above.
+                    controllability: (personalities[i].conscientiousness
+                        * (Fixed::ONE - threat))
+                        .clamp_01(),
+                    // Signed future outlook; provably in [-1, 1] (threat and
+                    // need_pressure are both clamped to 0..1), no clamp needed.
+                    future_implication: Fixed::ONE - threat - need_pressure,
+                    narrative_meaning: coherence,
                 };
 
                 let mut delta = appraisal::appraise(&appraisal, tick, &self.params);
@@ -2996,6 +3019,23 @@ impl Simulation {
                 emotions[i].shame = (emotions[i].shame + delta.shame).clamp_01();
                 emotions[i].pride = (emotions[i].pride + delta.pride).clamp_01();
                 emotions[i].guilt = (emotions[i].guilt + delta.guilt).clamp_01();
+                // §8.1.4: Expanded emotion families (write-only observational
+                // state — no consumer reads them yet, so calibrated runs are
+                // byte-identical; consumers are future iterations).
+                emotions[i].disgust = (emotions[i].disgust + delta.disgust).clamp_01();
+                emotions[i].contempt = (emotions[i].contempt + delta.contempt).clamp_01();
+                emotions[i].awe = (emotions[i].awe + delta.awe).clamp_01();
+                emotions[i].gratitude = (emotions[i].gratitude + delta.gratitude).clamp_01();
+                emotions[i].jealousy = (emotions[i].jealousy + delta.jealousy).clamp_01();
+                emotions[i].envy = (emotions[i].envy + delta.envy).clamp_01();
+                emotions[i].loneliness = (emotions[i].loneliness + delta.loneliness).clamp_01();
+                emotions[i].tenderness = (emotions[i].tenderness + delta.tenderness).clamp_01();
+                emotions[i].humiliation = (emotions[i].humiliation + delta.humiliation).clamp_01();
+                emotions[i].relief = (emotions[i].relief + delta.relief).clamp_01();
+                emotions[i].hope = (emotions[i].hope + delta.hope).clamp_01();
+                emotions[i].despair = (emotions[i].despair + delta.despair).clamp_01();
+                emotions[i].nostalgia = (emotions[i].nostalgia + delta.nostalgia).clamp_01();
+                emotions[i].moral_outrage = (emotions[i].moral_outrage + delta.moral_outrage).clamp_01();
 
                 // §8.1.4: Valence is SIGNED (-1..1). The old `.clamp_01()` floored
                 // negative affect at 0, so fear/anger/sadness could never move

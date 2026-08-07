@@ -119,6 +119,36 @@ pub struct DiscreteEmotions {
     pub shame: Fixed,
     pub pride: Fixed,
     pub guilt: Fixed,
+    /// §8.1.4 expanded emotion families — the plan's 22-family roster
+    /// (write-only observational state; nothing reads them for decisions).
+    #[serde(default)]
+    pub disgust: Fixed,
+    #[serde(default)]
+    pub contempt: Fixed,
+    #[serde(default)]
+    pub awe: Fixed,
+    #[serde(default)]
+    pub gratitude: Fixed,
+    #[serde(default)]
+    pub jealousy: Fixed,
+    #[serde(default)]
+    pub envy: Fixed,
+    #[serde(default)]
+    pub loneliness: Fixed,
+    #[serde(default)]
+    pub tenderness: Fixed,
+    #[serde(default)]
+    pub humiliation: Fixed,
+    #[serde(default)]
+    pub relief: Fixed,
+    #[serde(default)]
+    pub hope: Fixed,
+    #[serde(default)]
+    pub despair: Fixed,
+    #[serde(default)]
+    pub nostalgia: Fixed,
+    #[serde(default)]
+    pub moral_outrage: Fixed,
 }
 
 /// §19.5.A: How information was acquired — determines source trust weighting.

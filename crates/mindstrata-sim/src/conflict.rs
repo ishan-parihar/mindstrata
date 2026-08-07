@@ -167,6 +167,20 @@ mod tests {
             shame: Fixed::ZERO,
             pride: Fixed::ZERO,
             guilt: Fixed::ZERO,
+            disgust: Fixed::ZERO,
+            contempt: Fixed::ZERO,
+            awe: Fixed::ZERO,
+            gratitude: Fixed::ZERO,
+            jealousy: Fixed::ZERO,
+            envy: Fixed::ZERO,
+            loneliness: Fixed::ZERO,
+            tenderness: Fixed::ZERO,
+            humiliation: Fixed::ZERO,
+            relief: Fixed::ZERO,
+            hope: Fixed::ZERO,
+            despair: Fixed::ZERO,
+            nostalgia: Fixed::ZERO,
+            moral_outrage: Fixed::ZERO,
         }
     }
 

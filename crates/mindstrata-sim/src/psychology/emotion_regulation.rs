@@ -32,6 +32,8 @@ pub enum RegulationStrategy {
     Humor,
     /// Psychologically detach from the situation.
     Dissociation,
+    /// Self-medicate with intoxicants (when the world offers them).
+    SubstanceUse,
     /// Throw yourself into productive work.
     Work,
     /// Care for others to restore sense of purpose.
@@ -159,6 +161,10 @@ impl EmotionRegulationState {
             RegulationStrategy::Dissociation => {
                 // Dissociation reduces all emotional experience
                 (-Fixed::from_f64(0.1), -current_arousal * Fixed::from_f64(0.3))
+            }
+            RegulationStrategy::SubstanceUse => {
+                // Intoxicants blunt both poles but carry dependency risk
+                (-Fixed::from_f64(0.04), -current_arousal * Fixed::from_f64(0.25))
             }
             RegulationStrategy::Work => {
                 // Work provides distraction and sense of purpose
