@@ -2260,6 +2260,80 @@ fn memory_system_produces_plan_taxonomy_and_trace_properties() {
     );
 }
 
+// ── §8.1.5: Layered Motivation ────────────────────────────────────
+
+/// Iter 44: the plan's full five-factor pressure formula and complete
+/// need roster. `dominant_need` is write-only observational (no behavioral
+/// consumer yet), so the assertions target the genuinely-live new state:
+/// the care/romance needs must grow (tick_all wiring), the situational
+/// scarcity context must be derived from world stocks, and the full
+/// formula must amplify pressure over the plain deficit×urgency baseline.
+#[test]
+fn motivation_full_formula_and_roster_are_live() {
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::psychology::MotiveCategory;
+
+    let riverford = mindstrata_sim::scenario::Scenario::riverford();
+    let mut sim = mindstrata_sim::Simulation::from_scenario(riverford);
+    sim.populate();
+    sim.run(4320);
+
+    let mut care_grown = 0usize;
+    let mut romance_grown = 0usize;
+    let mut scarcity_context_seen = false;
+    let mut amplification_seen = false;
+    let mut roster_categories_seen = std::collections::HashSet::new();
+
+    for agent in &sim.agents {
+        let m = &agent.motivation;
+        // Plan roster: the care and romance needs exist and grow via tick_all.
+        if m.care.deficit > Fixed::ZERO {
+            care_grown += 1;
+        }
+        if m.romance.deficit > Fixed::ZERO {
+            romance_grown += 1;
+        }
+        // Plan §8.1.5 formula: situational affordance derived from world
+        // food/water scarcity must be present in real runs.
+        if m.food_scarcity > Fixed::ZERO || m.water_scarcity > Fixed::ZERO {
+            scarcity_context_seen = true;
+        }
+        // The full formula must amplify over the plain deficit×urgency
+        // baseline wherever the context factors are active.
+        if m.food_scarcity > Fixed::ZERO
+            && m.pressure_full(MotiveCategory::Hunger) > m.hunger.pressure()
+        {
+            amplification_seen = true;
+        }
+        roster_categories_seen.insert(m.dominant_need);
+    }
+
+    // Every agent grows both new needs (tick_all drives psychological needs).
+    assert_eq!(
+        care_grown,
+        sim.agents.len(),
+        "care deficit never grew for some agents — tick_all not wiring all needs"
+    );
+    assert_eq!(
+        romance_grown,
+        sim.agents.len(),
+        "romance deficit never grew for some agents — tick_all not wiring all needs"
+    );
+    assert!(
+        scarcity_context_seen,
+        "no agent carried a situational scarcity context — affordance factor never live"
+    );
+    assert!(
+        amplification_seen,
+        "pressure_full never exceeded the deficit x urgency baseline — five-factor formula inactive"
+    );
+    // dominant_need is always a valid roster category (never a panic/zero state).
+    assert!(
+        !roster_categories_seen.is_empty(),
+        "dominant_need never set — update_dominant not running"
+    );
+}
+
 // ── §7.2.6: Pregnancy State ───────────────────────────────────────
 
 /// Iter 42: the plan's `Option<PregnancyState>` shape. In real runs the

@@ -54,6 +54,9 @@ use serde::{Deserialize, Serialize};
 // ── Named constants for magic numbers ──────────────────────────────
 /// Expected grain capacity per agent — used for scarcity normalization.
 pub const EXPECTED_GRAIN_PER_AGENT: u32 = 10;
+/// Water endowment assumed per agent when deriving §8.1.5 situational
+/// affordance scarcity (world water stock / (this × population)).
+pub const EXPECTED_WATER_PER_AGENT: u32 = 10;
 /// Skill improvement per tick of practice.
 pub const SKILL_GAIN_PER_TICK: Fixed = Fixed::from_raw(10); // 0.001
 /// Demography runs once per this many ticks (matches `phases.is_deca`).
@@ -1969,6 +1972,12 @@ impl Simulation {
         // Collect action starts to defer resource operations outside the ctx block
         let mut action_starts: Vec<(usize, ActionKind)> = Vec::new();
 
+        // §8.1.5: Precompute world food/water totals before SystemContext borrows
+        // self.world mutably (the motivation block reads them later, so they must
+        // be captured here to avoid a borrow conflict).
+        let world_food_total = self.world.total_food();
+        let world_water_total = self.world.total_water();
+
         // Prepare system context and run systems that need mutable borrow on events/rng
         {
             let mut ctx = SystemContext {
@@ -2123,6 +2132,34 @@ impl Simulation {
 
                 // Architecture-plan-2 §8.1.5: Motivation update.
                 // Bridge biological needs from existing NeedState, then grow and update.
+                // §8.1.5 full formula: the three missing context factors are
+                // derived per tick from existing state — emotional amplification
+                // from affect, cultural legitimacy from the agent's legitimacy
+                // field (mean-zero 0.5 anchor), situational affordance from
+                // world food/water scarcity. Write-only observational: the
+                // richer pressure feeds only `dominant_need`, which has no
+                // behavioral consumer yet, so calibrated runs carry zero drift.
+                {
+                    let fear = self.agents[i].emotions.fear;
+                    let anger = self.agents[i].emotions.anger;
+                    let joy = self.agents[i].emotions.joy;
+                    let sadness = self.agents[i].emotions.sadness;
+                    let legitimacy = self.agents[i].legitimacy_field.overall;
+                    let expected_food = crate::sim::EXPECTED_GRAIN_PER_AGENT as i64
+                        * self.agents.len() as i64;
+                    let expected_water =
+                        crate::sim::EXPECTED_WATER_PER_AGENT as i64 * self.agents.len() as i64;
+                    // Use the world totals precomputed before the ctx block.
+                    let food_scarcity = (Fixed::ONE
+                        - world_food_total / Fixed::from_int(expected_food.max(1)))
+                        .clamp_01();
+                    let water_scarcity = (Fixed::ONE
+                        - world_water_total / Fixed::from_int(expected_water.max(1)))
+                        .clamp_01();
+                    self.agents[i].motivation.set_context(
+                        fear, anger, joy, sadness, legitimacy, food_scarcity, water_scarcity,
+                    );
+                }
                 self.agents[i].motivation.hunger.deficit = needs[i].hunger;
                 self.agents[i].motivation.thirst.deficit = needs[i].thirst;
                 self.agents[i].motivation.sleep.deficit = needs[i].fatigue;
