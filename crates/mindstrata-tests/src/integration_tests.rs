@@ -5667,3 +5667,67 @@ fn no_violence_norm_suppresses_threats() {
     let threats2 = again.recent_events(10_000_000).iter().filter(|e| is_threat(e)).count();
     assert_eq!(threats, threats2, "threat counts must be seed-deterministic");
 }
+
+/// §8.1.10/§19.5.D (Iteration 86): the witnessed-enforcement audit is live
+/// — a caught theft (Council fine) increments every holder's
+/// `enforcement_count` on the no-theft norm (previously created at 0 by
+/// `internalize_norm` and never written in production). The channel is
+/// armed-but-silent in the default world: its farms/wells are
+/// `AccessRight::Public`, so `inaccessible_farm_with_grain` never fires, no
+/// thefts occur, and `enforcement_count` stays 0 everywhere even past
+/// ritual fires — the observational claim that pins zero drift. This test
+/// pins the golden-window invariance (2000 ticks: no internalized norms at
+/// all), the post-ritual armed-but-silent state (9000 ticks: norms
+/// internalized with zero witnessed enforcement), and determinism.
+#[test]
+fn witnessed_enforcement_audit_is_armed() {
+    // Golden window: no ritual before 4320 → no internalized norms at all.
+    let early = run_sim(42, 2000);
+    for a in &early.agents {
+        assert!(
+            a.moral_cognition.internalized_norms.is_empty(),
+            "no internalized norm before the first monthly ritual"
+        );
+    }
+
+    // Past ritual fires: norms internalized, but the default world's public
+    // farm access means no theft enforcement ever fires — the audit channel
+    // is armed (method live, wired to the caught branch) yet silent, so
+    // every count stays 0 and calibrated runs carry zero drift.
+    let late = run_sim(42, 9000);
+    let mut any_norm = false;
+    for a in &late.agents {
+        for n in &a.moral_cognition.internalized_norms {
+            any_norm = true;
+            assert_eq!(
+                n.enforcement_count, 0,
+                "no theft enforcement in the public-access default world"
+            );
+        }
+    }
+    assert!(any_norm, "ritual participation should internalize norms");
+
+    // Determinism: same seed → byte-identical enforcement counts.
+    let again = run_sim(42, 9000);
+    let v1: Vec<(String, u32)> = late
+        .agents
+        .iter()
+        .flat_map(|a| {
+            a.moral_cognition
+                .internalized_norms
+                .iter()
+                .map(|n| (n.description.clone(), n.enforcement_count))
+        })
+        .collect();
+    let v2: Vec<(String, u32)> = again
+        .agents
+        .iter()
+        .flat_map(|a| {
+            a.moral_cognition
+                .internalized_norms
+                .iter()
+                .map(|n| (n.description.clone(), n.enforcement_count))
+        })
+        .collect();
+    assert_eq!(v1, v2, "enforcement counts must be seed-deterministic");
+}

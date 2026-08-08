@@ -4426,6 +4426,35 @@ impl Simulation {
                 }
                 self.agents[agent_idx].emotions.shame = (self.agents[agent_idx].emotions.shame + Fixed::from_f64(0.1)).clamp_01();
             }
+            // §8.1.10/§19.5.D (Iteration 86): a caught theft is public
+            // enforcement — the Council fines the thief and the whole village
+            // knows it. Every agent holding the no-theft norm witnesses the
+            // community enforce it, incrementing their documented
+            // `enforcement_count` (previously created at 0 by
+            // `internalize_norm` and never written in production — the
+            // witnessed-enforcement audit channel was dead). The violator is
+            // included among the witnesses: they experience the punishment
+            // most directly, so "witnessed enforcement" deliberately covers
+            // both observation and direct experience of the public fine.
+            // Resolved by id (`NO_THEFT_NORM_ID`, same convention as the
+            // gate above); a registry without the norm is a no-op.
+            // Observational: no production consumer reads
+            // `enforcement_count`, so calibrated runs carry zero drift — and
+            // the default world's farms are `AccessRight::Public`, so thefts
+            // never fire there at all.
+            let no_theft_name = self
+                .norms
+                .norms()
+                .iter()
+                .find(|n| n.id == norms::NO_THEFT_NORM_ID)
+                .map(|n| n.name.as_str());
+            if let Some(name) = no_theft_name {
+                for bundle in &mut self.agents {
+                    bundle
+                        .moral_cognition
+                        .record_witnessed_enforcement(name);
+                }
+            }
         }
 
         // §4.4: Track black market transaction volume
@@ -10147,8 +10176,7 @@ mod tests {
                 .inventory
                 .iter()
                 .find(|s| s.resource_id == crate::world::GRAIN_RESOURCE_ID)
-                .map(|s| s.quantity.to_f64())
-                .unwrap_or(0.0)
+                .map_or(0.0, |s| s.quantity.to_f64())
         };
         let amount = Fixed::from_f64(0.15);
         let tick = Tick::ZERO;
@@ -10204,6 +10232,94 @@ mod tests {
             tick
         ));
         assert!((grain_left(&sim) - 0.805).abs() < 0.001);
+    }
+
+    /// §8.1.10/§19.5.D (Iteration 86): the witnessed-enforcement *wiring* is
+    /// live — a caught theft (Council enforcement capacity 1.0 → the
+    /// detection roll < 1.0 always catches) increments `enforcement_count`
+    /// on the no-theft norm for every holder, including the violator, while
+    /// non-holders are a no-op. This closes the Iteration-86 coverage gap:
+    /// the default world's public-access farms never catch a theft, so only
+    /// this end-to-end test exercises the `enforce_theft` →
+    /// `record_witnessed_enforcement` loop.
+    #[test]
+    fn caught_theft_increments_witnessed_enforcement() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        // A thief who cannot use the black market (enforcement is not halved).
+        let thief = (0..sim.agents.len())
+            .find(|&i| !sim.black_market.can_participate(&sim.agents[i].personality))
+            .expect("at least one non-black-market agent");
+        let thief_id = AgentId::new(thief as u64);
+        // A farm with grain (same setup as the Iter-84 theft-take test).
+        let site_idx = sim
+            .world
+            .sites
+            .iter()
+            .position(|s| s.kind == crate::world::SiteKind::Farm)
+            .expect("seed-42 world has a farm");
+        {
+            let site = &mut sim.world.sites[site_idx];
+            if let Some(stock) = site
+                .inventory
+                .iter_mut()
+                .find(|s| s.resource_id == crate::world::GRAIN_RESOURCE_ID)
+            {
+                stock.quantity = Fixed::from_f64(1.0);
+            } else {
+                site.inventory.push(crate::world::ResourceStock {
+                    resource_id: crate::world::GRAIN_RESOURCE_ID,
+                    quantity: Fixed::from_f64(1.0),
+                    quality: Fixed::ONE,
+                    access: crate::world::AccessRight::OwnerOnly,
+                });
+            }
+        }
+        // Guarantee the catch: a Council at full enforcement capacity.
+        let council = sim
+            .institutions
+            .iter_mut()
+            .find(|i| i.kind == institutions::InstitutionKind::Council)
+            .expect("default village has a Council");
+        council.enforcement_capacity = Fixed::ONE;
+        // Two holders of the no-theft norm (thief + one witness) and one
+        // control agent with no internalized norm.
+        let witness = if thief == 0 { 1 } else { 0 };
+        let control = if thief == 2 || witness == 2 { 3 } else { 2 };
+        for &i in &[thief, witness] {
+            sim.agents[i]
+                .moral_cognition
+                .internalize_norm("No Theft".into(), Fixed::from_f64(0.6));
+        }
+        let tick = Tick::ZERO;
+        assert!(sim.enforce_theft(
+            thief,
+            thief_id,
+            site_idx,
+            crate::world::GRAIN_RESOURCE_ID,
+            Fixed::from_f64(0.15),
+            0,
+            tick
+        ));
+        let count = |i: usize| -> u32 {
+            sim.agents[i]
+                .moral_cognition
+                .internalized_norms
+                .iter()
+                .find(|n| n.description == "No Theft")
+                .map_or(0, |n| n.enforcement_count)
+        };
+        assert_eq!(count(thief), 1, "the violator experiences the enforcement");
+        assert_eq!(count(witness), 1, "a holder witnesses the public enforcement");
+        assert_eq!(count(control), 0, "non-holders have nothing to witness");
     }
 
     /// §10.8/§19.5.G: A clan enmity persists while any feud remains between

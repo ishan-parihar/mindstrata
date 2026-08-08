@@ -209,6 +209,26 @@ impl MoralCognition {
         }
         max_resistance
     }
+
+    /// §8.1.10/§19.5.D (Iteration 86): an agent who witnesses the community
+    /// enforce an internalized norm records it. `enforcement_count` (doc:
+    /// "Number of times the agent has witnessed enforcement") was created at
+    /// 0 by `internalize_norm` and never incremented in production — a
+    /// ritual could internalize the norm, but a caught theft fined by the
+    /// Council strengthened nothing in anyone's moral cognition. Public
+    /// enforcement is a community event: every agent holding the norm
+    /// witnesses it, so the audit increments their count. Observational (no
+    /// production consumer reads `enforcement_count` yet), saturating, and a
+    /// no-op for norms the agent has not internalized.
+    pub fn record_witnessed_enforcement(&mut self, description: &str) {
+        if let Some(norm) = self
+            .internalized_norms
+            .iter_mut()
+            .find(|n| n.description == description)
+        {
+            norm.enforcement_count = norm.enforcement_count.saturating_add(1);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -278,5 +298,39 @@ mod tests {
         assert_eq!(mc.internalized_norms[0].strength, Fixed::ONE);
         // Once strength crosses 0.7 the norm becomes identity-linked.
         assert!(mc.internalized_norms[0].identity_linked);
+    }
+
+    /// §8.1.10/§19.5.D (Iteration 86): witnessing public enforcement
+    /// increments the internalized norm's `enforcement_count` — the audit
+    /// channel created at 0 by `internalize_norm` and previously never
+    /// written in production. Un-internalized norms are a silent no-op, the
+    /// count is saturating, and the audit never touches strength or
+    /// identity-linking.
+    #[test]
+    fn record_witnessed_enforcement_increments_count() {
+        let mut mc = MoralCognition::default();
+        // Un-internalized norm: no-op, no panic, nothing added.
+        mc.record_witnessed_enforcement("no_theft");
+        assert!(mc.internalized_norms.is_empty());
+        // Internalize two norms; only the matching one records enforcement.
+        mc.internalize_norm("no_theft".into(), Fixed::from_f64(0.6));
+        mc.internalize_norm("no_violence".into(), Fixed::from_f64(0.6));
+        mc.record_witnessed_enforcement("no_theft");
+        mc.record_witnessed_enforcement("no_theft");
+        mc.record_witnessed_enforcement("no_violence");
+        let theft = mc
+            .internalized_norms
+            .iter()
+            .find(|n| n.description == "no_theft")
+            .unwrap();
+        let violence = mc
+            .internalized_norms
+            .iter()
+            .find(|n| n.description == "no_violence")
+            .unwrap();
+        assert_eq!(theft.enforcement_count, 2);
+        assert_eq!(violence.enforcement_count, 1);
+        // The audit does not touch strength or identity.
+        assert_eq!(theft.strength, Fixed::from_f64(0.6));
     }
 }
