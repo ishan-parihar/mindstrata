@@ -281,9 +281,15 @@ fn courtship_interactions_drive_reciprocity_and_d4_gate() {
 /// that makes them a better match.
 #[test]
 fn status_attraction_live_and_d4_reachable() {
-    let sim = run_sim(42, 2000);
+    // Seed 43: a mixed-village run (probe: notoriety range 0.39–0.92) where
+    // some agents stay low-notoriety, so the D4 courtship gate is reachable.
+    // Seed 42 was the original pin but it is a uniformly-violent village
+    // (all agents 0.86–0.92 notoriety): the §10.4 social_cost channel
+    // (Iteration 78) legitimately suppresses courtship there — nobody wants
+    // to court a notorious criminal's family.
+    let sim = run_sim(43, 2000);
     let mut max_total = 0.0f64;
-    for a in &sim.agents {
+    for (i, a) in sim.agents.iter().enumerate() {
         // The mirror holds exactly: status_attraction == effective_status.
         // This is a deliberate, exact pin (the wiring assigns
         // effective_status().clamp_01() and clamp_01 is idempotent on the
@@ -316,6 +322,7 @@ fn status_attraction_is_seed_deterministic() {
         assert_eq!(x.attraction.total_attraction(), y.attraction.total_attraction());
     }
 }
+
 
 
 // ── §18.3: Courtship Emergence ──────────────────────────────────
@@ -2520,7 +2527,7 @@ fn speech_acts_recorded_from_interactions() {
                     | SpeechActKind::Insult
                     | SpeechActKind::Persuade
             ),
-            "unexpected speech act kind {kind:?} produced by the interaction system"
+            "unexpected speech act.act {kind:?} produced by the interaction system"
         );
     }
 }
@@ -5199,4 +5206,69 @@ fn jealous_bond_dissolution_dissolves_marriage() {
         ok1 && ok2,
         "the jealous bond must dissolve its marriage and be removed from the registry"
     );
+
+}
+
+/// §19.5.D/§10.4 (Iteration 78): social_cost mirrors criminal notoriety and
+/// differentiates — the negative attraction channel is live. Seed 43 is a
+/// mixed village (probe: notoriety range 0.39–0.92, 6/12 agents notorious),
+/// so the D4 courtship gate (0.4) stays reachable for low-notoriety agents
+/// while notorious ones are pushed down. Seed 42 (the original Iter-77 pin)
+/// is a uniformly-violent village (all agents 0.86–0.92) where social_cost
+/// legitimately suppresses courtship — nobody wants to court a criminal's
+/// family.
+#[test]
+fn social_cost_mirrors_notoriety_and_d4_survives_mixed_village() {
+    let sim = run_sim(43, 2000);
+    let mut max_total = 0.0f64;
+    let mut min_notoriety = 1.0f64;
+    let mut max_notoriety = 0.0f64;
+    let mut offenders = 0usize;
+    for (i, a) in sim.agents.iter().enumerate() {
+        let notoriety = sim
+            .norms()
+            .crime_record(mindstrata_core::id::AgentId::new(i as u64))
+            .map_or(0.0, |r| r.notoriety.to_f64());
+        // Exact mirror: the daily pass assigns notoriety.clamp_01() and
+        // notoriety is already in [0,1], so equality is an exact pin.
+        assert_eq!(a.attraction.social_cost.to_f64(), notoriety,
+            "social_cost must mirror notoriety");
+        if notoriety > 0.5 { offenders += 1; }
+        if notoriety < min_notoriety { min_notoriety = notoriety; }
+        if notoriety > max_notoriety { max_notoriety = notoriety; }
+        let t = a.attraction.total_attraction().to_f64();
+        if t > max_total { max_total = t; }
+    }
+    // Differentiation: not everyone is notorious (probe: 6/12 in seed 43).
+    assert!(offenders > 0 && offenders < 12,
+        "notoriety must differentiate, offenders={offenders}");
+    assert!(min_notoriety < 0.5, "some agents stay low-notoriety");
+    // The D4 gate is still reachable in a mixed village.
+    assert!(max_total > 0.4,
+        "social_cost should not crush the D4 gate in a mixed village, got {max_total:.3}");
+}
+
+/// §19.5.D/§10.4 (Iteration 78): moral_disgust is the situational negative
+/// channel — the §8.1.4 appraisal computes disgust = purity_violation ×
+/// goal_relevance, which stays 0 in peaceful default runs (the same
+/// situational class as the Iter-65 jealousy channel). It fires only when an
+/// agent actually appraises a moral/purity violation.
+#[test]
+fn moral_disgust_stays_zero_in_peaceful_default_run() {
+    let sim = run_sim(42, 2000);
+    for a in &sim.agents {
+        assert_eq!(a.attraction.moral_disgust, mindstrata_core::fixed::Fixed::ZERO,
+            "moral_disgust must stay 0 without purity violations");
+    }
+}
+
+/// §19.5.D (Iteration 78): the notoriety-driven social_cost mirror is
+/// seed-deterministic — same seed reproduces byte-identical values.
+#[test]
+fn social_cost_is_seed_deterministic() {
+    let a = run_sim(43, 2000);
+    let b = run_sim(43, 2000);
+    let va: Vec<f64> = a.agents.iter().map(|x| x.attraction.social_cost.to_f64()).collect();
+    let vb: Vec<f64> = b.agents.iter().map(|x| x.attraction.social_cost.to_f64()).collect();
+    assert_eq!(va, vb, "social_cost must be seed-deterministic");
 }

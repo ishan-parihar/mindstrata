@@ -69,6 +69,25 @@ impl AttractionModel {
     pub fn update_status_attraction(&mut self, effective_status: Fixed) {
         self.status_attraction = effective_status.clamp_01();
     }
+
+    /// §10.4 (Iteration 78): The agent's criminal notoriety is a social cost
+    /// on any match — repeat offenders are costly partners. Wired from the
+    /// live norm-enforcement crime records (`CrimeRecord.notoriety`); this
+    /// channel was a declared plan field with zero production writers. Weighs
+    /// 0.1 (negative) in `total_attraction()`. Deterministic, no RNG, clamped.
+    pub fn update_social_cost(&mut self, notoriety: Fixed) {
+        self.social_cost = notoriety.clamp_01();
+    }
+
+    /// §10.4 (Iteration 78): The agent's aversion to taboo/purity violations.
+    /// Wired from the disgust emotion (which the §8.1.4 appraisal computes as
+    /// purity_violation × goal_relevance) — 0 in peaceful runs by design (the
+    /// same situational class as the Iter-65 jealousy channel), firing when
+    /// the agent actually appraises a moral violation. Weighs 0.2 (negative)
+    /// in `total_attraction()`. Deterministic, no RNG, clamped.
+    pub fn update_moral_disgust(&mut self, disgust: Fixed) {
+        self.moral_disgust = disgust.clamp_01();
+    }
 }
 
 /// §10.4: Familiarity-growth quality for an interaction kind.
@@ -135,6 +154,30 @@ mod tests {
         assert_eq!(a.status_attraction, Fixed::ONE);
         a.update_status_attraction(Fixed::from_f64(-0.5));
         assert_eq!(a.status_attraction, Fixed::ZERO);
+    }
+
+    #[test]
+    fn social_cost_reduces_total_attraction() {
+        let mut a = AttractionModel::default();
+        let without = a.total_attraction();
+        a.update_social_cost(Fixed::from_f64(0.5));
+        // Social cost carries weight 0.1 (negative) in total_attraction().
+        assert!(a.total_attraction() < without - Fixed::from_f64(0.04));
+        assert!(a.total_attraction() > without - Fixed::from_f64(0.06));
+        a.update_social_cost(Fixed::from_f64(-0.5));
+        assert_eq!(a.total_attraction(), without);
+    }
+
+    #[test]
+    fn moral_disgust_reduces_total_attraction() {
+        let mut a = AttractionModel::default();
+        let without = a.total_attraction();
+        a.update_moral_disgust(Fixed::from_f64(0.5));
+        // Moral disgust carries weight 0.2 (negative) in total_attraction().
+        assert!(a.total_attraction() < without - Fixed::from_f64(0.09));
+        assert!(a.total_attraction() > without - Fixed::from_f64(0.11));
+        a.update_moral_disgust(Fixed::from_f64(0.0));
+        assert_eq!(a.total_attraction(), without);
     }
 
     #[test]

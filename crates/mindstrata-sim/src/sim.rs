@@ -2652,6 +2652,25 @@ impl Simulation {
                 self.agents[i]
                     .attraction
                     .update_status_attraction(eff_status);
+                // §10.4 (Iteration 78): the two per-agent aversion channels.
+                // social_cost mirrors the agent's criminal notoriety from the
+                // live norm-enforcement crime records (offenders are socially
+                // costly partners — the channel only rises for agents who
+                // actually commit hostile acts, so it differentiates without
+                // depressing the D4-reachability that Iteration 77 wired).
+                // moral_disgust mirrors the disgust emotion — the §8.1.4
+                // appraisal's purity-violation aversion, 0 in peaceful runs by
+                // design (the same situational class as the Iter-65 jealousy
+                // channel), firing when the agent appraises a moral violation.
+                // Both deterministic, no RNG, observational (only the D4
+                // scenario gate reads total_attraction).
+                let notoriety = self
+                    .norms
+                    .crime_record(AgentId::new(i as u64))
+                    .map_or(Fixed::ZERO, |r| r.notoriety);
+                self.agents[i].attraction.update_social_cost(notoriety);
+                let disgust = self.agents[i].emotions.disgust;
+                self.agents[i].attraction.update_moral_disgust(disgust);
 
                 // Architecture-plan-2 §17.3: Relationship caching.
                 // Only decay relationships that have been recently active (dirty)
@@ -3248,6 +3267,25 @@ impl Simulation {
                             }
                             break;
                         }
+                        // §19.5.D (Iteration 78): norm enforcement is NOT
+                        // wired here — the pre-existing sites already record
+                        // offenses through check_violation (the theft-fine
+                        // path in the black-market/market block, the
+                        // violence-conflict block, and the norm-evaluation
+                        // pass's check_violation(1, …) call), so adding a
+                        // fourth speech-act site would inflate offense_count
+                        // and raise the punishment multiplier at those sites
+                        // — drifting the snapshot-hashed fines/trust-erosion
+                        // baselines. The Iteration-78 contribution to §19.5.D
+                        // lives in CrimeRecord::record_offense: notoriety (the
+                        // §10.4 social-cost driver) is episode-gated there
+                        // (ENFORCEMENT_EPISODE_TICKS) — offense_count still
+                        // grows every call (punishment trajectories
+                        // byte-identical), but notoriety climbs once per
+                        // distinct conflict episode instead of per raw act
+                        // (probe: 57–316/agent saturated it at 1.0 for
+                        // everyone; the gate keeps it a differentiating
+                        // 0–0.9 signal).
                         // Tone from current affect valence (0..1, 0.5 neutral).
                         let tone = (self.agents[fi].affect.valence + Fixed::ONE)
                             / Fixed::from_f64(2.0);
@@ -7908,8 +7946,12 @@ impl Simulation {
                                         fear_induced: violence_result.fear_induced,
                                         tick,
                                     });
-                                    // §19.5.D: Violence is a severe norm violation
-                                    let _ = self.norms.check_violation(4, from_id, tick_u64); // norm id=4: No Violence
+                                    // §19.5.D: Violence is a severe norm violation.
+                                    let _ = self.norms.check_violation(
+                                        crate::norms::NO_VIOLENCE_NORM_ID,
+                                        from_id,
+                                        tick_u64,
+                                    );
                                     // §19.5.G: Feud tracking is handled in dedicated section 18
 
                                     // Attacker gains shame from violence

@@ -39,26 +39,61 @@ pub struct NormViolation {
     pub punishment_applied: Fixed,
 }
 
+/// §19.5.D: The default "No Violence" norm id (index 4 in `default_norms`).
+/// Hostile interactions (Threaten/Insult) are direct confrontations checked
+/// against this norm by the Iteration-78 enforcement wiring.
+pub const NO_VIOLENCE_NORM_ID: u64 = 4;
+
+/// §19.5.D (Iteration 78): Episode window for notoriety — at most one
+/// notoriety increment per agent per window, so notoriety tracks distinct
+/// conflict *episodes* rather than raw hostile-act counts. A conflict-prone
+/// village produces hundreds of hostile acts per agent over 2000 ticks
+/// (probe: 57–316), which saturated notoriety at 1.0 for everyone and
+/// erased the differentiation the social-cost channel needs. `offense_count`
+/// (the punishment multiplier driver) is deliberately NOT gated — keeping
+/// every punishment trajectory byte-identical to the pre-existing baseline
+/// (fines → wealth_rank, trust erosion → relationship metrics are all
+/// snapshot-hashed, so gating them would drift the golden baselines).
+pub const ENFORCEMENT_EPISODE_TICKS: u64 = 400;
+
 /// §19.5.D: Crime record tracking repeat offenders.
 /// Each agent accumulates a criminal history that escalates punishment.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CrimeRecord {
-    /// Number of times this agent has committed crimes.
+    /// Number of times this agent has committed crimes. Drives the
+    /// punishment multiplier — grows on every offense, ungated, so the
+    /// punishment trajectory stays byte-identical to the baseline.
     pub offense_count: u32,
-    /// Last tick when a crime was committed (for recency weighting).
+    /// Last tick when a crime was committed. Pre-existing field kept for
+    /// API/format stability; the Iteration-78 episode gating tracks
+    /// `last_episode_tick` instead (no production readers remain).
     pub last_offense_tick: u64,
+    /// Distinct conflict episodes (one per `ENFORCEMENT_EPISODE_TICKS`
+    /// window). Drives notoriety so it stays a differentiating 0–0.9 signal.
+    pub episode_count: u32,
+    /// Last tick when a new episode began (for episode gating).
+    pub last_episode_tick: u64,
     /// Accumulated notoriety (0.0–1.0). Higher = more feared/known criminal.
     pub notoriety: Fixed,
 }
 
 impl CrimeRecord {
     /// Record a new offense and update notoriety.
+    /// `offense_count` grows every call (punishment trajectory unchanged);
+    /// notoriety grows once per distinct episode window.
     pub fn record_offense(&mut self, tick: u64) {
         self.offense_count += 1;
         self.last_offense_tick = tick;
-        // Notoriety grows with offense count, diminishing returns
+        let new_episode = self.episode_count == 0
+            || tick.saturating_sub(self.last_episode_tick)
+                >= ENFORCEMENT_EPISODE_TICKS;
+        if new_episode {
+            self.episode_count += 1;
+            self.last_episode_tick = tick;
+        }
+        // Notoriety grows with distinct episodes, diminishing returns.
         self.notoriety = Fixed::from_f64(
-            (1.0 - (-0.5 * self.offense_count as f64).exp()).min(1.0),
+            (1.0 - (-0.5 * self.episode_count as f64).exp()).min(1.0),
         );
     }
 
@@ -289,6 +324,34 @@ mod tests {
     use super::*;
 
     #[test]
+    fn check_violation_escalates_notoriety_and_punishment() {
+        let mut registry = NormRegistry::new();
+        registry.register(Norm {
+            id: NO_VIOLENCE_NORM_ID,
+            name: "No Violence".into(),
+            strength: Fixed::from_f64(0.9),
+            internalization: Fixed::from_f64(0.7),
+            punishment: Fixed::from_f64(0.8),
+            reinforcing_identity: None,
+        });
+        let violator = AgentId::new(3);
+        // First offense: punishment 0.8 × 1.0 multiplier, notoriety 1−e^−0.5.
+        let p1 = registry.check_violation(NO_VIOLENCE_NORM_ID, violator, 100);
+        assert_eq!(p1, Fixed::from_f64(0.8));
+        // Third offense across three distinct episodes (spaced beyond the
+        // 400-tick episode window): multiplier 2.0 → 0.8 × 2.0 = 1.6, capped
+        // at 1.0 (the punishment cap); notoriety 1−e^−1.5 ≈ 0.78. The
+        // escalation is observable in offense_count/multiplier/notoriety.
+        registry.check_violation(NO_VIOLENCE_NORM_ID, violator, 600);
+        let p3 = registry.check_violation(NO_VIOLENCE_NORM_ID, violator, 1100);
+        assert_eq!(p3, Fixed::ONE);
+        let record = registry.crime_record(violator).unwrap();
+        assert_eq!(record.offense_count, 3);
+        assert!(record.notoriety > Fixed::from_f64(0.7));
+        assert_eq!(registry.violations().len(), 3);
+    }
+
+    #[test]
     fn norm_pressure_decreases_with_conformity() {
         let mut registry = NormRegistry::new();
         registry.register(Norm {
@@ -351,6 +414,50 @@ mod tests {
         assert_eq!(registry.violations()[0].violator, AgentId::new(5));
     }
 
+    #[test]
+    fn notoriety_gates_per_episode_but_offense_count_grows() {
+        let mut record = CrimeRecord::default();
+
+        // First offense at tick 100 opens an episode window.
+        record.record_offense(100);
+        assert_eq!(record.offense_count, 1);
+        assert_eq!(record.episode_count, 1);
+
+        // Rapid repeat (tick 150, within the 400-tick window): offense_count
+        // grows (punishment trajectory unchanged) but notoriety does not
+        // (a new episode has not begun).
+        let notoriety_after_first = record.notoriety;
+        record.record_offense(150);
+        assert_eq!(record.offense_count, 2);
+        assert_eq!(record.episode_count, 1);
+        assert_eq!(record.notoriety, notoriety_after_first);
+
+        // A fresh episode after the window elapses increments both.
+        record.record_offense(510);
+        assert_eq!(record.offense_count, 3);
+        assert_eq!(record.episode_count, 2);
+        assert!(record.notoriety > notoriety_after_first);
+    }
+
+    #[test]
+    fn notoriety_differentiates_across_episode_counts() {
+        // A one-episode offender stays well below a chronic one, keeping
+        // notoriety a discriminating signal for the social-cost channel
+        // (Iteration 78) rather than saturating at 1.0 for everyone.
+        let mut occasional = CrimeRecord::default();
+        occasional.record_offense(100);
+        occasional.record_offense(600);
+
+        let mut chronic = CrimeRecord::default();
+        for tick in [100u64, 600, 1100, 1600] {
+            chronic.record_offense(tick);
+        }
+
+        assert!(chronic.notoriety > occasional.notoriety);
+        assert!(occasional.notoriety < Fixed::from_f64(0.9));
+        assert!(chronic.notoriety < Fixed::ONE, "notoriety stays < 1.0");
+    }
+
     // ── §19.5.D: Crime Record Tests ────────────────────────────────
 
     #[test]
@@ -383,13 +490,14 @@ mod tests {
         let n1 = record.notoriety.to_f64();
         assert!(n1 > 0.0 && n1 < 1.0, "First offense notoriety should be between 0 and 1");
 
-        record.record_offense(200);
+        // New episodes (spaced beyond the 400-tick window) grow notoriety.
+        record.record_offense(600);
         let n2 = record.notoriety.to_f64();
-        assert!(n2 > n1, "Notoriety should grow with more offenses");
+        assert!(n2 > n1, "Notoriety should grow with more distinct episodes");
 
-        // Cap at 1.0
-        for i in 0..20 {
-            record.record_offense(300 + i * 100);
+        // Cap at 1.0 (diminishing returns on episode count).
+        for i in 0..20u64 {
+            record.record_offense(600 + i * ENFORCEMENT_EPISODE_TICKS);
         }
         assert!(record.notoriety.to_f64() <= 1.0, "Notoriety should cap at 1.0");
     }

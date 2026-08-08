@@ -115,7 +115,11 @@ pub struct Snapshot {
 /// v8: collective_memory_registry (dynamic group memories),
 /// v9: meme_registry (mutated lineage state),
 /// v10: kinship_graph (marriage/birth-forged edges)
-pub const SNAPSHOT_VERSION: u32 = 10;
+/// Iteration 78: bumped 10 → 11 — `CrimeRecord` gained `episode_count`/
+/// `last_episode_tick` (episode-gated notoriety), changing the postcard wire
+/// format of `NormRegistry` inside `Snapshot`. Old serialized bytes would
+/// fail postcard deserialization (no default-fill), so the version guards it.
+pub const SNAPSHOT_VERSION: u32 = 11;
 
 /// Bundles all simulation state references needed to capture a snapshot.
 /// Replaces the 21-parameter `capture()` signature with a single struct.
