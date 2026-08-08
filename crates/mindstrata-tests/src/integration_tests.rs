@@ -6355,12 +6355,12 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         "marriage children must stay empty in the golden window"
     );
 
-    // Liveness at 80K on seed 46: two pregnancy-path births, each with the
-    // full record chain. (Probe-pinned post-Iteration-94: birth ticks
-    // 10,890 and 34,010; Iteration 93's Obey Ruler gate and Iteration 94's
-    // RL learned-delta consumer each shifted the seed-46 timeline —
-    // 7,480/60,940 after Iter-93 — so the chain assertions live at 80K.
-    // Both births land after the golden window.)
+    // Liveness at 80K on seed 46: three pregnancy-path births, each with
+    // the full record chain. (Probe-pinned post-Iteration-95: birth ticks
+    // 10,890 / 34,010 / 45,760; Iteration 94's RL learned-delta consumer
+    // and Iteration 95's speech-act relational effects each shifted the
+    // seed-46 timeline — 7,480/60,940 after Iter-93 — so the chain
+    // assertions live at 80K. All births land after the golden window.)
     let late = run_sim(46, 80000);
     let birth_ticks: Vec<u64> = late
         .recent_events(10_000_000)
@@ -6372,8 +6372,8 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         .collect();
     assert_eq!(
         birth_ticks,
-        vec![10890, 34010],
-        "seed-46 80K world must deliver exactly the two probed births"
+        vec![10890, 34010, 45760],
+        "seed-46 80K world must deliver exactly the three probed births"
     );
     for t in &birth_ticks {
         assert!(
@@ -6383,8 +6383,8 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
     }
     assert_eq!(
         late.agents.iter().filter(|a| a.parent_a.is_some()).count(),
-        2,
-        "both live children must carry parentage at 80K"
+        3,
+        "all live children must carry parentage at 80K"
     );
     let marriage_children: usize = late
         .marriage_registry
@@ -6393,16 +6393,16 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         .map(|m| m.children.len())
         .sum();
     assert_eq!(
-        marriage_children, 2,
-        "both births must be recorded in the mothers' active marriages"
+        marriage_children, 3,
+        "all births must be recorded in the mothers' active marriages"
     );
     assert_eq!(
         late.agents
             .iter()
             .map(|a| a.embodied.reproductive.children_born)
             .sum::<u32>(),
-        2,
-        "both pregnancy-path deliveries must increment children_born"
+        3,
+        "all pregnancy-path deliveries must increment children_born"
     );
     assert_eq!(
         late.agents
@@ -6531,4 +6531,72 @@ fn obey_ruler_norm_is_armed_and_authority_anchor_is_deterministic() {
         .filter(|e| is_threat(e))
         .count();
     assert_eq!(threats, threats2, "threat counts must be seed-deterministic");
+}
+
+
+/// §8.1.11 (Iteration 95): the speech-act effect model is APPLIED — the
+/// three channels `system_social_interactions` does not touch
+/// (status/obligation/reputation) now land in the pair's `relationship_v2s`
+/// at every speech act. trust/affection were already live there (the
+/// grounded `base_delta` values equal interaction.rs's per-kind deltas, so
+/// applying them again would double-count); `resolve_effect` computed
+/// status/obligation/reputation but nothing applied them. Deterministic
+/// pure deltas (no RNG), so replay is untouched.
+#[test]
+fn speech_acts_apply_relational_effects() {
+    use mindstrata_core::fixed::Fixed;
+    let sim = run_sim(42, 2000);
+    // Obligation accumulates from Help (Promise +0.03) and Trade (Request
+    // +0.01); admiration from Talk/Teach (Inform/Persuade +0.01); respect
+    // moves off its 0.3 construction baseline under Comfort (Reassure
+    // +0.02) / Insult + Threaten (−0.02). Probe-pinned on seed 42 @ 2000:
+    // obligation sum 21.7, admiration sum 31.4, respect moved on 64 of 132
+    // relationship entries.
+    let mut obl_sum = 0.0f64;
+    let mut adm_sum = 0.0f64;
+    let mut respect_moved = 0usize;
+    for a in &sim.agents {
+        for rv2 in &a.relationship_v2s {
+            obl_sum += rv2.obligation.to_f64();
+            adm_sum += rv2.admiration.to_f64();
+            if (rv2.respect.to_f64() - 0.3).abs() > 1e-6 {
+                respect_moved += 1;
+            }
+        }
+    }
+    assert!(
+        obl_sum > 10.0,
+        "Help/Trade speech acts must create obligation (got {obl_sum:.1})"
+    );
+    assert!(
+        adm_sum > 10.0,
+        "Talk/Teach speech acts must build admiration (got {adm_sum:.1})"
+    );
+    assert!(
+        respect_moved > 10,
+        "status effects must move respect off its baseline (got {respect_moved})"
+    );
+
+    // Determinism: a second seed-42 run reproduces byte-identical
+    // (obligation, admiration, respect) across every relationship.
+    let again = run_sim(42, 2000);
+    let v1: Vec<(Fixed, Fixed, Fixed)> = sim
+        .agents
+        .iter()
+        .flat_map(|a| {
+            a.relationship_v2s
+                .iter()
+                .map(|r| (r.obligation, r.admiration, r.respect))
+        })
+        .collect();
+    let v2: Vec<(Fixed, Fixed, Fixed)> = again
+        .agents
+        .iter()
+        .flat_map(|a| {
+            a.relationship_v2s
+                .iter()
+                .map(|r| (r.obligation, r.admiration, r.respect))
+        })
+        .collect();
+    assert_eq!(v1, v2, "speech-act relational effects must be seed-deterministic");
 }

@@ -9,7 +9,7 @@ Metrics500 {
     avg_stress: 0.9200666666666667,
     avg_health: 0.6696583333333332,
     avg_relationship_trust: 0.5057765151515151,
-    avg_relationship_quality: 0.31241287878787877,
+    avg_relationship_quality: 0.30359469696969693,
     polarization_index: 0.0827,
     agent_count: 12.0,
     household_count: 12.0,

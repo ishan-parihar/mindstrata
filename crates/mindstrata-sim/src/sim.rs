@@ -3501,10 +3501,38 @@ impl Simulation {
                             credibility,
                             tick_u64,
                         );
+                        let effect = act.resolve_effect();
                         let log = &mut self.agents[fi].speech_log;
                         log.push(act);
                         if log.len() > crate::social::speech_act::SPEECH_LOG_CAPACITY {
                             log.remove(0);
+                        }
+                        // §8.1.11 (Iteration 95): apply the speech act's
+                        // relational effects — the trust/affection channels
+                        // are already live (`system_social_interactions`'
+                        // per-kind deltas equal the grounded `base_delta`
+                        // values, so applying them here would double-count);
+                        // status/obligation/reputation were computed by
+                        // `resolve_effect` but never applied anywhere. Pure
+                        // deltas on existing state, no RNG — the replay
+                        // stream is untouched. The listener owes obligation
+                        // to the speaker (promises/requests create debt —
+                        // the daily power-balance pass reads it), admires
+                        // the speaker per their reputation (aggression costs
+                        // standing, informing builds it), and the speaker's
+                        // respect for the listener tracks the listener's
+                        // status in the speaker's eyes (comfort raises it;
+                        // insult/threaten demeans — feeds `quality()`).
+                        if ti < n {
+                            let l_pos = Self::relationship_v2_pos(ti, fi);
+                            let rv2 = &mut self.agents[ti].relationship_v2s[l_pos];
+                            rv2.obligation =
+                                (rv2.obligation + effect.obligation_delta).clamp_01();
+                            rv2.admiration =
+                                (rv2.admiration + effect.reputation_delta).clamp_01();
+                            let s_pos = Self::relationship_v2_pos(fi, ti);
+                            let rv2s = &mut self.agents[fi].relationship_v2s[s_pos];
+                            rv2s.respect = (rv2s.respect + effect.status_delta).clamp_01();
                         }
                     }
                 }
