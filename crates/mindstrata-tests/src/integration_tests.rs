@@ -5882,4 +5882,75 @@ fn violence_audit_armed_but_silent_and_deterministic() {
     let v2 = audit(&run_sim(42, 9000));
     assert_eq!(v1, v2, "enforcement counts must be seed-deterministic");
 }
+/// §8.1.10 (Iteration 89): the prescriptive "Help Neighbors" norm now
+/// amplifies the Help decision in the interaction system — the sim threads
+/// each agent's internalized strength into `choose_interaction`, which
+/// grows the high-affection Help window. The gate is zero-at-zero before
+/// the first ritual (no internalized norm → legacy Help window → golden
+/// baselines byte-identical), armed post-ritual (propensities > 0), and
+/// Help remains a live interaction path throughout. Determinism holds.
+#[test]
+fn help_neighbors_norm_amplifies_help() {
+    // Golden window: no ritual before 4320 → zero propensity everywhere,
+    // so the Help decision is untouched and the golden baseline stays
+    // byte-identical.
+    let early = run_sim(42, 2000);
+    for a in &early.agents {
+        assert_eq!(
+            a.moral_cognition.norm_resistance("Help Neighbors"),
+            Fixed::ZERO,
+            "no internalized norm before the first monthly ritual"
+        );
+    }
 
+    // Past ritual fires: the Help Neighbors norm is internalized (gate
+    // input live, bounded), and the Help system still fires — the
+    // prescriptive gate amplifies Help, it does not suppress or disable it.
+    let late = run_sim(42, 9000);
+    let max_propensity = late
+        .agents
+        .iter()
+        .map(|a| a.moral_cognition.norm_resistance("Help Neighbors").to_f64())
+        .fold(0.0f64, f64::max);
+    assert!(
+        max_propensity > 0.0,
+        "ritual participation should internalize the Help Neighbors norm"
+    );
+    assert!(max_propensity <= 1.0);
+    let is_help = |e: &mindstrata_core::event::SimEvent| {
+        matches!(
+            e,
+            mindstrata_core::event::SimEvent::InteractionOccurred {
+                kind: mindstrata_core::event::InteractionKind::Help,
+                ..
+            }
+        )
+    };
+    let helps: usize = late
+        .recent_events(10_000_000)
+        .iter()
+        .filter(|e| is_help(e))
+        .count();
+    assert!(helps > 0, "the Help decision must still fire");
+
+    // Determinism: same seed → byte-identical propensity vectors and Help
+    // counts across two runs.
+    let again = run_sim(42, 9000);
+    let v1: Vec<f64> = late
+        .agents
+        .iter()
+        .map(|a| a.moral_cognition.norm_resistance("Help Neighbors").to_f64())
+        .collect();
+    let v2: Vec<f64> = again
+        .agents
+        .iter()
+        .map(|a| a.moral_cognition.norm_resistance("Help Neighbors").to_f64())
+        .collect();
+    assert_eq!(v1, v2, "norm propensity must be seed-deterministic");
+    let helps2 = again
+        .recent_events(10_000_000)
+        .iter()
+        .filter(|e| is_help(e))
+        .count();
+    assert_eq!(helps, helps2, "Help counts must be seed-deterministic");
+}

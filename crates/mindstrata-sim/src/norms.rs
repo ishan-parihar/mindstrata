@@ -51,6 +51,12 @@ pub const NO_VIOLENCE_NORM_ID: u64 = 4;
 /// (`no_theft_resistance` in the sim).
 pub const NO_THEFT_NORM_ID: u64 = 0;
 
+/// §8.1.10 (Iteration 89): The prescriptive "Help Neighbors" norm id
+/// (index 1 in `default_norms`). Unlike the prohibitive norms, an
+/// internalized Help Neighbors norm *amplifies* the prosocial Help
+/// decision in the interaction system rather than suppressing an act.
+pub const HELP_NEIGHBORS_NORM_ID: u64 = 1;
+
 /// §19.5.D (Iteration 78): Episode window for notoriety — at most one
 /// notoriety increment per agent per window, so notoriety tracks distinct
 /// conflict *episodes* rather than raw hostile-act counts. A conflict-prone

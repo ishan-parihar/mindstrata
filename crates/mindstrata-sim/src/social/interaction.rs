@@ -202,6 +202,7 @@ pub fn choose_interaction(
     personality_agreeableness: Fixed,
     anger: Fixed,
     no_violence_resistance: Fixed, // §8.1.10 (Iteration 85)
+    help_neighbors_propensity: Fixed, // §8.1.10 (Iteration 89)
     rng: &mut RngStreams,
     params: &crate::parameters::SimParameters,
 ) -> InteractionKind {
@@ -253,9 +254,23 @@ pub fn choose_interaction(
         }
     } else if affection > params.social_high_affection_threshold {
         // High affection: comfort, help, talk
+        // §8.1.10 (Iteration 89): the prescriptive "Help Neighbors" norm
+        // amplifies the Help *decision* — the Help window [0.2, help_bound)
+        // grows with the internalized norm's strength: at full
+        // internalization the window reaches [0.2, 1.0), so the agent
+        // always helps or comforts in high-affection contexts (never merely
+        // talks), mirroring the prohibitive norms' full-suppression at 1.0
+        // without a cliff (continuous scaling). Zero-at-zero: before the
+        // first monthly ritual (tick 4320) no agent holds the norm, so the
+        // bound is 0.5 and the golden baseline stays byte-identical. The
+        // RNG draw stays unconditional — only the threshold changes.
+        // Clamped to [0.5, 1.0]: the prescriptive norm can amplify but never
+        // suppress the Help window, even for a degenerate out-of-range
+        // strength (mirrors the Iter-87 hypocrisy-factor clamp rationale).
+        let help_bound = (0.5 * (1.0 + help_neighbors_propensity.to_f64())).clamp(0.5, 1.0);
         if roll < 0.2 {
             InteractionKind::Comfort
-        } else if roll < 0.5 {
+        } else if roll < help_bound {
             InteractionKind::Help
         } else {
             InteractionKind::Talk
@@ -365,8 +380,8 @@ fn evolve_relationship_kind(rel: &mut Relationship, params: &crate::parameters::
 /// §5.4: Faction in-group bias — members of the same faction get trust bonuses.
 /// §5.1: Bonding and conflict rates from `SimParameters`.
 pub fn system_social_interactions(
-    // (id, openness, agreeableness, extraversion, anger, no_violence_resistance)
-    agents: &[(AgentId, Fixed, Fixed, Fixed, Fixed, Fixed)],
+    // (id, openness, agreeableness, extraversion, anger, no_violence_resistance, help_neighbors_propensity)
+    agents: &[(AgentId, Fixed, Fixed, Fixed, Fixed, Fixed, Fixed)],
     agent_positions: &[(i32, i32)],            // §2.4: agent (x, y) positions
     same_faction_matrix: &[Vec<bool>],         // §5.4: same_faction_matrix[i][j] = true if agents i,j share a faction
     relationships: &mut [Relationship],
@@ -379,7 +394,7 @@ pub fn system_social_interactions(
 ) {
     let num_agents = agents.len();
 
-    for (i, (agent_id, openness, agreeableness, extraversion, anger, no_violence_resistance)) in agents.iter().enumerate() {
+    for (i, (agent_id, openness, agreeableness, extraversion, anger, no_violence_resistance, help_neighbors_propensity)) in agents.iter().enumerate() {
         // Extraversion affects interaction frequency
         let interact_chance = params.social_interaction_base_chance + *extraversion * params.social_extraversion_multiplier;
         let roll = Fixed::from_f64(rng.get_mut(RngStream::Social).random_range(0.0..1.0));
@@ -405,7 +420,7 @@ pub fn system_social_interactions(
 
             // §5.4: In-group/out-group — check if both agents share a faction
             let same_faction = same_faction_matrix[i][target_idx];
-            let kind = choose_interaction(trust, affection, *openness, *agreeableness, *anger, *no_violence_resistance, rng, params);
+            let kind = choose_interaction(trust, affection, *openness, *agreeableness, *anger, *no_violence_resistance, *help_neighbors_propensity, rng, params);
 
             let interaction = Interaction {
                 from: *agent_id,
@@ -514,6 +529,7 @@ mod tests {
                     agreeableness,
                     anger,
                     resistance,
+                    Fixed::ZERO, // no Help Neighbors norm in this setup
                     &mut rng,
                     &params,
                 ) == InteractionKind::Threaten
@@ -534,6 +550,72 @@ mod tests {
         assert!(
             partial < baseline,
             "partial internalization must leave a reduced threat rate"
+        );
+    }
+
+    /// §8.1.10 (Iteration 89): the prescriptive "Help Neighbors" norm
+    /// amplifies the Help *decision* — `choose_interaction` grows the
+    /// high-affection Help window from [0.2, 0.5) toward [0.2, 1.0) as the
+    /// internalized strength rises. The RNG draw stays unconditional, so
+    /// the same seed yields the same roll sequence at every propensity:
+    /// full internalization must strictly increase Help (any roll in the
+    /// [0.5, 1.0) ring converts Talk → Help), partial must land strictly
+    /// between, and the untouched [0, 0.2) Comfort window must stay
+    /// identical (the golden window's unaffected-path zero-drift pin).
+    #[test]
+    fn help_neighbors_norm_amplifies_help_decision() {
+        let params = crate::parameters::SimParameters::default();
+        // High-affection setup isolates the Help branch: trust 1.0 and
+        // affection 1.0 clear both the low-trust and high-affection
+        // thresholds, and high agreeableness + zero anger keep the
+        // stress-driven negativity branch off, so every roll lands in the
+        // high-affection window.
+        let trust = Fixed::ONE;
+        let affection = Fixed::ONE;
+        let openness = Fixed::from_f64(0.5);
+        let agreeableness = Fixed::from_f64(0.8);
+        let anger = Fixed::ZERO;
+        let count_help = |propensity: Fixed| -> (u32, u32) {
+            let mut rng = RngStreams::new(42);
+            let mut help = 0u32;
+            let mut comfort = 0u32;
+            for _ in 0..2000 {
+                match choose_interaction(
+                    trust,
+                    affection,
+                    openness,
+                    agreeableness,
+                    anger,
+                    Fixed::ZERO,
+                    propensity,
+                    &mut rng,
+                    &params,
+                ) {
+                    InteractionKind::Help => help += 1,
+                    InteractionKind::Comfort => comfort += 1,
+                    _ => {}
+                }
+            }
+            (help, comfort)
+        };
+        let (baseline_help, baseline_comfort) = count_help(Fixed::ZERO);
+        let (full_help, full_comfort) = count_help(Fixed::ONE);
+        let (partial_help, _) = count_help(Fixed::from_f64(0.5));
+        assert!(
+            baseline_help > 0,
+            "high-affection rolls in [0.2, 0.5) must produce Help without the norm"
+        );
+        assert!(
+            full_help > baseline_help,
+            "full internalization must strictly amplify Help (rolls in [0.5, 1.0) convert Talk → Help)"
+        );
+        assert!(
+            partial_help > baseline_help && partial_help < full_help,
+            "partial internalization must land strictly between baseline and full"
+        );
+        assert_eq!(
+            baseline_comfort, full_comfort,
+            "the untouched [0, 0.2) Comfort window must be identical — same roll sequence"
         );
     }
 }

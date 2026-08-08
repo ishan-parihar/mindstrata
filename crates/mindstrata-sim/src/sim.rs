@@ -3257,12 +3257,33 @@ impl Simulation {
                     .iter()
                     .find(|n| n.id == norms::NO_VIOLENCE_NORM_ID)
                     .map(|n| n.name.as_str());
+                // §8.1.10 (Iteration 89): thread each agent's internalized
+                // "Help Neighbors" norm strength into the interaction
+                // decision — `choose_interaction` scales its high-affection
+                // Help window by (1 + propensity). The prescriptive norm
+                // uses the same id-resolved-by-description read as the
+                // prohibitive ones (`norm_resistance` returns the internalized
+                // strength); a registry without the norm resolves to zero
+                // propensity (legacy behavior). Zero-at-zero: no internalized
+                // norm before the first monthly ritual (tick 4320) → the
+                // Help bound stays 0.5 and the golden baseline stays
+                // byte-identical.
+                let help_neighbors_name = self
+                    .norms
+                    .norms()
+                    .iter()
+                    .find(|n| n.id == norms::HELP_NEIGHBORS_NORM_ID)
+                    .map(|n| n.name.as_str());
                 let agent_info: Vec<_> = self
                     .agents
                     .iter()
                     .enumerate()
                     .map(|(i, a)| {
                         let resistance = no_violence_name
+                            .map_or(Fixed::ZERO, |n| {
+                                a.moral_cognition.norm_resistance(n)
+                            });
+                        let help_propensity = help_neighbors_name
                             .map_or(Fixed::ZERO, |n| {
                                 a.moral_cognition.norm_resistance(n)
                             });
@@ -3273,6 +3294,7 @@ impl Simulation {
                             a.personality.extraversion,
                             emotions[i].anger,
                             resistance,
+                            help_propensity,
                         )
                     })
                     .collect();
@@ -8408,11 +8430,14 @@ impl Simulation {
                     let leader_id = self.institutions[inst_idx]
                         .get_role_holder("Leader")
                         .unwrap_or_else(|| AgentId::new(inst_idx as u64));
-                    // §5.2: Deactivate the matching FactionV2 record — the
-                    // institution is being dissolved, so the registry must not
-                    // keep reporting an active faction (stale threat/agent-tier).
-                    self.faction_v2_registry
-                        .deactivate_by_leader(leader_id.as_u64() as usize);
+                    // §5.2 (Iteration 89): Deactivate *every* FactionV2 record
+                    // — the retain below dissolves all v1 factions, so each
+                    // active v2 record's institution is being wiped and must
+                    // stop reporting as active (stale threat/agent-tier).
+                    // Previously only the revolting leader's record was
+                    // deactivated, leaving the other factions' records
+                    // stale-active and breaking the v1↔v2 1:1 invariant.
+                    self.faction_v2_registry.deactivate_all();
                     self.institutions.retain(|i| i.kind != InstitutionKind::Faction);
                     // The faction leadership becomes the new council.
                     for inst in &mut self.institutions {

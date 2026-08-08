@@ -298,6 +298,19 @@ impl FactionV2Registry {
         }
     }
 
+    /// §5.2 (Iteration 89): Deactivate every record — the coup path
+    /// dissolves *all* v1 factions (`retain`), so every active v2 record
+    /// whose institution is being wiped becomes stale and must stop
+    /// reporting as active (threat/agent-tier surface). Complements
+    /// `deactivate_by_leader`, which only matches the revolting leader and
+    /// left the other factions' records stale-active, breaking the v1↔v2
+    /// 1:1 registration invariant after a coup.
+    pub fn deactivate_all(&mut self) {
+        for faction in &mut self.factions {
+            faction.active = false;
+        }
+    }
+
     /// Daily update for all active factions.
     pub fn daily_update(&mut self) {
         for faction in &mut self.factions {
@@ -375,6 +388,28 @@ mod tests {
         let f = FactionV2::new(0, vec![0, 1], Fixed::from_f64(0.7), 0);
         // max_members=2, already has 2 members → zero chance
         assert_eq!(f.recruitment_chance(Fixed::from_f64(0.8), 2), Fixed::ZERO);
+    }
+
+    /// §5.2 (Iteration 89): `deactivate_all` marks every record inactive —
+    /// the coup path dissolves all v1 factions, so each active v2 record
+    /// (not just the revolting leader's) must stop reporting as active to
+    /// preserve the v1↔v2 1:1 registration invariant.
+    #[test]
+    fn registry_deactivate_all_marks_every_record_inactive() {
+        let mut reg = FactionV2Registry::new();
+        reg.register(FactionV2::new(0, vec![0, 1], Fixed::from_f64(0.7), 0));
+        reg.register(FactionV2::new(1, vec![2, 3], Fixed::from_f64(0.7), 0));
+        assert_eq!(reg.active().len(), 2, "both records start active");
+        // Leader-only deactivation leaves the second record stale-active —
+        // the exact asymmetry the coup path exposed.
+        reg.deactivate_by_leader(0);
+        assert_eq!(reg.active().len(), 1);
+        reg.deactivate_all();
+        assert_eq!(
+            reg.active().len(),
+            0,
+            "deactivate_all must clear every record, not just the leader's"
+        );
     }
 
     #[test]
