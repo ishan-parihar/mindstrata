@@ -3134,6 +3134,9 @@ impl Simulation {
                                 authority: self.agents[i].moral_values.authority,
                                 care: self.agents[i].moral_values.care,
                                 loyalty: self.agents[i].moral_values.loyalty,
+                                // §9.2 (Iteration 94): the agent's learned
+                                // RL valuation weights feed selection.
+                                action_values: self.agents[i].neural_like.values,
                             },
                             ctx.rng,
                         )
@@ -7984,21 +7987,17 @@ impl Simulation {
             self.agents[*agent_idx].decision_policy.learn_from_outcome(action_succeeded, action_cost);
 
             // §9.2: Neural-like RL values — learn the plan's four value
-            // components from the outcome (observational state).
-            let (need, emotional, social, identity) = match action {
-                ActionKind::Work => (0.4, 0.0, 0.0, 0.1),
-                ActionKind::Eat | ActionKind::Drink => (0.5, 0.1, 0.0, 0.0),
-                ActionKind::Socialize => (0.0, 0.1, 0.4, 0.0),
-                ActionKind::Worship => (0.0, 0.2, 0.1, 0.3),
-                ActionKind::Trade => (0.2, 0.0, 0.1, 0.1),
-                _ => (0.05, 0.05, 0.05, 0.05),
-            };
+            // components from the outcome. The outcome profile is the
+            // shared `ActionKind::outcome_profile` (single source of
+            // truth with the Iteration-94 selection consumer), so what an
+            // agent learns is exactly what biases its future choices.
+            let profile = action.outcome_profile();
             self.agents[*agent_idx].neural_like.values.learn_from_outcome(
                 action_succeeded,
-                Fixed::from_f64(need),
-                Fixed::from_f64(emotional),
-                Fixed::from_f64(social),
-                Fixed::from_f64(identity),
+                profile[0],
+                profile[1],
+                profile[2],
+                profile[3],
             );
         }
 

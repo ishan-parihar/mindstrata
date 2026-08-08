@@ -5,6 +5,7 @@
 //! This produces bounded rationality — agents are not perfectly optimal.
 
 use crate::person::{BodyState, Goal, GoalKind, IdentityKind, IdentityState, NeedState, Personality};
+use crate::psychology::neural_like::ActionValues;
 use crate::psychology::DecisionPolicy;
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::rng::{RngStreams, RngStream};
@@ -56,6 +57,13 @@ pub struct DecisionContext<'a> {
     pub care: Fixed,
     /// Loyalty foundation strength.
     pub loyalty: Fixed,
+    // ── §9.2 (Iteration 94): neural-like RL action values ───────────
+    /// The agent's learned valuation weights (need/emotional/social/identity
+    /// relief), EMA-updated from successful outcomes. The selection loop
+    /// folds `learned_delta` against each candidate's outcome profile into
+    /// the utility, closing the plan's §9.2 learning → action loop. Passed
+    /// by value (Copy, 5 Fixed fields).
+    pub action_values: ActionValues,
 }
 
 /// An action that an agent can take.
@@ -242,6 +250,22 @@ impl ActionKind {
         }
     }
 
+    /// §9.2 (Iteration 94): the outcome-relief profile `(need, emotional,
+    /// social, identity)` this action delivers on success — the single
+    /// source of truth shared by the RL learning site (`sim.rs`
+    /// `learn_from_outcome`) and the Iteration-94 selection consumer, so
+    /// what an agent learns is exactly what biases its future choices.
+    pub fn outcome_profile(self) -> [Fixed; 4] {
+        match self {
+            ActionKind::Work => [Fixed::from_f64(0.4), Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(0.1)],
+            ActionKind::Eat | ActionKind::Drink => [Fixed::from_f64(0.5), Fixed::from_f64(0.1), Fixed::ZERO, Fixed::ZERO],
+            ActionKind::Socialize => [Fixed::ZERO, Fixed::from_f64(0.1), Fixed::from_f64(0.4), Fixed::ZERO],
+            ActionKind::Worship => [Fixed::ZERO, Fixed::from_f64(0.2), Fixed::from_f64(0.1), Fixed::from_f64(0.3)],
+            ActionKind::Trade => [Fixed::from_f64(0.2), Fixed::ZERO, Fixed::from_f64(0.1), Fixed::from_f64(0.1)],
+            _ => [Fixed::from_f64(0.05), Fixed::from_f64(0.05), Fixed::from_f64(0.05), Fixed::from_f64(0.05)],
+        }
+    }
+
     /// Compute per-tick effect by dividing total relief by duration.
     /// All effects (including bonuses) are derived from the definition.
     pub fn per_tick_effects(self) -> ActionDef {
@@ -293,6 +317,7 @@ pub fn compute_utility(
     identity: &IdentityState,
     norm_pressure: Fixed,
     coin: Fixed,
+    action_values: ActionValues,
 ) -> Fixed {
     let mut utility = Fixed::ZERO;
 
@@ -360,6 +385,18 @@ pub fn compute_utility(
 
     utility -= action.energy_cost * Fixed::from_f64(0.5);
 
+    // §9.2 (Iteration 94): RL action values feed selection — the agent's
+    // learned valuation weights (EMA-updated from successful outcomes in
+    // `sim.rs`) bias each candidate's utility via `learned_delta` against
+    // that action's outcome profile. Zero at the neutral prior (tick-0
+    // inert), deterministic (no RNG — only a utility term), so the learned
+    // signal shifts the argmax without perturbing the RNG stream. Each
+    // profile is normalized by its own sum inside `learned_delta`, so the
+    // baseline is a uniform 0.5 across candidates and the relative signal
+    // (profiles matching what the agent learned to value) is what
+    // differentiates them.
+    utility += action_values.learned_delta(action.kind.outcome_profile());
+
     let noise_roll: f64 = rng
         .get_mut(RngStream::Behavior)
         .random_range(-0.05..0.05);
@@ -414,7 +451,7 @@ pub fn select_action(
 
     for kind in &candidates {
         let def = kind.definition();
-        let mut utility = compute_utility(&def, ctx.needs, ctx.personality, rng, ctx.total_grain, ctx.total_water, ctx.identity, ctx.norm_pressure, ctx.coin);
+        let mut utility = compute_utility(&def, ctx.needs, ctx.personality, rng, ctx.total_grain, ctx.total_water, ctx.identity, ctx.norm_pressure, ctx.coin, ctx.action_values);
 
         for goal in ctx.active_goals {
             let goal_aligned = matches!(
@@ -524,6 +561,7 @@ mod tests {
             authority: Fixed::ZERO,
             care: Fixed::ZERO,
             loyalty: Fixed::ZERO,
+            action_values: ActionValues::default(),
         }, &mut rng);
         assert!(chosen == ActionKind::Eat, "Broke hungry agent should Eat, got {chosen:?}");
     }
@@ -562,6 +600,7 @@ mod tests {
             authority: Fixed::ZERO,
             care: Fixed::ZERO,
             loyalty: Fixed::ZERO,
+            action_values: ActionValues::default(),
         }, &mut rng);
         assert!(
             chosen == ActionKind::Trade || chosen == ActionKind::Eat,
@@ -600,6 +639,7 @@ mod tests {
             authority: Fixed::ZERO,
             care: Fixed::ZERO,
             loyalty: Fixed::ZERO,
+            action_values: ActionValues::default(),
         }, &mut rng);
         assert!(eat_utility == ActionKind::Eat, "Broke hungry agent should prefer Eat, got {eat_utility:?}");
     }
@@ -691,6 +731,7 @@ mod tests {
             authority: Fixed::ZERO,
             care: Fixed::ZERO,
             loyalty: Fixed::ZERO,
+            action_values: ActionValues::default(),
         }, &mut rng);
         assert!(scarce == ActionKind::Eat, "Under grain scarcity, broke hungry agent should Eat, got {scarce:?}");
     }
@@ -725,6 +766,7 @@ mod tests {
             authority: Fixed::ZERO,
             care: Fixed::ZERO,
             loyalty: Fixed::ZERO,
+            action_values: ActionValues::default(),
         }, &mut rng);
         assert!(scarce == ActionKind::Drink, "Under water scarcity, thirsty agent should Drink, got {scarce:?}");
     }
@@ -743,8 +785,8 @@ mod tests {
         };
         let no_identity = IdentityState::default();
 
-        let u_farmer = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &farmer_identity, Fixed::ZERO, Fixed::ZERO);
-        let u_none = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &no_identity, Fixed::ZERO, Fixed::ZERO);
+        let u_farmer = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &farmer_identity, Fixed::ZERO, Fixed::ZERO, ActionValues::default());
+        let u_none = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &no_identity, Fixed::ZERO, Fixed::ZERO, ActionValues::default());
 
         assert!(u_farmer > u_none, "Farmer identity should increase Work utility");
     }
@@ -757,8 +799,8 @@ mod tests {
         let identity = IdentityState::default();
 
         // Negative pressure = compliant agent (compute_pressure returns negative for compliant)
-        let no_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO, Fixed::ZERO);
-        let compliant_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, -Fixed::from_f64(0.5), Fixed::ZERO);
+        let no_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO, Fixed::ZERO, ActionValues::default());
+        let compliant_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, -Fixed::from_f64(0.5), Fixed::ZERO, ActionValues::default());
 
         assert!(compliant_pressure > no_pressure, "Compliant (negative) pressure should increase Work utility");
     }
@@ -771,8 +813,8 @@ mod tests {
         let identity = IdentityState::default();
 
         // Positive pressure = violating agent
-        let no_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO, Fixed::ZERO);
-        let violating_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::from_f64(0.5), Fixed::ZERO);
+        let no_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO, Fixed::ZERO, ActionValues::default());
+        let violating_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::from_f64(0.5), Fixed::ZERO, ActionValues::default());
 
         assert!(violating_pressure < no_pressure, "Violating (positive) pressure should decrease Work utility");
     }
@@ -785,8 +827,8 @@ mod tests {
         let identity = IdentityState::default();
 
         // Positive pressure = violating agent prefers idle
-        let no_pressure = compute_utility(&ActionKind::Idle.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO, Fixed::ZERO);
-        let violating_pressure = compute_utility(&ActionKind::Idle.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::from_f64(0.5), Fixed::ZERO);
+        let no_pressure = compute_utility(&ActionKind::Idle.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO, Fixed::ZERO, ActionValues::default());
+        let violating_pressure = compute_utility(&ActionKind::Idle.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::from_f64(0.5), Fixed::ZERO, ActionValues::default());
 
         assert!(violating_pressure > no_pressure, "Violating (positive) pressure should increase Idle utility");
     }

@@ -289,6 +289,44 @@ impl ActionValues {
             .clamp(-Fixed::ONE, Fixed::ONE)
     }
 
+    /// §9.2 (Iteration 94): the *learned* valuation delta for an action's
+    /// outcome profile `(need, emotional, social, identity)` —
+    /// `dot(learned_components, profile) − dot(neutral_prior, profile)`.
+    ///
+    /// The four components start at the 0.5 neutral prior, so this is
+    /// **exactly zero at tick 0**: the consumer is inert until outcomes have
+    /// actually been experienced, which bounds the golden-baseline
+    /// perturbation to the learned signal only (no constant offset). As
+    /// learning differentiates the components (EMA toward the relief
+    /// profile of successful actions), the delta becomes a *relative*
+    /// preference signal — actions whose relief profile matches what the
+    /// agent has learned to value are favored over mismatched ones.
+    /// Deterministic, no RNG.
+    pub fn learned_delta(&self, profile: [Fixed; 4]) -> Fixed {
+        let prior = Fixed::from_f64(0.5);
+        let sum = profile[0] + profile[1] + profile[2] + profile[3];
+        if sum == Fixed::ZERO {
+            return Fixed::ZERO;
+        }
+        // The profile is normalized by its own sum so every candidate's
+        // baseline is the uniform 0.5 prior. Without this, actions with
+        // larger profile sums are systematically penalized (every learned
+        // component EMA-converges *downward* from the 0.5 prior toward its
+        // ≤0.5 profile component, so all deltas are negative and the raw
+        // 0.5·sum baseline rewards low-sum default actions like Rest
+        // regardless of what the agent actually learned). With
+        // normalization the signal is per-component —
+        // `dot(learned − prior, profile/sum)` — so an agent that learned
+        // need-relief favors need-heavy profiles (Eat/Work) over idle and
+        // mismatched ones.
+        let learned = self.need_relief * profile[0]
+            + self.emotional_relief * profile[1]
+            + self.social_reward * profile[2]
+            + self.identity_congruence * profile[3];
+        let baseline = prior * sum;
+        (learned - baseline) / sum
+    }
+
     /// EMA-update the learned components toward the experienced relief
     /// components of a successful outcome (failures leave values unchanged —
     /// "values update from outcomes", deterministic).
@@ -455,6 +493,51 @@ mod tests {
         v.learn_from_outcome(true, Fixed::ONE, Fixed::ONE, Fixed::ONE, Fixed::ONE);
         let after = v.value(Fixed::from_f64(0.8), Fixed::from_f64(0.8));
         assert!(after > before, "successful outcomes raise learned value");
+    }
+
+    #[test]
+    fn learned_delta_is_zero_at_prior_and_tracks_learning() {
+        // §9.2 (Iteration 94): the selection bias is exactly zero at the
+        // neutral prior (tick-0 inertness — no constant offset), and becomes
+        // a relative preference signal as components learn toward the
+        // outcome profile of successful actions.
+        let v = ActionValues::default();
+        // Work profile: (need 0.4, emotional 0, social 0, identity 0.1)
+        let work = [Fixed::from_f64(0.4), Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(0.1)];
+        assert_eq!(
+            v.learned_delta(work),
+            Fixed::ZERO,
+            "at the neutral prior the delta must be exactly zero"
+        );
+
+        // An agent that repeatedly succeeds at work converges its components
+        // toward the work profile, so the work delta rises relative to a
+        // mismatched (social-heavy) profile — the relative signal is what
+        // shifts the selection argmax (both profiles share the same baseline
+        // 0.5 sum, so the baseline terms cancel in the comparison).
+        let mut learned = ActionValues::default();
+        for _ in 0..60 {
+            learned.learn_from_outcome(true, Fixed::from_f64(0.4), Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(0.1));
+        }
+        let work_delta = learned.learned_delta(work);
+        // Socialize profile: (need 0, emotional 0.1, social 0.4, identity 0)
+        let socialize =
+            [Fixed::ZERO, Fixed::from_f64(0.1), Fixed::from_f64(0.4), Fixed::ZERO];
+        let socialize_delta = learned.learned_delta(socialize);
+        assert!(
+            work_delta > socialize_delta,
+            "work-learner must favor the work profile over the mismatched one: work={work_delta:?} socialize={socialize_delta:?}"
+        );
+
+        // And a symmetric control: a socialize-learner flips the preference.
+        let mut social_learner = ActionValues::default();
+        for _ in 0..60 {
+            social_learner.learn_from_outcome(true, Fixed::ZERO, Fixed::from_f64(0.1), Fixed::from_f64(0.4), Fixed::ZERO);
+        }
+        assert!(
+            social_learner.learned_delta(socialize) > social_learner.learned_delta(work),
+            "socialize-learner must favor the socialize profile"
+        );
     }
 
     #[test]
