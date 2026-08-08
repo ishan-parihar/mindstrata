@@ -5271,4 +5271,46 @@ fn social_cost_is_seed_deterministic() {
     let va: Vec<f64> = a.agents.iter().map(|x| x.attraction.social_cost.to_f64()).collect();
     let vb: Vec<f64> = b.agents.iter().map(|x| x.attraction.social_cost.to_f64()).collect();
     assert_eq!(va, vb, "social_cost must be seed-deterministic");
+
+}
+
+/// §10.4 (Iteration 79): AttractionModel.kinship_penalty is live — the last
+/// unwired attraction channel. It is the soft taboo against courting within
+/// the local pool: the agent's max transitive genetic relatedness to any
+/// other adult (the plan's §10.6 BFS model — parent/sibling 0.5, grandparent
+/// 0.25, first cousin 0.125), which the direct-edge 0.25 hard eligibility
+/// gate does not catch. Probe-verified: 0 in founding villages (seeds
+/// 42/43/44 — no kin ties in 2000 ticks), rising as families form (seed 51:
+/// 0.50). The channel is situational by design — the same class as the
+/// Iter-65 jealousy / Iter-78 moral_disgust channels.
+#[test]
+fn kinship_penalty_rises_when_families_form() {
+    // Founding villages have no kin ties → penalty stays 0.
+    for seed in [42u64, 43, 44] {
+        let sim = run_sim(seed, 2000);
+        for a in &sim.agents {
+            assert_eq!(a.attraction.kinship_penalty, mindstrata_core::fixed::Fixed::ZERO,
+                "seed {seed}: founding village must have zero kinship_penalty");
+        }
+    }
+    // Seed 51 forms family ties → at least one agent carries the penalty.
+    let sim = run_sim(51, 2000);
+    let mut any = false;
+    for a in &sim.agents {
+        if a.attraction.kinship_penalty > mindstrata_core::fixed::Fixed::ZERO {
+            any = true;
+        }
+    }
+    assert!(any, "seed 51 must produce kinship ties that raise the penalty");
+}
+
+/// §10.4 (Iteration 79): the kinship_penalty derivation is seed-deterministic
+/// — same seed reproduces byte-identical values.
+#[test]
+fn kinship_penalty_is_seed_deterministic() {
+    let a = run_sim(51, 2000);
+    let b = run_sim(51, 2000);
+    let va: Vec<f64> = a.agents.iter().map(|x| x.attraction.kinship_penalty.to_f64()).collect();
+    let vb: Vec<f64> = b.agents.iter().map(|x| x.attraction.kinship_penalty.to_f64()).collect();
+    assert_eq!(va, vb, "kinship_penalty must be seed-deterministic");
 }

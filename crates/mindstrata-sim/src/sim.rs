@@ -2671,6 +2671,39 @@ impl Simulation {
                 self.agents[i].attraction.update_social_cost(notoriety);
                 let disgust = self.agents[i].emotions.disgust;
                 self.agents[i].attraction.update_moral_disgust(disgust);
+                // §10.4 (Iteration 79): the last unwired attraction channel —
+                // kinship_penalty, the soft taboo against courting within the
+                // local pool. Derived as the max transitive genetic
+                // relatedness to any other adult (the plan's §10.6 BFS model:
+                // parent/sibling 0.5, grandparent 0.25, first cousin 0.125),
+                // which the direct-edge 0.25 hard eligibility gate does not
+                // catch. Reading: a pool-inbreeding signal — the 0.5 tier
+                // (parent/sibling, hard-gated out of courtship anyway) raises
+                // the cost of ALL matches in a kin-dense village, while the
+                // actionable taboo tier (cousins 0.125–0.24, which pass the
+                // hard gate) is exactly what the soft channel suppresses.
+                // 0 for founding villages, rising as families form (probe:
+                // seeds 42/43/44 → 0, seed 51 → 0.50). Daily cadence: kinship
+                // edges only change on birth/marriage, so the O(N²) BFS runs
+                // once a day (the patronage block below uses the same
+                // is_duodeca pattern for its O(N²) work). Deterministic, no
+                // RNG, observational (only the D4 scenario reads it).
+                if phases.is_daily {
+                    let adult_age = Fixed::from_f64(16.0);
+                    let mut max_relatedness = Fixed::ZERO;
+                    for j in 0..self.agents.len() {
+                        if j == i || self.agents[j].age < adult_age {
+                            continue;
+                        }
+                        let coeff = self.kinship_graph.transitive_coefficient(i, j);
+                        if coeff > max_relatedness {
+                            max_relatedness = coeff;
+                        }
+                    }
+                    self.agents[i]
+                        .attraction
+                        .update_kinship_penalty(max_relatedness);
+                }
 
                 // Architecture-plan-2 §17.3: Relationship caching.
                 // Only decay relationships that have been recently active (dirty)

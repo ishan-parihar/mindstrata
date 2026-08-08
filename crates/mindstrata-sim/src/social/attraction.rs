@@ -85,6 +85,19 @@ impl AttractionModel {
     /// same situational class as the Iter-65 jealousy channel), firing when
     /// the agent actually appraises a moral violation. Weighs 0.2 (negative)
     /// in `total_attraction()`. Deterministic, no RNG, clamped.
+    /// §10.4 (Iteration 79): The agent's kinship taboo against courting
+    /// within the local pool — the max transitive genetic relatedness to any
+    /// adult partner, derived from the live kinship graph. 0 for founders
+    /// (no kin ties), rising as families form: parent/sibling ties read 0.5,
+    /// grandparent 0.25, first cousin 0.125 (the plan's §10.6 BFS model, which
+    /// the direct-edge 0.25 hard eligibility gate does not catch — the soft
+    /// channel is the complement that makes kin courtships less attractive
+    /// without hard-blocking them). Weighs 0.3 (negative) in
+    /// `total_attraction()`. Deterministic, no RNG, clamped.
+    pub fn update_kinship_penalty(&mut self, max_relatedness: Fixed) {
+        self.kinship_penalty = max_relatedness.clamp_01();
+    }
+
     pub fn update_moral_disgust(&mut self, disgust: Fixed) {
         self.moral_disgust = disgust.clamp_01();
     }
@@ -135,6 +148,42 @@ mod tests {
         let without = a.total_attraction();
         a.kinship_penalty = Fixed::from_f64(0.9);
         assert!(a.total_attraction() < without);
+    }
+
+    #[test]
+    fn update_kinship_penalty_mirrors_relatedness() {
+        let mut a = AttractionModel::default();
+        a.update_kinship_penalty(Fixed::from_f64(0.125)); // first cousin
+        assert_eq!(a.kinship_penalty, Fixed::from_f64(0.125));
+        let before = a.total_attraction();
+        a.update_kinship_penalty(Fixed::from_f64(0.5)); // parent/sibling
+        assert!(a.total_attraction() < before);
+    }
+
+    #[test]
+    fn update_kinship_penalty_clamps_to_unit() {
+        let mut a = AttractionModel::default();
+        a.update_kinship_penalty(Fixed::from_f64(1.5));
+        assert_eq!(a.kinship_penalty, Fixed::ONE);
+        a.update_kinship_penalty(Fixed::from_f64(-0.5));
+        assert_eq!(a.kinship_penalty, Fixed::ZERO);
+    }
+
+    #[test]
+    fn cousin_relatedness_depresses_attraction_below_gate_math() {
+        // A first-cousin tie (0.125) at the 0.3 weight removes 0.0375 from
+        // total_attraction — enough to drop a borderline profile under the
+        // 0.4 D4 gate (0.42 base → 0.3825), the soft-taboo complement to the
+        // direct-edge hard gate which does not catch cousins.
+        let mut a = AttractionModel {
+            status_attraction: Fixed::from_f64(0.4),
+            familiarity: Fixed::from_f64(0.8),
+            ..AttractionModel::default()
+        };
+        let without = a.total_attraction();
+        assert!(without > Fixed::from_f64(0.4)); // D4 reachable pre-kinship
+        a.update_kinship_penalty(Fixed::from_f64(0.125));
+        assert!(a.total_attraction() < Fixed::from_f64(0.4)); // taboo applies
     }
 
     #[test]
