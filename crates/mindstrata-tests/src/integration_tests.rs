@@ -5803,3 +5803,83 @@ fn hypocrisy_consumer_is_armed_but_silent() {
         .collect();
     assert_eq!(v1, v2, "enforcement counts must be seed-deterministic");
 }
+/// §8.1.10/§19.5.D (Iteration 88): the violence-enforcement audit is armed
+/// but silent in the golden window and the default world. Violence fires
+/// early on seed 42 (tick ~2, all events before the first monthly ritual at
+/// 4320, when no agent holds any norm) — so the holder-gated, zero-RNG audit
+/// never fires and carries zero drift, while the escalation gate reads a
+/// zero hypocrisy factor. Post-ritual, holders exist but default-world
+/// violence is exhausted, so counts remain 0 everywhere. Determinism holds.
+#[test]
+fn violence_audit_armed_but_silent_and_deterministic() {
+    // Golden window: violence occurs, but no agent holds any internalized
+    // norm yet — the audit must be a no-op (no new RNG, no drift).
+    let early = run_sim(42, 2000);
+    let violence_events = early
+        .recent_events(10_000_000)
+        .iter()
+        .filter(|e| {
+            matches!(
+                e,
+                mindstrata_core::event::SimEvent::ConflictOccurred {
+                    kind: mindstrata_core::conflict::ConflictKind::Violence,
+                    ..
+                }
+            )
+        })
+        .count();
+    assert!(
+        violence_events >= 1,
+        "seed-42 baseline must produce violence within 2000 ticks"
+    );
+    for a in &early.agents {
+        assert!(
+            a.moral_cognition.internalized_norms.is_empty(),
+            "no internalized norm before the first monthly ritual"
+        );
+    }
+
+    // Past ritual fires: norms internalized, but default-world violence is
+    // an early-window phenomenon (all events before 4320), so no holder ever
+    // witnesses enforcement — counts stay 0, the gate is armed not active.
+    let late = run_sim(42, 9000);
+    let mut any_norm = false;
+    let mut max_count = 0u32;
+    for a in &late.agents {
+        for n in &a.moral_cognition.internalized_norms {
+            any_norm = true;
+            max_count = max_count.max(n.enforcement_count);
+        }
+        assert_eq!(
+            a.moral_cognition.hypocrisy_factor("No Violence"),
+            Fixed::ZERO,
+            "no witnessed no-violence enforcement in the default world"
+        );
+    }
+    assert!(any_norm, "ritual participation should internalize norms");
+    assert_eq!(
+        max_count, 0,
+        "all default-world violence fires before the first ritual"
+    );
+
+    // Determinism: same seed → byte-identical (description, count) audit
+    // vectors.
+    let audit = |sim: &Simulation| -> Vec<(String, u32)> {
+        let mut v: Vec<(String, u32)> = sim
+            .agents
+            .iter()
+            .flat_map(|a| {
+                a.moral_cognition
+                    .internalized_norms
+                    .iter()
+                    .map(|n| (n.description.clone(), n.enforcement_count))
+            })
+            .collect();
+        v.sort();
+        v
+    };
+    let v1 = audit(&late);
+    let v2 = audit(&run_sim(42, 9000));
+    assert_eq!(v1, v2, "enforcement counts must be seed-deterministic");
+}
+

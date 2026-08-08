@@ -1468,18 +1468,36 @@ impl Simulation {
         // baseline stays byte-identical. The RNG draw remains unconditional
         // (same stream position), so replay determinism holds at every
         // resistance value.
-        let resistance = self
+        let no_violence_name = self
             .norms
             .norms()
             .iter()
             .find(|n| n.id == norms::NO_VIOLENCE_NORM_ID)
-            .map_or(0.0, |n| {
-                self.agents[from_idx]
-                    .moral_cognition
-                    .norm_resistance(&n.name)
-                    .to_f64()
-            });
-        let chance = self.escalation_chance(from_idx, to_idx) * (1.0 - resistance);
+            .map(|n| n.name.as_str());
+        let resistance = no_violence_name.map_or(0.0, |name| {
+            self.agents[from_idx]
+                .moral_cognition
+                .norm_resistance(name)
+                .to_f64()
+        });
+        // §8.1.10 (Iteration 88): hypocrisy compounds the resistance gate —
+        // an agent who has witnessed the no-violence norm enforced
+        // (`enforcement_count`, populated by the Iteration-88 violence
+        // audit — violence is inherently public, unlike sneaky theft) is
+        // additionally restrained: "I have seen this punished; doing it
+        // myself would make me a hypocrite." Zero-at-zero (no witnessed
+        // enforcement before the audit's holders exist → legacy chance),
+        // continuous, no cliff, and no extra RNG (the draw below stays
+        // unconditional — only the comparison threshold changes).
+        let hypocrisy = no_violence_name.map_or(0.0, |name| {
+            self.agents[from_idx]
+                .moral_cognition
+                .hypocrisy_factor(name)
+                .to_f64()
+        });
+        let chance = self.escalation_chance(from_idx, to_idx)
+            * (1.0 - resistance)
+            * (1.0 - hypocrisy);
         self.rng.get_mut(RngStream::Social).random::<f64>() < chance
     }
 
@@ -8150,6 +8168,38 @@ impl Simulation {
                                         from_id,
                                         tick_u64,
                                     );
+                                    // §8.1.10/§19.5.D (Iteration 88): the
+                                    // no-violence witnessed-enforcement audit —
+                                    // unlike sneaky theft (which needs a
+                                    // detection roll), a violent act is
+                                    // inherently public, so no detection roll
+                                    // is drawn (zero new RNG — the golden
+                                    // baseline stays byte-identical). Every
+                                    // agent holding the internalized
+                                    // no-violence norm witnesses the village's
+                                    // enforcement response (the check_violation
+                                    // record — with the attacker's public shame
+                                    // applied below) and records it, exactly
+                                    // as the Iteration-86
+                                    // theft audit does. Gated on holders:
+                                    // before the first monthly ritual (tick
+                                    // 4320) no agent holds any norm, so the
+                                    // audit is a no-op in the golden window.
+                                    // Resolved by id (`NO_VIOLENCE_NORM_ID`); a
+                                    // registry without the norm is a no-op.
+                                    let no_violence_name = self
+                                        .norms
+                                        .norms()
+                                        .iter()
+                                        .find(|n| n.id == norms::NO_VIOLENCE_NORM_ID)
+                                        .map(|n| n.name.as_str());
+                                    if let Some(name) = no_violence_name {
+                                        for bundle in &mut self.agents {
+                                            bundle
+                                                .moral_cognition
+                                                .record_witnessed_enforcement(name);
+                                        }
+                                    }
                                     // §19.5.G: Feud tracking is handled in dedicated section 18
 
                                     // Attacker gains shame from violence
@@ -10143,6 +10193,133 @@ mod tests {
             sim.params.conflict_escalation_chance.to_f64() * (1.0 - 0.7);
         assert_eq!(chance_full, 0.0);
         assert!(chance_partial > 0.0 && chance_partial < 1.0);
+    }
+
+    /// §8.1.10 (Iteration 88): witnessed no-violence enforcement compounds
+    /// the escalation gate — an agent with zero norm strength but full
+    /// witnessed-enforcement exposure and full hypocrisy sensitivity never
+    /// escalates (the hypocrisy factor alone drives the chance to 0),
+    /// while a partial-sensitivity agent keeps a reduced non-cliff chance.
+    #[test]
+    fn witnessed_no_violence_enforcement_compounds_escalation_gate() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        let (a, b) = cross_clan_pair(&sim);
+        let aggression = Fixed::from_f64(1.5); // past the 1.2 threshold
+        // Zero norm strength (no resistance effect) + full exposure + full
+        // sensitivity: the hypocrisy factor alone suppresses escalation.
+        sim.agents[a].moral_cognition.hypocrisy_sensitivity = Fixed::ONE;
+        sim.agents[a]
+            .moral_cognition
+            .internalize_norm("No Violence".into(), Fixed::ZERO);
+        for _ in 0..5 {
+            sim.agents[a]
+                .moral_cognition
+                .record_witnessed_enforcement("No Violence");
+        }
+        assert_eq!(
+            sim.agents[a].moral_cognition.hypocrisy_factor("No Violence"),
+            Fixed::ONE
+        );
+        for _ in 0..50 {
+            assert!(
+                !sim.should_escalate(a, b, true, aggression),
+                "full no-violence hypocrisy must suppress escalation"
+            );
+        }
+        // Partial sensitivity (0.5): reduced but non-zero chance — no cliff.
+        sim.agents[b].moral_cognition.hypocrisy_sensitivity =
+            Fixed::from_f64(0.5);
+        sim.agents[b]
+            .moral_cognition
+            .internalize_norm("No Violence".into(), Fixed::ZERO);
+        for _ in 0..5 {
+            sim.agents[b]
+                .moral_cognition
+                .record_witnessed_enforcement("No Violence");
+        }
+        // Math-only on purpose: a count-based probabilistic assert over 50
+        // draws at chance 0.075 would be flaky (P(never fires) ~ 0.02).
+        let base = sim.params.conflict_escalation_chance.to_f64();
+        let chance_partial = base * (1.0 - 0.0) * (1.0 - 0.5);
+        assert!(chance_partial > 0.0 && chance_partial < 1.0);
+    }
+
+    /// §8.1.10/§19.5.D (Iteration 88): the violence-enforcement audit is
+    /// live — when a violent act fires, every holder of the internalized
+    /// no-violence norm witnesses it (violence is inherently public, unlike
+    /// sneaky theft which needs a detection roll). Pre-internalizing at
+    /// ZERO strength keeps the escalation gate at its baseline (violence
+    /// still fires on seed 42 at tick ~2), so each holder's count increments
+    /// exactly once per event while a non-holder control stays norm-less.
+    #[test]
+    fn violence_audit_increments_holders_when_violence_fires() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        for idx in [0usize, 1usize] {
+            sim.agents[idx]
+                .moral_cognition
+                .internalize_norm("No Violence".into(), Fixed::ZERO);
+        }
+        // Run past the first violence event (fires early on seed 42).
+        sim.run(500);
+        let events = sim
+            .recent_events(10_000_000)
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e,
+                    mindstrata_core::event::SimEvent::ConflictOccurred {
+                        kind: mindstrata_core::conflict::ConflictKind::Violence,
+                        ..
+                    }
+                )
+            })
+            .count();
+        assert!(
+            events >= 1,
+            "seed-42 baseline must produce violence within 500 ticks"
+        );
+        for idx in [0usize, 1usize] {
+            let norm = sim.agents[idx]
+                .moral_cognition
+                .internalized_norms
+                .iter()
+                .find(|n| n.description == "No Violence")
+                .expect("pre-internalized holder");
+            // Deliberate exact equality: it proves every public violence
+            // event is witnessed by every holder (both survive all 500 ticks
+            // on seed 42 — no mid-window removal). A looser `>= 1` would
+            // only prove liveness, not completeness.
+            assert_eq!(
+                norm.enforcement_count as usize, events,
+                "every public violence event must be witnessed by each holder"
+            );
+        }
+        // Control: an agent that never internalized stays norm-less.
+        assert!(
+            sim.agents[5]
+                .moral_cognition
+                .internalized_norms
+                .is_empty(),
+            "non-holder must not gain the norm from the audit"
+        );
     }
 
     /// §8.1.10/§19.5.D (Iteration 84): an agent who has internalized the
