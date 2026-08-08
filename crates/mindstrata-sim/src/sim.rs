@@ -3179,15 +3179,58 @@ impl Simulation {
                         if ti < n {
                             self.agents[ti].attraction.update_familiarity(quality);
                         }
-                        // Tone from current affect valence (0..1, 0.5 neutral).
-                        let tone = (self.agents[fi].affect.valence + Fixed::ONE)
-                            / Fixed::from_f64(2.0);
-                        // Credibility from the speaker's trust in the listener.
+                        // §10.4 (Iteration 76): The courtship stage ladder was
+                        // dead — Courtship::record_positive/record_negative had
+                        // zero production callers, so every courtship stayed
+                        // pinned at Awareness until daily decay. Feed each
+                        // interaction to the active courtship (either
+                        // direction): prosocial acts advance the romantic
+                        // ladder (gated by the pair's current trust and the
+                        // speaker's attraction readiness), hostile acts regress
+                        // it — deterministic, no RNG. The pursuer's
+                        // AttractionModel.reciprocity mirrors the courtship's
+                        // reciprocity tracker so total_attraction() finally
+                        // responds to returned interest (the §8.1.16 D4 gate
+                        // future-wiring documented at Iteration 75).
+                        // Speaker's current trust in the listener — computed
+                        // once, reused by both the courtship wiring below and
+                        // the speech-act credibility.
                         let credibility = self
                             .relationships
                             .iter()
                             .find(|r| r.from.as_u64() == from_u && r.to.as_u64() == to_u)
                             .map_or(Fixed::from_f64(0.5), |r| r.trust);
+                        let kind_is_hostile = matches!(
+                            kind,
+                            mindstrata_core::event::InteractionKind::Threaten
+                                | mindstrata_core::event::InteractionKind::Insult
+                        );
+                        for courtship in &mut self.active_courtships {
+                            if !courtship.active {
+                                continue;
+                            }
+                            let pair_matches =
+                                (courtship.pursuer == fi && courtship.pursued == ti)
+                                    || (courtship.pursuer == ti && courtship.pursued == fi);
+                            if !pair_matches {
+                                continue;
+                            }
+                            if kind_is_hostile {
+                                courtship.record_negative(tick_u64);
+                            } else {
+                                // The speaker's attraction readiness feeds the
+                                // courtship's mutual-attraction bookkeeping.
+                                courtship.record_positive(
+                                    tick_u64,
+                                    credibility,
+                                    self.agents[fi].attraction.total_attraction(),
+                                );
+                            }
+                            break;
+                        }
+                        // Tone from current affect valence (0..1, 0.5 neutral).
+                        let tone = (self.agents[fi].affect.valence + Fixed::ONE)
+                            / Fixed::from_f64(2.0);
                         let act = crate::social::speech_act::SpeechAct::from_interaction(
                             kind,
                             AgentId::new(from_u),
@@ -5163,6 +5206,24 @@ impl Simulation {
             }
 
             for (a, b) in new_marriages {
+                // §10.4 (Iteration 76): Marriage concludes the courtship — any
+                // active courtship between the newlyweds is removed so its
+                // record ends at Betrothal instead of lingering past the
+                // wedding (deterministic, no events, no RNG).
+                let mut wed_pursuers: Vec<usize> = Vec::new();
+                self.active_courtships.retain(|c| {
+                    let pair_matches = (c.pursuer == a && c.pursued == b)
+                        || (c.pursuer == b && c.pursued == a);
+                    if pair_matches {
+                        wed_pursuers.push(c.pursuer);
+                    }
+                    !pair_matches
+                });
+                // The newlywed pursuer's attraction model reverts to zero
+                // reciprocity — the courtship (and its mirror) is concluded.
+                for p in wed_pursuers {
+                    self.agents[p].attraction.reciprocity = Fixed::ZERO;
+                }
                 self.agents[a].partner = Some(b);
                 self.agents[b].partner = Some(a);
                 // §10.8: Marriage forges a clan alliance between the spouses' clans.
@@ -6500,12 +6561,58 @@ impl Simulation {
             self.faction_v2_registry.daily_update();
             // Architecture-plan-2 §12.2: Peer group daily update — decay cohesion.
             self.group_registry.daily_update();
-            // Architecture-plan-2 §10.4: Courtship daily updates — advance/regress stages.
-            // daily_update() is self-contained: it short-circuits on !active.
+            // Architecture-plan-2 §10.4 (Iteration 76): Courtship daily updates.
+            // The romantic ladder was dead — try_advance only ever fired from
+            // record_positive, and courting pairs sit beyond each other's
+            // perception radius, so a courtship formed at Awareness and rotted
+            // there. Each daily pass now refreshes the courtship's mutual
+            // attraction to the pair's CURRENT average trust (deterministic,
+            // no RNG, no events — zero golden impact) and advances the
+            // trust-gated ladder one rung per pass, stalling at the pair's
+            // trust ceiling. daily_update() is self-contained and short-circuits
+            // on !active.
             for courtship in &mut self.active_courtships {
+                let i = courtship.pursuer;
+                let j = courtship.pursued;
+                let idx_ij = Self::relationship_v2_pos(i, j);
+                let idx_ji = Self::relationship_v2_pos(j, i);
+                let trust_ij = if idx_ij < self.agents[i].relationship_v2s.len() {
+                    self.agents[i].relationship_v2s[idx_ij].trust
+                } else {
+                    Fixed::ZERO
+                };
+                let trust_ji = if idx_ji < self.agents[j].relationship_v2s.len() {
+                    self.agents[j].relationship_v2s[idx_ji].trust
+                } else {
+                    Fixed::ZERO
+                };
+                let avg_trust = (trust_ij + trust_ji) * Fixed::from_f64(0.5);
+                // mutual_attraction is informational (try_advance takes its
+                // own args): it tracks the pair's current average trust. Trust
+                // is passed as both the gate and the attraction-floor input,
+                // so the 0.6× attraction floor never binds — trust is the
+                // real gate (intentional simplification).
+                courtship.mutual_attraction = avg_trust;
+                courtship.try_advance(avg_trust, avg_trust);
                 courtship.daily_update();
+                // Mirror the courtship's reciprocity (which daily_update just
+                // decayed) into the pursuer's attraction model, so the mirror
+                // decays in lockstep instead of snapping and going stale.
+                self.agents[courtship.pursuer].attraction.reciprocity =
+                    courtship.reciprocity;
             }
-            self.active_courtships.retain(|c| c.active);
+            // Courtships that failed (net-negative at Awareness) free their
+            // pursuers' attraction models back to zero reciprocity.
+            let mut dead_pursuers: Vec<usize> = Vec::new();
+            self.active_courtships.retain(|c| {
+                if !c.active {
+                    dead_pursuers.push(c.pursuer);
+                }
+                c.active
+            });
+            for p in dead_pursuers {
+                self.agents[p].attraction.reciprocity = Fixed::ZERO;
+            }
         }
 
         // Architecture-plan-2 §13: Noospheric field — meme-driven spreading

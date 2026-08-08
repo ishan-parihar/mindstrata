@@ -88,15 +88,31 @@ impl Courtship {
 
     /// Check if stage advancement conditions are met.
     ///
-    /// Requires: trust >= stage threshold, attraction >= 60% of trust,
-    /// and positive interactions outnumber negatives.
-    fn try_advance(&mut self, trust: Fixed, attraction: Fixed) {
+    /// Requires: trust >= the next stage's threshold, attraction >= 60% of
+    /// that threshold, and — once the pair has an interaction record —
+    /// positive interactions must outnumber negatives. A freshly formed
+    /// courtship has no record (0 positives, 0 negatives), so trust alone may
+    /// advance it (the daily pass); hostile interaction history then gates
+    /// the ladder through the balance check. Advances at most one rung per
+    /// call, so repeated positive contact (or a daily refresh with the pair's
+    /// current trust) climbs the ladder one stage at a time, stalling at the
+    /// pair's trust ceiling.
+    pub fn try_advance(&mut self, trust: Fixed, attraction: Fixed) {
         if let Some(next) = self.stage.next_positive() {
+            // The courtship ladder concludes at Betrothal (§10.4: Awareness →
+            // … → Betrothal → Marriage): Marriage and the post-marriage stages
+            // belong to the pair-bond/marriage system, so a courtship record
+            // must never display them.
+            if next == RomanticStage::Married {
+                return;
+            }
             let trust_ok = trust >= next.base_trust();
             // Attraction must be at least 60% of the trust threshold
             let min_attraction = next.base_trust() * ATTRACTION_FLOOR_RATIO;
             let attraction_ok = attraction >= min_attraction;
-            let balance_ok = self.positive_interactions > self.negative_interactions;
+            let no_record = self.positive_interactions == 0 && self.negative_interactions == 0;
+            let balance_ok =
+                no_record || self.positive_interactions > self.negative_interactions;
 
             if trust_ok && attraction_ok && balance_ok {
                 self.stage = next;
@@ -128,6 +144,13 @@ impl Courtship {
     }
 
     /// Courtship probability of advancing per tick — depends on reciprocity and approval.
+    ///
+    /// Superseded (Iteration 76): the production advancement path is the
+    /// deterministic, trust-gated `try_advance` (driven by the daily pass and
+    /// the interaction wiring). A probabilistic daily roll here would draw
+    /// from the Social RNG stream and shift every downstream draw, forcing a
+    /// golden-baseline recalibration; the deterministic gate keeps the golden
+    /// replay byte-identical. Kept as the documented probabilistic design.
     pub fn advance_probability(&self) -> Fixed {
         let base = Fixed::from_f64(0.01);
         let reciprocity_bonus = self.reciprocity * Fixed::from_f64(0.02);
@@ -148,6 +171,10 @@ impl Courtship {
     }
 
     /// Courtship probability of regression per tick — depends on negative interactions.
+    ///
+    /// Superseded (Iteration 76) for the same golden-stability reason as
+    /// `advance_probability`: regression is driven deterministically by
+    /// `record_negative` → `try_regress` instead of a probabilistic roll.
     pub fn regression_probability(&self) -> Fixed {
         let negatives = Fixed::from_int(self.negative_interactions as i64);
         let positives = Fixed::from_int(self.positive_interactions as i64);
@@ -233,5 +260,84 @@ mod tests {
             Fixed::from_f64(20.0), Fixed::from_f64(22.0),
             Fixed::from_f64(0.5), false, Fixed::from_f64(0.3), Fixed::from_f64(0.5),
         ));
+    }
+
+    #[test]
+    fn ladder_climbs_one_stage_per_positive_as_trust_grows() {
+        let mut courtship = Courtship::new(0, 1, 0);
+        courtship.stage = RomanticStage::Awareness;
+        // The ladder is trust-gated: each rung requires the pair's trust to
+        // have grown past the next stage's base_trust (Exclusivity 0.55,
+        // Betrothal 0.65). Model the trust growth that repeated prosocial
+        // contact produces in production (relationship_v2 trust climbs with
+        // interaction). Seven positives climb Awareness → Attraction →
+        // Flirtation → ActiveCourtship → TestingReciprocity →
+        // SocialValidation → Exclusivity → Betrothal, one rung per positive.
+        for i in 0..7 {
+            let trust = (Fixed::from_f64(0.3) + Fixed::from_f64(0.1) * Fixed::from_int(i as i64))
+                .min(Fixed::from_f64(0.7));
+            courtship.record_positive(10, trust, Fixed::from_f64(0.5));
+        }
+        assert_eq!(courtship.stage, RomanticStage::Betrothal);
+        assert!(courtship.active);
+        assert_eq!(courtship.positive_interactions, 7);
+        // Reciprocity accumulates with each positive (0.02 per interaction).
+        assert!(courtship.reciprocity > Fixed::from_f64(0.13));
+    }
+
+    #[test]
+    fn trust_threshold_gates_ladder_advancement() {
+        // Trust 0.15 never clears the Attraction threshold (base 0.2), so a
+        // courtship stays at Awareness no matter how often the pair interacts.
+        let mut low_trust = Courtship::new(0, 1, 0);
+        low_trust.stage = RomanticStage::Awareness;
+        for _ in 0..20 {
+            low_trust.record_positive(10, Fixed::from_f64(0.15), Fixed::from_f64(0.5));
+        }
+        assert_eq!(low_trust.stage, RomanticStage::Awareness);
+
+        // Trust 0.25 clears Attraction (0.2) but not Flirtation (0.3) — the
+        // ladder stalls one rung up until pair trust grows.
+        let mut mid_trust = Courtship::new(0, 1, 0);
+        mid_trust.stage = RomanticStage::Awareness;
+        for _ in 0..20 {
+            mid_trust.record_positive(10, Fixed::from_f64(0.25), Fixed::from_f64(0.5));
+        }
+        assert_eq!(mid_trust.stage, RomanticStage::Attraction);
+    }
+
+    #[test]
+    fn direct_try_advance_is_trust_gated_and_monotonic() {
+        // try_advance is now public (wired into the daily courtship pass): it
+        // must advance at most one rung and never regress on its own.
+        let mut courtship = Courtship::new(0, 1, 0);
+        courtship.stage = RomanticStage::Awareness;
+        // Trust below the Attraction threshold (0.2): no movement.
+        courtship.try_advance(Fixed::from_f64(0.15), Fixed::from_f64(0.15));
+        assert_eq!(courtship.stage, RomanticStage::Awareness);
+        // Trust above it: exactly one rung per call.
+        courtship.try_advance(Fixed::from_f64(0.25), Fixed::from_f64(0.25));
+        assert_eq!(courtship.stage, RomanticStage::Attraction);
+        courtship.try_advance(Fixed::from_f64(0.25), Fixed::from_f64(0.25));
+        // Flirtation needs 0.3 — stalled at the trust ceiling.
+        assert_eq!(courtship.stage, RomanticStage::Attraction);
+    }
+
+    #[test]
+    fn hostile_interactions_regress_and_can_kill_a_courtship() {
+        let mut courtship = Courtship::new(0, 1, 0);
+        courtship.stage = RomanticStage::ActiveCourtship;
+        // Two hostile acts flip the balance negative at Flirtation…
+        for i in 0..2 {
+            courtship.record_negative(10 + i);
+        }
+        // First negative: positives(0) < negatives(1) → regress to Flirtation.
+        // Second: 0 < 2 → regress to Attraction.
+        assert_eq!(courtship.stage, RomanticStage::Attraction);
+        // A courtship at Awareness that goes net-negative fails outright.
+        let mut fresh = Courtship::new(0, 1, 0);
+        fresh.stage = RomanticStage::Awareness;
+        fresh.record_negative(10);
+        assert!(!fresh.active);
     }
 }

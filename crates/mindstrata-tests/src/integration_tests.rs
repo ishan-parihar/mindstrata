@@ -202,6 +202,74 @@ fn stress_reduces_planning_depth() {
     }
 }
 
+
+
+
+
+
+
+// ── §10.4 (Iteration 76): Courtship Ladder + Reciprocity Wiring ──────
+
+/// §10.4 (Iteration 76): The courtship romantic ladder is live. Previously
+/// Courtship::try_advance only ever fired from record_positive, which had no
+/// production callers — every courtship formed at Awareness and rotted there.
+/// The daily courtship pass now refreshes each courtship's mutual attraction
+/// to the pair's current average trust and advances the trust-gated ladder
+/// (deterministic, no RNG, no events), so a courtship climbs to its pair's
+/// trust ceiling; the ladder is capped at Betrothal (Marriage and the
+/// post-marriage stages belong to the pair-bond system).
+#[test]
+fn courtship_ladder_advances_in_live_run() {
+    let sim = run_sim(42, 10_000);
+    assert!(!sim.active_courtships.is_empty(),
+        "seed 42 forms courtships by 10k ticks");
+    let mut max_stage: Option<mindstrata_sim::social::marriage::RomanticStage> = None;
+    for c in &sim.active_courtships {
+        if max_stage.map_or(true, |m| c.stage > m) {
+            max_stage = Some(c.stage);
+        }
+    }
+    // Seed 42: both courtships climb past Awareness on trust alone
+    // (SocialValidation observed; anything >= Flirtation is real progress).
+    let max = max_stage.expect("at least one courtship");
+    assert!(max >= mindstrata_sim::social::marriage::RomanticStage::Flirtation,
+        "courtship ladder should climb past Awareness, got {:?}", max);
+    // The ladder concludes at Betrothal — never display post-marriage stages.
+    assert!(max <= mindstrata_sim::social::marriage::RomanticStage::Betrothal,
+        "courtship stage must not exceed Betrothal, got {:?}", max);
+}
+
+/// §10.4 (Iteration 76): Courting pairs that actually interact drive the
+/// full chain — interactions feed Courtship::record_positive, reciprocity
+/// accumulates, the pursuer's AttractionModel.reciprocity mirrors it, and
+/// total_attraction() finally crosses the §8.1.16 D4 courtship gate (0.4)
+/// — the future wiring documented at Iteration 75.
+#[test]
+fn courtship_interactions_drive_reciprocity_and_d4_gate() {
+    let sim = run_sim(44, 10_000);
+    let mut any_pos = false;
+    for c in &sim.active_courtships {
+        if c.positive_interactions > 0 {
+            any_pos = true;
+        }
+    }
+    assert!(any_pos, "seed 44 courting pairs record positive interactions");
+    let mut any_recip = false;
+    let mut max_total = 0.0f64;
+    for a in &sim.agents {
+        if a.attraction.reciprocity.to_f64() > 0.0 {
+            any_recip = true;
+        }
+        let t = a.attraction.total_attraction().to_f64();
+        if t > max_total {
+            max_total = t;
+        }
+    }
+    assert!(any_recip, "reciprocity must mirror into AttractionModel");
+    assert!(max_total > 0.4,
+        "reciprocity should push total_attraction past the 0.4 D4 gate, got {max_total:.3}");
+}
+
 // ── §18.3: Courtship Emergence ──────────────────────────────────
 
 /// §18.3: Repeated positive interactions should advance relationship stages.
@@ -561,6 +629,17 @@ fn courtship_to_marriage_chain() {
             assert!(partner.partner == Some(i),
                 "Agent {} partners {}, but {} does not partner back",
                 agent.name, partner.name, partner.name);
+        }
+    }
+
+    // §10.4 (Iteration 76): marriage concludes the courtship — no active
+    // courtship may contain a married pair (the record ends at Betrothal).
+    for (i, agent) in sim.agents.iter().enumerate() {
+        if let Some(partner_idx) = agent.partner {
+            assert!(!sim.active_courtships.iter().any(|c| {
+                (c.pursuer == i && c.pursued == partner_idx)
+                    || (c.pursuer == partner_idx && c.pursued == i)
+            }), "married pair ({i}, {partner_idx}) still has an active courtship");
         }
     }
 }
@@ -4992,6 +5071,8 @@ fn familiarity_growth_is_seed_deterministic() {
         "different seeds should produce different familiarity trajectories"
     );
 }
+
+
 
 #[test]
 fn jealous_bond_dissolution_dissolves_marriage() {
