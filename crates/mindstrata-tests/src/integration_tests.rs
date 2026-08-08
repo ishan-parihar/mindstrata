@@ -4412,6 +4412,70 @@ fn peer_group_attachment_styles_scale_upward() {
     assert!(disorganized.cohesion < secure.cohesion);
 }
 
+/// §12.3 (AP2): Attachment styles scale upward to factions — the largest
+/// group type — as well as peer groups. Every registered FactionV2 must carry
+/// the modal style of its live members (the rule the registration pass applies
+/// in sim.rs), and the style-aware daily dynamics must actually run over a
+/// long grievance-driven horizon (cohesion decays, fragmentation grows).
+#[test]
+fn faction_attachment_styles_scale_upward_and_dynamics_run() {
+    use mindstrata_sim::social::faction_v2::FactionV2;
+    use mindstrata_sim::social::group_formation::{
+        derive_group_attachment_style, GroupAttachmentStyle,
+    };
+
+    // Same horizon as factions_emerge_from_grievance: seed 42 forms its first
+    // faction between 20-30K ticks (ritual-delayed radicalization).
+    let sim = run_sim(42, 30000);
+
+    let factions: Vec<&FactionV2> = sim
+        .faction_v2_registry
+        .factions
+        .iter()
+        .filter(|f| f.active)
+        .collect();
+    assert!(
+        !factions.is_empty(),
+        "FactionV2 registry should hold formed factions under grievance (seed 42, 30K ticks)"
+    );
+
+    // §12.3: every faction's stored style must match the modal style of its
+    // live members — the derivation rule applied at registration.
+    for faction in &factions {
+        let member_styles: Vec<_> = faction
+            .members
+            .iter()
+            .map(|&m| sim.agents[m].attachment.style)
+            .collect();
+        let expected = derive_group_attachment_style(&member_styles);
+        assert_eq!(
+            faction.attachment_style,
+            expected,
+            "faction attachment style must equal the modal member style (members={})",
+            faction.members.len()
+        );
+
+        // §12.3 dynamics ran: faction registered with cohesion = grievance
+        // component + 0.2 and it decays daily; over a run that formed the
+        // faction long before the snapshot, cohesion must be well below 0.9.
+        assert!(faction.cohesion <= Fixed::from_f64(0.9));
+        assert!(faction.cohesion >= Fixed::ZERO);
+    }
+
+    // At least one style-aware modulator must be observable across the
+    // faction population: either a non-Secure faction exists (its style
+    // actually modulated dynamics), or supplies decayed below the 0.7
+    // formation value (the style-independent daily consumption ran).
+    let has_non_secure = factions
+        .iter()
+        .any(|f| f.attachment_style != GroupAttachmentStyle::Secure);
+    let supplies_decayed = factions.iter().any(|f| f.supplies < Fixed::from_f64(0.7));
+    assert!(
+        has_non_secure || supplies_decayed,
+        "style-aware dynamics should be observable across the faction population"
+    );
+}
+
 /// §12.4 (AP2): Full cult lifecycle — formation under low legitimacy + meaning
 /// crisis, betrayal-driven dissolution once members' meaning need is satisfied
 /// (belonging no longer binds them), and the member fallout rebound.

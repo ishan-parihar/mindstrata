@@ -4923,12 +4923,26 @@ impl Simulation {
                             .map(|id| id.as_u64() as usize)
                             .filter(|&idx| idx < self.agents.len())
                             .collect();
-                        let fv2 = crate::social::faction_v2::FactionV2::new(
+                        let mut fv2 = crate::social::faction_v2::FactionV2::new(
                             leader.as_u64() as usize,
                             member_indices,
                             avg_grievance,
                             tick_u64,
                         );
+                        // Architecture-plan-2 §12.3: attachment styles scale
+                        // upward — the faction takes the modal member style,
+                        // which modulates its daily dynamics (trust in
+                        // leadership, fragmentation under stress, cohesion
+                        // volatility, panic under scarcity). Mirrors the peer-
+                        // group derivation; deterministic, no RNG.
+                        {
+                            let member_styles: Vec<_> = fv2
+                                .members
+                                .iter()
+                                .map(|&m| self.agents[m].attachment.style)
+                                .collect();
+                            fv2.derive_attachment_style(&member_styles);
+                        }
                         let fv2_id = self.faction_v2_registry.register(fv2);
                         // §13.5: Factions found their own mythic past — a
                         // founding memory for group 1 + faction id (0 = village).
