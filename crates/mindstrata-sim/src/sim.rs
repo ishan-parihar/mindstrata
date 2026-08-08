@@ -2887,7 +2887,7 @@ impl Simulation {
                         let id = AgentId::new(i as u64);
                         self.institutions
                             .iter()
-                            .find(|inst| inst.members.iter().any(|m| *m == id))
+                            .find(|inst| inst.members.contains(&id))
                             .map(|inst| inst.id)
                     })
                     .collect();
@@ -2911,13 +2911,11 @@ impl Simulation {
                             let last_betrayal_tick = rv2
                                 .betrayal_history
                                 .last()
-                                .map(|e| e.tick)
-                                .unwrap_or(0);
+                                .map_or(0, |e| e.tick);
                             let last_reconciliation_tick = rv2
                                 .reconciliation_history
                                 .last()
-                                .map(|e| e.tick)
-                                .unwrap_or(0);
+                                .map_or(0, |e| e.tick);
                             if last_betrayal_tick > last_reconciliation_tick
                                 && rv2.trust > Fixed::from_f64(0.5)
                             {
@@ -5961,6 +5959,13 @@ impl Simulation {
     /// The dead agent's v2s entries referencing others are replaced with fresh
     /// stranger-level entries, and every other agent's entry pointing at `idx`
     /// is reset to stranger level (the old high-trust bonds died with them).
+    ///
+    /// Invariant: `relationship_v2s` rows must stay square (row i lists every
+    /// other live agent exactly once, targets ordered 0..n excluding self).
+    /// Births preserve this by APPENDING the newborn's row + one entry per
+    /// existing agent (see the v2s extension in `tick_birth_mechanics`) — do
+    /// not "simplify" that append as redundant; it is what keeps this
+    /// O(1)-slot lookup from indexing past a shorter vec after a birth.
     fn rebuild_relationship_v2s_after_death(&mut self, idx: usize) {
         let n = self.agents.len();
         let agent_id = AgentId::new(idx as u64);
@@ -5991,9 +5996,31 @@ impl Simulation {
 
     fn tick_birth_mechanics(&mut self, tick_u64: u64, tick: Tick) {
         // ── 19b. §19.5.F Birth mechanics — new agents from partnered couples ──
+        // §7.2.6 (Iteration 92): the conception→pregnancy→birth pipeline is
+        // now live. The demography roll (`should_birth` — the calibrated
+        // annual 0.3/couple rate) is the CONCEPTION decision: when it fires
+        // for a couple with a female partner, a pregnancy starts on the
+        // female instead of an immediate birth; gestation advances in the
+        // per-tick biology pass (`EmbodiedState::tick_update` →
+        // `reproductive.tick_update`, rate 0.001 × health × nutrition ×
+        // multiplier ≈ 1700–1900 ticks to term at default nutrition 0.6);
+        // when the pregnancy reaches full term the newborn is born here.
+        // Same-sex couples (no female partner) keep the legacy immediate-
+        // birth path — their behavior is unchanged.
+        //
+        // Zero drift by construction: the unconditional Social roll per
+        // couple per deca-pass is preserved (byte-identical RNG stream; the
+        // newborn still uses its separately-seeded child_rng and birth adds
+        // no draws), and on the default seed-42 world no conception fires
+        // before tick 22,010 (probe-verified) — every snapshot/golden
+        // horizon ≤ 2000 stays byte-identical.
         {
             let n = self.agents.len();
-            let mut new_births: Vec<(usize, usize, usize)> = Vec::new(); // (parent_a, parent_b, child_idx)
+            // (parent_a: usize, parent_b: Option<usize>, child_idx) — parent_b
+            // is None only for a widow birth (the father died mid-gestation).
+            let mut new_births: Vec<(usize, Option<usize>, usize)> = Vec::new();
+
+            // ── Conception pass: the should_birth roll now starts pregnancies ──
 
             for i in 0..n {
                 if let Some(partner_idx) = self.agents[i].partner {
@@ -6019,9 +6046,96 @@ impl Simulation {
                         DEMOGRAPHY_TICK_INTERVAL,
                         &self.demography_config, rng_val,
                     );
-                    if should && n + new_births.len() < crate::population_cap::MAX_POPULATION {
-                        new_births.push((i, partner_idx, n + new_births.len()));
+                    if should {
+                        // The female partner carries the pregnancy; a couple
+                        // with no female partner (same-sex) keeps the legacy
+                        // immediate birth (abstraction — behavior unchanged).
+                        // An already-pregnant female makes the fired roll a
+                        // natural no-op: the pregnancy must complete before a
+                        // new conception (birth spacing emerges from the
+                        // gestation delay).
+                        let female =
+                            if self.agents[i].embodied.reproductive.sex
+                                == crate::biology::reproductive::BiologicalSex::Female
+                            {
+                                Some(i)
+                            } else if self.agents[partner_idx].embodied.reproductive.sex
+                                == crate::biology::reproductive::BiologicalSex::Female
+                            {
+                                Some(partner_idx)
+                            } else {
+                                None
+                            };
+                        match female {
+                            Some(mother)
+                                if n + new_births.len()
+                                    < crate::population_cap::MAX_POPULATION
+                                    && self.agents[mother]
+                                        .embodied
+                                        .reproductive
+                                        .pregnancy
+                                        .is_none() =>
+                            {
+                                self.agents[mother].embodied.reproductive.pregnancy =
+                                    Some(crate::biology::reproductive::PregnancyState::new(
+                                        tick_u64,
+                                    ));
+                            }
+                            None if n + new_births.len()
+                                < crate::population_cap::MAX_POPULATION =>
+                            {
+                                new_births.push((i, Some(partner_idx), n + new_births.len()));
+                            }
+                            _ => {}
+                        }
                     }
+                }
+            }
+
+            // ── Birth pass: full-term pregnancies deliver newborns ──
+            // Deterministic (no RNG): the pregnancy's `complete_pregnancy`
+            // fires exactly when gestation_progress reaches 1.0, which the
+            // per-tick biology pass advances. Iteration 92: the pass is keyed
+            // off the pregnancy itself, not the couple — a mother whose
+            // husband died mid-gestation (her partner field cleared by
+            // handle_agent_death) still delivers. The father is resolved
+            // best-effort: live partner → active marriage's other spouse →
+            // None (a widow birth is recorded as single-parent).
+            let n2 = self.agents.len();
+            for mother in 0..n2 {
+                let full_term = self.agents[mother]
+                    .embodied
+                    .reproductive
+                    .pregnancy
+                    .as_ref()
+                    .is_some_and(|p| p.gestation_progress >= Fixed::ONE);
+                if full_term
+                    && n2 + new_births.len() < crate::population_cap::MAX_POPULATION
+                    && self.agents[mother]
+                        .embodied
+                        .reproductive
+                        .complete_pregnancy()
+                {
+                    let father = self.agents[mother]
+                        .partner
+                        .filter(|p| *p != mother && *p < n2)
+                        .or_else(|| {
+                            self.marriage_registry
+                                .marriages
+                                .iter()
+                                .find(|m| {
+                                    m.active
+                                        && (m.partner_a == mother || m.partner_b == mother)
+                                })
+                                .map(|m| {
+                                    if m.partner_a == mother {
+                                        m.partner_b
+                                    } else {
+                                        m.partner_a
+                                    }
+                                })
+                        });
+                    new_births.push((mother, father, n2 + new_births.len()));
                 }
             }
 
@@ -6075,7 +6189,9 @@ impl Simulation {
                     cultural: CulturalState::default(),
                     partner: None,
                     parent_a: Some(parent_a),
-                    parent_b: Some(parent_b),
+                    // parent_b is None only for widow births (father died
+                    // mid-gestation) — recorded as single-parent.
+                    parent_b,
                     feuds: Vec::new(),
                     feud_ticks: Vec::new(),
                     status: StatusState::default(),
@@ -6135,9 +6251,29 @@ impl Simulation {
                         learning_aptitude: Fixed::from_f64(0.6),
                         ..crate::culture::education::EducationState::default()
                     },
-                });                // Add relationships to all existing agents
+                });
+                // §10.2 (Iteration 92): keep the O(1) relationship_v2s matrix
+                // complete — the newborn must appear in every agent's vec and
+                // carry stranger-level entries for everyone. Previously a
+                // birth only appended the agent (with an empty v2s), so a
+                // birth after a death-replacement left the matrix asymmetric
+                // and the daily power-balance pass could index past a vec's
+                // length (latent panic — surfaced by accelerated population
+                // testing). The child is the last index, so its slot in any
+                // vec is the last position — append.
+                let new_idx = self.agents.len() - 1;
+                for j in 0..new_idx {
+                    self.agents[j].relationship_v2s.push(RelationshipV2::new(
+                        AgentId::new(j as u64),
+                        agent_id,
+                    ));
+                }
+                self.agents[new_idx].relationship_v2s = (0..new_idx)
+                    .map(|j| RelationshipV2::new(agent_id, AgentId::new(j as u64)))
+                    .collect();
+                // Add relationships to all existing agents
                 for existing_idx in 0..self.agents.len() - 1 {
-                    let trust = if existing_idx == parent_a || existing_idx == parent_b {
+                    let trust = if existing_idx == parent_a || parent_b == Some(existing_idx) {
                         Fixed::from_f64(0.8) // high trust for parents
                     } else {
                         Fixed::from_f64(0.4) // moderate trust for others
@@ -6182,17 +6318,21 @@ impl Simulation {
                 // directions, plus sibling links to every prior child of
                 // either parent.
                 self.kinship_graph.add_link(parent_a, child_idx, crate::social::kinship::KinshipLink::ParentChild, tick_u64);
-                self.kinship_graph.add_link(parent_b, child_idx, crate::social::kinship::KinshipLink::ParentChild, tick_u64);
                 self.kinship_graph.add_link(child_idx, parent_a, crate::social::kinship::KinshipLink::ParentChild, tick_u64);
-                self.kinship_graph.add_link(child_idx, parent_b, crate::social::kinship::KinshipLink::ParentChild, tick_u64);
+                if let Some(father) = parent_b {
+                    self.kinship_graph.add_link(father, child_idx, crate::social::kinship::KinshipLink::ParentChild, tick_u64);
+                    self.kinship_graph.add_link(child_idx, father, crate::social::kinship::KinshipLink::ParentChild, tick_u64);
+                }
                 for k in 0..child_idx {
-                    if k == parent_a || k == parent_b {
+                    if k == parent_a || parent_b == Some(k) {
                         continue;
                     }
                     let shares = self.agents[k].parent_a == Some(parent_a)
                         || self.agents[k].parent_b == Some(parent_a)
-                        || self.agents[k].parent_a == Some(parent_b)
-                        || self.agents[k].parent_b == Some(parent_b);
+                        || parent_b.is_some_and(|fb| {
+                            self.agents[k].parent_a == Some(fb)
+                                || self.agents[k].parent_b == Some(fb)
+                        });
                     if shares {
                         self.kinship_graph.add_link(child_idx, k, crate::social::kinship::KinshipLink::Sibling, tick_u64);
                         self.kinship_graph.add_link(k, child_idx, crate::social::kinship::KinshipLink::Sibling, tick_u64);
@@ -6205,7 +6345,11 @@ impl Simulation {
                 self.events.push(SimEvent::ChildBorn {
                     child: agent_id,
                     parent_a: AgentId::new(parent_a as u64),
-                    parent_b: AgentId::new(parent_b as u64),
+                    // A widow birth (father unknown) records the mother in
+                    // the second slot — the event type has no None variant.
+                    parent_b: parent_b.map_or(AgentId::new(parent_a as u64), |p| {
+                        AgentId::new(p as u64)
+                    }),
                     tick,
                 });
 
@@ -6216,6 +6360,16 @@ impl Simulation {
                     tick = tick_u64,
                     "Child born"
                 );
+
+                // §7.2.6 (Iteration 92): record the child in the mother's
+                // active marriage — `Marriage.children` was write-only (zero
+                // consumers); it now records "children produced by this
+                // marriage" at birth, observational.
+                if let Some(m) = self.marriage_registry.marriages.iter_mut().find(|m| {
+                    m.active && (m.partner_a == parent_a || m.partner_b == parent_a)
+                }) {
+                    m.children.push(child_idx);
+                }
             }
         }
 

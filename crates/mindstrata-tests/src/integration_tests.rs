@@ -1765,6 +1765,21 @@ fn snapshot_restore_preserves_kinship_graph_edges() {
     // Forge Spouse/InLaw edges directly (the Iter-67 asymmetry: marriage-
     // formed edges were lost on restore) so the byte-exact check covers the
     // exact class of edges this iteration closes.
+    // Iteration 92 recalibration: the conception→pregnancy pipeline delays
+    // births by ~1,900-tick gestation, and the post-birth RNG perturbation
+    // (newborns now fully participate in the O(1) relationship_v2s matrix)
+    // shifts whose rolls fire — probe: agents 0/1 have no children by 4500.
+    // Their kin are therefore forged here (this test's purpose is restore
+    // fidelity, not birth timing); the real birth-formed ParentChild/Sibling
+    // edges still exist from the elevated birth rate.
+    let child_a = sim.agents.iter().position(|a| a.parent_a.is_some()).expect("born child");
+    let child_b = sim.agents.iter().rposition(|a| a.parent_a.is_some()).expect("born child");
+    for (parent, child) in [(0, child_a), (1, child_b)] {
+        sim.kinship_graph
+            .add_link(parent, child, mindstrata_sim::social::kinship::KinshipLink::ParentChild, 100);
+        sim.kinship_graph
+            .add_link(child, parent, mindstrata_sim::social::kinship::KinshipLink::ParentChild, 100);
+    }
     sim.kinship_graph.add_marital_links(0, 1, 100);
 
     assert!(
@@ -5306,7 +5321,12 @@ fn kinship_penalty_rises_when_families_form() {
         }
     }
     // Seed 51 forms family ties → at least one agent carries the penalty.
-    let sim = run_sim(51, 2000);
+    // Iteration 92 recalibration: the conception→pregnancy pipeline delays
+    // the seed-51 birth (probe-pinned: conception lands post-2000, delivery
+    // at 4,170), so the horizon extends to 5000 where the probe confirms
+    // max penalty 0.5 (the 2,000-tick founding-village legs above are
+    // untouched — no conception fires there).
+    let sim = run_sim(51, 5000);
     let mut any = false;
     for a in &sim.agents {
         if a.attraction.kinship_penalty > mindstrata_core::fixed::Fixed::ZERO {
@@ -6137,4 +6157,297 @@ fn respect_elders_norm_is_armed_and_elder_anchor_is_deterministic() {
 
 
 
+}
+
+
+
+
+
+
+
+
+
+
+// ── §7.2.6: Conception → Pregnancy → Birth pipeline (Iteration 92) ────────
+
+/// §7.2.6 (Iteration 92): the conception→pregnancy→birth pipeline is live.
+/// The demography roll (`should_birth`) is now the CONCEPTION decision: a
+/// fired roll starts a pregnancy on the female partner; gestation advances in
+/// the per-tick biology pass; the full-term pregnancy delivers a newborn in
+/// the birth pass. This test runs the default world on an accelerated
+/// timescale (ticks_per_year = 100 — the demography unit-test convention) so
+/// the ~1,900-tick gestation and the conception rolls are observable within a
+/// short window. Under acceleration the compressed world ages fast (0.01
+/// years/tick), so mothers and children die and are replaced in-place within
+/// the window — the assertions therefore key on the persistent records
+/// (ChildBorn events, Marriage.children, children_born-at-delivery) rather
+/// than on live children, and the precise default-world lifecycle is pinned
+/// by `conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic`.
+#[test]
+fn conception_pipeline_round_trips_with_birth() {
+    let build = || {
+        let mut sim = Simulation::new(SimConfig {
+            seed: 42,
+            max_ticks: 6000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        });
+        sim.populate();
+        // Accelerate the timescale so the annual 0.3/couple rate and the
+        // ~1,900-tick gestation land inside the test window.
+        sim.demography_config.ticks_per_year = 100;
+        sim
+    };
+
+    // Segment 1: conception must fire — a pregnancy exists with its
+    // conception_tick recorded (deterministic on seed 42).
+    let mut sim = build();
+    sim.run(1000);
+    let pregnant: Vec<(usize, u64)> = sim
+        .agents
+        .iter()
+        .enumerate()
+        .filter_map(|(i, a)| {
+            a.embodied
+                .reproductive
+                .pregnancy
+                .as_ref()
+                .map(|p| (i, p.conception_tick))
+        })
+        .collect();
+    assert!(
+        !pregnant.is_empty(),
+        "the should_birth gate must start at least one pregnancy"
+    );
+    for (i, ct) in &pregnant {
+        assert!(*ct < 1000, "conception tick must be within the first segment");
+        assert!(*i < sim.agents.len(), "mother index must be a live agent");
+        assert!(
+            sim.agents[*i].embodied.reproductive.sex
+                == mindstrata_sim::biology::reproductive::BiologicalSex::Female,
+            "only a female agent may carry a pregnancy"
+        );
+    }
+
+    // Segment 2: the pregnancy completes and the newborn is born — the
+    // birth is recorded in the ChildBorn event stream and in the mother's
+    // active marriage, and the mother's children_born increments at
+    // delivery (children_born is a persistent counter; under the compressed
+    // timescale the mother may later die and be replaced, wiping it, so the
+    // delivery-time increment is proven by the event/registry records
+    // instead).
+    sim.run(3000);
+    let child_events: Vec<u64> = sim
+        .recent_events(10_000_000)
+        .iter()
+        .filter_map(|e| match e {
+            mindstrata_core::event::SimEvent::ChildBorn { tick, .. } => Some(tick.as_u64()),
+            _ => None,
+        })
+        .collect();
+    assert!(!child_events.is_empty(), "full-term pregnancies must deliver");
+    // The earliest events may be legacy same-sex births (immediate, before
+    // segment 1); at least one birth must be a pregnancy-path delivery that
+    // landed after the segment-1 conception window (~1,900-tick gestation).
+    assert!(
+        child_events.iter().any(|t| *t >= 1000),
+        "a pregnancy-path birth must land after its conception segment (got {child_events:?})"
+    );
+    let marriage_children: usize = sim
+        .marriage_registry
+        .marriages
+        .iter()
+        .map(|m| m.children.len())
+        .sum();
+    assert!(
+        marriage_children >= 1,
+        "every birth must be recorded in the mother's marriage children"
+    );
+    let born: u32 = sim
+        .agents
+        .iter()
+        .map(|a| a.embodied.reproductive.children_born)
+        .sum();
+    assert!(born >= 1, "children_born must be live on mothers at delivery");
+
+    // Determinism: a second identical accelerated run reproduces the same
+    // pregnancy→birth lifecycle (same seed → same outcome).
+    let mut again = build();
+    again.run(4000);
+    let again_children: usize = again
+        .marriage_registry
+        .marriages
+        .iter()
+        .map(|m| m.children.len())
+        .sum();
+    assert_eq!(
+        sim.marriage_registry
+            .marriages
+            .iter()
+            .map(|m| m.children.len())
+            .sum::<usize>(),
+        again_children,
+        "the birth lifecycle must be seed-deterministic"
+    );
+    assert_eq!(
+        sim.agents.len(),
+        again.agents.len(),
+        "population must be seed-deterministic"
+    );
+}
+
+/// §7.2.6 (Iteration 92): same-sex couples (no female partner) keep the
+/// legacy immediate-birth path — a fired `should_birth` roll births directly
+/// with no pregnancy state, so their behavior is unchanged by the pipeline.
+#[test]
+fn same_sex_couples_keep_legacy_immediate_birth() {
+    let mut sim = Simulation::new(SimConfig {
+        seed: 42,
+        max_ticks: 6000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    });
+    sim.populate();
+    sim.demography_config.ticks_per_year = 100;
+    // Raise the annual rate to ONE so the demography roll fires within the
+    // window regardless of the seed-42 stream (legacy-path determinism).
+    sim.demography_config.birth_rate = Fixed::ONE;
+    // Force an all-male world: every agent is Male, so no couple can ever
+    // carry a pregnancy — every birth must flow through the legacy path.
+    for a in &mut sim.agents {
+        a.embodied.reproductive.sex = mindstrata_sim::biology::reproductive::BiologicalSex::Male;
+        a.age = Fixed::from_f64(25.0);
+        a.body.health = Fixed::ONE;
+    }
+    // Force one partnered pair so the demography gate has a couple to roll.
+    sim.agents[0].partner = Some(1);
+    sim.agents[1].partner = Some(0);
+
+    sim.run(2000);
+    let born = sim.agents.iter().filter(|a| a.parent_a.is_some()).count();
+    assert!(born > 0, "all-male couples must still birth via the legacy path");
+    assert_eq!(
+        sim.agents
+            .iter()
+            .filter(|a| a.embodied.reproductive.pregnancy.is_some())
+            .count(),
+        0,
+        "an all-male world can never hold a pregnancy"
+    );
+}
+
+/// §7.2.6 (Iteration 92): the pipeline is zero-drift in the calibrated
+/// windows and live at the emergent horizon. On the default world no
+/// conception fires before the earliest observed birth (seed-51 at 4,170;
+/// seed-42's first at 22,010), so every snapshot/golden horizon ≤ 2000 stays
+/// byte-identical. Seed 46 delivers two pregnancy-path births (probe-pinned
+/// at 7,480 and 25,420) with the full record chain — ChildBorn events,
+/// Marriage.children, live children, mothers' children_born — proving the
+/// pipeline end-to-end in an unaccelerated run.
+#[test]
+fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
+    // Golden-window invariance (seed 42): no conception, no pregnancy, no
+    // birth, no marriage children within the calibrated 2000-tick window.
+    let golden = run_sim(42, 2000);
+    assert_eq!(
+        golden
+            .agents
+            .iter()
+            .filter(|a| a.embodied.reproductive.pregnancy.is_some())
+            .count(),
+        0,
+        "no pregnancy may exist in the golden window"
+    );
+    assert_eq!(
+        golden.agents.iter().filter(|a| a.parent_a.is_some()).count(),
+        0,
+        "no birth may exist in the golden window"
+    );
+    assert_eq!(
+        golden
+            .marriage_registry
+            .marriages
+            .iter()
+            .map(|m| m.children.len())
+            .sum::<usize>(),
+        0,
+        "marriage children must stay empty in the golden window"
+    );
+
+    // Liveness at 30K on seed 46: two pregnancy-path births, each with the
+    // full record chain. (Probe-pinned: birth ticks 7,480 and 25,420; both
+    // conceptions land after the golden window.)
+    let late = run_sim(46, 30000);
+    let birth_ticks: Vec<u64> = late
+        .recent_events(10_000_000)
+        .iter()
+        .filter_map(|e| match e {
+            mindstrata_core::event::SimEvent::ChildBorn { tick, .. } => Some(tick.as_u64()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        birth_ticks,
+        vec![7480, 25420],
+        "seed-46 30K world must deliver exactly the two probed births"
+    );
+    for t in &birth_ticks {
+        assert!(
+            *t > 2000,
+            "every birth must be post-golden-window (got {t})"
+        );
+    }
+    assert_eq!(
+        late.agents.iter().filter(|a| a.parent_a.is_some()).count(),
+        2,
+        "both live children must carry parentage at 30K"
+    );
+    let marriage_children: usize = late
+        .marriage_registry
+        .marriages
+        .iter()
+        .map(|m| m.children.len())
+        .sum();
+    assert_eq!(
+        marriage_children, 2,
+        "both births must be recorded in the mothers' active marriages"
+    );
+    assert_eq!(
+        late.agents
+            .iter()
+            .map(|a| a.embodied.reproductive.children_born)
+            .sum::<u32>(),
+        2,
+        "both pregnancy-path deliveries must increment children_born"
+    );
+    assert_eq!(
+        late.agents
+            .iter()
+            .filter(|a| a.embodied.reproductive.pregnancy.is_some())
+            .count(),
+        0,
+        "every pregnancy must clear after delivery"
+    );
+
+    // Determinism: two seed-46 30K runs → identical birth timeline and
+    // population.
+    let again = run_sim(46, 30000);
+    let ticks2: Vec<u64> = again
+        .recent_events(10_000_000)
+        .iter()
+        .filter_map(|e| match e {
+            mindstrata_core::event::SimEvent::ChildBorn { tick, .. } => Some(tick.as_u64()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(birth_ticks, ticks2, "birth timeline must be seed-deterministic");
+    assert_eq!(
+        late.agents.len(),
+        again.agents.len(),
+        "population must be seed-deterministic"
+    );
 }
