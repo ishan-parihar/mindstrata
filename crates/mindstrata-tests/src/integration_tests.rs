@@ -4938,6 +4938,61 @@ fn clan_identity_myths_and_honor_codes_live() {
 /// dissolves its marriage (Separation cause, record kept inactive) and is
 /// removed from the registry. Deterministic, and byte-inert for peaceful
 /// runs (jealousy stays ~0 there, so nothing reaches the threshold).
+/// §10.4 (Iteration 75): Attraction familiarity grows with repeated
+/// interaction. Before this iteration `update_familiarity` had zero
+/// production callers — the attraction model's familiarity term was pinned
+/// at 0 forever, so the plan's "familiarity grows with interaction" mechanic
+/// was dead and `total_attraction()` (which gates the §8.1.16 D4 courtship
+/// scenario at 0.4) could never respond to repeated contact. Note: with the
+/// default other factors, even familiarity at the 0.8 cap only reaches
+/// total_attraction ≈ 0.38 — the wiring makes the signal *live and
+/// responsive*, while crossing the 0.4 gate requires additional attraction
+/// factors (reciprocity/status) to be non-zero. This test pins:
+/// (1) familiarity rises across a real run for agents that interact;
+/// (2) the 0.8 cap holds; (3) the wiring is seed-deterministic.
+#[test]
+fn familiarity_grows_with_interaction_across_run() {
+    use mindstrata_core::fixed::Fixed;
+
+    let sim = run_sim(42, 4000);
+    let engaged = sim.agents.iter()
+        .filter(|a| a.attraction.familiarity > Fixed::ZERO)
+        .count();
+    let max_fam = sim.agents.iter()
+        .map(|a| a.attraction.familiarity.to_f64())
+        .fold(0.0, f64::max);
+    // Agents interact every day in riverford, so repeated contact must
+    // register for every agent (probe: 12/12 engaged, max 0.515 by tick 1000).
+    assert_eq!(engaged, sim.agents.len(),
+        "every agent should have interacted enough to build familiarity");
+    assert!(max_fam > 0.0, "familiarity must actually grow");
+    assert!(max_fam <= 0.8, "familiarity respects the 0.8 cap, got {max_fam}");
+}
+
+/// §10.4 (Iteration 75): familiarity wiring must be seed-deterministic —
+/// the growth path consumes no RNG (quality is a pure function of the
+/// interaction kind, applied in the deterministic event window).
+#[test]
+fn familiarity_growth_is_seed_deterministic() {
+    let a = run_sim(42, 3000);
+    let b = run_sim(42, 3000);
+    for (x, y) in a.agents.iter().zip(b.agents.iter()) {
+        assert_eq!(x.attraction.familiarity.to_raw(), y.attraction.familiarity.to_raw());
+    }
+    // Sanity: a different seed diverges. By 3000 ticks the majority of
+    // agents (8/12 at seed 42) have saturated at the 0.8 cap — identical
+    // across seeds in the saturated majority — so the divergence check runs
+    // at a shorter horizon (1000) where growth is still mid-flight and the
+    // per-seed interaction-kind mix remains distinguishable.
+    let c = run_sim(43, 1000);
+    let d = run_sim(42, 1000);
+    assert!(
+        c.agents.iter().zip(d.agents.iter())
+            .any(|(x, y)| x.attraction.familiarity.to_raw() != y.attraction.familiarity.to_raw()),
+        "different seeds should produce different familiarity trajectories"
+    );
+}
+
 #[test]
 fn jealous_bond_dissolution_dissolves_marriage() {
     fn drive(seed: u64) -> (usize, usize, bool) {

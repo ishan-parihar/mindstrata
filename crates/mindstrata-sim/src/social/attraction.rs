@@ -1,5 +1,6 @@
 //! Attraction system — multi-factor mate selection model.
 
+use mindstrata_core::event::InteractionKind;
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 
@@ -59,6 +60,31 @@ impl AttractionModel {
     }
 }
 
+/// §10.4: Familiarity-growth quality for an interaction kind.
+///
+/// Deep, prosocial interactions (help, comfort, teaching) build familiarity
+/// most; mundane exchanges (talk, gossip, trade) build some; hostile acts
+/// (threaten, insult) build almost none — a threat makes you more aware of
+/// someone, but that awareness is not the warm familiarity that feeds
+/// attraction. The qualities sit one order of magnitude below the 0.3–0.6
+/// raw scale so that, through `update_familiarity`'s 0.01-per-interaction
+/// scaling, familiarity accumulates as a *slow, discriminating* signal
+/// (probe: 0.3–0.6 qualities saturated every agent at the 0.8 cap by tick
+/// 1000 in both seeds, erasing all differentiation — the same dead-signal
+/// problem this wiring exists to fix).
+pub fn familiarity_quality_for(kind: InteractionKind) -> Fixed {
+    match kind {
+        InteractionKind::Help => Fixed::from_f64(0.06),
+        InteractionKind::Comfort => Fixed::from_f64(0.05),
+        InteractionKind::Teach => Fixed::from_f64(0.05),
+        InteractionKind::Trade => Fixed::from_f64(0.04),
+        InteractionKind::Talk => Fixed::from_f64(0.03),
+        InteractionKind::Gossip => Fixed::from_f64(0.03),
+        InteractionKind::Threaten => Fixed::from_f64(0.005),
+        InteractionKind::Insult => Fixed::from_f64(0.005),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -80,4 +106,51 @@ mod tests {
         a.kinship_penalty = Fixed::from_f64(0.9);
         assert!(a.total_attraction() < without);
     }
+
+    #[test]
+    fn familiarity_accumulates_from_repeated_interaction() {
+        let mut a = AttractionModel::default();
+        assert_eq!(a.familiarity, Fixed::ZERO);
+        // 100 Help-grade interactions (quality 0.06 → +0.0006 each) — the
+        // slow, discriminating accumulation the plan calls "familiarity grows
+        // with repeated interaction".
+        for _ in 0..100 {
+            a.update_familiarity(familiarity_quality_for(InteractionKind::Help));
+        }
+        assert!(a.familiarity > Fixed::from_f64(0.05));
+    }
+
+    #[test]
+    fn familiarity_caps_at_eight_tenths() {
+        let mut a = AttractionModel::default();
+        // 20,000 Help-grade interactions would exceed the 0.8 cap without
+        // the `.min()` guard; the cap must hold.
+        for _ in 0..20_000 {
+            a.update_familiarity(familiarity_quality_for(InteractionKind::Help));
+        }
+        assert_eq!(a.familiarity, Fixed::from_f64(0.8));
+    }
+
+    #[test]
+    fn hostile_interactions_build_little_familiarity() {
+        let mut a = AttractionModel::default();
+        for _ in 0..10 {
+            a.update_familiarity(familiarity_quality_for(InteractionKind::Insult));
+        }
+        let hostile = a.familiarity;
+        let mut b = AttractionModel::default();
+        for _ in 0..10 {
+            b.update_familiarity(familiarity_quality_for(InteractionKind::Comfort));
+        }
+        assert!(hostile < b.familiarity);
+    }
+
+    #[test]
+    fn familiarity_feeds_total_attraction() {
+        let mut a = AttractionModel::default();
+        let base = a.total_attraction();
+        a.familiarity = Fixed::from_f64(0.8);
+        assert!(a.total_attraction() > base);
+    }
 }
+

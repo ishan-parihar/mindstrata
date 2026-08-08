@@ -3163,6 +3163,22 @@ impl Simulation {
                         if fi >= n {
                             continue;
                         }
+                        // §10.4: familiarity grows with repeated interaction —
+                        // both participants become more familiar with each
+                        // other, scaled by how prosocial the interaction kind
+                        // is. Previously `update_familiarity` had zero
+                        // production callers, so the attraction model's
+                        // familiarity term was pinned at 0 forever and
+                        // `total_attraction()` (which gates the §8.1.16 D4
+                        // courtship scenario) never responded to contact.
+                        // Deterministic, no RNG: quality is a pure function
+                        // of the kind.
+                        let quality = crate::social::attraction::familiarity_quality_for(kind);
+                        self.agents[fi].attraction.update_familiarity(quality);
+                        let ti = to_u as usize;
+                        if ti < n {
+                            self.agents[ti].attraction.update_familiarity(quality);
+                        }
                         // Tone from current affect valence (0..1, 0.5 neutral).
                         let tone = (self.agents[fi].affect.valence + Fixed::ONE)
                             / Fixed::from_f64(2.0);
