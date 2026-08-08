@@ -4315,6 +4315,31 @@ impl Simulation {
     /// Returns (taken > 0, was_caught): theft succeeded and whether it was detected.
     fn enforce_theft(&mut self, agent_idx: usize, agent_id: AgentId, site_idx: usize, resource_id: u64, amount: Fixed, tick_u64: u64, tick: Tick) -> bool {
         let owner = self.world.sites[site_idx].owner;
+        // §8.1.10/§19.5.D (Iteration 84): an agent who has internalized the
+        // no-theft norm takes less — the norm's strength scales the amount
+        // taken continuously (no threshold cliff). At full internalization the
+        // scaled amount reaches zero and the agent refuses the theft outright
+        // (early return: nothing consumed, no enforcement run). Resolved by id
+        // (`NO_THEFT_NORM_ID`, the same constant the check_violation site
+        // uses) so a scenario that re-registers norms with renamed
+        // descriptions still gates correctly; a registry without the norm
+        // resolves to zero resistance (legacy behavior). Zero-at-zero: before
+        // the first monthly ritual (tick 4320) no agent holds any internalized
+        // norm, so resistance = 0 and the golden baseline stays byte-identical.
+        // The gate draws no RNG — the enforcement detection roll's stream
+        // position is unchanged whenever a theft still occurs.
+        let resistance = self
+            .norms
+            .norms()
+            .iter()
+            .find(|n| n.id == norms::NO_THEFT_NORM_ID)
+            .map_or(Fixed::ZERO, |n| {
+                self.agents[agent_idx].moral_cognition.norm_resistance(&n.name)
+            });
+        let amount = amount * (Fixed::ONE - resistance);
+        if amount <= Fixed::ZERO {
+            return false; // refused the theft — nothing taken, no enforcement
+        }
         let taken = self.world.consume_resource(site_idx, resource_id, amount);
         // Early return if nothing was actually taken — don't run enforcement for zero-resource thefts
         if taken <= Fixed::ZERO {
@@ -4344,7 +4369,7 @@ impl Simulation {
 
         // §19.5.D: Apply enforcement probability — not all thefts are caught
         let (_punishment, was_caught) = self.norms.check_violation_with_enforcement(
-            0, agent_id, tick_u64, effective_enforcement, detection_roll
+            norms::NO_THEFT_NORM_ID, agent_id, tick_u64, effective_enforcement, detection_roll
         );
 
         if was_caught {
@@ -4361,7 +4386,7 @@ impl Simulation {
                 amount: taken.to_f64(),
                 fine: fine.to_f64(),
             });
-            self.events.push(SimEvent::NormViolated { agent: agent_id, norm_id: 0, witnesses: Vec::new(), tick });
+            self.events.push(SimEvent::NormViolated { agent: agent_id, norm_id: norms::NO_THEFT_NORM_ID, witnesses: Vec::new(), tick });
             // §19.5.B: Record institutional enforcement provenance
             self.provenance.record_institutional(
                 crate::provenance::InstitutionalTrace {
@@ -10050,6 +10075,113 @@ mod tests {
             sim.params.conflict_escalation_chance.to_f64() * (1.0 - 0.7);
         assert_eq!(chance_full, 0.0);
         assert!(chance_partial > 0.0 && chance_partial < 1.0);
+    }
+
+    /// §8.1.10/§19.5.D (Iteration 84): an agent who has internalized the
+    /// no-theft norm takes less from an inaccessible farm — the norm's
+    /// strength scales the amount taken continuously; at full internalization
+    /// the agent refuses the theft outright (nothing consumed, no enforcement
+    /// run). Zero-at-zero: no internalized norm → legacy take unchanged.
+    #[test]
+    fn internalized_no_theft_norm_reduces_theft_take() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        let thief = 0;
+        let thief_id = AgentId::new(thief as u64); // agent index == agent id
+        // A farm owned by another agent, stocked with grain.
+        let site_idx = sim
+            .world
+            .sites
+            .iter()
+            .position(|s| s.kind == crate::world::SiteKind::Farm)
+            .expect("seed-42 world has a farm");
+        {
+            let site = &mut sim.world.sites[site_idx];
+            if let Some(stock) = site
+                .inventory
+                .iter_mut()
+                .find(|s| s.resource_id == crate::world::GRAIN_RESOURCE_ID)
+            {
+                stock.quantity = Fixed::from_f64(1.0);
+            } else {
+                site.inventory.push(crate::world::ResourceStock {
+                    resource_id: crate::world::GRAIN_RESOURCE_ID,
+                    quantity: Fixed::from_f64(1.0),
+                    quality: Fixed::ONE,
+                    access: crate::world::AccessRight::OwnerOnly,
+                });
+            }
+        }
+        let grain_left = |sim: &Simulation| -> f64 {
+            sim.world.sites[site_idx]
+                .inventory
+                .iter()
+                .find(|s| s.resource_id == crate::world::GRAIN_RESOURCE_ID)
+                .map(|s| s.quantity.to_f64())
+                .unwrap_or(0.0)
+        };
+        let amount = Fixed::from_f64(0.15);
+        let tick = Tick::ZERO;
+        // No internalized norm: the gate must read exactly zero resistance.
+        assert_eq!(
+            sim.agents[thief].moral_cognition.norm_resistance("No Theft"),
+            Fixed::ZERO
+        );
+        // Baseline: the full 0.15 is taken.
+        assert!(sim.enforce_theft(
+            thief,
+            thief_id,
+            site_idx,
+            crate::world::GRAIN_RESOURCE_ID,
+            amount,
+            0,
+            tick
+        ));
+        assert!((grain_left(&sim) - 0.85).abs() < 0.001);
+        // Full internalization: the scaled amount is zero → refusal, nothing
+        // consumed, no enforcement run.
+        sim.agents[thief]
+            .moral_cognition
+            .internalize_norm("No Theft".into(), Fixed::ONE);
+        assert_eq!(
+            sim.agents[thief].moral_cognition.norm_resistance("No Theft"),
+            Fixed::ONE
+        );
+        assert!(!sim.enforce_theft(
+            thief,
+            thief_id,
+            site_idx,
+            crate::world::GRAIN_RESOURCE_ID,
+            amount,
+            0,
+            tick
+        ));
+        assert!((grain_left(&sim) - 0.85).abs() < 0.001);
+        // Partial internalization at the fresh-village strength (0.7): the
+        // take scales continuously to 0.15 × (1 − 0.7) = 0.045 — not a cliff.
+        let partial = 1;
+        let partial_id = AgentId::new(partial as u64);
+        sim.agents[partial]
+            .moral_cognition
+            .internalize_norm("No Theft".into(), Fixed::from_f64(0.7));
+        assert!(sim.enforce_theft(
+            partial,
+            partial_id,
+            site_idx,
+            crate::world::GRAIN_RESOURCE_ID,
+            amount,
+            0,
+            tick
+        ));
+        assert!((grain_left(&sim) - 0.805).abs() < 0.001);
     }
 
     /// §10.8/§19.5.G: A clan enmity persists while any feud remains between

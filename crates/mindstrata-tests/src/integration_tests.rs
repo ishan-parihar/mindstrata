@@ -5547,3 +5547,52 @@ fn no_violence_norm_resistance_gates_escalation() {
         .collect();
     assert_eq!(v1, v2, "norm resistance must be seed-deterministic");
 }
+
+/// §8.1.10/§19.5.D (Iteration 84): the no-theft norm resistance is
+/// behavioral — an agent who has internalized the norm takes less from an
+/// inaccessible farm (and refuses outright at full internalization). The gate
+/// is zero-at-zero: before the first monthly ritual (tick 4320) no agent
+/// holds any internalized norm, so resistance = 0 everywhere and the golden
+/// baseline stays byte-identical. This test pins the golden-window
+/// invariance (a 2000-tick run shows zero resistance), the liveness of the
+/// no-theft norm past ritual fires, and determinism.
+#[test]
+fn no_theft_norm_resistance_reduces_theft_take() {
+    // Golden window: no ritual before 4320 → zero resistance everywhere.
+    let early = run_sim(42, 2000);
+    for a in &early.agents {
+        assert_eq!(
+            a.moral_cognition.norm_resistance("No Theft"),
+            Fixed::ZERO,
+            "no internalized norm before the first monthly ritual"
+        );
+    }
+
+    // Past ritual fires: the no-theft norm is internalized, so resistance is
+    // non-zero for at least some agents, and the theft gate reads it.
+    let late = run_sim(42, 9000);
+    let max_resistance = late
+        .agents
+        .iter()
+        .map(|a| a.moral_cognition.norm_resistance("No Theft").to_f64())
+        .fold(0.0f64, f64::max);
+    assert!(
+        max_resistance > 0.0,
+        "ritual participation should internalize the no-theft norm"
+    );
+    assert!(max_resistance <= 1.0);
+
+    // Determinism: same seed → byte-identical resistance across two runs.
+    let again = run_sim(42, 9000);
+    let v1: Vec<f64> = late
+        .agents
+        .iter()
+        .map(|a| a.moral_cognition.norm_resistance("No Theft").to_f64())
+        .collect();
+    let v2: Vec<f64> = again
+        .agents
+        .iter()
+        .map(|a| a.moral_cognition.norm_resistance("No Theft").to_f64())
+        .collect();
+    assert_eq!(v1, v2, "norm resistance must be seed-deterministic");
+}

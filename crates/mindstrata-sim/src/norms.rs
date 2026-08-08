@@ -44,6 +44,13 @@ pub struct NormViolation {
 /// against this norm by the Iteration-78 enforcement wiring.
 pub const NO_VIOLENCE_NORM_ID: u64 = 4;
 
+/// §19.5.D: The default "No Theft" norm id (index 0 in `default_norms`).
+/// Resource thefts are checked against this norm inside `enforce_theft`
+/// (Iteration-78-era wiring) and, from Iteration 84, the theft *decision*
+/// itself is gated by the agent's internalized strength of this norm
+/// (`no_theft_resistance` in the sim).
+pub const NO_THEFT_NORM_ID: u64 = 0;
+
 /// §19.5.D (Iteration 78): Episode window for notoriety — at most one
 /// notoriety increment per agent per window, so notoriety tracks distinct
 /// conflict *episodes* rather than raw hostile-act counts. A conflict-prone
