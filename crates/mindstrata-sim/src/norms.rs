@@ -57,6 +57,14 @@ pub const NO_THEFT_NORM_ID: u64 = 0;
 /// decision in the interaction system rather than suppressing an act.
 pub const HELP_NEIGHBORS_NORM_ID: u64 = 1;
 
+/// §8.1.10 (Iteration 91): The prescriptive "Respect Elders" norm id
+/// (index 2 in `default_norms`). An internalized norm suppresses
+/// disrespectful acts (threat/insult) toward the community's designated
+/// elder — the Council "Elder" role holder, the live elder anchor (age-based
+/// elders > 60 never appear at the sim's timescale: 35040 ticks/year, so
+/// test horizons stay below ~56 years).
+pub const RESPECT_ELDERS_NORM_ID: u64 = 2;
+
 /// §19.5.D (Iteration 78): Episode window for notoriety — at most one
 /// notoriety increment per agent per window, so notoriety tracks distinct
 /// conflict *episodes* rather than raw hostile-act counts. A conflict-prone

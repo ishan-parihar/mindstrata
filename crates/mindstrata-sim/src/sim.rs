@@ -3274,6 +3274,28 @@ impl Simulation {
                     .iter()
                     .find(|n| n.id == norms::HELP_NEIGHBORS_NORM_ID)
                     .map(|n| n.name.as_str());
+                // §8.1.10 (Iteration 91): thread each agent's internalized
+                // "Respect Elders" norm strength plus the elder designation
+                // into the interaction decision — `choose_interaction`
+                // suppresses disrespectful acts toward the community's
+                // designated elder (the Council "Elder" role holder, the live
+                // elder anchor; age-based elders > 60 never appear at the
+                // sim's 35040-tick-per-year timescale). Resolved once per
+                // tick, deterministic, no RNG. Zero-at-zero: no internalized
+                // norm before the first monthly ritual (tick 4320) → the
+                // elder flag alone changes nothing → golden byte-identical.
+                let respect_elders_name = self
+                    .norms
+                    .norms()
+                    .iter()
+                    .find(|n| n.id == norms::RESPECT_ELDERS_NORM_ID)
+                    .map(|n| n.name.as_str());
+                let elder_idx: Option<usize> = self
+                    .institutions
+                    .iter()
+                    .find(|i| i.kind == InstitutionKind::Council)
+                    .and_then(|c| c.get_role_holder("Elder"))
+                    .map(|id| id.as_u64() as usize);
                 let agent_info: Vec<_> = self
                     .agents
                     .iter()
@@ -3287,6 +3309,10 @@ impl Simulation {
                             .map_or(Fixed::ZERO, |n| {
                                 a.moral_cognition.norm_resistance(n)
                             });
+                        let respect_propensity = respect_elders_name
+                            .map_or(Fixed::ZERO, |n| {
+                                a.moral_cognition.norm_resistance(n)
+                            });
                         (
                             AgentId::new(i as u64),
                             a.personality.openness,
@@ -3295,6 +3321,8 @@ impl Simulation {
                             emotions[i].anger,
                             resistance,
                             help_propensity,
+                            respect_propensity,
+                            Some(i) == elder_idx,
                         )
                     })
                     .collect();

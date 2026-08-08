@@ -203,6 +203,8 @@ pub fn choose_interaction(
     anger: Fixed,
     no_violence_resistance: Fixed, // §8.1.10 (Iteration 85)
     help_neighbors_propensity: Fixed, // §8.1.10 (Iteration 89)
+    respect_elders_propensity: Fixed, // §8.1.10 (Iteration 91)
+    target_is_elder: bool,          // §8.1.10 (Iteration 91)
     rng: &mut RngStreams,
     params: &crate::parameters::SimParameters,
 ) -> InteractionKind {
@@ -222,6 +224,21 @@ pub fn choose_interaction(
     // resistance value — replay determinism holds).
     let threat_scale = (Fixed::ONE - no_violence_resistance).to_f64();
 
+    // §8.1.10 (Iteration 91): the prescriptive "Respect Elders" norm
+    // suppresses *disrespectful* acts (threat/insult) toward the community's
+    // designated elder (the Council "Elder" role holder). Target-conditional
+    // and zero-at-zero: a non-elder target or a norm-less agent leaves both
+    // negative windows untouched (elder_scale = 1.0 → legacy probabilities,
+    // golden baselines byte-identical); full internalization toward the
+    // elder eliminates disrespect entirely; partial leaves a strictly
+    // reduced continuous rate (no cliff). The RNG draw stays unconditional
+    // — only the thresholds change, so replay determinism holds.
+    let elder_scale = if target_is_elder {
+        (Fixed::ONE - respect_elders_propensity.clamp_01()).to_f64()
+    } else {
+        1.0
+    };
+
     // Stress-driven negativity: angry agents (low agreeableness OR elevated
     // anger) occasionally lash out even at moderate trust. Without this, the
     // negative-interaction branch was structurally unreachable (low-trust
@@ -236,8 +253,8 @@ pub fn choose_interaction(
     } else {
         0.0
     };
-    if roll < negativity_prob {
-        return if roll < negativity_prob * 0.4 * threat_scale {
+    if roll < negativity_prob * elder_scale {
+        return if roll < negativity_prob * 0.4 * threat_scale * elder_scale {
             InteractionKind::Threaten
         } else {
             InteractionKind::Insult
@@ -246,8 +263,9 @@ pub fn choose_interaction(
 
     if trust < params.social_low_trust_threshold {
         // Low trust: threaten or avoid (an internalized no-violence norm
-        // converts the threat into cautious talk)
-        if roll < 0.3 * threat_scale {
+        // converts the threat into cautious talk; toward the designated
+        // elder a Respect Elders norm does the same)
+        if roll < 0.3 * threat_scale * elder_scale {
             InteractionKind::Threaten
         } else {
             InteractionKind::Talk // cautious talk
@@ -379,9 +397,14 @@ fn evolve_relationship_kind(rel: &mut Relationship, params: &crate::parameters::
 /// radius can interact, creating natural neighborhoods and social clusters.
 /// §5.4: Faction in-group bias — members of the same faction get trust bonuses.
 /// §5.1: Bonding and conflict rates from `SimParameters`.
+///
+/// The per-agent info tuple grows with every norm wiring (Iterations 85, 89,
+/// 91) — an intentional flat data-passing shape, not a public API.
+#[expect(clippy::type_complexity)]
 pub fn system_social_interactions(
-    // (id, openness, agreeableness, extraversion, anger, no_violence_resistance, help_neighbors_propensity)
-    agents: &[(AgentId, Fixed, Fixed, Fixed, Fixed, Fixed, Fixed)],
+    // (id, openness, agreeableness, extraversion, anger, no_violence_resistance,
+    //  help_neighbors_propensity, respect_elders_propensity, is_elder)
+    agents: &[(AgentId, Fixed, Fixed, Fixed, Fixed, Fixed, Fixed, Fixed, bool)],
     agent_positions: &[(i32, i32)],            // §2.4: agent (x, y) positions
     same_faction_matrix: &[Vec<bool>],         // §5.4: same_faction_matrix[i][j] = true if agents i,j share a faction
     relationships: &mut [Relationship],
@@ -394,7 +417,10 @@ pub fn system_social_interactions(
 ) {
     let num_agents = agents.len();
 
-    for (i, (agent_id, openness, agreeableness, extraversion, anger, no_violence_resistance, help_neighbors_propensity)) in agents.iter().enumerate() {
+    // The source agent's own elder flag is unused here — the gate reads the
+    // *target's* elder status (`agents[target_idx].8`) when the interaction
+    // is chosen.
+    for (i, (agent_id, openness, agreeableness, extraversion, anger, no_violence_resistance, help_neighbors_propensity, respect_elders_propensity, _is_elder)) in agents.iter().enumerate() {
         // Extraversion affects interaction frequency
         let interact_chance = params.social_interaction_base_chance + *extraversion * params.social_extraversion_multiplier;
         let roll = Fixed::from_f64(rng.get_mut(RngStream::Social).random_range(0.0..1.0));
@@ -420,7 +446,19 @@ pub fn system_social_interactions(
 
             // §5.4: In-group/out-group — check if both agents share a faction
             let same_faction = same_faction_matrix[i][target_idx];
-            let kind = choose_interaction(trust, affection, *openness, *agreeableness, *anger, *no_violence_resistance, *help_neighbors_propensity, rng, params);
+            let kind = choose_interaction(
+                trust,
+                affection,
+                *openness,
+                *agreeableness,
+                *anger,
+                *no_violence_resistance,
+                *help_neighbors_propensity,
+                *respect_elders_propensity,
+                agents[target_idx].8, // the target's is_elder flag
+                rng,
+                params,
+            );
 
             let interaction = Interaction {
                 from: *agent_id,
@@ -529,7 +567,9 @@ mod tests {
                     agreeableness,
                     anger,
                     resistance,
-                    Fixed::ZERO, // no Help Neighbors norm in this setup
+                    Fixed::ZERO,  // no Help Neighbors norm in this setup
+                    Fixed::ZERO,  // no Respect Elders norm in this setup
+                    false,        // no designated-elder target
                     &mut rng,
                     &params,
                 ) == InteractionKind::Threaten
@@ -588,6 +628,8 @@ mod tests {
                     anger,
                     Fixed::ZERO,
                     propensity,
+                    Fixed::ZERO,
+                    false,
                     &mut rng,
                     &params,
                 ) {
@@ -616,6 +658,70 @@ mod tests {
         assert_eq!(
             baseline_comfort, full_comfort,
             "the untouched [0, 0.2) Comfort window must be identical — same roll sequence"
+        );
+    }
+
+    /// §8.1.10 (Iteration 91): the prescriptive "Respect Elders" norm
+    /// suppresses *disrespectful* acts toward the community's designated
+    /// elder — `choose_interaction` scales both negative windows (the
+    /// stress-driven negativity branch and the low-trust threat gate) by
+    /// elder_scale = (1 − propensity) when the target is the elder. The RNG
+    /// draw stays unconditional, so the same seed yields the same roll
+    /// sequence at every propensity: full internalization must eliminate
+    /// threats toward the elder, partial must leave a strictly reduced rate,
+    /// and the elder flag alone (zero propensity) must be inert — the
+    /// zero-at-zero pin that keeps the golden baseline byte-identical.
+    #[test]
+    fn respect_elders_norm_suppresses_disrespect_toward_elders() {
+        let params = crate::parameters::SimParameters::default();
+        // Low-trust isolated setup: trust 0 sits below the low-trust
+        // threshold, high agreeableness + zero anger keep the stress-driven
+        // negativity branch off, so every Threaten comes from the low-trust
+        // `roll < 0.3` gate.
+        let trust = Fixed::ZERO;
+        let affection = Fixed::ZERO;
+        let openness = Fixed::from_f64(0.5);
+        let agreeableness = Fixed::from_f64(0.8);
+        let anger = Fixed::ZERO;
+        let count_threats = |propensity: Fixed, target_is_elder: bool| -> u32 {
+            let mut rng = RngStreams::new(42);
+            let mut threats = 0u32;
+            for _ in 0..2000 {
+                if choose_interaction(
+                    trust,
+                    affection,
+                    openness,
+                    agreeableness,
+                    anger,
+                    Fixed::ZERO,
+                    Fixed::ZERO,
+                    propensity,
+                    target_is_elder,
+                    &mut rng,
+                    &params,
+                ) == InteractionKind::Threaten
+                {
+                    threats += 1;
+                }
+            }
+            threats
+        };
+        let baseline = count_threats(Fixed::ZERO, false);
+        let elder_no_norm = count_threats(Fixed::ZERO, true);
+        let elder_full = count_threats(Fixed::ONE, true);
+        let elder_partial = count_threats(Fixed::from_f64(0.7), true);
+        assert!(baseline > 0, "low-trust threats must occur without the norm");
+        assert_eq!(
+            elder_no_norm, baseline,
+            "the elder designation alone must be inert (zero-at-zero)"
+        );
+        assert_eq!(
+            elder_full, 0,
+            "full Respect Elders internalization must eliminate threats toward the elder"
+        );
+        assert!(
+            elder_partial < baseline,
+            "partial internalization must leave a strictly reduced threat rate"
         );
     }
 }
