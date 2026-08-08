@@ -7042,6 +7042,24 @@ impl Simulation {
                                     MemoryTag::RitualParticipated,
                                 );
                             }
+                            // §12.5: Rituals "reinforce norms" — each
+                            // participant internalizes (or strengthens) the
+                            // community's registry norms, scaled by the norm's
+                            // community internalization. Deterministic (no RNG)
+                            // and observationally isolated (norm_resistance has
+                            // no production consumer), so the golden baseline
+                            // stays byte-identical: rituals fire only at
+                            // monthly intervals (4320 ticks) while every
+                            // snapshot/golden horizon is ≤ 2000.
+                            for norm in self.norms.norms() {
+                                let reinforcement =
+                                    ritual.norm_reinforcement_for(norm.internalization);
+                                if reinforcement > Fixed::ZERO {
+                                    self.agents[p]
+                                        .moral_cognition
+                                        .reinforce_norm(&norm.name, reinforcement);
+                                }
+                            }
                         }
                         for j in (i + 1)..ritual.participants.len() {
                             let a = ritual.participants[i];

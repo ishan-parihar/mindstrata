@@ -5428,3 +5428,73 @@ fn power_balance_private_label_coupling_is_seed_deterministic() {
     assert!(a1 > 0.0, "expected power_balance to differentiate, got 0");
 }
 
+/// §12.5 (Iteration 82): ritual participation "reinforces norms" — the
+/// plan's norm-reinforcement effect is live. The ritual block now feeds each
+/// participant's `MoralCognition` through `Ritual::norm_reinforcement_for`
+/// (previously dead: zero production callers), internalizing/strengthening the
+/// community's registry norms. Rituals fire on their monthly 4320-tick
+/// interval, so this test runs past the first fire to pin liveness, and also
+/// pins the golden-window invariance: at 1000 ticks (before any ritual fires)
+/// every agent holds an empty internalized-norm set, so the calibrated
+/// baseline and all ≤2000-tick snapshots stay byte-identical.
+#[test]
+fn ritual_reinforces_internalized_norms() {
+    // Golden window: no ritual has fired by 1000 ticks → empty everywhere.
+    let early = run_sim(42, 1000);
+    for a in &early.agents {
+        assert!(
+            a.moral_cognition.internalized_norms.is_empty(),
+            "no ritual should fire before tick 4320"
+        );
+    }
+
+    // Past the first monthly fire (5000 > 4320): participants hold norms.
+    let run = |seed: u64| -> Vec<Vec<(String, f64)>> {
+        let sim = run_sim(seed, 5000);
+        sim.agents
+            .iter()
+            .map(|a| {
+                a.moral_cognition
+                    .internalized_norms
+                    .iter()
+                    .map(|n| (n.description.clone(), n.strength.to_f64()))
+                    .collect()
+            })
+            .collect()
+    };
+    let norms = run(42);
+    let total: usize = norms.iter().map(Vec::len).sum();
+    assert!(total > 0, "expected internalized norms after a ritual fire");
+    // Every internalized norm came from the community registry (names match
+    // default_norms) with positive, bounded strength.
+    let registry_names = [
+        "No Theft",
+        "Help Neighbors",
+        "Respect Elders",
+        "Obey Ruler",
+        "No Violence",
+    ];
+    for agent_norms in &norms {
+        for (name, strength) in agent_norms {
+            assert!(
+                registry_names.contains(&name.as_str()),
+                "unknown internalized norm {name}"
+            );
+            assert!(*strength > 0.0 && *strength <= 1.0, "bad strength {strength}");
+        }
+    }
+    // Determinism: same seed → byte-identical internalized-norm sets.
+    assert_eq!(norms, run(42), "internalized norms must be seed-deterministic");
+    // Per-agent uniqueness: `reinforce_norm` is duplicate-safe by
+    // construction, so no agent may hold the same norm twice.
+    for agent_norms in &norms {
+        let mut names: Vec<&str> = agent_norms.iter().map(|(n, _)| n.as_str()).collect();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), agent_norms.len(), "duplicate internalized norm");
+    }
+    // Cross-seed differentiation: the seeded rituals split the village into
+    // pro/anti clusters (traditionalism + agreeableness > 1.0), so different
+    // seeds form different clusters and the internalized-norm sets diverge.
+    assert_ne!(norms, run(43), "different seeds should internalize differently");
+}

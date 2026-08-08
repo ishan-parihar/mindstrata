@@ -131,6 +131,29 @@ impl MoralCognition {
             .clamp_01()
     }
 
+    /// Reinforce an internalized norm through ritual participation
+    /// (AP2 §12.5: rituals \"reinforce norms\"). Strengthens an existing
+    /// norm on repeated exposure, or internalizes it on first exposure.
+    /// Deterministic — no RNG, pure function of input state.
+    pub fn reinforce_norm(&mut self, description: &str, amount: Fixed) {
+        if let Some(norm) = self
+            .internalized_norms
+            .iter_mut()
+            .find(|n| n.description == description)
+        {
+            norm.strength = (norm.strength + amount).clamp_01();
+            norm.emotional_charge = norm.strength * Fixed::from_f64(0.5);
+            // Ritual exposure is NOT witnessed enforcement — `enforcement_count`
+            // stays untouched so the field keeps its documented meaning
+            // ("times the agent has witnessed enforcement") for any future
+            // consumer such as a violation audit.
+            norm.identity_linked =
+                norm.identity_linked || norm.strength > Fixed::from_f64(0.7);
+        } else {
+            self.internalize_norm(description.to_string(), amount);
+        }
+    }
+
     /// Internalize a new norm through repeated exposure and enforcement.
     pub fn internalize_norm(&mut self, description: String, strength: Fixed) {
         // Check if already internalized
@@ -219,5 +242,41 @@ mod tests {
         mc.internalize_norm("no_theft".into(), Fixed::from_f64(0.8));
         let resistance = mc.norm_resistance("no_theft");
         assert_eq!(resistance, Fixed::from_f64(0.8));
+    }
+
+    #[test]
+    fn reinforce_norm_strengthens_existing() {
+        let mut mc = MoralCognition::default();
+        mc.internalize_norm("no_violence".into(), Fixed::from_f64(0.3));
+        mc.reinforce_norm("no_violence", Fixed::from_f64(0.2));
+        assert_eq!(mc.internalized_norms.len(), 1);
+        assert_eq!(
+            mc.internalized_norms[0].strength,
+            Fixed::from_f64(0.5),
+            "repeated ritual participation should strengthen the norm"
+        );
+        // Ritual exposure is not witnessed enforcement — the counter stays 0.
+        assert_eq!(mc.internalized_norms[0].enforcement_count, 0);
+    }
+
+    #[test]
+    fn reinforce_norm_internalizes_on_first_exposure() {
+        let mut mc = MoralCognition::default();
+        mc.reinforce_norm("respect_elders", Fixed::from_f64(0.4));
+        assert_eq!(mc.internalized_norms.len(), 1);
+        assert_eq!(mc.internalized_norms[0].strength, Fixed::from_f64(0.4));
+        // Sub-threshold first exposure: not identity-linked, zero enforcement.
+        assert!(!mc.internalized_norms[0].identity_linked);
+        assert_eq!(mc.internalized_norms[0].enforcement_count, 0);
+    }
+
+    #[test]
+    fn reinforce_norm_clamps_at_one() {
+        let mut mc = MoralCognition::default();
+        mc.internalize_norm("no_theft".into(), Fixed::from_f64(0.8));
+        mc.reinforce_norm("no_theft", Fixed::from_f64(0.5));
+        assert_eq!(mc.internalized_norms[0].strength, Fixed::ONE);
+        // Once strength crosses 0.7 the norm becomes identity-linked.
+        assert!(mc.internalized_norms[0].identity_linked);
     }
 }
