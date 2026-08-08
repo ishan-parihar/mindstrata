@@ -2282,23 +2282,26 @@ impl Simulation {
                 // world food/water scarcity. Write-only observational: the
                 // richer pressure feeds only `dominant_need`, which has no
                 // behavioral consumer yet, so calibrated runs carry zero drift.
+                // Scarcity hoisted to the agent-loop scope (Iteration 71): the
+                // same deterministic values feed both the motivation context
+                // (below) and the daily prospection scenario generation.
+                let expected_food = crate::sim::EXPECTED_GRAIN_PER_AGENT as i64
+                    * self.agents.len() as i64;
+                let expected_water =
+                    crate::sim::EXPECTED_WATER_PER_AGENT as i64 * self.agents.len() as i64;
+                // Use the world totals precomputed before the ctx block.
+                let food_scarcity = (Fixed::ONE
+                    - world_food_total / Fixed::from_int(expected_food.max(1)))
+                    .clamp_01();
+                let water_scarcity = (Fixed::ONE
+                    - world_water_total / Fixed::from_int(expected_water.max(1)))
+                    .clamp_01();
                 {
                     let fear = self.agents[i].emotions.fear;
                     let anger = self.agents[i].emotions.anger;
                     let joy = self.agents[i].emotions.joy;
                     let sadness = self.agents[i].emotions.sadness;
                     let legitimacy = self.agents[i].legitimacy_field.overall;
-                    let expected_food = crate::sim::EXPECTED_GRAIN_PER_AGENT as i64
-                        * self.agents.len() as i64;
-                    let expected_water =
-                        crate::sim::EXPECTED_WATER_PER_AGENT as i64 * self.agents.len() as i64;
-                    // Use the world totals precomputed before the ctx block.
-                    let food_scarcity = (Fixed::ONE
-                        - world_food_total / Fixed::from_int(expected_food.max(1)))
-                        .clamp_01();
-                    let water_scarcity = (Fixed::ONE
-                        - world_water_total / Fixed::from_int(expected_water.max(1)))
-                        .clamp_01();
                     self.agents[i].motivation.set_context(
                         fear, anger, joy, sadness, legitimacy, food_scarcity, water_scarcity,
                     );
@@ -2415,6 +2418,40 @@ impl Simulation {
                     let agent_ambition = self.agents[i].personality.ambition;
                     let agent_trauma = self.agents[i].embodied.nervous.trauma_load;
                     let agent_depression = self.agents[i].psychopathology.depression_risk;
+
+                    // Architecture-plan-2 §8.1.16 (Iteration 71): the plan's
+                    // core mechanic — "agents simulate possible futures" —
+                    // was dead: generate_scenario/evaluate_scenarios had zero
+                    // production callers, so the scenario set stayed empty.
+                    // One scenario per daily pass, derived deterministically
+                    // from live state (no RNG) and bounded by capacity; then
+                    // evaluate_scenarios() grounds hope/dread in the set.
+                    // Ordering matters (reviewer-mandated): generation runs
+                    // FIRST — it uses the standing emotion biases from the
+                    // previous tick's update — then evaluation regrounds
+                    // hope/dread, and only then does update() apply today's
+                    // emotions, so the plan's "depression reduces hope" drain
+                    // operates on the scenario-grounded hope instead of being
+                    // clobbered by the overwrite. Observational — prospection
+                    // is absent from the AgentBundle projection and has no
+                    // behavioral consumer, so calibrated runs stay
+                    // byte-identical.
+                    if phases.is_daily {
+                        let inputs = crate::psychology::imagination::ScenarioInputs {
+                            hunger: needs[i].hunger,
+                            thirst: needs[i].thirst,
+                            safety: needs[i].safety,
+                            fear: agent_fear,
+                            anger: emotions[i].anger,
+                            ambition: agent_ambition,
+                            food_scarcity,
+                            water_scarcity,
+                            has_partner: self.agents[i].partner.is_some(),
+                            total_attraction: self.agents[i].attraction.total_attraction(),
+                        };
+                        self.agents[i].prospection.generate_daily_scenario(tick_u64, inputs);
+                        self.agents[i].prospection.evaluate_scenarios();
+                    }
                     self.agents[i].prospection.update(
                         agent_fear, agent_ambition, agent_trauma, agent_depression,
                     );

@@ -4189,6 +4189,88 @@ fn orphaned_authority_stage_resets_when_producer_removed() {
     );
 }
 
+/// §8.1.16 (AP2, Iteration 71): Mental-scenario generation — the plan's
+/// "agents simulate possible futures" mechanic was fully dead in production
+/// (generate_scenario/evaluate_scenarios had zero callers, so the scenario
+/// set stayed empty). Now each daily pass a focal agent derives one scenario
+/// about its dominant concern domain from live state. Assert scenarios
+/// populate across a real run, capacity stays bounded, the canonical plan
+/// domains appear, and the end-state is seed-deterministic.
+#[test]
+fn mental_scenarios_generate_across_run() {
+    use mindstrata_core::fixed::Fixed;
+
+    let run = |seed: u64| -> (Vec<String>, Fixed, Fixed) {
+        let config = SimConfig {
+            seed,
+            max_ticks: 2000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(2000);
+        let mut descriptions: Vec<String> = Vec::new();
+        for a in &sim.agents {
+            for s in &a.prospection.scenarios {
+                descriptions.push(s.description.clone());
+            }
+        }
+        descriptions.sort();
+        let hope = sim.agents[0].prospection.hope;
+        let dread = sim.agents[0].prospection.dread;
+        (descriptions, hope, dread)
+    };
+
+    let (descriptions, hope, dread) = run(42);
+    assert!(
+        !descriptions.is_empty(),
+        "daily scenario generation must populate the scenario set"
+    );
+    // Capacity bound: at most `capacity` (5) scenarios per agent, so the
+    // total is bounded by 12 agents × 5.
+    assert!(
+        descriptions.len() <= 12 * 5,
+        "scenario set must respect per-agent capacity, got {}",
+        descriptions.len()
+    );
+    // The default riverford world is genuinely scarce (world grain ~11.6 vs
+    // the ~120 expected reference, so food_scarcity ≈ 0.9) and every agent's
+    // fear saturates near 1.0 — so the strict domain priority correctly
+    // fixates the whole village on the harvest-failure dread (the plan's
+    // flagship "If the harvest fails" scenario). Its presence here proves the
+    // live derivation produces the plan's exact scenario class.
+    assert!(
+        descriptions.iter().any(|d| d.contains("harvest fails")),
+        "scarcity-dread scenario must fire in the scarce default world, saw {descriptions:?}"
+    );
+    // evaluate_scenarios() is live: the all-dread scenario set regrounds dread
+    // above its 0.2 default baseline and hope below its 0.5 default.
+    assert!(
+        dread > Fixed::from_f64(0.2),
+        "scenario evaluation must raise dread above baseline, got {dread}"
+    );
+    assert!(
+        hope < Fixed::from_f64(0.5),
+        "all-dread scenarios must not raise hope above baseline, got {hope}"
+    );
+
+    // Seed determinism: an identical-seed run reproduces the exact scenario
+    // descriptions and hope/dread end-state (deterministic derivation, no RNG).
+    // (Domain BREADTH — all six concern domains under their exact trigger
+    // conditions — is covered by the eight imagination.rs unit tests; this
+    // test proves the production wiring is live and deterministic.)
+    let (descriptions2, hope2, dread2) = run(42);
+    assert_eq!(
+        descriptions, descriptions2,
+        "scenario generation must be seed-deterministic"
+    );
+    assert_eq!(hope, hope2, "hope must be seed-deterministic");
+    assert_eq!(dread, dread2, "dread must be seed-deterministic");
+}
+
 /// §10.6 (AP2): Births must mirror parent/child and sibling links into the
 /// kinship graph — the graph was previously only seeded at populate (where
 /// initial adults have no parents), so the entire kinship system had no edges
