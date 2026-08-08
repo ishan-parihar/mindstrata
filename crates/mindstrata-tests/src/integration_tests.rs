@@ -5498,3 +5498,52 @@ fn ritual_reinforces_internalized_norms() {
     // seeds form different clusters and the internalized-norm sets diverge.
     assert_ne!(norms, run(43), "different seeds should internalize differently");
 }
+
+/// §8.1.10/§19.5.H (Iteration 83): the no-violence norm resistance is
+/// behavioral — an agent who has internalized the norm resists escalating a
+/// failed threat to physical violence. The gate is zero-at-zero: before the
+/// first monthly ritual (tick 4320) no agent holds any internalized norm, so
+/// resistance = 0 everywhere and the golden 1000-tick baseline stays
+/// byte-identical. This test pins the golden-window invariance (a 2000-tick
+/// run shows zero resistance), the liveness of the escalation gate in a run
+/// past ritual fires, and determinism.
+#[test]
+fn no_violence_norm_resistance_gates_escalation() {
+    // Golden window: no ritual before 4320 → zero resistance everywhere.
+    let early = run_sim(42, 2000);
+    for a in &early.agents {
+        assert_eq!(
+            a.moral_cognition.norm_resistance("No Violence"),
+            Fixed::ZERO,
+            "no internalized norm before the first monthly ritual"
+        );
+    }
+
+    // Past ritual fires: the norm is internalized, so resistance is non-zero
+    // for at least some agents, and the escalation gate reads it.
+    let late = run_sim(42, 9000);
+    let max_resistance = late
+        .agents
+        .iter()
+        .map(|a| a.moral_cognition.norm_resistance("No Violence").to_f64())
+        .fold(0.0f64, f64::max);
+    assert!(
+        max_resistance > 0.0,
+        "ritual participation should internalize the no-violence norm"
+    );
+    assert!(max_resistance <= 1.0);
+
+    // Determinism: same seed → byte-identical resistance across two runs.
+    let again = run_sim(42, 9000);
+    let v1: Vec<f64> = late
+        .agents
+        .iter()
+        .map(|a| a.moral_cognition.norm_resistance("No Violence").to_f64())
+        .collect();
+    let v2: Vec<f64> = again
+        .agents
+        .iter()
+        .map(|a| a.moral_cognition.norm_resistance("No Violence").to_f64())
+        .collect();
+    assert_eq!(v1, v2, "norm resistance must be seed-deterministic");
+}

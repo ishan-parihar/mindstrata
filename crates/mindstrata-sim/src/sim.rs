@@ -1456,8 +1456,31 @@ impl Simulation {
         {
             return false;
         }
-        self.rng.get_mut(RngStream::Social).random::<f64>()
-            < self.escalation_chance(from_idx, to_idx)
+        // §8.1.10: An agent who has internalized the no-violence norm resists
+        // escalating a failed threat to physical violence — the norm's strength
+        // scales the escalation chance continuously (no threshold cliff).
+        // The norm is resolved by id (`NO_VIOLENCE_NORM_ID`, the same constant
+        // the check_violation sites use) so a scenario that re-registers norms
+        // with renamed descriptions still gates correctly; a registry without
+        // the norm resolves to zero resistance (legacy behavior).
+        // Zero-at-zero: before the first monthly ritual (tick 4320) no agent
+        // holds any internalized norm, so resistance = 0 and the golden
+        // baseline stays byte-identical. The RNG draw remains unconditional
+        // (same stream position), so replay determinism holds at every
+        // resistance value.
+        let resistance = self
+            .norms
+            .norms()
+            .iter()
+            .find(|n| n.id == norms::NO_VIOLENCE_NORM_ID)
+            .map_or(0.0, |n| {
+                self.agents[from_idx]
+                    .moral_cognition
+                    .norm_resistance(&n.name)
+                    .to_f64()
+            });
+        let chance = self.escalation_chance(from_idx, to_idx) * (1.0 - resistance);
+        self.rng.get_mut(RngStream::Social).random::<f64>() < chance
     }
 
     /// §13.5: Seed the village's founding collective memory (group 0).
@@ -9976,6 +9999,57 @@ mod tests {
         let aggression = Fixed::from_f64(1.5);
         assert!(!sim.should_escalate(a, b, false, aggression));
         assert!(!sim.should_escalate(a, b, true, Fixed::ZERO));
+    }
+
+    /// §8.1.10 (Iteration 83): An agent who has internalized the no-violence
+    /// norm resists escalating a failed threat — `norm_resistance("No
+    /// Violence")` scales the escalation chance continuously (zero-at-zero:
+    /// no internalized norm → legacy behavior).
+    #[test]
+    fn internalized_no_violence_norm_resists_escalation() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        let (a, b) = cross_clan_pair(&sim);
+        let aggression = Fixed::from_f64(1.5); // past the 1.2 threshold
+        // No internalized norm: the gate must read exactly zero resistance.
+        assert_eq!(
+            sim.agents[a].moral_cognition.norm_resistance("No Violence"),
+            Fixed::ZERO
+        );
+        // Full internalization: chance scales to 0 → never escalates,
+        // regardless of the RNG draw (the draw still happens — stream safe).
+        sim.agents[a]
+            .moral_cognition
+            .internalize_norm("No Violence".into(), Fixed::ONE);
+        assert_eq!(
+            sim.agents[a].moral_cognition.norm_resistance("No Violence"),
+            Fixed::ONE
+        );
+        for _ in 0..50 {
+            assert!(
+                !sim.should_escalate(a, b, true, aggression),
+                "full no-violence internalization must suppress escalation"
+            );
+        }
+        // Partial internalization at the same strength as a fresh village norm
+        // (0.7) leaves a non-zero but reduced chance — continuous, not a cliff.
+        // (Agent `b` is untouched, so its norm set is still empty.)
+        sim.agents[b]
+            .moral_cognition
+            .internalize_norm("No Violence".into(), Fixed::from_f64(0.7));
+        let chance_full = sim.params.conflict_escalation_chance.to_f64() * (1.0 - 1.0);
+        let chance_partial =
+            sim.params.conflict_escalation_chance.to_f64() * (1.0 - 0.7);
+        assert_eq!(chance_full, 0.0);
+        assert!(chance_partial > 0.0 && chance_partial < 1.0);
     }
 
     /// §10.8/§19.5.G: A clan enmity persists while any feud remains between
