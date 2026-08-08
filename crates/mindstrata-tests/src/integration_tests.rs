@@ -5731,3 +5731,75 @@ fn witnessed_enforcement_audit_is_armed() {
         .collect();
     assert_eq!(v1, v2, "enforcement counts must be seed-deterministic");
 }
+
+/// §8.1.10 (Iteration 87): the hypocrisy consumer is live — an agent who
+/// has witnessed the no-theft norm enforced (enforcement_count, populated by
+/// the Iteration-86 audit) and is sensitive to hypocrisy resists theft
+/// further, compounding the Iteration-84 resistance gate. The channel is
+/// armed-but-silent in the default world: its public-access farms never
+/// catch a theft, so every enforcement_count stays 0 and `hypocrisy_factor`
+/// stays 0 everywhere — the observational claim that pins zero drift. This
+/// test pins the golden-window invariance (2000 ticks: no internalized
+/// norms at all → factor 0), the post-ritual armed-but-silent state (9000
+/// ticks: norms internalized, factor 0 everywhere), and determinism of the
+/// (description, count) audit vectors.
+#[test]
+fn hypocrisy_consumer_is_armed_but_silent() {
+    // Golden window: no ritual before 4320 → no internalized norms at all,
+    // so the hypocrisy factor reads 0 everywhere.
+    let early = run_sim(42, 2000);
+    for a in &early.agents {
+        assert!(
+            a.moral_cognition.internalized_norms.is_empty(),
+            "no internalized norm before the first monthly ritual"
+        );
+        assert_eq!(a.moral_cognition.hypocrisy_factor("No Theft"), Fixed::ZERO);
+    }
+
+    // Past ritual fires: norms internalized, but the default world's public
+    // farm access means no theft enforcement ever fires — the audit channel
+    // stays at count 0, so the hypocrisy factor remains 0 and calibrated
+    // runs carry zero drift (the gate is armed, not active, here).
+    let late = run_sim(42, 9000);
+    let mut any_norm = false;
+    for a in &late.agents {
+        for n in &a.moral_cognition.internalized_norms {
+            any_norm = true;
+            assert_eq!(
+                n.enforcement_count, 0,
+                "no theft enforcement in the public-access default world"
+            );
+        }
+        assert_eq!(
+            a.moral_cognition.hypocrisy_factor("No Theft"),
+            Fixed::ZERO,
+            "no witnessed enforcement → no hypocrisy in default runs"
+        );
+    }
+    assert!(any_norm, "ritual participation should internalize norms");
+
+    // Determinism: same seed → byte-identical (description, count) audit
+    // vectors.
+    let again = run_sim(42, 9000);
+    let v1: Vec<(String, u32)> = late
+        .agents
+        .iter()
+        .flat_map(|a| {
+            a.moral_cognition
+                .internalized_norms
+                .iter()
+                .map(|n| (n.description.clone(), n.enforcement_count))
+        })
+        .collect();
+    let v2: Vec<(String, u32)> = again
+        .agents
+        .iter()
+        .flat_map(|a| {
+            a.moral_cognition
+                .internalized_norms
+                .iter()
+                .map(|n| (n.description.clone(), n.enforcement_count))
+        })
+        .collect();
+    assert_eq!(v1, v2, "enforcement counts must be seed-deterministic");
+}

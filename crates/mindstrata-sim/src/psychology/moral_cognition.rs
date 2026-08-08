@@ -229,7 +229,41 @@ impl MoralCognition {
             norm.enforcement_count = norm.enforcement_count.saturating_add(1);
         }
     }
+
+    /// §8.1.10 (Iteration 87): hypocrisy — the behavioral consumer of the
+    /// Iteration-86 witnessed-enforcement audit. An agent who has seen the
+    /// community punish a norm violation (high `enforcement_count`) and is
+    /// sensitive to hypocrisy resists committing that same violation: "I
+    /// have seen people punished for this; doing it myself would make me a
+    /// hypocrite." Returns `hypocrisy_sensitivity × exposure`, where
+    /// exposure is the witnessed-enforcement count capped at
+    /// [`HYPOCRISY_ENFORCEMENT_CAP`] (5 public enforcements fully activate
+    /// the trait's weight). Zero-at-zero: no witnessed enforcement (the
+    /// default world's public-access farms never catch a theft) → factor 0 →
+    /// legacy behavior. Absent norms and zero sensitivity are both 0.
+    pub fn hypocrisy_factor(&self, description: &str) -> Fixed {
+        let count = self
+            .internalized_norms
+            .iter()
+            .find(|n| n.description == description)
+            .map_or(0, |n| n.enforcement_count);
+        if count == 0 {
+            return Fixed::ZERO;
+        }
+        let exposure = (count.min(HYPOCRISY_ENFORCEMENT_CAP) as f64)
+            / (HYPOCRISY_ENFORCEMENT_CAP as f64);
+        // Clamped: `hypocrisy_sensitivity` is a pub field that a scenario
+        // config could deserialize out of range — without the clamp an
+        // over-1.0 factor would drive the theft gate's (1 − hypocrisy)
+        // negative and silently refuse every theft.
+        Fixed::from_f64(self.hypocrisy_sensitivity.to_f64() * exposure).clamp_01()
+    }
 }
+
+/// §8.1.10 (Iteration 87): witnessed-enforcement count at which the
+/// hypocrisy effect saturates — 5 public enforcements fully activate the
+/// agent's hypocrisy-sensitivity weight.
+pub const HYPOCRISY_ENFORCEMENT_CAP: u32 = 5;
 
 #[cfg(test)]
 mod tests {
@@ -332,5 +366,40 @@ mod tests {
         assert_eq!(violence.enforcement_count, 1);
         // The audit does not touch strength or identity.
         assert_eq!(theft.strength, Fixed::from_f64(0.6));
+    }
+
+    /// §8.1.10 (Iteration 87): `hypocrisy_factor` scales the agent's
+    /// hypocrisy sensitivity by witnessed-enforcement exposure — zero count
+    /// or zero sensitivity → 0, cap saturation → the full trait weight, and
+    /// the absent-norm case is a silent 0.
+    #[test]
+    fn hypocrisy_factor_scales_with_witnessed_enforcement() {
+        let mut mc = MoralCognition::default();
+        // No internalized norm → 0.
+        assert_eq!(mc.hypocrisy_factor("no_theft"), Fixed::ZERO);
+        mc.internalize_norm("no_theft".into(), Fixed::from_f64(0.3));
+        // Internalized but no witnessed enforcement → 0 (zero-at-zero).
+        assert_eq!(mc.hypocrisy_factor("no_theft"), Fixed::ZERO);
+        // One witnessed enforcement: 0.5 sensitivity × 1/5 = 0.1.
+        mc.record_witnessed_enforcement("no_theft");
+        assert_eq!(mc.hypocrisy_factor("no_theft"), Fixed::from_f64(0.1));
+        // Saturation: 5 witnessed enforcements → full sensitivity (0.5).
+        for _ in 0..4 {
+            mc.record_witnessed_enforcement("no_theft");
+        }
+        assert_eq!(mc.hypocrisy_factor("no_theft"), Fixed::from_f64(0.5));
+        // Beyond the cap the factor stays at the full sensitivity.
+        mc.record_witnessed_enforcement("no_theft");
+        assert_eq!(mc.hypocrisy_factor("no_theft"), Fixed::from_f64(0.5));
+        // A different norm's count does not bleed over.
+        assert_eq!(mc.hypocrisy_factor("no_violence"), Fixed::ZERO);
+        // Zero sensitivity → 0 regardless of exposure.
+        let mut low = MoralCognition {
+            hypocrisy_sensitivity: Fixed::ZERO,
+            ..Default::default()
+        };
+        low.internalize_norm("no_theft".into(), Fixed::from_f64(0.3));
+        low.record_witnessed_enforcement("no_theft");
+        assert_eq!(low.hypocrisy_factor("no_theft"), Fixed::ZERO);
     }
 }

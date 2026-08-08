@@ -4350,15 +4350,32 @@ impl Simulation {
         // norm, so resistance = 0 and the golden baseline stays byte-identical.
         // The gate draws no RNG — the enforcement detection roll's stream
         // position is unchanged whenever a theft still occurs.
-        let resistance = self
+        let no_theft_name = self
             .norms
             .norms()
             .iter()
             .find(|n| n.id == norms::NO_THEFT_NORM_ID)
-            .map_or(Fixed::ZERO, |n| {
-                self.agents[agent_idx].moral_cognition.norm_resistance(&n.name)
-            });
-        let amount = amount * (Fixed::ONE - resistance);
+            .map(|n| n.name.as_str());
+        let resistance = no_theft_name.map_or(Fixed::ZERO, |name| {
+            self.agents[agent_idx].moral_cognition.norm_resistance(name)
+        });
+        // §8.1.10 (Iteration 87): hypocrisy compounds the resistance gate —
+        // an agent who has witnessed the no-theft norm enforced
+        // (`enforcement_count`, populated by the Iteration-86 audit) and is
+        // sensitive to hypocrisy resists the act further: "I have seen
+        // people punished for this; doing it myself would make me a
+        // hypocrite." `hypocrisy_factor` is zero-at-zero (no witnessed
+        // enforcement before any caught theft → legacy take), continuous,
+        // and saturating at 5 witnessed enforcements; it draws no RNG (the
+        // enforcement detection roll's stream position is unchanged
+        // whenever a theft still occurs). The two mechanisms (internal
+        // conviction strength vs social-learning shame) compound
+        // multiplicatively, and either at full weight refuses the theft
+        // outright.
+        let hypocrisy = no_theft_name.map_or(Fixed::ZERO, |name| {
+            self.agents[agent_idx].moral_cognition.hypocrisy_factor(name)
+        });
+        let amount = amount * (Fixed::ONE - resistance) * (Fixed::ONE - hypocrisy);
         if amount <= Fixed::ZERO {
             return false; // refused the theft — nothing taken, no enforcement
         }
@@ -10320,6 +10337,119 @@ mod tests {
         assert_eq!(count(thief), 1, "the violator experiences the enforcement");
         assert_eq!(count(witness), 1, "a holder witnesses the public enforcement");
         assert_eq!(count(control), 0, "non-holders have nothing to witness");
+    }
+
+    /// §8.1.10 (Iteration 87): the hypocrisy *wiring* is live — with zero
+    /// norm strength but full witnessed-enforcement exposure and full
+    /// hypocrisy sensitivity, the agent refuses the theft outright (the
+    /// hypocrisy factor alone drives the take to zero), a normless control
+    /// steals the full amount, and a partial-sensitivity agent takes
+    /// proportionally less (0.15 × (1 − 0.5) = 0.075).
+    #[test]
+    fn witnessed_enforcement_hypocrisy_suppresses_theft() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        let site_idx = sim
+            .world
+            .sites
+            .iter()
+            .position(|s| s.kind == crate::world::SiteKind::Farm)
+            .expect("seed-42 world has a farm");
+        {
+            let site = &mut sim.world.sites[site_idx];
+            if let Some(stock) = site
+                .inventory
+                .iter_mut()
+                .find(|s| s.resource_id == crate::world::GRAIN_RESOURCE_ID)
+            {
+                stock.quantity = Fixed::from_f64(1.0);
+            } else {
+                site.inventory.push(crate::world::ResourceStock {
+                    resource_id: crate::world::GRAIN_RESOURCE_ID,
+                    quantity: Fixed::from_f64(1.0),
+                    quality: Fixed::ONE,
+                    access: crate::world::AccessRight::OwnerOnly,
+                });
+            }
+        }
+        let grain_left = |sim: &Simulation| -> f64 {
+            sim.world.sites[site_idx]
+                .inventory
+                .iter()
+                .find(|s| s.resource_id == crate::world::GRAIN_RESOURCE_ID)
+                .map_or(0.0, |s| s.quantity.to_f64())
+        };
+        let amount = Fixed::from_f64(0.15);
+        let tick = Tick::ZERO;
+        // Full hypocrisy: sensitivity 1.0, zero norm strength, 5 witnessed
+        // enforcements → the hypocrisy factor alone refuses the theft.
+        let full = 0;
+        sim.agents[full].moral_cognition.hypocrisy_sensitivity = Fixed::ONE;
+        sim.agents[full]
+            .moral_cognition
+            .internalize_norm("No Theft".into(), Fixed::ZERO);
+        for _ in 0..5 {
+            sim.agents[full]
+                .moral_cognition
+                .record_witnessed_enforcement("No Theft");
+        }
+        assert_eq!(
+            sim.agents[full].moral_cognition.hypocrisy_factor("No Theft"),
+            Fixed::ONE
+        );
+        // Partial hypocrisy: default sensitivity 0.5, same exposure.
+        let partial = 1;
+        sim.agents[partial]
+            .moral_cognition
+            .internalize_norm("No Theft".into(), Fixed::ZERO);
+        for _ in 0..5 {
+            sim.agents[partial]
+                .moral_cognition
+                .record_witnessed_enforcement("No Theft");
+        }
+        // Normless control.
+        let control = 2;
+        // Control steals the full amount.
+        assert!(sim.enforce_theft(
+            control,
+            AgentId::new(control as u64),
+            site_idx,
+            crate::world::GRAIN_RESOURCE_ID,
+            amount,
+            0,
+            tick
+        ));
+        assert!((grain_left(&sim) - 0.85).abs() < 0.001);
+        // Full hypocrisy refuses outright — nothing consumed.
+        assert!(!sim.enforce_theft(
+            full,
+            AgentId::new(full as u64),
+            site_idx,
+            crate::world::GRAIN_RESOURCE_ID,
+            amount,
+            0,
+            tick
+        ));
+        assert!((grain_left(&sim) - 0.85).abs() < 0.001);
+        // Partial hypocrisy takes 0.15 × (1 − 0.5) = 0.075.
+        assert!(sim.enforce_theft(
+            partial,
+            AgentId::new(partial as u64),
+            site_idx,
+            crate::world::GRAIN_RESOURCE_ID,
+            amount,
+            0,
+            tick
+        ));
+        assert!((grain_left(&sim) - 0.775).abs() < 0.001);
     }
 
     /// §10.8/§19.5.G: A clan enmity persists while any feud remains between
