@@ -4011,7 +4011,11 @@ impl Simulation {
                         result.emotional_charge * Fixed::from_f64(0.5),
                         source_trust, result.emotional_charge, tick_u64,
                     );
-                    r.record_transmission(from.as_u64() as usize, tick_u64);
+                    // §13.3: The originator is in the source chain but has not
+                    // retold the rumor — record_source skips the evidence
+                    // degradation so stored evidence stays aligned with the
+                    // actual hop count.
+                    r.record_source(from.as_u64() as usize, tick_u64);
                     self.rumor_registry.register(r);
                 }
             }
@@ -6102,6 +6106,97 @@ impl Simulation {
             self.wire_meme_aggregation(tick_u64);
             // Architecture-plan-2 §13.3: Decay rumor prevalence daily.
             self.rumor_registry.tick_all(tick_u64);
+            // Architecture-plan-2 §13.3 + §12.3: Deterministic rumor transmission
+            // pass — each active rumor spreads to its most receptive listener,
+            // with the transmitter's group-level attachment style scaling the
+            // spread (anxious groups escalate rumors, avoidant groups suppress
+            // them). Fully deterministic (argmax, no RNG): the golden baseline
+            // stays byte-identical. Trust matrix read from relationship_v2s;
+            // susceptibility from openness (open agents are more receptive),
+            // skepticism from the epistemic substrate.
+            {
+                let n = self.agents.len();
+                if n > 0 && !self.rumor_registry.rumors.is_empty() {
+                    // trust[listener][source] — listener's trust in the source.
+                    let mut trust_matrix = vec![vec![Fixed::ZERO; n]; n];
+                    for (listener, agent) in self.agents.iter().enumerate() {
+                        for (pos, rv2) in agent.relationship_v2s.iter().enumerate() {
+                            let source = if pos >= listener { pos + 1 } else { pos };
+                            trust_matrix[listener][source] = rv2.trust;
+                        }
+                    }
+                    let susceptibility: Vec<Fixed> = self
+                        .agents
+                        .iter()
+                        .map(|a| {
+                            (Fixed::from_f64(0.4)
+                                + a.personality.openness * Fixed::from_f64(0.6))
+                                .clamp_01()
+                        })
+                        .collect();
+                    let skepticism: Vec<Fixed> = self
+                        .agents
+                        .iter()
+                        .map(|a| a.epistemic.trust_network.skepticism)
+                        .collect();
+                    // §12.3: group-level attachment style escalates/suppresses
+                    // rumor spread by the transmitter's groups (factions then
+                    // peer groups; the maximum applies for multi-membership).
+                    let mut escalation = vec![Fixed::ONE; n];
+                    let style_scale = |style: crate::social::group_formation::GroupAttachmentStyle| {
+                        match style {
+                            crate::social::group_formation::GroupAttachmentStyle::Secure => {
+                                Fixed::from_f64(1.0)
+                            }
+                            crate::social::group_formation::GroupAttachmentStyle::Anxious => {
+                                // §12.3: "Anxious groups... escalate rumors."
+                                Fixed::from_f64(1.5)
+                            }
+                            crate::social::group_formation::GroupAttachmentStyle::Avoidant => {
+                                // §12.3: avoidant groups "suppress emotion" —
+                                // rumors travel slower through them.
+                                Fixed::from_f64(0.5)
+                            }
+                            crate::social::group_formation::GroupAttachmentStyle::Disorganized => {
+                                // §12.3 lists rumor escalation under Anxious;
+                                // volatile/purge-prone groups get a mild 1.25×
+                                // (interpreted from "volatile leadership").
+                                Fixed::from_f64(1.25)
+                            }
+                        }
+                    };
+                    for faction in &self.faction_v2_registry.factions {
+                        if !faction.active {
+                            continue;
+                        }
+                        let scale = style_scale(faction.attachment_style);
+                        for &m in &faction.members {
+                            if m < n {
+                                escalation[m] = escalation[m].max(scale);
+                            }
+                        }
+                    }
+                    for group in &self.group_registry.groups {
+                        if !group.active {
+                            continue;
+                        }
+                        let scale = style_scale(group.attachment_style);
+                        for &m in &group.members {
+                            if m < n {
+                                escalation[m] = escalation[m].max(scale);
+                            }
+                        }
+                    }
+                    self.rumor_registry.transmission_pass(
+                        &trust_matrix,
+                        &susceptibility,
+                        &skepticism,
+                        &escalation,
+                        n as u32,
+                        tick_u64,
+                    );
+                }
+            }
             // Architecture-plan-2 §13.4: Tick propaganda campaigns daily.
             self.propaganda_registry.tick_all(self.params.propaganda_resistance_growth);
             // Architecture-plan-2 §13.4: Apply propaganda effects to target agents.

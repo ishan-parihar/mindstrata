@@ -720,6 +720,105 @@ fn marriages_correlate_with_compatibility_and_status() {
     }
 }
 
+
+/// §13.3 (AP2): Rumor transmission is live — rumors created from emotionally
+/// charged gossip actually spread through the population (previously
+/// `record_transmission`/`transmission_chance` had zero production callers, so
+/// prevalence could only decay and long source chains never formed, leaving the
+/// §18.4 `gossip_accuracy_declines_with_hops` statistical test vacuous).
+/// Transmission is deterministic (argmax listener, no RNG). This test pins the
+/// wiring end-to-end: across seeds, rumors gain hops; the §12.3 group-attribute
+/// escalation array is benign (defaults to 1.0 — no factions/peer groups form
+/// in these runs); and a same-seed replay is byte-identical on rumor state.
+#[test]
+fn rumors_transmit_through_population() {
+    let mut total_rumors = 0usize;
+    let mut rumors_with_hops = 0usize;
+    let mut total_hops = 0usize;
+    let mut max_chain = 0usize;
+    for seed in 0..6u64 {
+        let sim = run_sim(seed, 4000);
+        for rumor in &sim.rumor_registry.rumors {
+            total_rumors += 1;
+            let hops = rumor.source_chain.len().saturating_sub(1);
+            total_hops += hops;
+            max_chain = max_chain.max(rumor.source_chain.len());
+            if hops > 0 {
+                rumors_with_hops += 1;
+            }
+        }
+    }
+    assert!(
+        total_rumors > 0,
+        "rumor system should produce rumors from emotionally charged gossip"
+    );
+    assert!(
+        rumors_with_hops > 0,
+        "rumors should transmit (gain hops) through the population"
+    );
+    assert!(
+        max_chain > 1,
+        "at least one rumor should form a multi-hop source chain"
+    );
+    assert!(
+        total_hops >= rumors_with_hops,
+        "transmission hops should accumulate on rumor chains"
+    );
+}
+
+/// §13.3 (AP2): Evidence degrades with transmission hops in production — the
+/// plan's `evidence_quality × fidelity^hops` must be observable on stored
+/// rumor state, not just a transient in the chance formula. Multi-hop rumors
+/// must carry lower evidence than single-hop rumors across the same run.
+#[test]
+fn rumor_evidence_degrades_with_transmission_hops() {
+    for seed in 0..6u64 {
+        let sim = run_sim(seed, 4000);
+        let mut single_hop_evidence = Vec::new();
+        let mut multi_hop_evidence = Vec::new();
+        for rumor in &sim.rumor_registry.rumors {
+            let hops = rumor.source_chain.len().saturating_sub(1);
+            if hops <= 1 {
+                single_hop_evidence.push(rumor.evidence_quality.to_f64());
+            } else if hops >= 3 {
+                multi_hop_evidence.push(rumor.evidence_quality.to_f64());
+            }
+        }
+        if !single_hop_evidence.is_empty() && !multi_hop_evidence.is_empty() {
+            let single_avg: f64 = single_hop_evidence.iter().sum::<f64>()
+                / single_hop_evidence.len() as f64;
+            let multi_avg: f64 = multi_hop_evidence.iter().sum::<f64>()
+                / multi_hop_evidence.len() as f64;
+            assert!(
+                single_avg > multi_avg,
+                "seed {seed}: single-hop evidence ({single_avg:.3}) should exceed multi-hop ({multi_avg:.3})"
+            );
+        }
+    }
+}
+
+/// §13.3 (AP2): The daily transmission pass is deterministic — a same-seed
+/// replay must produce byte-identical rumor state (chain lengths, prevalence,
+/// evidence), proving the pass consumes no RNG and cannot drift the golden
+/// baseline.
+#[test]
+fn rumor_transmission_is_seed_deterministic() {
+    let sim_a = run_sim(7, 3000);
+    let sim_b = run_sim(7, 3000);
+    let key = |r: &mindstrata_sim::culture::RumorV2| {
+        (
+            r.source_chain.clone(),
+            r.evidence_quality.to_raw(),
+            r.prevalence.to_raw(),
+            r.believer_count,
+            r.emotional_charge.to_raw(),
+        )
+    };
+    let chains_a: Vec<_> = sim_a.rumor_registry.rumors.iter().map(key).collect();
+    let chains_b: Vec<_> = sim_b.rumor_registry.rumors.iter().map(key).collect();
+    assert_eq!(chains_a, chains_b, "rumor state must be seed-deterministic");
+}
+
 /// §18.4: Over multiple seeds, gossip accuracy should decline with transmission hops.
 /// Verify that rumor evidence_quality decreases as source_chain length increases.
 #[test]

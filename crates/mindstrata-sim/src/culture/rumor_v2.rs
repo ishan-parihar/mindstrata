@@ -94,10 +94,16 @@ impl RumorV2 {
     /// Compute transmission probability from source to listener.
     ///
     /// ```text
-    /// chance = evidence_quality × (1 - hops_fidelity_loss)
-    ///        × emotional_charge × listener_susceptibility
-    ///        × (1 - skepticism) × target_proximity
+    /// chance = evidence_quality × emotional_charge
+    ///        × listener_susceptibility × (1 - skepticism)
+    ///        × target_proximity
     /// ```
+    ///
+    /// Evidence degradation with hops is baked into the stored
+    /// `evidence_quality` field (each [`record_transmission`](Self::record_transmission)
+    /// multiplies it by the 0.85 fidelity factor), so no on-the-fly hop factor
+    /// is applied here — the stored field is the single source of truth for
+    /// the plan's `evidence_quality × fidelity^hops`.
     pub fn transmission_chance(
         &self,
         source_trust: Fixed,
@@ -105,11 +111,6 @@ impl RumorV2 {
         skepticism: Fixed,
         population: u32,
     ) -> Fixed {
-        // Evidence degrades with hops
-        let hops_fidelity = Fixed::from_f64(0.85)
-            .powi(self.source_chain.len() as u32);
-        let effective_evidence = self.evidence_quality * hops_fidelity;
-
         // Prevalence creates social proof (bandwagon effect)
         let social_proof = if population > 0 {
             self.prevalence * Fixed::from_f64(0.2)
@@ -117,7 +118,7 @@ impl RumorV2 {
             Fixed::ZERO
         };
 
-        let base = effective_evidence
+        let base = self.evidence_quality
             * source_trust
             * self.emotional_charge
             * listener_susceptibility
@@ -134,10 +135,28 @@ impl RumorV2 {
         (base + target_bonus).clamp_01()
     }
 
+    /// Record the rumor's originator without degrading evidence.
+    ///
+    /// The creator is the first entry in the source chain (so the transmission
+    /// pass knows who to attribute the first hop to) but has *not* retold the
+    /// rumor — the plan's `evidence_quality × fidelity^hops` degradation only
+    /// applies to actual retellings, so the hop count (`source_chain.len() - 1`)
+    /// stays aligned with the stored evidence penalty.
+    pub fn record_source(&mut self, agent_id: usize, tick: u64) {
+        self.source_chain.push(agent_id);
+        self.last_transmitted_tick = tick;
+    }
+
     /// Record a transmission hop (adds agent to source chain, degrades evidence).
     pub fn record_transmission(&mut self, agent_id: usize, tick: u64) {
         self.source_chain.push(agent_id);
         self.last_transmitted_tick = tick;
+        // §13.3: Evidence degrades with each hop (telephone game) — the plan's
+        // `evidence_quality × fidelity^hops`. Degrades the *stored* field so
+        // hop distortion is observable state, not just a transient in the
+        // chance formula.
+        self.evidence_quality =
+            (self.evidence_quality * Fixed::from_f64(0.85)).clamp_01();
         // Emotional charge amplifies with each retelling
         self.emotional_charge =
             (self.emotional_charge + Fixed::from_f64(0.02)).clamp_01();
@@ -236,6 +255,78 @@ impl RumorRegistry {
         }
     }
 
+    /// §13.3: Deterministic daily transmission pass — each active rumor spreads
+    /// to its single most receptive listener.
+    ///
+    /// For every active rumor whose last transmitter is `source`, the pass
+    /// scans all agents not already in the source chain, computes
+    /// `transmission_chance` for each (scaled by the §12.3 group-escalation
+    /// factor of the transmitter — anxious groups escalate rumors, avoidant
+    /// groups suppress them), and transmits to the argmax listener when that
+    /// chance clears the spread floor. The argmax tie-breaks to the lowest
+    /// index, so the pass is **fully deterministic (no RNG)** — the golden
+    /// baseline stays byte-identical. `record_transmission` then grows the
+    /// source chain (degrading stored evidence) and the believer count, and
+    /// prevalence tracks believers per population (the plan's
+    /// `host_count / population × emotional_contagion`).
+    ///
+    /// Returns the number of transmission hops taken.
+    pub fn transmission_pass(
+        &mut self,
+        trust_matrix: &[Vec<Fixed>],
+        susceptibility: &[Fixed],
+        skepticism: &[Fixed],
+        escalation: &[Fixed],
+        population: u32,
+        tick: u64,
+    ) -> usize {
+        const SPREAD_FLOOR: f64 = 0.02;
+        let mut hops = 0;
+        let n = trust_matrix.len();
+        for i in 0..self.rumors.len() {
+            if !self.rumors[i].active {
+                continue;
+            }
+            let source = *self.rumors[i].source_chain.last().unwrap_or(&usize::MAX);
+            if source >= n {
+                continue;
+            }
+            let source_escalation = escalation.get(source).copied().unwrap_or(Fixed::ONE);
+            // Deterministic argmax over non-chain listeners.
+            let mut best: Option<(usize, Fixed)> = None;
+            for listener in 0..n {
+                if self.rumors[i].source_chain.contains(&listener) {
+                    continue;
+                }
+                let chance = self.rumors[i].transmission_chance(
+                    trust_matrix[listener][source],
+                    susceptibility[listener],
+                    skepticism[listener],
+                    population,
+                ) * source_escalation;
+                if chance > Fixed::from_f64(SPREAD_FLOOR)
+                    && best.is_none_or(|(_, best_chance)| chance > best_chance)
+                {
+                    best = Some((listener, chance));
+                }
+            }
+            if let Some((listener, _)) = best {
+                self.rumors[i].record_transmission(listener, tick);
+                self.rumors[i].believer_count += 1;
+                // Plan: prevalence = host_count / population × emotional_contagion.
+                let believers = Fixed::from_int(self.rumors[i].believer_count as i64);
+                let contagion = Fixed::ONE + self.rumors[i].emotional_charge;
+                self.rumors[i].prevalence = if population > 0 {
+                    (believers / Fixed::from_int(population as i64) * contagion).clamp_01()
+                } else {
+                    Fixed::ZERO
+                };
+                hops += 1;
+            }
+        }
+        hops
+    }
+
     /// Number of active rumors.
     pub fn active_count(&self) -> usize {
         self.rumors.iter().filter(|r| r.active).count()
@@ -290,6 +381,113 @@ mod tests {
         let chance_2_hops =
             r.transmission_chance(Fixed::ONE, Fixed::ONE, Fixed::ZERO, 100);
         assert!(chance_no_hops > chance_2_hops);
+    }
+
+    #[test]
+    fn record_transmission_degrades_stored_evidence() {
+        // §13.3: stored evidence_quality must degrade with each hop (the
+        // plan's `evidence_quality × fidelity^hops`), not just transiently.
+        let mut r = RumorV2::new(
+            0,
+            "test".into(),
+            None,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.9),
+            Fixed::from_f64(0.5),
+            0,
+        );
+        r.record_transmission(1, 1);
+        let after_1 = r.evidence_quality;
+        r.record_transmission(2, 2);
+        assert!(r.evidence_quality < after_1);
+        assert!(r.evidence_quality < Fixed::from_f64(0.9));
+    }
+
+    #[test]
+    fn transmission_pass_spreads_to_most_receptive_listener() {
+        // A rumor from source 0: listener 1 has the highest trust (0.9) and
+        // lowest skepticism; listener 2 has low trust (0.1).
+        let mut reg = RumorRegistry::default();
+        reg.register(RumorV2::new(
+            0, "test".into(), None,
+            Fixed::from_f64(0.5), Fixed::from_f64(0.9),
+            Fixed::from_f64(0.6), 0,
+        ));
+        reg.rumors[0].record_source(0, 0); // originator 0
+        let trust = vec![
+            vec![Fixed::ZERO, Fixed::from_f64(0.5), Fixed::from_f64(0.5)],
+            vec![Fixed::from_f64(0.9), Fixed::ZERO, Fixed::from_f64(0.5)],
+            vec![Fixed::from_f64(0.1), Fixed::from_f64(0.5), Fixed::ZERO],
+        ];
+        let susceptibility = vec![Fixed::from_f64(0.8); 3];
+        let skepticism = vec![Fixed::ZERO; 3];
+        let escalation = vec![Fixed::ONE; 3];
+        let hops = reg.transmission_pass(&trust, &susceptibility, &skepticism, &escalation, 10, 1);
+        assert_eq!(hops, 1);
+        // Listener 1 (trust 0.9) was chosen; chain grew and prevalence rose.
+        assert_eq!(reg.rumors[0].source_chain, vec![0, 1]);
+        assert_eq!(reg.rumors[0].believer_count, 1);
+        assert!(reg.rumors[0].prevalence > Fixed::ZERO);
+    }
+
+    #[test]
+    fn transmission_pass_is_deterministic_and_avoids_chain_repeats() {
+        let mut reg = RumorRegistry::default();
+        reg.register(RumorV2::new(
+            0, "test".into(), None,
+            Fixed::from_f64(0.5), Fixed::from_f64(0.9),
+            Fixed::from_f64(0.6), 0,
+        ));
+        reg.rumors[0].record_source(0, 0);
+        let trust = vec![
+            vec![Fixed::ZERO, Fixed::from_f64(0.7), Fixed::from_f64(0.7)],
+            vec![Fixed::from_f64(0.7), Fixed::ZERO, Fixed::from_f64(0.7)],
+            vec![Fixed::from_f64(0.7), Fixed::from_f64(0.7), Fixed::ZERO],
+        ];
+        let susceptibility = vec![Fixed::from_f64(0.8); 3];
+        let skepticism = vec![Fixed::ZERO; 3];
+        let escalation = vec![Fixed::ONE; 3];
+        // Same inputs → same result (no RNG).
+        let hops_a = reg.transmission_pass(&trust, &susceptibility, &skepticism, &escalation, 10, 1);
+        let chain_a = reg.rumors[0].source_chain.clone();
+        let hops_b = reg.transmission_pass(&trust, &susceptibility, &skepticism, &escalation, 10, 2);
+        assert_eq!(hops_a, 1);
+        assert_eq!(hops_b, 1);
+        // The second pass must pick a *different* listener (no repeats), and
+        // the full sequence is deterministic.
+        assert_eq!(chain_a, vec![0, 1]);
+        assert_eq!(reg.rumors[0].source_chain, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn anxious_escalation_boosts_spread_over_secure() {
+        // Same rumor, same listeners; only the transmitter's escalation factor
+        // differs (anxious 1.5× vs secure 1.0×). The anxious variant must
+        // clear the spread floor and transmit where the secure one would not.
+        let build = |escalation: Fixed| {
+            let mut reg = RumorRegistry::default();
+            reg.register(RumorV2::new(
+                0, "test".into(), None,
+                Fixed::from_f64(0.3), Fixed::from_f64(0.4),
+                Fixed::from_f64(0.3), 0,
+            ));
+            reg.rumors[0].record_source(0, 0);
+            let trust = vec![
+                vec![Fixed::ZERO, Fixed::from_f64(0.5), Fixed::from_f64(0.5)],
+                vec![Fixed::from_f64(0.5), Fixed::ZERO, Fixed::from_f64(0.5)],
+                vec![Fixed::from_f64(0.5), Fixed::from_f64(0.5), Fixed::ZERO],
+            ];
+            let susceptibility = vec![Fixed::from_f64(0.5); 3];
+            let skepticism = vec![Fixed::from_f64(0.4); 3];
+            let escalations = vec![escalation, Fixed::ONE, Fixed::ONE];
+            reg.transmission_pass(
+                &trust, &susceptibility, &skepticism, &escalations, 10, 1,
+            )
+        };
+        let secure_hops = build(Fixed::from_f64(1.0));
+        let anxious_hops = build(Fixed::from_f64(1.5));
+        assert!(anxious_hops > secure_hops);
+        assert_eq!(secure_hops, 0); // weak rumor does not spread from a secure source
     }
 
     #[test]
