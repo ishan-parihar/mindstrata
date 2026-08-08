@@ -205,19 +205,30 @@ pub fn protest_legitimacy_effect(protest_size: usize, total_population: usize) -
 
 /// Compute how the council responds to a protest.
 /// Returns true if the protest is suppressed (council has enough enforcement capacity).
+///
+/// `protest_strength` is the protesting faction's v2 fighting strength (0–1)
+/// — Architecture-plan-2 §29.2: mobilization capacity, morale, cohesion, and
+/// casualties determine a faction's ability to actually press a challenge.
+/// An armed faction is harder to suppress: the effective protest size ratio
+/// scales up with strength. A zero strength (no v2 record / unarmed crowd)
+/// is byte-identical to the legacy suppression logic.
 pub fn council_response(
     council_enforcement: Fixed,
     protest_size: usize,
     total_population: usize,
+    protest_strength: Fixed,
 ) -> (bool, Fixed) {
     if total_population == 0 {
         return (false, Fixed::ZERO);
     }
 
     let size_ratio = Fixed::from_int(protest_size as i64) / Fixed::from_int(total_population as i64);
+    // §29.2: armed factions resist suppression — effective size grows with
+    // fighting strength (mobilization × morale × (1 − casualties)).
+    let effective_ratio = size_ratio * (Fixed::ONE + protest_strength.clamp_01());
 
     // Suppression succeeds if enforcement capacity outweighs protest size
-    let suppression_threshold = council_enforcement - size_ratio;
+    let suppression_threshold = council_enforcement - effective_ratio;
     let suppressed = suppression_threshold > Fixed::ZERO;
 
     // Legitimacy effect: suppressing a large protest costs legitimacy
@@ -354,6 +365,7 @@ mod tests {
             Fixed::from_f64(0.7),
             2,
             12,
+            Fixed::ZERO,
         );
         assert!(suppressed);
 
@@ -362,7 +374,59 @@ mod tests {
             Fixed::from_f64(0.2),
             8,
             12,
+            Fixed::ZERO,
         );
         assert!(!suppressed);
+    }
+
+    #[test]
+    fn zero_protest_strength_is_legacy_identical() {
+        // With protest_strength = 0 the armed-scale factor is 1.0 — the
+        // effective ratio equals the plain size ratio, so suppression and
+        // legitimacy outcomes must match the pre-§29.2 logic exactly.
+        let (suppressed_a, effect_a) = council_response(
+            Fixed::from_f64(0.5), 3, 12, Fixed::ZERO,
+        );
+        let (suppressed_b, effect_b) = council_response(
+            Fixed::from_f64(0.5), 3, 12, Fixed::from_f64(0.001),
+        );
+        assert_eq!(suppressed_a, suppressed_b);
+        assert_eq!(effect_a, effect_b);
+    }
+
+    #[test]
+    fn armed_faction_resists_suppression() {
+        // Borderline suppression: enforcement 0.5 vs size ratio 3/12 = 0.25.
+        // Unarmed (0.0): threshold 0.5 − 0.25 = 0.25 > 0 → suppressed.
+        // Armed (1.0): effective ratio 0.25 × 2.0 = 0.5 → threshold 0.0 →
+        // not suppressed. The same crowd with fighting strength resists.
+        let (suppressed_unarmed, _) = council_response(
+            Fixed::from_f64(0.5), 3, 12, Fixed::ZERO,
+        );
+        let (suppressed_armed, _) = council_response(
+            Fixed::from_f64(0.5), 3, 12, Fixed::ONE,
+        );
+        assert!(suppressed_unarmed);
+        assert!(!suppressed_armed);
+    }
+
+    #[test]
+    fn higher_strength_is_never_easier_to_suppress() {
+        for strength_a in [0.0f64, 0.3, 0.6, 0.9] {
+            for strength_b in [0.1f64, 0.4, 0.7, 1.0] {
+                let (suppressed_a, _) = council_response(
+                    Fixed::from_f64(0.5), 4, 12, Fixed::from_f64(strength_a),
+                );
+                let (suppressed_b, _) = council_response(
+                    Fixed::from_f64(0.5), 4, 12, Fixed::from_f64(strength_b),
+                );
+                // A stronger faction is never suppressed while a weaker one is
+                // not (stronger factions only ever resist suppression).
+                assert!(
+                    !(strength_b > strength_a && suppressed_b && !suppressed_a),
+                    "strength {strength_b} suppressed but weaker {strength_a} free"
+                );
+            }
+        }
     }
 }

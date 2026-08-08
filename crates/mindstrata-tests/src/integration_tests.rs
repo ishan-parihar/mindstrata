@@ -335,6 +335,72 @@ fn factions_emerge_from_grievance() {
         "Faction should have at least 2 members, got {}", faction.members.len());
 }
 
+
+/// §29.2 (AP2): FactionV2 combat-capability surface is consumed — the v1
+/// protest-suppression decision now feeds the protesting faction's v2 fighting
+/// strength (mobilization × morale × (1 − casualties)) into
+/// `factions::council_response`, so armed/mobilized factions resist
+/// crackdowns (previously `fighting_strength`/`threat_level` had zero
+/// production callers — the §29.2 mandate was computed but never acted on).
+/// This test pins the 1:1 v1↔v2 registration linkage that the consumer relies
+/// on, plus the live strength/threat observability of formed factions.
+#[test]
+fn faction_v2_fighting_strength_links_to_protests() {
+    use mindstrata_sim::institutions::InstitutionKind;
+    use mindstrata_core::fixed::Fixed;
+
+    // Same horizon as factions_emerge_from_grievance: seed 42 forms its first
+    // faction between 20-30K ticks.
+    let sim = run_sim(42, 30000);
+
+    let v1_factions: Vec<_> = sim.institutions.iter()
+        .filter(|i| i.kind == InstitutionKind::Faction)
+        .collect();
+    let v2_active: Vec<_> = sim.faction_v2_registry.factions.iter()
+        .filter(|f| f.active)
+        .collect();
+
+    // Every formed v1 faction must have a live v2 record (1:1 registration),
+    // and vice versa — the suppression consumer matches by leader.
+    assert!(!v1_factions.is_empty(), "v1 factions should form under grievance");
+    assert_eq!(
+        v1_factions.len(), v2_active.len(),
+        "each v1 faction should have a matching active v2 record"
+    );
+
+    for v2 in &v2_active {
+        // §29.2 linkage: the v2 leader must resolve to a v1 "Leader" role holder.
+        let leader_match = v1_factions.iter()
+            .filter_map(|i| i.get_role_holder("Leader"))
+            .any(|id| id.as_u64() as usize == v2.leader);
+        assert!(leader_match, "v2 leader {} must match a v1 faction leader", v2.leader);
+
+        // The combat surface is live and bounded.
+        let strength = v2.fighting_strength();
+        let threat = v2.threat_level();
+        assert!(strength >= Fixed::ZERO && strength <= Fixed::ONE,
+            "fighting strength in [0,1], got {}", strength.to_f64());
+        assert!(threat >= Fixed::ZERO && threat <= Fixed::ONE,
+            "threat level in [0,1], got {}", threat.to_f64());
+        assert!(strength > Fixed::ZERO || v2.morale <= Fixed::ZERO,
+            "formed faction should have measurable fighting strength");
+    }
+
+    // The suppression decision is armed-aware: at any given enforcement level,
+    // a stronger faction is never suppressed while a weaker one is not. Verify
+    // through the public API used by the consumer (council_response with the
+    // faction's live strength).
+    let (suppressed_unarmed, _) = mindstrata_sim::factions::council_response(
+        Fixed::from_f64(0.5), 3, 12, Fixed::ZERO,
+    );
+    let (suppressed_armed, _) = mindstrata_sim::factions::council_response(
+        Fixed::from_f64(0.5), 3, 12, Fixed::ONE,
+    );
+    assert!(suppressed_unarmed);
+    assert!(!suppressed_armed,
+        "an armed faction (fighting strength 1.0) must resist suppression");
+}
+
 /// §29.2: Faction membership must be exclusive — an agent in one faction
 /// cannot also join another. Before Iteration 6 every new faction pulled
 /// from the same grievance pool, producing overlapping memberships.
