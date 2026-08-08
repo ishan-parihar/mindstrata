@@ -4150,7 +4150,7 @@ fn kin_stages_instantiated_from_kinship_graph() {
     );
 
     // Determinism: same seed + same manual edges → identical stage end-state.
-    let mut sim2 = Simulation::new(config);
+    let mut sim2 = Simulation::new(config.clone());
     sim2.populate();
     sim2.run(144);
     for (a, b, link) in [
@@ -4911,7 +4911,7 @@ fn relational_fields_refresh_deterministically() {
     );
 
     // Seed-determinism: same seed → byte-identical relational fields.
-    let mut sim2 = Simulation::new(config);
+    let mut sim2 = Simulation::new(config.clone());
     sim2.populate();
     sim2.run(1000);
     for (a1, a2) in sim.agents.iter().zip(sim2.agents.iter()) {
@@ -5047,7 +5047,7 @@ fn clan_identity_myths_and_honor_codes_live() {
     );
 
     // Determinism: an identical second run reproduces the same clan identity.
-    let mut sim2 = Simulation::new(config);
+    let mut sim2 = Simulation::new(config.clone());
     sim2.populate();
     sim2.run(3000);
     let key = |s: &mindstrata_sim::Simulation| {
@@ -5313,4 +5313,68 @@ fn kinship_penalty_is_seed_deterministic() {
     let va: Vec<f64> = a.agents.iter().map(|x| x.attraction.kinship_penalty.to_f64()).collect();
     let vb: Vec<f64> = b.agents.iter().map(|x| x.attraction.kinship_penalty.to_f64()).collect();
     assert_eq!(va, vb, "kinship_penalty must be seed-deterministic");
+}
+
+/// §8.1.12 (Iteration 80): executive function now feeds prospection — the
+/// plan's "high executive function enables long-term planning" coupling was
+/// dead in production (`CognitiveRuntime` updated every tick, zero readers).
+/// The D5 ambition scenario gate (`can_plan_long_term`) is unit-proven (D1
+/// scarcity dominates default runs, so it never fires live — same documented
+/// pattern as Iter-71's D2–D6), and the live-observable channel is
+/// `planning_confidence` mirroring `effective_planning_depth`: the daily
+/// prospection pass blends the emotion-derived confidence with the EF depth.
+#[test]
+fn executive_function_planning_confidence_tracks_ef_depth() {
+    let config = SimConfig {
+        seed: 42, max_ticks: 2000, world_width: 16, world_height: 16,
+        num_agents: 12, snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.run(2000);
+    let mut can_plan_true = 0usize;
+    let mut can_plan_false = 0usize;
+    for a in &sim.agents {
+        let ef = a.cognitive_runtime.effective_planning_depth().to_f64();
+        let pc = a.prospection.planning_confidence.to_f64();
+        // Blend is (emotion_formula + ef_depth) / 2 — recompute the formula
+        // from the same inputs update() used (final fear/ambition). This
+        // mirrors the f64 form of ProspectionState::update()'s formula:
+        // planning_confidence = (0.5 - fear*0.2 + ambition*0.2).clamp_01().
+        let formula = (0.5 - a.emotions.fear.to_f64() * 0.2
+            + a.personality.ambition.to_f64() * 0.2).clamp(0.0, 1.0);
+        let expected = (formula + ef) * 0.5;
+        assert!(
+            (pc - expected).abs() < 0.001,
+            "planning_confidence {pc:.4} must blend emotion formula {formula:.4} with ef_depth {ef:.4} (expected {expected:.4})"
+        );
+        assert!((0.0..=1.0).contains(&pc));
+        if a.cognitive_runtime.can_plan_long_term() { can_plan_true += 1; } else { can_plan_false += 1; }
+    }
+    // The EF state must differentiate — some agents can plan long-term, some
+    // cannot (stressed/sleep-deprived agents are EF-degraded).
+    assert!(can_plan_true > 0, "some agents must retain long-term planning");
+    assert!(can_plan_false > 0, "some agents must be EF-degraded");
+}
+
+/// §8.1.12 (Iteration 80): the EF -> prospection coupling is seed-deterministic
+/// — same seed reproduces byte-identical planning_confidence and EF state.
+#[test]
+fn executive_function_coupling_is_seed_deterministic() {
+    let run = |seed: u64| -> (Vec<f64>, Vec<f64>, Vec<bool>) {
+        let config = SimConfig { seed, max_ticks: 2000, world_width: 16, world_height: 16,
+            num_agents: 12, snapshot_interval: None };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(2000);
+        let ef: Vec<f64> = sim.agents.iter().map(|a| a.cognitive_runtime.effective_planning_depth().to_f64()).collect();
+        let pc: Vec<f64> = sim.agents.iter().map(|a| a.prospection.planning_confidence.to_f64()).collect();
+        let cpl: Vec<bool> = sim.agents.iter().map(|a| a.cognitive_runtime.can_plan_long_term()).collect();
+        (ef, pc, cpl)
+    };
+    let (ef1, pc1, cpl1) = run(42);
+    let (ef2, pc2, cpl2) = run(42);
+    assert_eq!(ef1, ef2, "effective_planning_depth must be seed-deterministic");
+    assert_eq!(pc1, pc2, "planning_confidence must be seed-deterministic");
+    assert_eq!(cpl1, cpl2, "can_plan_long_term must be seed-deterministic");
 }

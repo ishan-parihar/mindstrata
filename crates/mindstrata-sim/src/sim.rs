@@ -2448,6 +2448,19 @@ impl Simulation {
                             water_scarcity,
                             has_partner: self.agents[i].partner.is_some(),
                             total_attraction: self.agents[i].attraction.total_attraction(),
+                            // §8.1.12 (Iteration 80): the D5 ambition gate —
+                            // long-term planning requires intact executive
+                            // function (stress/fatigue/pain/trauma degrade it).
+                            // Deliberate hard gate (not a soft scale): matches
+                            // CognitiveRuntime::can_plan_long_term's documented
+                            // categorical contract; the alternative (scaling D5's
+                            // vividness by EF depth) is unit-testable but less
+                            // legible. Note: cognitive_runtime.update runs under
+                            // the can_appraise() budget gate while this read sits
+                            // in the can_prospect() block — with mismatched
+                            // budget exhaustion the read reflects last-tick EF.
+                            // Harmless at 12 focal agents (budgets never exhaust).
+                            can_plan_long_term: self.agents[i].cognitive_runtime.can_plan_long_term(),
                         };
                         self.agents[i].prospection.generate_daily_scenario(tick_u64, inputs);
                         self.agents[i].prospection.evaluate_scenarios();
@@ -2455,6 +2468,24 @@ impl Simulation {
                     self.agents[i].prospection.update(
                         agent_fear, agent_ambition, agent_trauma, agent_depression,
                     );
+                    // §8.1.12 (Iteration 80): mirror the executive function's
+                    // effective planning depth into planning_confidence — the
+                    // plan's "confidence in ability to plan and execute"
+                    // should track the agent's actual degraded capacity, not
+                    // just fear/ambition. Deliberate 0.5/0.5 simplification:
+                    // the emotion term (update()) captures motivational
+                    // confidence while EF depth captures cognitive capacity;
+                    // equal weight is the documented default, revisable via
+                    // calibration. Both operands are provably in [0,1] (clamped
+                    // by their producers), so the blend needs no re-clamp.
+                    // Observational; deterministic; same budget-gate note as
+                    // the D5 gate above. Runs inside the can_prospect() block,
+                    // consistent with update() — both skip together on
+                    // budget exhaustion.
+                    let ef_depth = self.agents[i].cognitive_runtime.effective_planning_depth();
+                    self.agents[i].prospection.planning_confidence =
+                        (self.agents[i].prospection.planning_confidence + ef_depth)
+                            * Fixed::from_f64(0.5);
                     let _ = self.agents[i].agent_tier.budget_tracker.consume_prospection();
                 }
 

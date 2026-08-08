@@ -92,6 +92,13 @@ pub struct ScenarioInputs {
     /// Whether the agent already has a partner — courtship scenarios only
     /// generate for unattached agents.
     pub has_partner: bool,
+    /// §8.1.12 (Iteration 80): Whether the agent's executive function
+    /// currently permits long-term planning (`CognitiveRuntime::can_plan_long_term`).
+    /// Gates the D5 ambition scenario — the plan's "high executive function
+    /// enables long-term planning" coupling: an ambitious agent whose EF is
+    /// degraded (stressed/sleep-deprived/traumatized) cannot simulate the
+    /// status-seeking future and falls through to the D6 hopeful default.
+    pub can_plan_long_term: bool,
     /// The agent's total attraction toward potential partners (0–1).
     pub total_attraction: Fixed,
 }
@@ -166,8 +173,11 @@ impl ProspectionState {
             );
             return;
         }
-        // D5 — Ambition: status-seeking.
-        if inputs.ambition > Fixed::from_f64(0.5) {
+        // D5 — Ambition: status-seeking. §8.1.12 gate (Iteration 80):
+        // long-term planning requires intact executive function — an
+        // ambitious agent that cannot plan long-term right now falls
+        // through to the D6 hopeful default instead.
+        if inputs.ambition > Fixed::from_f64(0.5) && inputs.can_plan_long_term {
             self.generate_scenario(
                 "If I distinguish myself, I may gain respect.".into(),
                 Fixed::from_f64(0.5),
@@ -374,6 +384,7 @@ mod tests {
                 water_scarcity: Fixed::ZERO,
                 has_partner: false,
                 total_attraction: Fixed::ZERO,
+                can_plan_long_term: true,
             },
         );
         let s = pro.scenarios.last().unwrap();
@@ -397,6 +408,7 @@ mod tests {
                 water_scarcity: Fixed::ZERO,
                 has_partner: false,
                 total_attraction: Fixed::ZERO,
+                can_plan_long_term: true,
             },
         );
         assert!(pro.scenarios.last().unwrap().description.contains("come to harm"));
@@ -418,6 +430,7 @@ mod tests {
                 water_scarcity: Fixed::ZERO,
                 has_partner: false,
                 total_attraction: Fixed::ZERO,
+                can_plan_long_term: true,
             },
         );
         assert!(pro.scenarios.last().unwrap().description.contains("council may punish"));
@@ -440,6 +453,7 @@ mod tests {
                 water_scarcity: Fixed::ZERO,
                 has_partner: true,
                 total_attraction: Fixed::from_f64(0.8),
+                can_plan_long_term: true,
             },
         );
         assert!(!attached.scenarios.last().unwrap().description.contains("court"));
@@ -458,6 +472,7 @@ mod tests {
                 water_scarcity: Fixed::ZERO,
                 has_partner: false,
                 total_attraction: Fixed::from_f64(0.2),
+                can_plan_long_term: true,
             },
         );
         assert!(!low.scenarios.last().unwrap().description.contains("court"));
@@ -476,6 +491,7 @@ mod tests {
                 water_scarcity: Fixed::ZERO,
                 has_partner: false,
                 total_attraction: Fixed::from_f64(0.8),
+                can_plan_long_term: true,
             },
         );
         assert!(viable.scenarios.last().unwrap().description.contains("court"));
@@ -497,9 +513,78 @@ mod tests {
                 water_scarcity: Fixed::ZERO,
                 has_partner: false,
                 total_attraction: Fixed::ZERO,
+                can_plan_long_term: true,
             },
         );
         assert!(pro.scenarios.last().unwrap().description.contains("gain respect"));
+    }
+
+    #[test]
+    fn ambition_domain_gated_on_planning_capacity() {
+        // Ambitious agent with intact EF: D5 ambition scenario fires.
+        let mut intact = ProspectionState::default();
+        intact.generate_daily_scenario(
+            100,
+            ScenarioInputs {
+                hunger: Fixed::ZERO,
+                thirst: Fixed::ZERO,
+                safety: Fixed::ZERO,
+                fear: Fixed::ZERO,
+                anger: Fixed::ZERO,
+                ambition: Fixed::from_f64(0.7),
+                food_scarcity: Fixed::ZERO,
+                water_scarcity: Fixed::ZERO,
+                has_partner: false,
+                total_attraction: Fixed::ZERO,
+                can_plan_long_term: true,
+            },
+        );
+        assert!(intact.scenarios.last().unwrap().description.contains("gain respect"));
+        // Ambitious agent with degraded EF: falls through to the D6 hopeful default.
+        let mut degraded = ProspectionState::default();
+        degraded.generate_daily_scenario(
+            100,
+            ScenarioInputs {
+                hunger: Fixed::ZERO,
+                thirst: Fixed::ZERO,
+                safety: Fixed::ZERO,
+                fear: Fixed::ZERO,
+                anger: Fixed::ZERO,
+                ambition: Fixed::from_f64(0.7),
+                food_scarcity: Fixed::ZERO,
+                water_scarcity: Fixed::ZERO,
+                has_partner: false,
+                total_attraction: Fixed::ZERO,
+                can_plan_long_term: false,
+            },
+        );
+        let d = degraded.scenarios.last().unwrap();
+        assert!(!d.description.contains("gain respect"));
+        assert!(d.description.contains("rains come"));
+    }
+
+    #[test]
+    fn non_ambitious_agent_never_fires_d5_even_with_planning() {
+        let mut pro = ProspectionState::default();
+        pro.generate_daily_scenario(
+            100,
+            ScenarioInputs {
+                hunger: Fixed::ZERO,
+                thirst: Fixed::ZERO,
+                safety: Fixed::ZERO,
+                fear: Fixed::ZERO,
+                anger: Fixed::ZERO,
+                ambition: Fixed::from_f64(0.4),
+                food_scarcity: Fixed::ZERO,
+                water_scarcity: Fixed::ZERO,
+                has_partner: false,
+                total_attraction: Fixed::ZERO,
+                can_plan_long_term: true,
+            },
+        );
+        let d = pro.scenarios.last().unwrap();
+        assert!(!d.description.contains("gain respect"));
+        assert!(d.description.contains("rains come"));
     }
 
     #[test]
@@ -518,6 +603,7 @@ mod tests {
                 water_scarcity: Fixed::ZERO,
                 has_partner: false,
                 total_attraction: Fixed::ZERO,
+                can_plan_long_term: true,
             },
         );
         let s = pro.scenarios.last().unwrap();
@@ -542,6 +628,7 @@ mod tests {
             water_scarcity: Fixed::ZERO,
             has_partner: false,
             total_attraction: Fixed::ZERO,
+            can_plan_long_term: true,
         };
         for i in 0..10u64 {
             pro.generate_daily_scenario(i, inputs);
@@ -568,6 +655,7 @@ mod tests {
                 water_scarcity: Fixed::ZERO,
                 has_partner: false,
                 total_attraction: Fixed::ZERO,
+                can_plan_long_term: true,
             },
         );
         pro.evaluate_scenarios();
