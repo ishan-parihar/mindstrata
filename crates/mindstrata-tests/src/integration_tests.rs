@@ -6345,9 +6345,11 @@ fn same_sex_couples_keep_legacy_immediate_birth() {
 /// conception fires before the earliest observed birth (seed-51 at 4,170;
 /// seed-42's first at 22,010), so every snapshot/golden horizon ≤ 2000 stays
 /// byte-identical. Seed 46 delivers two pregnancy-path births (probe-pinned
-/// at 7,480 and 25,420) with the full record chain — ChildBorn events,
-/// Marriage.children, live children, mothers' children_born — proving the
-/// pipeline end-to-end in an unaccelerated run.
+/// at 7,480 and 60,940 post-Iteration-93; the Obey Ruler gate legitimately
+/// delayed the second from 25,420 to 60,940 by suppressing Guard-Captain-
+/// directed threats past the first ritual) with the full record chain —
+/// ChildBorn events, Marriage.children, live children, mothers'
+/// children_born — proving the pipeline end-to-end in an unaccelerated run.
 #[test]
 fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
     // Golden-window invariance (seed 42): no conception, no pregnancy, no
@@ -6378,10 +6380,13 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         "marriage children must stay empty in the golden window"
     );
 
-    // Liveness at 30K on seed 46: two pregnancy-path births, each with the
-    // full record chain. (Probe-pinned: birth ticks 7,480 and 25,420; both
-    // conceptions land after the golden window.)
-    let late = run_sim(46, 30000);
+    // Liveness at 80K on seed 46: two pregnancy-path births, each with the
+    // full record chain. (Probe-pinned post-Iteration-93: birth ticks 7,480
+    // and 60,940; the second conception — 25,420 pre-Iteration-93 — was
+    // delayed past 30K by the Obey Ruler gate's post-4320 trajectory
+    // perturbation, so the chain assertions live at 80K. Both births land
+    // after the golden window.)
+    let late = run_sim(46, 80000);
     let birth_ticks: Vec<u64> = late
         .recent_events(10_000_000)
         .iter()
@@ -6392,8 +6397,8 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         .collect();
     assert_eq!(
         birth_ticks,
-        vec![7480, 25420],
-        "seed-46 30K world must deliver exactly the two probed births"
+        vec![7480, 60940],
+        "seed-46 80K world must deliver exactly the two probed births"
     );
     for t in &birth_ticks {
         assert!(
@@ -6404,7 +6409,7 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
     assert_eq!(
         late.agents.iter().filter(|a| a.parent_a.is_some()).count(),
         2,
-        "both live children must carry parentage at 30K"
+        "both live children must carry parentage at 80K"
     );
     let marriage_children: usize = late
         .marriage_registry
@@ -6433,9 +6438,9 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         "every pregnancy must clear after delivery"
     );
 
-    // Determinism: two seed-46 30K runs → identical birth timeline and
+    // Determinism: two seed-46 80K runs → identical birth timeline and
     // population.
-    let again = run_sim(46, 30000);
+    let again = run_sim(46, 80000);
     let ticks2: Vec<u64> = again
         .recent_events(10_000_000)
         .iter()
@@ -6450,4 +6455,105 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         again.agents.len(),
         "population must be seed-deterministic"
     );
+}
+
+/// §8.1.10 (Iteration 93): the prescriptive "Obey Ruler" norm is armed and
+/// its authority anchor (the Council Guard Captain) is deterministic.
+#[test]
+fn obey_ruler_norm_is_armed_and_authority_anchor_is_deterministic() {
+    use mindstrata_sim::institutions::InstitutionKind;
+
+    // Golden window: no ritual before 4320 → zero propensity everywhere,
+    // so the authority flag alone changes nothing and the golden baseline
+    // stays byte-identical.
+    let early = run_sim(42, 2000);
+    for a in &early.agents {
+        assert_eq!(
+            a.moral_cognition.norm_resistance("Obey Ruler"),
+            Fixed::ZERO,
+            "no internalized norm before the first monthly ritual"
+        );
+    }
+
+    // The authority anchor: the Council designates exactly one "Guard
+    // Captain" role holder — the source of truth the interaction wiring
+    // reads — and it is distinct from the Elder (the two gates never
+    // compound on the same target).
+    let guard_count = early
+        .institutions
+        .iter()
+        .filter(|i| i.kind == InstitutionKind::Council)
+        .filter_map(|c| c.get_role_holder("Guard Captain"))
+        .count();
+    assert_eq!(
+        guard_count, 1,
+        "the Council must designate exactly one Guard Captain"
+    );
+    let guard_idx = early
+        .institutions
+        .iter()
+        .find(|i| i.kind == InstitutionKind::Council)
+        .and_then(|c| c.get_role_holder("Guard Captain"))
+        .map(|id| id.as_u64() as usize);
+    let elder_idx = early
+        .institutions
+        .iter()
+        .find(|i| i.kind == InstitutionKind::Council)
+        .and_then(|c| c.get_role_holder("Elder"))
+        .map(|id| id.as_u64() as usize);
+    assert_ne!(
+        guard_idx, elder_idx,
+        "the Guard Captain and Elder anchors must be distinct agents"
+    );
+
+    // Past ritual fires: the norm is internalized (gate input live, bounded),
+    // and the threat system still fires — the gate suppresses defiance
+    // toward the authority only, it does not disable conflict.
+    let late = run_sim(42, 9000);
+    let max_propensity = late
+        .agents
+        .iter()
+        .map(|a| a.moral_cognition.norm_resistance("Obey Ruler").to_f64())
+        .fold(0.0f64, f64::max);
+    assert!(
+        max_propensity > 0.0,
+        "ritual participation should internalize the Obey Ruler norm"
+    );
+    assert!(max_propensity <= 1.0);
+    let is_threat = |e: &mindstrata_core::event::SimEvent| {
+        matches!(
+            e,
+            mindstrata_core::event::SimEvent::InteractionOccurred {
+                kind: mindstrata_core::event::InteractionKind::Threaten,
+                ..
+            }
+        )
+    };
+    let threats: usize = late
+        .recent_events(10_000_000)
+        .iter()
+        .filter(|e| is_threat(e))
+        .count();
+    assert!(threats > 0, "the threat decision must still fire");
+
+    // Determinism: same seed → byte-identical propensity vectors and threat
+    // counts across two runs.
+    let again = run_sim(42, 9000);
+    let v1: Vec<f64> = late
+        .agents
+        .iter()
+        .map(|a| a.moral_cognition.norm_resistance("Obey Ruler").to_f64())
+        .collect();
+    let v2: Vec<f64> = again
+        .agents
+        .iter()
+        .map(|a| a.moral_cognition.norm_resistance("Obey Ruler").to_f64())
+        .collect();
+    assert_eq!(v1, v2, "norm propensity must be seed-deterministic");
+    let threats2 = again
+        .recent_events(10_000_000)
+        .iter()
+        .filter(|e| is_threat(e))
+        .count();
+    assert_eq!(threats, threats2, "threat counts must be seed-deterministic");
 }

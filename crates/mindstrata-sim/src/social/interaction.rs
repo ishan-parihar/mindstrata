@@ -205,6 +205,8 @@ pub fn choose_interaction(
     help_neighbors_propensity: Fixed, // §8.1.10 (Iteration 89)
     respect_elders_propensity: Fixed, // §8.1.10 (Iteration 91)
     target_is_elder: bool,          // §8.1.10 (Iteration 91)
+    obey_ruler_propensity: Fixed,   // §8.1.10 (Iteration 93)
+    target_is_authority: bool,      // §8.1.10 (Iteration 93)
     rng: &mut RngStreams,
     params: &crate::parameters::SimParameters,
 ) -> InteractionKind {
@@ -239,6 +241,23 @@ pub fn choose_interaction(
         1.0
     };
 
+    // §8.1.10 (Iteration 93): the prescriptive "Obey Ruler" norm
+    // suppresses *defiance* (threat/insult) toward the community's
+    // authority — the Council "Guard Captain" role holder (the ruler's
+    // enforcement arm). The gate mirrors the Iteration-91 elder gate:
+    // target-conditional (a non-authority target or a norm-less agent
+    // leaves both negative windows untouched → obey_scale 1.0 → legacy
+    // probabilities, golden baselines byte-identical), zero-at-zero, and
+    // the RNG draw stays unconditional (only thresholds change → replay
+    // determinism). The Guard Captain is a distinct anchor from the Elder
+    // (separate role holders, probe-verified), so this gate never
+    // compounds with the elder gate on the same target.
+    let obey_scale = if target_is_authority {
+        (Fixed::ONE - obey_ruler_propensity.clamp_01()).to_f64()
+    } else {
+        1.0
+    };
+
     // Stress-driven negativity: angry agents (low agreeableness OR elevated
     // anger) occasionally lash out even at moderate trust. Without this, the
     // negative-interaction branch was structurally unreachable (low-trust
@@ -253,8 +272,8 @@ pub fn choose_interaction(
     } else {
         0.0
     };
-    if roll < negativity_prob * elder_scale {
-        return if roll < negativity_prob * 0.4 * threat_scale * elder_scale {
+    if roll < negativity_prob * elder_scale * obey_scale {
+        return if roll < negativity_prob * 0.4 * threat_scale * elder_scale * obey_scale {
             InteractionKind::Threaten
         } else {
             InteractionKind::Insult
@@ -264,8 +283,9 @@ pub fn choose_interaction(
     if trust < params.social_low_trust_threshold {
         // Low trust: threaten or avoid (an internalized no-violence norm
         // converts the threat into cautious talk; toward the designated
-        // elder a Respect Elders norm does the same)
-        if roll < 0.3 * threat_scale * elder_scale {
+        // elder a Respect Elders norm does the same, and toward the Guard
+        // Captain an Obey Ruler norm suppresses the defiance)
+        if roll < 0.3 * threat_scale * elder_scale * obey_scale {
             InteractionKind::Threaten
         } else {
             InteractionKind::Talk // cautious talk
@@ -403,8 +423,21 @@ fn evolve_relationship_kind(rel: &mut Relationship, params: &crate::parameters::
 #[expect(clippy::type_complexity)]
 pub fn system_social_interactions(
     // (id, openness, agreeableness, extraversion, anger, no_violence_resistance,
-    //  help_neighbors_propensity, respect_elders_propensity, is_elder)
-    agents: &[(AgentId, Fixed, Fixed, Fixed, Fixed, Fixed, Fixed, Fixed, bool)],
+    //  help_neighbors_propensity, respect_elders_propensity, is_elder,
+    //  obey_ruler_propensity, is_authority)
+    agents: &[(
+        AgentId,
+        Fixed,
+        Fixed,
+        Fixed,
+        Fixed,
+        Fixed,
+        Fixed,
+        Fixed,
+        bool,
+        Fixed,
+        bool,
+    )],
     agent_positions: &[(i32, i32)],            // §2.4: agent (x, y) positions
     same_faction_matrix: &[Vec<bool>],         // §5.4: same_faction_matrix[i][j] = true if agents i,j share a faction
     relationships: &mut [Relationship],
@@ -417,10 +450,10 @@ pub fn system_social_interactions(
 ) {
     let num_agents = agents.len();
 
-    // The source agent's own elder flag is unused here — the gate reads the
-    // *target's* elder status (`agents[target_idx].8`) when the interaction
-    // is chosen.
-    for (i, (agent_id, openness, agreeableness, extraversion, anger, no_violence_resistance, help_neighbors_propensity, respect_elders_propensity, _is_elder)) in agents.iter().enumerate() {
+    // The source agent's own elder/authority flags are unused here — the
+    // gates read the *target's* status (`agents[target_idx].8` for elder,
+    // `agents[target_idx].10` for authority) when the interaction is chosen.
+    for (i, (agent_id, openness, agreeableness, extraversion, anger, no_violence_resistance, help_neighbors_propensity, respect_elders_propensity, _is_elder, obey_ruler_propensity, _is_authority)) in agents.iter().enumerate() {
         // Extraversion affects interaction frequency
         let interact_chance = params.social_interaction_base_chance + *extraversion * params.social_extraversion_multiplier;
         let roll = Fixed::from_f64(rng.get_mut(RngStream::Social).random_range(0.0..1.0));
@@ -455,7 +488,9 @@ pub fn system_social_interactions(
                 *no_violence_resistance,
                 *help_neighbors_propensity,
                 *respect_elders_propensity,
-                agents[target_idx].8, // the target's is_elder flag
+                agents[target_idx].8,  // the target's is_elder flag
+                *obey_ruler_propensity,
+                agents[target_idx].10, // the target's is_authority flag
                 rng,
                 params,
             );
@@ -570,6 +605,8 @@ mod tests {
                     Fixed::ZERO,  // no Help Neighbors norm in this setup
                     Fixed::ZERO,  // no Respect Elders norm in this setup
                     false,        // no designated-elder target
+                    Fixed::ZERO,  // no Obey Ruler norm in this setup
+                    false,        // no authority target in this setup
                     &mut rng,
                     &params,
                 ) == InteractionKind::Threaten
@@ -630,6 +667,8 @@ mod tests {
                     propensity,
                     Fixed::ZERO,
                     false,
+                    Fixed::ZERO,  // no Obey Ruler norm in this setup
+                    false,        // no authority target in this setup
                     &mut rng,
                     &params,
                 ) {
@@ -697,6 +736,8 @@ mod tests {
                     Fixed::ZERO,
                     propensity,
                     target_is_elder,
+                    Fixed::ZERO,  // no Obey Ruler norm in this setup
+                    false,        // no authority target in this setup
                     &mut rng,
                     &params,
                 ) == InteractionKind::Threaten
@@ -721,6 +762,68 @@ mod tests {
         );
         assert!(
             elder_partial < baseline,
+            "partial internalization must leave a strictly reduced threat rate"
+        );
+    }
+
+    /// §8.1.10 (Iteration 93): the prescriptive "Obey Ruler" norm
+    /// suppresses *defiance* (threat/insult) toward the community's
+    /// authority — the Council "Guard Captain" role holder. Mirrors the
+    /// Iteration-91 elder gate: `choose_interaction` scales both negative
+    /// windows by obey_scale = (1 − propensity) when the target is the
+    /// authority. Same seed-42 roll sequence across all propensities.
+    #[test]
+    fn obey_ruler_norm_suppresses_defiance_toward_guard_captain() {
+        let params = crate::parameters::SimParameters::default();
+        // Low-trust isolated setup (mirrors the Respect Elders test): trust 0
+        // sits below the low-trust threshold, high agreeableness + zero anger
+        // keep the stress-driven negativity branch off, so every Threaten
+        // comes from the low-trust `roll < 0.3` gate.
+        let trust = Fixed::ZERO;
+        let affection = Fixed::ZERO;
+        let openness = Fixed::from_f64(0.5);
+        let agreeableness = Fixed::from_f64(0.8);
+        let anger = Fixed::ZERO;
+        let count_threats = |propensity: Fixed, target_is_authority: bool| -> u32 {
+            let mut rng = RngStreams::new(42);
+            let mut threats = 0u32;
+            for _ in 0..2000 {
+                if choose_interaction(
+                    trust,
+                    affection,
+                    openness,
+                    agreeableness,
+                    anger,
+                    Fixed::ZERO,
+                    Fixed::ZERO,
+                    Fixed::ZERO,
+                    false, // no designated-elder target
+                    propensity,
+                    target_is_authority,
+                    &mut rng,
+                    &params,
+                ) == InteractionKind::Threaten
+                {
+                    threats += 1;
+                }
+            }
+            threats
+        };
+        let baseline = count_threats(Fixed::ZERO, false);
+        let authority_no_norm = count_threats(Fixed::ZERO, true);
+        let authority_full = count_threats(Fixed::ONE, true);
+        let authority_partial = count_threats(Fixed::from_f64(0.7), true);
+        assert!(baseline > 0, "low-trust threats must occur without the norm");
+        assert_eq!(
+            authority_no_norm, baseline,
+            "the authority designation alone must be inert (zero-at-zero)"
+        );
+        assert_eq!(
+            authority_full, 0,
+            "full Obey Ruler internalization must eliminate threats toward the authority"
+        );
+        assert!(
+            authority_partial < baseline,
             "partial internalization must leave a strictly reduced threat rate"
         );
     }

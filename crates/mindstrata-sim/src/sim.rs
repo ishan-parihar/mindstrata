@@ -3294,6 +3294,26 @@ impl Simulation {
                     .find(|i| i.kind == InstitutionKind::Council)
                     .and_then(|c| c.get_role_holder("Elder"))
                     .map(|id| id.as_u64() as usize);
+                // §8.1.10 (Iteration 93): the authority anchor for the
+                // "Obey Ruler" gate — the Council "Guard Captain" role
+                // holder, the ruler's enforcement arm. Distinct from the
+                // Elder (separate role holders assigned at populate), so
+                // the two gates never compound on the same target. Resolved
+                // once per tick, deterministic, no RNG. A deceased captain
+                // clears the anchor (the gate naturally goes inert — no
+                // authority to defy).
+                let obey_ruler_name = self
+                    .norms
+                    .norms()
+                    .iter()
+                    .find(|n| n.id == norms::OBEY_RULER_NORM_ID)
+                    .map(|n| n.name.as_str());
+                let authority_idx: Option<usize> = self
+                    .institutions
+                    .iter()
+                    .find(|i| i.kind == InstitutionKind::Council)
+                    .and_then(|c| c.get_role_holder("Guard Captain"))
+                    .map(|id| id.as_u64() as usize);
                 let agent_info: Vec<_> = self
                     .agents
                     .iter()
@@ -3311,6 +3331,10 @@ impl Simulation {
                             .map_or(Fixed::ZERO, |n| {
                                 a.moral_cognition.norm_resistance(n)
                             });
+                        let obey_propensity = obey_ruler_name
+                            .map_or(Fixed::ZERO, |n| {
+                                a.moral_cognition.norm_resistance(n)
+                            });
                         (
                             AgentId::new(i as u64),
                             a.personality.openness,
@@ -3321,6 +3345,8 @@ impl Simulation {
                             help_propensity,
                             respect_propensity,
                             Some(i) == elder_idx,
+                            obey_propensity,
+                            Some(i) == authority_idx,
                         )
                     })
                     .collect();

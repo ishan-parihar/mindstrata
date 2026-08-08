@@ -65,6 +65,16 @@ pub const HELP_NEIGHBORS_NORM_ID: u64 = 1;
 /// test horizons stay below ~56 years).
 pub const RESPECT_ELDERS_NORM_ID: u64 = 2;
 
+/// §8.1.10 (Iteration 93): The prescriptive "Obey Ruler" norm id
+/// (index 3 in `default_norms`). An internalized norm suppresses
+/// *defiance* toward the community's authority — the Council "Guard
+/// Captain" role holder (the ruler's enforcement arm; a distinct,
+/// non-overlapping anchor from the Elder, so the Iteration-91
+/// Respect Elders gate and this gate never compound on the same
+/// target). Mirror of the Iteration-91 elder gate: target-conditional,
+/// zero-at-zero, single unconditional RNG draw.
+pub const OBEY_RULER_NORM_ID: u64 = 3;
+
 /// §19.5.D (Iteration 78): Episode window for notoriety — at most one
 /// notoriety increment per agent per window, so notoriety tracks distinct
 /// conflict *episodes* rather than raw hostile-act counts. A conflict-prone
