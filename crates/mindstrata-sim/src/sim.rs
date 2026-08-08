@@ -7207,9 +7207,30 @@ impl Simulation {
                             // stays byte-identical: rituals fire only at
                             // monthly intervals (4320 ticks) while every
                             // snapshot/golden horizon is ≤ 2000.
+                            //
+                            // §19.5.D (Iteration 90): the sponsor
+                            // institution's declared norms (`Institution.
+                            // norm_ids` — the temple declares "Obey Ruler" = 3)
+                            // are reinforced preferentially at its ritual; the
+                            // field's documented purpose ("Obey Ruler norm
+                            // reinforced by temple") is now honored. A missing
+                            // sponsor or empty declaration keeps the legacy
+                            // all-equal reinforcement. The declared norm has no
+                            // behavioral consumer, so this only changes the
+                            // growth rate of observational strength.
+                            let sponsor_norms: std::collections::BTreeSet<u64> =
+                                self.institutions
+                                    .get(ritual.sponsor)
+                                    .map_or_else(
+                                        std::collections::BTreeSet::new,
+                                        |inst| inst.norm_ids.iter().copied().collect(),
+                                    );
                             for norm in self.norms.norms() {
-                                let reinforcement =
-                                    ritual.norm_reinforcement_for(norm.internalization);
+                                let reinforcement = ritual
+                                    .norm_reinforcement_for_institutional(
+                                        norm.internalization,
+                                        sponsor_norms.contains(&norm.id),
+                                    );
                                 if reinforcement > Fixed::ZERO {
                                     self.agents[p]
                                         .moral_cognition

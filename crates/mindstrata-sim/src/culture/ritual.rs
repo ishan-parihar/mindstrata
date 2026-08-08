@@ -85,6 +85,15 @@ pub struct Ritual {
 }
 
 impl Ritual {
+    /// §12.5 (Iteration 90): institutions declare the norms their collective
+    /// life upholds (`Institution.norm_ids`); a ritual hosted by such an
+    /// institution reinforces its declared norms preferentially. 1.5× keeps
+    /// the temple-declared norm clearly ahead of the base-reinforced norms
+    /// (Obey Ruler 0.4 internalization → 0.138/fire vs Respect Elders 0.5 →
+    /// 0.115/fire) while staying far below the 1.0 `reinforce_norm` clamp
+    /// across the 30K horizon.
+    pub const INSTITUTIONAL_NORM_REINFORCEMENT_MULTIPLIER: Fixed = Fixed::from_raw(15_000); // 1.5
+
     /// Create a new ritual.
     pub fn new(
         id: usize,
@@ -131,6 +140,29 @@ impl Ritual {
     /// Compute norm reinforcement for a single participant.
     pub fn norm_reinforcement_for(&self, internalization: Fixed) -> Fixed {
         self.norm_reinforcement * internalization
+    }
+
+    /// §12.5/§19.5.D (Iteration 90): reinforcement honoring the sponsor
+    /// institution's declared norms (`Institution.norm_ids` — the default
+    /// temple declares "Obey Ruler" = 3, the field's documented purpose
+    /// "Obey Ruler norm reinforced by temple" that had zero consumers).
+    /// Declared norms are reinforced preferentially (× the institutional
+    /// multiplier); everything else keeps the base reinforcement. Pure and
+    /// deterministic — no RNG, so the golden baseline is untouched (the
+    /// block only runs at monthly ritual fires, beyond every snapshot
+    /// horizon; and the temple-declared norm currently has no behavioral
+    /// consumer, so the strength change is observational only).
+    pub fn norm_reinforcement_for_institutional(
+        &self,
+        internalization: Fixed,
+        declared: bool,
+    ) -> Fixed {
+        let base = self.norm_reinforcement_for(internalization);
+        if declared {
+            base * Self::INSTITUTIONAL_NORM_REINFORCEMENT_MULTIPLIER
+        } else {
+            base
+        }
     }
 
     /// Is this ritual due to occur at the given tick?
@@ -272,5 +304,54 @@ mod tests {
         let due = reg.due_rituals(150);
         assert_eq!(due.len(), 1);
         assert_eq!(due[0].kind, RitualKind::SeasonalPrayer);
+    }
+
+    /// §19.5.D (Iteration 90): a norm declared by the sponsor institution
+    /// (`Institution.norm_ids`) is reinforced preferentially — exactly the
+    /// institutional multiplier on top of the base; a non-declared norm
+    /// keeps the base reinforcement (legacy identity); zero internalization
+    /// yields zero either way.
+    #[test]
+    fn institutional_norm_reinforcement_weights_declared_norms() {
+        let ritual = Ritual::new(
+            0,
+            RitualKind::SeasonalPrayer,
+            "Seasonal Prayer".into(),
+            1,
+            Fixed::from_f64(0.2),
+            Fixed::from_f64(0.25),
+            Fixed::from_f64(0.05),
+            4320,
+            0,
+        );
+        let base = ritual.norm_reinforcement_for(Fixed::from_f64(0.4));
+        let declared = ritual.norm_reinforcement_for_institutional(
+            Fixed::from_f64(0.4),
+            true,
+        );
+        let undeclared = ritual.norm_reinforcement_for_institutional(
+            Fixed::from_f64(0.4),
+            false,
+        );
+        assert!(base > Fixed::ZERO, "the seeded ritual must reinforce");
+        assert_eq!(
+            undeclared,
+            base,
+            "a non-declared norm keeps the legacy base reinforcement"
+        );
+        assert_eq!(
+            declared,
+            base * Ritual::INSTITUTIONAL_NORM_REINFORCEMENT_MULTIPLIER,
+            "a declared norm gets the institutional multiplier on top of base"
+        );
+        assert!(
+            declared > base,
+            "the multiplier must strictly increase the reinforcement"
+        );
+        assert_eq!(
+            ritual.norm_reinforcement_for_institutional(Fixed::ZERO, true),
+            Fixed::ZERO,
+            "zero internalization stays zero even when declared"
+        );
     }
 }

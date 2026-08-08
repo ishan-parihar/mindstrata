@@ -5954,3 +5954,77 @@ fn help_neighbors_norm_amplifies_help() {
         .count();
     assert_eq!(helps, helps2, "Help counts must be seed-deterministic");
 }
+/// §12.5/§19.5.D (Iteration 90): the sponsor institution's declared norms
+/// (`Institution.norm_ids` — the temple declares "Obey Ruler" = 3) are
+/// reinforced preferentially at its ritual. The field's documented purpose
+/// ("Obey Ruler norm reinforced by temple") is now honored. The temple-declared
+/// norm must internalize strictly faster than a base-reinforced sibling norm
+/// (Respect Elders, same ritual loop, not declared) past the first ritual fire,
+/// while the golden window stays norm-free (zero drift).
+#[test]
+fn temple_declared_norm_reinforces_preferentially() {
+    // Golden window: no ritual before 4320 → no internalized norms at all,
+    // so the wiring is byte-invisible in the calibrated baseline.
+    let early = run_sim(42, 2000);
+    for a in &early.agents {
+        assert!(
+            a.moral_cognition.internalized_norms.is_empty(),
+            "no internalized norm before the first monthly ritual"
+        );
+    }
+
+    // Past ritual fires: the temple's declared "Obey Ruler" is reinforced
+    // preferentially (×1.5) for the temple congregation, so its max strength
+    // strictly exceeds the base-reinforced, undeclared "Respect Elders" —
+    // proving the norm_ids declaration is live in a real run.
+    // Arithmetic (pin): temple norm_reinforcement = 0.25×0.6 + 0.2×0.4 =
+    // 0.23; Obey Ruler (internalization 0.4) boosted = 0.23×0.4×1.5 =
+    // 0.138/fire vs Respect Elders (0.5) base = 0.23×0.5 = 0.115/fire;
+    // two monthly fires by 9000 → 0.276 vs 0.230. If the multiplier or a
+    // scenario's internalization values change, revisit this assertion.
+    let late = run_sim(42, 9000);
+    let strength = |sim: &Simulation, name: &str| -> Vec<f64> {
+        sim.agents
+            .iter()
+            .map(|a| a.moral_cognition.norm_resistance(name).to_f64())
+            .collect()
+    };
+    let max = |v: &[f64]| v.iter().copied().fold(0.0f64, f64::max);
+    let obey = strength(&late, "Obey Ruler");
+    let respect = strength(&late, "Respect Elders");
+    assert!(
+        max(&obey) > 0.0,
+        "the temple-declared norm must internalize past the first ritual"
+    );
+    assert!(
+        max(&obey) > max(&respect),
+        "the temple-declared norm must reinforce preferentially over an undeclared sibling"
+    );
+    assert!(max(&obey) <= 1.0, "reinforcement stays clamped at 1.0");
+
+    // Determinism: same seed → byte-identical (description, strength)
+    // audit vectors across two runs.
+    let again = run_sim(42, 9000);
+    let audit = |sim: &Simulation| -> Vec<(String, f64)> {
+        let mut v: Vec<(String, f64)> = sim
+            .agents
+            .iter()
+            .flat_map(|a| {
+                a.moral_cognition
+                    .internalized_norms
+                    .iter()
+                    .map(|n| (n.description.clone(), n.strength.to_f64()))
+            })
+            .collect();
+        v.sort_by(|a, b| {
+            a.0.cmp(&b.0).then(
+                a.1.partial_cmp(&b.1)
+                    .unwrap_or(std::cmp::Ordering::Equal),
+            )
+        });
+        v
+    };
+    let v1 = audit(&late);
+    let v2 = audit(&again);
+    assert_eq!(v1, v2, "norm strengths must be seed-deterministic");
+}
