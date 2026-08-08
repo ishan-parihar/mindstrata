@@ -201,11 +201,25 @@ pub fn choose_interaction(
     personality_openness: Fixed,
     personality_agreeableness: Fixed,
     anger: Fixed,
+    no_violence_resistance: Fixed, // §8.1.10 (Iteration 85)
     rng: &mut RngStreams,
     params: &crate::parameters::SimParameters,
 ) -> InteractionKind {
     let social_rng = rng.get_mut(RngStream::Social);
     let roll: f64 = social_rng.random_range(0.0..1.0);
+
+    // §8.1.10 (Iteration 85): the no-violence norm suppresses the threat
+    // *decision* itself — an agent who has internalized the norm is less
+    // likely to issue a threat in the first place. Both threat paths scale
+    // their thresholds by (1 − resistance): the stress-driven negativity
+    // branch converts the threatened act into an insult (verbal hostility
+    // persists, the violent act is suppressed), and the low-trust branch
+    // converts the threat into cautious talk. Continuous (no cliff),
+    // zero-at-zero (no internalized norm before the first monthly ritual at
+    // tick 4320 → legacy probabilities, golden baselines byte-identical),
+    // and the RNG draw stays unconditional (same stream position at every
+    // resistance value — replay determinism holds).
+    let threat_scale = (Fixed::ONE - no_violence_resistance).to_f64();
 
     // Stress-driven negativity: angry agents (low agreeableness OR elevated
     // anger) occasionally lash out even at moderate trust. Without this, the
@@ -222,7 +236,7 @@ pub fn choose_interaction(
         0.0
     };
     if roll < negativity_prob {
-        return if roll < negativity_prob * 0.4 {
+        return if roll < negativity_prob * 0.4 * threat_scale {
             InteractionKind::Threaten
         } else {
             InteractionKind::Insult
@@ -230,8 +244,9 @@ pub fn choose_interaction(
     }
 
     if trust < params.social_low_trust_threshold {
-        // Low trust: threaten or avoid
-        if roll < 0.3 {
+        // Low trust: threaten or avoid (an internalized no-violence norm
+        // converts the threat into cautious talk)
+        if roll < 0.3 * threat_scale {
             InteractionKind::Threaten
         } else {
             InteractionKind::Talk // cautious talk
@@ -350,7 +365,8 @@ fn evolve_relationship_kind(rel: &mut Relationship, params: &crate::parameters::
 /// §5.4: Faction in-group bias — members of the same faction get trust bonuses.
 /// §5.1: Bonding and conflict rates from `SimParameters`.
 pub fn system_social_interactions(
-    agents: &[(AgentId, Fixed, Fixed, Fixed, Fixed)], // (id, openness, agreeableness, extraversion, anger)
+    // (id, openness, agreeableness, extraversion, anger, no_violence_resistance)
+    agents: &[(AgentId, Fixed, Fixed, Fixed, Fixed, Fixed)],
     agent_positions: &[(i32, i32)],            // §2.4: agent (x, y) positions
     same_faction_matrix: &[Vec<bool>],         // §5.4: same_faction_matrix[i][j] = true if agents i,j share a faction
     relationships: &mut [Relationship],
@@ -363,7 +379,7 @@ pub fn system_social_interactions(
 ) {
     let num_agents = agents.len();
 
-    for (i, (agent_id, openness, agreeableness, extraversion, anger)) in agents.iter().enumerate() {
+    for (i, (agent_id, openness, agreeableness, extraversion, anger, no_violence_resistance)) in agents.iter().enumerate() {
         // Extraversion affects interaction frequency
         let interact_chance = params.social_interaction_base_chance + *extraversion * params.social_extraversion_multiplier;
         let roll = Fixed::from_f64(rng.get_mut(RngStream::Social).random_range(0.0..1.0));
@@ -389,7 +405,7 @@ pub fn system_social_interactions(
 
             // §5.4: In-group/out-group — check if both agents share a faction
             let same_faction = same_faction_matrix[i][target_idx];
-            let kind = choose_interaction(trust, affection, *openness, *agreeableness, *anger, rng, params);
+            let kind = choose_interaction(trust, affection, *openness, *agreeableness, *anger, *no_violence_resistance, rng, params);
 
             let interaction = Interaction {
                 from: *agent_id,
@@ -466,5 +482,58 @@ mod tests {
         process_interaction(&interaction, &mut relationships, &mut events, Tick::new(1), false, Fixed::from_f64(0.05), Fixed::from_f64(0.08), &crate::parameters::SimParameters::default());
 
         assert!(relationships[0].trust < Fixed::from_f64(0.5));
+    }
+
+    /// §8.1.10 (Iteration 85): an agent who has internalized the no-violence
+    /// norm suppresses the threat *decision* itself — `choose_interaction`
+    /// scales both threat thresholds by (1 − resistance). The RNG draw stays
+    /// unconditional, so the same seed yields the same roll sequence at every
+    /// resistance value: full internalization must eliminate threats
+    /// entirely, partial internalization must leave a strictly reduced rate,
+    /// and zero resistance (the golden window) must match legacy behavior.
+    #[test]
+    fn no_violence_norm_suppresses_threat_decision() {
+        let params = crate::parameters::SimParameters::default();
+        // Low-trust setup isolates the threat branch: trust 0 sits below the
+        // low-trust threshold, high agreeableness keeps the stress-driven
+        // negativity branch off, so every Threaten comes from the low-trust
+        // `roll < 0.3` gate.
+        let trust = Fixed::ZERO;
+        let affection = Fixed::ZERO;
+        let openness = Fixed::from_f64(0.5);
+        let agreeableness = Fixed::from_f64(0.8);
+        let anger = Fixed::ZERO;
+        let count_threats = |resistance: Fixed| -> u32 {
+            let mut rng = RngStreams::new(42);
+            let mut threats = 0u32;
+            for _ in 0..2000 {
+                if choose_interaction(
+                    trust,
+                    affection,
+                    openness,
+                    agreeableness,
+                    anger,
+                    resistance,
+                    &mut rng,
+                    &params,
+                ) == InteractionKind::Threaten
+                {
+                    threats += 1;
+                }
+            }
+            threats
+        };
+        let baseline = count_threats(Fixed::ZERO);
+        let suppressed = count_threats(Fixed::ONE);
+        let partial = count_threats(Fixed::from_f64(0.7));
+        assert!(baseline > 0, "low-trust threats must occur without the norm");
+        assert_eq!(
+            suppressed, 0,
+            "full no-violence internalization must eliminate threats"
+        );
+        assert!(
+            partial < baseline,
+            "partial internalization must leave a reduced threat rate"
+        );
     }
 }

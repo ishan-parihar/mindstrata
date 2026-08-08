@@ -3222,17 +3222,39 @@ impl Simulation {
                 let agent_positions: Vec<(i32, i32)> = self.agents.iter()
                     .map(|a| (a.position.x, a.position.y))
                     .collect();
+                // §8.1.10 (Iteration 85): thread each agent's internalized
+                // no-violence norm strength into the interaction decision —
+                // `choose_interaction` scales its threat thresholds by
+                // (1 − resistance). Resolved by id (`NO_VIOLENCE_NORM_ID`,
+                // the same constant the check_violation sites use) so a
+                // scenario that re-registers norms with renamed descriptions
+                // still gates correctly; a registry without the norm resolves
+                // to zero resistance (legacy behavior). Zero-at-zero: before
+                // the first monthly ritual (tick 4320) no agent holds any
+                // internalized norm, so the thresholds are unchanged and the
+                // golden baseline stays byte-identical.
+                let no_violence_name = self
+                    .norms
+                    .norms()
+                    .iter()
+                    .find(|n| n.id == norms::NO_VIOLENCE_NORM_ID)
+                    .map(|n| n.name.as_str());
                 let agent_info: Vec<_> = self
                     .agents
                     .iter()
                     .enumerate()
                     .map(|(i, a)| {
+                        let resistance = no_violence_name
+                            .map_or(Fixed::ZERO, |n| {
+                                a.moral_cognition.norm_resistance(n)
+                            });
                         (
                             AgentId::new(i as u64),
                             a.personality.openness,
                             a.personality.agreeableness,
                             a.personality.extraversion,
                             emotions[i].anger,
+                            resistance,
                         )
                     })
                     .collect();

@@ -5596,3 +5596,74 @@ fn no_theft_norm_resistance_reduces_theft_take() {
         .collect();
     assert_eq!(v1, v2, "norm resistance must be seed-deterministic");
 }
+
+/// §8.1.10 (Iteration 85): the no-violence norm now suppresses the threat
+/// *decision* itself — `choose_interaction` scales both threat thresholds by
+/// (1 − resistance), so an agent who has internalized the norm issues fewer
+/// threats in the first place (converting them into insults or cautious
+/// talk). The gate is zero-at-zero: before the first monthly ritual (tick
+/// 4320) no agent holds any internalized norm, so the thresholds are
+/// unchanged and the golden baseline stays byte-identical. This test pins
+/// the golden-window invariance (a 2000-tick run shows zero resistance), the
+/// liveness of the gate input past ritual fires, the liveness of the threat
+/// system itself (threats still occur — the gate suppresses, it does not
+/// disable), and determinism.
+#[test]
+fn no_violence_norm_suppresses_threats() {
+    // Golden window: no ritual before 4320 → zero resistance everywhere.
+    let early = run_sim(42, 2000);
+    for a in &early.agents {
+        assert_eq!(
+            a.moral_cognition.norm_resistance("No Violence"),
+            Fixed::ZERO,
+            "no internalized norm before the first monthly ritual"
+        );
+    }
+
+    // Past ritual fires: the no-violence norm is internalized (gate input
+    // live), and the threat system still fires — the gate suppresses the
+    // threat decision, it does not disable the conflict system.
+    let late = run_sim(42, 9000);
+    let max_resistance = late
+        .agents
+        .iter()
+        .map(|a| a.moral_cognition.norm_resistance("No Violence").to_f64())
+        .fold(0.0f64, f64::max);
+    assert!(
+        max_resistance > 0.0,
+        "ritual participation should internalize the no-violence norm"
+    );
+    assert!(max_resistance <= 1.0);
+    let is_threat = |e: &mindstrata_core::event::SimEvent| {
+        matches!(
+            e,
+            mindstrata_core::event::SimEvent::InteractionOccurred {
+                kind: mindstrata_core::event::InteractionKind::Threaten,
+                ..
+            }
+        )
+    };
+    let threats: usize = late
+        .recent_events(10_000_000)
+        .iter()
+        .filter(|e| is_threat(e))
+        .count();
+    assert!(threats > 0, "the threat decision must still fire");
+
+    // Determinism: same seed → byte-identical resistance vectors and threat
+    // counts across two runs.
+    let again = run_sim(42, 9000);
+    let v1: Vec<f64> = late
+        .agents
+        .iter()
+        .map(|a| a.moral_cognition.norm_resistance("No Violence").to_f64())
+        .collect();
+    let v2: Vec<f64> = again
+        .agents
+        .iter()
+        .map(|a| a.moral_cognition.norm_resistance("No Violence").to_f64())
+        .collect();
+    assert_eq!(v1, v2, "norm resistance must be seed-deterministic");
+    let threats2 = again.recent_events(10_000_000).iter().filter(|e| is_threat(e)).count();
+    assert_eq!(threats, threats2, "threat counts must be seed-deterministic");
+}
