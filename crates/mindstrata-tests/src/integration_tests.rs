@@ -5378,3 +5378,53 @@ fn executive_function_coupling_is_seed_deterministic() {
     assert_eq!(pc1, pc2, "planning_confidence must be seed-deterministic");
     assert_eq!(cpl1, cpl2, "can_plan_long_term must be seed-deterministic");
 }
+
+/// §11.2/§10.2 (Iteration 81): the power-balance → private-label channel is
+/// live. `power_balance` fills from directed dependence/status each daily
+/// boundary (§11.2) and feeds `derive_private_label`, so a dominated agent's
+/// emotionally honest view can diverge from the public label even without
+/// overt resentment. The divergence only crosses the 0.4 effective-resentment
+/// threshold under strong domination (rare in default runs — same documented
+/// pattern as the D5 gate in Iteration 80), so the live assertions pin the
+/// channel's determinism plus the fact that power_balance genuinely
+/// differentiates relationships by the end of a run.
+#[test]
+fn power_balance_private_label_coupling_is_seed_deterministic() {
+    let run = |seed: u64| -> (u32, f64, f64) {
+        let config = SimConfig {
+            seed,
+            max_ticks: 2000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(2000);
+        let mut divergent = 0u32;
+        let mut min_pb = f64::INFINITY;
+        let mut max_abs_pb = 0.0f64;
+        for a in &sim.agents {
+            for r in &a.relationship_v2s {
+                let pb = r.power_balance.to_f64();
+                min_pb = min_pb.min(pb);
+                max_abs_pb = max_abs_pb.max(pb.abs());
+                if r.derive_private_label() != r.derive_public_label() {
+                    divergent += 1;
+                }
+            }
+        }
+        (divergent, min_pb, max_abs_pb)
+    };
+    let (d1, m1, a1) = run(42);
+    let (d2, m2, a2) = run(42);
+    assert_eq!(d1, d2, "private-label divergence must be seed-deterministic");
+    assert_eq!(m1, m2, "min power_balance must be seed-deterministic");
+    assert_eq!(a1, a2, "max |power_balance| must be seed-deterministic");
+    // The channel is live: by the end of the run at least one relationship is
+    // dominated from its owner's perspective (power_balance < 0).
+    assert!(m1 < 0.0, "expected a dominated relationship, got min pb {m1}");
+    assert!(a1 > 0.0, "expected power_balance to differentiate, got 0");
+}
+

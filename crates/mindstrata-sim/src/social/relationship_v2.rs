@@ -457,9 +457,23 @@ impl RelationshipV2 {
     /// public label, then resentment dominating trust downgrades it toward
     /// the negative branch (a "friend" the agent privately resents is labeled
     /// Disliked; a Rival becomes an Enemy). Deterministic, no RNG.
+    ///
+    /// §11.2: *being dominated* feeds the same channel — an agent who holds
+    /// the weaker hand in an asymmetric relationship privately resents the
+    /// subordination even when the public stage looks friendly. A smooth ramp
+    /// (no threshold cliff) maps each unit of domination (negative
+    /// `power_balance`) onto 0.5 units of effective resentment, so the
+    /// divergence is continuous in the underlying power differential.
     pub fn derive_private_label(&self) -> RelationshipLabel {
         let public = self.derive_public_label();
-        if self.resentment > self.trust && self.resentment > Fixed::from_f64(0.4) {
+        // §11.2: domination (power_balance < 0 ⇒ the other side holds the
+        // leverage) feeds the resentment channel that drives the downgrade.
+        let domination = (Fixed::ZERO - self.power_balance).max(Fixed::ZERO);
+        let effective_resentment =
+            (self.resentment + domination * Fixed::from_f64(0.5)).clamp_01();
+        if effective_resentment > self.trust
+            && effective_resentment > Fixed::from_f64(0.4)
+        {
             match public {
                 RelationshipLabel::Unnoticed
                 | RelationshipLabel::Noticed
@@ -750,6 +764,68 @@ mod tests {
         // A public Rival with high resentment becomes privately an Enemy.
         r.stage = RelationshipStage::Rival;
         assert_eq!(r.derive_private_label(), RelationshipLabel::Enemy);
+    }
+
+    #[test]
+    fn private_label_downgrades_under_domination() {
+        // §11.2: a dominated agent privately resents the subordination even
+        // with zero overt resentment — the honest view diverges from public.
+        let mut r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        r.stage = RelationshipStage::Friend;
+        r.trust = Fixed::from_f64(0.3);
+        // Balanced power → the private view matches the public one.
+        r.power_balance = Fixed::ZERO;
+        assert_eq!(r.derive_private_label(), RelationshipLabel::Friend);
+        // Strong domination (pb = -0.9 → effective resentment 0.45, above the
+        // 0.4 threshold and above trust) downgrades even with zero resentment.
+        r.power_balance = Fixed::from_f64(-0.9);
+        assert_eq!(r.derive_private_label(), RelationshipLabel::Disliked);
+        // Moderate domination (effective resentment 0.25) stays public — the
+        // ramp is continuous, not a threshold cliff.
+        r.power_balance = Fixed::from_f64(-0.5);
+        assert_eq!(r.derive_private_label(), RelationshipLabel::Friend);
+    }
+
+    #[test]
+    fn power_balance_fills_directed_leverage_and_drives_label() {
+        // A depends on B heavily, B barely on A, B holds the status edge → A
+        // is dominated (negative balance); the mirror relationship is positive.
+        let mut subordinate = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        subordinate.update_power_balance(
+            Fixed::from_f64(0.95),
+            Fixed::from_f64(0.05),
+            Fixed::from_f64(0.05),
+            Fixed::from_f64(-1.0),
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+        );
+        assert!(subordinate.power_balance < Fixed::ZERO);
+        assert!(subordinate.power_balance > Fixed::from_f64(-1.0));
+
+        let mut dominant = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        dominant.update_power_balance(
+            Fixed::from_f64(0.1),
+            Fixed::from_f64(0.9),
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.6),
+            Fixed::from_f64(0.5),
+        );
+        assert!(dominant.power_balance > Fixed::from_f64(0.5));
+
+        // The dominated view diverges from the public Friend; the dominant
+        // view matches it.
+        subordinate.stage = RelationshipStage::Friend;
+        subordinate.trust = Fixed::from_f64(0.3);
+        dominant.stage = RelationshipStage::Friend;
+        dominant.trust = Fixed::from_f64(0.3);
+        assert_eq!(
+            subordinate.derive_private_label(),
+            RelationshipLabel::Disliked
+        );
+        assert_eq!(dominant.derive_private_label(), RelationshipLabel::Friend);
     }
 
     #[test]
