@@ -58,6 +58,17 @@ impl AttractionModel {
         self.familiarity = (self.familiarity + interaction_quality * Fixed::from_f64(0.01))
             .min(Fixed::from_f64(0.8));
     }
+
+    /// §10.4 (Iteration 77): Reflect the agent's current social standing in
+    /// their attraction profile. `status_attraction` was a declared plan field
+    /// with zero production writers — the last of the three attraction factors
+    /// (with familiarity and reciprocity) that could push `total_attraction()`
+    /// over the §8.1.16 D4 courtship gate (0.4). The agent's own composite
+    /// standing (`StatusDimensions::effective_status`) contributes to the
+    /// standing they bring to a match. Deterministic, no RNG, clamped [0, 1].
+    pub fn update_status_attraction(&mut self, effective_status: Fixed) {
+        self.status_attraction = effective_status.clamp_01();
+    }
 }
 
 /// §10.4: Familiarity-growth quality for an interaction kind.
@@ -105,6 +116,45 @@ mod tests {
         let without = a.total_attraction();
         a.kinship_penalty = Fixed::from_f64(0.9);
         assert!(a.total_attraction() < without);
+    }
+
+    #[test]
+    fn status_attraction_raises_total_attraction() {
+        let mut a = AttractionModel::default();
+        let without = a.total_attraction();
+        a.update_status_attraction(Fixed::from_f64(0.4));
+        // Status carries weight 0.1 in total_attraction().
+        assert!(a.total_attraction() > without + Fixed::from_f64(0.03));
+        assert!(a.total_attraction() < without + Fixed::from_f64(0.05));
+    }
+
+    #[test]
+    fn status_attraction_clamps_to_unit() {
+        let mut a = AttractionModel::default();
+        a.update_status_attraction(Fixed::from_f64(1.5));
+        assert_eq!(a.status_attraction, Fixed::ONE);
+        a.update_status_attraction(Fixed::from_f64(-0.5));
+        assert_eq!(a.status_attraction, Fixed::ZERO);
+    }
+
+    #[test]
+    fn high_status_plus_familiarity_crosses_d4_gate() {
+        // The §8.1.16 D4 gate (total_attraction > 0.4) is reachable with
+        // status + familiarity alone — no reciprocity needed. Models the live
+        // condition: familiarity saturated at the 0.8 cap (probe: sustained
+        // interaction in riverford reaches the cap) plus an effective_status
+        // of 0.4 (probe: role-holding agents reach 0.4). Base total is 0.30
+        // (0.5 physical/personality/moral/attachment/social-approval at their
+        // weights), +0.08 familiarity +0.04 status = 0.42 > 0.4. This pins
+        // the Iteration-77 claim that wiring status_attraction closes the
+        // last D4 factor.
+        let mut a = AttractionModel::default();
+        for _ in 0..1400 {
+            a.update_familiarity(familiarity_quality_for(InteractionKind::Help));
+        }
+        assert_eq!(a.familiarity, Fixed::from_f64(0.8)); // saturated at cap
+        a.update_status_attraction(Fixed::from_f64(0.4));
+        assert!(a.total_attraction() > Fixed::from_f64(0.4));
     }
 
     #[test]

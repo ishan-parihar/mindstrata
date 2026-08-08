@@ -270,6 +270,54 @@ fn courtship_interactions_drive_reciprocity_and_d4_gate() {
         "reciprocity should push total_attraction past the 0.4 D4 gate, got {max_total:.3}");
 }
 
+
+
+/// §10.4 (Iteration 77): AttractionModel.status_attraction is live — the
+/// last of the three attraction factors (with familiarity Iter-75 and
+/// reciprocity Iter-76) documented as needing wiring to push total_attraction
+/// over the §8.1.16 D4 courtship gate (0.4). The daily status pass reflects
+/// each agent's composite standing (StatusDimensions::effective_status) into
+/// their attraction profile: role holders and the wealthy carry the standing
+/// that makes them a better match.
+#[test]
+fn status_attraction_live_and_d4_reachable() {
+    let sim = run_sim(42, 2000);
+    let mut max_total = 0.0f64;
+    for a in &sim.agents {
+        // The mirror holds exactly: status_attraction == effective_status.
+        // This is a deliberate, exact pin (the wiring assigns
+        // effective_status().clamp_01() and clamp_01 is idempotent on the
+        // already-clamped composite) — a future relative/scaled re-derivation
+        // must consciously update both the wiring and this assertion.
+        let eff = a.status_v2.effective_status();
+        assert_eq!(a.attraction.status_attraction, eff,
+            "status_attraction must mirror effective_status");
+        let t = a.attraction.total_attraction().to_f64();
+        if t > max_total {
+            max_total = t;
+        }
+    }
+    // Probe-verified: role-holding agent 0 reaches effective_status 0.4
+    // (authority 0.6 + wealth_rank 1.0), so total_attraction = base 0.38 +
+    // status 0.04 = 0.42 — the D4 gate is crossed in a default run, without
+    // reciprocity.
+    assert!(max_total > 0.4,
+        "status_attraction should push total_attraction past the 0.4 D4 gate, got {max_total:.3}");
+}
+
+/// §10.4 (Iteration 77): the status mirror is seed-deterministic — same seed
+/// reproduces byte-identical status_attraction and total_attraction.
+#[test]
+fn status_attraction_is_seed_deterministic() {
+    let a = run_sim(42, 2000);
+    let b = run_sim(42, 2000);
+    for (x, y) in a.agents.iter().zip(b.agents.iter()) {
+        assert_eq!(x.attraction.status_attraction, y.attraction.status_attraction);
+        assert_eq!(x.attraction.total_attraction(), y.attraction.total_attraction());
+    }
+}
+
+
 // ── §18.3: Courtship Emergence ──────────────────────────────────
 
 /// §18.3: Repeated positive interactions should advance relationship stages.

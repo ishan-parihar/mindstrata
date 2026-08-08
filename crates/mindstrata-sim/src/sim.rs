@@ -2632,6 +2632,26 @@ impl Simulation {
                         / Fixed::from_int(num_connections);
                     self.agents[i].status_v2.network_centrality = avg_quality;
                 }
+                // §10.4 (Iteration 77): status_attraction was a declared
+                // AttractionModel field with zero production writers — the
+                // last of the three attraction factors (with familiarity and
+                // reciprocity) that feed the §8.1.16 D4 courtship gate. The
+                // agent's freshly-refreshed composite standing feeds their
+                // attraction profile: role holders and the wealthy carry the
+                // standing that makes them a better match. The mirror is
+                // intentionally exact (status_attraction == effective_status,
+                // pinned by the integration test): a future relative/scaled
+                // derivation is a conscious re-design, not an incidental one.
+                // Note: status_attraction tracks whatever effective_status()
+                // captures — the Iter-55 institutional_rank field is not yet
+                // weighted into the composite, so a future weighting flows
+                // through automatically. Deterministic, no RNG, observational
+                // only (feeds only the D4 scenario gate — no behavioral
+                // consumer), so calibrated runs stay byte-identical.
+                let eff_status = self.agents[i].status_v2.effective_status();
+                self.agents[i]
+                    .attraction
+                    .update_status_attraction(eff_status);
 
                 // Architecture-plan-2 §17.3: Relationship caching.
                 // Only decay relationships that have been recently active (dirty)
