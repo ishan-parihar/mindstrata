@@ -6626,7 +6626,11 @@ fn same_sex_couples_keep_legacy_immediate_birth() {
 /// children_born — proving the pipeline end-to-end in an unaccelerated run.
 /// (Iteration 107: liveness and determinism now run seed 1 — seed 99's
 /// mothers died before 80K, zeroing the children_born record — with the
-/// full chain intact; the golden window stays seed 46.)
+/// full chain intact; the golden window stays seed 46. Iteration 108: the
+/// §10.1.2 kin-support consumer creates ParentChild edges at the first
+/// birth, and the parents' buffered stress re-paces courtship — seed 1
+/// now delivers TWO births by 80K, probe-pinned [21860, 45710], with the
+/// 2-chain intact: 2 live children, 2 marriage records, children_born 2.)
 #[test]
 fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
     // Golden-window invariance (seed 46): no conception, no pregnancy, no
@@ -6682,12 +6686,14 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         .collect();
     assert_eq!(
         birth_ticks,
-        // Iteration 107 recalibration (second pass): seed 99 delivered the
-        // three births but its mothers died before 80K, zeroing the
-        // children_born record — seed 1 delivers the full chain: THREE
-        // births by 80K, probe-pinned [21860, 35360, 52270], with all
-        // three mothers alive and children_born summing to 3.
-        vec![21860, 35360, 52270],
+        // Iteration 108 recalibration: the §10.1.2 kin-support consumer
+        // (ParentChild edges exist from the first birth onward; the
+        // parents' buffered stress and longer planning horizon re-pace
+        // courtship) drops the third birth and delays the second — seed 1
+        // now delivers TWO births by 80K, probe-pinned [21860, 45710],
+        // with the 2-chain intact (2 live children, 2 marriage records,
+        // children_born 2).
+        vec![21860, 45710],
         "seed-1 80K world must deliver exactly the probed births"
     );
     for t in &birth_ticks {
@@ -6698,7 +6704,7 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
     }
     assert_eq!(
         late.agents.iter().filter(|a| a.parent_a.is_some()).count(),
-        3,
+        2,
         "all live children must carry parentage at 80K"
     );
     let marriage_children: usize = late
@@ -6708,7 +6714,7 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         .map(|m| m.children.len())
         .sum();
     assert_eq!(
-        marriage_children, 3,
+        marriage_children, 2,
         "all births must be recorded in the mothers' active marriages"
     );
     assert_eq!(
@@ -6716,7 +6722,7 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
             .iter()
             .map(|a| a.embodied.reproductive.children_born)
             .sum::<u32>(),
-        3,
+        2,
         "all pregnancy-path deliveries must increment children_born"
     );
     assert_eq!(
@@ -7495,4 +7501,65 @@ fn sensory_field_fear_contagion_is_live_and_sustains_fear() {
         .sum::<f64>()
         / again.agents.len() as f64;
     assert_eq!(mean_fear, again_mean, "mean fear must be seed-deterministic");
+}
+
+/// §10.1.2 (Iteration 108): the social field's `kin_count` feeds the
+/// kin-support buffer — kinship reduces the stress input to cognition
+/// (plan §10.1.2 kinship + §10.3 kin branch). The kinship edge is injected
+/// directly (the canonical pattern: `kinship_graph.add_link`), the daily
+/// kin-sync types the pair's RelationshipV2 as ParentChild, and the field
+/// refresh counts it. Documented dual mechanism: the injected edge ALSO
+/// re-types the pair's interactions (kin deltas), so the early-tick
+/// differential is confounded (probe: the direction even inverts at
+/// 200–500 ticks) — the buffer is unit-proven in isolation
+/// (`kin_stress_factor`), and the long-horizon direction — stress
+/// strictly LOWER in the kin world — is probe-pinned buffer-dominant on
+/// every seed at 2000 ticks (seed 42: 0.994 → 0.691, seed 1: 0.998 →
+/// 0.698, seed 7: 0.995 → 0.842, seed 99: 0.998 → 0.698).
+#[test]
+fn kin_support_buffers_cognitive_stress() {
+    use mindstrata_sim::sim::SimConfig;
+    use mindstrata_sim::social::kinship::KinshipLink;
+
+    fn run_world(seed: u64, kin: bool) -> (f64, u32) {
+        let config = SimConfig {
+            seed,
+            max_ticks: 2000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = mindstrata_sim::Simulation::new(config);
+        sim.populate();
+        if kin {
+            sim.kinship_graph
+                .add_link(0, 1, KinshipLink::ParentChild, 0);
+            sim.kinship_graph
+                .add_link(1, 0, KinshipLink::ParentChild, 0);
+        }
+        sim.run(2000);
+        (
+            sim.agents[0].cognitive.stress.to_f64(),
+            sim.agents[0].relational_fields.kin_count,
+        )
+    }
+
+    for seed in [42u64, 1, 7, 99] {
+        let (control_stress, _) = run_world(seed, false);
+        let (kin_stress, kin_count) = run_world(seed, true);
+        assert!(
+            kin_count > 0,
+            "the injected ParentChild edge must surface in the social field's kin_count (seed {seed}, got {kin_count})"
+        );
+        assert!(
+            kin_stress < control_stress,
+            "the kin-support buffer must strictly lower cognitive stress at 2000 ticks (seed {seed}: kin {kin_stress:.4} vs control {control_stress:.4})"
+        );
+    }
+
+    // Determinism: identical seed → byte-identical stress.
+    let (a, _) = run_world(42, true);
+    let (b, _) = run_world(42, true);
+    assert_eq!(a, b, "the kin world must be seed-deterministic");
 }

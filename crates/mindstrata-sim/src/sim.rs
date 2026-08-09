@@ -2307,8 +2307,23 @@ impl Simulation {
             // ── 0b. Cognitive state update (§22.1) ────────────────────
             // §22.1: Stress reduces planning horizon, increases heuristic bias.
             // This must happen before action selection to affect decision-making.
+            // Iteration 108 (§10.1.2): kin support buffers the stress input —
+            // the social field's kin_count scales (fear + anger) down before
+            // the EMA. Zero-at-zero: no kin → factor 1.0 → byte-identical
+            // (kinship forms only via births, earliest at ~4,170 ticks, so
+            // every ≤2000-tick calibrated window is untouched). Note the
+            // channel: this lowers cognitive.stress → planning_horizon /
+            // heuristic_bias (§22.1); the metrics' avg_stress (mean of
+            // fear + anger) is NOT changed by the buffer.
+            let kin_rate = Fixed::from_f64(crate::social::relational_field::KIN_STRESS_RATE);
+            let kin_cap = Fixed::from_f64(crate::social::relational_field::KIN_STRESS_CAP);
             for i in 0..self.agents.len() {
-                let stress = emotions[i].fear + emotions[i].anger;
+                let stress = (emotions[i].fear + emotions[i].anger)
+                    * crate::social::relational_field::RelationalFields::kin_stress_factor(
+                        self.agents[i].relational_fields.kin_count,
+                        kin_rate,
+                        kin_cap,
+                    );
                 let need_fatigue = needs[i].fatigue.max(needs[i].hunger).max(needs[i].thirst);
                 self.agents[i].cognitive.update(stress, need_fatigue);
 

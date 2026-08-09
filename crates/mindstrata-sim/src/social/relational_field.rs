@@ -15,8 +15,12 @@
 //! field's `perceived_stress` has a decisional consumer: the daily fear
 //! contagion fold (`contagion_delta`) at the emotion-decay site — an
 //! agent's fear rises with the ambient stress it perceives. The social
-//! (trust/obligation/kin/peer-status) and noospheric (beliefs,
-//! legitimacy, collective fear) layers remain observational.
+//! field's `kin_count` has a decisional consumer too (Iteration 108): the
+//! kin-support buffer (`kin_stress_factor`) scales the per-tick stress
+//! input to cognition down — family buffers stress, zero-at-zero (no kin
+//! → factor 1.0 → byte-identical). The remaining social
+//! (trust/obligation/peer-status) and noospheric (beliefs, legitimacy,
+//! collective fear) layers remain observational.
 
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
@@ -30,6 +34,17 @@ pub const PERCEPTION_RADIUS: i32 = 5;
 /// the §22.1 per-tick decay; the per-tick appraisal recompute, not this
 /// fold's clamp, sets the observed equilibrium.
 pub const FEAR_CONTAGION_RATE: f64 = 0.05;
+
+/// Per-kin stress-buffer rate (§10.1.2, Iteration 108): each kin-stage
+/// relationship reduces the stress input to cognition by this fraction.
+/// Modest so a family buffers without zeroing the signal; zero kin →
+/// identity (byte-identical calibrated runs, since kinship forms only via
+/// births, earliest at ~4,170 ticks).
+pub const KIN_STRESS_RATE: f64 = 0.15;
+
+/// Ceiling on the total kin stress reduction (§10.1.2, Iteration 108):
+/// 3+ kin saturate at 45% buffering — the buffer cannot erase the signal.
+pub const KIN_STRESS_CAP: f64 = 0.45;
 
 /// §10.1: The three relational fields an agent perceives around itself.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -78,6 +93,19 @@ impl RelationalFields {
     /// exercised on the real path, never a reimplementation.
     pub fn contagion_apply(fear: Fixed, perceived_stress: Fixed, rate: Fixed) -> Fixed {
         (fear + Self::contagion_delta(perceived_stress, rate)).clamp_01()
+    }
+
+    /// §10.1.2 (Iteration 108): the kin-support buffer — kinship reduces
+    /// the stress input to cognition (family buffers stress). Identity at
+    /// zero kin (no family → no buffer), monotone in `kin_count`, capped at
+    /// `cap` total reduction, deterministic (no RNG). The caller multiplies
+    /// the agent's per-tick stress input (fear + anger) by the returned
+    /// factor before `CognitiveState::update`.
+    pub fn kin_stress_factor(kin_count: u32, rate: Fixed, cap: Fixed) -> Fixed {
+        let reduction = (Fixed::from_int(kin_count as i64) * rate).min(cap);
+        // The clamp is defensive: reduction ∈ [0, cap] with cap < 1.0, so
+        // the factor is provably in [0.55, 1.0] for the shipped constants.
+        (Fixed::ONE - reduction).clamp_01()
     }
 
     /// Mean of a slice of `Fixed`; 0 when empty.
@@ -191,6 +219,41 @@ mod tests {
             RelationalFields::contagion_apply(Fixed::from_f64(0.99), Fixed::ONE, rate),
             Fixed::ONE,
             "fear + delta above 1.0 must saturate at the clamp"
+        );
+    }
+
+    #[test]
+    fn kin_stress_factor_is_identity_at_zero_and_capped() {
+        // §10.1.2 (Iteration 108): zero kin (no family) must leave the
+        // stress input untouched; the buffer is monotone in kin count and
+        // capped so it can never erase the signal.
+        let rate = Fixed::from_f64(KIN_STRESS_RATE);
+        let cap = Fixed::from_f64(KIN_STRESS_CAP);
+        assert_eq!(
+            RelationalFields::kin_stress_factor(0, rate, cap),
+            Fixed::ONE,
+            "no kin must be a byte-identical identity"
+        );
+        assert_eq!(
+            RelationalFields::kin_stress_factor(1, rate, cap),
+            Fixed::ONE - rate,
+            "one kin buffers exactly the rate"
+        );
+        assert_eq!(
+            RelationalFields::kin_stress_factor(2, rate, cap),
+            Fixed::ONE - rate - rate,
+            "two kin buffer twice the rate"
+        );
+        // 3 × 0.15 = 0.45 = the cap exactly.
+        assert_eq!(
+            RelationalFields::kin_stress_factor(3, rate, cap),
+            Fixed::ONE - cap,
+            "three kin reach the cap"
+        );
+        assert_eq!(
+            RelationalFields::kin_stress_factor(10, rate, cap),
+            Fixed::ONE - cap,
+            "many kin saturate at the cap, never below"
         );
     }
 
