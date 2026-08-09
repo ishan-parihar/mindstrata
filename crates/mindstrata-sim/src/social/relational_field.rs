@@ -39,8 +39,16 @@
 //! panic inflicts — a genuinely terrified population amplifies the crisis
 //! (one-sided — identity at/below the 0.95 anchor, which sits above the
 //! calibrated peak of 0.903, so provably zero-blast: the single seed-42
-//! panic at ~4,320 ticks sits at collective fear 0.90 < 0.95). The
-//! remaining social (obligation/peer-status) layers remain observational.
+//! panic at ~4,320 ticks sits at collective fear 0.90 < 0.95). The social
+//! field's `peer_status` gained a consumer in Iteration 113: the envy
+//! channel (`envy_delta`/`envy_apply`) folds status frustration into the
+//! daily anger fold — an agent who perceives a GENUINELY dominant
+//! neighbor (peer_status above the 0.5 anchor, which sits above the
+//! calibrated ceiling of 0.4687 — probe-pinned max at t=200, seed 42,
+//! across seeds 1/7/42/99, drought/pestilence scenarios, and the 20K
+//! horizon) grows envious,
+//! feeding anger — one-sided, so provably zero-blast. The remaining
+//! social (obligation) layer remains observational.
 
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
@@ -130,6 +138,28 @@ pub const COLLECTIVE_FEAR_PANIC_RATE: f64 = 0.5;
 /// binds only if a future rate change would push the amplification past
 /// 50%).
 pub const COLLECTIVE_FEAR_PANIC_CAP: f64 = 0.5;
+
+/// The peer-status envy anchor (§10.1.2, Iteration 113): the highest
+/// effective status among nearby agents above which an agent grows envious
+/// of a genuinely dominant presence. Placed at 0.5 — ABOVE the calibrated
+/// ceiling of 0.4687 (probe-pinned max at t=200, seed 42; the widest sweep
+/// yet: seeds 1/7/42/99, drought/pestilence scenarios, and the 20K horizon
+/// all stay ≤ 0.4687) — so the envy term is identity (zero delta)
+/// throughout the golden/snapshot horizons (provably zero-blast).
+pub const PEER_ENVY_ANCHOR: f64 = 0.5;
+
+/// Per-unit-above-anchor envy rate (§10.1.2, Iteration 113): each unit of
+/// perceived peer status above the anchor adds this fraction to the
+/// agent's daily anger. At peer status 0.6 (a genuinely dominant presence)
+/// anger rises 0.03/day — a visible but bounded status-frustration
+/// pressure.
+pub const PEER_ENVY_RATE: f64 = 0.3;
+
+/// Ceiling on the daily envy contribution (§10.1.2, Iteration 113): status
+/// frustration can add at most this much anger per day — the term stays in
+/// [0, 0.15] for the shipped constants (cap binds exactly at full
+/// dominance: (1.0 − 0.5) × 0.3 = 0.15).
+pub const PEER_ENVY_CAP: f64 = 0.15;
 
 /// §10.1: The three relational fields an agent perceives around itself.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -274,6 +304,43 @@ impl RelationalFields {
         // No clamp is needed: amplification ∈ [0, cap] with cap < 1.0, so
         // the factor is provably in [1.0, 1.5] for the shipped constants.
         Fixed::ONE + amplification
+    }
+
+    /// §10.1.2 (Iteration 113): the peer-status envy contribution — an
+    /// agent who perceives a GENUINELY dominant neighbor (peer_status above
+    /// the 0.5 anchor) grows envious: status frustration feeds anger ("the
+    /// most dominant presence I see outranks me enough to sting"). ONE-SIDED:
+    /// identity (zero delta) at or below the anchor — the calibrated world's
+    /// peer status peaks at 0.4687 (probe-pinned), so this term is exactly
+    /// zero throughout the golden/snapshot horizons (provably zero-blast).
+    /// Monotone above the anchor, capped so the daily envy pressure stays
+    /// bounded, deterministic (no RNG).
+    pub fn envy_delta(
+        peer_status: Fixed,
+        anchor: Fixed,
+        rate: Fixed,
+        cap: Fixed,
+    ) -> Fixed {
+        let above_anchor = (peer_status - anchor).max(Fixed::ZERO);
+        // No clamp needed: above_anchor ∈ [0, 1], rate and cap are small, so
+        // the delta is provably in [0, cap] ⊆ [0, 0.15] for the shipped
+        // constants.
+        (above_anchor * rate).min(cap)
+    }
+
+    /// §10.1.2 (Iteration 113): the full daily envy apply-step — `anger +
+    /// envy_delta`, clamped to [0, 1]. Shared by the sim's daily fold and
+    /// the unit tests so the clamp/saturation contract is exercised on the
+    /// real path, never a reimplementation (same pattern as
+    /// `contagion_apply`).
+    pub fn envy_apply(
+        anger: Fixed,
+        peer_status: Fixed,
+        anchor: Fixed,
+        rate: Fixed,
+        cap: Fixed,
+    ) -> Fixed {
+        (anger + Self::envy_delta(peer_status, anchor, rate, cap)).clamp_01()
     }
 
     /// Mean of a slice of `Fixed`; 0 when empty.
@@ -576,6 +643,71 @@ mod tests {
             ),
             Fixed::ONE + cap,
             "an oversized rate must saturate at the cap"
+        );
+    }
+
+    #[test]
+    fn peer_envy_is_identity_below_anchor_and_capped() {
+        // §10.1.2 (Iteration 113): at/below the anchor the envy delta is
+        // exactly zero (byte-identical — the calibrated world's peer status
+        // peaks at 0.4687 < 0.5, so the golden horizons never see the term);
+        // above the anchor it rises monotonically and is capped so the
+        // daily status-frustration pressure stays bounded.
+        let anchor = Fixed::from_f64(PEER_ENVY_ANCHOR);
+        let rate = Fixed::from_f64(PEER_ENVY_RATE);
+        let cap = Fixed::from_f64(PEER_ENVY_CAP);
+        assert_eq!(
+            RelationalFields::envy_delta(anchor, anchor, rate, cap),
+            Fixed::ZERO,
+            "at the anchor the envy delta must be exactly zero"
+        );
+        assert_eq!(
+            RelationalFields::envy_delta(Fixed::from_f64(0.46), anchor, rate, cap),
+            Fixed::ZERO,
+            "below the anchor (calibrated-world ceiling 0.46) must also be zero"
+        );
+        assert_eq!(
+            RelationalFields::envy_delta(Fixed::from_f64(0.6), anchor, rate, cap),
+            Fixed::from_f64(0.03),
+            "a genuinely dominant presence (0.6) must add exactly 0.03/day"
+        );
+        let low = RelationalFields::envy_delta(Fixed::from_f64(0.55), anchor, rate, cap);
+        let high = RelationalFields::envy_delta(Fixed::from_f64(0.8), anchor, rate, cap);
+        assert!(low < high, "higher peer status must enrage more");
+        // Full dominance: (1.0 − 0.5) × 0.3 = 0.15 = the cap exactly.
+        assert_eq!(
+            RelationalFields::envy_delta(Fixed::ONE, anchor, rate, cap),
+            cap,
+            "full dominance with the shipped rate must hit the cap exactly"
+        );
+        // Cap: an oversized rate saturates at the cap, never above.
+        assert_eq!(
+            RelationalFields::envy_delta(Fixed::ONE, anchor, Fixed::from_f64(5.0), cap),
+            cap,
+            "an oversized rate must saturate at the cap"
+        );
+        // The shared apply-step: anger + delta, clamped.
+        assert_eq!(
+            RelationalFields::envy_apply(
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.6),
+                anchor,
+                rate,
+                cap,
+            ),
+            Fixed::from_f64(0.53),
+            "envy_apply must add the delta to anger on the real path"
+        );
+        assert_eq!(
+            RelationalFields::envy_apply(
+                Fixed::from_f64(0.99),
+                Fixed::ONE,
+                anchor,
+                rate,
+                cap,
+            ),
+            Fixed::ONE,
+            "anger + delta above 1.0 must saturate at the clamp"
         );
     }
 

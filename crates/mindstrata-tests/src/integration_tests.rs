@@ -8093,3 +8093,132 @@ fn collective_fear_amplifies_panic_legitimacy_damage_end_to_end() {
         "institution legitimacy vectors must be seed-deterministic"
     );
 }
+
+/// §10.1.2 (Iteration 113): the social field's `peer_status` is produced
+/// daily (the highest effective status among agents within the perception
+/// radius) and now has a decisional consumer — the daily envy fold in the
+/// emotion block: an agent who perceives a GENUINELY dominant peer
+/// (peer_status above the 0.5 anchor) grows envious, feeding anger. The
+/// anchor sits ABOVE the calibrated ceiling of 0.46 (probe-pinned across
+/// seeds 1/7/42/99, drought/pestilence scenarios, and the 20K horizon),
+/// so this is a ZERO-BLAST iteration: golden byte-identical, no snapshot
+/// drift.
+///
+/// Leg A — producer reach: the field is live and bounded in a default run.
+/// Leg B — consumer via the public path: the shared `envy_apply` step is
+///   exact and identity below the anchor.
+/// Leg C — replay determinism: two same-seed runs produce byte-identical
+///   peer-status vectors.
+#[test]
+fn peer_status_envy_feeds_daily_anger_end_to_end() {
+    use mindstrata_sim::social::relational_field::RelationalFields;
+
+    // Leg A — producer reach: peer_status is live and bounded in the
+    // calibrated world (2000 ticks: probe-pinned mean 0.41, max 0.46).
+    let sim = crate::test_helpers::run_sim(42, 2000);
+    let mean_ps: f64 = sim
+        .agents
+        .iter()
+        .map(|a| a.relational_fields.peer_status.to_f64())
+        .sum::<f64>()
+        / sim.agents.len() as f64;
+    assert!(
+        mean_ps > 0.3 && mean_ps <= 1.0,
+        "peer_status must be live and bounded: {mean_ps:.4}"
+    );
+
+    // Leg B — consumer through the public path: identity below the 0.5
+    // anchor (the calibrated ceiling is 0.46 — this is what makes the
+    // iteration zero-blast), exact envy pressure above it, and the shared
+    // apply-step exercises the real clamp.
+    let anchor = Fixed::from_f64(0.5);
+    let rate = Fixed::from_f64(0.3);
+    let cap = Fixed::from_f64(0.15);
+    assert_eq!(
+        RelationalFields::envy_delta(Fixed::from_f64(0.46), anchor, rate, cap),
+        Fixed::ZERO,
+        "below the anchor the envy delta must be zero"
+    );
+    assert_eq!(
+        RelationalFields::envy_delta(Fixed::from_f64(0.6), anchor, rate, cap),
+        Fixed::from_f64(0.03),
+        "a dominant presence (0.6) must add exactly 0.03/day"
+    );
+    assert_eq!(
+        RelationalFields::envy_apply(
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.6),
+            anchor,
+            rate,
+            cap,
+        ),
+        Fixed::from_f64(0.53),
+        "envy_apply must add the delta to anger on the real path"
+    );
+
+    // Leg C — replay determinism: peer-status vectors are byte-identical
+    // across two same-seed runs (the field is deterministic by
+    // construction — index-order iteration, no RNG).
+    let again = crate::test_helpers::run_sim(42, 2000);
+    let v1: Vec<f64> = sim
+        .agents
+        .iter()
+        .map(|a| a.relational_fields.peer_status.to_f64())
+        .collect();
+    let v2: Vec<f64> = again
+        .agents
+        .iter()
+        .map(|a| a.relational_fields.peer_status.to_f64())
+        .collect();
+    assert_eq!(v1, v2, "peer-status vectors must be seed-deterministic");
+
+    // Leg D — the fold is genuinely wired end-to-end: this leg FAILS if the
+    // envy fold in `tick()` is ever removed (Legs A–C would stay green).
+    // Two same-seed worlds run to tick 143 (no daily phase yet — daily fires
+    // at 144), then peer_status is injected (0.9 vs 0.4) and tick 144 runs:
+    // the emotion fold reads the injected field during the tick (the §10.1
+    // refresh runs at END of tick), so the dominant-peer world's anger must
+    // rise by the envy delta (0.4 above anchor × 0.3 = 0.12/day) relative
+    // to the control, which sees zero delta.
+    let make_at_144 = || {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = mindstrata_sim::Simulation::new(config);
+        sim.populate();
+        sim.run(143);
+        sim
+    };
+    let mut dominant = make_at_144();
+    let mut calm = make_at_144();
+    for agent in &mut dominant.agents {
+        agent.relational_fields.peer_status = Fixed::from_f64(0.9);
+    }
+    for agent in &mut calm.agents {
+        agent.relational_fields.peer_status = Fixed::from_f64(0.4);
+    }
+    dominant.run(1); // tick 144 — the first daily phase
+    calm.run(1);
+    let mean_diff: f64 = dominant
+        .agents
+        .iter()
+        .zip(calm.agents.iter())
+        .map(|(a, b)| a.emotions.anger.to_f64() - b.emotions.anger.to_f64())
+        .sum::<f64>()
+        / dominant.agents.len() as f64;
+    assert!(
+        mean_diff > 0.10,
+        "the envy fold must raise anger in the dominant-peer world: {mean_diff:.4}"
+    );
+    for (a, b) in dominant.agents.iter().zip(calm.agents.iter()) {
+        assert!(
+            a.emotions.anger >= b.emotions.anger,
+            "the envy term must be monotone per agent (never negative)"
+        );
+    }
+}

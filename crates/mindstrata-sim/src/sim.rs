@@ -3857,6 +3857,36 @@ impl Simulation {
                             ),
                         );
                 }
+                // ── 7c. §10.1.2 peer-status envy (Iteration 113) ───────
+                // The social field's highest-status neighbor ("the most
+                // dominant presence I see") feeds the agent's anger on the
+                // daily cadence: an agent who perceives a GENUINELY
+                // dominant peer (peer_status above the 0.5 anchor — above
+                // the calibrated ceiling of 0.46, probe-pinned across seeds
+                // 1/7/42/99, drought/pestilence scenarios, and the 20K
+                // horizon) grows envious: status frustration → anger. The
+                // anger channel is decisional (feeds threat_level, stress,
+                // and witnessed-violation appraisal), so the envy term is
+                // behaviorally live when it engages. ONE-SIDED: identity
+                // (zero delta) at/below the anchor, so calibrated runs are
+                // byte-identical (zero-blast — no regeneration).
+                // Deterministic (no RNG).
+                for (agent, emotion) in self.agents.iter().zip(emotions.iter_mut()) {
+                    emotion.anger =
+                        crate::social::relational_field::RelationalFields::envy_apply(
+                            emotion.anger,
+                            agent.relational_fields.peer_status,
+                            Fixed::from_f64(
+                                crate::social::relational_field::PEER_ENVY_ANCHOR,
+                            ),
+                            Fixed::from_f64(
+                                crate::social::relational_field::PEER_ENVY_RATE,
+                            ),
+                            Fixed::from_f64(
+                                crate::social::relational_field::PEER_ENVY_CAP,
+                            ),
+                        );
+                }
             }
 
             // ── 8. Belief resistance decay ────────────────────────────
