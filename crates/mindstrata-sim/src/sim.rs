@@ -1591,13 +1591,67 @@ impl Simulation {
             self.agents[from_idx].emotions.humiliation,
             crate::appraisal::HUMILIATION_ESCALATION_RATE,
         );
+        // §8.1.4 (Iteration 122): a contemptuous aggressor escalates a
+        // failed threat to violence MORE readily — `contempt_escalation_factor`
+        // (1 + contempt × rate, factor 1.30 at full contempt) multiplies the
+        // chance chain. This is the SECOND AMPLIFIER alongside the Iter-116
+        // humiliation factor on the same §19.5.H decision, from a distinct
+        // semantic layer: humiliation is public status loss ("I was shamed"),
+        // contempt is secure superiority ("the target is beneath me — no
+        // restraint needed"). ONE-SIDED: identity at zero — the calibration
+        // probe shows contempt is never produced in calibrated windows (its
+        // appraisal inputs — `(1 − status_threat) × unfair` — don't fire in
+        // calm worlds; probe mean/max 0.0000 across seeds and scenarios), so
+        // the factor is exactly 1.0 throughout the golden/snapshot horizons
+        // (provably zero-blast). The RNG draw below stays unconditional
+        // (same stream position), so replay determinism holds at every
+        // contempt value — only the comparison threshold changes. The
+        // combined-amplifier ceiling is clamped at 1.0 by
+        // `escalation_chance` (the enemy-clan tests exercise the same
+        // clamp), so even both amplifiers (humiliation × contempt) at
+        // saturation cannot exceed it.
+        let contempt_factor = crate::appraisal::contempt_escalation_factor(
+            self.agents[from_idx].emotions.contempt,
+            crate::appraisal::CONTEMPT_ESCALATION_RATE,
+        );
+        // §8.1.4 (Iteration 122): a despairing aggressor escalates a failed
+        // threat to violence LESS readily — `despair_pacify_factor`
+        // (1 − despair × rate floored at 0.5, factor 0.75 at half despair,
+        // 0.5 at full) multiplies the chance chain. This is the PACIFIER
+        // counterpoint to the Iter-116/122 amplifiers on the same §19.5.H
+        // decision, from the distinct layer of hopelessness ("nothing I do
+        // matters — violence cannot change this"); the floor guarantees it
+        // never fully erases the escalation chance (same never-zero design
+        // as the Iter-110 trust / Iter-114 obligation pacifiers). ONE-SIDED:
+        // identity at zero — the calibration probe shows despair is never
+        // produced in calibrated windows (its appraisal inputs —
+        // `future_negative × (1 − coping_potential)` — don't fire in calm
+        // worlds; probe mean/max 0.0000 across seeds and scenarios), so the
+        // factor is exactly 1.0 throughout the golden/snapshot horizons
+        // (provably zero-blast). The RNG draw below stays unconditional
+        // (same stream position), so replay determinism holds at every
+        // despair value — only the comparison threshold changes. The
+        // multipliers compose multiplicatively on this chain: a
+        // simultaneously contemptuous AND despairing aggressor nets
+        // ×(1.3 × 0.5) = 0.65, i.e. despair dominates the decision
+        // (hopelessness demobilizes even the secure-superior). The
+        // violent-despair counter-hypothesis (nothing-to-lose violence) is
+        // acknowledged and left as a future calibration knob — the
+        // rate/floor consts make it trivially tunable.
+        let despair_factor = crate::appraisal::despair_pacify_factor(
+            self.agents[from_idx].emotions.despair,
+            crate::appraisal::DESPAIR_PACIFY_RATE,
+            crate::appraisal::DESPAIR_PACIFY_FLOOR,
+        );
         let chance = self.escalation_chance(from_idx, to_idx)
             * (1.0 - resistance)
             * (1.0 - hypocrisy)
             * dominance_scale
             * trust_factor.to_f64()
             * obligation_factor.to_f64()
-            * humiliation_factor.to_f64();
+            * humiliation_factor.to_f64()
+            * contempt_factor.to_f64()
+            * despair_factor.to_f64();
         self.rng.get_mut(RngStream::Social).random::<f64>() < chance
     }
 
@@ -11166,6 +11220,99 @@ mod tests {
             trusting_escalations < control_escalations,
             "a trusting aggressor must escalate strictly less: \
              {trusting_escalations} vs {control_escalations}"
+        );
+    }
+
+    /// §8.1.4 (Iteration 122): the contempt fold genuinely shifts escalation
+    /// outcomes. Two same-seed worlds differ only in the aggressor's
+    /// `emotions.contempt` (1.0 vs 0.0 — a contemptuous aggressor sees the
+    /// target as beneath them and escalates a failed threat more readily).
+    /// The RNG draw sequence is identical in both (same seed, same call
+    /// order, exactly one draw per `should_escalate`), so the count gap is
+    /// deterministic: the contemptuous aggressor escalates strictly more
+    /// often.
+    #[test]
+    fn contempt_amplifies_escalation_outcomes() {
+        let make_config = || SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut contemptuous = Simulation::new(make_config());
+        contemptuous.populate();
+        let mut control = Simulation::new(make_config());
+        control.populate();
+        let (a, b) = cross_clan_pair(&contemptuous);
+        contemptuous.agents[a].emotions.contempt = Fixed::ONE;
+        // Control keeps the tick-0 identity (contempt 0 → factor 1.0).
+        let aggression = Fixed::from_f64(1.5); // past the 1.2 threshold
+        let mut contemptuous_escalations = 0;
+        let mut control_escalations = 0;
+        for _ in 0..500 {
+            if contemptuous.should_escalate(a, b, true, aggression) {
+                contemptuous_escalations += 1;
+            }
+            if control.should_escalate(a, b, true, aggression) {
+                control_escalations += 1;
+            }
+        }
+        assert!(
+            control_escalations > 0,
+            "control must escalate at the base rate, got {control_escalations}"
+        );
+        assert!(
+            contemptuous_escalations > control_escalations,
+            "a contemptuous aggressor must escalate strictly more: \
+             {contemptuous_escalations} vs {control_escalations}"
+        );
+    }
+
+    /// §8.1.4 (Iteration 122): the despair fold genuinely shifts escalation
+    /// outcomes. Two same-seed worlds differ only in the aggressor's
+    /// `emotions.despair` (1.0 vs 0.0 — a despairing aggressor is demobilized
+    /// and escalates a failed threat less readily). The RNG draw sequence is
+    /// identical in both (same seed, same call order, exactly one draw per
+    /// `should_escalate`), so the count gap is deterministic: the despairing
+    /// aggressor escalates strictly less often.
+    #[test]
+    fn despair_pacifies_escalation_outcomes() {
+        let make_config = || SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut despairing = Simulation::new(make_config());
+        despairing.populate();
+        let mut control = Simulation::new(make_config());
+        control.populate();
+        let (a, b) = cross_clan_pair(&despairing);
+        despairing.agents[a].emotions.despair = Fixed::ONE;
+        // Control keeps the tick-0 identity (despair 0 → factor 1.0).
+        let aggression = Fixed::from_f64(1.5); // past the 1.2 threshold
+        let mut despairing_escalations = 0;
+        let mut control_escalations = 0;
+        for _ in 0..500 {
+            if despairing.should_escalate(a, b, true, aggression) {
+                despairing_escalations += 1;
+            }
+            if control.should_escalate(a, b, true, aggression) {
+                control_escalations += 1;
+            }
+        }
+        assert!(
+            control_escalations > 0,
+            "control must escalate at the base rate, got {control_escalations}"
+        );
+        assert!(
+            despairing_escalations < control_escalations,
+            "a despairing aggressor must escalate strictly less: \
+             {despairing_escalations} vs {control_escalations}"
         );
     }
 

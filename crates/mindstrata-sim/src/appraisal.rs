@@ -196,6 +196,57 @@ pub fn humiliation_escalation_factor(humiliation: Fixed, rate: f64) -> Fixed {
     Fixed::ONE + humiliation * Fixed::from_f64(rate)
 }
 
+/// §8.1.4 (Iteration 122): the contempt escalation rate — a contemptuous
+/// aggressor escalates a failed threat to violence more readily ("the
+/// target is beneath me — no restraint needed"). At full contempt 1.0 the
+/// escalation chance rises exactly 30% (factor 1.30, mirroring
+/// humiliation's shipped constant — both are dignity emotions, both
+/// amplify the same §19.5.H decision). ONE-SIDED: identity at zero — the
+/// calibration probe shows contempt is NEVER produced in any calibrated
+/// window (its appraisal input — `(1 − status_threat) × unfair` — only
+/// fires under an unfair-other appraisal from a secure position, which
+/// calm worlds never generate; probe mean/max 0.0000 across seeds and
+/// scenarios), so the factor is exactly 1.0 throughout the
+/// golden/snapshot horizons (provably zero-blast).
+pub const CONTEMPT_ESCALATION_RATE: f64 = 0.3;
+
+/// §8.1.4 (Iteration 122): the contempt escalation factor —
+/// `1 + contempt × rate`, ∈ [1.0, 1.3] for the shipped constant. The
+/// caller multiplies the escalation chance in `should_escalate` by the
+/// returned factor. NO clamp (the Iter-112 lesson — `clamp_01` would
+/// silently erase the amplification). One-sided: identity at zero,
+/// monotone above. Deterministic, no RNG.
+pub fn contempt_escalation_factor(contempt: Fixed, rate: f64) -> Fixed {
+    Fixed::ONE + contempt * Fixed::from_f64(rate)
+}
+
+/// §8.1.4 (Iteration 122): the despair pacification rate and floor — a
+/// despairing aggressor escalates a failed threat to violence LESS
+/// readily ("nothing I do matters — violence cannot change this"). At
+/// full despair 1.0 the escalation chance falls to exactly the floor
+/// 0.5 (halved, never erased — hopelessness demobilizes but cannot
+/// fully pacify an otherwise violent agent; same never-zero design as
+/// the Iter-110 trust pacifier's cap). ONE-SIDED: identity at zero —
+/// the calibration probe shows despair is NEVER produced in any
+/// calibrated window (its appraisal input —
+/// `future_negative × (1 − coping_potential)` — only fires when a
+/// negative future implication combines with low coping, which calm
+/// worlds never generate; probe mean/max 0.0000 across seeds and
+/// scenarios), so the factor is exactly 1.0 throughout the
+/// golden/snapshot horizons (provably zero-blast).
+pub const DESPAIR_PACIFY_RATE: f64 = 0.5;
+pub const DESPAIR_PACIFY_FLOOR: f64 = 0.5;
+
+/// §8.1.4 (Iteration 122): the despair pacification factor —
+/// `1 − despair × rate` floored at `floor`, ∈ [floor, 1.0] for the
+/// shipped constants. The caller multiplies the escalation chance in
+/// `should_escalate` by the returned factor. The floor guarantees the
+/// pacification never fully erases the escalation chance. One-sided:
+/// identity at zero, monotone below. Deterministic, no RNG.
+pub fn despair_pacify_factor(despair: Fixed, rate: f64, floor: f64) -> Fixed {
+    (Fixed::ONE - despair * Fixed::from_f64(rate)).max(Fixed::from_f64(floor))
+}
+
 pub fn appraise(appraisal: &Appraisal, _tick: Tick, params: &crate::parameters::SimParameters) -> EmotionDelta {
     let mut delta = EmotionDelta::default();
 
@@ -486,6 +537,71 @@ mod tests {
             humiliation_escalation_factor(Fixed::ONE, HUMILIATION_ESCALATION_RATE),
             Fixed::from_f64(1.3),
             "full humiliation × 0.3 must be exactly 1.30"
+        );
+    }
+
+    #[test]
+    fn contempt_escalation_factor_is_identity_at_zero_and_amplifies() {
+        // §8.1.4 (Iteration 122): identity at zero (never produced in
+        // calibrated windows → zero-blast), exact 1.15 at 0.5, exact 1.30
+        // at full contempt. NO clamp — the factor provably exceeds 1.0
+        // (the Iter-112 lesson: `clamp_01` would erase the amplification).
+        assert_eq!(
+            contempt_escalation_factor(Fixed::ZERO, CONTEMPT_ESCALATION_RATE),
+            Fixed::ONE,
+            "zero contempt must be a byte-identical identity"
+        );
+        assert_eq!(
+            contempt_escalation_factor(Fixed::from_f64(0.5), CONTEMPT_ESCALATION_RATE),
+            Fixed::from_f64(1.15),
+            "0.5 × 0.3 must add exactly 0.15"
+        );
+        assert_eq!(
+            contempt_escalation_factor(Fixed::ONE, CONTEMPT_ESCALATION_RATE),
+            Fixed::from_f64(1.3),
+            "full contempt × 0.3 must be exactly 1.30"
+        );
+    }
+
+    #[test]
+    fn despair_pacify_factor_is_identity_at_zero_and_floored() {
+        // §8.1.4 (Iteration 122): identity at zero (never produced in
+        // calibrated windows → zero-blast), exact 0.75 at 0.5, exact floor
+        // 0.5 at full despair. The floor is load-bearing: the pacification
+        // must never fully erase the escalation chance (same never-zero
+        // design as the Iter-110 trust pacifier's cap).
+        assert_eq!(
+            despair_pacify_factor(
+                Fixed::ZERO,
+                DESPAIR_PACIFY_RATE,
+                DESPAIR_PACIFY_FLOOR
+            ),
+            Fixed::ONE,
+            "zero despair must be a byte-identical identity"
+        );
+        assert_eq!(
+            despair_pacify_factor(
+                Fixed::from_f64(0.5),
+                DESPAIR_PACIFY_RATE,
+                DESPAIR_PACIFY_FLOOR
+            ),
+            Fixed::from_f64(0.75),
+            "1 − 0.5 × 0.5 must be exactly 0.75"
+        );
+        assert_eq!(
+            despair_pacify_factor(
+                Fixed::ONE,
+                DESPAIR_PACIFY_RATE,
+                DESPAIR_PACIFY_FLOOR
+            ),
+            Fixed::from_f64(0.5),
+            "full despair must hit the exact floor 0.5"
+        );
+        // The floor must actually bind below the unfloored value.
+        assert_eq!(
+            despair_pacify_factor(Fixed::ONE, 0.8, DESPAIR_PACIFY_FLOOR),
+            Fixed::from_f64(0.5),
+            "floor 0.5 must bind at high rates"
         );
     }
 }

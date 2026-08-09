@@ -8952,3 +8952,62 @@ fn shared_trauma_bonds_peer_groups_end_to_end() {
         "maximal shared trauma still does not flip seed-42 candidates"
     );
 }
+#[test]
+fn secondary_emotions_fold_is_zero_blast_in_golden_window() {
+    // §8.1.4 (Iteration 122): the contempt amplifier + despair pacifier on
+    // `should_escalate` must be provably inert in the calibrated golden
+    // window — both emotions are never produced in calm worlds (their
+    // appraisal inputs don't fire), so both factors are exactly 1.0 and the
+    // escalation chance chain is byte-identical.
+    //
+    // Leg A (zero-blast pin): the real seed-42 golden population at the
+    // 5000-tick horizon has EVERY agent at exactly `contempt == 0` and
+    // `despair == 0`. The factors are then exactly 1.0 → the chain is
+    // bit-identical to the pre-fold build → golden stays byte-identical.
+    let sim = crate::test_helpers::run_sim(42, 5000);
+    let any_nonzero = |f: fn(&mindstrata_sim::person::DiscreteEmotions) -> mindstrata_core::fixed::Fixed| {
+        sim.agents
+            .iter()
+            .any(|a| f(&a.emotions) > mindstrata_core::fixed::Fixed::ZERO)
+    };
+    assert!(
+        !any_nonzero(|e| e.contempt),
+        "contempt must be exactly ZERO for every agent in the golden window"
+    );
+    assert!(
+        !any_nonzero(|e| e.despair),
+        "despair must be exactly ZERO for every agent in the golden window"
+    );
+
+    // Leg B (the fold is live, not dead): the OTHER §8.1.4 channels are
+    // genuinely live producers in the same window — awe/relief/nostalgia
+    // hover well above zero. That is precisely why they were NOT folded:
+    // they are not identity-at-zero, so a consumer on them would be a
+    // calibrated change (golden regeneration), not a zero-blast addition.
+    // The contempt/despair choice is the identity-at-zero pair among the
+    // six — the only zero-blast-compatible consumers.
+    let mean = |f: fn(&mindstrata_sim::person::DiscreteEmotions) -> mindstrata_core::fixed::Fixed| -> f64 {
+        sim.agents
+            .iter()
+            .map(|a| f(&a.emotions).to_f64())
+            .sum::<f64>()
+            / sim.agents.len() as f64
+    };
+    let live = [mean(|e| e.awe), mean(|e| e.relief), mean(|e| e.nostalgia)];
+    assert!(
+        live.iter().all(|&m| m > 0.3),
+        "awe/relief/nostalgia must be live producers in the golden window, got {live:?}"
+    );
+
+    // Leg C (producer-side symmetry): envy — the third zero emotion — is
+    // also identically zero (its status-threat × incongruence inputs don't
+    // fire in calm worlds), so it remains a viable future zero-blast
+    // consumer without disturbing this fold. It was NOT folded here because
+    // its natural consumer is a different decision — coveting lives in the
+    // relationship/patronage layer, not the failed-threat escalation — so
+    // forcing it onto this chain would be a semantic stretch.
+    assert!(
+        !any_nonzero(|e| e.envy),
+        "envy must be exactly ZERO for every agent in the golden window"
+    );
+}
