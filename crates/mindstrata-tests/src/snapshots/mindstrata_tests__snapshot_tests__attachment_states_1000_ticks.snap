@@ -6,7 +6,7 @@ expression: attachment_states
 [
     AttachmentSnapshot {
         name: "Anna",
-        security: 1.0,
+        security: 0.9368,
         anxiety: 0.0789,
         avoidance: 0.0526,
     },

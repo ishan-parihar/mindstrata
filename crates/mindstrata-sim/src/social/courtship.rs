@@ -194,6 +194,21 @@ impl Courtship {
 ///
 /// Eligibility requires: both adults, not closely related, not already bonded,
 /// and some minimum attraction level.
+/// §10.4 (Iteration 118): the "Seek proximity" step — one deterministic
+/// Manhattan step from `(ax, ay)` toward `(bx, by)` when the pair sits
+/// beyond `radius`, `None` at or within it (identity). Pure and RNG-free,
+/// so the daily courtship pass can un-stall a pair that formed beyond
+/// perception radius (the Iter-76 stall: pairs beyond radius never
+/// interact, trust never grows, and the ladder rots at Awareness) without
+/// touching the RNG streams or the golden's replay determinism.
+pub fn seek_step(ax: i32, ay: i32, bx: i32, by: i32, radius: i32) -> Option<(i32, i32)> {
+    let dist = (ax - bx).abs() + (ay - by).abs();
+    if dist <= radius {
+        return None;
+    }
+    Some(((bx - ax).clamp(-1, 1), (by - ay).clamp(-1, 1)))
+}
+
 pub fn eligible_for_courtship(
     age_a: Fixed,
     age_b: Fixed,
@@ -371,5 +386,27 @@ mod tests {
         fresh.stage = RomanticStage::Awareness;
         fresh.record_negative(10);
         assert!(!fresh.active);
+    }
+
+    /// §10.4 (Iteration 118): `seek_step` returns a single deterministic
+    /// Manhattan step toward the target only when the pair is beyond the
+    /// radius — identity at and within it, and the step strictly reduces
+    /// the distance (so the daily pass converges the pair into perception
+    /// range in ⌈distance − radius⌉ days).
+    #[test]
+    fn seek_step_closes_distance_beyond_radius_and_is_identity_within() {
+        // Beyond radius on one axis: step toward the target.
+        let step = seek_step(0, 0, 8, 0, 5);
+        assert_eq!(step, Some((1, 0)));
+        let after_dist = (1i32 - 8).abs();
+        assert!(after_dist < 8, "the step must close the distance");
+        // Diagonal beyond radius: steps on both axes.
+        assert_eq!(seek_step(0, 0, 6, 6, 5), Some((1, 1)));
+        // At exactly the radius: identity (no seeking needed).
+        assert_eq!(seek_step(0, 0, 5, 0, 5), None);
+        // Within the radius: identity.
+        assert_eq!(seek_step(0, 0, 3, 1, 5), None);
+        // Negative offsets step correctly (target behind the pursuer).
+        assert_eq!(seek_step(8, 4, 0, 4, 5), Some((-1, 0)));
     }
 }

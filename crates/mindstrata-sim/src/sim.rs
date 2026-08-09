@@ -7439,6 +7439,45 @@ impl Simulation {
                 self.agents[courtship.pursuer].attraction.reciprocity =
                     courtship.reciprocity;
             }
+            // §10.4 (Iteration 118): "Seek proximity" — the pursuer
+            // actively walks toward the pursued whenever they sit beyond
+            // perception radius. Probe-pinned stall (Iter-76 limitation):
+            // courtships form without any distance check (trust-gated
+            // formation), and pairs beyond radius never interact — the
+            // interaction path is radius-gated, so trust never grows and
+            // the ladder rots at Awareness (seed 42 golden holds a pair at
+            // distance 8 for the whole 1000-tick window; seeds 1/99 the
+            // same at 5000). One deterministic Manhattan step per day
+            // (no RNG, world-clamped) converges the pair into perception
+            // range in ⌈distance − radius⌉ days, after which the normal
+            // interaction path takes over. Identity at or within the
+            // radius — zero-at-zero for already-proximate pairs.
+            for courtship in &self.active_courtships {
+                if !courtship.active {
+                    continue;
+                }
+                let i = courtship.pursuer;
+                let j = courtship.pursued;
+                if i >= self.agents.len() || j >= self.agents.len() {
+                    continue;
+                }
+                let ax = self.agents[i].position.x;
+                let ay = self.agents[i].position.y;
+                let bx = self.agents[j].position.x;
+                let by = self.agents[j].position.y;
+                if let Some((dx, dy)) = crate::social::courtship::seek_step(
+                    ax,
+                    ay,
+                    bx,
+                    by,
+                    crate::social::interaction::DEFAULT_PERCEPTION_RADIUS,
+                ) {
+                    let w = self.world.width as i32;
+                    let h = self.world.height as i32;
+                    self.agents[i].position.x = (ax + dx).clamp(0, w - 1);
+                    self.agents[i].position.y = (ay + dy).clamp(0, h - 1);
+                }
+            }
             // Courtships that failed (net-negative at Awareness) free their
             // pursuers' attraction models back to zero reciprocity.
             let mut dead_pursuers: Vec<usize> = Vec::new();
