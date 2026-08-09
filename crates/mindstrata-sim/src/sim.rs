@@ -6943,6 +6943,95 @@ impl Simulation {
         }
     }
 
+    /// §10.7 (AP2): Household food pooling — the plan's "resource pooling"
+    /// and "division of labor" dimensions, now decisional (Iteration 119;
+    /// previously `pool_food`/`distribute_food` had ZERO production call
+    /// sites and `HouseholdRole` had ZERO consumers). Every day, well-fed
+    /// adults of a multi-member household contribute a share of their
+    /// surplus to the communal pot (`pool_food`), then hungry members are
+    /// fed dependents-first — children and elders (the childcare / elder
+    /// care dimensions) before adults — via `distribute_food`. Hunger
+    /// relief is exact (`min(hunger, ration)`), never overshoots, and the
+    /// pool never goes negative. Contributions are deliberately savings-only
+    /// (inverse to need): a starving adult contributes nothing, so a
+    /// prolonged famine drains the founding cache to zero — the fold is an
+    /// emergency buffer, not a subsistence model. Singleton households are
+    /// skipped entirely
+    /// (identity by construction — one member has no one to pool with or
+    /// care for), and every current calibrated window is all-singleton
+    /// (probe-pinned: no marriages form in ≤2000-tick windows), so the
+    /// golden, all snapshots, and every trajectory pin stay byte-identical.
+    /// Deterministic: no RNG, fixed member order.
+    pub fn tick_household_food_pooling(&mut self) {
+        use crate::social::household::{
+            HouseholdRole, HOUSEHOLD_ADULT_FEED_RATIO, HOUSEHOLD_FEED_RELIEF,
+            HOUSEHOLD_HUNGER_FEED_THRESHOLD, HOUSEHOLD_POOL_RATE,
+        };
+        let threshold = Fixed::from_f64(HOUSEHOLD_HUNGER_FEED_THRESHOLD);
+        let dependent_ration = Fixed::from_f64(HOUSEHOLD_FEED_RELIEF);
+        let adult_ration = Fixed::from_f64(HOUSEHOLD_FEED_RELIEF * HOUSEHOLD_ADULT_FEED_RATIO);
+        let pool_rate = Fixed::from_f64(HOUSEHOLD_POOL_RATE);
+        for h in &mut self.households {
+            if h.members.len() < 2 {
+                continue; // singleton — no pooling partner; identity by construction
+            }
+            // Guard: roles must run parallel to members (production and
+            // add/remove/derive all maintain this; a malformed or
+            // deserialized household must not panic a pub method).
+            if h.roles.len() != h.members.len() {
+                continue;
+            }
+            // Clone the small member list so `h.pool_food`/`h.distribute_food`
+            // (mutable) don't fight the iterator's immutable borrow.
+            let members: Vec<usize> = h.members.clone();
+            // Dependents consume but do not produce: children, elders, and
+            // household dependents. (`HouseholdRole::Dependent` is included
+            // for completeness — `derive_roles` never assigns it today.)
+            let dependent: Vec<bool> = h
+                .roles
+                .iter()
+                .map(|r| {
+                    matches!(
+                        r,
+                        HouseholdRole::Child | HouseholdRole::Elder | HouseholdRole::Dependent
+                    )
+                })
+                .collect();
+            // Division of labor: adults (Head/Partner/Adult) contribute a
+            // share of their surplus — how far they sit below the feed
+            // threshold — to the communal pot.
+            for (idx, &member) in members.iter().enumerate() {
+                if dependent[idx] {
+                    continue; // dependents consume, they do not produce
+                }
+                let hunger = self.agents[member].needs.hunger;
+                if hunger < threshold {
+                    h.pool_food((threshold - hunger) * pool_rate);
+                }
+            }
+            // Childcare / elder care: dependents are fed first, then hungry
+            // adults from the residual pot.
+            for pass in 0..2 {
+                for (idx, &member) in members.iter().enumerate() {
+                    let hunger = self.agents[member].needs.hunger;
+                    if hunger < threshold {
+                        continue;
+                    }
+                    let is_dep = dependent[idx];
+                    let want_pass = if pass == 0 { is_dep } else { !is_dep };
+                    if !want_pass {
+                        continue;
+                    }
+                    let ration = if is_dep { dependent_ration } else { adult_ration };
+                    let given = h.distribute_food(hunger.min(ration));
+                    if given > Fixed::ZERO {
+                        self.agents[member].needs.hunger = (hunger - given).max(Fixed::ZERO);
+                    }
+                }
+            }
+        }
+    }
+
     /// §6 + §10.6/§10.7: Kinship & Household daily update.
     fn tick_kinship_household_daily(&mut self, tick_u64: u64, phases: crate::scheduler::TickPhases) {
         // §10.6: Decay kinship edges daily.
@@ -6966,6 +7055,11 @@ impl Simulation {
                 household.derive_roles(&ages, &partners);
                 household.collect_traditions(&practices);
             }
+            // §10.7 (AP2): Household food pooling — division of labor
+            // (adults contribute surplus) + childcare/elder care (dependents
+            // fed first). Multi-member households only; singleton worlds
+            // stay byte-identical by construction.
+            self.tick_household_food_pooling();
             // Architecture-plan-2 §10.9: Tick patronage relations daily.
             self.patronage_registry.daily_update();
             // §10.9: Patrons provision destitute clients — patronage as an

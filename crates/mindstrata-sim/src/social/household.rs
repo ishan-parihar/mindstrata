@@ -32,6 +32,27 @@
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 
+/// §10.7 (AP2): Household food-pooling constants (Iteration 119).
+///
+/// `Simulation::tick_household_food_pooling` uses these to make the plan's
+/// "resource pooling" and "division of labor" dimensions decisional (see the
+/// fold's doc for the full narrative). Values are deliberately small — the
+/// fold is an emergency buffer for hungry households, not a full subsistence
+/// model.
+/// - `HOUSEHOLD_POOL_RATE`: an adult's daily surplus contribution, scaled by
+///   how far they sit below the feed threshold (≈0.005/day at half hunger).
+/// - `HOUSEHOLD_FEED_RELIEF`: a dependent's daily ration (hunger relief).
+/// - `HOUSEHOLD_ADULT_FEED_RATIO`: hungry adults receive this fraction of the
+///   dependent ration from the residual pot — dependents eat first and
+///   better (childcare/elder care).
+/// - `HOUSEHOLD_HUNGER_FEED_THRESHOLD`: only members at or above this hunger
+///   are fed. Calibrated windows sit at ≤0.33 max hunger; malnutrition
+///   starts at 0.7 — the fold engages only genuinely hungry members.
+pub const HOUSEHOLD_POOL_RATE: f64 = 0.02;
+pub const HOUSEHOLD_FEED_RELIEF: f64 = 0.1;
+pub const HOUSEHOLD_ADULT_FEED_RATIO: f64 = 0.5;
+pub const HOUSEHOLD_HUNGER_FEED_THRESHOLD: f64 = 0.35;
+
 /// Role within a household.
 ///
 /// §10.7 (AP2): the plan's `Household` carries `roles: Vec<HouseholdRole>`;

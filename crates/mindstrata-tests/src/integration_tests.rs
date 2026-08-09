@@ -8625,3 +8625,171 @@ fn seek_proximity_converges_courting_pairs_end_to_end() {
         "the seek must un-stall the ladder (no courtship past Awareness at 5000)"
     );
 }
+#[test]
+fn household_food_pooling_feeds_dependents_first_end_to_end() {
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::social::household::HouseholdRole;
+
+    // §10.7 (AP2) — Iteration 119: the household food-pooling fold is
+    // decisional for multi-member households (division of labor + childcare/
+    // elder care). Probe-pinned: every calibrated window is all-singleton,
+    // so Legs A–C prove the mechanics on constructed households and Leg D
+    // proves the fold is a complete no-op on the real golden population.
+
+    // Leg A: exact math — the well-fed head only contributes surplus; the
+    // hungry child is fed its full dependent ration (0.1) and lands at 0.8.
+    let mut sim = crate::test_helpers::run_sim(42, 500);
+    sim.agents[1].age = Fixed::from_f64(8.0); // make agent 1 a child
+    sim.households[0].add_member(1);
+    let ages: Vec<Fixed> = sim.agents.iter().map(|a| a.age).collect();
+    let partners: Vec<Option<usize>> = sim.agents.iter().map(|a| a.partner).collect();
+    sim.households[0].derive_roles(&ages, &partners);
+    assert_eq!(sim.households[0].roles[0], HouseholdRole::Head);
+    assert_eq!(sim.households[0].roles[1], HouseholdRole::Child);
+    sim.agents[0].needs.hunger = Fixed::from_f64(0.1); // well-fed head
+    sim.agents[1].needs.hunger = Fixed::from_f64(0.9); // hungry child
+    sim.households[0].food_reserves = Fixed::from_f64(2.0);
+    sim.tick_household_food_pooling();
+    assert_eq!(
+        sim.agents[1].needs.hunger,
+        Fixed::from_f64(0.8),
+        "child fed the full dependent ration"
+    );
+    assert_eq!(
+        sim.agents[0].needs.hunger,
+        Fixed::from_f64(0.1),
+        "well-fed head untouched (below threshold)"
+    );
+    // Reserves: 2.0 + head's surplus contribution (0.02 × 0.25) − 0.1 ration.
+    let expected = Fixed::from_f64(2.0)
+        + Fixed::from_f64(0.02) * Fixed::from_f64(0.25)
+        - Fixed::from_f64(0.1);
+    assert!(
+        (sim.households[0].food_reserves - expected).to_f64().abs() < 1e-9,
+        "pool decremented exactly: {} vs {}",
+        sim.households[0].food_reserves.to_f64(),
+        expected.to_f64()
+    );
+
+    // Leg B: both hungry — the child still eats first (full 0.1) and the
+    // adult receives only the residual half-ration (0.05): dependents-first.
+    let mut sim = crate::test_helpers::run_sim(42, 500);
+    sim.agents[1].age = Fixed::from_f64(8.0);
+    sim.households[0].add_member(1);
+    let ages: Vec<Fixed> = sim.agents.iter().map(|a| a.age).collect();
+    let partners: Vec<Option<usize>> = sim.agents.iter().map(|a| a.partner).collect();
+    sim.households[0].derive_roles(&ages, &partners);
+    sim.agents[0].needs.hunger = Fixed::from_f64(0.6);
+    sim.agents[1].needs.hunger = Fixed::from_f64(0.9);
+    sim.households[0].food_reserves = Fixed::from_f64(2.0);
+    sim.tick_household_food_pooling();
+    assert_eq!(
+        sim.agents[1].needs.hunger,
+        Fixed::from_f64(0.8),
+        "child fed the full ration before the adult"
+    );
+    assert_eq!(
+        sim.agents[0].needs.hunger,
+        Fixed::from_f64(0.55),
+        "adult gets only the residual half-ration"
+    );
+    // Both above threshold → no contributions; reserves 2.0 − 0.15 exactly.
+    let expected = Fixed::from_f64(2.0) - Fixed::from_f64(0.15);
+    assert!(
+        (sim.households[0].food_reserves - expected).to_f64().abs() < 1e-9,
+        "pool spent exactly 0.15: {} vs {}",
+        sim.households[0].food_reserves.to_f64(),
+        expected.to_f64()
+    );
+
+    // Leg C: singleton households are untouched (the zero-blast guard) —
+    // hunger and reserves byte-identical even when the member is starving.
+    let mut sim = crate::test_helpers::run_sim(42, 500);
+    sim.agents[0].needs.hunger = Fixed::from_f64(0.9);
+    let h_before = sim.agents[0].needs.hunger;
+    let r_before = sim.households[0].food_reserves;
+    sim.tick_household_food_pooling();
+    assert_eq!(
+        sim.agents[0].needs.hunger,
+        h_before,
+        "singleton member never fed"
+    );
+    assert_eq!(
+        sim.households[0].food_reserves,
+        r_before,
+        "singleton reserves untouched"
+    );
+
+    // Leg E: elder care — an Elder (age 70) is a dependent too and is fed
+    // the full 0.1 ration before the hungry adult's residual half-ration.
+    let mut sim = crate::test_helpers::run_sim(42, 500);
+    sim.agents[1].age = Fixed::from_f64(70.0);
+    sim.households[0].add_member(1);
+    let ages: Vec<Fixed> = sim.agents.iter().map(|a| a.age).collect();
+    let partners: Vec<Option<usize>> = sim.agents.iter().map(|a| a.partner).collect();
+    sim.households[0].derive_roles(&ages, &partners);
+    assert_eq!(sim.households[0].roles[1], HouseholdRole::Elder);
+    sim.agents[0].needs.hunger = Fixed::from_f64(0.6);
+    sim.agents[1].needs.hunger = Fixed::from_f64(0.9);
+    sim.households[0].food_reserves = Fixed::from_f64(2.0);
+    sim.tick_household_food_pooling();
+    assert_eq!(
+        sim.agents[1].needs.hunger,
+        Fixed::from_f64(0.8),
+        "elder fed the full ration before the adult"
+    );
+    assert_eq!(
+        sim.agents[0].needs.hunger,
+        Fixed::from_f64(0.55),
+        "adult gets only the residual half-ration"
+    );
+
+    // Leg F: pool exhaustion — `distribute_food` caps at reserves: a child
+    // at 0.9 with only 0.08 in the pot receives exactly 0.08 and the pool
+    // drains to exactly zero — nothing overshoots, nothing goes negative.
+    let mut sim = crate::test_helpers::run_sim(42, 500);
+    sim.agents[1].age = Fixed::from_f64(8.0);
+    sim.households[0].add_member(1);
+    let ages: Vec<Fixed> = sim.agents.iter().map(|a| a.age).collect();
+    let partners: Vec<Option<usize>> = sim.agents.iter().map(|a| a.partner).collect();
+    sim.households[0].derive_roles(&ages, &partners);
+    sim.agents[0].needs.hunger = Fixed::from_f64(0.6); // above threshold: no contribution
+    sim.agents[1].needs.hunger = Fixed::from_f64(0.9);
+    sim.households[0].food_reserves = Fixed::from_f64(0.08);
+    sim.tick_household_food_pooling();
+    assert_eq!(
+        sim.agents[1].needs.hunger,
+        Fixed::from_f64(0.9) - Fixed::from_f64(0.08),
+        "relief capped by the 0.08 pot"
+    );
+    assert_eq!(
+        sim.households[0].food_reserves,
+        Fixed::ZERO,
+        "pool drains to exactly zero"
+    );
+
+    // Leg D: the entire seed-42 population is all-singleton (probe-pinned:
+    // 12 households, all size 1, at 1000 ticks) → the fold is a complete
+    // no-op on the real golden population.
+    let a = crate::test_helpers::run_sim(42, 1000);
+    let mut b = crate::test_helpers::run_sim(42, 1000);
+    assert!(
+        a.households.iter().all(|h| h.members.len() == 1),
+        "precondition: all-singleton population"
+    );
+    b.tick_household_food_pooling();
+    let hunger_a: Vec<f64> = a.agents.iter().map(|x| x.needs.hunger.to_f64()).collect();
+    let hunger_b: Vec<f64> = b.agents.iter().map(|x| x.needs.hunger.to_f64()).collect();
+    assert_eq!(hunger_a, hunger_b, "fold is a no-op on all-singleton worlds");
+    let res_a: Vec<f64> = a
+        .households
+        .iter()
+        .map(|h| h.food_reserves.to_f64())
+        .collect();
+    let res_b: Vec<f64> = b
+        .households
+        .iter()
+        .map(|h| h.food_reserves.to_f64())
+        .collect();
+    assert_eq!(res_a, res_b, "singleton reserves identical after the fold");
+}
