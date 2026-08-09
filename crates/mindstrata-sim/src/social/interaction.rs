@@ -837,6 +837,59 @@ mod tests {
         );
     }
 
+    /// §8.1.4 (Iteration 99): a tenderness-boosted help propensity converts
+    /// more high-affection rolls into Help — the same window the Iter-89
+    /// Help Neighbors norm amplifies, so the norm and the emotion compose
+    /// additively (clamped by the [0.5, 1.0] window bound). Zero-at-zero:
+    /// propensity 0 → legacy Help window.
+    #[test]
+    fn tenderness_boosted_propensity_amplifies_help() {
+        let params = crate::parameters::SimParameters::default();
+        let trust = Fixed::ONE;
+        let affection = Fixed::ONE;
+        let openness = Fixed::from_f64(0.5);
+        let agreeableness = Fixed::from_f64(0.8);
+        let anger = Fixed::ZERO;
+        let count_help = |propensity: Fixed| -> u32 {
+            let mut rng = RngStreams::new(42);
+            let mut help = 0u32;
+            for _ in 0..2000 {
+                if choose_interaction(
+                    trust,
+                    affection,
+                    openness,
+                    agreeableness,
+                    anger,
+                    Fixed::ZERO,
+                    propensity,
+                    Fixed::ZERO,
+                    false,
+                    Fixed::ZERO,
+                    false,
+                    &mut rng,
+                    &params,
+                ) == InteractionKind::Help
+                {
+                    help += 1;
+                }
+            }
+            help
+        };
+        // Tenderness 0.9 × multiplier 0.5 = 0.45 propensity (no norm).
+        let baseline = count_help(Fixed::ZERO);
+        let tender = count_help(Fixed::from_f64(0.45));
+        let full = count_help(Fixed::ONE);
+        assert!(baseline > 0, "high-affection rolls must produce some Help");
+        assert!(
+            tender > baseline,
+            "tenderness-boosted propensity must amplify Help: {tender} vs {baseline}"
+        );
+        assert!(
+            full > tender,
+            "higher propensity must amplify Help strictly more: {full} vs {tender}"
+        );
+    }
+
     /// §8.1.4 (Iteration 98): a lonely agent clears the interaction gate
     /// more often — `system_social_interactions` adds `loneliness ×
     /// social_loneliness_multiplier` to `interact_chance` (the family was

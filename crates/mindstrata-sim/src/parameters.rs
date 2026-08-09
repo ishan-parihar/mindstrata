@@ -108,6 +108,11 @@ pub struct SimParameters {
     /// (0.3) — a lonely agent seeks social contact more (the emotion gate's
     /// first read of the loneliness family).
     pub social_loneliness_multiplier: Fixed,
+    /// §8.1.4 (Iteration 99): tenderness multiplier for the help propensity
+    /// (0.5) — a tender agent helps neighbors more (the warmth→caregiving
+    /// channel; folds into the Help-window consumer, clamped by its
+    /// [0.5, 1.0] bound).
+    pub social_tenderness_help_multiplier: Fixed,
     /// Agreeableness threshold for Teach interaction (0.5).
     pub social_agreeableness_threshold: Fixed,
     /// Friend→Neighbor downgrade threshold (0.4 = Friend downgrades if trust drops below).
@@ -355,6 +360,7 @@ impl Default for SimParameters {
             social_interaction_base_chance: Fixed::from_f64(0.3),
             social_extraversion_multiplier: Fixed::from_f64(0.4),
             social_loneliness_multiplier: Fixed::from_f64(0.3),
+            social_tenderness_help_multiplier: Fixed::from_f64(0.5),
             social_agreeableness_threshold: Fixed::from_f64(0.5),
             social_friend_downgrade_threshold: Fixed::from_f64(0.4),
             social_rival_repair_trust: Fixed::from_f64(0.5),

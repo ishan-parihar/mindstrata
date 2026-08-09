@@ -3331,10 +3331,20 @@ impl Simulation {
                             .map_or(Fixed::ZERO, |n| {
                                 a.moral_cognition.norm_resistance(n)
                             });
-                        let help_propensity = help_neighbors_name
+                        // §8.1.4 (Iteration 99): tenderness folds into the
+                        // help propensity — a tender agent (warm congruence
+                        // toward close others) helps more, mirroring the
+                        // Iter-89 Help Neighbors norm channel. Zero-at-zero:
+                        // tenderness 0 → the norm-only legacy value. The
+                        // Help-window consumer clamps to [0.5, 1.0], so the
+                        // sum can never overflow the decision window.
+                        let help_propensity = (help_neighbors_name
                             .map_or(Fixed::ZERO, |n| {
                                 a.moral_cognition.norm_resistance(n)
-                            });
+                            })
+                            + emotions[i].tenderness
+                                * self.params.social_tenderness_help_multiplier)
+                            .clamp_01();
                         let respect_propensity = respect_elders_name
                             .map_or(Fixed::ZERO, |n| {
                                 a.moral_cognition.norm_resistance(n)
