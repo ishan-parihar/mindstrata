@@ -4647,7 +4647,34 @@ impl Simulation {
         let hypocrisy = no_theft_name.map_or(Fixed::ZERO, |name| {
             self.agents[agent_idx].moral_cognition.hypocrisy_factor(name)
         });
-        let amount = amount * (Fixed::ONE - resistance) * (Fixed::ONE - hypocrisy);
+        // §10.1.3 (Iteration 111): the noospheric field's perceived
+        // legitimacy deters theft — an agent who believes the institution
+        // rules rightfully takes less ("the grain belongs to a legitimate
+        // authority"). ONE-SIDED: identity at/below the 0.5 construction
+        // anchor, so a merely-default institution deters nothing; the
+        // consumer activates only when legitimacy is genuinely earned above
+        // the baseline (rituals, propaganda, institutional strength).
+        // Zero-blast by construction: legitimacy decays to ~0.04 in every
+        // calibrated window, so the factor is exactly 1.0 throughout the
+        // golden/snapshot horizons. The gate draws no RNG — the enforcement
+        // detection roll's stream position is unchanged whenever a theft
+        // still occurs.
+        // The three `Fixed` conversions run once per theft attempt — and
+        // theft itself never fires in calibrated windows (0 NormViolated at
+        // every horizon, probe-pinned), so the cost is even rarer than the
+        // Iter-110 escalation path; the shared Fixed-domain helper's
+        // unit-test precision wins over hoisting to file-scope constants.
+        let legitimacy_factor =
+            crate::social::relational_field::RelationalFields::legitimacy_deterrence_factor(
+                self.agents[agent_idx].relational_fields.legitimacy_perceived,
+                Fixed::from_f64(crate::social::relational_field::LEGITIMACY_DETERRENCE_ANCHOR),
+                Fixed::from_f64(crate::social::relational_field::LEGITIMACY_DETERRENCE_RATE),
+                Fixed::from_f64(crate::social::relational_field::LEGITIMACY_DETERRENCE_CAP),
+            );
+        let amount = amount
+            * (Fixed::ONE - resistance)
+            * (Fixed::ONE - hypocrisy)
+            * legitimacy_factor;
         if amount <= Fixed::ZERO {
             return false; // refused the theft — nothing taken, no enforcement
         }
@@ -10996,6 +11023,95 @@ mod tests {
             tick
         ));
         assert!((grain_left(&sim) - 0.805).abs() < 0.001);
+    }
+
+    /// §10.1.3 (Iteration 111): the fold genuinely shifts theft outcomes.
+    /// Two same-seed worlds are IDENTICAL except the thief's perceived
+    /// legitimacy (0.9 — an institution that has genuinely earned the
+    /// agent's belief in its right to rule — vs 0.5, the construction
+    /// anchor where the factor is identity). The take is computed
+    /// deterministically before any enforcement roll, so the
+    /// *legitimacy-deterred* world must strictly take less from the same
+    /// farm stock.
+    #[test]
+    fn perceived_legitimacy_deters_theft_take() {
+        let make_config = || SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let grain_left = |sim: &Simulation| -> f64 {
+            let site_idx = sim
+                .world
+                .sites
+                .iter()
+                .position(|s| s.kind == crate::world::SiteKind::Farm)
+                .expect("seed-42 world has a farm");
+            sim.world.sites[site_idx]
+                .inventory
+                .iter()
+                .find(|s| s.resource_id == crate::world::GRAIN_RESOURCE_ID)
+                .map_or(0.0, |s| s.quantity.to_f64())
+        };
+        let amount = Fixed::from_f64(0.15);
+        let tick = Tick::ZERO;
+
+        let mut anchored = Simulation::new(make_config());
+        anchored.populate();
+        let mut legitimated = Simulation::new(make_config());
+        legitimated.populate();
+        let thief = (0..anchored.agents.len())
+            .find(|&i| !anchored.black_market.can_participate(&anchored.agents[i].personality))
+            .expect("at least one non-black-market agent");
+        let thief_id = AgentId::new(thief as u64);
+        let site_idx = anchored
+            .world
+            .sites
+            .iter()
+            .position(|s| s.kind == crate::world::SiteKind::Farm)
+            .expect("seed-42 world has a farm");
+        // The consumer reads the produced noospheric field.
+        legitimated.agents[thief].relational_fields.legitimacy_perceived =
+            Fixed::from_f64(0.9);
+        // Both worlds start from the same farm stock.
+        assert!((grain_left(&anchored) - grain_left(&legitimated)).abs() < 0.001);
+        let baseline = grain_left(&anchored);
+        assert!(anchored.enforce_theft(
+            thief,
+            thief_id,
+            site_idx,
+            crate::world::GRAIN_RESOURCE_ID,
+            amount,
+            0,
+            tick
+        ));
+        assert!(legitimated.enforce_theft(
+            thief,
+            thief_id,
+            site_idx,
+            crate::world::GRAIN_RESOURCE_ID,
+            amount,
+            0,
+            tick
+        ));
+        let anchored_taken = baseline - grain_left(&anchored);
+        let legitimated_taken = baseline - grain_left(&legitimated);
+        assert!(
+            legitimated_taken < anchored_taken,
+            "a legitimacy-deterred thief must take strictly less: \
+             {legitimated_taken:.4} vs {anchored_taken:.4}"
+        );
+        assert!(
+            (anchored_taken - 0.15).abs() < 0.001,
+            "the anchored thief takes the full amount"
+        );
+        assert!(
+            (legitimated_taken - 0.15 * 0.8).abs() < 0.001,
+            "the legitimacy-deterred thief takes 0.15 x (1 - 0.4 x 0.5) = 0.12"
+        );
     }
 
     /// §8.1.10/§19.5.D (Iteration 86): the witnessed-enforcement *wiring* is

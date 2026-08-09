@@ -7882,3 +7882,113 @@ fn social_trust_pacifies_escalation_end_to_end() {
         );
     }
 }
+
+// §10.1.3 (Iteration 111): the noospheric field's perceived legitimacy
+// deters theft end-to-end. One-sided: identity at/below the 0.5
+// construction anchor, so the consumer is provably zero-blast in every
+// calibrated window (legitimacy decays to ~0.04 — golden byte-identical,
+// no regeneration).
+#[test]
+fn perceived_legitimacy_deters_theft_end_to_end() {
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::sim::SimConfig;
+    use mindstrata_sim::social::relational_field::{
+        RelationalFields, LEGITIMACY_DETERRENCE_ANCHOR, LEGITIMACY_DETERRENCE_CAP,
+        LEGITIMACY_DETERRENCE_RATE,
+    };
+
+    fn make_config(seed: u64, max_ticks: u64) -> SimConfig {
+        SimConfig {
+            seed,
+            max_ticks,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        }
+    }
+
+    // ── Leg A — producer reach: the raw legitimacy field must surface in the
+    // daily-refreshed noospheric field (the consumer reads the produced
+    // field, not the raw state). ──
+    {
+        let mut sim = mindstrata_sim::Simulation::new(make_config(42, 300));
+        sim.populate();
+        for a in &mut sim.agents {
+            a.legitimacy_field.overall = Fixed::from_f64(0.9);
+        }
+        sim.run(200); // past several daily refresh boundaries
+        let mean = sim
+            .agents
+            .iter()
+            .map(|a| a.relational_fields.legitimacy_perceived.to_f64())
+            .sum::<f64>()
+            / sim.agents.len() as f64;
+        // The injected 0.9 decays toward the baseline over the window
+        // (probe: 0.643 at tick 200 vs the ~0.04 decayed baseline), but stays
+        // far above the 0.5 anchor — the surface is live and the consumer's
+        // input is the produced field. The assert anchors on the relative
+        // claim (well above the anchor AND an order of magnitude above the
+        // decayed baseline) rather than the observed value, so a future
+        // legitimacy-dynamics change re-pins the comment, not the semantics.
+        assert!(
+            mean > 0.5 && mean > 0.04 * 10.0,
+            "injected legitimacy must surface in the refreshed field, got {mean}"
+        );
+    }
+
+    // ── Leg B — consumer factor through the public path: at/below the
+    // construction anchor the factor is identity (byte-identical — the
+    // zero-blast contract), above it the factor deters monotonically. ──
+    {
+        let anchor = Fixed::from_f64(LEGITIMACY_DETERRENCE_ANCHOR);
+        let rate = Fixed::from_f64(LEGITIMACY_DETERRENCE_RATE);
+        let cap = Fixed::from_f64(LEGITIMACY_DETERRENCE_CAP);
+        assert_eq!(
+            RelationalFields::legitimacy_deterrence_factor(anchor, anchor, rate, cap),
+            Fixed::ONE,
+            "at the anchor the factor must be a byte-identical identity"
+        );
+        assert_eq!(
+            RelationalFields::legitimacy_deterrence_factor(Fixed::ZERO, anchor, rate, cap),
+            Fixed::ONE,
+            "decayed legitimacy (below anchor) must also be identity"
+        );
+        assert!(
+            RelationalFields::legitimacy_deterrence_factor(
+                Fixed::from_f64(0.9),
+                anchor,
+                rate,
+                cap,
+            )
+            .to_f64()
+                < 1.0,
+            "a genuinely legitimate institution must deter the theft amount"
+        );
+    }
+
+    // ── Leg C — replay determinism: same seed, same legitimacy injection →
+    // byte-identical refreshed field (the deterministic theft-take proof
+    // itself lives in the sim.rs unit test `perceived_legitimacy_deters_
+    // theft_take`, where the private `enforce_theft` is accessible; here we
+    // pin the producer side through the public run path). ──
+    {
+        let field_after = |seed: u64| -> Vec<f64> {
+            let mut sim = mindstrata_sim::Simulation::new(make_config(seed, 200));
+            sim.populate();
+            for a in &mut sim.agents {
+                a.legitimacy_field.overall = Fixed::from_f64(0.9);
+            }
+            sim.run(200);
+            sim.agents
+                .iter()
+                .map(|a| a.relational_fields.legitimacy_perceived.to_f64())
+                .collect()
+        };
+        assert_eq!(
+            field_after(42),
+            field_after(42),
+            "the legitimacy producer must be replay-deterministic"
+        );
+    }
+}

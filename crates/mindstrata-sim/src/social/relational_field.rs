@@ -26,9 +26,15 @@
 //! `social_trust` gained a consumer in Iteration 110: the pacification
 //! factor (`trust_pacify_factor`) scales the failed-threat escalation
 //! chance down — an agent embedded in a trusting relationship graph
-//! escalates to violence less readily. The remaining social
-//! (obligation/peer-status) and noospheric (legitimacy, collective fear)
-//! layers remain observational.
+//! escalates to violence less readily. The noospheric field's
+//! `legitimacy_perceived` gained a consumer in Iteration 111: the
+//! deterrence factor (`legitimacy_deterrence_factor`) scales the theft
+//! amount down when the agent perceives the institution as legitimately
+//! ruling (one-sided — identity at/below the 0.5 construction anchor, so
+//! legitimacy must be genuinely earned above the baseline; provably
+//! zero-blast because legitimacy decays to ~0.04 in every calibrated
+//! window). The remaining social (obligation/peer-status) and noospheric
+//! (collective fear) layers remain observational.
 
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
@@ -74,6 +80,28 @@ pub const SOCIAL_TRUST_PACIFY_RATE: f64 = 0.3;
 /// [0.4, 1.0] for the shipped constants (cap binds only if a future rate
 /// change would push the reduction past 60%).
 pub const SOCIAL_TRUST_PACIFY_CAP: f64 = 0.6;
+
+/// The legitimacy anchor (§10.1.3, Iteration 111): the construction-time
+/// value of `legitimacy_field.overall` (sim.rs:877). The theft-deterrence
+/// factor is identity at or below this anchor — an institution must GENUINELY
+/// earn legitimacy above the baseline before it deters theft. This is what
+/// makes the consumer zero-blast: legitimacy decays to ~0.04 in every
+/// calibrated window (probe-pinned), so the factor is exactly 1.0 throughout
+/// the golden/snapshot horizons (golden byte-identical, no regeneration).
+pub const LEGITIMACY_DETERRENCE_ANCHOR: f64 = 0.5;
+
+/// Per-unit-above-anchor theft-deterrence rate (§10.1.3, Iteration 111):
+/// each unit of perceived legitimacy above the anchor reduces the theft
+/// amount by this fraction. At legitimacy 0.8 (a genuinely respected
+/// institution) the take drops 15%; at full legitimacy 1.0 it drops 25%.
+/// Modest so legitimate institutions deter without abolishing theft.
+pub const LEGITIMACY_DETERRENCE_RATE: f64 = 0.5;
+
+/// Ceiling on the legitimacy deterrence (§10.1.3, Iteration 111): the
+/// institution can deter but never erase theft — the factor stays in
+/// [0.5, 1.0] for the shipped constants (cap binds only if a future rate
+/// change would push the reduction past 50%).
+pub const LEGITIMACY_DETERRENCE_CAP: f64 = 0.5;
 
 /// §10.1: The three relational fields an agent perceives around itself.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -162,6 +190,31 @@ impl RelationalFields {
         let reduction = (social_trust * rate).min(cap);
         // The clamp is defensive: reduction ∈ [0, cap] with cap < 1.0, so
         // the factor is provably in [0.4, 1.0] for the shipped constants.
+        (Fixed::ONE - reduction).clamp_01()
+    }
+
+    /// §10.1.3 (Iteration 111): the legitimacy deterrence factor — an agent
+    /// who believes the institution rules rightfully takes less in a theft
+    /// ("the grain belongs to a legitimate authority; stealing undermines
+    /// it"). ONE-SIDED: identity at or below the construction anchor (0.5),
+    /// so a merely-default institution deters nothing — it must GENUINELY
+    /// earn legitimacy above the baseline. This is provably zero-blast:
+    /// legitimacy decays to ~0.04 in every calibrated window (probe-pinned),
+    /// so the factor is exactly 1.0 throughout the golden/snapshot horizons
+    /// (golden byte-identical, no regeneration). Monotone above the anchor,
+    /// capped so the institution can never erase theft entirely,
+    /// deterministic (no RNG). The caller multiplies the theft amount in
+    /// `enforce_theft` by the returned factor.
+    pub fn legitimacy_deterrence_factor(
+        legitimacy_perceived: Fixed,
+        anchor: Fixed,
+        rate: Fixed,
+        cap: Fixed,
+    ) -> Fixed {
+        let above_anchor = (legitimacy_perceived - anchor).max(Fixed::ZERO);
+        let reduction = (above_anchor * rate).min(cap);
+        // The clamp is defensive: reduction ∈ [0, cap] with cap < 1.0, so
+        // the factor is provably in [0.5, 1.0] for the shipped constants.
         (Fixed::ONE - reduction).clamp_01()
     }
 
@@ -345,6 +398,67 @@ mod tests {
             RelationalFields::trust_pacify_factor(Fixed::ONE, Fixed::from_f64(2.0), cap),
             Fixed::ONE - cap,
             "an oversized rate must saturate at the cap, never below"
+        );
+    }
+
+    #[test]
+    fn legitimacy_deterrence_factor_is_identity_at_anchor_and_capped() {
+        // §10.1.3 (Iteration 111): at/below the construction anchor the
+        // factor is exactly 1.0 (byte-identical — legitimacy decays to ~0.04
+        // in every calibrated window, so the golden horizons never see the
+        // consumer); above the anchor it deters monotonically and is capped
+        // so the institution can never erase theft entirely.
+        let anchor = Fixed::from_f64(LEGITIMACY_DETERRENCE_ANCHOR);
+        let rate = Fixed::from_f64(LEGITIMACY_DETERRENCE_RATE);
+        let cap = Fixed::from_f64(LEGITIMACY_DETERRENCE_CAP);
+        assert_eq!(
+            RelationalFields::legitimacy_deterrence_factor(anchor, anchor, rate, cap),
+            Fixed::ONE,
+            "at the construction anchor the factor must be a byte-identical identity"
+        );
+        assert_eq!(
+            RelationalFields::legitimacy_deterrence_factor(Fixed::ZERO, anchor, rate, cap),
+            Fixed::ONE,
+            "below the anchor (decayed legitimacy) must also be identity"
+        );
+        assert_eq!(
+            RelationalFields::legitimacy_deterrence_factor(
+                Fixed::from_f64(0.8),
+                anchor,
+                rate,
+                cap,
+            ),
+            Fixed::from_f64(0.85),
+            "legitimacy 0.8 must deter by exactly 0.15"
+        );
+        let low = RelationalFields::legitimacy_deterrence_factor(
+            Fixed::from_f64(0.6),
+            anchor,
+            rate,
+            cap,
+        );
+        let high = RelationalFields::legitimacy_deterrence_factor(
+            Fixed::from_f64(0.9),
+            anchor,
+            rate,
+            cap,
+        );
+        assert!(low > high, "higher legitimacy must deter more");
+        assert_eq!(
+            RelationalFields::legitimacy_deterrence_factor(Fixed::ONE, anchor, rate, cap),
+            Fixed::ONE - rate * Fixed::from_f64(0.5),
+            "full legitimacy with the shipped rate must deter by exactly 0.25"
+        );
+        // Cap: an oversized rate saturates at the cap, never below.
+        assert_eq!(
+            RelationalFields::legitimacy_deterrence_factor(
+                Fixed::ONE,
+                anchor,
+                Fixed::from_f64(5.0),
+                cap,
+            ),
+            Fixed::ONE - cap,
+            "an oversized rate must saturate at the cap"
         );
     }
 
