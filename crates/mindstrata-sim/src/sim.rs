@@ -3137,6 +3137,11 @@ impl Simulation {
                                 // §9.2 (Iteration 94): the agent's learned
                                 // RL valuation weights feed selection.
                                 action_values: self.agents[i].neural_like.values,
+                                // §8.1.5 (Iteration 96): the full-pressure
+                                // motivation argmax biases selection toward
+                                // actions that relieve the dominant need.
+                                dominant_need: self.agents[i].motivation.dominant_need,
+                                dominant_pressure: self.agents[i].motivation.dominant_pressure(),
                             },
                             ctx.rng,
                         )

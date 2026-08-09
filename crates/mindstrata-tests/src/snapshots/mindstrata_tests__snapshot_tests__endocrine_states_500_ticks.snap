@@ -19,7 +19,7 @@ expression: endocrine_states
         bonding: 0.489,
         dominance: 0.5202,
         fertility: 0.4859,
-        metabolic_energy: 0.0,
+        metabolic_energy: 1.0,
         arousal: 1.0,
         growth_capacity: 0.6,
     },
