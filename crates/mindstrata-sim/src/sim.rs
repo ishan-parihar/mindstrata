@@ -210,8 +210,12 @@ pub struct AgentBundle {
     /// §22: Derived mental states — trauma, depression, ambition, resilience, resentment.
     pub derived: DerivedMentalState,
     /// §10.1: The agent's perceived relational fields (sensory / social /
-    /// noospheric), refreshed on the daily cadence. Observational — no
-    /// decisional consumer wired yet, so calibrated runs carry zero drift.
+    /// noospheric), refreshed on the daily cadence. Decisional consumers are
+    /// tracked in the `relational_field` module doc — six wired since
+    /// Iteration 107 (`perceived_stress`, `kin_count`, `belief_confidence`,
+    /// `social_trust`, `legitimacy_perceived`, `collective_fear`); the
+    /// remaining observational layers are `social_obligation` and
+    /// `peer_status`.
     #[serde(default)]
     pub relational_fields: crate::social::relational_field::RelationalFields,
     /// Track success rate for derived mental state computation.
@@ -8777,7 +8781,7 @@ impl Simulation {
             // Check propositions 0 ("the_market_is_fair") and 1 ("the_council_protects_us")
             let belief_refs: Vec<&Vec<Belief>> = self.agents.iter().map(|a| &a.beliefs).collect();
             for prop_id in 0..=1 {
-                let panic_result = gossip::detect_moral_panic(&belief_refs, prop_id);
+                let mut panic_result = gossip::detect_moral_panic(&belief_refs, prop_id);
                 if panic_result.triggered && panic_cooldown_ok {
                     self.last_moral_panic_tick = tick_u64;
                     tracing::warn!(
@@ -8786,6 +8790,37 @@ impl Simulation {
                         tick = tick_u64,
                         "§7.2: Moral panic triggered!"
                     );
+                    // §10.1.3 (Iteration 112): a genuinely terrified
+                    // population amplifies the panic's legitimacy damage —
+                    // collective fear (world mean agent fear, refreshed
+                    // daily into the relational fields) scales the damage
+                    // by `collective_fear_panic_amplifier`. ONE-SIDED:
+                    // identity at/below the 0.95 anchor (above the
+                    // calibrated peak of 0.903), so this consumer is
+                    // provably zero-blast in every calibrated window — the
+                    // single seed-42 panic at ~4,320 ticks sits at
+                    // collective fear 0.90 and is likewise unamplified.
+                    // The `Fixed` conversions below run only when a panic
+                    // actually fires (sub-tick-frequency), so the cost is
+                    // negligible.
+                    let collective_fear = self
+                        .agents
+                        .iter()
+                        .map(|a| a.emotions.fear)
+                        .fold(Fixed::ZERO, |acc, f| acc + f)
+                        / Fixed::from_int(self.agents.len() as i64);
+                    let panic_amplifier = crate::social::relational_field::
+                        RelationalFields::collective_fear_panic_amplifier(
+                            collective_fear,
+                            Fixed::from_f64(crate::social::relational_field::
+                                COLLECTIVE_FEAR_PANIC_ANCHOR),
+                            Fixed::from_f64(crate::social::relational_field::
+                                COLLECTIVE_FEAR_PANIC_RATE),
+                            Fixed::from_f64(crate::social::relational_field::
+                                COLLECTIVE_FEAR_PANIC_CAP),
+                        );
+                    panic_result.legitimacy_damage =
+                        panic_result.legitimacy_damage * panic_amplifier;
                     // Apply legitimacy damage to all matching institutions
                     for inst in &mut self.institutions {
                         let inst_prop = match inst.kind {
@@ -11111,6 +11146,93 @@ mod tests {
         assert!(
             (legitimated_taken - 0.15 * 0.8).abs() < 0.001,
             "the legitimacy-deterred thief takes 0.15 x (1 - 0.4 x 0.5) = 0.12"
+        );
+    }
+
+    /// §10.1.3 (Iteration 112): the panic fold genuinely shifts legitimacy
+    /// outcomes. Two same-seed worlds are IDENTICAL except the population's
+    /// collective fear (0.99 — a genuinely terrified population — vs 0.8,
+    /// below the 0.95 anchor where the amplifier is identity). Every agent's
+    /// council belief is pinned above the §7.2 trigger threshold (avg charge
+    /// ≥ 0.55, ≥ 30% of agents at charge > 0.4), so a panic fires
+    /// deterministically in both worlds at the same tick; the terrified
+    /// world must lose strictly more institutional legitimacy. The
+    /// amplification is provable without any RNG: the damage fold happens
+    /// before any roll.
+    #[test]
+    fn collective_fear_amplifies_panic_legitimacy_damage() {
+        let make_config = || SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let council_legitimacy = |sim: &Simulation| -> f64 {
+            sim.institutions
+                .iter()
+                .find(|i| i.kind == institutions::InstitutionKind::Council)
+                .map_or(0.0, |i| i.legitimacy.to_f64())
+        };
+        let mut calm = Simulation::new(make_config());
+        calm.populate();
+        let mut terrified = Simulation::new(make_config());
+        terrified.populate();
+        // Pin every agent's council belief above the §7.2 trigger threshold
+        // so the panic fires deterministically in both worlds at the same
+        // tick (proposition 1 → Council).
+        for agent in &mut calm.agents {
+            agent.beliefs[1].emotional_charge = Fixed::from_f64(0.9);
+        }
+        for agent in &mut terrified.agents {
+            agent.beliefs[1].emotional_charge = Fixed::from_f64(0.9);
+        }
+        // The consumer reads the produced noospheric field (world mean fear,
+        // refreshed daily into the relational fields). 0.99 > 0.95 anchor →
+        // amplified; 0.8 < 0.95 → identity.
+        for agent in &mut calm.agents {
+            agent.emotions.fear = Fixed::from_f64(0.8);
+        }
+        for agent in &mut terrified.agents {
+            agent.emotions.fear = Fixed::from_f64(0.99);
+        }
+        // Raise council legitimacy so the damage differential is not erased
+        // by the clamp at zero: 1.0 − 0.66 (calm) vs 1.0 − 0.6732
+        // (terrified, ×1.02) are both visible above zero.
+        for inst in &mut calm.institutions {
+            if inst.kind == institutions::InstitutionKind::Council {
+                inst.legitimacy = Fixed::ONE;
+            }
+        }
+        for inst in &mut terrified.institutions {
+            if inst.kind == institutions::InstitutionKind::Council {
+                inst.legitimacy = Fixed::ONE;
+            }
+        }
+        assert_eq!(council_legitimacy(&calm), 1.0);
+        assert_eq!(council_legitimacy(&terrified), 1.0);
+        // 400 ≥ the 300-tick cooldown; `Tick::ZERO` is fine — `tick_u64`
+        // alone gates the cooldown, `tick` only stamps the emitted event.
+        let tick_u64 = 400u64;
+        calm.tick_moral_panic_and_revolution(tick_u64, Tick::ZERO);
+        terrified.tick_moral_panic_and_revolution(tick_u64, Tick::ZERO);
+        let calm_after = council_legitimacy(&calm);
+        let terrified_after = council_legitimacy(&terrified);
+        // Damage 0.66: calm (identity) → 1.0 − 0.66 = 0.34; terrified
+        // (×1.02) → 1.0 − 0.6732 = 0.3268 — strictly lower.
+        assert!(
+            terrified_after < calm_after,
+            "a terrified population must lose strictly more legitimacy: \
+             calm {calm_after:.4} vs terrified {terrified_after:.4}"
+        );
+        assert!(
+            (calm_after - 0.34).abs() < 0.001,
+            "the calm world loses exactly the base damage"
+        );
+        assert!(
+            (terrified_after - (1.0 - 0.66 * 1.02)).abs() < 0.001,
+            "the terrified world loses the base damage amplified by 1.02"
         );
     }
 

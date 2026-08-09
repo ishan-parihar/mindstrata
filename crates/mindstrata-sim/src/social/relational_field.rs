@@ -33,8 +33,14 @@
 //! ruling (one-sided — identity at/below the 0.5 construction anchor, so
 //! legitimacy must be genuinely earned above the baseline; provably
 //! zero-blast because legitimacy decays to ~0.04 in every calibrated
-//! window). The remaining social (obligation/peer-status) and noospheric
-//! (collective fear) layers remain observational.
+//! window). The noospheric field's `collective_fear` gained a consumer in
+//! Iteration 112: the panic amplification factor
+//! (`collective_fear_panic_amplifier`) scales the legitimacy damage a moral
+//! panic inflicts — a genuinely terrified population amplifies the crisis
+//! (one-sided — identity at/below the 0.95 anchor, which sits above the
+//! calibrated peak of 0.903, so provably zero-blast: the single seed-42
+//! panic at ~4,320 ticks sits at collective fear 0.90 < 0.95). The
+//! remaining social (obligation/peer-status) layers remain observational.
 
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
@@ -102,6 +108,28 @@ pub const LEGITIMACY_DETERRENCE_RATE: f64 = 0.5;
 /// [0.5, 1.0] for the shipped constants (cap binds only if a future rate
 /// change would push the reduction past 50%).
 pub const LEGITIMACY_DETERRENCE_CAP: f64 = 0.5;
+
+/// The collective-fear panic anchor (§10.1.3, Iteration 112): the world
+/// mean fear above which a moral panic's legitimacy damage is amplified.
+/// Placed at 0.95 — ABOVE the calibrated world's collective-fear peak of
+/// 0.903 (probe-pinned) — so the amplifier is identity (factor 1.0)
+/// throughout the golden/snapshot horizons. The single moral panic that
+/// fires in seed-42 runs (~4,320 ticks) sits at collective fear 0.90, so
+/// it is not amplified either: the consumer engages only in true terror.
+pub const COLLECTIVE_FEAR_PANIC_ANCHOR: f64 = 0.95;
+
+/// Per-unit-above-anchor panic-amplification rate (§10.1.3, Iteration 112):
+/// each unit of collective fear above the anchor multiplies the panic's
+/// legitimacy damage by `1 + above × this`. At full terror (fear 1.0) the
+/// damage is amplified by exactly 2.5% — modest, bounded, deterministic.
+pub const COLLECTIVE_FEAR_PANIC_RATE: f64 = 0.5;
+
+/// Ceiling on the panic amplification (§10.1.3, Iteration 112): collective
+/// fear can intensify a panic but never more than double its legitimacy
+/// damage — the factor stays in [1.0, 1.5] for the shipped constants (cap
+/// binds only if a future rate change would push the amplification past
+/// 50%).
+pub const COLLECTIVE_FEAR_PANIC_CAP: f64 = 0.5;
 
 /// §10.1: The three relational fields an agent perceives around itself.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -216,6 +244,36 @@ impl RelationalFields {
         // The clamp is defensive: reduction ∈ [0, cap] with cap < 1.0, so
         // the factor is provably in [0.5, 1.0] for the shipped constants.
         (Fixed::ONE - reduction).clamp_01()
+    }
+
+    /// §10.1.3 (Iteration 112): the panic amplification factor — when a
+    /// moral panic fires, a genuinely terrified population amplifies the
+    /// legitimacy damage it inflicts ("fear → gossip → more fear", §13.5's
+    /// self-reinforcing loop made live). ONE-SIDED: identity at or below the
+    /// anchor (0.95), so the amplifier engages only in true terror — the
+    /// calibrated world's collective fear peaks at 0.903 (probe-pinned), so
+    /// the factor is exactly 1.0 throughout the golden/snapshot horizons
+    /// (golden byte-identical, no regeneration; the single panic that fires
+    /// at ~4,320 ticks in seed-42 runs sits at collective fear 0.90 < 0.95
+    /// and is likewise unamplified). Monotone above the anchor, capped so
+    /// the amplification can never more than double the damage,
+    /// deterministic (no RNG). The caller multiplies
+    /// `MoralPanicResult::legitimacy_damage` in
+    /// `tick_moral_panic_and_revolution` by the returned factor.
+    pub fn collective_fear_panic_amplifier(
+        collective_fear: Fixed,
+        anchor: Fixed,
+        rate: Fixed,
+        cap: Fixed,
+    ) -> Fixed {
+        let above_anchor = (collective_fear - anchor).max(Fixed::ZERO);
+        let amplification = (above_anchor * rate).min(cap);
+        // NOTE: no `clamp_01` here — an amplifier must exceed 1.0, and
+        // `clamp_01` caps at 1.0 (it would silently erase the amplification
+        // and turn this into an identity, which a shipping unit test caught).
+        // No clamp is needed: amplification ∈ [0, cap] with cap < 1.0, so
+        // the factor is provably in [1.0, 1.5] for the shipped constants.
+        Fixed::ONE + amplification
     }
 
     /// Mean of a slice of `Fixed`; 0 when empty.
@@ -458,6 +516,65 @@ mod tests {
                 cap,
             ),
             Fixed::ONE - cap,
+            "an oversized rate must saturate at the cap"
+        );
+    }
+
+    #[test]
+    fn collective_fear_panic_amplifier_is_identity_below_anchor_and_capped() {
+        // §10.1.3 (Iteration 112): at/below the anchor the factor is exactly
+        // 1.0 (byte-identical — the calibrated world's collective fear peaks
+        // at 0.903 < 0.95, so the golden horizons never see the consumer);
+        // above the anchor it amplifies monotonically and is capped so the
+        // panic damage can never more than double.
+        let anchor = Fixed::from_f64(COLLECTIVE_FEAR_PANIC_ANCHOR);
+        let rate = Fixed::from_f64(COLLECTIVE_FEAR_PANIC_RATE);
+        let cap = Fixed::from_f64(COLLECTIVE_FEAR_PANIC_CAP);
+        assert_eq!(
+            RelationalFields::collective_fear_panic_amplifier(anchor, anchor, rate, cap),
+            Fixed::ONE,
+            "at the anchor the factor must be a byte-identical identity"
+        );
+        assert_eq!(
+            RelationalFields::collective_fear_panic_amplifier(
+                Fixed::from_f64(0.9),
+                anchor,
+                rate,
+                cap,
+            ),
+            Fixed::ONE,
+            "below the anchor (calibrated-world fear 0.903) must also be identity"
+        );
+        assert_eq!(
+            RelationalFields::collective_fear_panic_amplifier(Fixed::ONE, anchor, rate, cap),
+            Fixed::from_f64(1.025),
+            "full terror with the shipped rate must amplify by exactly 0.025"
+        );
+        let low = RelationalFields::collective_fear_panic_amplifier(
+            Fixed::from_f64(0.96),
+            anchor,
+            rate,
+            cap,
+        );
+        let high = RelationalFields::collective_fear_panic_amplifier(
+            Fixed::from_f64(0.99),
+            anchor,
+            rate,
+            cap,
+        );
+        assert!(low < high, "higher collective fear must amplify more");
+        // Cap: an oversized rate saturates at the cap, never above.
+        // (Rate 20.0 × above-anchor 0.05 = 1.0 > cap 0.5, so the cap binds;
+        // rate 5.0 would give 0.25 < cap and NOT saturate — the cap only
+        // engages when above-anchor × rate ≥ cap.)
+        assert_eq!(
+            RelationalFields::collective_fear_panic_amplifier(
+                Fixed::ONE,
+                anchor,
+                Fixed::from_f64(20.0),
+                cap,
+            ),
+            Fixed::ONE + cap,
             "an oversized rate must saturate at the cap"
         );
     }

@@ -7992,3 +7992,104 @@ fn perceived_legitimacy_deters_theft_end_to_end() {
         );
     }
 }
+
+/// §10.1.3 (Iteration 112): the noospheric field's `collective_fear` is
+/// produced daily (world mean fear, mirrored into every agent's relational
+/// field) and now has a decisional consumer — the moral-panic legitimacy
+/// damage amplifier in `tick_moral_panic_and_revolution`. The amplifier is
+/// ONE-SIDED at the 0.95 anchor (above the calibrated peak of 0.903), so
+/// this is a ZERO-BLAST iteration: golden byte-identical, no snapshot drift.
+///
+/// Leg A — producer reach: the field is live and bounded in a default run.
+/// Leg B — consumer factor via the public path: the pure amplifier is exact
+///   and identity below the anchor.
+/// Leg C — replay determinism: two same-seed runs to 4,320 ticks produce
+///   identical panic counts (the §7.2 trigger fires exactly once in seed-42)
+///   and identical institution legitimacy vectors.
+#[test]
+fn collective_fear_amplifies_panic_legitimacy_damage_end_to_end() {
+    use mindstrata_core::conflict::ConflictKind;
+    use mindstrata_core::event::SimEvent;
+    use mindstrata_sim::social::relational_field::RelationalFields;
+
+    // Leg A — producer reach: collective_fear mirrors mean fear and stays
+    // bounded in the calibrated world (2000 ticks: probe-pinned mean 0.7702).
+    let sim = crate::test_helpers::run_sim(42, 2000);
+    let mean_cf: f64 = sim
+        .agents
+        .iter()
+        .map(|a| a.relational_fields.collective_fear.to_f64())
+        .sum::<f64>()
+        / sim.agents.len() as f64;
+    let mean_fear: f64 = sim
+        .agents
+        .iter()
+        .map(|a| a.emotions.fear.to_f64())
+        .sum::<f64>()
+        / sim.agents.len() as f64;
+    assert!(
+        mean_cf > 0.7 && mean_cf <= 1.0,
+        "collective_fear must be live and bounded: {mean_cf:.4}"
+    );
+    assert!(
+        (mean_cf - mean_fear).abs() < 0.01,
+        "collective_fear must mirror mean fear: {mean_cf:.4} vs {mean_fear:.4}"
+    );
+
+    // Leg B — consumer factor through the public path: identity at/below
+    // the 0.95 anchor (the calibrated peak is 0.903 — this is what makes
+    // the iteration zero-blast), exact amplification above it.
+    let anchor = Fixed::from_f64(0.95);
+    let rate = Fixed::from_f64(0.5);
+    let cap = Fixed::from_f64(0.5);
+    assert_eq!(
+        RelationalFields::collective_fear_panic_amplifier(
+            Fixed::from_f64(0.9),
+            anchor,
+            rate,
+            cap,
+        ),
+        Fixed::ONE,
+        "below the anchor the amplifier must be identity"
+    );
+    assert_eq!(
+        RelationalFields::collective_fear_panic_amplifier(Fixed::ONE, anchor, rate, cap),
+        Fixed::from_f64(1.025),
+        "full terror must amplify by exactly 0.025"
+    );
+
+    // Leg C — replay determinism at the panic horizon: the §7.2 trigger
+    // fires exactly once in a seed-42 4,320-tick run, and the run is
+    // seed-deterministic in both panic count and institution legitimacy.
+    let is_panic = |e: &SimEvent| {
+        matches!(
+            e,
+            SimEvent::ConflictOccurred {
+                kind: ConflictKind::MoralPanic,
+                ..
+            }
+        )
+    };
+    // Leg C needs its own 4,320-tick runs (the §7.2 trigger fires only at
+    // ~4,320 in seed-42; the Leg-A 2,000-tick sim has zero panics).
+    let at_panic_horizon = crate::test_helpers::run_sim(42, 4320);
+    let again = crate::test_helpers::run_sim(42, 4320);
+    let panics = at_panic_horizon.recent_events(10_000_000).iter().filter(|e| is_panic(e)).count();
+    let panics2 = again.recent_events(10_000_000).iter().filter(|e| is_panic(e)).count();
+    assert!(
+        panics >= 1,
+        "the §7.2 trigger must fire at the 4,320-tick horizon (seed 42)"
+    );
+    assert_eq!(panics, panics2, "panic counts must be seed-deterministic");
+    let council_leg = |s: &mindstrata_sim::Simulation| -> Vec<f64> {
+        s.institutions
+            .iter()
+            .map(|i| i.legitimacy.to_f64())
+            .collect()
+    };
+    assert_eq!(
+        council_leg(&at_panic_horizon),
+        council_leg(&again),
+        "institution legitimacy vectors must be seed-deterministic"
+    );
+}
