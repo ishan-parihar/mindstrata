@@ -137,7 +137,7 @@ pub struct Temperament {
 }
 
 /// §8.1.6: Per-tick state-trait dynamics signals consumed by
-/// `Temperament::plastic_update`. Every field is a deterministic function of
+    /// `Temperament::plastic_update`. Every field is a deterministic function of
 /// existing agent state — no RNG, no writes to decision-read state — so the
 /// plasticity pass cannot disturb calibrated runs.
 #[derive(Debug, Clone, Copy, Default)]
@@ -185,6 +185,22 @@ impl Temperament {
                 + Fixed::from_f64(0.4) * t.risk_tolerance)
                 .clamp_01(),
         }
+    }
+
+    /// §8.1.6 (Iteration 105): how much a temperament-reactivity deviation
+    /// from the trait-derived baseline scales the fear/anger stress response.
+    /// Identity at zero deviation (Δ = 0 → amplifier 1.0 → legacy
+    /// byte-identical appraise); bounded to [0.5, 1.5] so even an extreme
+    /// deviation cannot more than halve or one-and-a-half-fold the response.
+    /// Pure (no RNG), deterministic. The deviation is zero at construction
+    /// (temperament starts at `from_traits`), so the amplifier is inert until
+    /// the plasticity pass accumulates repeated-stress experience — the
+    /// state-trait dynamics loop is closed: stressed agents become more
+    /// reactive, then feel fear/anger more intensely.
+    #[inline]
+    pub fn reactivity_amplifier(deviation: Fixed) -> Fixed {
+        (Fixed::ONE + deviation * Fixed::from_f64(1.0))
+            .clamp(Fixed::from_f64(0.5), Fixed::from_f64(1.5))
     }
 
     /// §8.1.6: Trait plasticity — the plan's formula
@@ -930,6 +946,37 @@ mod temperament_tests {
         assert!(
             young.reactivity > elderly.reactivity,
             "younger agents must show more trait plasticity"
+        );
+    }
+
+    #[test]
+    fn reactivity_amplifier_is_identity_at_zero_and_bounded() {
+        // §8.1.6 (Iteration 105): zero deviation → amplifier 1.0 exactly —
+        // the appraise fold is byte-identical when the plasticity pass has
+        // not yet drifted the agent (the zero-at-zero contract).
+        assert_eq!(Temperament::reactivity_amplifier(Fixed::ZERO), Fixed::ONE);
+        // Positive deviation amplifies; negative damps — monotone.
+        let up = Temperament::reactivity_amplifier(Fixed::from_f64(0.2));
+        let down = Temperament::reactivity_amplifier(Fixed::from_f64(-0.2));
+        assert!(up > Fixed::ONE, "stressed reactivity must amplify the response");
+        assert!(down < Fixed::ONE, "below-baseline reactivity must damp the response");
+        assert!(up > down, "the amplifier must be monotone in the deviation");
+        // Bounded: a 0.5 deviation saturates at 1.5×; −1.0 at 0.5×.
+        assert_eq!(
+            Temperament::reactivity_amplifier(Fixed::from_f64(0.5)),
+            Fixed::from_f64(1.5),
+            "amplifier must clamp at the 1.5 upper bound"
+        );
+        assert_eq!(
+            Temperament::reactivity_amplifier(Fixed::from_f64(-2.0)),
+            Fixed::from_f64(0.5),
+            "amplifier must clamp at the 0.5 lower bound"
+        );
+        // Deterministic: same deviation reproduces the same amplifier.
+        assert_eq!(
+            Temperament::reactivity_amplifier(Fixed::from_f64(0.2)),
+            up,
+            "the amplifier must be deterministic"
         );
     }
 }

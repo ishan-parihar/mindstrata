@@ -3675,6 +3675,27 @@ impl Simulation {
 
                 let mut delta = appraisal::appraise(&appraisal, tick, &self.params);
 
+                // §8.1.6 (Iteration 105): temperament reactivity amplifies the
+                // stress response. The deviation from the trait-derived
+                // baseline is zero at construction and builds only as the
+                // plasticity pass accumulates repeated-stress experience
+                // (identity-at-zero → amplifier 1.0 → legacy byte-identical
+                // when inert). The fold lands on the appraise-produced delta
+                // only — the §8.1.14 attachment-fear block below stays
+                // orthogonal.
+                let reactivity_baseline =
+                    crate::person::Temperament::from_traits(&personalities[i]);
+                let reactivity_deviation = self.agents[i]
+                    .personality
+                    .temperament
+                    .reactivity
+                    - reactivity_baseline.reactivity;
+                let reactivity_amp = crate::person::Temperament::reactivity_amplifier(
+                    reactivity_deviation,
+                );
+                delta.fear = (delta.fear * reactivity_amp).clamp_01();
+                delta.anger = (delta.anger * reactivity_amp).clamp_01();
+
                 // §8.1.14: Attachment → emotion — separation distress feeds fear.
                 // Anxious and disorganized styles convert separation into fear
                 // more readily than secure/avoidant styles.

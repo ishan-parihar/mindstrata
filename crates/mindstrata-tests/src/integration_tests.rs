@@ -7233,3 +7233,65 @@ fn identity_relevance_derived_live_in_default_runs() {
         "traumatic/flashbulb traces must carry strong identity relevance (got {max_ir:.3}, kind {max_ir_kind})"
     );
 }
+
+/// §8.1.6 (Iteration 105): the plasticity pass genuinely drifts temperament
+/// in live runs, and the reactivity amplifier genuinely amplifies the
+/// fear/anger stress response at the production appraise site. Reach:
+/// probe-pinned 3/12 agents carry Δreactivity > 0.05 by tick 2000 on seed
+/// 42 (max 0.189) — the pass is live, so the amplifier has real input.
+/// Differential: the amplifier is behaviorally live. A low-coping world
+/// (conscientiousness 0.1 < the 0.3 low-coping threshold) fires the +0.1
+/// fear floor daily, so appraise fear accumulates; a pre-run reactivity
+/// deviation (+0.9 → amplifier 1.5) must accumulate strictly MORE fear.
+/// Measured at tick 5, before the additive emotions saturate at 1.0
+/// (probe-pinned: control 6.23 vs amplified 8.84 — a ~42% margin).
+#[test]
+fn trait_plasticity_drift_amplifies_fear_and_anger_in_default_runs() {
+    // Reach: the pass drifts reactivity in production.
+    let sim = run_sim(42, 2000);
+    let mut drifted = 0usize;
+    let mut max_delta = 0.0f64;
+    for a in &sim.agents {
+        let baseline = mindstrata_sim::person::Temperament::from_traits(&a.personality);
+        let d = (a.personality.temperament.reactivity - baseline.reactivity).to_f64();
+        max_delta = max_delta.max(d);
+        if d > 0.05 {
+            drifted += 1;
+        }
+    }
+    assert!(
+        drifted > 0,
+        "the plasticity pass must drift reactivity in default runs (got {drifted} agents, max Δ {max_delta:.3})"
+    );
+
+    // Differential: the amplifier is live at the decision site.
+    let run = |craft: bool| -> f64 {
+        let mut s = Simulation::new(SimConfig {
+            seed: 42,
+            max_ticks: 5,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        });
+        s.populate();
+        for a in &mut s.agents {
+            a.personality.conscientiousness = mindstrata_core::fixed::Fixed::from_f64(0.1);
+            if craft {
+                let baseline = mindstrata_sim::person::Temperament::from_traits(&a.personality);
+                a.personality.temperament.reactivity =
+                    (baseline.reactivity + mindstrata_core::fixed::Fixed::from_f64(0.9))
+                        .clamp_01();
+            }
+        }
+        s.run(5);
+        s.agents.iter().map(|a| a.emotions.fear.to_f64()).sum()
+    };
+    let control = run(false);
+    let amplified = run(true);
+    assert!(
+        amplified > control,
+        "reactivity deviation must amplify fear accumulation \
+         (amplified {amplified:.3} vs control {control:.3})"
+    );
+}
