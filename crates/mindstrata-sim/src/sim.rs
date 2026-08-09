@@ -2746,11 +2746,13 @@ impl Simulation {
                 // pinned by the integration test): a future relative/scaled
                 // derivation is a conscious re-design, not an incidental one.
                 // Note: status_attraction tracks whatever effective_status()
-                // captures — the Iter-55 institutional_rank field is not yet
-                // weighted into the composite, so a future weighting flows
-                // through automatically. Deterministic, no RNG, observational
-                // only (feeds only the D4 scenario gate — no behavioral
-                // consumer), so calibrated runs stay byte-identical.
+                // captures — since Iteration 106 the §11.1 institutional_rank
+                // field IS weighted into the composite (× 0.1), so role
+                // holders' status_attraction reflects their institutional
+                // power, flowing through automatically. Deterministic, no RNG;
+                // status_attraction itself feeds only the D4 scenario gate,
+                // but the composite also feeds §10.9 patronage formation
+                // (behavioral), so role-holder status now genuinely matters.
                 let eff_status = self.agents[i].status_v2.effective_status();
                 self.agents[i]
                     .attraction

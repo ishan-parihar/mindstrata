@@ -40,6 +40,18 @@ impl Default for StatusDimensions {
 
 impl StatusDimensions {
     pub fn effective_status(&self) -> Fixed {
+        // §11.1 (Iteration 106): institutional_rank is a first-class status
+        // component (0 = none, 1 = top role). Weighted at 0.1 — equal to
+        // wealth_rank, below the core three (dominance/prestige/authority) —
+        // so a role-holder's composite genuinely reflects their institutional
+        // power. The term is exactly zero for roleless agents (rank is zero),
+        // so their composite is unchanged; the positive weights sum to 1.05
+        // with the new term and clamp at 1.0 for saturated status. Note:
+        // institutional_rank overlaps with `authority` (synced from legacy
+        // role_status, also set for role-holders) — the two are distinct
+        // sources (registry-derived authority vs legacy role status), and
+        // §11.1 lists both as separate components, so the overlap is
+        // plan-faithful; the 0.1 weight keeps the double-count modest.
         (self.dominance * Fixed::from_f64(0.15)
             + self.prestige * Fixed::from_f64(0.2)
             + self.authority * Fixed::from_f64(0.2)
@@ -47,6 +59,7 @@ impl StatusDimensions {
             + self.wealth_rank * Fixed::from_f64(0.1)
             + self.moral_reputation * Fixed::from_f64(0.1)
             + self.honor * Fixed::from_f64(0.05)
+            + self.institutional_rank * Fixed::from_f64(0.1)
             - self.shame * Fixed::from_f64(0.1))
             .clamp_01()
     }
@@ -124,6 +137,47 @@ mod tests {
         }"#;
         let restored: StatusDimensions = serde_json::from_str(old_json).unwrap();
         assert_eq!(restored.institutional_rank, Fixed::ZERO);
+    }
+
+    #[test]
+    fn effective_status_weights_institutional_rank() {
+        // §11.1 (Iteration 106): the legacy 8-dimension composite is the
+        // reference — a roleless agent (rank 0) must be byte-identical to it,
+        // and a role-holder must exceed it by exactly rank × 0.1 (0.6 → +0.06
+        // here, before any clamp; the arithmetic is exact at SCALE = 10_000).
+        let legacy = |s: &StatusDimensions| {
+            (s.dominance * Fixed::from_f64(0.15)
+                + s.prestige * Fixed::from_f64(0.2)
+                + s.authority * Fixed::from_f64(0.2)
+                + s.legitimacy * Fixed::from_f64(0.15)
+                + s.wealth_rank * Fixed::from_f64(0.1)
+                + s.moral_reputation * Fixed::from_f64(0.1)
+                + s.honor * Fixed::from_f64(0.05)
+                - s.shame * Fixed::from_f64(0.1))
+                .clamp_01()
+        };
+        let base = StatusDimensions::default();
+        assert_eq!(base.effective_status(), legacy(&base), "rankless agent must match legacy");
+        let holder = StatusDimensions {
+            institutional_rank: Fixed::from_f64(0.6),
+            ..StatusDimensions::default()
+        };
+        let expected = (legacy(&holder) + Fixed::from_f64(0.06)).clamp_01();
+        assert_eq!(holder.effective_status(), expected, "role-holder must gain rank × 0.1");
+        // Saturated status clamps at 1.0 even with the new term.
+        let maxed = StatusDimensions {
+            dominance: Fixed::ONE,
+            prestige: Fixed::ONE,
+            authority: Fixed::ONE,
+            legitimacy: Fixed::ONE,
+            wealth_rank: Fixed::ONE,
+            moral_reputation: Fixed::ONE,
+            network_centrality: Fixed::ONE,
+            honor: Fixed::ONE,
+            institutional_rank: Fixed::ONE,
+            shame: Fixed::ZERO,
+        };
+        assert_eq!(maxed.effective_status(), Fixed::ONE);
     }
 
     #[test]
