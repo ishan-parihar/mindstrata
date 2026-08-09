@@ -13,9 +13,40 @@
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 
-/// A mental scenario — an imagined future outcome.
+/// §8.1.16 (Iteration 117): the concern domain that generated a mental
+/// scenario — D1 scarcity (urgent deficit / failing harvest), D2 threat
+/// (exposure to danger), D3 injustice (grievance seeking redress), D4
+/// courtship (unattached with a viable target), D5 ambition (status-
+/// seeking, EF-gated), D6 hopeful default. Observational infrastructure:
+/// `MentalScenario` was previously opaque, so domain-aware consumers
+/// (decision folds, narrative systems) could not distinguish concern
+/// domains; the discriminator is the foundation for those. (An earlier
+/// Iteration-117 draft wired D3–D5 into `compute_utility` as direct
+/// decision folds; the probe premise that only D1/D2 fire in calibrated
+/// windows is FALSE — D3/D4/D5 fire in larger/longer worlds — and AP2
+/// §8.1.16 prescribes emotion-biased prospection rather than
+/// domain→action folds, so that fold was reverted. D1/D2 reach decisions
+/// through the Iter-103 dread channel.)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ScenarioKind {
+    /// D1 — Scarcity: an urgent deficit or a failing harvest.
+    D1Scarcity,
+    /// D2 — Threat: the agent feels exposed to danger.
+    D2Threat,
+    /// D3 — Injustice: a grievance seeks redress.
+    D3Injustice,
+    /// D4 — Courtship: unattached with a viable attraction target.
+    D4Courtship,
+    /// D5 — Ambition: status-seeking (EF-gated).
+    D5Ambition,
+    /// D6 — Hopeful default.
+    D6Hopeful,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MentalScenario {
+    /// The concern domain that generated this scenario (§8.1.16 Iter-117).
+    pub kind: ScenarioKind,
     /// Brief description of the imagined scenario.
     pub description: String,
     /// Perceived probability of this outcome (0–1).
@@ -120,6 +151,7 @@ impl ProspectionState {
         {
             let probability = (Fixed::from_f64(0.5) + scarcity * Fixed::from_f64(0.4)).clamp_01();
             self.generate_scenario(
+                ScenarioKind::D1Scarcity,
                 "If the harvest fails, my household goes hungry.".into(),
                 probability,
                 Fixed::from_f64(-0.6),
@@ -134,6 +166,7 @@ impl ProspectionState {
         // D2 — Threat: the agent feels exposed to danger.
         if inputs.safety > Fixed::from_f64(0.5) || inputs.fear > Fixed::from_f64(0.4) {
             self.generate_scenario(
+                ScenarioKind::D2Threat,
                 "If I travel alone, I may come to harm.".into(),
                 inputs.fear,
                 Fixed::from_f64(-0.5),
@@ -148,6 +181,7 @@ impl ProspectionState {
         // D3 — Injustice: a grievance seeks redress.
         if inputs.anger > Fixed::from_f64(0.4) {
             self.generate_scenario(
+                ScenarioKind::D3Injustice,
                 "If I complain, the council may punish me.".into(),
                 Fixed::from_f64(0.4),
                 Fixed::from_f64(-0.3),
@@ -162,6 +196,7 @@ impl ProspectionState {
         // D4 — Courtship: unattached with a viable attraction target.
         if !inputs.has_partner && inputs.total_attraction > Fixed::from_f64(0.4) {
             self.generate_scenario(
+                ScenarioKind::D4Courtship,
                 "If I court them, my kin gain standing.".into(),
                 inputs.total_attraction,
                 Fixed::from_f64(0.5),
@@ -179,6 +214,7 @@ impl ProspectionState {
         // through to the D6 hopeful default instead.
         if inputs.ambition > Fixed::from_f64(0.5) && inputs.can_plan_long_term {
             self.generate_scenario(
+                ScenarioKind::D5Ambition,
                 "If I distinguish myself, I may gain respect.".into(),
                 Fixed::from_f64(0.5),
                 Fixed::from_f64(0.5),
@@ -192,6 +228,7 @@ impl ProspectionState {
         }
         // D6 — Hopeful default.
         self.generate_scenario(
+            ScenarioKind::D6Hopeful,
             "If the rains come, the village thrives.".into(),
             Fixed::from_f64(0.6),
             Fixed::from_f64(0.4),
@@ -206,6 +243,7 @@ impl ProspectionState {
     /// Generate a new mental scenario based on current state and action options.
     pub fn generate_scenario(
         &mut self,
+        kind: ScenarioKind,
         description: String,
         base_probability: Fixed,
         expected_valence: Fixed,
@@ -223,6 +261,7 @@ impl ProspectionState {
         };
 
         let scenario = MentalScenario {
+            kind,
             description,
             probability: base_probability,
             expected_valence: biased_valence.clamp(-Fixed::ONE, Fixed::ONE),
@@ -320,6 +359,7 @@ mod tests {
         };
         for i in 0..5 {
             pro.generate_scenario(
+                ScenarioKind::D6Hopeful,
                 format!("scenario {i}"),
                 Fixed::from_f64(0.5),
                 Fixed::from_f64(0.3),
@@ -337,6 +377,7 @@ mod tests {
     fn best_scenario_maximizes_value() {
         let mut pro = ProspectionState::default();
         pro.generate_scenario(
+            ScenarioKind::D2Threat,
             "bad".into(),
             Fixed::from_f64(0.8),
             Fixed::from_f64(-0.5),
@@ -347,6 +388,7 @@ mod tests {
             0,
         );
         pro.generate_scenario(
+            ScenarioKind::D6Hopeful,
             "good".into(),
             Fixed::from_f64(0.8),
             Fixed::from_f64(0.5),
@@ -661,5 +703,103 @@ mod tests {
         pro.evaluate_scenarios();
         assert!(pro.dread > baseline_dread, "scenario evaluation must raise dread");
         assert!(pro.hope <= baseline_hope, "dread scenario must not raise hope");
+    }
+
+    /// §8.1.16 (Iteration 117): `generate_daily_scenario` stamps each
+    /// scenario with the concern domain that produced it — D1 scarcity
+    /// (hunger > 0.6), D2 threat (fear > 0.4), D3 injustice (anger > 0.4),
+    /// D4 courtship (unattached + attraction), D5 ambition (EF-gated),
+    /// D6 hopeful default. This is the discriminator future domain-aware
+    /// consumers (decision folds, narrative systems) key on — if a domain
+    /// ever stops setting its kind, its scenarios become indistinguishable
+    /// from the default.
+    #[test]
+    fn daily_scenario_kinds_are_stamped_per_domain() {
+        let inputs = |hunger: Fixed, fear: Fixed, anger: Fixed, ambition: Fixed,
+                      has_partner: bool, attraction: Fixed, can_plan: bool| ScenarioInputs {
+            hunger,
+            thirst: Fixed::ZERO,
+            safety: Fixed::ZERO,
+            fear,
+            anger,
+            ambition,
+            food_scarcity: Fixed::ZERO,
+            water_scarcity: Fixed::ZERO,
+            has_partner,
+            total_attraction: attraction,
+            can_plan_long_term: can_plan,
+        };
+        let mut pro = ProspectionState::default();
+
+        // D1 scarcity (hunger beats a zero elsewheres).
+        pro.generate_daily_scenario(1, inputs(Fixed::from_f64(0.8), Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, false, Fixed::ZERO, true));
+        assert_eq!(pro.scenarios.last().unwrap().kind, ScenarioKind::D1Scarcity);
+
+        // D2 threat (fear 0.6, hunger below the scarcity gate).
+        pro.generate_daily_scenario(2, inputs(Fixed::from_f64(0.3), Fixed::from_f64(0.6), Fixed::ZERO, Fixed::ZERO, false, Fixed::ZERO, true));
+        assert_eq!(pro.scenarios.last().unwrap().kind, ScenarioKind::D2Threat);
+
+        // D3 injustice (anger 0.6, everything else calm).
+        pro.generate_daily_scenario(3, inputs(Fixed::from_f64(0.3), Fixed::ZERO, Fixed::from_f64(0.6), Fixed::ZERO, false, Fixed::ZERO, true));
+        assert_eq!(pro.scenarios.last().unwrap().kind, ScenarioKind::D3Injustice);
+
+        // D4 courtship (unattached with attraction 0.6, else calm).
+        pro.generate_daily_scenario(4, inputs(Fixed::from_f64(0.3), Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, false, Fixed::from_f64(0.6), true));
+        assert_eq!(pro.scenarios.last().unwrap().kind, ScenarioKind::D4Courtship);
+
+        // D5 ambition (ambition 0.7 + intact EF, else calm).
+        pro.generate_daily_scenario(5, inputs(Fixed::from_f64(0.3), Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(0.7), false, Fixed::ZERO, true));
+        assert_eq!(pro.scenarios.last().unwrap().kind, ScenarioKind::D5Ambition);
+
+        // D6 hopeful default (all calm).
+        pro.generate_daily_scenario(6, inputs(Fixed::from_f64(0.3), Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, false, Fixed::ZERO, true));
+        assert_eq!(pro.scenarios.last().unwrap().kind, ScenarioKind::D6Hopeful);
+    }
+
+    /// §8.1.16 (Iteration 117): the plan's four emotion-bias lines are
+    /// genuinely wired in `update` — fear amplifies dread, ambition
+    /// amplifies hope, trauma amplifies catastrophe, depression reduces
+    /// hope. Each line must move its target monotonically from a calm
+    /// baseline. Guards against a future refactor silently deleting one
+    /// of the plan's bias terms.
+    #[test]
+    fn emotion_bias_lines_match_the_plan() {
+        let mut pro = ProspectionState::default();
+        pro.update(Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO);
+        let base_cat = pro.catastrophic_bias;
+        let base_opt = pro.optimism_bias;
+
+        // Trauma amplifies catastrophe.
+        pro.update(Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(0.5), Fixed::ZERO);
+        assert!(
+            pro.catastrophic_bias > base_cat,
+            "trauma must amplify catastrophe"
+        );
+
+        // Fear amplifies dread (the catastrophic-bias channel).
+        pro.update(Fixed::from_f64(0.5), Fixed::ZERO, Fixed::ZERO, Fixed::ZERO);
+        assert!(
+            pro.catastrophic_bias > base_cat,
+            "fear must amplify dread"
+        );
+
+        // Ambition amplifies hope (the optimism-bias channel).
+        pro.update(Fixed::ZERO, Fixed::from_f64(0.5), Fixed::ZERO, Fixed::ZERO);
+        assert!(
+            pro.optimism_bias > base_opt,
+            "ambition must amplify hope"
+        );
+
+        // Depression reduces hope and tempers optimism.
+        pro.hope = Fixed::from_f64(0.5);
+        pro.update(Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(0.5));
+        assert!(
+            pro.hope < Fixed::from_f64(0.5),
+            "depression must reduce hope"
+        );
+        assert!(
+            pro.optimism_bias < base_opt,
+            "depression must temper optimism"
+        );
     }
 }

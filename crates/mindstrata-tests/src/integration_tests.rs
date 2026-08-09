@@ -8513,3 +8513,49 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
             "full humiliation must amplify the chance by exactly 1.30"
         );
     }
+
+/// §8.1.16 (Iteration 117): the concern-domain discriminator is live
+/// end-to-end — every mental scenario a populated agent holds carries the
+/// `ScenarioKind` of the domain that produced it (D1 scarcity / D2 threat
+/// / D3 injustice / D4 courtship / D5 ambition / D6 hopeful default).
+///
+/// The full six-way range is pinned at unit level
+/// (`daily_scenario_kinds_are_stamped_per_domain`); this test proves the
+/// field survives the populate→run path and that the *driven* (non-
+/// default) kinds genuinely reach populated agents: the seed-42
+/// calibrated world is fear-laden by 5000 ticks (golden dread ≈ 0.29),
+/// so every prospection-running agent holds a D2 threat scenario (the
+/// daily generator early-returns on the first fired domain; D6 is only
+/// the calm fallthrough). A discriminator that never produced D2 here
+/// would be dead on the golden's own dynamics.
+///
+/// (Iteration 117 scope note: an earlier draft wired D3/D4/D5 into
+/// `compute_utility` as direct decision folds. The probe premise that only
+/// D1/D2 ever fire in calibrated windows is FALSE — D3/D4/D5 fire in
+/// larger/longer worlds (probe + 4 gate failures: panic start 3034→2631,
+/// snapshot metrics drift, stress inversion, the birth pipeline losing a
+/// birth), and AP2 §8.1.16 prescribes emotion-biased prospection rather
+/// than domain→action folds, so the fold was reverted. D1/D2 continue to
+/// reach decisions through the Iter-103 dread channel; this test pins the
+/// remaining deliverable: the domain discriminator itself.)
+#[test]
+fn scenario_kinds_are_stamped_end_to_end() {
+    use mindstrata_sim::psychology::imagination::ScenarioKind;
+    let sim = crate::test_helpers::run_sim(42, 5000);
+    let mut distinct: Vec<ScenarioKind> = Vec::new();
+    for a in &sim.agents {
+        for s in &a.prospection.scenarios {
+            if !distinct.contains(&s.kind) {
+                distinct.push(s.kind);
+            }
+        }
+    }
+    assert!(
+        !distinct.is_empty(),
+        "populated agents must hold mental scenarios with stamped kinds"
+    );
+    assert!(
+        distinct.contains(&ScenarioKind::D2Threat),
+        "fear-driven threat scenarios must reach populated agents, got {distinct:?}"
+    );
+}
