@@ -2507,10 +2507,40 @@ impl Simulation {
                     - world_water_total / Fixed::from_int(expected_water.max(1)))
                     .clamp_01();
                 {
-                    let fear = self.agents[i].emotions.fear;
-                    let anger = self.agents[i].emotions.anger;
-                    let joy = self.agents[i].emotions.joy;
-                    let sadness = self.agents[i].emotions.sadness;
+                    // NOTE (Iteration 124): the LIVE LOCAL emotions vec —
+                    // the tick's step-0b parallel-array machinery took each
+                    // agent's emotions out via `std::mem::take` (sim.rs:2337)
+                    // and only writes back at step-8 (sim.rs:4105), so
+                    // `self.agents[i].emotions.*` is all-ZERO here. The
+                    // pre-iteration code read the EMPTIED field, so
+                    // `set_context` received all zeros and the §8.1.5
+                    // emotional pressure amplifications (`1 + fear×0.4`
+                    // Safety/Certainty, `1 + anger×0.4` Justice,
+                    // `1 + joy×0.3` Romance, `1 − sadness×0.3` Meaning)
+                    // were silently DEAD — the dominant-need machinery has
+                    // operated with an emotionless context since the
+                    // parallel-array refactor (audit-found in Iteration
+                    // 123). SEMANTIC: at this site the local vec holds the
+                    // value TAKEN from the agent at tick start — the
+                    // previous tick's accumulated writeback, not this
+                    // tick's fresh appraise deltas — "yesterday's emotion
+                    // drives today's motivation", the same carried-over
+                    // treatment the emotion machinery itself gives the
+                    // vec. Probe-pinned blast radius: fear mean 0.83–1.0
+                    // and joy mean 0.65–0.89 across calibrated windows
+                    // (anger ~0, sadness 0), so this restores a genuinely
+                    // live emotional context. The net Safety amplification
+                    // measures ~1.03× (not 1.35×): the ×0.8 legitimacy
+                    // dampener at live legitimacy≈0 partially cancels the
+                    // fear factor — which is exactly why the full gate is
+                    // green with ZERO regeneration (live-but-observationally-
+                    // inert in every test window; Safety stays dominant and
+                    // the Iter-96 exclusive urgency boost scales its
+                    // channels uniformly). Deterministic, no RNG.
+                    let fear = emotions[i].fear;
+                    let anger = emotions[i].anger;
+                    let joy = emotions[i].joy;
+                    let sadness = emotions[i].sadness;
                     let legitimacy = self.agents[i].legitimacy_field.overall;
                     self.agents[i].motivation.set_context(
                         fear, anger, joy, sadness, legitimacy, food_scarcity, water_scarcity,

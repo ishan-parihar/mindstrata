@@ -9077,3 +9077,93 @@ fn envy_poisons_courtship_interest_zero_blast_in_golden_window() {
         "an envious world must court strictly less: {injected_mean:.4} vs {control_mean:.4}"
     );
 }
+#[test]
+fn motivation_emotional_context_is_live() {
+    // Iteration 124: the §8.1.5 emotional pressure amplifications
+    // (`1 + fear×0.4` Safety/Certainty, `1 + anger×0.4` Justice,
+    // `1 + joy×0.3` Romance, `1 − sadness×0.3` Meaning) are LIVE. The
+    // pre-iteration call site read the EMPTIED agent emotion field (the
+    // tick's `std::mem::take` parallel-array pattern) — `set_context`
+    // received all zeros, so the dominant-need machinery ran with an
+    // emotionless context since the parallel-array refactor (audit-found
+    // in Iteration 123).
+    //
+    // Leg A (the context is live): the real seed-42 golden population at
+    // the 5000-tick horizon carries mean motivation.fear > 0.5 and mean
+    // motivation.joy > 0.3 — the amplification has genuine input (the
+    // pre-fix probe pinned mean motivation.fear at exactly 0.0000).
+    let sim = crate::test_helpers::run_sim(42, 5000);
+    let mean = |f: fn(&mindstrata_sim::psychology::motivation::MotivationState) -> f64| -> f64 {
+        sim.agents
+            .iter()
+            .map(|a| f(&a.motivation))
+            .sum::<f64>()
+            / sim.agents.len() as f64
+    };
+    let fear_mean = mean(|m| m.fear.to_f64());
+    let joy_mean = mean(|m| m.joy.to_f64());
+    assert!(
+        fear_mean > 0.5,
+        "motivation fear context must be live, mean {fear_mean:.3}"
+    );
+    assert!(
+        joy_mean > 0.3,
+        "motivation joy context must be live, mean {joy_mean:.3}"
+    );
+
+    // Leg B (the amplification is behaviorally present in the motivation
+    // layer): summed `pressure_full(Safety)` exceeds the summed raw safety
+    // pressure — the fear × 0.4 emotional factor out-weighs the live
+    // legitimacy dampener (×0.8 at legitimacy ≈ 0, per the pressure_full
+    // formula), yielding a measured net ~1.03× on seed 42 @5000. The
+    // strict inequality proves the emotional channel is net-positive in
+    // the real population.
+    let full_sum: f64 = sim
+        .agents
+        .iter()
+        .map(|a| {
+            a.motivation
+                .pressure_full(mindstrata_sim::psychology::motivation::MotiveCategory::Safety)
+                .to_f64()
+        })
+        .sum();
+    let base_sum: f64 = sim.agents.iter().map(|a| a.motivation.safety.pressure().to_f64()).sum();
+    assert!(
+        full_sum > base_sum,
+        "Safety pressure must be amplified by the live fear context: {full_sum:.3} vs {base_sum:.3}"
+    );
+
+    // Leg B2 (direct amplification proof on a real agent's state): zeroing
+    // the live fear on a cloned MotivationState strictly lowers
+    // pressure_full(Safety) — the emotional factor genuinely multiplies
+    // the pressure, not a coincidental population artifact.
+    let mut m = sim.agents[0].motivation.clone();
+    let with_fear = m
+        .pressure_full(mindstrata_sim::psychology::motivation::MotiveCategory::Safety);
+    let fear_before = m.fear;
+    m.fear = mindstrata_core::fixed::Fixed::ZERO;
+    let without_fear = m
+        .pressure_full(mindstrata_sim::psychology::motivation::MotiveCategory::Safety);
+    assert!(
+        with_fear > without_fear,
+        "fear {fear_before} must amplify Safety pressure: {with_fear} vs {without_fear}"
+    );
+
+    // Leg C (determinism): the same seed reproduces the identical amplified
+    // pressure — the fix introduced no RNG.
+    let sim2 = crate::test_helpers::run_sim(42, 5000);
+    let full_sum2: f64 = sim2
+        .agents
+        .iter()
+        .map(|a| {
+            a.motivation
+                .pressure_full(mindstrata_sim::psychology::motivation::MotiveCategory::Safety)
+                .to_f64()
+        })
+        .sum();
+    assert_eq!(
+        (full_sum * 10000.0) as u64,
+        (full_sum2 * 10000.0) as u64,
+        "amplified pressure must be seed-deterministic"
+    );
+}
