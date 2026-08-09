@@ -2912,8 +2912,35 @@ impl Simulation {
                     .crime_record(AgentId::new(i as u64))
                     .map_or(Fixed::ZERO, |r| r.notoriety);
                 self.agents[i].attraction.update_social_cost(notoriety);
-                let disgust = self.agents[i].emotions.disgust;
+                // NOTE (Iteration 123): both channels below read the LIVE
+                // local `emotions[i]` vec, not `self.agents[i].emotions` —
+                // the tick takes each agent's emotions out via
+                // `std::mem::take` at the step-0b parallel-array setup, so
+                // the AGENT field is all-zero until the step-8 writeback
+                // (sim.rs:4105). The pre-Iteration-123 `update_moral_disgust`
+                // line read the emptied field and was therefore a LATENT
+                // dead channel (moral_disgust pinned at 0 in production
+                // despite live disgust producers); it is fixed here to read
+                // the local vec — behaviorally identical until a purity
+                // violation actually fires the emotion (which calm worlds
+                // never do → zero-blast).
+                let disgust = emotions[i].disgust;
                 self.agents[i].attraction.update_moral_disgust(disgust);
+                // §8.1.4 (Iteration 123): the envy aversion channel — the
+                // coveting emotion (`status_threat × incongruent` — wanting
+                // what the higher-status other has) poisons courtship
+                // interest: the envious mind is consumed with status
+                // comparison, so romantic salience drops. Mirrors the
+                // moral_disgust channel exactly (same update-*-cost pattern,
+                // same 0.2 weight tier, and — per the note above — the
+                // same live local-vec read). ONE-SIDED: identity at zero —
+                // envy is never produced in calibrated windows
+                // (probe-pinned: every seed-42 golden agent at envy == 0,
+                // Iter-122 Leg C), so `envy_cost` stays exactly 0 and
+                // `total_attraction()` is bit-identical (provably
+                // zero-blast).
+                let envy = emotions[i].envy;
+                self.agents[i].attraction.update_envy_cost(envy);
                 // §10.4 (Iteration 79): the last unwired attraction channel —
                 // kinship_penalty, the soft taboo against courting within the
                 // local pool. Derived as the max transitive genetic

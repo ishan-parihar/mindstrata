@@ -17,6 +17,20 @@ pub struct AttractionModel {
     pub kinship_penalty: Fixed,
     pub moral_disgust: Fixed,
     pub social_cost: Fixed,
+    /// §8.1.4 (Iteration 123): the envy aversion channel — coveting what the
+    /// higher-status other has (`status_threat × incongruent`) poisons
+    /// courtship interest: the envious mind is consumed with status
+    /// comparison, so romantic salience drops. Weighs 0.2 (negative) in
+    /// `total_attraction()` — the same weight tier as `moral_disgust` (both
+    /// strong aversive emotions). Deterministic, no RNG, clamped. 0 in calm
+    /// worlds (envy is never produced there — probe-pinned, see the sim.rs
+    /// fold site). Note: at full envy the 0.2 removal can flip a borderline
+    /// profile (e.g. 0.45) under the 0.4 D4 courtship gate — fully
+    /// suppressing courtship in genuinely envious worlds. That is the
+    /// intended "poisons courtship interest" effect, matching the disgust
+    /// tier, and the const-style weight is trivially tunable.
+    #[serde(default)]
+    pub envy_cost: Fixed,
     pub attachment_resonance: Fixed,
 }
 
@@ -33,6 +47,7 @@ impl Default for AttractionModel {
             kinship_penalty: Fixed::ZERO,
             moral_disgust: Fixed::ZERO,
             social_cost: Fixed::ZERO,
+            envy_cost: Fixed::ZERO,
             attachment_resonance: Fixed::from_f64(0.5),
         }
     }
@@ -50,7 +65,8 @@ impl AttractionModel {
             + self.attachment_resonance * Fixed::from_f64(0.1);
         let negative = self.kinship_penalty * Fixed::from_f64(0.3)
             + self.moral_disgust * Fixed::from_f64(0.2)
-            + self.social_cost * Fixed::from_f64(0.1);
+            + self.social_cost * Fixed::from_f64(0.1)
+            + self.envy_cost * Fixed::from_f64(0.2);
         (positive - negative).clamp_01()
     }
 
@@ -100,6 +116,13 @@ impl AttractionModel {
 
     pub fn update_moral_disgust(&mut self, disgust: Fixed) {
         self.moral_disgust = disgust.clamp_01();
+    }
+
+    /// §8.1.4 (Iteration 123): mirror the live `emotions.envy` into the
+    /// courtship-cost channel. Identity at zero: envy is never produced in
+    /// calibrated windows, so the channel stays exactly 0 (zero-blast).
+    pub fn update_envy_cost(&mut self, envy: Fixed) {
+        self.envy_cost = envy.clamp_01();
     }
 }
 
@@ -167,6 +190,44 @@ mod tests {
         assert_eq!(a.kinship_penalty, Fixed::ONE);
         a.update_kinship_penalty(Fixed::from_f64(-0.5));
         assert_eq!(a.kinship_penalty, Fixed::ZERO);
+    }
+
+    #[test]
+    fn envy_cost_reduces_attraction() {
+        // §8.1.4 (Iteration 123): a fully envious profile (envy_cost 1.0)
+        // at the 0.2 weight removes exactly 0.2 from total_attraction — the
+        // coveting emotion depresses courtship interest like moral_disgust.
+        let mut a = AttractionModel {
+            physical_attraction: Fixed::from_f64(0.8),
+            ..AttractionModel::default()
+        };
+        let without = a.total_attraction();
+        a.envy_cost = Fixed::ONE;
+        assert!(a.total_attraction() < without);
+        assert_eq!(
+            without - a.total_attraction(),
+            Fixed::from_f64(0.2),
+            "envy 1.0 × weight 0.2 must remove exactly 0.2"
+        );
+    }
+
+    #[test]
+    fn update_envy_cost_mirrors_envy_and_clamps() {
+        let mut a = AttractionModel::default();
+        a.update_envy_cost(Fixed::from_f64(0.5));
+        assert_eq!(a.envy_cost, Fixed::from_f64(0.5));
+        let before = a.total_attraction();
+        a.update_envy_cost(Fixed::ONE);
+        assert!(a.total_attraction() < before);
+        // Clamp bounds: out-of-range inputs collapse to the unit interval.
+        a.update_envy_cost(Fixed::from_f64(1.5));
+        assert_eq!(a.envy_cost, Fixed::ONE);
+        a.update_envy_cost(Fixed::from_f64(-0.5));
+        assert_eq!(a.envy_cost, Fixed::ZERO);
+        // Identity at zero: the default model's channel is inert.
+        let mut b = AttractionModel::default();
+        b.update_envy_cost(Fixed::ZERO);
+        assert_eq!(b.envy_cost, Fixed::ZERO);
     }
 
     #[test]

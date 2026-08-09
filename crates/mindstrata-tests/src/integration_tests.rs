@@ -9011,3 +9011,69 @@ fn secondary_emotions_fold_is_zero_blast_in_golden_window() {
         "envy must be exactly ZERO for every agent in the golden window"
     );
 }
+#[test]
+fn envy_poisons_courtship_interest_zero_blast_in_golden_window() {
+    // §8.1.4 (Iteration 123): the envy aversion channel on the attraction
+    // model must be provably inert in the calibrated golden window — envy
+    // is never produced in calm worlds (its appraisal inputs —
+    // `status_threat × incongruent` — don't fire), so `envy_cost` stays
+    // exactly 0 and `total_attraction()` is bit-identical.
+    //
+    // Leg A (zero-blast pin): the real seed-42 golden population at the
+    // 5000-tick horizon has EVERY agent at exactly `attraction.envy_cost
+    // == 0`. The cost term contributes exactly 0 → total_attraction is
+    // unchanged → golden stays byte-identical.
+    let sim = crate::test_helpers::run_sim(42, 5000);
+    assert!(
+        sim.agents
+            .iter()
+            .all(|a| a.attraction.envy_cost == mindstrata_core::fixed::Fixed::ZERO),
+        "envy_cost must be exactly ZERO for every agent in the golden window"
+    );
+
+    // Leg B (the wiring is live, not dead): inject `emotions.envy = 1.0`
+    // into every agent at tick 100, then run exactly ONE tick. The
+    // per-tick attraction pass reads the LIVE local emotions vec (the
+    // parallel-array copy the tick machinery operates on — the AGENT
+    // field itself is emptied by `std::mem::take` at tick start and only
+    // written back at the end of the tick), so one tick suffices to write
+    // the channel at the injected value. The horizon is deliberately
+    // short: the Iter-116 per-tick decay (0.12/tick) would erode the
+    // injection to ~0 within 50 ticks.
+    let mut injected = crate::test_helpers::run_sim(42, 100);
+    for a in injected.agents.iter_mut() {
+        a.emotions.envy = mindstrata_core::fixed::Fixed::ONE;
+    }
+    injected.run(1); // delta ticks → tick 101
+    let min_cost = injected
+        .agents
+        .iter()
+        .map(|a| a.attraction.envy_cost)
+        .fold(mindstrata_core::fixed::Fixed::ONE, |m, c| m.min(c));
+    assert!(
+        min_cost > mindstrata_core::fixed::Fixed::from_f64(0.9),
+        "every agent's envy_cost must be written from the live emotion, min {min_cost}"
+    );
+
+    // Leg C (the fold genuinely shifts courtship outcomes): two same-seed
+    // worlds at the same horizon (tick 101) differing only in the
+    // injected envy. The RNG stream is identical until the injection
+    // point, and the emotion is otherwise unread (producer-only), so the
+    // ONLY divergence is the envy cost in total_attraction. The envious
+    // world must court strictly less (1.0 cost at the 0.2 weight removes
+    // exactly 0.2 from every profile).
+    let control = crate::test_helpers::run_sim(42, 101);
+    let mean_attraction = |s: &mindstrata_sim::Simulation| -> f64 {
+        s.agents
+            .iter()
+            .map(|a| a.attraction.total_attraction().to_f64())
+            .sum::<f64>()
+            / s.agents.len() as f64
+    };
+    let control_mean = mean_attraction(&control);
+    let injected_mean = mean_attraction(&injected);
+    assert!(
+        injected_mean < control_mean - 0.1,
+        "an envious world must court strictly less: {injected_mean:.4} vs {control_mean:.4}"
+    );
+}
