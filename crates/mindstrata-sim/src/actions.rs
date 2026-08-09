@@ -72,6 +72,10 @@ pub struct DecisionContext<'a> {
     pub dominant_need: MotiveCategory,
     /// Pressure of the dominant need (full formula) — scales the urgency boost.
     pub dominant_pressure: Fixed,
+    // ── §8.1.16 (Iteration 103): prospection dread ──────────────────
+    /// The agent's scenario-grounded dread (0–1) — how much it fears the
+    /// imagined bad future. Drives the precautionary-provisioning term.
+    pub dread: Fixed,
 }
 
 /// An action that an agent can take.
@@ -328,6 +332,7 @@ pub fn compute_utility(
     action_values: ActionValues,
     dominant_need: MotiveCategory,
     dominant_pressure: Fixed,
+    dread: Fixed,
 ) -> Fixed {
     let mut utility = Fixed::ZERO;
 
@@ -380,6 +385,26 @@ pub fn compute_utility(
         };
         if urgent {
             utility += dominant_pressure * Fixed::from_f64(0.4);
+        }
+    }
+
+    // §8.1.16 (Iteration 103): precautionary provisioning — an agent who
+    // daily imagines the harvest failing (scenario-grounded dread) prepares
+    // for it: Work and Trade (grain-seeking, stocking up) gain utility and
+    // Rest loses it. Zero-at-zero (dread 0 → exact legacy utility),
+    // deterministic (pure utility term — the RNG stream is untouched), and
+    // sized small (0.2/0.1) so it is a genuine nudge, not a reordering
+    // lever: a dread 0.4 agent's Work gains 0.08, comparable to the §8.1.5
+    // urgency boost at low pressure.
+    if dread > Fixed::ZERO {
+        match action.kind {
+            ActionKind::Work | ActionKind::Trade => {
+                utility += dread * Fixed::from_f64(0.2);
+            }
+            ActionKind::Rest => {
+                utility -= dread * Fixed::from_f64(0.1);
+            }
+            _ => {}
         }
     }
 
@@ -484,7 +509,7 @@ pub fn select_action(
 
     for kind in &candidates {
         let def = kind.definition();
-        let mut utility = compute_utility(&def, ctx.needs, ctx.personality, rng, ctx.total_grain, ctx.total_water, ctx.identity, ctx.norm_pressure, ctx.coin, ctx.action_values, ctx.dominant_need, ctx.dominant_pressure);
+        let mut utility = compute_utility(&def, ctx.needs, ctx.personality, rng, ctx.total_grain, ctx.total_water, ctx.identity, ctx.norm_pressure, ctx.coin, ctx.action_values, ctx.dominant_need, ctx.dominant_pressure, ctx.dread);
 
         for goal in ctx.active_goals {
             let goal_aligned = matches!(
@@ -597,6 +622,7 @@ mod tests {
             action_values: ActionValues::default(),
             dominant_need: MotiveCategory::Hunger,
             dominant_pressure: Fixed::ZERO,
+            dread: Fixed::ZERO,
         }, &mut rng);
         assert!(chosen == ActionKind::Eat, "Broke hungry agent should Eat, got {chosen:?}");
     }
@@ -638,6 +664,7 @@ mod tests {
             action_values: ActionValues::default(),
             dominant_need: MotiveCategory::Hunger,
             dominant_pressure: Fixed::ZERO,
+            dread: Fixed::ZERO,
         }, &mut rng);
         assert!(
             chosen == ActionKind::Trade || chosen == ActionKind::Eat,
@@ -679,6 +706,7 @@ mod tests {
             action_values: ActionValues::default(),
             dominant_need: MotiveCategory::Hunger,
             dominant_pressure: Fixed::ZERO,
+            dread: Fixed::ZERO,
         }, &mut rng);
         assert!(eat_utility == ActionKind::Eat, "Broke hungry agent should prefer Eat, got {eat_utility:?}");
     }
@@ -773,6 +801,7 @@ mod tests {
             action_values: ActionValues::default(),
             dominant_need: MotiveCategory::Hunger,
             dominant_pressure: Fixed::ZERO,
+            dread: Fixed::ZERO,
         }, &mut rng);
         assert!(scarce == ActionKind::Eat, "Under grain scarcity, broke hungry agent should Eat, got {scarce:?}");
     }
@@ -810,6 +839,7 @@ mod tests {
             action_values: ActionValues::default(),
             dominant_need: MotiveCategory::Hunger,
             dominant_pressure: Fixed::ZERO,
+            dread: Fixed::ZERO,
         }, &mut rng);
         assert!(scarce == ActionKind::Drink, "Under water scarcity, thirsty agent should Drink, got {scarce:?}");
     }
@@ -828,8 +858,8 @@ mod tests {
         };
         let no_identity = IdentityState::default();
 
-        let u_farmer = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &farmer_identity, Fixed::ZERO, Fixed::ZERO, ActionValues::default(), MotiveCategory::Hunger, Fixed::ZERO);
-        let u_none = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &no_identity, Fixed::ZERO, Fixed::ZERO, ActionValues::default(), MotiveCategory::Hunger, Fixed::ZERO);
+        let u_farmer = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &farmer_identity, Fixed::ZERO, Fixed::ZERO, ActionValues::default(), MotiveCategory::Hunger, Fixed::ZERO, Fixed::ZERO);
+        let u_none = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &no_identity, Fixed::ZERO, Fixed::ZERO, ActionValues::default(), MotiveCategory::Hunger, Fixed::ZERO, Fixed::ZERO);
 
         assert!(u_farmer > u_none, "Farmer identity should increase Work utility");
     }
@@ -842,8 +872,8 @@ mod tests {
         let identity = IdentityState::default();
 
         // Negative pressure = compliant agent (compute_pressure returns negative for compliant)
-        let no_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO, Fixed::ZERO, ActionValues::default(), MotiveCategory::Hunger, Fixed::ZERO);
-        let compliant_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, -Fixed::from_f64(0.5), Fixed::ZERO, ActionValues::default(), MotiveCategory::Hunger, Fixed::ZERO);
+        let no_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO, Fixed::ZERO, ActionValues::default(), MotiveCategory::Hunger, Fixed::ZERO, Fixed::ZERO);
+        let compliant_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, -Fixed::from_f64(0.5), Fixed::ZERO, ActionValues::default(), MotiveCategory::Hunger, Fixed::ZERO, Fixed::ZERO);
 
         assert!(compliant_pressure > no_pressure, "Compliant (negative) pressure should increase Work utility");
     }
@@ -856,8 +886,8 @@ mod tests {
         let identity = IdentityState::default();
 
         // Positive pressure = violating agent
-        let no_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO, Fixed::ZERO, ActionValues::default(), MotiveCategory::Hunger, Fixed::ZERO);
-        let violating_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::from_f64(0.5), Fixed::ZERO, ActionValues::default(), MotiveCategory::Hunger, Fixed::ZERO);
+        let no_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO, Fixed::ZERO, ActionValues::default(), MotiveCategory::Hunger, Fixed::ZERO, Fixed::ZERO);
+        let violating_pressure = compute_utility(&ActionKind::Work.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::from_f64(0.5), Fixed::ZERO, ActionValues::default(), MotiveCategory::Hunger, Fixed::ZERO, Fixed::ZERO);
 
         assert!(violating_pressure < no_pressure, "Violating (positive) pressure should decrease Work utility");
     }
@@ -870,8 +900,8 @@ mod tests {
         let identity = IdentityState::default();
 
         // Positive pressure = violating agent prefers idle
-        let no_pressure = compute_utility(&ActionKind::Idle.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO, Fixed::ZERO, ActionValues::default(), MotiveCategory::Hunger, Fixed::ZERO);
-        let violating_pressure = compute_utility(&ActionKind::Idle.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::from_f64(0.5), Fixed::ZERO, ActionValues::default(), MotiveCategory::Hunger, Fixed::ZERO);
+        let no_pressure = compute_utility(&ActionKind::Idle.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::ZERO, Fixed::ZERO, ActionValues::default(), MotiveCategory::Hunger, Fixed::ZERO, Fixed::ZERO);
+        let violating_pressure = compute_utility(&ActionKind::Idle.definition(), &needs, &personality, &mut rng, Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity, Fixed::from_f64(0.5), Fixed::ZERO, ActionValues::default(), MotiveCategory::Hunger, Fixed::ZERO, Fixed::ZERO);
 
         assert!(violating_pressure > no_pressure, "Violating (positive) pressure should increase Idle utility");
     }
@@ -983,13 +1013,13 @@ mod tests {
             &ActionKind::Eat.definition(), &needs, &personality, &mut RngStreams::new(42),
             Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity,
             Fixed::ZERO, Fixed::ZERO, ActionValues::default(),
-            MotiveCategory::Hunger, Fixed::from_f64(0.8),
+            MotiveCategory::Hunger, Fixed::from_f64(0.8), Fixed::ZERO,
         );
         let eat_when_thirst_dominant = compute_utility(
             &ActionKind::Eat.definition(), &needs, &personality, &mut RngStreams::new(42),
             Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity,
             Fixed::ZERO, Fixed::ZERO, ActionValues::default(),
-            MotiveCategory::Thirst, Fixed::from_f64(0.8),
+            MotiveCategory::Thirst, Fixed::from_f64(0.8), Fixed::ZERO,
         );
         assert!(
             eat_when_hungry_dominant > eat_when_thirst_dominant,
@@ -1012,13 +1042,13 @@ mod tests {
             &ActionKind::Eat.definition(), &needs, &personality, &mut RngStreams::new(42),
             Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity,
             Fixed::ZERO, Fixed::ZERO, ActionValues::default(),
-            MotiveCategory::Hunger, Fixed::ZERO,
+            MotiveCategory::Hunger, Fixed::ZERO, Fixed::ZERO,
         );
         let safety_dominant = compute_utility(
             &ActionKind::Eat.definition(), &needs, &personality, &mut RngStreams::new(42),
             Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity,
             Fixed::ZERO, Fixed::ZERO, ActionValues::default(),
-            MotiveCategory::Safety, Fixed::from_f64(0.8),
+            MotiveCategory::Safety, Fixed::from_f64(0.8), Fixed::ZERO,
         );
         assert_eq!(
             zero_pressure, safety_dominant,
@@ -1039,13 +1069,13 @@ mod tests {
             &ActionKind::Eat.definition(), &needs, &personality, &mut RngStreams::new(42),
             Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity,
             Fixed::ZERO, Fixed::ZERO, ActionValues::default(),
-            MotiveCategory::Hunger, Fixed::from_f64(0.2),
+            MotiveCategory::Hunger, Fixed::from_f64(0.2), Fixed::ZERO,
         );
         let high = compute_utility(
             &ActionKind::Eat.definition(), &needs, &personality, &mut RngStreams::new(42),
             Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity,
             Fixed::ZERO, Fixed::ZERO, ActionValues::default(),
-            MotiveCategory::Hunger, Fixed::from_f64(0.9),
+            MotiveCategory::Hunger, Fixed::from_f64(0.9), Fixed::ZERO,
         );
         assert!(high > low, "Higher dominant pressure should yield a larger boost");
     }
@@ -1064,17 +1094,181 @@ mod tests {
             &ActionKind::Work.definition(), &needs, &personality, &mut RngStreams::new(42),
             Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity,
             Fixed::ZERO, Fixed::ZERO, ActionValues::default(),
-            MotiveCategory::Hunger, Fixed::ZERO,
+            MotiveCategory::Hunger, Fixed::ZERO, Fixed::ZERO,
         );
         let hungry_dominant = compute_utility(
             &ActionKind::Work.definition(), &needs, &personality, &mut RngStreams::new(42),
             Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity,
             Fixed::ZERO, Fixed::ZERO, ActionValues::default(),
-            MotiveCategory::Hunger, Fixed::from_f64(0.9),
+            MotiveCategory::Hunger, Fixed::from_f64(0.9), Fixed::ZERO,
         );
         assert_eq!(
             zero_pressure, hungry_dominant,
             "A Hunger-dominant agent must not boost non-relieving Work"
+        );
+    }
+
+    /// §8.1.16 (Iteration 103): dread boosts provisioning actions and
+    /// suppresses Rest — the precautionary consumer's exact magnitude is
+    /// pinned: 0.6 dread → Work +0.12, Rest −0.06 (identical noise streams,
+    /// so the delta is precisely the term).
+    #[test]
+    fn dread_boosts_provisioning_and_suppresses_rest() {
+        let needs = NeedState {
+            hunger: Fixed::from_f64(0.3),
+            ..Default::default()
+        };
+        let personality = make_personality();
+        let identity = IdentityState::default();
+        let work_dreadful = compute_utility(
+            &ActionKind::Work.definition(), &needs, &personality, &mut RngStreams::new(42),
+            Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity,
+            Fixed::ZERO, Fixed::ZERO, ActionValues::default(),
+            MotiveCategory::Hunger, Fixed::ZERO, Fixed::from_f64(0.6),
+        );
+        let work_calm = compute_utility(
+            &ActionKind::Work.definition(), &needs, &personality, &mut RngStreams::new(42),
+            Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity,
+            Fixed::ZERO, Fixed::ZERO, ActionValues::default(),
+            MotiveCategory::Hunger, Fixed::ZERO, Fixed::ZERO,
+        );
+        let rest_dreadful = compute_utility(
+            &ActionKind::Rest.definition(), &needs, &personality, &mut RngStreams::new(42),
+            Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity,
+            Fixed::ZERO, Fixed::ZERO, ActionValues::default(),
+            MotiveCategory::Hunger, Fixed::ZERO, Fixed::from_f64(0.6),
+        );
+        let rest_calm = compute_utility(
+            &ActionKind::Rest.definition(), &needs, &personality, &mut RngStreams::new(42),
+            Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity,
+            Fixed::ZERO, Fixed::ZERO, ActionValues::default(),
+            MotiveCategory::Hunger, Fixed::ZERO, Fixed::ZERO,
+        );
+        let work_delta = (work_dreadful - work_calm).to_f64();
+        let rest_delta = (rest_calm - rest_dreadful).to_f64();
+        assert!(
+            work_delta > 0.0,
+            "dread must boost Work, delta {work_delta:.6}"
+        );
+        assert!(
+            rest_delta > 0.0,
+            "dread must suppress Rest, delta {rest_delta:.6}"
+        );
+        // Exact magnitude: 0.6 × 0.2 = 0.12 for Work, 0.6 × 0.1 = 0.06 for
+        // Rest (the noise streams are identical, so no other term differs).
+        assert!(
+            (work_delta - 0.12).abs() < 1e-9,
+            "Work boost must be exactly 0.12, got {work_delta:.6}"
+        );
+        assert!(
+            (rest_delta - 0.06).abs() < 1e-9,
+            "Rest penalty must be exactly 0.06, got {rest_delta:.6}"
+        );
+    }
+
+    /// §8.1.16 (Iteration 103): the precautionary term is exclusive to
+    /// provisioning — every other action's utility is byte-identical at
+    /// dread 0.6 vs dread 0 (identical noise streams), so the consumer
+    /// cannot distort the non-provisioning action set.
+    #[test]
+    fn dread_leaves_non_provisioning_actions_untouched() {
+        let needs = NeedState {
+            hunger: Fixed::from_f64(0.7),
+            ..Default::default()
+        };
+        let personality = make_personality();
+        let identity = IdentityState::default();
+        for kind in [
+            ActionKind::Eat,
+            ActionKind::Drink,
+            ActionKind::Socialize,
+            ActionKind::Worship,
+            ActionKind::Wander,
+            ActionKind::Idle,
+        ] {
+            let dreadful = compute_utility(
+                &kind.definition(), &needs, &personality, &mut RngStreams::new(42),
+                Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity,
+                Fixed::ZERO, Fixed::ZERO, ActionValues::default(),
+                MotiveCategory::Hunger, Fixed::from_f64(0.8), Fixed::from_f64(0.6),
+            );
+            let calm = compute_utility(
+                &kind.definition(), &needs, &personality, &mut RngStreams::new(42),
+                Fixed::from_f64(0.5), Fixed::from_f64(0.5), &identity,
+                Fixed::ZERO, Fixed::ZERO, ActionValues::default(),
+                MotiveCategory::Hunger, Fixed::from_f64(0.8), Fixed::ZERO,
+            );
+            assert_eq!(
+                dreadful.to_f64(), calm.to_f64(),
+                "{kind:?} must be untouched by dread"
+            );
+        }
+    }
+
+    /// §8.1.16 (Iteration 103): the precautionary term shifts real
+    /// selections — a dreadful agent chooses Work strictly more often and
+    /// Rest strictly less often than a calm twin, on identical RNG streams
+    /// (every noise draw matches, so the differential is deterministic).
+    #[test]
+    fn dread_shifts_selection_toward_provisioning() {
+        let needs = NeedState {
+            hunger: Fixed::from_f64(0.15),
+            thirst: Fixed::from_f64(0.1),
+            fatigue: Fixed::from_f64(0.25),
+            ..Default::default()
+        };
+        let personality = make_personality();
+        let identity = IdentityState::default();
+        let dp = make_decision_policy();
+        let count_selection = |dread: Fixed| -> (u64, u64) {
+            let mut rng = RngStreams::new(42);
+            let mut work = 0u64;
+            let mut rest = 0u64;
+            for _ in 0..500 {
+                let chosen = select_action(
+                    &DecisionContext {
+                        needs: &needs,
+                        personality: &personality,
+                        active_goals: &[],
+                        identity: &identity,
+                        decision_policy: &dp,
+                        total_grain: Fixed::from_f64(0.5),
+                        total_water: Fixed::from_f64(0.5),
+                        coin: Fixed::ZERO,
+                        norm_pressure: Fixed::ZERO,
+                        anger: Fixed::ZERO,
+                        fear: Fixed::ZERO,
+                        joy: Fixed::ZERO,
+                        sadness: Fixed::ZERO,
+                        stress: Fixed::ZERO,
+                        fairness: Fixed::ZERO,
+                        authority: Fixed::ZERO,
+                        care: Fixed::ZERO,
+                        loyalty: Fixed::ZERO,
+                        action_values: ActionValues::default(),
+                        dominant_need: MotiveCategory::Hunger,
+                        dominant_pressure: Fixed::ZERO,
+                        dread,
+                    },
+                    &mut rng,
+                );
+                match chosen {
+                    ActionKind::Work => work += 1,
+                    ActionKind::Rest => rest += 1,
+                    _ => {}
+                }
+            }
+            (work, rest)
+        };
+        let (work_dreadful, rest_dreadful) = count_selection(Fixed::from_f64(0.8));
+        let (work_calm, rest_calm) = count_selection(Fixed::ZERO);
+        assert!(
+            work_dreadful > work_calm,
+            "dread must push selections toward Work: {work_dreadful} vs {work_calm}"
+        );
+        assert!(
+            rest_dreadful < rest_calm,
+            "dread must push selections away from Rest: {rest_dreadful} vs {rest_calm}"
         );
     }
 }

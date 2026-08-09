@@ -3173,6 +3173,14 @@ impl Simulation {
                                 // actions that relieve the dominant need.
                                 dominant_need: self.agents[i].motivation.dominant_need,
                                 dominant_pressure: self.agents[i].motivation.dominant_pressure(),
+                                // §8.1.16 (Iteration 103): the scenario-
+                                // grounded dread (regrounded on the daily
+                                // phase, before selection in the same tick)
+                                // drives precautionary provisioning — Work/
+                                // Trade up, Rest down. Zero-at-zero: agents
+                                // whose tiers do not run prospection hold
+                                // dread 0 → legacy utility.
+                                dread: self.agents[i].prospection.dread,
                             },
                             ctx.rng,
                         )
