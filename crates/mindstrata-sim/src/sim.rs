@@ -1525,10 +1525,30 @@ impl Simulation {
                 .map_or(Fixed::ZERO, |r| r.power_balance);
             Self::dominance_escalation_scale(power_balance)
         };
+        // §10.1.2 (Iteration 110): The social field's mean trust pacifies
+        // the escalation decision — an agent embedded in a trusting
+        // relationship graph escalates a failed threat to violence less
+        // readily ("the social fabric restrains me"). The aggressor's own
+        // mean `social_trust` (refreshed daily by refresh_relational_fields,
+        // zero at tick 0 → factor 1.0) scales the chance continuously
+        // (0.3/unit trust, capped at 0.6 so the pacification never erases
+        // the escalation chance entirely). The RNG draw below stays
+        // unconditional (same stream position), so replay determinism holds
+        // at every trust value — only the comparison threshold changes.
+        // The two `Fixed` conversions run once per failed-threat escalation
+        // opportunity (not per-tick-per-agent — orders of magnitude below the
+        // Iter-108 kin fold), so the shared Fixed-domain helper's unit-test
+        // precision wins over hoisting them to file-scope computed constants.
+        let trust_factor = crate::social::relational_field::RelationalFields::trust_pacify_factor(
+            self.agents[from_idx].relational_fields.social_trust,
+            Fixed::from_f64(crate::social::relational_field::SOCIAL_TRUST_PACIFY_RATE),
+            Fixed::from_f64(crate::social::relational_field::SOCIAL_TRUST_PACIFY_CAP),
+        );
         let chance = self.escalation_chance(from_idx, to_idx)
             * (1.0 - resistance)
             * (1.0 - hypocrisy)
-            * dominance_scale;
+            * dominance_scale
+            * trust_factor.to_f64();
         self.rng.get_mut(RngStream::Social).random::<f64>() < chance
     }
 
@@ -10644,6 +10664,53 @@ mod tests {
             dominant_escalations > subordinate_escalations,
             "dominant aggressor must escalate strictly more: \
              {dominant_escalations} vs {subordinate_escalations}"
+        );
+    }
+
+    /// §10.1.2 (Iteration 110): the fold genuinely shifts escalation
+    /// outcomes. Two same-seed worlds differ only in the aggressor's mean
+    /// `social_trust` (0.9 vs 0.0 — a trusting relationship graph pacifies
+    /// the failed-threat escalation). The RNG draw sequence is identical in
+    /// both (same seed, same call order, exactly one draw per
+    /// `should_escalate`), so the count gap is deterministic: the trusting
+    /// aggressor escalates strictly less often.
+    #[test]
+    fn social_trust_pacifies_escalation_outcomes() {
+        let make_config = || SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut trusting = Simulation::new(make_config());
+        trusting.populate();
+        let mut control = Simulation::new(make_config());
+        control.populate();
+        let (a, b) = cross_clan_pair(&trusting);
+        trusting.agents[a].relational_fields.social_trust =
+            Fixed::from_f64(0.9); // mean trust over a rich relationship graph
+        // Control keeps the tick-0 identity (trust 0 → factor 1.0).
+        let aggression = Fixed::from_f64(1.5); // past the 1.2 threshold
+        let mut trusting_escalations = 0;
+        let mut control_escalations = 0;
+        for _ in 0..500 {
+            if trusting.should_escalate(a, b, true, aggression) {
+                trusting_escalations += 1;
+            }
+            if control.should_escalate(a, b, true, aggression) {
+                control_escalations += 1;
+            }
+        }
+        assert!(
+            control_escalations > 0,
+            "control must escalate at the base rate, got {control_escalations}"
+        );
+        assert!(
+            trusting_escalations < control_escalations,
+            "a trusting aggressor must escalate strictly less: \
+             {trusting_escalations} vs {control_escalations}"
         );
     }
 

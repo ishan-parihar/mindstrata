@@ -22,9 +22,13 @@
 //! `belief_confidence` gained a consumer in Iteration 109: the dogmatism
 //! factor (`belief_rigidity_factor`) scales belief-update resistance — an
 //! agent holding its beliefs with high mean confidence updates them more
-//! slowly (self-assurance → closed-mindedness). The remaining social
-//! (trust/obligation/peer-status) and noospheric (legitimacy,
-//! collective fear) layers remain observational.
+//! slowly (self-assurance → closed-mindedness). The social field's
+//! `social_trust` gained a consumer in Iteration 110: the pacification
+//! factor (`trust_pacify_factor`) scales the failed-threat escalation
+//! chance down — an agent embedded in a trusting relationship graph
+//! escalates to violence less readily. The remaining social
+//! (obligation/peer-status) and noospheric (legitimacy, collective fear)
+//! layers remain observational.
 
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
@@ -57,6 +61,19 @@ pub const KIN_STRESS_CAP: f64 = 0.45;
 /// construction-time mean (0.55) it reaches 1.275 — a 27% resistance
 /// uplift for fully-confident belief holders, bounded and deterministic.
 pub const BELIEF_CONFIDENCE_RIGIDITY: f64 = 0.5;
+
+/// Per-unit-trust violence-pacification rate (§10.1.2, Iteration 110):
+/// each unit of mean social trust reduces the failed-threat escalation
+/// chance by this fraction. At the calibrated world's mean trust (0.5)
+/// the escalation chance drops ~15%; at full trust (1.0) it drops 30%.
+/// Zero trust (empty relationship graph, tick 0) → identity 1.0.
+pub const SOCIAL_TRUST_PACIFY_RATE: f64 = 0.3;
+
+/// Ceiling on the trust pacification (§10.1.2, Iteration 110): the social
+/// fabric can dampen escalation but never erase it — the factor stays in
+/// [0.4, 1.0] for the shipped constants (cap binds only if a future rate
+/// change would push the reduction past 60%).
+pub const SOCIAL_TRUST_PACIFY_CAP: f64 = 0.6;
 
 /// §10.1: The three relational fields an agent perceives around itself.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -131,6 +148,21 @@ impl RelationalFields {
         // confidence ∈ [0, 1] and rigidity is small, so the factor is
         // provably in [1.0, ~1.5]; no clamp needed, but documented.
         Fixed::ONE + belief_confidence * rigidity
+    }
+
+    /// §10.1.2 (Iteration 110): the trust pacification factor — an agent
+    /// embedded in a trusting relationship graph escalates a failed threat
+    /// to violence less readily ("the social fabric restrains me").
+    /// Identity at zero mean trust (no relationships → factor exactly 1.0
+    /// → byte-identical at tick 0), monotone in `social_trust`, capped so
+    /// the pacification can never erase the escalation chance entirely,
+    /// deterministic (no RNG). The caller multiplies the escalation chance
+    /// in `should_escalate` by the returned factor.
+    pub fn trust_pacify_factor(social_trust: Fixed, rate: Fixed, cap: Fixed) -> Fixed {
+        let reduction = (social_trust * rate).min(cap);
+        // The clamp is defensive: reduction ∈ [0, cap] with cap < 1.0, so
+        // the factor is provably in [0.4, 1.0] for the shipped constants.
+        (Fixed::ONE - reduction).clamp_01()
     }
 
     /// Mean of a slice of `Fixed`; 0 when empty.
@@ -279,6 +311,40 @@ mod tests {
             RelationalFields::kin_stress_factor(10, rate, cap),
             Fixed::ONE - cap,
             "many kin saturate at the cap, never below"
+        );
+    }
+
+    #[test]
+    fn trust_pacify_factor_is_identity_at_zero_and_capped() {
+        // §10.1.2 (Iteration 110): zero mean trust (empty relationship
+        // graph) must leave the escalation chance untouched; the pacification
+        // is monotone in trust and capped so it never erases violence.
+        let rate = Fixed::from_f64(SOCIAL_TRUST_PACIFY_RATE);
+        let cap = Fixed::from_f64(SOCIAL_TRUST_PACIFY_CAP);
+        assert_eq!(
+            RelationalFields::trust_pacify_factor(Fixed::ZERO, rate, cap),
+            Fixed::ONE,
+            "zero trust must be a byte-identical identity"
+        );
+        assert_eq!(
+            RelationalFields::trust_pacify_factor(Fixed::from_f64(0.5), rate, cap),
+            Fixed::ONE - Fixed::from_f64(0.15),
+            "mean-trust world (0.5) must pacify by exactly 0.15"
+        );
+        let low = RelationalFields::trust_pacify_factor(Fixed::from_f64(0.2), rate, cap);
+        let high = RelationalFields::trust_pacify_factor(Fixed::from_f64(0.8), rate, cap);
+        assert!(low > high, "higher trust must pacify more");
+        // 1.0 × 0.3 = 0.3 < cap 0.6 → the reduction is exactly rate at full trust.
+        assert_eq!(
+            RelationalFields::trust_pacify_factor(Fixed::ONE, rate, cap),
+            Fixed::ONE - rate,
+            "full trust with the shipped rate must pacify by exactly the rate"
+        );
+        // Cap: a rate that would exceed the cap binds instead.
+        assert_eq!(
+            RelationalFields::trust_pacify_factor(Fixed::ONE, Fixed::from_f64(2.0), cap),
+            Fixed::ONE - cap,
+            "an oversized rate must saturate at the cap, never below"
         );
     }
 

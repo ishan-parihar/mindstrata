@@ -6,6 +6,6 @@ expression: stage_counts
 {
     "Acquaintance": 34,
     "Familiar": 32,
-    "PatronClient": 8,
-    "Unnoticed": 58,
+    "PatronClient": 7,
+    "Unnoticed": 59,
 }
