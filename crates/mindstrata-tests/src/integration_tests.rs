@@ -454,17 +454,24 @@ fn factions_emerge_from_grievance() {
 
 
 /// §29.2 (AP2): FactionV2 combat-capability surface is consumed — the v1
-/// protest-suppression decision now feeds the protesting faction's v2 fighting
-/// strength (mobilization × morale × (1 − casualties)) into
-/// `factions::council_response`, so armed/mobilized factions resist
-/// crackdowns (previously `fighting_strength`/`threat_level` had zero
-/// production callers — the §29.2 mandate was computed but never acted on).
-/// This test pins the 1:1 v1↔v2 registration linkage that the consumer relies
-/// on, plus the live strength/threat observability of formed factions.
+/// protest-suppression decision now feeds the protesting faction's v2 full
+/// threat model into `factions::council_response`, so armed/mobilized factions
+/// resist crackdowns. Iteration 89 wired `fighting_strength`; **Iteration 100
+/// upgraded the consumer to `suppression_resistance`** — the armed core
+/// (mobilization × morale × (1 − casualties)) blended with the
+/// cohesion/grievance-modulated `threat_level` and amplified by
+/// `legitimacy_of_violence` (martyrdom/radicalization). Previously
+/// `threat_level()` and `legitimacy_of_violence` had zero production
+/// consumers — computed every tick, never acted on. This test pins the 1:1
+/// v1↔v2 registration linkage the consumer relies on, the live
+/// strength/threat/resistance observability of formed factions, and the
+/// behavioral deltas the new fields drive (radicalized factions resist
+/// harder; resistance never drops below the raw armed core).
 #[test]
 fn faction_v2_fighting_strength_links_to_protests() {
     use mindstrata_sim::institutions::InstitutionKind;
     use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::social::faction_v2::FactionV2;
 
     // Same horizon as factions_emerge_from_grievance: seed 42 forms its first
     // faction between 20-30K ticks.
@@ -495,10 +502,17 @@ fn faction_v2_fighting_strength_links_to_protests() {
         // The combat surface is live and bounded.
         let strength = v2.fighting_strength();
         let threat = v2.threat_level();
+        let resistance = v2.suppression_resistance();
         assert!(strength >= Fixed::ZERO && strength <= Fixed::ONE,
             "fighting strength in [0,1], got {}", strength.to_f64());
         assert!(threat >= Fixed::ZERO && threat <= Fixed::ONE,
             "threat level in [0,1], got {}", threat.to_f64());
+        assert!(resistance >= Fixed::ZERO && resistance <= Fixed::ONE,
+            "suppression resistance in [0,1], got {}", resistance.to_f64());
+        // §29.2 (Iteration 100): the full-threat consumer never weakens the
+        // armed-faction mandate — resistance is at least raw fighting strength.
+        assert!(resistance >= strength,
+            "suppression resistance must never fall below the armed core");
         assert!(strength > Fixed::ZERO || v2.morale <= Fixed::ZERO,
             "formed faction should have measurable fighting strength");
     }
@@ -506,7 +520,7 @@ fn faction_v2_fighting_strength_links_to_protests() {
     // The suppression decision is armed-aware: at any given enforcement level,
     // a stronger faction is never suppressed while a weaker one is not. Verify
     // through the public API used by the consumer (council_response with the
-    // faction's live strength).
+    // faction's live resistance).
     let (suppressed_unarmed, _) = mindstrata_sim::factions::council_response(
         Fixed::from_f64(0.5), 3, 12, Fixed::ZERO,
     );
@@ -516,6 +530,45 @@ fn faction_v2_fighting_strength_links_to_protests() {
     assert!(suppressed_unarmed);
     assert!(!suppressed_armed,
         "an armed faction (fighting strength 1.0) must resist suppression");
+
+    // §29.2 (Iteration 100) behavioral deltas — the two fields that had zero
+    // consumers now drive the suppression outcome:
+    //  (a) radicalization: identical arms, high legitimacy_of_violence →
+    //      strictly higher resistance;
+    //  (b) suppression flips at a borderline enforcement level.
+    let base = |lov: f64| {
+        let mut f = FactionV2::new(0, vec![0, 1], Fixed::from_f64(0.7), 0);
+        f.legitimacy_of_violence = Fixed::from_f64(lov);
+        f
+    };
+    let moderate = base(0.2);
+    let radical = base(0.9);
+    let r_moderate = moderate.suppression_resistance();
+    let r_radical = radical.suppression_resistance();
+    assert!(r_radical > r_moderate,
+        "radicalized faction must resist harder ({} vs {})",
+        r_radical.to_f64(), r_moderate.to_f64());
+
+    // Borderline: there must exist an enforcement level that suppresses the
+    // moderate faction's protest yet fails against the radicalized one (same
+    // crowd, same arms, different willingness to escalate). Sweep rather than
+    // hardcode so the pin survives Fixed-scale arithmetic.
+    let mut flip_found = false;
+    for tenth in 30..=60 {
+        let enforcement = Fixed::from_int(tenth) / Fixed::from_int(100);
+        let (suppressed_moderate, _) = mindstrata_sim::factions::council_response(
+            enforcement, 3, 12, r_moderate,
+        );
+        let (suppressed_radical, _) = mindstrata_sim::factions::council_response(
+            enforcement, 3, 12, r_radical,
+        );
+        if suppressed_moderate && !suppressed_radical {
+            flip_found = true;
+            break;
+        }
+    }
+    assert!(flip_found,
+        "an enforcement level must suppress the moderate protest but not the radicalized one");
 }
 
 /// §29.2: Faction membership must be exclusive — an agent in one faction

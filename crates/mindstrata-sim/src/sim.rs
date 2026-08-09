@@ -5427,25 +5427,33 @@ impl Simulation {
                         .map(|i| i.enforcement_capacity)
                         .fold(Fixed::ZERO, std::cmp::Ord::max);
 
-                    // Architecture-plan-2 §29.2: an armed, mobilized faction
-                    // resists suppression — the protesting v1 faction's v2
-                    // record (matched by leader, registered 1:1 at formation)
-                    // feeds its fighting strength into the suppression
-                    // decision. Zero if no v2 record exists (legacy behavior).
+                    // Architecture-plan-2 §29.2: an armed, mobilized, radicalized
+                    // faction resists suppression — the protesting v1 faction's
+                    // v2 record (matched by leader, registered 1:1 at formation)
+                    // feeds its full threat model into the suppression decision:
+                    // suppression_resistance blends the armed core (fighting
+                    // strength) with the cohesion/grievance-modulated threat
+                    // level and amplifies by legitimacy of violence (Iteration
+                    // 100 — previously only raw fighting_strength was read;
+                    // threat_level() and legitimacy_of_violence had zero
+                    // consumers). Zero if no v2 record exists (legacy behavior).
                     let protest_leader = self.institutions[inst_idx]
                         .get_role_holder("Leader")
                         .map(|id| id.as_u64() as usize);
-                    let protest_strength = protest_leader
+                    let protest_resistance = protest_leader
                         .and_then(|leader_idx| {
                             self.faction_v2_registry
                                 .factions
                                 .iter()
                                 .find(|f| f.active && f.leader == leader_idx)
                         })
-                        .map_or(Fixed::ZERO, crate::social::faction_v2::FactionV2::fighting_strength);
+                        .map_or(
+                            Fixed::ZERO,
+                            crate::social::faction_v2::FactionV2::suppression_resistance,
+                        );
 
                     let (suppressed, legitimacy_effect) = factions::council_response(
-                        council_enforcement, protest_size, total_pop, protest_strength,
+                        council_enforcement, protest_size, total_pop, protest_resistance,
                     );
 
                     // Apply legitimacy effect to council

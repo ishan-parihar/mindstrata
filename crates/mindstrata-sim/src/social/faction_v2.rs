@@ -177,6 +177,41 @@ impl FactionV2 {
         (strength * cohesion_factor * self.grievance).clamp_01()
     }
 
+    /// §29.2 (Iteration 100): resistance a faction offers to a crackdown —
+    /// the revolt-vs-crackdown force comparison now reads the full threat
+    /// model instead of raw arms alone.
+    ///
+    /// `fighting_strength` (mobilization × morale × (1 − casualties)) is the
+    /// armed core. `threat_level` (= fighting_strength × cohesion × grievance
+    /// × (1 − fragmentation)) adds how much of that arms the faction can
+    /// bring to bear against institutions: a cohesive, aggrieved faction
+    /// converts its arms into effective resistance, while a fragmented one
+    /// fights worse than its raw strength suggests. `legitimacy_of_violence`
+    /// amplifies — a faction that has come to believe force is right
+    /// (martyrdom/radicalization channel) is willing to fight harder against
+    /// suppression.
+    ///
+    /// The blend `(armed_core + threat)` keeps resistance at least as large
+    /// as the raw armed core (the Iteration-89 armed-faction mandate is
+    /// preserved and amplified — never weakened), and `radicalization` scales
+    /// the whole by the faction's willingness to escalate.
+    ///
+    /// Saturation note: when `armed_core + threat` already clamps to 1.0 (a
+    /// strong, cohesive, aggrieved faction), the radicalization multiplier is
+    /// capped by the [0, 1] bound — high vs low legitimacy_of_violence
+    /// produce no difference at that edge; the amplifier only bites below
+    /// saturation.
+    ///
+    /// Zero-at-zero: an unarmed faction (fighting strength 0 → threat 0)
+    /// offers zero resistance regardless of grievance; the legacy
+    /// `protest_strength = 0` suppression behavior is unchanged.
+    pub fn suppression_resistance(&self) -> Fixed {
+        let armed_core = self.fighting_strength();
+        let threat = self.threat_level();
+        let radicalization = Fixed::ONE + self.legitimacy_of_violence * Fixed::from_f64(0.5);
+        ((armed_core + threat).clamp_01() * radicalization).clamp_01()
+    }
+
     /// Record casualties from a conflict or crackdown.
     ///
     /// Also increases grievance and legitimacy_of_violence (martyrdom effect):
@@ -343,6 +378,50 @@ mod tests {
         f1.cohesion = Fixed::from_f64(0.9);
         f2.cohesion = Fixed::from_f64(0.2);
         assert!(f1.threat_level() > f2.threat_level());
+    }
+
+    #[test]
+    fn suppression_resistance_never_below_armed_core() {
+        // §29.2 (Iteration 100): the blend (armed_core + threat) ×
+        // radicalization must never weaken the Iteration-89 armed-faction
+        // mandate — resistance is always at least the raw fighting strength.
+        let f = FactionV2::new(0, vec![0, 1, 2], Fixed::from_f64(0.7), 0);
+        assert!(f.suppression_resistance() >= f.fighting_strength());
+    }
+
+    #[test]
+    fn suppression_resistance_rises_with_violence_legitimacy() {
+        // Radicalization (martyrdom → legitimacy_of_violence) amplifies
+        // willingness to fight suppression — the §29.2 field's first consumer.
+        let mut f1 = FactionV2::new(0, vec![0, 1], Fixed::from_f64(0.7), 0);
+        let mut f2 = FactionV2::new(0, vec![0, 1], Fixed::from_f64(0.7), 0);
+        f1.legitimacy_of_violence = Fixed::from_f64(0.2);
+        f2.legitimacy_of_violence = Fixed::from_f64(0.9);
+        assert!(f2.suppression_resistance() > f1.suppression_resistance());
+    }
+
+    #[test]
+    fn suppression_resistance_rises_with_cohesion_and_grievance() {
+        // The threat term folds cohesion × grievance × (1 − fragmentation)
+        // into resistance: a cohesive, aggrieved faction fights harder than
+        // a fragmented, indifferent one with the same raw arms.
+        let mut f1 = FactionV2::new(0, vec![0, 1], Fixed::from_f64(0.7), 0);
+        let mut f2 = FactionV2::new(0, vec![0, 1], Fixed::from_f64(0.7), 0);
+        f1.cohesion = Fixed::from_f64(0.9);
+        f1.grievance = Fixed::from_f64(0.9);
+        f2.cohesion = Fixed::from_f64(0.3);
+        f2.grievance = Fixed::from_f64(0.3);
+        assert!(f1.suppression_resistance() > f2.suppression_resistance());
+    }
+
+    #[test]
+    fn suppression_resistance_zero_at_unarmed() {
+        // Zero-at-zero: an unarmed faction offers zero resistance regardless
+        // of grievance — the legacy protest_strength = 0 behavior is unchanged.
+        let mut f = FactionV2::new(0, vec![0, 1], Fixed::from_f64(0.7), 0);
+        f.mobilization_capacity = Fixed::ZERO;
+        f.morale = Fixed::ZERO;
+        assert_eq!(f.suppression_resistance(), Fixed::ZERO);
     }
 
     #[test]
