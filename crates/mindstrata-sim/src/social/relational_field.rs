@@ -47,8 +47,20 @@
 //! calibrated ceiling of 0.4687 — probe-pinned max at t=200, seed 42,
 //! across seeds 1/7/42/99, drought/pestilence scenarios, and the 20K
 //! horizon) grows envious,
-//! feeding anger — one-sided, so provably zero-blast. The remaining
-//! social (obligation) layer remains observational.
+//! feeding anger — one-sided, so provably zero-blast. The social field's
+//! `social_obligation` gained a consumer in Iteration 114: the restraint
+//! factor (`obligation_restraint_factor`) scales the failed-threat
+//! escalation chance down — an agent bound by deep reciprocal obligations
+//! escalates less readily ("I owe this web; attacking dishonors my debts")
+//! — a SECOND §19.5.H pacifier alongside Iter-110's trust (trust = "I
+//! believe they won't harm me", obligation = "I have duties I must
+//! honor"). ONE-SIDED at the semantic-midpoint anchor 0.5: identity in
+//! every golden/snapshot horizon (seed-42 max obligation 0.456@5000 —
+//! proven by the byte-identical gates), engaging only in deep-debt worlds
+//! (mean obligation reaches 0.69@20K) and late crisis scenarios
+//! (0.52–0.61@3000) — a designed crisis activation, so the regression
+//! blast is zero. With this, EVERY §10.1 relational-field layer has a
+//! decisional consumer.
 
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
@@ -160,6 +172,33 @@ pub const PEER_ENVY_RATE: f64 = 0.3;
 /// [0, 0.15] for the shipped constants (cap binds exactly at full
 /// dominance: (1.0 − 0.5) × 0.3 = 0.15).
 pub const PEER_ENVY_CAP: f64 = 0.15;
+
+/// The obligation-restraint anchor (§10.1.2, Iteration 114): mean
+/// obligation over the agent's relationship graph above which the
+/// failed-threat escalation chance is dampened. Placed at the semantic
+/// midpoint 0.5 — the wide-sweep probe (seeds 1/7/42/99, drought/
+/// pestilence/riverford/famine, 20K horizon) shows every golden/snapshot
+/// horizon stays below it (seed-42 max 0.456@5000, proven by the
+/// byte-identical gates), so the factor is identity (1.0) throughout the
+/// golden/snapshot horizons (zero regression blast). The anchor is deliberately reachable: deep
+/// debt webs DO cross it (seed-42 mean obligation reaches 0.69@20K;
+/// scenarios 0.52–0.61@3000), so the restraint genuinely engages in
+/// long-running worlds — a designed crisis activation, not dead code.
+pub const OBLIGATION_RESTRAINT_ANCHOR: f64 = 0.5;
+
+/// Per-unit-above-anchor obligation-restraint rate (§10.1.2, Iteration
+/// 114): each unit of mean obligation above the anchor reduces the
+/// escalation chance by this fraction. At obligation 0.6 (a genuinely
+/// bound relationship web) the chance drops 3%; at full obligation 1.0 it
+/// drops 15% — modest, bounded, deterministic.
+pub const OBLIGATION_RESTRAINT_RATE: f64 = 0.3;
+
+/// Ceiling on the obligation restraint (§10.1.2, Iteration 114): duties can
+/// restrain violence but never erase it — the factor stays in [0.7, 1.0]
+/// for the shipped constants (cap binds only if a future rate change would
+/// push the reduction past 30%; with the shipped rate the max reduction is
+/// (1.0 − 0.5) × 0.3 = 0.15 at full obligation).
+pub const OBLIGATION_RESTRAINT_CAP: f64 = 0.3;
 
 /// §10.1: The three relational fields an agent perceives around itself.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -304,6 +343,35 @@ impl RelationalFields {
         // No clamp is needed: amplification ∈ [0, cap] with cap < 1.0, so
         // the factor is provably in [1.0, 1.5] for the shipped constants.
         Fixed::ONE + amplification
+    }
+
+    /// §10.1.2 (Iteration 114): the obligation-restraint factor — an agent
+    /// bound by deep reciprocal obligations escalates a failed threat to
+    /// violence less readily ("I owe this web; attacking dishonors my
+    /// debts"). This is the SECOND §19.5.H pacifier alongside Iter-110's
+    /// trust (trust = "I believe they won't harm me" — relational
+    /// confidence; obligation = "I have duties I must honor" — moral
+    /// constraint); §10.1.2 lists both as social-field layers, so both act
+    /// on the violence decision. ONE-SIDED: identity at or below the anchor
+    /// (0.5) — every golden/snapshot horizon sits below it (seed-42 max
+    /// 0.456@5000, proven by the byte-identical gates), so the factor is
+    /// exactly 1.0 throughout the golden/snapshot horizons (zero
+    /// regression blast); deep-debt worlds cross it by design (mean
+    /// obligation reaches 0.69@20K), activating the restraint. Monotone above the anchor, capped so the restraint
+    /// can never erase the escalation chance entirely, deterministic (no
+    /// RNG). The caller multiplies the escalation chance in
+    /// `should_escalate` by the returned factor.
+    pub fn obligation_restraint_factor(
+        social_obligation: Fixed,
+        anchor: Fixed,
+        rate: Fixed,
+        cap: Fixed,
+    ) -> Fixed {
+        let above_anchor = (social_obligation - anchor).max(Fixed::ZERO);
+        let reduction = (above_anchor * rate).min(cap);
+        // The clamp is defensive: reduction ∈ [0, cap] with cap < 1.0, so
+        // the factor is provably in [0.7, 1.0] for the shipped constants.
+        (Fixed::ONE - reduction).clamp_01()
     }
 
     /// §10.1.2 (Iteration 113): the peer-status envy contribution — an
@@ -642,6 +710,75 @@ mod tests {
                 cap,
             ),
             Fixed::ONE + cap,
+            "an oversized rate must saturate at the cap"
+        );
+    }
+
+    #[test]
+    fn obligation_restraint_factor_is_identity_below_anchor_and_capped() {
+        // §10.1.2 (Iteration 114): at/below the anchor the factor is exactly
+        // 1.0 (byte-identical — every golden/snapshot horizon sits below
+        // 0.5: seed-42 max obligation 0.456@5000, proven by the
+        // byte-identical gates, so the golden/snapshot horizons never see
+        // the consumer); above the anchor it restrains monotonically and is
+        // capped so the duty can never erase the escalation chance
+        // entirely.
+        let anchor = Fixed::from_f64(OBLIGATION_RESTRAINT_ANCHOR);
+        let rate = Fixed::from_f64(OBLIGATION_RESTRAINT_RATE);
+        let cap = Fixed::from_f64(OBLIGATION_RESTRAINT_CAP);
+        assert_eq!(
+            RelationalFields::obligation_restraint_factor(anchor, anchor, rate, cap),
+            Fixed::ONE,
+            "at the anchor the factor must be a byte-identical identity"
+        );
+        assert_eq!(
+            RelationalFields::obligation_restraint_factor(
+                Fixed::from_f64(0.456),
+                anchor,
+                rate,
+                cap,
+            ),
+            Fixed::ONE,
+            "below the anchor (seed-42 max 0.456@5000) must also be identity"
+        );
+        assert_eq!(
+            RelationalFields::obligation_restraint_factor(
+                Fixed::from_f64(0.6),
+                anchor,
+                rate,
+                cap,
+            ),
+            Fixed::from_f64(0.97),
+            "obligation 0.6 must restrain by exactly 0.03"
+        );
+        let low = RelationalFields::obligation_restraint_factor(
+            Fixed::from_f64(0.55),
+            anchor,
+            rate,
+            cap,
+        );
+        let high = RelationalFields::obligation_restraint_factor(
+            Fixed::from_f64(0.8),
+            anchor,
+            rate,
+            cap,
+        );
+        assert!(low > high, "higher obligation must restrain more");
+        // Full obligation: (1.0 − 0.5) × 0.3 = 0.15 reduction.
+        assert_eq!(
+            RelationalFields::obligation_restraint_factor(Fixed::ONE, anchor, rate, cap),
+            Fixed::ONE - Fixed::from_f64(0.15),
+            "full obligation with the shipped rate must restrain by exactly 0.15"
+        );
+        // Cap: an oversized rate saturates at the cap, never below.
+        assert_eq!(
+            RelationalFields::obligation_restraint_factor(
+                Fixed::ONE,
+                anchor,
+                Fixed::from_f64(5.0),
+                cap,
+            ),
+            Fixed::ONE - cap,
             "an oversized rate must saturate at the cap"
         );
     }

@@ -1548,11 +1548,37 @@ impl Simulation {
             Fixed::from_f64(crate::social::relational_field::SOCIAL_TRUST_PACIFY_RATE),
             Fixed::from_f64(crate::social::relational_field::SOCIAL_TRUST_PACIFY_CAP),
         );
+        // §10.1.2 (Iteration 114): the social field's mean obligation also
+        // pacifies the escalation decision — an agent bound by deep
+        // reciprocal obligations escalates a failed threat to violence less
+        // readily ("I owe this web; attacking dishonors my debts"). This is
+        // the SECOND §19.5.H pacifier alongside the trust factor above, but
+        // a distinct semantic layer: trust is relational confidence ("I
+        // believe they won't harm me"), obligation is moral constraint ("I
+        // have duties I must honor") — §10.1.2 lists both as social-field
+        // components. ONE-SIDED at the 0.5 anchor — identity in every
+        // golden/snapshot horizon (seed-42 max obligation 0.456@5000,
+        // proven by the byte-identical gates), so the golden/snapshot
+        // windows are untouched (zero-blast — no regeneration); deep-debt worlds cross it by
+        // design (seed-42 mean obligation reaches 0.69@20K), activating the
+        // restraint. The RNG draw below stays unconditional (same stream
+        // position), so replay determinism holds at every obligation value
+        // — only the comparison threshold changes. The `Fixed` conversions
+        // run once per failed-threat escalation opportunity (same cost
+        // class as the Iter-110 trust factor).
+        let obligation_factor =
+            crate::social::relational_field::RelationalFields::obligation_restraint_factor(
+                self.agents[from_idx].relational_fields.social_obligation,
+                Fixed::from_f64(crate::social::relational_field::OBLIGATION_RESTRAINT_ANCHOR),
+                Fixed::from_f64(crate::social::relational_field::OBLIGATION_RESTRAINT_RATE),
+                Fixed::from_f64(crate::social::relational_field::OBLIGATION_RESTRAINT_CAP),
+            );
         let chance = self.escalation_chance(from_idx, to_idx)
             * (1.0 - resistance)
             * (1.0 - hypocrisy)
             * dominance_scale
-            * trust_factor.to_f64();
+            * trust_factor.to_f64()
+            * obligation_factor.to_f64();
         self.rng.get_mut(RngStream::Social).random::<f64>() < chance
     }
 
@@ -10803,6 +10829,54 @@ mod tests {
             trusting_escalations < control_escalations,
             "a trusting aggressor must escalate strictly less: \
              {trusting_escalations} vs {control_escalations}"
+        );
+    }
+
+    /// §10.1.2 (Iteration 114): the obligation fold genuinely shifts
+    /// escalation outcomes — the identical-RNG proof, mirroring Iter-110's
+    /// trust test. Two same-seed worlds are IDENTICAL except the aggressor's
+    /// mean `social_obligation` (0.9 — a deeply bound reciprocal web — vs
+    /// the tick-0 identity zero). Both worlds share the same RNG stream, so
+    /// the draw sequence is byte-identical across the 500 calls; the
+    /// obligated world's escalation threshold is strictly lower, so it MUST
+    /// escalate strictly less often.
+    #[test]
+    fn social_obligation_restrains_escalation_outcomes() {
+        let make_config = || SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut obligated = Simulation::new(make_config());
+        obligated.populate();
+        let mut control = Simulation::new(make_config());
+        control.populate();
+        let (a, b) = cross_clan_pair(&obligated);
+        obligated.agents[a].relational_fields.social_obligation =
+            Fixed::from_f64(0.9); // mean obligation over a deeply bound graph
+        // Control keeps the tick-0 identity (obligation 0 → factor 1.0).
+        let aggression = Fixed::from_f64(1.5); // past the 1.2 threshold
+        let mut obligated_escalations = 0;
+        let mut control_escalations = 0;
+        for _ in 0..500 {
+            if obligated.should_escalate(a, b, true, aggression) {
+                obligated_escalations += 1;
+            }
+            if control.should_escalate(a, b, true, aggression) {
+                control_escalations += 1;
+            }
+        }
+        assert!(
+            control_escalations > 0,
+            "control must escalate at the base rate, got {control_escalations}"
+        );
+        assert!(
+            obligated_escalations < control_escalations,
+            "an obligation-bound aggressor must escalate strictly less: \
+             {obligated_escalations} vs {control_escalations}"
         );
     }
 

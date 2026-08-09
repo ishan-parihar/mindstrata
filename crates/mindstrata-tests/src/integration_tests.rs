@@ -8222,3 +8222,82 @@ fn peer_status_envy_feeds_daily_anger_end_to_end() {
         );
     }
 }
+/// §10.1.2 (Iteration 114): the social field's `social_obligation` is
+/// produced daily (mean obligation over the agent's relationship graph —
+/// accrued from interaction `obligation_delta` writes at sim.rs:3625) and
+/// now has a decisional consumer — a SECOND §19.5.H escalation pacifier
+/// alongside Iter-110's trust (trust = "I believe they won't harm me",
+/// obligation = "I have duties I must honor"). The factor is ONE-SIDED at
+/// the 0.5 anchor, ABOVE the calibrated ceiling of 0.456 (probe-pinned:
+/// 0.028@200 → 0.456@5000 in seed-42 runs), so this is a ZERO-BLAST
+/// iteration: golden byte-identical, no snapshot drift. The deterministic
+/// fold proof lives in the sim.rs identical-RNG unit test (`should_escalate`
+/// is private).
+///
+/// Leg A — producer reach: the field is live and bounded in a default run.
+/// Leg B — consumer via the public path: the factor is exact and identity
+///   below the anchor.
+/// Leg C — replay determinism: two same-seed runs produce byte-identical
+///   obligation vectors.
+#[test]
+fn social_obligation_restrains_escalation_end_to_end() {
+    use mindstrata_sim::social::relational_field::RelationalFields;
+
+    // Leg A — producer reach: obligation is live and bounded in the
+    // calibrated world (2000 ticks: probe-pinned mean 0.346).
+    let sim = crate::test_helpers::run_sim(42, 2000);
+    let mean_ob: f64 = sim
+        .agents
+        .iter()
+        .map(|a| a.relational_fields.social_obligation.to_f64())
+        .sum::<f64>()
+        / sim.agents.len() as f64;
+    assert!(
+        mean_ob > 0.2 && mean_ob <= 1.0,
+        "social_obligation must be live and bounded: {mean_ob:.4}"
+    );
+
+    // Leg B — consumer through the public path: identity below the 0.5
+    // anchor (every golden/snapshot horizon sits below it — seed-42 max
+    // obligation 0.456@5000, proven by the byte-identical gates — this is
+    // what makes the iteration zero-blast), exact restraint above it.
+    let anchor = Fixed::from_f64(0.5);
+    let rate = Fixed::from_f64(0.3);
+    let cap = Fixed::from_f64(0.3);
+    assert_eq!(
+        RelationalFields::obligation_restraint_factor(
+            Fixed::from_f64(0.456),
+            anchor,
+            rate,
+            cap,
+        ),
+        Fixed::ONE,
+        "below the anchor the factor must be identity"
+    );
+    assert_eq!(
+        RelationalFields::obligation_restraint_factor(
+            Fixed::from_f64(0.6),
+            anchor,
+            rate,
+            cap,
+        ),
+        Fixed::from_f64(0.97),
+        "obligation 0.6 must restrain by exactly 0.03"
+    );
+
+    // Leg C — replay determinism: obligation vectors are byte-identical
+    // across two same-seed runs (the field is deterministic by
+    // construction — index-order iteration, no RNG).
+    let again = crate::test_helpers::run_sim(42, 2000);
+    let v1: Vec<f64> = sim
+        .agents
+        .iter()
+        .map(|a| a.relational_fields.social_obligation.to_f64())
+        .collect();
+    let v2: Vec<f64> = again
+        .agents
+        .iter()
+        .map(|a| a.relational_fields.social_obligation.to_f64())
+        .collect();
+    assert_eq!(v1, v2, "obligation vectors must be seed-deterministic");
+}
