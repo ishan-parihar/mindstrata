@@ -43,9 +43,29 @@ pub struct GroupCandidate {
     pub social_cost: Fixed,
     /// Institutional suppression pressure (0–1).
     pub institutional_suppression: Fixed,
+    /// §12.2 (AP2, Iteration 121): Shared trauma — how much bodily trauma the
+    /// members jointly carry (mean of their nervous `trauma_load`). The
+    /// plan's "bonding after shared trauma" emergent effect: trauma binds
+    /// like experienced grievance. `#[serde(default)]` so pre-Iter-121 saves
+    /// restore.
+    #[serde(default)]
+    pub shared_trauma: Fixed,
     /// Tick when this candidate was first identified.
     pub identified_tick: u64,
 }
+
+/// §12.2 (AP2, Iteration 121): Weight of the shared-trauma bonding term in
+/// [`GroupCandidate::formation_pressure`] — deliberately equal to the
+/// `shared_grievance` weight (0.2): bodily trauma binds like an experienced
+/// grievance. Bounded by `shared_trauma ≤ 1.0`, so the term adds at most 0.2
+/// to a candidate's pressure (flipping only candidates in (0.3, 0.5]).
+///
+/// Scope note: this is the FORMATION entry point of "trauma → group
+/// psychology" only; existing groups' cohesion (`compute_group_cohesion`)
+/// and `PeerGroup` state deliberately carry no trauma term yet — the natural
+/// future extension if trauma-bonded groups should also hold together
+/// better.
+pub const TRAUMA_BONDING_WEIGHT: f64 = 0.2;
 
 impl GroupCandidate {
     /// Compute the total formation pressure.
@@ -57,7 +77,12 @@ impl GroupCandidate {
             + self.emotional_synchrony * Fixed::from_f64(0.15)
             + self.repeated_interaction * Fixed::from_f64(0.15)
             + self.leadership_gravity * Fixed::from_f64(0.15)
-            + self.external_threat * Fixed::from_f64(0.15);
+            + self.external_threat * Fixed::from_f64(0.15)
+            // §12.2 (AP2, Iteration 121): bonding after shared trauma —
+            // shared bodily trauma binds like experienced grievance
+            // (`TRAUMA_BONDING_WEIGHT` = 0.2, matching shared_grievance),
+            // the plan's "bonding after shared trauma" effect from §7.2.
+            + self.shared_trauma * Fixed::from_f64(TRAUMA_BONDING_WEIGHT);
         let negative =
             self.social_cost * Fixed::from_f64(0.15) + self.institutional_suppression * Fixed::from_f64(0.15);
         (positive - negative).clamp_01()
@@ -332,6 +357,7 @@ pub fn evaluate_peer_group(
         external_threat: Fixed::ZERO,
         social_cost: Fixed::from_f64(0.1),
         institutional_suppression: Fixed::ZERO,
+        shared_trauma: Fixed::ZERO,
         identified_tick: 0,
     })
 }
@@ -368,9 +394,65 @@ mod tests {
             external_threat: Fixed::from_f64(0.6),
             social_cost: Fixed::from_f64(0.1),
             institutional_suppression: Fixed::from_f64(0.1),
+            shared_trauma: Fixed::ZERO,
             identified_tick: 0,
         };
         assert!(candidate.formation_pressure() > Fixed::from_f64(0.3));
+    }
+
+    // ── §12.2 Shared-trauma bonding tests (Iteration 121) ────────────
+
+    #[test]
+    fn shared_trauma_increases_formation_pressure() {
+        let base = GroupCandidate {
+            members: vec![0, 1, 2],
+            shared_grievance: Fixed::from_f64(0.5),
+            shared_identity: Fixed::from_f64(0.5),
+            emotional_synchrony: Fixed::from_f64(0.5),
+            repeated_interaction: Fixed::from_f64(0.5),
+            leadership_gravity: Fixed::ZERO,
+            external_threat: Fixed::ZERO,
+            social_cost: Fixed::ZERO,
+            institutional_suppression: Fixed::ZERO,
+            shared_trauma: Fixed::ZERO,
+            identified_tick: 0,
+        };
+        let mut bonded = base.clone();
+        bonded.shared_trauma = Fixed::ONE;
+        let p0 = base.formation_pressure();
+        let p1 = bonded.formation_pressure();
+        assert!(p1 > p0, "trauma adds bonding pressure");
+        assert_eq!(p1, p0 + Fixed::from_f64(0.2), "trauma weighs like grievance (0.2)");
+    }
+
+    #[test]
+    fn shared_trauma_can_flip_should_form() {
+        // A candidate just below the 0.5 boundary bonds over it at full trauma.
+        let mut candidate = GroupCandidate {
+            members: vec![0, 1, 2],
+            shared_grievance: Fixed::from_f64(0.5),
+            shared_identity: Fixed::from_f64(0.5),
+            emotional_synchrony: Fixed::from_f64(0.5),
+            repeated_interaction: Fixed::from_f64(0.5),
+            leadership_gravity: Fixed::ZERO,
+            external_threat: Fixed::ZERO,
+            social_cost: Fixed::from_f64(0.2),
+            institutional_suppression: Fixed::ZERO,
+            shared_trauma: Fixed::ZERO,
+            identified_tick: 0,
+        };
+        // 0.5×0.2 + 0.5×0.2 + 0.5×0.15 + 0.5×0.15 − 0.2×0.15 = 0.35 − 0.03 = 0.32
+        assert!(!candidate.should_form());
+        candidate.shared_trauma = Fixed::ONE; // +0.2 → 0.52
+        assert!(candidate.should_form(), "shared trauma bonds the group into form");
+    }
+
+    #[test]
+    fn shared_trauma_serde_restores_zero() {
+        // Pre-Iter-121 saves lack the field and must restore 0.
+        let old = r#"{"members":[],"shared_grievance":0,"shared_identity":0,"emotional_synchrony":0,"repeated_interaction":0,"leadership_gravity":0,"external_threat":0,"social_cost":0,"institutional_suppression":0,"identified_tick":0}"#;
+        let restored: GroupCandidate = serde_json::from_str(old).unwrap();
+        assert_eq!(restored.shared_trauma, Fixed::ZERO);
     }
 
     #[test]
@@ -410,6 +492,7 @@ mod tests {
             external_threat: Fixed::from_f64(0.6),
             social_cost: Fixed::from_f64(0.1),
             institutional_suppression: Fixed::from_f64(0.1),
+            shared_trauma: Fixed::ZERO,
             identified_tick: 0,
         };
         let group = PeerGroup::from_candidate(&candidate, 0, 100);
@@ -451,6 +534,7 @@ mod tests {
             external_threat: Fixed::from_f64(0.6),
             social_cost: Fixed::from_f64(0.1),
             institutional_suppression: Fixed::from_f64(0.1),
+            shared_trauma: Fixed::ZERO,
             identified_tick: 0,
         };
         let group = PeerGroup::from_candidate(&candidate, 0, 100);
@@ -493,6 +577,7 @@ mod tests {
             external_threat: Fixed::from_f64(0.6),
             social_cost: Fixed::from_f64(0.1),
             institutional_suppression: Fixed::from_f64(0.1),
+            shared_trauma: Fixed::ZERO,
             identified_tick: 0,
         };
         reg.register(PeerGroup::from_candidate(&candidate, 0, 100));
@@ -600,6 +685,7 @@ mod tests {
             external_threat: Fixed::from_f64(0.6),
             social_cost: Fixed::from_f64(0.1),
             institutional_suppression: Fixed::from_f64(0.1),
+            shared_trauma: Fixed::ZERO,
             identified_tick: 0,
         };
         let mut secure = PeerGroup::from_candidate(&candidate, 0, 0);

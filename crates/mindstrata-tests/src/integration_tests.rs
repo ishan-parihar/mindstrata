@@ -4948,6 +4948,7 @@ fn peer_group_attachment_styles_scale_upward() {
         external_threat: Fixed::from_f64(0.6),
         social_cost: Fixed::from_f64(0.1),
         institutional_suppression: Fixed::from_f64(0.1),
+        shared_trauma: Fixed::ZERO,
         identified_tick: 0,
     };
     let mut group = PeerGroup::from_candidate(&candidate, 0, 0);
@@ -8879,5 +8880,75 @@ fn narrative_dominance_steers_cluster_assignment_end_to_end() {
     assert!(
         pro_after >= pro_base,
         "dominant narrative must not shrink the pro cluster: {pro_after} vs {pro_base}"
+    );
+}
+#[test]
+fn shared_trauma_bonds_peer_groups_end_to_end() {
+    use mindstrata_core::fixed::Fixed;
+
+    // §12.2 (AP2) — Iteration 121: shared-trauma bonding. The formation
+    // pressure gains a trauma term (weight 0.2, same as shared_grievance —
+    // the plan's "bonding after shared trauma" from §7.2). Leg A proves the
+    // exact math, Leg B the zero-blast reality on the golden population, and
+    // Leg C documents the live fold on a trauma-injected population.
+
+    // Leg A: exact math — trauma weighs like grievance (0.2) in pressure.
+    let mut base = mindstrata_sim::social::group_formation::GroupCandidate {
+        members: vec![0, 1, 2],
+        shared_grievance: Fixed::from_f64(0.5),
+        shared_identity: Fixed::from_f64(0.5),
+        emotional_synchrony: Fixed::from_f64(0.5),
+        repeated_interaction: Fixed::from_f64(0.5),
+        leadership_gravity: Fixed::ZERO,
+        external_threat: Fixed::ZERO,
+        social_cost: Fixed::ZERO,
+        institutional_suppression: Fixed::ZERO,
+        shared_trauma: Fixed::ZERO,
+        identified_tick: 0,
+    };
+    let p0 = base.formation_pressure();
+    base.shared_trauma = Fixed::ONE;
+    assert_eq!(base.formation_pressure(), p0 + Fixed::from_f64(0.2));
+    base.shared_trauma = Fixed::from_f64(0.5);
+    assert_eq!(base.formation_pressure(), p0 + Fixed::from_f64(0.1));
+    assert!(base.formation_pressure() > p0);
+
+    // Leg B: on the real seed-42 golden population the trauma term is LIVE
+    // (mean trauma_load is high, probe-pinned 0.13 @1000) yet NO peer group
+    // forms — production candidates carry external_threat 0 and leadership
+    // 0, so none crosses the 0.5 should_form boundary; the fold changes no
+    // observable state (byte-identical golden + snapshots, no regeneration).
+    let sim = crate::test_helpers::run_sim(42, 1000);
+    let mean_trauma: f64 = sim
+        .agents
+        .iter()
+        .map(|a| a.embodied.nervous.trauma_load.to_f64())
+        .sum::<f64>()
+        / sim.agents.len() as f64;
+    assert!(mean_trauma > 0.05, "the trauma term is live in the golden window");
+    assert_eq!(
+        sim.group_registry.groups.len(),
+        0,
+        "no candidate flips → observable state unchanged"
+    );
+
+    // Leg C: even MAXIMAL shared trauma (full trauma_load on every agent,
+    // adding the full +0.2 bonding term to every candidate) does not flip any
+    // seed-42 candidate — production candidates sit below the 0.3 threshold
+    // where a trauma bond could cross 0.5. This pins the fold's live-but-
+    // -inert reality: the term is computed and weighs in, yet no group forms
+    // (so golden + snapshots stay byte-identical). (The trauma mutation also
+    // diverges RNG-driven dynamics, so this is a documented empirical pin,
+    // not a derivation.)
+    let mut sim = crate::test_helpers::run_sim(42, 100);
+    for agent in &mut sim.agents {
+        agent.embodied.nervous.trauma_load = Fixed::ONE;
+    }
+    sim.run(4900);
+    let groups_trauma = sim.group_registry.groups.len();
+    println!("ITER121 trauma-injected groups={groups_trauma}");
+    assert_eq!(
+        groups_trauma, 0,
+        "maximal shared trauma still does not flip seed-42 candidates"
     );
 }

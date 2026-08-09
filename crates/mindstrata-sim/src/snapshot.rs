@@ -408,6 +408,7 @@ mod tests {
             external_threat: Fixed::from_f64(0.6),
             social_cost: Fixed::from_f64(0.1),
             institutional_suppression: Fixed::from_f64(0.1),
+            shared_trauma: Fixed::ZERO,
             identified_tick: 0,
         };
         let group = PeerGroup::from_candidate(&candidate, 0, 100);

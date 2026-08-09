@@ -8064,8 +8064,22 @@ impl Simulation {
                         Fixed::ZERO
                     }
                 }).fold(Fixed::ZERO, |acc, r| acc + r) / Fixed::from_int(peers.len() as i64);
+                // §12.2 (AP2, Iteration 121): shared trauma — the mean of the
+                // candidate's bodily trauma load (self + peers). The plan's
+                // "bonding after shared trauma": trauma feeds the formation
+                // pressure like an experienced grievance.
+                let members: Vec<usize> = {
+                    let mut m = vec![i];
+                    m.extend_from_slice(&peers);
+                    m
+                };
+                let shared_trauma: Fixed = members
+                    .iter()
+                    .map(|&m| self.agents[m].embodied.nervous.trauma_load)
+                    .fold(Fixed::ZERO, |acc, t| acc + t)
+                    / Fixed::from_int(members.len() as i64);
                 let candidate = crate::social::group_formation::GroupCandidate {
-                    members: { let mut m = vec![i]; m.extend_from_slice(&peers); m },
+                    members,
                     shared_grievance,
                     shared_identity,
                     emotional_synchrony,
@@ -8074,6 +8088,7 @@ impl Simulation {
                     external_threat: Fixed::ZERO,
                     social_cost,
                     institutional_suppression,
+                    shared_trauma,
                     identified_tick: tick_u64,
                 };
                 if candidate.should_form() {
