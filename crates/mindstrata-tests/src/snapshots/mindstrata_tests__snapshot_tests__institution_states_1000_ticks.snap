@@ -7,11 +7,11 @@ expression: inst_states
     InstitutionSnapshot {
         name: "Village Council",
         kind: "Council",
-        legitimacy: 0.6751,
-        morale: 0.4442,
+        legitimacy: 0.6306,
+        morale: 0.2894,
         unity: 1.0,
-        fear: 0.0977,
-        trust_in_leadership: 0.6741,
+        fear: 0.1109,
+        trust_in_leadership: 0.6302,
         member_count: 2,
     },
     InstitutionSnapshot {

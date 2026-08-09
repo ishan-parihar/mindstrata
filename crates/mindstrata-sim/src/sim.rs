@@ -3784,6 +3784,42 @@ impl Simulation {
                 emotion.guilt = (emotion.guilt - decay).clamp_01();
             }
 
+            // ── 7b. §10.1.1 fear contagion (Iteration 107) ────────────
+            // The sensory field's perceived ambient stress ("expression" —
+            // mean of (fear + anger) / 2 over agents within
+            // PERCEPTION_RADIUS) feeds the agent's fear on the daily
+            // cadence: an agent surrounded by stressed neighbors catches
+            // their fear, and a terrified village sustains itself against
+            // the §22.1 decay. Zero-at-zero: no stressed neighbors →
+            // perceived_stress 0 → the term contributes nothing, and the
+            // daily refresh (end of the previous tick) reads default zeros
+            // at tick 0, so calibrated runs are byte-identical until
+            // neighbors actually hold stress. Deterministic (the field is
+            // RNG-free by construction); the rate keeps the annual ambient
+            // pressure bounded (~FEAR_CONTAGION_RATE × stress × 365,
+            // clamped). Equilibrium note: the fold's own arithmetic
+            // (rate × stress ≈ 0.02/day vs decay 0.002/day) would alone
+            // saturate fear — and empirically 2/12 agents DO sit at the
+            // 1.0 clamp at tick 2000 (probe-pinned) — but the per-tick
+            // appraisal recompute holds the population MEAN at ~0.86,
+            // leaving headroom for the other 10, so the channel's
+            // differential is compressed but live. The elevated ambient
+            // fear is the intended "terrified village sustains itself"
+            // state (reviewer-flagged calibration risk: if appraisal
+            // tuning changes, re-pin the integration floor).
+            if phases.is_daily {
+                for (agent, emotion) in self.agents.iter().zip(emotions.iter_mut()) {
+                    emotion.fear =
+                        crate::social::relational_field::RelationalFields::contagion_apply(
+                            emotion.fear,
+                            agent.relational_fields.perceived_stress,
+                            Fixed::from_f64(
+                                crate::social::relational_field::FEAR_CONTAGION_RATE,
+                            ),
+                        );
+                }
+            }
+
             // ── 8. Belief resistance decay ────────────────────────────
             // §5.1: Use configurable decay rate from SimParameters.
             // §8.1.17: Narrative frames modulate belief rigidity — agents whose
