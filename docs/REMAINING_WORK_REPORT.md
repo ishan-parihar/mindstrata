@@ -13,7 +13,7 @@ The dominant category. A recurring pattern across the campaign: systems were bui
 | # | Plan § | Item | Producer (iteration) | Status |
 |---|--------|------|----------------------|--------|
 | 1 | §7.2.6 | **Conception→pregnancy→birth pipeline** — `attempt_conception` has **zero production callers**; births flow through probabilistic demography only; `Option<PregnancyState>` stays `None` in real runs | Iter 42 | **Largest inert biological channel** |
-| 2 | §8.1.4 | Expanded 14 emotion families (disgust, contempt, awe, gratitude, jealousy, envy, loneliness, tenderness, humiliation, relief, hope, despair, nostalgia, moral_outrage) + deepened appraisal dimensions feeding **decisions** | Iter 48 | Observational |
+| 2 | §8.1.4 | **PARTIAL (Iter 98)** — loneliness→social-seeking wired (`interact_chance` + loneliness×0.3; the expanded 14-family appraisal now has a decision consumer). Still unwired: contempt, awe, envy, tenderness, humiliation, relief, despair, nostalgia | Iter 48 | Partially wired |
 | 3 | §9.2 | Neural-like activations / RL action values / prediction error feeding **action selection** | Iter 51 | Observational |
 | 4 | §8.1.16 | Prospection scenarios feeding decisions; D2–D6 domains (threat/injustice/courtship/ambition) proven by unit test only — the scarce default world fires only D1 | Iter 71 | Observational |
 | 5 | §8.1.5 | **WIRED (Iter 96)** — `dominant_need` urgency boost in `compute_utility`: the full-pressure argmax biases selection toward the dominant need's relief channel (exclusive boost; Safety/Esteem dominant = zero boost = fight-or-flight override) | Iter 44 | Wired |

@@ -3355,6 +3355,7 @@ impl Simulation {
                             Some(i) == elder_idx,
                             obey_propensity,
                             Some(i) == authority_idx,
+                            emotions[i].loneliness, // §8.1.4 (Iteration 98)
                         )
                     })
                     .collect();

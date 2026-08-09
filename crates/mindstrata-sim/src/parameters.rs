@@ -104,6 +104,10 @@ pub struct SimParameters {
     pub social_interaction_base_chance: Fixed,
     /// Extraversion multiplier for interaction chance (0.4).
     pub social_extraversion_multiplier: Fixed,
+    /// §8.1.4 (Iteration 98): loneliness multiplier for interaction chance
+    /// (0.3) — a lonely agent seeks social contact more (the emotion gate's
+    /// first read of the loneliness family).
+    pub social_loneliness_multiplier: Fixed,
     /// Agreeableness threshold for Teach interaction (0.5).
     pub social_agreeableness_threshold: Fixed,
     /// Friend→Neighbor downgrade threshold (0.4 = Friend downgrades if trust drops below).
@@ -350,6 +354,7 @@ impl Default for SimParameters {
             social_default_affection: Fixed::from_f64(0.3),
             social_interaction_base_chance: Fixed::from_f64(0.3),
             social_extraversion_multiplier: Fixed::from_f64(0.4),
+            social_loneliness_multiplier: Fixed::from_f64(0.3),
             social_agreeableness_threshold: Fixed::from_f64(0.5),
             social_friend_downgrade_threshold: Fixed::from_f64(0.4),
             social_rival_repair_trust: Fixed::from_f64(0.5),

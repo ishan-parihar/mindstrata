@@ -424,7 +424,7 @@ fn evolve_relationship_kind(rel: &mut Relationship, params: &crate::parameters::
 pub fn system_social_interactions(
     // (id, openness, agreeableness, extraversion, anger, no_violence_resistance,
     //  help_neighbors_propensity, respect_elders_propensity, is_elder,
-    //  obey_ruler_propensity, is_authority)
+    //  obey_ruler_propensity, is_authority, loneliness)
     agents: &[(
         AgentId,
         Fixed,
@@ -437,6 +437,7 @@ pub fn system_social_interactions(
         bool,
         Fixed,
         bool,
+        Fixed,
     )],
     agent_positions: &[(i32, i32)],            // §2.4: agent (x, y) positions
     same_faction_matrix: &[Vec<bool>],         // §5.4: same_faction_matrix[i][j] = true if agents i,j share a faction
@@ -453,9 +454,17 @@ pub fn system_social_interactions(
     // The source agent's own elder/authority flags are unused here — the
     // gates read the *target's* status (`agents[target_idx].8` for elder,
     // `agents[target_idx].10` for authority) when the interaction is chosen.
-    for (i, (agent_id, openness, agreeableness, extraversion, anger, no_violence_resistance, help_neighbors_propensity, respect_elders_propensity, _is_elder, obey_ruler_propensity, _is_authority)) in agents.iter().enumerate() {
-        // Extraversion affects interaction frequency
-        let interact_chance = params.social_interaction_base_chance + *extraversion * params.social_extraversion_multiplier;
+    for (i, (agent_id, openness, agreeableness, extraversion, anger, no_violence_resistance, help_neighbors_propensity, respect_elders_propensity, _is_elder, obey_ruler_propensity, _is_authority, loneliness)) in agents.iter().enumerate() {
+        // §8.1.4 (Iteration 98): a lonely agent seeks social contact more —
+        // loneliness adds to the interaction-chance gate (previously the
+        // family was computed by appraisal every tick and never read).
+        // Zero-at-zero (loneliness 0 → legacy gate, byte-identical), the RNG
+        // draw stays unconditional (only the threshold moves — replay
+        // determinism holds), and extraversion still dominates the
+        // personality channel.
+        let interact_chance = params.social_interaction_base_chance
+            + *extraversion * params.social_extraversion_multiplier
+            + *loneliness * params.social_loneliness_multiplier;
         let roll = Fixed::from_f64(rng.get_mut(RngStream::Social).random_range(0.0..1.0));
 
         if roll > interact_chance {
@@ -826,5 +835,103 @@ mod tests {
             authority_partial < baseline,
             "partial internalization must leave a strictly reduced threat rate"
         );
+    }
+
+    /// §8.1.4 (Iteration 98): a lonely agent clears the interaction gate
+    /// more often — `system_social_interactions` adds `loneliness ×
+    /// social_loneliness_multiplier` to `interact_chance` (the family was
+    /// computed by appraisal every tick and never read). Zero-at-zero: at
+    /// loneliness 0 the gate is exactly the legacy formula. The gate roll
+    /// itself is drawn unconditionally, but once a lonely agent converts an
+    /// extra roll, `select_interaction_target`/`choose_interaction` consume
+    /// more downstream RNG — so the runs are replay-deterministic per seed,
+    /// not stream-identical; the higher threshold still converts strictly
+    /// more rolls into interactions.
+    #[test]
+    fn loneliness_raises_interaction_gate() {
+        let params = crate::parameters::SimParameters::default();
+        let count_interactions = |loneliness: Fixed| -> u32 {
+            let mut rng = RngStreams::new(42);
+            let mut events: Vec<SimEvent> = Vec::new();
+            let mut relationships: Vec<Relationship> = Vec::new();
+            let agent_info = vec![
+                (
+                    AgentId::new(0),
+                    Fixed::from_f64(0.5), // openness
+                    Fixed::from_f64(0.5), // agreeableness
+                    Fixed::ZERO,          // extraversion (0 isolates loneliness)
+                    Fixed::ZERO,          // anger
+                    Fixed::ZERO,          // no_violence_resistance
+                    Fixed::ZERO,          // help_neighbors_propensity
+                    Fixed::ZERO,          // respect_elders_propensity
+                    false,                // is_elder
+                    Fixed::ZERO,          // obey_ruler_propensity
+                    false,                // is_authority
+                    loneliness,           // §8.1.4 (Iteration 98)
+                ),
+                (
+                    AgentId::new(1),
+                    Fixed::from_f64(0.5),
+                    Fixed::from_f64(0.5),
+                    Fixed::ZERO,
+                    Fixed::ZERO,
+                    Fixed::ZERO,
+                    Fixed::ZERO,
+                    Fixed::ZERO,
+                    false,
+                    Fixed::ZERO,
+                    false,
+                    Fixed::ZERO,
+                ),
+            ];
+            let positions = vec![(0i32, 0i32), (1i32, 0i32)]; // both within radius 5
+            let same_faction = vec![vec![false, false], vec![false, false]];
+            let mut interactions = 0u32;
+            for _ in 0..1000 {
+                system_social_interactions(
+                    &agent_info,
+                    &positions,
+                    &same_faction,
+                    &mut relationships,
+                    &mut events,
+                    Tick::new(1),
+                    &mut rng,
+                    params.bonding_rate,
+                    params.conflict_escalation_rate,
+                    &params,
+                );
+            }
+            for ev in &events {
+                if let SimEvent::InteractionOccurred { .. } = ev {
+                    interactions += 1;
+                }
+            }
+            interactions
+        };
+        let baseline = count_interactions(Fixed::ZERO);
+        let lonely = count_interactions(Fixed::from_f64(0.9));
+        assert!(baseline > 0, "non-lonely agents must still interact");
+        assert!(
+            lonely > baseline,
+            "lonely agents must clear the gate more often: {lonely} vs {baseline}"
+        );
+    }
+
+    /// §8.1.4 (Iteration 98): loneliness alone — with zero extraversion and
+    /// zero loneliness the gate is exactly the base chance; the multiplier
+    /// only ever *raises* the gate (never lowers it), so a calmer agent is
+    /// never penalized by this channel.
+    #[test]
+    fn loneliness_never_lowers_the_gate() {
+        let params = crate::parameters::SimParameters::default();
+        let chance = |loneliness: Fixed| -> f64 {
+            (params.social_interaction_base_chance
+                + Fixed::ZERO * params.social_extraversion_multiplier
+                + loneliness * params.social_loneliness_multiplier)
+                .to_f64()
+        };
+        assert_eq!(chance(Fixed::ZERO), params.social_interaction_base_chance.to_f64());
+        assert!(chance(Fixed::from_f64(0.5)) > chance(Fixed::ZERO));
+        assert!(chance(Fixed::ONE) >= chance(Fixed::from_f64(0.5)));
     }
 }
