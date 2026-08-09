@@ -2278,14 +2278,18 @@ fn pestilence_epidemic_onset_outpaces_riverford() {
          (got {mid_infected} carriers @4000)"
     );
     // Iteration 110 recalibration: the trust-pacification consumer re-paces
-    // the conflict/mortality arc and the epidemic now BURNS OUT before
-    // 12000 (0 carriers; the mid tail @4000 still carries 2). The deep-tail
-    // pin becomes a decline-to-exhaustion claim: the deep tail carries
-    // strictly fewer than the mid tail, and the onset->mid->deep arc
-    // declines monotonically.
+    // the conflict/mortality arc and the epidemic no longer rages at 12000.
+    // Iteration 115 recalibration: the §13.5 moral-panic legitimacy drain
+    // (the fear-heavy pestilence world fires the §7.2 trigger every
+    // cooldown — 20 panics by 12000 — collapsing institution legitimacy
+    // and shifting the conflict arc) leaves the deep tail on a LOW
+    // 2-carrier endemic PLATEAU instead of exhausting: the pin becomes
+    // mid ≥ deep ≥ 1 (the tail never grows past the mid tail and stays
+    // endemic), while the decline-from-onset-peak claim below still holds
+    // (deep 2 < onset 6).
     assert!(
-        deep_infected < mid_infected,
-        "the deep tail must decline to exhaustion below the mid tail \
+        deep_infected <= mid_infected && deep_infected >= 1,
+        "the deep tail must plateau at or below the mid tail, still endemic \
          (deep {deep_infected} vs mid {mid_infected} carriers)"
     );
     // The endemic persistence must still sit BELOW the onset peak — the
@@ -6713,8 +6717,13 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         // courtship) drops the third birth and delays the second — seed 1
         // now delivers TWO births by 80K, probe-pinned [21860, 45710],
         // with the 2-chain intact (2 live children, 2 marriage records,
-        // children_born 2).
-        vec![21860, 45710],
+        // children_born 2). Iteration 115 recalibration: the §13.5 moral-
+        // panic legitimacy drain (rate 0.001, calibrated so the pipeline
+        // SURVIVES — 0.005 killed all births) re-paces courtship again —
+        // seed 1 now delivers TWO births by 80K, probe-pinned
+        // [28230, 35960], with the 2-chain intact (2 live children, 2
+        // marriage records, children_born 2, population 14).
+        vec![28230, 35960],
         "seed-1 80K world must deliver exactly the probed births"
     );
     for t in &birth_ticks {
@@ -8300,4 +8309,114 @@ fn social_obligation_restrains_escalation_end_to_end() {
         .map(|a| a.relational_fields.social_obligation.to_f64())
         .collect();
     assert_eq!(v1, v2, "obligation vectors must be seed-deterministic");
+}
+/// §13.5 (Iteration 115): the moral-panic lifecycle is now LIVE — a §7.2
+/// trigger registers the panic, the daily driver escalates/resolves it
+/// from escalation pressure + fatigue, and an ACTIVE panic erodes its
+/// target institution's legitimacy each day.
+#[test]
+fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::institutions::InstitutionKind;
+    use mindstrata_sim::noosphere::moral_panic::{
+        panic_fatigue, panic_legitimacy_drain, MoralPanic, PanicTrigger, PANIC_FATIGUE_RATE,
+        PANIC_LEGITIMACY_DRAIN_RATE,
+    };
+    use mindstrata_sim::sim::Simulation;
+
+    let council_leg = |sim: &Simulation| -> Fixed {
+        sim.institutions
+            .iter()
+            .find(|i| i.kind == InstitutionKind::Council)
+            .map_or(Fixed::ZERO, |i| i.legitimacy)
+    };
+
+    // Leg A — producer reach: a real §7.2 panic fires in the calibrated
+    // world (start_tick 3034, probe-pinned deterministic), is REGISTERED
+    // in the registry, and is still active with the lifecycle having run
+    // on it — 13 daily steps of escalation (low legitimacy + high fear
+    // keep the pressure above 0.5) raise intensity 0.3 → 0.95 by 5,000.
+    let sim = crate::test_helpers::run_sim(42, 5000);
+    assert!(
+        !sim.moral_panic_registry.panics.is_empty(),
+        "a real panic must have been registered by 5000 ticks"
+    );
+    let panic = sim.moral_panic_registry.panics.first().unwrap();
+    assert!(
+        panic.active,
+        "a ~2,000-tick-old panic must still be active (fatigue ~0.26 is far below 0.7)"
+    );
+    assert!(
+        panic.start_tick >= 2900 && panic.start_tick <= 3200,
+        "the seed-42 panic must fire near the probe-pinned 3,034 horizon, got {}",
+        panic.start_tick
+    );
+    assert!(
+        panic.intensity > Fixed::from_f64(0.3),
+        "daily escalation must have raised intensity above the initial 0.3"
+    );
+    assert!(
+        matches!(
+            panic.trigger,
+            PanicTrigger::InstitutionalCorruption | PanicTrigger::MoralViolation
+        ),
+        "the registered panic must carry one of the two §7.2 mapped triggers"
+    );
+
+    // Leg B — consumer through the public path: the drain and fatigue
+    // helpers are exact, deterministic pure functions.
+    assert_eq!(
+        panic_legitimacy_drain(Fixed::from_f64(0.3), PANIC_LEGITIMACY_DRAIN_RATE),
+        Fixed::from_f64(0.0003),
+        "fresh-panic intensity 0.3 × 0.001 must be exactly 0.0003"
+    );
+    assert_eq!(
+        panic_legitimacy_drain(Fixed::ONE, PANIC_LEGITIMACY_DRAIN_RATE),
+        Fixed::from_f64(0.001)
+    );
+    assert_eq!(panic_fatigue(0, PANIC_FATIGUE_RATE), Fixed::ZERO);
+    assert_eq!(
+        panic_fatigue(35, PANIC_FATIGUE_RATE),
+        Fixed::from_f64(0.7),
+        "fatigue must cross the resolve threshold after 35 days"
+    );
+
+    // Leg C — replay determinism: two same-seed 5,000-tick runs register
+    // the same panic and drain the same institution identically.
+    let again = crate::test_helpers::run_sim(42, 5000);
+    assert_eq!(
+        sim.moral_panic_registry.panics.len(),
+        again.moral_panic_registry.panics.len(),
+        "panic registration must be seed-deterministic"
+    );
+    assert_eq!(council_leg(&sim), council_leg(&again));
+
+    // Leg D — the wiring differential (the only leg that FAILS if the
+    // drain line in `tick_moral_panic_lifecycle` is ever deleted): two
+    // identical 2,000-tick worlds; inject a council panic into one and run
+    // both to the next daily tick (2,016). The worlds diverge ONLY by the
+    // panic's legitimacy drain, so the control-vs-injected council
+    // legitimacy gap must equal the drain of the panic's (post-update)
+    // intensity exactly.
+    let mut with_panic = crate::test_helpers::run_sim(42, 2000);
+    let mut control = crate::test_helpers::run_sim(42, 2000);
+    with_panic.moral_panic_registry.register(MoralPanic::new(
+        PanicTrigger::InstitutionalCorruption,
+        None,
+        2000,
+    ));
+    with_panic.run(16); // ticks 2001..2016; 2016 = 14 × 144 is the next daily tick
+    control.run(16);
+    let injected = with_panic.moral_panic_registry.panics.last().unwrap();
+    assert!(
+        injected.active,
+        "the injected panic must survive its first lifecycle step"
+    );
+    let actual_gap = council_leg(&control) - council_leg(&with_panic);
+    let expected_gap =
+        panic_legitimacy_drain(injected.intensity, PANIC_LEGITIMACY_DRAIN_RATE);
+    assert_eq!(
+        actual_gap, expected_gap,
+        "the injected panic must drain exactly its intensity × rate from the council"
+    );
 }

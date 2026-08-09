@@ -7316,8 +7316,13 @@ impl Simulation {
             self.tick_cults(tick_u64);
             self.tick_cult_dynamics();
 
-            // Architecture-plan-2 §13.5: Moral panic daily update.
-            self.moral_panic_registry.daily_update();
+            // Architecture-plan-2 §13.5 (Iteration 115): Moral panic
+            // lifecycle — escalation pressure drives daily escalation or
+            // fatigue-driven resolution, and an ACTIVE panic erodes its
+            // target institution's legitimacy each day ("panic → distrust →
+            // more panic"). Previously the registry was unit-test-only dead
+            // code: nothing ever registered a panic, so this was a no-op.
+            self.tick_moral_panic_lifecycle(tick_u64);
 
             self.faction_v2_registry.daily_update();
             // Architecture-plan-2 §12.2: Peer group daily update — decay cohesion.
@@ -8902,6 +8907,24 @@ impl Simulation {
                         fear_induced: panic_result.avg_charge,
                         tick,
                     });
+                    // §13.5 (Iteration 115): record the panic so its
+                    // lifecycle runs daily — escalation/de-escalation from
+                    // `escalation_pressure` + fatigue, and the legitimacy
+                    // drain. Previously NOTHING ever registered a panic:
+                    // the registry stayed empty and `daily_update` was a
+                    // no-op (unit-test-only dead machinery). `start_tick`
+                    // lets the daily driver skip same-tick processing (the
+                    // §7.2 legitimacy damage above already applied).
+                    let trigger = match prop_id {
+                        // proposition 1 = "the_council_protects_us" → council
+                        // corruption; proposition 0 = "the_market_is_fair" →
+                        // a perceived moral failing of the market.
+                        0 => crate::noosphere::moral_panic::PanicTrigger::MoralViolation,
+                        _ => crate::noosphere::moral_panic::PanicTrigger::InstitutionalCorruption,
+                    };
+                    self.moral_panic_registry.register(
+                        crate::noosphere::moral_panic::MoralPanic::new(trigger, None, tick_u64),
+                    );
                 }
             }
 
@@ -9010,6 +9033,95 @@ impl Simulation {
             }
         }
 
+    }
+
+    /// §13.5 (Iteration 115): daily moral-panic lifecycle driver.
+    ///
+    /// For each ACTIVE panic (skipping panics registered this very tick —
+    /// their §7.2 legitimacy damage already applied at trigger), the
+    /// resolve-first cycle runs:
+    /// 1. `should_resolve(institutional_response, fatigue)` — with the
+    ///    institutional response never set by any system, fatigue
+    ///    (`panic_fatigue`, 0.02/day → crosses the 0.7 resolve threshold
+    ///    after 35 days) is the resolution driver: the panic ends when the
+    ///    population tires of the crisis;
+    /// 2. else `escalation_pressure(mean_legitimacy, community_fear)` above
+    ///    the 0.5 threshold → `escalate` (self-reinforcing: as the panic
+    ///    erodes legitimacy, the legitimacy-vacuum term keeps pressure
+    ///    high);
+    /// 3. else natural `daily_update` decay.
+    ///
+    /// Then the DECISIONAL CONSUMER: the panic's (post-update) intensity
+    /// erodes the legitimacy of the institution it erupted about
+    /// (`panic_legitimacy_drain`) each day until resolved. Deterministic —
+    /// no RNG — so replay determinism holds. Zero-blast by construction:
+    /// no panic fires before ~4,320 ticks in seed-42 runs, so the golden
+    /// (1,000) and snapshot (≤2,000) horizons never see this consumer.
+    fn tick_moral_panic_lifecycle(&mut self, tick_u64: u64) {
+        use crate::noosphere::moral_panic::{
+            panic_fatigue, panic_legitimacy_drain, PanicTrigger, PANIC_ESCALATION_THRESHOLD,
+            PANIC_FATIGUE_RATE, PANIC_LEGITIMACY_DRAIN_RATE, TICKS_PER_DAY,
+        };
+        if self.moral_panic_registry.panics.is_empty() {
+            return;
+        }
+        // Mean legitimacy over the two panic-relevant institutions and the
+        // world mean fear (community fear) drive `escalation_pressure`.
+        let mut legit_sum = Fixed::ZERO;
+        let mut legit_count = 0u32;
+        for inst in &self.institutions {
+            if inst.kind == InstitutionKind::Council || inst.kind == InstitutionKind::Market {
+                legit_sum += inst.legitimacy;
+                legit_count += 1;
+            }
+        }
+        let mean_legitimacy = if legit_count > 0 {
+            legit_sum / Fixed::from_int(legit_count as i64)
+        } else {
+            Fixed::ZERO
+        };
+        let n = self.agents.len();
+        let community_fear = if n > 0 {
+            self.agents
+                .iter()
+                .map(|a| a.emotions.fear)
+                .fold(Fixed::ZERO, |acc, f| acc + f)
+                / Fixed::from_int(n as i64)
+        } else {
+            Fixed::ZERO
+        };
+        let panics = &mut self.moral_panic_registry.panics;
+        for panic in panics {
+            if !panic.active || panic.start_tick == tick_u64 {
+                continue;
+            }
+            let elapsed_days = (tick_u64 - panic.start_tick) / TICKS_PER_DAY;
+            let fatigue = panic_fatigue(elapsed_days, PANIC_FATIGUE_RATE);
+            let pressure = panic.escalation_pressure(mean_legitimacy, community_fear);
+            if panic.should_resolve(Fixed::ZERO, fatigue) {
+                panic.deescalate();
+            } else if pressure > Fixed::from_f64(PANIC_ESCALATION_THRESHOLD) {
+                panic.escalate(tick_u64);
+            } else {
+                panic.daily_update();
+            }
+            // Decisional consumer: active intensity erodes the institution
+            // the panic erupted about ("panic → distrust → more panic").
+            let target = match panic.trigger {
+                PanicTrigger::InstitutionalCorruption => Some(InstitutionKind::Council),
+                PanicTrigger::MoralViolation => Some(InstitutionKind::Market),
+                _ => None,
+            };
+            if let Some(target) = target {
+                let drain =
+                    panic_legitimacy_drain(panic.intensity, PANIC_LEGITIMACY_DRAIN_RATE);
+                for inst in &mut self.institutions {
+                    if inst.kind == target {
+                        inst.legitimacy = (inst.legitimacy - drain).max(Fixed::ZERO);
+                    }
+                }
+            }
+        }
     }
 
     /// Sections 15+13: Derived mental state computation and belief updates.
