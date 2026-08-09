@@ -1441,6 +1441,19 @@ impl Simulation {
         }
     }
 
+    /// §10.2 (Iteration 102): Continuous dominance scale folded into the
+    /// escalation chance. `power_balance` (directed, from→to, ∈ [-1, 1]) is
+    /// mapped onto [0.5, 1.5] — identity at zero, so pairs without a
+    /// relationship record (or a perfectly balanced one) keep the legacy
+    /// chance. Monotone: a dominant aggressor escalates a failed threat
+    /// more readily ("I can win this"), a subordinate backs down ("picking
+    /// a fight with them would go badly"). Pure function of the field — no
+    /// RNG, deterministic.
+    #[inline]
+    fn dominance_escalation_scale(power_balance: Fixed) -> f64 {
+        (1.0 + power_balance.to_f64() * 0.5).clamp(0.5, 1.5)
+    }
+
     /// §19.5.H/§10.8: Whether a failed threat escalates to violence. The RNG
     /// draw happens under exactly the same conditions as the original inline
     /// logic, so the stream is untouched (replay determinism).
@@ -1495,9 +1508,27 @@ impl Simulation {
                 .hypocrisy_factor(name)
                 .to_f64()
         });
+        // §10.2 (Iteration 102): Relational dominance feeds the escalation
+        // decision. `power_balance` (directed, from→to) was updated on the
+        // daily boundary (tick % 144) but had zero consumers — a write-only
+        // field. The aggressor's directed power over the target scales the
+        // chance continuously (0.5× subordinate → 1.5× dominant); pairs
+        // without a relationship record resolve to zero → scale 1.0 →
+        // legacy behavior. The RNG draw below stays unconditional (same
+        // stream position), so replay determinism holds at every
+        // power-balance value — only the comparison threshold changes.
+        let dominance_scale = {
+            let pos = Self::relationship_v2_pos(from_idx, to_idx);
+            let power_balance = self.agents[from_idx]
+                .relationship_v2s
+                .get(pos)
+                .map_or(Fixed::ZERO, |r| r.power_balance);
+            Self::dominance_escalation_scale(power_balance)
+        };
         let chance = self.escalation_chance(from_idx, to_idx)
             * (1.0 - resistance)
-            * (1.0 - hypocrisy);
+            * (1.0 - hypocrisy)
+            * dominance_scale;
         self.rng.get_mut(RngStream::Social).random::<f64>() < chance
     }
 
@@ -10459,6 +10490,65 @@ mod tests {
         let aggression = Fixed::from_f64(1.5);
         assert!(!sim.should_escalate(a, b, false, aggression));
         assert!(!sim.should_escalate(a, b, true, Fixed::ZERO));
+    }
+
+    /// §10.2 (Iteration 102): the dominance scale is identity at zero
+    /// (legacy chance), clamped to [0.5, 1.5], and monotone in the
+    /// aggressor's directed power over the target.
+    #[test]
+    fn dominance_escalation_scale_is_identity_at_zero_and_clamped() {
+        assert_eq!(Simulation::dominance_escalation_scale(Fixed::ZERO), 1.0);
+        assert_eq!(Simulation::dominance_escalation_scale(Fixed::ONE), 1.5);
+        assert_eq!(
+            Simulation::dominance_escalation_scale(Fixed::from_f64(-1.0)),
+            0.5
+        );
+        let low = Simulation::dominance_escalation_scale(Fixed::from_f64(-0.4));
+        let high = Simulation::dominance_escalation_scale(Fixed::from_f64(0.4));
+        assert!(low < 1.0 && high > 1.0 && low < high);
+    }
+
+    /// §10.2 (Iteration 102): the fold genuinely shifts escalation outcomes.
+    /// Two same-seed worlds differ only in the pair's directed
+    /// `power_balance` (+1 vs −1). The RNG draw sequence is identical in
+    /// both (same seed, same call order, exactly one draw per
+    /// `should_escalate`), so the count gap is deterministic: a dominant
+    /// aggressor escalates strictly more often than a subordinate one.
+    #[test]
+    fn relational_dominance_shifts_escalation_outcomes() {
+        let make_config = || SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut dominant = Simulation::new(make_config());
+        dominant.populate();
+        let mut subordinate = Simulation::new(make_config());
+        subordinate.populate();
+        let (a, b) = cross_clan_pair(&dominant);
+        let pos = Simulation::relationship_v2_pos(a, b);
+        dominant.agents[a].relationship_v2s[pos].power_balance = Fixed::ONE;
+        subordinate.agents[a].relationship_v2s[pos].power_balance =
+            Fixed::from_f64(-1.0);
+        let aggression = Fixed::from_f64(1.5); // past the 1.2 threshold
+        let mut dominant_escalations = 0;
+        let mut subordinate_escalations = 0;
+        for _ in 0..200 {
+            if dominant.should_escalate(a, b, true, aggression) {
+                dominant_escalations += 1;
+            }
+            if subordinate.should_escalate(a, b, true, aggression) {
+                subordinate_escalations += 1;
+            }
+        }
+        assert!(
+            dominant_escalations > subordinate_escalations,
+            "dominant aggressor must escalate strictly more: \
+             {dominant_escalations} vs {subordinate_escalations}"
+        );
     }
 
     /// §8.1.10 (Iteration 83): An agent who has internalized the no-violence

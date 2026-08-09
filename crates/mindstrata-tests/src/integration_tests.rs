@@ -7023,3 +7023,80 @@ fn tenderness_channel_boosts_helping_when_multiplier_active() {
         "same seed + same multiplier must be deterministic"
     );
 }
+
+/// §10.2 (Iteration 102): relational dominance genuinely feeds the
+/// violence-escalation decision in live runs. Two same-seed worlds differ
+/// only in every relationship's directed `dependence` (A's dependence on B
+/// — a field the simulation itself never writes, so the daily
+/// `power_balance` recompute reproduces the crafted asymmetry at every
+/// 144-tick boundary): the zero-dependence world grants everyone maximum
+/// emotional leverage (power_balance shifts up), the full-dependence world
+/// strips it. The dominant world must produce strictly more violence across
+/// the horizon. Before Iteration 102 the two worlds were byte-identical
+/// (`power_balance` had zero consumers).
+#[test]
+fn relational_dominance_feeds_violence_escalation() {
+    fn violence_of(sim: &Simulation) -> usize {
+        sim.recent_events(10_000_000)
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e,
+                    mindstrata_core::event::SimEvent::ConflictOccurred {
+                        kind: mindstrata_core::conflict::ConflictKind::Violence,
+                        ..
+                    }
+                )
+            })
+            .count()
+    }
+    fn run_world(dependence: f64, seed: u64) -> Simulation {
+        let config = SimConfig {
+            seed,
+            max_ticks: 5000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        for a in &mut sim.agents {
+            for r in &mut a.relationship_v2s {
+                r.dependence = Fixed::from_f64(dependence);
+            }
+        }
+        sim.run(5000);
+        sim
+    }
+    let mut dominant_total = 0usize;
+    let mut subordinate_total = 0usize;
+    for seed in [42u64, 44, 45] {
+        let dominant = run_world(0.0, seed);
+        let subordinate = run_world(1.0, seed);
+        // Reach: the crafted asymmetry must survive the daily recompute
+        // (zero-dependence → +0.7 emotional leverage per pair).
+        let mean_pb = |sim: &Simulation| -> f64 {
+            let values: Vec<f64> = sim
+                .agents
+                .iter()
+                .flat_map(|a| a.relationship_v2s.iter().map(|r| r.power_balance.to_f64()))
+                .collect();
+            values.iter().sum::<f64>() / values.len() as f64
+        };
+        let dom_mean = mean_pb(&dominant);
+        let sub_mean = mean_pb(&subordinate);
+        assert!(
+            dom_mean > sub_mean,
+            "crafted dependence must raise power_balance \
+             (dom {dom_mean:.3} vs sub {sub_mean:.3})"
+        );
+        dominant_total += violence_of(&dominant);
+        subordinate_total += violence_of(&subordinate);
+    }
+    assert!(
+        dominant_total > subordinate_total,
+        "zero-dependence (dominant) world must escalate strictly more: \
+         {dominant_total} vs {subordinate_total}"
+    );
+}
