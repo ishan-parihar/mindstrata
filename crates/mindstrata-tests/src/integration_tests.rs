@@ -8793,3 +8793,91 @@ fn household_food_pooling_feeds_dependents_first_end_to_end() {
         .collect();
     assert_eq!(res_a, res_b, "singleton reserves identical after the fold");
 }
+#[test]
+fn narrative_dominance_steers_cluster_assignment_end_to_end() {
+    use mindstrata_core::fixed::Fixed;
+
+    // §13.6 (AP2) — Iteration 120: the narrative-dominance momentum fold
+    // (remaining-work row 14). The threshold (0.6) sits ABOVE the
+    // probe-pinned calibrated ceiling (max dominance = 0.52 across 9
+    // seed × horizon combos up to 20,000 ticks), so Leg A proves the fold
+    // is identity on the real golden population and Legs B–D prove the
+    // mechanics engage when a genuine dominant narrative emerges.
+
+    // Leg A: on the real seed-42 golden population the momentum is exactly
+    // ZERO — the fold is identity in every calibrated world.
+    let sim = crate::test_helpers::run_sim(42, 1000);
+    assert!(
+        sim.echo_chamber
+            .narrative_dominance
+            .values()
+            .all(|d| *d <= Fixed::from_f64(0.52)),
+        "precondition: calibrated dominance ceiling"
+    );
+    assert_eq!(
+        sim.echo_chamber.narrative_momentum(
+            Fixed::from_f64(mindstrata_sim::culture::echo_chamber::NARRATIVE_DOMINANCE_THRESHOLD),
+            Fixed::from_f64(mindstrata_sim::culture::echo_chamber::NARRATIVE_MOMENTUM_RATE),
+        ),
+        Fixed::ZERO,
+        "momentum is zero at the calibrated ceiling"
+    );
+
+    // Leg B: a genuine dominant narrative (0.8 > 0.6) yields exact momentum.
+    let mut state = mindstrata_sim::culture::echo_chamber::EchoChamberState::new();
+    state.narrative_dominance.insert(0, Fixed::from_f64(0.8));
+    let m = state.narrative_momentum(
+        Fixed::from_f64(mindstrata_sim::culture::echo_chamber::NARRATIVE_DOMINANCE_THRESHOLD),
+        Fixed::from_f64(mindstrata_sim::culture::echo_chamber::NARRATIVE_MOMENTUM_RATE),
+    );
+    assert_eq!(m, Fixed::from_f64(0.05), "(0.8 − 0.6) × 0.25");
+
+    // Leg C: the momentum tips marginal agents — a pro_score of 0.97 with
+    // momentum 0.05 crosses the 1.0 assignment boundary; without it, not.
+    let base = Fixed::from_f64(0.97);
+    assert!(base <= Fixed::ONE, "baseline pro_score below the boundary");
+    assert!(base + m > Fixed::ONE, "momentum tips the marginal agent over");
+
+    // Leg D: end-to-end — inject a dominant narrative into a live seed-42
+    // run (credibility 0.8 on every meme → dominance 0.832 > 0.6). The
+    // load-bearing assertion is `momentum > 0` (the fold engages); the
+    // pro-cluster assertion is directional (momentum only ever ADDS to
+    // pro_score — personality is static — so the pro cluster can never
+    // shrink from the fold; whether it actually grows depends on how many
+    // agents sit within the 0.058 momentum margin of the 1.0 boundary).
+    let base_sim = crate::test_helpers::run_sim(42, 300);
+    let pro_base = base_sim
+        .echo_chamber
+        .clusters
+        .iter()
+        .filter(|c| c.dominant_narrative == "pro_institution")
+        .map(|c| c.members.len())
+        .next()
+        .unwrap_or(0);
+    let mut sim = crate::test_helpers::run_sim(42, 200);
+    for meme in &mut sim.meme_registry.memes {
+        meme.credibility = Fixed::from_f64(0.8);
+    }
+    sim.run(100);
+    let pro_after = sim
+        .echo_chamber
+        .clusters
+        .iter()
+        .filter(|c| c.dominant_narrative == "pro_institution")
+        .map(|c| c.members.len())
+        .next()
+        .unwrap_or(0);
+    let momentum_after = sim.echo_chamber.narrative_momentum(
+        Fixed::from_f64(mindstrata_sim::culture::echo_chamber::NARRATIVE_DOMINANCE_THRESHOLD),
+        Fixed::from_f64(mindstrata_sim::culture::echo_chamber::NARRATIVE_MOMENTUM_RATE),
+    );
+    assert!(
+        momentum_after > Fixed::ZERO,
+        "the injected narrative dominates: {}",
+        momentum_after.to_f64()
+    );
+    assert!(
+        pro_after >= pro_base,
+        "dominant narrative must not shrink the pro cluster: {pro_after} vs {pro_base}"
+    );
+}

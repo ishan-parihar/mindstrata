@@ -26,6 +26,34 @@ use std::collections::BTreeMap;
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 
+/// §13.6 (AP2): Narrative-dominance → cluster-assignment fold (Iteration 120).
+///
+/// [`EchoChamberState::narrative_momentum`] scales the daily pro-institution
+/// cluster-assignment heuristic by the strongest narrative in the meme pool
+/// — the plan's "narrative dominance increases within clusters" loop, made
+/// decisional at assignment time.
+/// - `NARRATIVE_DOMINANCE_THRESHOLD`: a narrative must clear this to be
+///   "dominant". Anchored at 0.6, ABOVE the probe-pinned calibrated ceiling
+///   of 0.52 (the initial memes sit at credibility 0.5 × virality 1.04 =
+///   0.52, and the value only decays from there across every seed × horizon
+///   swept — 9 combos up to 20,000 ticks), so the channel is identity in
+///   every current calibrated world (zero-blast by construction).
+/// - `NARRATIVE_MOMENTUM_RATE`: the bonus slope — at full dominance (1.0)
+///   the momentum reaches `(1.0 − 0.6) × 0.25 = 0.1`, enough to tip marginal
+///   agents (pro_score within 0.1 below the 1.0 boundary) into the
+///   pro-institution cluster.
+///
+/// The momentum is deliberately ONE-SIDED (a village-wide bandwagon toward
+/// the institutional pole): it aggregates the single strongest narrative and
+/// adds to every agent's pro_score, rather than per-agent alignment with a
+/// specific narrative's content — no belief↔meme bridge exists in the
+/// codebase, and competing high-dominance narratives (e.g. a pro-temple and
+/// an anti-temple meme both at 0.8) still push pro by the max. Acceptable
+/// for an assignment-level nudge; a competition-aware (top-2 gap) variant
+/// would be a future refinement.
+pub const NARRATIVE_DOMINANCE_THRESHOLD: f64 = 0.6;
+pub const NARRATIVE_MOMENTUM_RATE: f64 = 0.25;
+
 /// A cluster of agents who share similar beliefs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BeliefCluster {
@@ -158,6 +186,24 @@ impl EchoChamberState {
     /// Get a mutable reference to a cluster by id.
     pub fn get_cluster_mut(&mut self, id: usize) -> Option<&mut BeliefCluster> {
         self.clusters.iter_mut().find(|c| c.id == id)
+    }
+
+    /// §13.6 (AP2): Narrative-dominance momentum — how strongly the most
+    /// dominant narrative should pull the village's cluster assignment toward
+    /// the institutional pole. Returns `ZERO` when no narrative clears
+    /// `threshold` (identity: every calibrated window sits at ≤0.52 < 0.6),
+    /// else `(max_dominance − threshold) × rate`, clamped to [0, 1].
+    /// Deterministic: `BTreeMap` iteration, `max` of values, no RNG.
+    pub fn narrative_momentum(&self, threshold: Fixed, rate: Fixed) -> Fixed {
+        let max_dom = self
+            .narrative_dominance
+            .values()
+            .copied()
+            .fold(Fixed::ZERO, Fixed::max);
+        if max_dom <= threshold {
+            return Fixed::ZERO;
+        }
+        ((max_dom - threshold) * rate).clamp_01()
     }
 
     /// Compute overall polarization from cluster disagreements.
@@ -385,6 +431,65 @@ mod tests {
     fn narrative_dominance_defaults_to_empty() {
         let state = EchoChamberState::new();
         assert!(state.narrative_dominance.is_empty());
+    }
+
+    // ── §13.6 Narrative-dominance momentum tests (Iteration 120) ───────
+
+    #[test]
+    fn narrative_momentum_zero_at_and_below_calibrated_ceiling() {
+        let mut state = EchoChamberState::new();
+        // The probe-pinned calibrated ceiling (0.52) and below: identity.
+        state.narrative_dominance.insert(0, Fixed::from_f64(0.52));
+        state.narrative_dominance.insert(3, Fixed::from_f64(0.52));
+        let m = state.narrative_momentum(
+            Fixed::from_f64(NARRATIVE_DOMINANCE_THRESHOLD),
+            Fixed::from_f64(NARRATIVE_MOMENTUM_RATE),
+        );
+        assert_eq!(m, Fixed::ZERO, "at/below the threshold the fold is identity");
+        let mut state2 = EchoChamberState::new();
+        state2.narrative_dominance.insert(0, Fixed::from_f64(0.2));
+        assert_eq!(
+            state2.narrative_momentum(
+                Fixed::from_f64(NARRATIVE_DOMINANCE_THRESHOLD),
+                Fixed::from_f64(NARRATIVE_MOMENTUM_RATE),
+            ),
+            Fixed::ZERO
+        );
+    }
+
+    #[test]
+    fn narrative_momentum_scales_above_threshold() {
+        let mut state = EchoChamberState::new();
+        state.narrative_dominance.insert(0, Fixed::from_f64(0.8));
+        let m = state.narrative_momentum(
+            Fixed::from_f64(NARRATIVE_DOMINANCE_THRESHOLD),
+            Fixed::from_f64(NARRATIVE_MOMENTUM_RATE),
+        );
+        assert_eq!(m, Fixed::from_f64(0.05), "(0.8 − 0.6) × 0.25");
+    }
+
+    #[test]
+    fn narrative_momentum_empty_map_is_zero() {
+        let state = EchoChamberState::new();
+        assert_eq!(
+            state.narrative_momentum(
+                Fixed::from_f64(NARRATIVE_DOMINANCE_THRESHOLD),
+                Fixed::from_f64(NARRATIVE_MOMENTUM_RATE),
+            ),
+            Fixed::ZERO
+        );
+    }
+
+    #[test]
+    fn narrative_momentum_takes_the_maximum_narrative() {
+        let mut state = EchoChamberState::new();
+        state.narrative_dominance.insert(1, Fixed::from_f64(0.7));
+        state.narrative_dominance.insert(2, Fixed::from_f64(0.9));
+        let m = state.narrative_momentum(
+            Fixed::from_f64(NARRATIVE_DOMINANCE_THRESHOLD),
+            Fixed::from_f64(NARRATIVE_MOMENTUM_RATE),
+        );
+        assert_eq!(m, Fixed::from_f64(0.075), "(0.9 − 0.6) × 0.25");
     }
 
     #[test]

@@ -7299,10 +7299,29 @@ impl Simulation {
                     // Create 2 default clusters (pro-institution vs anti-institution)
                     let c_pro = self.echo_chamber.create_cluster("pro_institution".into());
                     let c_anti = self.echo_chamber.create_cluster("anti_institution".into());
+                    // §13.6 (AP2): narrative-dominance → cluster assignment
+                    // (remaining-work row 14). When a single narrative truly
+                    // dominates the meme pool (dominance > 0.6), the village
+                    // tips toward the institutional pole: the momentum bonus
+                    // is added to every pro_score, pulling marginal agents
+                    // (within 0.1 below the 1.0 boundary at full dominance)
+                    // into the pro-institution cluster. The threshold is
+                    // anchored ABOVE the probe-pinned calibrated ceiling
+                    // (max dominance = 0.52 in every seed × horizon swept),
+                    // so in every current calibrated world the momentum is
+                    // exactly ZERO and the assignment is byte-identical.
+                    let nd_threshold = Fixed::from_f64(
+                        crate::culture::echo_chamber::NARRATIVE_DOMINANCE_THRESHOLD,
+                    );
+                    let nd_rate = Fixed::from_f64(
+                        crate::culture::echo_chamber::NARRATIVE_MOMENTUM_RATE,
+                    );
+                    let momentum = self.echo_chamber.narrative_momentum(nd_threshold, nd_rate);
                     for i in 0..n {
                         // Simple heuristic: high traditionalism + high agreeableness = pro-institution
                         let pro_score = self.agents[i].personality.traditionalism
-                            + self.agents[i].personality.agreeableness;
+                            + self.agents[i].personality.agreeableness
+                            + momentum;
                         let cluster_id = if pro_score > Fixed::from_f64(1.0) {
                             c_pro
                         } else {
@@ -7318,22 +7337,20 @@ impl Simulation {
                             // previously pinned polarization at 0.0000 forever).
                             let belief_charge = self.agents[i].beliefs.iter()
                                 .map(|b| b.emotional_charge)
-                                .fold(Fixed::ZERO, |acc, c| acc.max(c));
+                                .fold(Fixed::ZERO, Fixed::max);
                             // Accumulate WITHOUT clamping: Phase 3 divides by
                             // member count, so an early clamp would saturate the
                             // running sum at 1.0 and understate the per-cluster
                             // average for large clusters (e.g. ~24 members at
                             // MAX_POPULATION).
-                            cluster.emotional_charge = cluster.emotional_charge
-                                + belief_charge * Fixed::from_f64(0.5);
+                            cluster.emotional_charge += belief_charge * Fixed::from_f64(0.5);
                             // Identity fusion from ideological commitment: an
                             // agent's echo-chamber strength and polarization
                             // tendency — the actual drivers §13.6 names — rather
                             // than raw conformity.
                             let fusion_input = self.agents[i].ideology.echo_chamber_strength
                                 + self.agents[i].ideology.polarization_tendency;
-                            cluster.identity_fusion = cluster.identity_fusion
-                                + fusion_input * Fixed::from_f64(0.5);
+                            cluster.identity_fusion += fusion_input * Fixed::from_f64(0.5);
                         }
                     }
                     // Phase 2: Compute cross-cutting ties from relationship_v2s.
