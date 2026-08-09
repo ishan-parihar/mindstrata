@@ -8420,3 +8420,96 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
         "the injected panic must drain exactly its intensity × rate from the council"
     );
 }
+    /// §8.1.4 (Iteration 116): the expanded emotion families' decay works
+    /// end-to-end through a populated world, keeping the produced families at
+    /// meaningful producer-driven levels instead of the pre-Iter-116
+    /// saturation at 1.0, and the never-produced channels stay at the
+    /// identity zero (the zero-blast precondition for the humiliation
+    /// escalation amplifier — whose wiring is proven by the identical-RNG
+    /// unit test in sim.rs).
+    ///
+    /// Leg A — the per-tick proportional decay breaks the saturation: before
+    /// Iter-116 the produced families (awe/relief/hope/gratitude/nostalgia)
+    /// were pinned at exactly 1.0 in every calibrated run (probe-pinned). At
+    /// 5000 ticks they must sit at meaningful producer-driven levels — below
+    /// 0.95 (not saturated) and above 0.2 (not decayed to nothing).
+    /// Leg B — the never-produced channels (humiliation/envy/contempt/
+    /// despair/moral_outrage/disgust/jealousy) stay exactly 0.0 in the calm
+    /// window, which is the zero-blast precondition for the §8.1.4
+    /// humiliation escalation amplifier (factor exactly 1.0 — the fold's
+    /// exact multiplier is pinned below).
+    #[test]
+    fn secondary_emotion_decay_and_humiliation_amplifier_end_to_end() {
+        use mindstrata_sim::appraisal::{
+            humiliation_escalation_factor, HUMILIATION_ESCALATION_RATE,
+        };
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        // Legs A + B: natural seed-42 run.
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(5000);
+        let n = sim.agents.len() as f64;
+        let mean_of = |f: fn(&mindstrata_sim::sim::AgentBundle) -> Fixed| {
+            sim.agents.iter().map(f).map(Fixed::to_f64).sum::<f64>() / n
+        };
+        for (name, pick) in [
+            ("awe", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.awe)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
+            ("relief", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.relief)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
+            ("hope", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.hope)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
+            ("gratitude", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.gratitude)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
+            ("nostalgia", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.nostalgia)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
+        ] {
+            let m = mean_of(pick);
+            assert!(
+                m < 0.95,
+                "{name} must no longer saturate at 1.0, mean {m:.4} @ 5000"
+            );
+            assert!(
+                m > 0.2,
+                "{name} must keep a meaningful producer-driven level, mean {m:.4} @ 5000"
+            );
+        }
+        for (name, pick) in [
+            ("humiliation", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.humiliation)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
+            ("envy", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.envy)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
+            ("contempt", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.contempt)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
+            ("despair", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.despair)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
+            ("moral_outrage", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.moral_outrage)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
+            ("disgust", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.disgust)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
+            ("jealousy", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.jealousy)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
+        ] {
+            let m = mean_of(pick);
+            assert_eq!(
+                m, 0.0,
+                "{name} must stay at the identity zero in the calm window (amplifier zero-blast), mean {m:.4}"
+            );
+        }
+
+        // The pure factor is the exact multiplier the should_escalate fold
+        // uses (proven wired by the identical-RNG unit test in sim.rs).
+        assert_eq!(
+            humiliation_escalation_factor(Fixed::from_f64(1.0), HUMILIATION_ESCALATION_RATE)
+                .to_f64(),
+            1.3,
+            "full humiliation must amplify the chance by exactly 1.30"
+        );
+    }

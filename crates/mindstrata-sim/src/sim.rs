@@ -1573,12 +1573,31 @@ impl Simulation {
                 Fixed::from_f64(crate::social::relational_field::OBLIGATION_RESTRAINT_RATE),
                 Fixed::from_f64(crate::social::relational_field::OBLIGATION_RESTRAINT_CAP),
             );
+        // §8.1.4 (Iteration 116): a humiliated agent escalates a failed
+        // threat to violence MORE readily — `humiliation_escalation_factor`
+        // (1 + humiliation × rate, factor 1.30 at full humiliation with the
+        // shipped constant) multiplies the chance chain. This is the
+        // AMPLIFIER counterpoint to the Iter-110 trust / Iter-114 obligation
+        // pacifiers on the same §19.5.H decision. ONE-SIDED: identity at
+        // zero — the calibration probe shows humiliation is never produced
+        // in calibrated windows (its appraisal inputs — status threat +
+        // identity relevance — don't fire in calm worlds; probe mean/max
+        // 0.0000 across seeds and scenarios), so the factor is exactly 1.0
+        // throughout the golden/snapshot horizons (provably zero-blast). The
+        // RNG draw below stays unconditional (same stream position), so
+        // replay determinism holds at every humiliation value — only the
+        // comparison threshold changes.
+        let humiliation_factor = crate::appraisal::humiliation_escalation_factor(
+            self.agents[from_idx].emotions.humiliation,
+            crate::appraisal::HUMILIATION_ESCALATION_RATE,
+        );
         let chance = self.escalation_chance(from_idx, to_idx)
             * (1.0 - resistance)
             * (1.0 - hypocrisy)
             * dominance_scale
             * trust_factor.to_f64()
-            * obligation_factor.to_f64();
+            * obligation_factor.to_f64()
+            * humiliation_factor.to_f64();
         self.rng.get_mut(RngStream::Social).random::<f64>() < chance
     }
 
@@ -3785,9 +3804,14 @@ impl Simulation {
                 emotions[i].shame = (emotions[i].shame + delta.shame).clamp_01();
                 emotions[i].pride = (emotions[i].pride + delta.pride).clamp_01();
                 emotions[i].guilt = (emotions[i].guilt + delta.guilt).clamp_01();
-                // §8.1.4: Expanded emotion families (write-only observational
-                // state — no consumer reads them yet, so calibrated runs are
-                // byte-identical; consumers are future iterations).
+                // §8.1.4: Expanded emotion families. Observational state in
+                // calm windows — loneliness (Iter-98) and tenderness (Iter-99)
+                // are consumed for decisions, humiliation (Iter-116) amplifies
+                // failed-threat escalation, and the rest are kept at
+                // producer-driven steady states by the Iter-116 daily decay
+                // below. No gate serializes them (golden agent_hash and the
+                // snapshots read only base emotions/valence), so calibrated
+                // runs stay byte-identical.
                 emotions[i].disgust = (emotions[i].disgust + delta.disgust).clamp_01();
                 emotions[i].contempt = (emotions[i].contempt + delta.contempt).clamp_01();
                 emotions[i].awe = (emotions[i].awe + delta.awe).clamp_01();
@@ -3847,6 +3871,42 @@ impl Simulation {
                 emotion.shame = (emotion.shame - decay).clamp_01();
                 emotion.pride = (emotion.pride - decay).clamp_01();
                 emotion.guilt = (emotion.guilt - decay).clamp_01();
+                // §8.1.4 (Iteration 116): The expanded emotion families decay
+                // proportionally EVERY TICK (SECONDARY_EMOTION_DECAY_RATE,
+                // probe-calibrated) — the base-8 linear decay (0.002/tick) is
+                // ~40× too weak against the per-tick appraisal deltas (~0.08/
+                // tick, probe-pinned: awe climbs 0.08 → 1.0 in ~20 ticks), and
+                // the expanded families previously had NO decay at all: the
+                // produced families (awe/relief/hope/gratitude/nostalgia)
+                // pinned at 1.0 in every calibrated run. The proportional
+                // per-tick decay cancels the per-tick production to keep them
+                // at meaningful producer-driven levels. `loneliness` (Iter-98
+                // social-seeking) and `tenderness` (Iter-99 helping) are
+                // exempt — their consumers were calibrated against the
+                // saturated state, so decaying them is a separate, larger
+                // calibration (the Iter-115 birth-pipeline lesson).
+                let rate = crate::appraisal::SECONDARY_EMOTION_DECAY_RATE;
+                emotion.disgust =
+                    crate::appraisal::secondary_emotion_decay(emotion.disgust, rate);
+                emotion.contempt =
+                    crate::appraisal::secondary_emotion_decay(emotion.contempt, rate);
+                emotion.awe = crate::appraisal::secondary_emotion_decay(emotion.awe, rate);
+                emotion.gratitude =
+                    crate::appraisal::secondary_emotion_decay(emotion.gratitude, rate);
+                emotion.jealousy =
+                    crate::appraisal::secondary_emotion_decay(emotion.jealousy, rate);
+                emotion.envy = crate::appraisal::secondary_emotion_decay(emotion.envy, rate);
+                emotion.humiliation =
+                    crate::appraisal::secondary_emotion_decay(emotion.humiliation, rate);
+                emotion.relief =
+                    crate::appraisal::secondary_emotion_decay(emotion.relief, rate);
+                emotion.hope = crate::appraisal::secondary_emotion_decay(emotion.hope, rate);
+                emotion.despair =
+                    crate::appraisal::secondary_emotion_decay(emotion.despair, rate);
+                emotion.nostalgia =
+                    crate::appraisal::secondary_emotion_decay(emotion.nostalgia, rate);
+                emotion.moral_outrage =
+                    crate::appraisal::secondary_emotion_decay(emotion.moral_outrage, rate);
             }
 
             // ── 7b. §10.1.1 fear contagion (Iteration 107) ────────────
@@ -10989,6 +11049,54 @@ mod tests {
             obligated_escalations < control_escalations,
             "an obligation-bound aggressor must escalate strictly less: \
              {obligated_escalations} vs {control_escalations}"
+        );
+    }
+
+    /// §8.1.4 (Iteration 116): a humiliated agent escalates a failed threat
+    /// to violence MORE readily — the amplification is wired into
+    /// `should_escalate` as the counterpoint to the Iter-110 trust /
+    /// Iter-114 obligation pacifiers. The identical-RNG proof: 500
+    /// `should_escalate` calls per world on identical configs; the
+    /// humiliated aggressor (humiliation 1.0 → factor 1.30) must escalate
+    /// strictly more than the control (0 → factor 1.0). **Fails if the fold
+    /// line is ever deleted.**
+    #[test]
+    fn humiliation_amplifies_failed_threat_escalation() {
+        let make_config = || SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut humiliated = Simulation::new(make_config());
+        humiliated.populate();
+        let mut control = Simulation::new(make_config());
+        control.populate();
+        let (a, b) = cross_clan_pair(&humiliated);
+        humiliated.agents[a].emotions.humiliation =
+            Fixed::from_f64(1.0); // deep status defeat
+        // Control keeps the tick-0 identity (humiliation 0 → factor 1.0).
+        let aggression = Fixed::from_f64(1.5); // past the 1.2 threshold
+        let mut humiliated_escalations = 0;
+        let mut control_escalations = 0;
+        for _ in 0..500 {
+            if humiliated.should_escalate(a, b, true, aggression) {
+                humiliated_escalations += 1;
+            }
+            if control.should_escalate(a, b, true, aggression) {
+                control_escalations += 1;
+            }
+        }
+        assert!(
+            control_escalations > 0,
+            "control must escalate at the base rate, got {control_escalations}"
+        );
+        assert!(
+            humiliated_escalations > control_escalations,
+            "a humiliated aggressor must escalate strictly more: \
+             {humiliated_escalations} vs {control_escalations}"
         );
     }
 

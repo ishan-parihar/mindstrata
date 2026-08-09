@@ -144,6 +144,58 @@ impl EmotionDelta {
 ///
 /// This implements the cognitive appraisal → emotion mapping from
 /// the architecture spec's Section 9.2.
+/// §8.1.4 (Iteration 116): per-tick proportional decay for the expanded
+/// emotion families. The base 8 emotions decay subtractively (0.002/tick,
+/// §22.1), but the 14 expanded families had NO decay — their per-tick
+/// appraisal deltas (~0.08–0.12/tick, probe-pinned: awe climbs 0.08 → 1.0
+/// in ~20 ticks) accumulated to saturation (awe/relief/hope/gratitude/
+/// nostalgia/tenderness/loneliness pinned at 1.0 in every calibrated run,
+/// probe-pinned). The appraisal runs EVERY tick (the per-tick emotion
+/// path in sim.rs, not the daily phase), so a daily decay cannot hold
+/// production — a per-tick proportional decay at 0.12 cancels production
+/// to producer-driven
+/// steady states (probe-pinned post-wiring, seeds 1/7/42/99 @ 5000): awe
+/// 0.51–0.61, relief 0.65–0.79, hope 0.82–0.88, gratitude/nostalgia
+/// 0.88 (their production is higher, ~0.12/tick). Applied to the 12
+/// NON-consumed families only — `loneliness` (Iter-98 social-seeking) and
+/// `tenderness` (Iter-99 helping) are consumed and were calibrated against
+/// their saturated state; decaying those two is a separate, larger
+/// calibration.
+pub const SECONDARY_EMOTION_DECAY_RATE: f64 = 0.12;
+
+/// §8.1.4 (Iteration 116): per-unit humiliation escalation rate — a
+/// humiliated agent escalates a failed threat to violence more readily
+/// (status-defeat → aggression, the amplifier counterpoint to the
+/// Iter-110 trust / Iter-114 obligation pacifiers on the same §19.5.H
+/// decision). At full humiliation 1.0 the escalation chance rises exactly
+/// 30% (factor 1.30). ONE-SIDED: identity at zero — the calibration shows
+/// humiliation is NEVER produced in any calibrated window (its appraisal
+/// inputs — status threat + identity relevance — don't fire in calm
+/// worlds; probe: mean/max 0.0000 across seeds and scenarios), so the
+/// factor is exactly 1.0 throughout the golden/snapshot horizons
+/// (provably zero-blast).
+pub const HUMILIATION_ESCALATION_RATE: f64 = 0.3;
+
+/// §8.1.4 (Iteration 116): proportional daily decay for a secondary
+/// emotion — `value × (1 − rate)` clamped. Pure and deterministic (no
+/// RNG); used by the daily emotion block to keep the expanded families at
+/// meaningful producer-driven levels instead of saturating at 1.0.
+pub fn secondary_emotion_decay(value: Fixed, rate: f64) -> Fixed {
+    (value * (Fixed::ONE - Fixed::from_f64(rate))).clamp_01()
+}
+
+/// §8.1.4 (Iteration 116): the humiliation escalation factor — a
+/// humiliated agent escalates a failed threat to violence more readily
+/// (`1 + humiliation × rate`, ∈ [1.0, 1.3] for the shipped constant).
+/// The caller multiplies the escalation chance in `should_escalate` by the
+/// returned factor. NO clamp: the factor provably exceeds 1.0 (the
+/// Iter-112 lesson — `clamp_01` would silently erase the amplification),
+/// and it can never bind at the cap with the shipped rate. One-sided:
+/// identity at zero, monotone above. Deterministic, no RNG.
+pub fn humiliation_escalation_factor(humiliation: Fixed, rate: f64) -> Fixed {
+    Fixed::ONE + humiliation * Fixed::from_f64(rate)
+}
+
 pub fn appraise(appraisal: &Appraisal, _tick: Tick, params: &crate::parameters::SimParameters) -> EmotionDelta {
     let mut delta = EmotionDelta::default();
 
@@ -382,5 +434,58 @@ mod tests {
         assert_eq!(d.despair, Fixed::ZERO);
         assert_eq!(d.nostalgia, Fixed::ZERO);
         assert_eq!(d.moral_outrage, Fixed::ZERO);
+    }
+
+    #[test]
+    fn secondary_emotion_decay_is_proportional_and_exact() {
+        // §8.1.4 (Iteration 116): `value × (1 − rate)` — a saturated 1.0
+        // emotion decays to exactly 0.4 at a 0.6 rate; zero stays zero; the
+        // decay is monotone in the value. Explicit rates (not the shipped
+        // const) so the pure math is pinned independent of calibration.
+        assert_eq!(
+            secondary_emotion_decay(Fixed::ONE, 0.6),
+            Fixed::from_f64(0.4),
+            "1.0 × (1 − 0.6) must be exactly 0.4"
+        );
+        assert_eq!(
+            secondary_emotion_decay(Fixed::from_f64(0.5), 0.6),
+            Fixed::from_f64(0.2),
+            "0.5 × (1 − 0.6) must be exactly 0.2"
+        );
+        assert_eq!(
+            secondary_emotion_decay(Fixed::ZERO, 0.12),
+            Fixed::ZERO
+        );
+        // The shipped per-tick rate must sit in the meaningful band (1–15%).
+        assert!(
+            (0.01..0.15).contains(&SECONDARY_EMOTION_DECAY_RATE),
+            "per-tick rate must be 1–15%, got {SECONDARY_EMOTION_DECAY_RATE}"
+        );
+        let low = secondary_emotion_decay(Fixed::from_f64(0.3), 0.12);
+        let high = secondary_emotion_decay(Fixed::from_f64(0.9), 0.12);
+        assert!(low < high, "decay must be monotone in the value");
+    }
+
+    #[test]
+    fn humiliation_escalation_factor_is_identity_at_zero_and_amplifies() {
+        // §8.1.4 (Iteration 116): identity at zero (never produced in
+        // calibrated windows → zero-blast), exact 1.15 at 0.5, exact 1.30
+        // at full humiliation. NO clamp — the factor provably exceeds 1.0
+        // (the Iter-112 lesson: `clamp_01` would erase the amplification).
+        assert_eq!(
+            humiliation_escalation_factor(Fixed::ZERO, HUMILIATION_ESCALATION_RATE),
+            Fixed::ONE,
+            "zero humiliation must be a byte-identical identity"
+        );
+        assert_eq!(
+            humiliation_escalation_factor(Fixed::from_f64(0.5), HUMILIATION_ESCALATION_RATE),
+            Fixed::from_f64(1.15),
+            "0.5 × 0.3 must add exactly 0.15"
+        );
+        assert_eq!(
+            humiliation_escalation_factor(Fixed::ONE, HUMILIATION_ESCALATION_RATE),
+            Fixed::from_f64(1.3),
+            "full humiliation × 0.3 must be exactly 1.30"
+        );
     }
 }
