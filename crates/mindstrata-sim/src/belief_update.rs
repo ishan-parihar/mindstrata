@@ -15,10 +15,13 @@ use mindstrata_core::fixed::Fixed;
 /// ```text
 /// new_confidence =
 ///     old_confidence * resistance
-///   + evidence_strength * source_trust
+///   + effective_evidence * blended_trust
 ///   + emotional_reinforcement
 ///   + social_reinforcement
 /// ```
+/// where `effective_evidence = evidence_strength * (2 − rigidity_factor)`
+/// (§10.1.3, Iteration 109 — the noospheric dogmatism dampening; identity
+/// when `rigidity_factor` is 1.0).
 pub fn update_belief(
     belief: &mut Belief,
     evidence_strength: Fixed,
@@ -27,8 +30,22 @@ pub fn update_belief(
     social_reinforcement_delta: Fixed,
     current_tick: u64,
     params: &crate::parameters::SimParameters,
+    rigidity_factor: Fixed,
 ) {
     let resistance = belief.resistance;
+
+    // §10.1.3 (Iteration 109): the noospheric field's mean belief
+    // confidence dampens incoming evidence — an agent holding its beliefs
+    // with high mean confidence weights counter- and confirming evidence
+    // less (dogmatism / closed-mindedness). Identity at rigidity_factor
+    // 1.0 (no beliefs → byte-identical; ×1.0 is exact). NOTE: we dampen
+    // the EVIDENCE term, NOT `resistance` — the formula weights old
+    // confidence by resistance, so scaling resistance up would AMPLIFY
+    // positive updates (verified empirically); the evidence dampening is
+    // the honest closed-mindedness direction. Multiplication (not
+    // division) keeps the dampening exact fixed-point. The raw evidence
+    // still gates reinforcement decay.
+    let effective_evidence = evidence_strength * (Fixed::from_f64(2.0) - rigidity_factor);
 
     // §19.5.A: Blend explicit source_trust with belief's source base_trust.
     // This means the evidence source of the belief itself modulates trust.
@@ -41,7 +58,7 @@ pub fn update_belief(
 
     // Base update: weighted combination
     let base_update = belief.confidence * resistance
-        + evidence_strength * blended_trust
+        + effective_evidence * blended_trust
         + emotional_reinforcement
         + social_reinforcement_delta;
 
@@ -73,6 +90,7 @@ pub fn update_beliefs(
     social_reinforcement: Fixed,
     current_tick: u64,
     params: &crate::parameters::SimParameters,
+    rigidity_factor: Fixed,
 ) {
     for (prop_id, strength, trust) in evidence {
         if let Some(belief) = beliefs.iter_mut().find(|b| b.proposition_id == *prop_id) {
@@ -84,6 +102,7 @@ pub fn update_beliefs(
                 social_reinforcement,
                 current_tick,
                 params,
+                rigidity_factor,
             );
         }
     }
@@ -125,6 +144,9 @@ mod tests {
             Fixed::ZERO,
             100,
             &crate::parameters::SimParameters::default(),
+            // §10.1.3 (Iteration 109): identity factor — legacy tests keep
+            // rigidity 1.0 so the pre-consumer expectations hold exactly.
+            Fixed::ONE,
         );
 
         assert!(
@@ -155,6 +177,9 @@ mod tests {
             Fixed::ZERO,
             100,
             &crate::parameters::SimParameters::default(),
+            // §10.1.3 (Iteration 109): identity factor — legacy tests keep
+            // rigidity 1.0 so the pre-consumer expectations hold exactly.
+            Fixed::ONE,
         );
 
         // Identity-linked beliefs resist change, but should still move somewhat
@@ -162,6 +187,61 @@ mod tests {
             belief.confidence > Fixed::from_f64(0.3),
             "Identity-linked beliefs should resist contradictory evidence, got {}",
             belief.confidence.to_f64()
+        );
+    }
+
+    #[test]
+    fn rigid_belief_updates_move_less() {
+        // §10.1.3 (Iteration 109): the dogmatism factor scales update
+        // resistance — under the same evidence, a belief updated with a
+        // rigidity factor > 1.0 must move strictly less than with 1.0.
+        let params = crate::parameters::SimParameters::default();
+        let make = |confidence: f64| Belief {
+            proposition_id: 0,
+            confidence: Fixed::from_f64(confidence),
+            emotional_charge: Fixed::ZERO,
+            identity_linkage: Fixed::ZERO,
+            resistance: Fixed::from_f64(0.5),
+            last_reinforced_tick: 0,
+            source: crate::person::EvidenceSource::PersonalExperience,
+            social_reinforcement: 0,
+            is_accurate: true,
+        };
+
+        let mut loose = make(0.5);
+        update_belief(
+            &mut loose,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.8),
+            Fixed::ZERO,
+            Fixed::ZERO,
+            100,
+            &params,
+            Fixed::ONE,
+        );
+
+        let mut rigid = make(0.5);
+        update_belief(
+            &mut rigid,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.8),
+            Fixed::ZERO,
+            Fixed::ZERO,
+            100,
+            &params,
+            Fixed::from_f64(1.275),
+        );
+
+        assert!(
+            (loose.confidence - Fixed::from_f64(0.5)).abs()
+                > (rigid.confidence - Fixed::from_f64(0.5)).abs(),
+            "the rigid belief must move strictly less under identical evidence (loose {} vs rigid {})",
+            loose.confidence.to_f64(),
+            rigid.confidence.to_f64()
+        );
+        assert!(
+            rigid.confidence < loose.confidence,
+            "rigidity must dampen the upward movement"
         );
     }
 }

@@ -18,8 +18,12 @@
 //! field's `kin_count` has a decisional consumer too (Iteration 108): the
 //! kin-support buffer (`kin_stress_factor`) scales the per-tick stress
 //! input to cognition down — family buffers stress, zero-at-zero (no kin
-//! → factor 1.0 → byte-identical). The remaining social
-//! (trust/obligation/peer-status) and noospheric (beliefs, legitimacy,
+//! → factor 1.0 → byte-identical). The noospheric field's
+//! `belief_confidence` gained a consumer in Iteration 109: the dogmatism
+//! factor (`belief_rigidity_factor`) scales belief-update resistance — an
+//! agent holding its beliefs with high mean confidence updates them more
+//! slowly (self-assurance → closed-mindedness). The remaining social
+//! (trust/obligation/peer-status) and noospheric (legitimacy,
 //! collective fear) layers remain observational.
 
 use mindstrata_core::fixed::Fixed;
@@ -45,6 +49,14 @@ pub const KIN_STRESS_RATE: f64 = 0.15;
 /// Ceiling on the total kin stress reduction (§10.1.2, Iteration 108):
 /// 3+ kin saturate at 45% buffering — the buffer cannot erase the signal.
 pub const KIN_STRESS_CAP: f64 = 0.45;
+
+/// Dogmatism rigidity per unit of mean belief confidence (§10.1.3,
+/// Iteration 109): the update-time resistance multiplier is
+/// `1 + belief_confidence × this`. At confidence 0 (no beliefs) the
+/// factor is exactly 1.0 — byte-identical. At the default world's
+/// construction-time mean (0.55) it reaches 1.275 — a 27% resistance
+/// uplift for fully-confident belief holders, bounded and deterministic.
+pub const BELIEF_CONFIDENCE_RIGIDITY: f64 = 0.5;
 
 /// §10.1: The three relational fields an agent perceives around itself.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -106,6 +118,19 @@ impl RelationalFields {
         // The clamp is defensive: reduction ∈ [0, cap] with cap < 1.0, so
         // the factor is provably in [0.55, 1.0] for the shipped constants.
         (Fixed::ONE - reduction).clamp_01()
+    }
+
+    /// §10.1.3 (Iteration 109): the dogmatism factor — an agent holding
+    /// its beliefs with high mean confidence resists counter-evidence more
+    /// (self-assurance → closed-mindedness). Identity at zero confidence
+    /// (no beliefs → factor exactly 1.0 → byte-identical), monotone in
+    /// `belief_confidence`, deterministic (no RNG). The caller multiplies
+    /// the per-belief update `resistance` by the returned factor before
+    /// `update_belief`'s base update.
+    pub fn belief_rigidity_factor(belief_confidence: Fixed, rigidity: Fixed) -> Fixed {
+        // confidence ∈ [0, 1] and rigidity is small, so the factor is
+        // provably in [1.0, ~1.5]; no clamp needed, but documented.
+        Fixed::ONE + belief_confidence * rigidity
     }
 
     /// Mean of a slice of `Fixed`; 0 when empty.
@@ -254,6 +279,32 @@ mod tests {
             RelationalFields::kin_stress_factor(10, rate, cap),
             Fixed::ONE - cap,
             "many kin saturate at the cap, never below"
+        );
+    }
+
+    #[test]
+    fn belief_rigidity_factor_is_identity_at_zero_and_monotone() {
+        // §10.1.3 (Iteration 109): zero mean belief confidence (no beliefs)
+        // must leave update resistance untouched (identity, byte-identical);
+        // higher confidence scales resistance up monotonically.
+        let rigidity = Fixed::from_f64(BELIEF_CONFIDENCE_RIGIDITY);
+        assert_eq!(
+            RelationalFields::belief_rigidity_factor(Fixed::ZERO, rigidity),
+            Fixed::ONE,
+            "no beliefs must be a byte-identical identity"
+        );
+        assert_eq!(
+            RelationalFields::belief_rigidity_factor(Fixed::from_f64(0.5), rigidity),
+            Fixed::from_f64(1.25),
+            "confidence 0.5 × rigidity 0.5 must give exactly 1.25"
+        );
+        let low = RelationalFields::belief_rigidity_factor(Fixed::from_f64(0.2), rigidity);
+        let high = RelationalFields::belief_rigidity_factor(Fixed::from_f64(0.8), rigidity);
+        assert!(low < high, "higher confidence must scale resistance up more");
+        assert_eq!(
+            RelationalFields::belief_rigidity_factor(Fixed::ONE, rigidity),
+            Fixed::from_f64(1.5),
+            "full confidence with the shipped rigidity caps at 1.5"
         );
     }
 

@@ -8974,6 +8974,19 @@ impl Simulation {
                     let evidence_strength = trust - Fixed::from_f64(0.5);
                     let source_trust = Fixed::from_f64(0.6);
 
+                    // §10.1.3 (Iteration 109): the noospheric field's mean
+                    // belief confidence scales update resistance — the
+                    // dogmatism factor (identity at 1.0 when the agent
+                    // holds no beliefs, since the field reads zero there).
+                    // Read before the mutable `beliefs` borrow.
+                    let rigidity_factor =
+                        crate::social::relational_field::RelationalFields::belief_rigidity_factor(
+                            self.agents[from_idx].relational_fields.belief_confidence,
+                            Fixed::from_f64(
+                                crate::social::relational_field::BELIEF_CONFIDENCE_RIGIDITY,
+                            ),
+                        );
+
                     belief_update::update_beliefs(
                         &mut self.agents[from_idx].beliefs,
                         &[(2, evidence_strength, source_trust)],
@@ -8981,6 +8994,7 @@ impl Simulation {
                         Fixed::ZERO,
                         tick_u64,
                         &self.params,
+                        rigidity_factor,
                     );
                 }
             }

@@ -7563,3 +7563,164 @@ fn kin_support_buffers_cognitive_stress() {
     let (b, _) = run_world(42, true);
     assert_eq!(a, b, "the kin world must be seed-deterministic");
 }
+
+/// §10.1.3 (Iteration 109): the noospheric field's mean `belief_confidence`
+/// feeds the dogmatism factor — an agent holding its beliefs with high
+/// mean confidence weights incoming evidence less (closed-mindedness),
+/// sustaining conviction against erosion. The mechanism is unit-proven in
+/// isolation (`belief_rigidity_factor` + `rigid_belief_updates_move_less`);
+/// this test proves liveness in the coupled world. Documented confound: the
+/// belief-update formula's own `confidence × resistance` term dominates the
+/// trajectory, so the integration-level claim is the *emergent* one — a
+/// high-confidence belief ecology persists (probe-pinned mean 0.586 at
+/// 2000) while a weak one collapses (0.066) under identical evidence
+/// streams (probe: fear and population byte-identical between the two
+/// seeded worlds → the belief state feeds no decision, so the trajectories
+/// are cleanly isolated).
+#[test]
+fn noospheric_belief_confidence_sustains_conviction() {
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::sim::SimConfig;
+
+    fn run_seeded(seed: u64, ticks: u64, conf: f64) -> (f64, f64) {
+        let config = SimConfig {
+            seed,
+            max_ticks: ticks,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = mindstrata_sim::Simulation::new(config);
+        sim.populate();
+        for a in &mut sim.agents {
+            for b in &mut a.beliefs {
+                b.confidence = Fixed::from_f64(conf);
+            }
+        }
+        sim.run(ticks);
+        let mean: f64 = sim
+            .agents
+            .iter()
+            .flat_map(|a| a.beliefs.iter())
+            .map(|b| b.confidence.to_f64())
+            .sum::<f64>()
+            / sim.agents.iter().map(|a| a.beliefs.len()).sum::<usize>() as f64;
+        let mean_fear: f64 = sim.agents.iter().map(|a| a.emotions.fear.to_f64()).sum::<f64>()
+            / sim.agents.len() as f64;
+        (mean, mean_fear)
+    }
+
+    // Reach: the producer is live in a default run and the consumer is
+    // non-trivially active (factor > 1.0) for every agent.
+    let default = run_sim(42, 2000);
+    for a in &default.agents {
+        let rf = a.relational_fields.belief_confidence;
+        assert!(
+            rf > Fixed::ZERO,
+            "every agent must hold beliefs with positive mean confidence"
+        );
+        assert!(
+            mindstrata_sim::social::relational_field::RelationalFields::belief_rigidity_factor(
+                rf,
+                Fixed::from_f64(
+                    mindstrata_sim::social::relational_field::BELIEF_CONFIDENCE_RIGIDITY,
+                ),
+            ) > Fixed::ONE,
+            "the dogmatism factor must be non-trivial (> 1.0) in a default run"
+        );
+    }
+
+    // Consumer-isolating leg: the SAME evidence through the real public
+    // path — a belief updated with the agent's LIVE rf-derived factor
+    // moves strictly less than with identity rigidity. (The seeded-world
+    // gap below is an emergence pin dominated by the formula's own
+    // confidence × resistance term; this leg isolates the consumer's
+    // marginal contribution.)
+    {
+        use mindstrata_sim::belief_update::update_belief;
+        let s = run_sim(42, 2000);
+        let rf = s.agents[0].relational_fields.belief_confidence;
+        let factor = mindstrata_sim::social::relational_field::RelationalFields::
+            belief_rigidity_factor(
+                rf,
+                Fixed::from_f64(
+                    mindstrata_sim::social::relational_field::BELIEF_CONFIDENCE_RIGIDITY,
+                ),
+            );
+        assert!(factor > Fixed::ONE, "the live factor must be non-trivial");
+        let params = mindstrata_sim::parameters::SimParameters::default();
+        let make = |conf: f64| mindstrata_sim::person::Belief {
+            proposition_id: 0,
+            confidence: Fixed::from_f64(conf),
+            emotional_charge: Fixed::ZERO,
+            identity_linkage: Fixed::ZERO,
+            resistance: Fixed::from_f64(0.5),
+            last_reinforced_tick: 0,
+            source: mindstrata_sim::person::EvidenceSource::PersonalExperience,
+            social_reinforcement: 0,
+            is_accurate: true,
+        };
+        let mut loose = make(0.5);
+        update_belief(
+            &mut loose,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.8),
+            Fixed::ZERO,
+            Fixed::ZERO,
+            100,
+            &params,
+            Fixed::ONE,
+        );
+        let mut rigid = make(0.5);
+        update_belief(
+            &mut rigid,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.8),
+            Fixed::ZERO,
+            Fixed::ZERO,
+            100,
+            &params,
+            factor,
+        );
+        assert!(
+            rigid.confidence < loose.confidence,
+            "the live rf-derived factor must dampen the same evidence (rigid {} vs loose {})",
+            rigid.confidence.to_f64(),
+            loose.confidence.to_f64()
+        );
+    }
+
+    // Behavioral differential: identical evidence streams (fear is
+    // byte-identical across the seeded worlds — the belief state feeds no
+    // decision), so the gap is the emergent conviction-persistence
+    // dynamic: the high-confidence ecology persists while the weak one
+    // collapses. (Emergence pin, not a consumer proof — the consumer's
+    // marginal contribution is isolated by the leg above and the unit
+    // test.)
+    let (low_mean, low_fear) = run_seeded(42, 2000, 0.1);
+    let (high_mean, high_fear) = run_seeded(42, 2000, 0.9);
+    assert_eq!(
+        low_fear, high_fear,
+        "the seeded worlds must share an identical evidence stream"
+    );
+    assert!(
+        high_mean > low_mean + 0.4,
+        "the confident belief ecology must persist far above the weak one (probe-pinned 0.586 vs 0.066 at 2000, got {high_mean:.4} vs {low_mean:.4})"
+    );
+    assert!(
+        high_mean > 0.5,
+        "high-confidence beliefs must remain elevated (got {high_mean:.4})"
+    );
+    assert!(
+        low_mean < 0.15,
+        "weakly-held beliefs must collapse (got {low_mean:.4})"
+    );
+
+    // Determinism: identical seed → byte-identical mean confidence.
+    let (again_high, _) = run_seeded(42, 2000, 0.9);
+    assert_eq!(
+        high_mean, again_high,
+        "the belief ecology must be seed-deterministic"
+    );
+}
