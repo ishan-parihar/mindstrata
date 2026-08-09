@@ -214,6 +214,15 @@ fn stress_reduces_planning_depth() {
 /// (deterministic, no RNG, no events), so a courtship climbs to its pair's
 /// trust ceiling; the ladder is capped at Betrothal (Marriage and the
 /// post-marriage stages belong to the pair-bond system).
+///
+/// §10.4 (Iteration 101): the daily pass's attraction arg is now the
+/// pursuer's LIVE `total_attraction()` (not trust), so the 0.6× attraction
+/// floor binds — a pair with high trust but low attraction (disgust,
+/// social cost, kinship penalty) stalls below the floor instead of climbing.
+/// This test pins the differential: a village whose attraction model is
+/// artificially zeroed (all positive channels zeroed, all penalties maxed)
+/// forms courtships on trust alone but never climbs past the first rungs,
+/// while the default village's courting pairs climb to Betrothal.
 #[test]
 fn courtship_ladder_advances_in_live_run() {
     let sim = run_sim(45, 10_000);
@@ -234,6 +243,91 @@ fn courtship_ladder_advances_in_live_run() {
     // The ladder concludes at Betrothal — never display post-marriage stages.
     assert!(max <= mindstrata_sim::social::marriage::RomanticStage::Betrothal,
         "courtship stage must not exceed Betrothal, got {max:?}");
+}
+
+/// §10.4 (Iteration 101): the attraction floor binds in a live run — a
+/// village whose AttractionModel is suppressed (positive channels zeroed,
+/// penalties raised) forms courtships on trust alone but the daily ladder
+/// can never clear the 0.6× attraction floor as high as the default, so
+/// courtships stall below the default village's ceiling. This is the
+/// behavioral delta the §10.4 attraction→courtship consumer must produce
+/// (previously the daily pass substituted trust for the attraction arg, so
+/// the floor never bound and a disgusted/socially-costly pair climbed
+/// exactly like an infatuated one). Note the crush is NOT total: the daily
+/// status mirror, interaction familiarity and mirrored reciprocity
+/// re-inflate the model during the run (probe: ceiling ~0.163 vs default
+/// ~0.477), so the pin is the suppressed differential, not a freeze.
+#[test]
+fn attraction_floor_stalls_courtship_in_suppressed_attraction_village() {
+    use mindstrata_sim::social::marriage::RomanticStage;
+    use mindstrata_core::fixed::Fixed;
+
+    let config = SimConfig {
+        seed: 45, max_ticks: 10_000, world_width: 16, world_height: 16,
+        num_agents: 12, snapshot_interval: None,
+    };
+    // Control leg: the DEFAULT village's courtships climb past the first
+    // rungs with a healthy attraction ceiling — the differential baseline.
+    let control = run_sim(45, 10_000);
+    let control_max_total = control.agents.iter()
+        .map(|a| a.attraction.total_attraction().to_f64())
+        .fold(0.0f64, f64::max);
+    let mut control_max_stage: Option<RomanticStage> = None;
+    for c in &control.active_courtships {
+        if control_max_stage.is_none_or(|m| c.stage > m) {
+            control_max_stage = Some(c.stage);
+        }
+    }
+    let control_max = control_max_stage.expect("control forms courtships");
+
+    // Suppress the attraction surface: positive channels zeroed, penalties
+    // raised. At tick 0 total_attraction() ≈ 0; during the run the daily
+    // status mirror, interaction familiarity and the courtship reciprocity
+    // mirror re-inflate it (social_cost/moral_disgust are re-derived from
+    // notoriety/disgust, so those penalties do not persist), but the ceiling
+    // stays far below the default.
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    for a in &mut sim.agents {
+        a.attraction.physical_attraction = Fixed::ZERO;
+        a.attraction.personality_attraction = Fixed::ZERO;
+        a.attraction.status_attraction = Fixed::ZERO;
+        a.attraction.moral_attraction = Fixed::ZERO;
+        a.attraction.familiarity = Fixed::ZERO;
+        a.attraction.reciprocity = Fixed::ZERO;
+        a.attraction.social_approval = Fixed::ZERO;
+        a.attraction.attachment_resonance = Fixed::ZERO;
+        a.attraction.kinship_penalty = Fixed::ONE;
+        a.attraction.moral_disgust = Fixed::ONE;
+        a.attraction.social_cost = Fixed::ONE;
+    }
+    sim.run(10_000);
+
+    // Trust-gated courtships still form (eligibility uses avg_trust, not
+    // attraction) — but the ladder stalls below the control's ceiling.
+    assert!(!sim.active_courtships.is_empty(),
+        "suppressed-attraction village should still form trust-gated courtships");
+    let mut max_stage: Option<RomanticStage> = None;
+    for c in &sim.active_courtships {
+        if max_stage.is_none_or(|m| c.stage > m) {
+            max_stage = Some(c.stage);
+        }
+    }
+    let max = max_stage.expect("at least one courtship");
+    let max_total = sim.agents.iter().map(|a| a.attraction.total_attraction().to_f64())
+        .fold(0.0f64, f64::max);
+    // The differential, measured in the same test: the suppressed village
+    // must climb strictly less far AND carry a strictly lower attraction
+    // ceiling than the identical-seed control (probe: control Betrothal /
+    // 0.477 vs suppressed < Betrothal / 0.163).
+    let stall_msg = format!("suppressed-attraction courtships must stall below the control's stage ({max:?} vs control {control_max:?})");
+    let ceiling_msg = format!("suppressed village attraction ceiling must stay below the control's ({max_total:.3} vs control {control_max_total:.3})");
+    assert!(max < control_max, "{stall_msg}");
+    assert!(max_total < control_max_total, "{ceiling_msg}");
+    assert!(max_total < 0.35,
+        "suppressed ceiling sanity bound, got {max_total:.3}");
+    assert!(control_max >= RomanticStage::Flirtation,
+        "control must actually climb (got {control_max:?}) for the differential to bind");
 }
 
 /// §10.4 (Iteration 76): Courting pairs that actually interact drive the
@@ -6929,5 +7023,3 @@ fn tenderness_channel_boosts_helping_when_multiplier_active() {
         "same seed + same multiplier must be deterministic"
     );
 }
-
-

@@ -91,12 +91,15 @@ impl Courtship {
     /// Requires: trust >= the next stage's threshold, attraction >= 60% of
     /// that threshold, and — once the pair has an interaction record —
     /// positive interactions must outnumber negatives. A freshly formed
-    /// courtship has no record (0 positives, 0 negatives), so trust alone may
-    /// advance it (the daily pass); hostile interaction history then gates
-    /// the ladder through the balance check. Advances at most one rung per
-    /// call, so repeated positive contact (or a daily refresh with the pair's
-    /// current trust) climbs the ladder one stage at a time, stalling at the
-    /// pair's trust ceiling.
+    /// courtship has no record (0 positives, 0 negatives), so it may advance
+    /// on trust + attraction alone (the daily pass); hostile interaction
+    /// history then gates the ladder through the balance check. Advances at
+    /// most one rung per call, so repeated positive contact (or a daily
+    /// refresh with the pair's current trust) climbs the ladder one stage at
+    /// a time, stalling at the pair's trust/attraction ceiling (Iteration
+    /// 101: the daily pass feeds the pursuer's live `total_attraction()`, so
+    /// the 0.6× attraction floor genuinely gates — a pair below the floor
+    /// stalls even with ample trust).
     pub fn try_advance(&mut self, trust: Fixed, attraction: Fixed) {
         if let Some(next) = self.stage.next_positive() {
             // The courtship ladder concludes at Betrothal (§10.4: Awareness →
@@ -321,6 +324,35 @@ mod tests {
         courtship.try_advance(Fixed::from_f64(0.25), Fixed::from_f64(0.25));
         // Flirtation needs 0.3 — stalled at the trust ceiling.
         assert_eq!(courtship.stage, RomanticStage::Attraction);
+    }
+
+    /// §10.4 (Iteration 101): the attraction floor binds when the real
+    /// attraction arg is below 0.6× the next stage's base trust — the
+    /// documented simplification (daily pass passed trust as both gate and
+    /// attraction) made this floor dead; the consumer now feeds the pursuer's
+    /// live `total_attraction()`. These tests pin the floor as a real gate
+    /// independent of trust.
+    #[test]
+    fn attraction_floor_gates_ladder_even_with_high_trust() {
+        // Trust 0.6 clears Exclusivity (0.55) but attraction 0.2 is below its
+        // floor (0.55 × 0.6 = 0.33) — the ladder must stall at the floor.
+        let mut courtship = Courtship::new(0, 1, 0);
+        courtship.stage = RomanticStage::ActiveCourtship;
+        courtship.record_positive(10, Fixed::from_f64(0.6), Fixed::from_f64(0.2));
+        assert_eq!(
+            courtship.stage, RomanticStage::ActiveCourtship,
+            "attraction below the 0.6× floor must stall advancement"
+        );
+    }
+
+    #[test]
+    fn attraction_at_floor_advances_with_trust() {
+        // Attraction exactly at the floor (0.55 × 0.6 = 0.33) is sufficient
+        // when trust clears the threshold — zero-at-zero preservation.
+        let mut courtship = Courtship::new(0, 1, 0);
+        courtship.stage = RomanticStage::ActiveCourtship;
+        courtship.record_positive(10, Fixed::from_f64(0.6), Fixed::from_f64(0.33));
+        assert_eq!(courtship.stage, RomanticStage::TestingReciprocity);
     }
 
     #[test]

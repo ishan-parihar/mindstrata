@@ -7128,13 +7128,25 @@ impl Simulation {
                     Fixed::ZERO
                 };
                 let avg_trust = (trust_ij + trust_ji) * Fixed::from_f64(0.5);
-                // mutual_attraction is informational (try_advance takes its
-                // own args): it tracks the pair's current average trust. Trust
-                // is passed as both the gate and the attraction-floor input,
-                // so the 0.6× attraction floor never binds — trust is the
-                // real gate (intentional simplification).
-                courtship.mutual_attraction = avg_trust;
-                courtship.try_advance(avg_trust, avg_trust);
+                // §10.4 (Iteration 101): the ladder is now attraction-gated
+                // like the interaction path — `record_positive` passes the
+                // speaker's real `total_attraction()` (familiarity, status,
+                // reciprocity, moral disgust, social cost, kinship penalty
+                // all fold in), but the daily pass substituted `avg_trust`
+                // for the attraction arg, so the 0.6× attraction floor
+                // (`min_attraction = next.base_trust() × 0.6`) NEVER bound
+                // here — trust was the only real gate and the plan's
+                // attraction→courtship consumer stayed dead on the daily
+                // path. The pursuer's live total attraction now feeds both
+                // the bookkeeping field and the ladder gate: a pair with
+                // high trust but low attraction (disgusted, socially
+                // costly, kinship-penalized) stalls below the floor instead
+                // of climbing. Trust remains the primary gate; attraction
+                // binds only below its own 0.6× floor (zero-at-zero: at or
+                // above the floor the advance conditions are unchanged).
+                let pursuer_attraction = self.agents[i].attraction.total_attraction();
+                courtship.mutual_attraction = pursuer_attraction;
+                courtship.try_advance(avg_trust, pursuer_attraction);
                 courtship.daily_update();
                 // Mirror the courtship's reciprocity (which daily_update just
                 // decayed) into the pursuer's attraction model, so the mirror
