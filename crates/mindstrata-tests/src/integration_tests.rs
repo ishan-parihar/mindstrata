@@ -7187,3 +7187,49 @@ fn prospection_dread_fires_in_default_runs_and_reaches_decisions() {
         "expected material dread in default runs, got {max_dread:.3}"
     );
 }
+/// §8.1.3 (Iteration 104): the identity-relevance producer fires in live
+/// runs — encoded traces carry the identity-protection recall bias (no
+/// longer the hardcoded 0 baseline), and the retrieval consumer (`× 0.25`
+/// in `retrieval_score`) therefore sees real input. The interaction encode
+/// maps Threaten/Insult → Traumatic, Help/Comfort → Emotional, else →
+/// Social, so a default seed-42 run must produce the full identity-salient
+/// class mix. Memory is excluded from snapshot projections and the golden
+/// baseline by construction (module doc), so this wiring is drift-free.
+#[test]
+fn identity_relevance_derived_live_in_default_runs() {
+    let sim = run_sim(42, 2000);
+    let mut total = 0usize;
+    let mut identity_salient = 0usize;
+    let mut traumatic = 0usize;
+    let mut max_ir = 0.0f64;
+    let mut max_ir_kind = String::new();
+    for a in &sim.agents {
+        for m in &a.memory.episodes {
+            total += 1;
+            let ir = m.identity_relevance.to_f64();
+            if ir >= 0.3 {
+                identity_salient += 1;
+            }
+            if m.kind == mindstrata_sim::memory::MemoryKind::Traumatic {
+                traumatic += 1;
+            }
+            if ir > max_ir {
+                max_ir = ir;
+                max_ir_kind = format!("{:?}", m.kind);
+            }
+        }
+    }
+    assert!(total > 0, "agents must encode memories in a live run");
+    assert!(
+        identity_salient > 0,
+        "identity-salient traces must exist (social/emotional/traumatic classes), got {identity_salient}"
+    );
+    assert!(
+        traumatic > 0,
+        "seed 42 must encode threat/insult traces as Traumatic, got {traumatic}"
+    );
+    assert!(
+        max_ir > 0.5,
+        "traumatic/flashbulb traces must carry strong identity relevance (got {max_ir:.3}, kind {max_ir_kind})"
+    );
+}

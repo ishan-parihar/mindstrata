@@ -39,8 +39,11 @@
 //! Distortion mechanics (§8.1.3): emotion distorts (`reconsolidate`
 //! erodes `accuracy` and records an `EmotionalReconsolidation` event),
 //! retrieval reconstructs (rehearsal erodes `accuracy` slightly and
-//! records a `Rehearsal` event), and identity protects (baseline
-//! `identity_relevance` is reserved for the identity-protection wiring).
+//! records a `Rehearsal` event), and identity protects — `identity_relevance`
+//! is now derived at encoding (Iteration 104, see `derive_identity_relevance`)
+//! and biases `retrieval_score`, so identity-salient traces intrude more,
+//! are rehearsed more, and survive eviction (the identity-protection recall
+//! bias, live rather than reserved).
 
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
@@ -207,6 +210,51 @@ fn retrieval_score(m: &MemoryTrace) -> Fixed {
         + m.identity_relevance * Fixed::from_f64(0.25)
 }
 
+/// §8.1.3 (Iteration 104): deterministic identity-relevance derivation at
+/// encoding — the plan's identity-protection recall bias, finally live.
+/// Identity-salient classes: self-threats (trauma — the strongest identity-
+/// protection trigger), social-evaluation events (being helped, threatened,
+/// talked to), and identity-anchoring milestones (skill mastery, knowledge
+/// acquisition, life-story chapters, ritual participation). A flashbulb
+/// upgrade (vivid identity-anchored moment) adds a small bonus on top of the
+/// base kind — matching the valence precedent, where a flashbulb derived
+/// from a traumatic event KEEPS the base kind's character. Pure (no RNG), so
+/// encoding stays deterministic; the `retrieval_score` consumer (× 0.25)
+/// finally sees nonzero input for identity-salient traces.
+fn derive_identity_relevance(
+    base_kind: MemoryKind,
+    upgraded_to_flashbulb: bool,
+    tag: MemoryTag,
+    emotional_charge: Fixed,
+) -> Fixed {
+    // Base identity-implication by class. Self-threat dominates; social
+    // evaluation implicates the social self; bodily maintenance, semantic
+    // knowledge, procedural skill, episodic chapters, and cultural ritual
+    // anchor identity only through their milestone tags below.
+    let base = match base_kind {
+        MemoryKind::Traumatic => Fixed::from_f64(0.6),
+        MemoryKind::Emotional | MemoryKind::Social => Fixed::from_f64(0.3),
+        _ => Fixed::ZERO,
+    };
+    // Vivid identity-anchored moments implicate the self more than flat ones.
+    let vivid = if upgraded_to_flashbulb {
+        Fixed::from_f64(0.15)
+    } else {
+        Fixed::ZERO
+    };
+    // Milestone tags anchor identity beyond the base kind.
+    let milestone = match tag {
+        MemoryTag::SkillMastered
+        | MemoryTag::LearnedKnowledge
+        | MemoryTag::LifeEvent
+        | MemoryTag::RitualParticipated => Fixed::from_f64(0.2),
+        _ => Fixed::ZERO,
+    };
+    // Emotional charge amplifies identity implication (a charged identity
+    // event implicates the self more than a flat one).
+    (base + vivid + milestone + emotional_charge * Fixed::from_f64(0.1)).clamp_01()
+}
+
 /// The memory store for an agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryStore {
@@ -256,8 +304,11 @@ impl MemoryStore {
     /// - `valence` — sign from the kind (negative for `Traumatic`,
     ///   positive for `Emotional`/`Flashbulb`, neutral otherwise).
     /// - `social_sharedness` — 1.0 when the trace involves another agent.
-    /// - `identity_relevance` — 0 baseline (identity protection is a
-    ///   future, separately-calibrated consumer).
+    /// - `identity_relevance` — §8.1.3 (Iteration 104): derived from the
+    ///   base kind's identity-implication class, the flashbulb upgrade,
+    ///   milestone tags, and emotional charge (see
+    ///   `derive_identity_relevance`) — the retrieval bias is now live
+    ///   rather than a 0 baseline.
     /// - `Flashbulb` upgrade — salience ≥ 0.4 AND charge ≥ 0.6. Calibrated
     ///   against live probes: salience (a product of four ≤ 1.0 factors)
     ///   tops out ≈ 0.45 in riverford runs, so the ≥ 0.4 tier is the vivid
@@ -288,11 +339,22 @@ impl MemoryStore {
         // The vivid-tail threshold is riverford-calibrated (compute_salience
         // tops out ≈ 0.45 there); crisis scenarios shift the envelope, which
         // is desirable (more flashbacks under trauma) but re-checkable.
-        let kind = if salience >= Fixed::from_f64(0.4) && emotional_charge >= Fixed::from_f64(0.6) {
+        // The pre-upgrade kind is the identity-relevance anchor: a traumatic
+        // flashbulb stays maximally identity-salient (matching the valence
+        // precedent above).
+        let base_kind = kind;
+        let upgraded = salience >= Fixed::from_f64(0.4) && emotional_charge >= Fixed::from_f64(0.6);
+        let kind = if upgraded {
             MemoryKind::Flashbulb
         } else {
-            kind
+            base_kind
         };
+
+        // §8.1.3 (Iteration 104): identity relevance is derived from the
+        // PRE-upgrade kind, the upgrade flag, the tag, and the charge —
+        // pure and deterministic.
+        let identity_relevance =
+            derive_identity_relevance(base_kind, upgraded, tag, emotional_charge);
 
         let memory = MemoryTrace {
             id: self.next_id,
@@ -303,7 +365,7 @@ impl MemoryStore {
             sensory_richness: (salience + emotional_charge) * Fixed::from_f64(0.5),
             accuracy: Fixed::ONE,
             valence,
-            identity_relevance: Fixed::ZERO,
+            identity_relevance,
             social_sharedness: if other_agent.is_some() { Fixed::ONE } else { Fixed::ZERO },
             last_rehearsed: tick,
             distortion_history: Vec::new(),
@@ -595,11 +657,141 @@ mod tests {
         assert_eq!(trace.accuracy, Fixed::ONE, "accuracy starts at 1.0");
         assert_eq!(trace.valence, Fixed::ZERO, "social traces are valence-neutral");
         assert_eq!(trace.social_sharedness, Fixed::ONE, "shared when another agent is involved");
-        assert_eq!(trace.identity_relevance, Fixed::ZERO, "identity relevance is a 0 baseline");
+        // §8.1.3 (Iteration 104): a Social TalkedTo trace at charge 0.4
+        // derives identity_relevance = 0.3 (social class) + 0.04 (charge
+        // amplification) = 0.34 — the identity-protection recall bias is
+        // live, no longer a 0 baseline.
+        assert!(
+            (trace.identity_relevance - Fixed::from_f64(0.34)).abs() < Fixed::from_f64(0.001),
+            "social traces carry identity relevance, got {}",
+            trace.identity_relevance
+        );
         assert_eq!(trace.last_rehearsed, 3, "freshly encoded traces were last rehearsed at encode tick");
         assert!(trace.sensory_richness > Fixed::ZERO, "salient+emotional traces are vivid");
         assert!(trace.distortion_history.is_empty(), "fresh traces have no distortion history");
         assert_eq!(trace.rehearsal_count, 0);
+    }
+
+    #[test]
+    fn derive_identity_relevance_ranks_classes_and_is_deterministic() {
+        // Self-threat dominates; social/emotional implicate the social self;
+        // bodily maintenance is identity-neutral at zero charge.
+        let traumatic =
+            derive_identity_relevance(MemoryKind::Traumatic, false, MemoryTag::ThreatenedBy, Fixed::ZERO);
+        let emotional =
+            derive_identity_relevance(MemoryKind::Emotional, false, MemoryTag::HelpedBy, Fixed::ZERO);
+        let social =
+            derive_identity_relevance(MemoryKind::Social, false, MemoryTag::TalkedTo, Fixed::ZERO);
+        let somatic =
+            derive_identity_relevance(MemoryKind::Somatic, false, MemoryTag::AteFood, Fixed::ZERO);
+        assert!(traumatic > emotional, "trauma is the strongest identity trigger");
+        assert!(emotional > somatic, "emotional events implicate the social self");
+        assert_eq!(social, emotional, "social and emotional share the same class base");
+        assert_eq!(somatic, Fixed::ZERO, "a flat bodily event has no identity implication");
+
+        // The flashbulb upgrade adds a vividness bonus on top of the base
+        // class (a traumatic flashbulb stays more salient than an emotional
+        // one — the valence precedent).
+        let traumatic_flash = derive_identity_relevance(
+            MemoryKind::Traumatic,
+            true,
+            MemoryTag::ThreatenedBy,
+            Fixed::ZERO,
+        );
+        assert!(
+            traumatic_flash > traumatic,
+            "vivid identity-anchored moments implicate the self more"
+        );
+
+        // Milestone tags anchor identity beyond the base kind.
+        let mastered = derive_identity_relevance(
+            MemoryKind::Procedural,
+            false,
+            MemoryTag::SkillMastered,
+            Fixed::ZERO,
+        );
+        let learned = derive_identity_relevance(
+            MemoryKind::Semantic,
+            false,
+            MemoryTag::LearnedKnowledge,
+            Fixed::ZERO,
+        );
+        let chapter = derive_identity_relevance(
+            MemoryKind::Episodic,
+            false,
+            MemoryTag::LifeEvent,
+            Fixed::ZERO,
+        );
+        assert!(mastered > Fixed::ZERO && learned > Fixed::ZERO && chapter > Fixed::ZERO,
+            "milestone traces anchor identity");
+
+        // Emotional charge amplifies identity implication, deterministically.
+        let charged = derive_identity_relevance(
+            MemoryKind::Social,
+            false,
+            MemoryTag::TalkedTo,
+            Fixed::from_f64(0.5),
+        );
+        assert!(charged > social, "charge amplifies identity implication");
+        assert!(
+            charged <= Fixed::ONE,
+            "identity relevance must clamp to [0, 1]"
+        );
+        // Determinism: same inputs reproduce the same value.
+        let again = derive_identity_relevance(
+            MemoryKind::Social,
+            false,
+            MemoryTag::TalkedTo,
+            Fixed::from_f64(0.5),
+        );
+        assert_eq!(charged, again, "derivation must be deterministic");
+    }
+
+    #[test]
+    fn retrieval_score_prefers_identity_relevant_traces() {
+        // The §8.1.3 consumer: with identical strength and emotional charge,
+        // the identity-relevant trace must outrank the neutral one — the
+        // identity-protection recall bias is genuinely live in retrieval.
+        let mut store = MemoryStore::new(100);
+        store.encode(MemoryKind::Traumatic, 0, Fixed::from_f64(0.5), Fixed::ZERO, None, MemoryTag::ThreatenedBy);
+        store.encode(MemoryKind::Somatic, 1, Fixed::from_f64(0.5), Fixed::ZERO, None, MemoryTag::AteFood);
+        let traumatic = &store.episodes[0];
+        let somatic = &store.episodes[1];
+        assert_eq!(traumatic.strength, somatic.strength, "strengths are matched");
+        assert_eq!(traumatic.emotional_charge, somatic.emotional_charge, "charges are matched");
+        assert!(traumatic.identity_relevance > somatic.identity_relevance);
+        assert!(
+            retrieval_score(traumatic) > retrieval_score(somatic),
+            "identity-relevant traces must intrude more (retrieval bias live)"
+        );
+    }
+
+    #[test]
+    fn encode_derives_identity_relevance_by_class() {
+        let mut store = MemoryStore::new(100);
+        // Traumatic flashbulb: highest identity relevance (0.6 base + 0.15
+        // vivid + charge).
+        store.encode(MemoryKind::Traumatic, 0, Fixed::from_f64(0.45), Fixed::from_f64(0.7), None, MemoryTag::ThreatenedBy);
+        // Emotional helped: social-self class.
+        store.encode(MemoryKind::Emotional, 1, Fixed::from_f64(0.5), Fixed::from_f64(0.3), Some(3), MemoryTag::HelpedBy);
+        // Somatic rest: identity-neutral base.
+        store.encode(MemoryKind::Somatic, 2, Fixed::from_f64(0.5), Fixed::ZERO, None, MemoryTag::Rested);
+        let flash = &store.episodes[0];
+        let emotional = &store.episodes[1];
+        let somatic = &store.episodes[2];
+        assert_eq!(flash.kind, MemoryKind::Flashbulb, "salience 0.45 + charge 0.7 upgrades");
+        assert!(
+            flash.identity_relevance > emotional.identity_relevance,
+            "traumatic flashbulbs are maximally identity-salient"
+        );
+        assert!(
+            emotional.identity_relevance > somatic.identity_relevance,
+            "emotional events outrank somatic rest"
+        );
+        assert!(
+            somatic.identity_relevance < Fixed::from_f64(0.1),
+            "flat somatic rest stays identity-neutral"
+        );
     }
 
     #[test]
