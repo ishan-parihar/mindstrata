@@ -17,7 +17,7 @@ The dominant category. A recurring pattern across the campaign: systems were bui
 | 3 | §9.2 | Neural-like activations / RL action values / prediction error feeding **action selection** | Iter 51 | Observational |
 | 4 | §8.1.16 | Prospection scenarios feeding decisions; D2–D6 domains (threat/injustice/courtship/ambition) proven by unit test only — the scarce default world fires only D1 | Iter 71 | Observational |
 | 5 | §8.1.5 | **WIRED (Iter 96)** — `dominant_need` urgency boost in `compute_utility`: the full-pressure argmax biases selection toward the dominant need's relief channel (exclusive boost; Safety/Esteem dominant = zero boost = fight-or-flight override) | Iter 44 | Wired |
-| 6 | §8.1.2 | Attention biases feeding back into `compute_salience` (currently "nothing feeds back"; `attention_capacity()` exposed, unread) | Iter 41 | Observational |
+| 6 | §8.1.2 | **WIRED (Iter 97)** — `percept_bias_factor` folds extraversion/openness/fear/anger/trauma into `compute_salience`; memory-encoding salience now reflects the agent's biases (social-memory encoding ~2× extravert-vs-introvert) | Iter 41 | Wired |
 | 7 | §8.1.11 | Speech-act `resolve_effect` model (trust/affection/status/obligation/reputation deltas) **applied** to relationships — currently computed + unit-tested but not applied | Iter 40 | Observational |
 | 8 | §8.1.3 | Memory `identity_relevance` — identity-protection recall bias (baseline 0) | Iter 43 | Observational |
 | 9 | §8.1.6 | **Trait plasticity** — the 12 core traits never move (prerequisite for developmental change) | Iter ~50 | Observational |

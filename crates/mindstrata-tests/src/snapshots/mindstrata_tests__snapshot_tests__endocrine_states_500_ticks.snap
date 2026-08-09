@@ -25,12 +25,12 @@ expression: endocrine_states
     },
     EndocrineSnapshot {
         name: "Cara",
-        stress: 1.0,
+        stress: 0.0,
         bonding: 0.4827,
         dominance: 0.5906,
-        fertility: 0.3831,
+        fertility: 0.7473,
         metabolic_energy: 1.0,
-        arousal: 1.0,
+        arousal: 0.3422,
         growth_capacity: 0.6,
     },
 ]

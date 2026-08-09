@@ -23,19 +23,24 @@ use serde::{Deserialize, Serialize};
 /// §8.1.2 (AP2): this is the cognitive gateway — upgraded with the three
 /// perceptual-bias dimensions (threat, social, novelty), the salience
 /// competition record, and the plan's `attention_capacity()` naming for the
-/// budget. The biases and the salience map are write-only observational
-/// state (Iteration 41): they are recomputed from existing agent state by
-/// pure functions (no RNG) and never feed back into `compute_salience`, so
-/// calibrated runs carry zero drift.
+/// budget. The biases are recomputed from existing agent state by pure
+/// functions (no RNG) and — since Iteration 97 — **feed back into
+/// [`AttentionState::compute_salience`]** as a class-matched multiplicative
+/// fold (`bias / 0.5`, exactly 1.0 at the neutral anchor, so a
+/// neutral-bias agent is byte-identical to the pre-Iter-97 gate). The
+/// salience map remains observational state.
 ///
 /// Generalization note: the plan's signature emergent effects — "fearful
 /// agents notice threats", "hungry agents notice food" — are today hardcoded
 /// as flat boosts inside [`AttentionState::event_relevance`] (negative affect
 /// → threat +0.2, hunger/thirst → resource +0.3). The bias dimensions
-/// generalize those hardcoded paths: the documented consumer is a future
-/// iteration that replaces the flat boosts with the per-agent bias
-/// dimensions (individually calibrated to stay inside the zero-drift
-/// envelope). Until then the biases are observational.
+/// generalize the *threat/social/novelty* paths: `threat_bias` scales
+/// Threat percepts, `social_bias` scales Social percepts, `novelty_bias`
+/// scales Other (novel) percepts; Resource and Emotional percepts have no
+/// matching dimension and keep the flat boosts untouched (fold 1.0). The
+/// flat boosts were NOT removed — removing them would shift the calibrated
+/// gate even at the anchor, while the multiplicative fold is zero-at-zero
+/// by construction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttentionState {
     /// Current focus — what the agent is paying attention to.
@@ -192,7 +197,13 @@ impl AttentionState {
         let relevance = Self::event_relevance(event, agent_id, needs, affect);
         let habituation_penalty = Self::event_habituation(event, &mut self.habituation);
 
-        let raw_salience = base_intensity * novelty * relevance * self.salience_bias;
+        // §8.1.2 (Iteration 97): the perceptual-bias fold — the class-matched
+        // bias normalized by the 0.5 neutral anchor (exactly 1.0 at anchor,
+        // so a neutral-bias agent is byte-identical to the pre-Iter-97 gate;
+        // a hypervigilant agent's threat percepts, an extravert's social
+        // percepts, and an open agent's novel percepts score higher).
+        let raw_salience = base_intensity * novelty * relevance * self.salience_bias
+            * self.percept_bias_factor(event);
         let salience = (raw_salience - habituation_penalty).clamp_01();
 
         // Update habituation (exposure increases habituation)
@@ -247,6 +258,25 @@ impl AttentionState {
         };
         // Novelty = 1 - habituation (habituated events are less novel)
         Fixed::ONE - habituation_level
+    }
+
+    /// §8.1.2 (Iteration 97): the class-matched perceptual-bias fold — the
+    /// bias for the event's percept class normalized by the 0.5 neutral
+    /// anchor. Exactly [`Fixed::ONE`] at the anchor for every class, so the
+    /// fold is zero-at-zero by construction. Threat percepts scale with
+    /// `threat_bias` (hypervigilance), Social with `social_bias`, Other
+    /// (novel) with `novelty_bias`; Resource and Emotional percepts have no
+    /// matching bias dimension and fold at 1.0 (their flat hunger/thirst/
+    /// trust boosts in [`AttentionState::event_relevance`] stay untouched).
+    fn percept_bias_factor(&self, event: &SimEvent) -> Fixed {
+        let bias = match PerceptKind::of(event) {
+            PerceptKind::Threat => self.threat_bias,
+            PerceptKind::Social => self.social_bias,
+            PerceptKind::Other => self.novelty_bias,
+            PerceptKind::Resource | PerceptKind::Emotional => return Fixed::ONE,
+        };
+        // bias / 0.5 — Fixed division keeps the anchor fold exact (5000/5000).
+        bias / Fixed::from_f64(0.5)
     }
 
     /// Relevance: how important is this event to the agent's current state?
@@ -361,11 +391,12 @@ impl AttentionState {
 
     /// §8.1.2: Recompute the perceptual biases from existing agent state.
     ///
-    /// Pure and deterministic (no RNG), write-only observational state — so
-    /// this cannot perturb calibrated runs. threat_bias rises with fear, anger,
+    /// Pure and deterministic (no RNG). Since Iteration 97 the biases feed
+    /// back into [`AttentionState::compute_salience`] via
+    /// [`AttentionState::percept_bias_factor`]; they stay within [0.3, 0.7]
+    /// around the 0.5 neutral anchor. threat_bias rises with fear, anger,
     /// and trauma risk (trauma-triggered hypervigilance); social_bias with
-    /// extraversion and attachment security; novelty_bias with openness. All
-    /// stay within [0.3, 0.7] around the 0.5 neutral anchor.
+    /// extraversion and attachment security; novelty_bias with openness.
     pub fn recompute_biases(
         &mut self,
         fear: Fixed,
@@ -657,5 +688,95 @@ mod tests {
             tick: Tick::new(1),
         };
         assert_eq!(PerceptKind::of(&talk), PerceptKind::Social);
+    }
+
+    // ── §8.1.2 (Iteration 97): perceptual-bias feedback ────────────
+
+    fn threat_event() -> SimEvent {
+        SimEvent::InteractionOccurred {
+            from: AgentId::new(1),
+            to: AgentId::new(0),
+            kind: InteractionKind::Threaten,
+            tick: Tick::new(1),
+        }
+    }
+
+    fn talk_event() -> SimEvent {
+        SimEvent::InteractionOccurred {
+            from: AgentId::new(1),
+            to: AgentId::new(0),
+            kind: InteractionKind::Talk,
+            tick: Tick::new(1),
+        }
+    }
+
+    fn ate_event() -> SimEvent {
+        SimEvent::AgentAte {
+            agent: AgentId::new(2),
+            food: mindstrata_core::id::EntityId::new(0),
+            tick: Tick::new(1),
+        }
+    }
+
+    #[test]
+    fn bias_fold_is_exactly_one_at_neutral_anchor() {
+        let attention = AttentionState::default();
+        assert_eq!(attention.percept_bias_factor(&threat_event()), Fixed::ONE);
+        assert_eq!(attention.percept_bias_factor(&talk_event()), Fixed::ONE);
+        // Resource/Emotional percepts fold at 1.0 regardless of any bias.
+        assert_eq!(attention.percept_bias_factor(&ate_event()), Fixed::ONE);
+    }
+
+    #[test]
+    fn threat_bias_amplifies_threat_salience() {
+        // Fresh, identical states — only the bias differs — so habituation
+        // starts identical and the comparison isolates the fold.
+        let mut neutral = AttentionState::default();
+        let mut vigilant = AttentionState::default();
+        vigilant.threat_bias = Fixed::from_f64(0.7);
+        let needs = NeedState::default();
+        let affect = Affect::default();
+
+        let s_neutral = neutral.compute_salience(&threat_event(), AgentId::new(0), &needs, &affect);
+        let s_vigilant = vigilant.compute_salience(&threat_event(), AgentId::new(0), &needs, &affect);
+        assert!(
+            s_vigilant > s_neutral,
+            "Threat-biased agent should notice threats more: {s_vigilant} vs {s_neutral}"
+        );
+    }
+
+    #[test]
+    fn social_bias_amplifies_social_salience() {
+        let mut neutral = AttentionState::default();
+        let mut extravert = AttentionState::default();
+        extravert.social_bias = Fixed::from_f64(0.7);
+        let needs = NeedState::default();
+        let affect = Affect::default();
+
+        let s_neutral = neutral.compute_salience(&talk_event(), AgentId::new(0), &needs, &affect);
+        let s_extravert = extravert.compute_salience(&talk_event(), AgentId::new(0), &needs, &affect);
+        assert!(
+            s_extravert > s_neutral,
+            "Socially biased agent should notice interactions more: {s_extravert} vs {s_neutral}"
+        );
+    }
+
+    #[test]
+    fn resource_events_ignore_perceptual_biases() {
+        // Resource percepts have no matching bias dimension — the fold stays
+        // 1.0 even at extreme biases, so eating salience is bias-invariant.
+        let mut low = AttentionState::default();
+        low.threat_bias = Fixed::from_f64(0.3);
+        let mut high = AttentionState::default();
+        high.threat_bias = Fixed::from_f64(0.7);
+        let needs = NeedState::default();
+        let affect = Affect::default();
+
+        let s_low = low.compute_salience(&ate_event(), AgentId::new(0), &needs, &affect);
+        let s_high = high.compute_salience(&ate_event(), AgentId::new(0), &needs, &affect);
+        assert_eq!(
+            s_low, s_high,
+            "Resource percepts must ignore the perceptual biases"
+        );
     }
 }
