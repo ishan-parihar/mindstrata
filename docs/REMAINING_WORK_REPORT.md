@@ -62,7 +62,7 @@ The dominant category. A recurring pattern across the campaign: systems were bui
 
 | Item | Detail |
 |------|--------|
-| **O(n²) daily passes** | Rumor transmission rebuilds the n×n trust matrix daily (fine at 12–48, documented as needing lazy/sparse treatment at scale, §17.4). |
+| **O(n²) daily passes — PARTIALLY RESOLVED (Iter 142)** | The daily rumor pass's n×n trust-matrix allocation + fill is GONE: `transmission_pass_lazy` reads trust directly from the packed `relationship_v2s` via a closure (byte-identical golden, proven by the lazy-vs-matrix equivalence test). Remaining O(rumors × n): the per-rumor argmax listener scan (inherent to the spread model) — cheap at village scale. |
 | **Meme aggregation** | Plan's sparse/lazy aggregation strategy (§17.4) not implemented — linear scans are fine at village scale only. |
 | **Benches — PARTIALLY RESOLVED (Iter 141)** | Per-system benches SHIPPED: `subsystems.rs` criterion target isolates the memory-encode hot path (fresh 16.7ns / near-capacity 175ns) and the gossip single-hop pass; `tick_loop.rs` extended to the 48-agent cap + a 10K-tick long-horizon run bench. Still missing: release-mode behavioral benchmark (measurements above are debug-vs-release unverified) and per-system regression thresholds wired into CI. |
 | **Cognitive budget at scale** | `AgentTier`/`CognitiveBudgetTracker` exist but are exercised only implicitly; background-tier behavior at 100s of agents is unmeasured. |

@@ -7328,15 +7328,30 @@ impl Simulation {
             // skepticism from the epistemic substrate.
             {
                 let n = self.agents.len();
-                if n > 0 && !self.rumor_registry.rumors.is_empty() {
-                    // trust[listener][source] — listener's trust in the source.
-                    let mut trust_matrix = vec![vec![Fixed::ZERO; n]; n];
-                    for (listener, agent) in self.agents.iter().enumerate() {
-                        for (pos, rv2) in agent.relationship_v2s.iter().enumerate() {
-                            let source = if pos >= listener { pos + 1 } else { pos };
-                            trust_matrix[listener][source] = rv2.trust;
+                if n > 0
+                    && !self.rumor_registry.rumors.is_empty()
+                    && self.rumor_registry.rumors.iter().any(|r| r.active)
+                {
+                    // §17.4 lazy trust lookup: read trust[listener][source]
+                    // straight from the packed per-agent relationship_v2s
+                    // instead of allocating an n×n matrix on every daily
+                    // pass (O(n²) fill at 12–48 agents, the queue's flagged
+                    // O(n²) pass). The diagonal is never read — the source is
+                    // always in the rumor's chain, and chain members are
+                    // skipped as listeners — so it is ZERO exactly as in the
+                    // old matrix. Missing entries (e.g. newborn agents)
+                    // degrade to ZERO, matching the old unfilled cells.
+                    let agents = &self.agents;
+                    let trust = move |listener: usize, source: usize| -> Fixed {
+                        if listener == source {
+                            Fixed::ZERO
+                        } else {
+                            agents[listener]
+                                .relationship_v2s
+                                .get(Self::relationship_v2_pos(listener, source))
+                                .map_or(Fixed::ZERO, |rv2| rv2.trust)
                         }
-                    }
+                    };
                     let susceptibility: Vec<Fixed> = self
                         .agents
                         .iter()
@@ -7399,8 +7414,9 @@ impl Simulation {
                             }
                         }
                     }
-                    self.rumor_registry.transmission_pass(
-                        &trust_matrix,
+                    self.rumor_registry.transmission_pass_lazy(
+                        n,
+                        trust,
                         &susceptibility,
                         &skepticism,
                         &escalation,

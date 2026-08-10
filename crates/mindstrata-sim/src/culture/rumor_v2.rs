@@ -280,9 +280,41 @@ impl RumorRegistry {
         population: u32,
         tick: u64,
     ) -> usize {
+        let n = trust_matrix.len();
+        self.transmission_pass_lazy(
+            n,
+            |listener, source| trust_matrix[listener][source],
+            susceptibility,
+            skepticism,
+            escalation,
+            population,
+            tick,
+        )
+    }
+
+    /// §17.4 lazy variant: like [`Self::transmission_pass`] but the trust
+    /// value for a (listener, source) pair is produced by a closure instead of
+    /// being read from a dense n×n matrix. Callers with a packed/sparse trust
+    /// store (e.g. the sim's per-agent `relationship_v2s`) can avoid the
+    /// O(n²) matrix allocation + fill on every daily pass. The closure is
+    /// invoked exactly once per (rumor, listener) scan — same count as the
+    /// matrix reads it replaces — so the pass is bit-identical when the
+    /// closure returns the same values the matrix would.
+    pub fn transmission_pass_lazy<F>(
+        &mut self,
+        n: usize,
+        trust: F,
+        susceptibility: &[Fixed],
+        skepticism: &[Fixed],
+        escalation: &[Fixed],
+        population: u32,
+        tick: u64,
+    ) -> usize
+    where
+        F: Fn(usize, usize) -> Fixed,
+    {
         const SPREAD_FLOOR: f64 = 0.02;
         let mut hops = 0;
-        let n = trust_matrix.len();
         for i in 0..self.rumors.len() {
             if !self.rumors[i].active {
                 continue;
@@ -299,7 +331,7 @@ impl RumorRegistry {
                     continue;
                 }
                 let chance = self.rumors[i].transmission_chance(
-                    trust_matrix[listener][source],
+                    trust(listener, source),
                     susceptibility[listener],
                     skepticism[listener],
                     population,
@@ -428,6 +460,94 @@ mod tests {
         assert_eq!(reg.rumors[0].source_chain, vec![0, 1]);
         assert_eq!(reg.rumors[0].believer_count, 1);
         assert!(reg.rumors[0].prevalence > Fixed::ZERO);
+    }
+
+    #[test]
+    fn lazy_pass_is_bit_identical_to_matrix_pass() {
+        // §17.4: the lazy closure variant must produce byte-identical rumor
+        // state to the dense-matrix API — the sim's O(n²) trust-matrix build
+        // is replaced by a direct packed-relationship read, so this equality
+        // is the contract that keeps the golden baseline stable.
+        fn build() -> RumorRegistry {
+            let mut reg = RumorRegistry::default();
+            reg.register(RumorV2::new(
+                0, "a".into(), None,
+                Fixed::from_f64(0.5), Fixed::from_f64(0.9),
+                Fixed::from_f64(0.6), 0,
+            ));
+            reg.register(RumorV2::new(
+                1, "b".into(), Some(2),
+                Fixed::from_f64(0.8), Fixed::from_f64(0.7),
+                Fixed::from_f64(0.5), 0,
+            ));
+            reg.rumors[0].record_source(0, 0);
+            reg.rumors[1].record_source(3, 0);
+            reg
+        }
+        let trust = vec![
+            vec![Fixed::ZERO, Fixed::from_f64(0.5), Fixed::from_f64(0.5), Fixed::from_f64(0.5)],
+            vec![Fixed::from_f64(0.9), Fixed::ZERO, Fixed::from_f64(0.5), Fixed::from_f64(0.5)],
+            vec![Fixed::from_f64(0.1), Fixed::from_f64(0.5), Fixed::ZERO, Fixed::from_f64(0.5)],
+            vec![Fixed::from_f64(0.3), Fixed::from_f64(0.5), Fixed::from_f64(0.5), Fixed::ZERO],
+        ];
+        let susceptibility = vec![Fixed::from_f64(0.8); 4];
+        let skepticism = vec![Fixed::ZERO; 4];
+        let escalation = vec![Fixed::ONE; 4];
+
+        let mut matrix_reg = build();
+        let matrix_hops = matrix_reg.transmission_pass(
+            &trust, &susceptibility, &skepticism, &escalation, 10, 1,
+        );
+
+        let mut lazy_reg = build();
+        let lazy_hops = lazy_reg.transmission_pass_lazy(
+            4,
+            |l, s| trust[l][s],
+            &susceptibility,
+            &skepticism,
+            &escalation,
+            10,
+            1,
+        );
+
+        assert_eq!(lazy_hops, matrix_hops);
+        assert_eq!(lazy_reg.rumors.len(), matrix_reg.rumors.len());
+        for (a, b) in lazy_reg.rumors.iter().zip(&matrix_reg.rumors) {
+            assert_eq!(a.source_chain, b.source_chain);
+            assert_eq!(a.believer_count, b.believer_count);
+            assert_eq!(a.prevalence, b.prevalence);
+            assert_eq!(a.active, b.active);
+        }
+        // Hard-coded anchor: the matrix result is exactly the expected spread
+        // (rumor 0 from source 0 reaches listener 1 at trust 0.9; rumor 1 from
+        // source 3 reaches listener 0 — all its trust entries are 0.5, so the
+        // argmax tie-breaks to the lowest index). Guards the shared body
+        // against a refactor that keeps the two variants "equal" but wrong.
+        assert_eq!(matrix_hops, 2);
+        assert_eq!(matrix_reg.rumors[0].source_chain, vec![0, 1]);
+        assert_eq!(matrix_reg.rumors[0].believer_count, 1);
+        assert_eq!(matrix_reg.rumors[1].source_chain, vec![3, 0]);
+        assert_eq!(matrix_reg.rumors[1].believer_count, 1);
+
+        // Closure-consulted leg: a closure returning ZERO trust everywhere
+        // must suppress the UNTARGETED rumor (its chance = base + 0, trust is
+        // the only driver) while the TARGETED rumor still spreads at its 0.1
+        // target-proximity floor — proves the lazy pass actually reads the
+        // closure rather than ignoring it (and that the two rumors are
+        // distinguished by the closure's values, not by a shared constant).
+        let mut zero_reg = build();
+        let zero_hops = zero_reg.transmission_pass_lazy(
+            4,
+            |_, _| Fixed::ZERO,
+            &susceptibility,
+            &skepticism,
+            &escalation,
+            10,
+            1,
+        );
+        assert_eq!(zero_hops, 1);
+        assert_eq!(zero_reg.rumors[0].source_chain, vec![0]);
+        assert_eq!(zero_reg.rumors[1].source_chain, vec![3, 0]);
     }
 
     #[test]
