@@ -85,6 +85,56 @@ const EPISODIC_CHAPTER_EVENTS: u32 = 100;
 fn life_chapter_crossed(before: u32, after: u32) -> bool {
     before / EPISODIC_CHAPTER_EVENTS != after / EPISODIC_CHAPTER_EVENTS
 }
+/// §5 (Iteration 155): If the agent holds an external directive (a
+/// Command-sourced goal), return the action it demands AND the directive's
+/// goal kind — unless a critical need of a *different* kind demands survival
+/// first (the tick's own critical-interruption rule, applied at selection
+/// time). Commands are strong nudges, not mind control: they override
+/// routine and internal drives, but never block eating/drinking/resting
+/// when those are truly pressing. `SeekSafety` has no aligned action
+/// candidate in [`actions::select_action`], so a SeekSafety directive
+/// returns `None` (the goal still shows in the inspector but cannot steer
+/// an action yet).
+///
+/// The directive is *consumed* by the caller the moment it steers a
+/// selection — satisfaction is the action being performed, NOT the resource
+/// outcome (an unproductive farm would otherwise leave a Work directive
+/// spinning forever on record_failure).
+fn command_goal_action(goals: &[Goal], needs: &NeedState) -> Option<(ActionKind, GoalKind)> {
+    // `max_by_key` returns the *last* maximum on ties, so a same-priority
+    // repeat directive wins — the most recent command takes precedence.
+    let command = goals
+        .iter()
+        .filter(|g| g.source == GoalSource::Command)
+        .max_by_key(|g| g.priority.to_raw())?;
+    let (action, blocked) = match command.kind {
+        GoalKind::Eat => (
+            ActionKind::Eat,
+            needs.thirst > Fixed::from_f64(0.9) || needs.fatigue > Fixed::from_f64(0.95),
+        ),
+        GoalKind::Drink => (
+            ActionKind::Drink,
+            needs.hunger > Fixed::from_f64(0.9) || needs.fatigue > Fixed::from_f64(0.95),
+        ),
+        GoalKind::Rest => (
+            ActionKind::Rest,
+            needs.hunger > Fixed::from_f64(0.9) || needs.thirst > Fixed::from_f64(0.9),
+        ),
+        GoalKind::Work | GoalKind::Socialize | GoalKind::Worship => (
+            match command.kind {
+                GoalKind::Work => ActionKind::Work,
+                GoalKind::Socialize => ActionKind::Socialize,
+                _ => ActionKind::Worship,
+            },
+            needs.hunger > Fixed::from_f64(0.9)
+                || needs.thirst > Fixed::from_f64(0.9)
+                || needs.fatigue > Fixed::from_f64(0.95),
+        ),
+        GoalKind::SeekSafety => return None,
+    };
+    if blocked { None } else { Some((action, command.kind)) }
+}
+
 /// Demography runs once per this many ticks (matches `phases.is_deca`).
 const DEMOGRAPHY_TICK_INTERVAL: u64 = 10;
 /// Minimum mutual trust required to initiate a courtship (0.3).
@@ -3452,10 +3502,25 @@ impl Simulation {
                         Fixed::from_f64(0.5) // normal agents need stronger routine signal
                     };
 
-                    let action = if follow_routine && effective_routine_strength > effective_routine_threshold {
-                        // §10.3: Routine creates behavioral stability — prefer scheduled action
-                        routine_action
-                    } else if !self.agents[i].feuds.is_empty()
+                    let action =
+                        if let Some((cmd_action, cmd_kind)) = command_goal_action(&goals[i], &needs[i]) {
+                            // §5 (Iteration 155): an external directive takes
+                            // priority over routine and internal drives, and is
+                            // consumed the moment it steers a selection — a
+                            // one-shot nudge that returns the agent to
+                            // autonomy. Gated on `GoalSource::Command` goals —
+                            // which only exist after `command_agent` is called
+                            // (never in a calibrated window), so this branch is
+                            // a structural no-op everywhere calibrated and draws
+                            // zero RNG.
+                            goals[i].retain(|g| {
+                                !(g.source == GoalSource::Command && g.kind == cmd_kind)
+                            });
+                            cmd_action
+                        } else if follow_routine && effective_routine_strength > effective_routine_threshold {
+                            // §10.3: Routine creates behavioral stability — prefer scheduled action
+                            routine_action
+                        } else if !self.agents[i].feuds.is_empty()
                         && emotions[i].anger > Fixed::from_f64(0.4)
                         && needs[i].hunger < Fixed::from_f64(0.85)
                         && needs[i].thirst < Fixed::from_f64(0.85)
@@ -5059,6 +5124,56 @@ impl Simulation {
     }
 
     /// Access the current tick.
+    /// §5 (Iteration 155): The interactive-TUI command channel — inject a
+    /// high-priority directive goal into an agent's goal queue.
+    ///
+    /// The goal is exempt from goal-generation decay and need-dropping, so
+    /// it persists until satisfied or replaced. While present, the tick's
+    /// selection phase honors its aligned action over routine and internal
+    /// drives (`command_goal_action`), yielding only to critical needs of
+    /// other kinds (the sim's own interruption rule) — so commands are
+    /// strong nudges, not mind control: a commanded agent still eats,
+    /// drinks, and rests when those are truly pressing.
+    ///
+    /// Called only by the interactive TUI (and tests) *between* ticks —
+    /// never from the tick loop — so calibrated windows are untouched.
+    /// Directives serialize into snapshots (they are ordinary goals), so a
+    /// commanded world saved to disk carries its directives on reload.
+    /// Returns false if the agent index is out of range.
+    pub fn command_agent(&mut self, agent_idx: usize, kind: GoalKind) -> bool {
+        if agent_idx >= self.agents.len() {
+            return false;
+        }
+        let tick = self.current_tick().as_u64();
+        let agent = &mut self.agents[agent_idx];
+        // Upsert: a repeat directive of the same kind replaces the old one
+        // (prevents stale duplicate directives piling up in the queue).
+        agent
+            .goals
+            .retain(|g| !(g.source == GoalSource::Command && g.kind == kind));
+        agent.goals.push(Goal {
+            kind,
+            priority: Fixed::ONE,
+            commitment: Fixed::ONE,
+            created_tick: tick,
+            source: GoalSource::Command,
+        });
+        true
+    }
+
+    /// §5 (Iteration 155): Cancel every outstanding directive on an agent,
+    /// returning it to fully autonomous behavior. Returns false if the agent
+    /// index is out of range.
+    pub fn clear_commands(&mut self, agent_idx: usize) -> bool {
+        if agent_idx >= self.agents.len() {
+            return false;
+        }
+        self.agents[agent_idx]
+            .goals
+            .retain(|g| g.source != GoalSource::Command);
+        true
+    }
+
     pub fn current_tick(&self) -> Tick {
         self.clock.tick()
     }
@@ -13525,5 +13640,176 @@ mod tests {
              (the §8.1.4 reverence fold is wired), reverent {reverent_leg:.4} vs \
              plain {plain_leg:.4}"
         );
+    }
+}
+
+// ── §5 (Iteration 155): Interactive-TUI command channel ────────────────
+
+#[cfg(test)]
+mod command_channel_tests {
+    use super::*;
+
+    fn build_sim(n: u32) -> Simulation {
+        let mut sim = Simulation::new(SimConfig {
+            seed: 7,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: n,
+            snapshot_interval: None,
+        });
+        sim.populate();
+        sim
+    }
+
+    #[test]
+    fn command_agent_injects_high_priority_command_goal() {
+        let mut sim = build_sim(6);
+        assert!(sim.command_agent(0, GoalKind::Work));
+        let goal = sim.agents[0].goals.iter().find(|g| g.kind == GoalKind::Work).expect("injected goal present");
+        assert_eq!(goal.priority, Fixed::ONE);
+        assert_eq!(goal.commitment, Fixed::ONE);
+        assert_eq!(goal.source, GoalSource::Command);
+        assert_eq!(goal.created_tick, 0);
+    }
+
+    #[test]
+    fn command_agent_rejects_out_of_range_index() {
+        let mut sim = build_sim(6);
+        assert!(!sim.command_agent(6, GoalKind::Work));
+        assert!(!sim.command_agent(usize::MAX, GoalKind::Work));
+        assert!(sim.agents[0].goals.is_empty());
+    }
+
+    #[test]
+    fn commanded_directive_steers_and_is_consumed_on_first_selection() {
+        let mut sim = build_sim(6);
+        assert!(sim.command_agent(2, GoalKind::Work));
+        assert!(sim.agents[2].goals.iter().any(|g| g.source == GoalSource::Command));
+        // Fresh worlds select on the first tick; the directive fires Work and
+        // is consumed in the same selection — a one-shot nudge.
+        sim.tick();
+        assert_eq!(sim.agents[2].current_action, ActionKind::Work, "the directive steered the selection");
+        assert!(
+            !sim.agents[2].goals.iter().any(|g| g.source == GoalSource::Command),
+            "the directive was consumed by the selection it steered"
+        );
+    }
+
+    #[test]
+    fn command_goal_action_returns_aligned_action_for_directives() {
+        let work = vec![Goal {
+            kind: GoalKind::Work,
+            priority: Fixed::ONE,
+            commitment: Fixed::ONE,
+            created_tick: 0,
+            source: GoalSource::Command,
+        }];
+        let calm = NeedState::default();
+        assert_eq!(command_goal_action(&work, &calm), Some((ActionKind::Work, GoalKind::Work)));
+
+        let worship = vec![Goal {
+            kind: GoalKind::Worship,
+            priority: Fixed::ONE,
+            commitment: Fixed::ONE,
+            created_tick: 0,
+            source: GoalSource::Command,
+        }];
+        assert_eq!(
+            command_goal_action(&worship, &calm),
+            Some((ActionKind::Worship, GoalKind::Worship))
+        );
+    }
+
+    #[test]
+    fn command_goal_action_yields_to_critical_needs_of_other_kinds() {
+        let work = vec![Goal {
+            kind: GoalKind::Work,
+            priority: Fixed::ONE,
+            commitment: Fixed::ONE,
+            created_tick: 0,
+            source: GoalSource::Command,
+        }];
+        let starving = NeedState {
+            hunger: Fixed::from_f64(0.95),
+            ..Default::default()
+        };
+        assert_eq!(command_goal_action(&work, &starving), None, "Work yields to critical hunger");
+    }
+
+    #[test]
+    fn command_goal_action_ignores_endogenous_goals_and_seek_safety() {
+        let endogenous = vec![Goal {
+            kind: GoalKind::Work,
+            priority: Fixed::ONE,
+            commitment: Fixed::ONE,
+            created_tick: 0,
+            source: GoalSource::Identity,
+        }];
+        assert_eq!(command_goal_action(&endogenous, &NeedState::default()), None);
+
+        let seek = vec![Goal {
+            kind: GoalKind::SeekSafety,
+            priority: Fixed::ONE,
+            commitment: Fixed::ONE,
+            created_tick: 0,
+            source: GoalSource::Command,
+        }];
+        assert_eq!(command_goal_action(&seek, &NeedState::default()), None);
+    }
+
+    #[test]
+    fn command_goal_action_prioritizes_highest_priority_directive() {
+        let goals = vec![
+            Goal {
+                kind: GoalKind::Rest,
+                priority: Fixed::from_f64(0.5),
+                commitment: Fixed::ONE,
+                created_tick: 0,
+                source: GoalSource::Command,
+            },
+            Goal {
+                kind: GoalKind::Work,
+                priority: Fixed::ONE,
+                commitment: Fixed::ONE,
+                created_tick: 0,
+                source: GoalSource::Command,
+            },
+        ];
+        assert_eq!(
+            command_goal_action(&goals, &NeedState::default()),
+            Some((ActionKind::Work, GoalKind::Work))
+        );
+    }
+
+    #[test]
+    fn command_agent_upserts_repeat_directive_of_same_kind() {
+        let mut sim = build_sim(6);
+        assert!(sim.command_agent(1, GoalKind::Work));
+        assert!(sim.command_agent(1, GoalKind::Work));
+        let count = sim.agents[1]
+            .goals
+            .iter()
+            .filter(|g| g.source == GoalSource::Command && g.kind == GoalKind::Work)
+            .count();
+        assert_eq!(count, 1, "repeat directives of the same kind replace, not pile up");
+    }
+
+    #[test]
+    fn clear_commands_removes_all_directives() {
+        let mut sim = build_sim(6);
+        assert!(sim.command_agent(1, GoalKind::Work));
+        assert!(sim.command_agent(1, GoalKind::Worship));
+        assert_eq!(
+            sim.agents[1].goals.iter().filter(|g| g.source == GoalSource::Command).count(),
+            2
+        );
+        assert!(sim.clear_commands(1));
+        assert_eq!(
+            sim.agents[1].goals.iter().filter(|g| g.source == GoalSource::Command).count(),
+            0,
+            "clear removes every directive"
+        );
+        assert!(!sim.clear_commands(6), "out-of-range clear returns false");
     }
 }

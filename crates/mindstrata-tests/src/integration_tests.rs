@@ -2407,6 +2407,152 @@ fn military_is_deterministic_across_identical_setups() {
     }
 }
 
+// ── §5 (AP2 Phase 4, Iteration 155): Interactive-TUI command channel ──
+
+/// §5 (Iteration 155): the interactive-TUI command channel genuinely
+/// steers behavior — a Worship directive injected via `command_agent`
+/// (priority-1.0 Command-sourced goal honored by the tick's selection
+/// branch) makes the agent journal Worship over the same window, while an
+/// identical control world with no command worships essentially never (the
+/// village routine is work-dominant). Both worlds share the same seed,
+/// settle phase, and tick count, so the only difference is the directive.
+#[test]
+fn commanded_agent_worships_more_than_identical_control() {
+    use mindstrata_sim::person::GoalKind;
+    use mindstrata_sim::journal::JournalEntryKind;
+
+    let build = || {
+        let config = SimConfig {
+            seed: 11, max_ticks: 2000, world_width: 16, world_height: 16,
+            num_agents: 12, snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(100); // settle phase — identical RNG position in both worlds
+        sim
+    };
+
+    let worship_count = |sim: &Simulation| -> usize {
+        sim.journal()
+            .entries_for_agent(mindstrata_core::id::AgentId::new(0))
+            .iter()
+            .filter(|e| matches!(e.kind, JournalEntryKind::Worshiped))
+            .count()
+    };
+
+    let mut control = build();
+    let control_before = worship_count(&control);
+    for _ in 0..200 {
+        control.tick();
+    }
+    let control_delta = worship_count(&control) - control_before;
+
+    let mut commanded = build();
+    let commanded_before = worship_count(&commanded);
+    assert!(commanded.command_agent(0, GoalKind::Worship));
+    for _ in 0..200 {
+        commanded.tick();
+    }
+    let commanded_delta = worship_count(&commanded) - commanded_before;
+
+    assert!(
+        commanded_delta >= 1 && commanded_delta > control_delta,
+        "commanded agent must worship (non-default action) while the control \
+         does not: commanded {commanded_delta} vs control {control_delta}"
+    );
+}
+
+/// §5 (Iteration 155): a directive is spent once its action completes —
+/// the satisfied Command goal leaves the queue and the agent returns to
+/// autonomous behavior (one-shot nudges, not permanent hijack).
+#[test]
+fn commanded_directive_is_removed_after_satisfaction() {
+    use mindstrata_sim::person::GoalKind;
+    use mindstrata_sim::journal::JournalEntryKind;
+
+    let config = SimConfig {
+        seed: 29, max_ticks: 2000, world_width: 16, world_height: 16,
+        num_agents: 12, snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.run(50);
+
+    assert!(sim.command_agent(0, GoalKind::Work));
+    assert!(
+        sim.agents[0].goals.iter().any(|g| g.source == mindstrata_sim::person::GoalSource::Command),
+        "directive present right after the command"
+    );
+
+    // Count post-command Work only (the settle phase also journaled Work).
+    let worked_before = sim
+        .journal()
+        .entries_for_agent(mindstrata_core::id::AgentId::new(0))
+        .iter()
+        .filter(|e| matches!(e.kind, JournalEntryKind::Worked { .. }))
+        .count();
+    let mut worked = worked_before;
+    for _ in 0..60 {
+        sim.tick();
+        worked = sim
+            .journal()
+            .entries_for_agent(mindstrata_core::id::AgentId::new(0))
+            .iter()
+            .filter(|e| matches!(e.kind, JournalEntryKind::Worked { .. }))
+            .count();
+        if worked > worked_before {
+            break;
+        }
+    }
+    assert!(worked > worked_before, "the commanded Work action must complete");
+    assert!(
+        !sim.agents[0].goals.iter().any(|g| g.source == mindstrata_sim::person::GoalSource::Command),
+        "the consumed directive is removed from the queue"
+    );
+}
+
+/// §5 (Iteration 155): different commands steer different agents toward
+/// their own directives — agent 0 commanded to Work journals Worked, agent
+/// 1 commanded to Worship journals Worshiped, over the same window.
+#[test]
+fn different_commands_steer_agents_toward_their_own_goals() {
+    use mindstrata_sim::person::GoalKind;
+    use mindstrata_sim::journal::JournalEntryKind;
+
+    let config = SimConfig {
+        seed: 23, max_ticks: 2000, world_width: 16, world_height: 16,
+        num_agents: 12, snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.run(80);
+
+    assert!(sim.command_agent(0, GoalKind::Work));
+    assert!(sim.command_agent(1, GoalKind::Worship));
+    for _ in 0..250 {
+        sim.tick();
+    }
+
+    let agent_entries = |sim: &Simulation, idx: usize| -> Vec<mindstrata_sim::journal::JournalEntryKind> {
+        sim.journal()
+            .entries_for_agent(mindstrata_core::id::AgentId::new(idx as u64))
+            .iter()
+            .map(|e| e.kind.clone())
+            .collect()
+    };
+    let a0 = agent_entries(&sim, 0);
+    let a1 = agent_entries(&sim, 1);
+
+    assert!(
+        a0.iter().any(|k| matches!(k, JournalEntryKind::Worked { .. })),
+        "agent 0 (Work command) must have worked: {a0:?}"
+    );
+    assert!(
+        a1.iter().any(|k| matches!(k, JournalEntryKind::Worshiped)),
+        "agent 1 (Worship command) must have worshipped: {a1:?}"
+    );
+}
+
 /// §16.1 (AP2 §5, Iteration 154): the save/load FILE round trip is
 /// lossless — a snapshot written to disk and read back produces identical
 /// postcard bytes and the identical deterministic hash.

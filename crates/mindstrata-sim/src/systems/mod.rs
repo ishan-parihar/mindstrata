@@ -129,7 +129,12 @@ pub fn system_goal_generation(
     for (i, (need, agent_goals)) in needs.iter().zip(goals.iter_mut()).enumerate() {
         // ── Goal decay: reduce priority of old goals over time ──
         // §24: Goals that aren't addressed gradually lose priority.
+        // §5 (Iteration 155): external directives are exempt — a TUI command
+        // persists until satisfied or replaced, never silently fades.
         for goal in agent_goals.iter_mut() {
+            if goal.source == crate::person::GoalSource::Command {
+                continue;
+            }
             let age = tick.saturating_sub(goal.created_tick) as f64;
             let decay = Fixed::from_f64(age * 0.001); // slow decay
             goal.priority = (goal.priority - decay).max(Fixed::ZERO);
@@ -140,6 +145,11 @@ pub fn system_goal_generation(
             // Goals that decayed to zero priority are removed
             if g.priority <= Fixed::ZERO {
                 return false;
+            }
+            // §5 (Iteration 155): external directives are exempt — endogenous
+            // need pressure cannot drop a user-issued command.
+            if g.source == crate::person::GoalSource::Command {
+                return true;
             }
             let threshold = Fixed::from_f64(0.3);
             match g.kind {

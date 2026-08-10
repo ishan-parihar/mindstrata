@@ -391,6 +391,9 @@ pub enum GoalSource {
     Identity,
     /// Goal driven by emotional state (e.g., fear → SeekSafety).
     Emotion,
+    /// §5 (Iteration 155): An external directive — the interactive TUI's
+    /// command channel injected this goal between ticks.
+    Command,
 }
 
 /// Goal priority and source.
