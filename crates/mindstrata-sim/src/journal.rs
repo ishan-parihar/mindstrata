@@ -26,6 +26,11 @@ pub enum JournalEntryKind {
     /// §5 (Iteration 149): A court returned a verdict on a prosecuted
     /// violation — the supplemental court fine on a Guilty verdict.
     LegalVerdict { case_id: u64, guilty: bool, sentence: f64 },
+    /// §5 (Iteration 150): A hostile neighboring settlement raided the
+    /// village granary.
+    TradeRaid { settlement: String, grain_lost: f64 },
+    /// §5 (Iteration 150): A caravan arrived from a neighboring settlement.
+    TradeCaravan { settlement: String, grain_gained: f64 },
 }
 
 /// A single journal entry.

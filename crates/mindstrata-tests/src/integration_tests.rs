@@ -1708,6 +1708,116 @@ fn legal_repeat_offender_escalates_sentence() {
     assert_eq!(sim.legal.acquittals, 0);
 }
 
+// ── §5: Diplomacy / Multi-Settlement (Iteration 150) ─────────────────
+
+/// The diplomacy pass runs only on the 4320-tick cadence, so calibrated
+/// windows (golden @2000, snapshots ≤2000) contain ZERO passes — all
+/// neighbors stay neutral and no event can fire.
+#[test]
+fn diplomacy_dormant_in_calibrated_windows() {
+    let sim = run_sim(42, 2000);
+    assert_eq!(sim.diplomacy.pass_count, 0, "no pass may run inside a calibrated window");
+    assert_eq!(sim.diplomacy.raids, 0);
+    assert_eq!(sim.diplomacy.caravans, 0);
+    assert!(
+        sim.diplomacy.neighbors.iter().all(|n| n.relation == Fixed::ZERO),
+        "neighbors stay neutral without a pass"
+    );
+}
+
+/// The pass is live, deterministic, and eventually produces events — 2000
+/// passes mean-revert relations (bounded in [-1, 1]) and, with ~3-6% event
+/// odds per pass, generate many caravans and raids on the fixed seed.
+#[test]
+fn diplomacy_pass_is_live_deterministic_and_events_fire() {
+    let run_passes = |seed: u64| -> (u64, u64, u64) {
+        let config = SimConfig {
+            seed, max_ticks: 2000, world_width: 16, world_height: 16,
+            num_agents: 12, snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        for i in 0..2000u64 {
+            sim.tick_diplomacy(4320 * (i + 1));
+        }
+        (
+            sim.diplomacy.pass_count,
+            sim.diplomacy.raids,
+            sim.diplomacy.caravans,
+        )
+    };
+
+    let a = run_passes(42);
+    let b = run_passes(42);
+    assert_eq!(a, b, "the diplomacy pass must be seed-deterministic");
+    assert_eq!(a.0, 2000, "every call is one pass");
+    assert!(a.1 + a.2 > 0, "2000 passes must eventually fire an event");
+    assert!(a.1 > 0, "hostile-leaning relations must eventually raid (seed 42)");
+    assert!(a.2 > 0, "friendly-leaning relations must eventually caravan (seed 42)");
+}
+
+/// A raid carries off a fraction of the village's grain, chills the
+/// neighbor's relation, and is journaled — deterministically.
+#[test]
+fn diplomacy_raid_removes_grain_and_chills_relations() {
+    let config = SimConfig {
+        seed: 42, max_ticks: 2000, world_width: 16, world_height: 16,
+        num_agents: 12, snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    let grain_before = sim.world.total_food();
+    assert!(grain_before > Fixed::ZERO, "the riverford village has grain to raid");
+
+    sim.apply_raid(0, 100);
+
+    let grain_after = sim.world.total_food();
+    assert!(grain_after < grain_before, "the raid carried off grain");
+    assert!(grain_after >= Fixed::ZERO);
+    assert!(
+        sim.diplomacy.neighbors[0].relation < Fixed::ZERO,
+        "the raid chilled the relation"
+    );
+    assert_eq!(sim.diplomacy.raids, 1);
+    assert_eq!(sim.diplomacy.neighbors[0].last_raid_tick, Some(100));
+    let journaled = sim
+        .journal()
+        .entries_for_agent(mindstrata_core::id::AgentId::new(0))
+        .iter()
+        .any(|e| matches!(e.kind, mindstrata_sim::journal::JournalEntryKind::TradeRaid { .. }));
+    assert!(journaled, "the raid is journaled");
+}
+
+/// A caravan delivers grain to the market (scaled by the relation), warms
+/// the neighbor's relation, and is journaled — deterministically.
+#[test]
+fn diplomacy_caravan_adds_grain_and_warms_relations() {
+    let config = SimConfig {
+        seed: 42, max_ticks: 2000, world_width: 16, world_height: 16,
+        num_agents: 12, snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    let grain_before = sim.world.total_food();
+
+    sim.apply_caravan(1, 100);
+
+    let grain_after = sim.world.total_food();
+    assert!(grain_after > grain_before, "the caravan delivered grain");
+    assert!(
+        sim.diplomacy.neighbors[1].relation > Fixed::ZERO,
+        "the caravan warmed the relation"
+    );
+    assert_eq!(sim.diplomacy.caravans, 1);
+    assert_eq!(sim.diplomacy.neighbors[1].caravan_count, 1);
+    let journaled = sim
+        .journal()
+        .entries_for_agent(mindstrata_core::id::AgentId::new(0))
+        .iter()
+        .any(|e| matches!(e.kind, mindstrata_sim::journal::JournalEntryKind::TradeCaravan { .. }));
+    assert!(journaled, "the caravan is journaled");
+}
+
 /// §5 (AP2, Iteration 147): an emergent drought regime has real teeth in a
 /// live run — after the regime declares, every well drains each tick AND
 /// farm output is suppressed (growth factor ≈0.61 vs ≈1.02 normal). The
