@@ -1413,6 +1413,138 @@ fn weather_is_live_seed_deterministic_and_bounded() {
         "calibrated windows must end in the Normal regime");
 }
 
+// ── §19.5.I: Technology Tree (Iteration 148) ────────────────────────
+
+/// The yearly discovery pass runs on the 4320-tick ritual cadence, so no
+/// calibrated window (golden @2000, snapshots ≤2000) contains a pass — the
+/// seeded tier-0 catalog must be untouched at every short horizon.
+#[test]
+fn technology_store_stays_seeded_in_calibrated_windows() {
+    let sim = run_sim(42, 2000);
+    assert_eq!(sim.knowledge_store.len(), 5,
+        "only the five seeded tier-0 nodes may exist at 2000 ticks");
+    assert!(
+        sim.knowledge_store.iter().all(|k| k.id < 5),
+        "no tier-1+ node may enter the store inside a calibrated window"
+    );
+    assert!(!sim.technology.is_discovered(5), "Advanced Irrigation stays undiscovered");
+    assert_eq!(sim.technology.undiscovered().count(), 6, "five tier-1 + one tier-2 remain hidden");
+}
+
+/// Prerequisites gate learning end-to-end: with two tier-1 nodes injected
+/// into the store (as if the discovery pass had fired), an agent missing a
+/// node's prerequisite must never acquire it through ANY transmission path
+/// (work-innovation, socialization, interaction diffusion, apprenticeship),
+/// while prereq-holding agents do acquire it.
+#[test]
+fn technology_prereqs_gate_learning_end_to_end() {
+    use mindstrata_sim::culture::{Knowledge, KnowledgeCategory};
+
+    let config = SimConfig {
+        seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
+        num_agents: 24, snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    // Simulate a post-discovery world: Advanced Irrigation (5, prereq Crop
+    // Rotation 0) and Metalworking (6, prereq Well Maintenance 1) are in the
+    // store and marked discovered, exactly as the yearly pass would leave them.
+    sim.technology.discovered.insert(5);
+    sim.technology.discovered.insert(6);
+    sim.knowledge_store.push(Knowledge {
+        id: 5, name: "Advanced Irrigation".into(), category: KnowledgeCategory::Agricultural,
+        difficulty: Fixed::from_f64(0.6), utility: Fixed::from_f64(0.9),
+        holders: 0, discovered_tick: 4320,
+    });
+    sim.knowledge_store.push(Knowledge {
+        id: 6, name: "Metalworking".into(), category: KnowledgeCategory::Craft,
+        difficulty: Fixed::from_f64(0.55), utility: Fixed::from_f64(0.8),
+        holders: 0, discovered_tick: 4320,
+    });
+    // Control A lacks Crop Rotation → must never learn Advanced Irrigation.
+    let control_a = 0usize;
+    sim.agents[control_a].cultural.knowledge.retain(|k| *k != 0);
+    // Control B lacks Well Maintenance → must never learn Metalworking.
+    let control_b = 1usize;
+    sim.agents[control_b].cultural.knowledge.retain(|k| *k != 1);
+    assert!(!sim.agents[control_a].cultural.knowledge.contains(&0), "control A setup");
+    assert!(!sim.agents[control_b].cultural.knowledge.contains(&1), "control B setup");
+
+    sim.run(5000);
+
+    // The gate's invariant — no agent may hold a node without ALL of its
+    // prerequisites — checked live across every transmission path. (A stripped
+    // control can RE-ACQUIRE its tier-0 prerequisite through socialization,
+    // since tier-0 nodes are ungated by design; the population-wide invariant
+    // is therefore the honest, race-free statement of the gate, and the two
+    // stripped controls maximize the chance that any un-gated path would
+    // transmit a node to a non-holder and trip it.)
+    for a in &sim.agents {
+        if a.cultural.knowledge.contains(&5) {
+            assert!(a.cultural.knowledge.contains(&0),
+                "every Advanced Irrigation holder must hold Crop Rotation");
+        }
+        if a.cultural.knowledge.contains(&6) {
+            assert!(a.cultural.knowledge.contains(&1),
+                "every Metalworking holder must hold Well Maintenance");
+        }
+    }
+    // Positive control: the discovered nodes DID spread — work-innovation and
+    // apprenticeship transmit store knowledge to prereq-holding agents.
+    let learners_a = sim.agents.iter().filter(|a| a.cultural.knowledge.contains(&5)).count();
+    let learners_b = sim.agents.iter().filter(|a| a.cultural.knowledge.contains(&6)).count();
+    assert!(learners_a >= 1, "Advanced Irrigation must spread to prereq-holding agents");
+    assert!(learners_b >= 1, "Metalworking must spread to prereq-holding agents");
+}
+
+/// The discovery pass itself: with a universal prerequisite (Crop Rotation is
+/// seeded to every agent), repeated yearly passes must eventually fire and
+/// add the node to the store with the correct discovery tick; with the
+/// prerequisite stripped from the whole population it must never fire.
+#[test]
+fn technology_discovery_pass_fires_on_prereq_mass() {
+    let config = SimConfig {
+        seed: 42, max_ticks: 2000, world_width: 16, world_height: 16,
+        num_agents: 12, snapshot_interval: None,
+    };
+    // Positive: universal Crop Rotation → Advanced Irrigation has mass 1.0.
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    let mut fired_pass = usize::MAX;
+    for i in 0..1000usize {
+        sim.tick_technology_discovery(4320 * (i as u64 + 1));
+        if sim.knowledge_store.iter().any(|k| k.id >= 5) {
+            fired_pass = i;
+            break;
+        }
+    }
+    assert!(fired_pass < 1000, "a universal prerequisite must eventually yield a discovery");
+    let fired_id = sim.knowledge_store.iter().find(|k| k.id >= 5).map(|k| k.id).unwrap();
+    assert!(sim.technology.is_discovered(fired_id), "discovery marks the node in the tree");
+    let entry = sim.knowledge_store.iter().find(|k| k.id == fired_id).unwrap();
+    assert_eq!(
+        entry.discovered_tick, 4320 * (fired_pass as u64 + 1),
+        "the Knowledge entry records the pass that fired it"
+    );
+
+    // Negative: no one holds any tier-0 prerequisite → no node can fire.
+    let mut sim2 = Simulation::new(SimConfig {
+        seed: 42, max_ticks: 2000, world_width: 16, world_height: 16,
+        num_agents: 12, snapshot_interval: None,
+    });
+    sim2.populate();
+    for a in &mut sim2.agents {
+        a.cultural.knowledge.clear();
+    }
+    for i in 0..1000usize {
+        sim2.tick_technology_discovery(4320 * (i as u64 + 1));
+    }
+    assert!(
+        sim2.knowledge_store.iter().all(|k| k.id < 5),
+        "without the prerequisite mass, the discovery pass must never fire"
+    );
+}
+
 /// §5 (AP2, Iteration 147): an emergent drought regime has real teeth in a
 /// live run — after the regime declares, every well drains each tick AND
 /// farm output is suppressed (growth factor ≈0.61 vs ≈1.02 normal). The

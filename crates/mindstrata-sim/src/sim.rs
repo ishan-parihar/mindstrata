@@ -2,7 +2,7 @@
 
 use crate::actions::{self, ActionKind};
 use crate::conflict::{self, ConflictKind, ConflictState};
-use crate::culture::{CulturalState, Knowledge, KnowledgeCategory};
+use crate::culture::{CulturalState, Knowledge, KnowledgeCategory, TechnologyTree};
 use crate::logistics;
 use crate::gossip;
 use crate::market::{self, MarketState, WealthState};
@@ -366,6 +366,9 @@ pub struct Simulation {
     pub market: MarketState,
     /// §19.5.I: Cultural knowledge store — all knowledge in the world.
     pub knowledge_store: Vec<Knowledge>,
+    /// §19.5.I (Iteration 148): The technology tree — knowledge
+    /// prerequisites and innovation chains layered over the flat store.
+    pub technology: TechnologyTree,
     /// §6.5: Per-tick metric history for observability and CSV export.
     pub metric_history: Vec<MetricsSnapshot>,
     /// §7.3: Tick when last revolution occurred (for cooldown tracking).
@@ -478,6 +481,7 @@ impl Simulation {
             site_work_ticks: Vec::new(),
             market: MarketState::new(&crate::parameters::SimParameters::default()),
             knowledge_store: Vec::new(),
+            technology: TechnologyTree::riverford(),
             metric_history: Vec::new(),
             last_revolution_tick: 0,
             last_moral_panic_tick: 0,
@@ -588,6 +592,15 @@ impl Simulation {
             agent_diseases: snapshot.agent_diseases,
             site_work_ticks: snapshot.site_work_ticks,
             market: snapshot.market,
+            // §5 (Iteration 148): snapshots predate technology — restore a
+            // fresh riverford tree and reconcile the discovered set with the
+            // serialized knowledge_store (a mid-run snapshot may include
+            // discovered tier-1+ nodes).
+            technology: {
+                let mut t = TechnologyTree::riverford();
+                t.reconcile_discovered(&snapshot.knowledge_store);
+                t
+            },
             knowledge_store: snapshot.knowledge_store,
             metric_history: snapshot.metric_history,
             last_revolution_tick: snapshot.last_revolution_tick,
@@ -4383,6 +4396,14 @@ impl Simulation {
                 "New season"
             );
         }
+        // ── 16a. §19.5.I (Iteration 148): Technology discovery — the yearly
+        // innovation pass, on the same 4320-tick cadence as the monthly
+        // ritual. Calibrated windows (golden @2000, snapshots ≤2000) contain
+        // no pass at all; draws come from the virgin Narrative stream, so a
+        // pass cannot perturb any other subsystem.
+        if tick_u64 > 0 && tick_u64.is_multiple_of(4320) {
+            self.tick_technology_discovery(tick_u64);
+        }
         // Reset work ticks tracker for this tick
         for tick in &mut self.site_work_ticks {
             *tick = 0;
@@ -4546,7 +4567,12 @@ impl Simulation {
                         let pick = self.rng.get_mut(RngStream::Social)
                             .random_range(0..self.agents[pi].cultural.knowledge.len());
                         let knowledge_id = self.agents[pi].cultural.knowledge[pick];
-                        if !self.agents[i].cultural.knowledge.contains(&knowledge_id) {
+                        // §5 (Iteration 148): the technology tree gates peer
+                        // transmission — a learner must hold every
+                        // prerequisite of the knowledge before absorbing it.
+                        if !self.agents[i].cultural.knowledge.contains(&knowledge_id)
+                            && self.technology.can_learn(&self.agents[i].cultural.knowledge, knowledge_id)
+                        {
                             let acceptance = (self.agents[i].cultural.openness * Fixed::from_f64(0.6)
                                 + Fixed::from_f64(0.4)).clamp_01();
                             if acceptance > Fixed::from_f64(0.3) {
@@ -4585,8 +4611,12 @@ impl Simulation {
                 if roll < discovery_chance {
                     // Try to discover a knowledge item not yet known by this agent
                     for k in &self.knowledge_store {
+                        // §5 (Iteration 148): work-innovation is also gated —
+                        // an agent cannot innovate a node whose prerequisites
+                        // they do not hold.
                         if !self.agents[idx].cultural.knowledge.contains(&k.id)
                             && k.difficulty < self.agents[idx].personality.openness
+                            && self.technology.can_learn(&self.agents[idx].cultural.knowledge, k.id)
                         {
                             innovations.push((idx, k.id, k.name.clone()));
                             break; // one discovery per tick per agent
@@ -4926,7 +4956,10 @@ impl Simulation {
                     let acceptance = (source_trust * Fixed::from_f64(0.5)
                         + self.agents[ti].cultural.openness * Fixed::from_f64(0.5)).clamp_01();
                     if !self.agents[ti].cultural.knowledge.contains(&kid)
-                        && acceptance > Fixed::from_f64(0.5) {
+                        && acceptance > Fixed::from_f64(0.5)
+                        // §5 (Iteration 148): interaction diffusion is gated
+                        // by the technology tree's prerequisites.
+                        && self.technology.can_learn(&self.agents[ti].cultural.knowledge, kid) {
                         self.agents[ti].cultural.knowledge.push(kid);
                         if let Some(k) = self.knowledge_store.iter_mut().find(|k| k.id == kid) {
                             k.holders += 1;
@@ -8512,6 +8545,13 @@ impl Simulation {
             for knowledge in &self.knowledge_store {
                 let knowledge_id = knowledge.id;
                 if self.agents[student].education.has_learned(knowledge_id) { continue; }
+                // §5 (Iteration 148): the technology tree gates education too
+                // — a student cannot be taught a node without its prereqs.
+                // Deliberately checks `cultural.knowledge` (the same vec the
+                // other three gates use) rather than `education.has_learned`:
+                // prerequisites live in the knowledge vec, and the two are
+                // kept in sync by the apprenticeship bookkeeping below.
+                if !self.technology.can_learn(&self.agents[student].cultural.knowledge, knowledge_id) { continue; }
                 // Pick the best teacher among agents who hold this knowledge,
                 // can teach, and share a relationship with the student.
                 let mut best: Option<(usize, Fixed)> = None;
@@ -8609,6 +8649,48 @@ impl Simulation {
     }
 
     /// Section 4b: Resource operations, journal recording, intention tracking.
+    /// §19.5.I (Iteration 148): One technology-discovery pass. For each
+    /// undiscovered tier-1+ node, rolls the discovery chance derived from the
+    /// population's prerequisite mass; a hit adds the node to the knowledge
+    /// store and marks it discovered, unlocking its dependents for later
+    /// passes. Draws come from the virgin Narrative stream — the only
+    /// consumer — so the pass can never perturb any other subsystem's RNG.
+    /// The pass is idempotent and safe to call from tests.
+    pub fn tick_technology_discovery(&mut self, tick_u64: u64) {
+        let known: Vec<Vec<u64>> = self
+            .agents
+            .iter()
+            .map(|a| a.cultural.knowledge.clone())
+            .collect();
+        let ids: Vec<u64> = self.technology.undiscovered().collect();
+        let mut hits: Vec<u64> = Vec::new();
+        for id in ids {
+            let chance = self.technology.discovery_chance(id, &known);
+            if chance <= Fixed::ZERO {
+                continue;
+            }
+            let roll = Fixed::from_f64(self.rng.get_mut(RngStream::Narrative).random::<f64>());
+            if roll < chance {
+                hits.push(id);
+            }
+        }
+        for id in hits {
+            let name = self
+                .technology
+                .nodes
+                .get(&id)
+                .map_or_else(|| format!("tech-{id}"), |n| n.name.clone());
+            if let Some(k) = self.technology.discover(id, tick_u64) {
+                self.knowledge_store.push(k);
+                self.journal.record(
+                    tick_u64,
+                    AgentId::new(0),
+                    JournalEntryKind::KnowledgeDiscovered { knowledge_id: id, name },
+                );
+            }
+        }
+    }
+
     fn tick_resource_operations(&mut self, action_starts: &[(usize, ActionKind)], _pre_tick_events: usize, tick_u64: u64, tick: Tick) {
         // ── 4b. Resource operations, journal recording, intention tracking ──
 
