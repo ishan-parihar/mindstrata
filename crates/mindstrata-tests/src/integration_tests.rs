@@ -7350,6 +7350,107 @@ fn background_tier_agents_skip_memory_encoding_in_live_runs() {
     );
 }
 
+/// §17.1 (Iteration 145): the section-4 Level-of-Detail gap — the
+/// Focal/Secondary/Background calibration is not validated against a
+/// population mix. This test PINS the measured tier-mix envelope across
+/// population sizes (6/12/24/48, the MAX_POPULATION cap) and seeds.
+///
+/// MEASURED FINDING (Iter-145 probe): reclassify is promotion-heavy — the
+/// §17.1 LOD gradient does NOT materialize at scale. 6 agents: 6F/0S;
+/// 12: 10F/2S; 24: 22F/2S; 48 (both seeds): 48F/0S; Background never
+/// appears at any tested size. At the 48-cap everyone is Focal, so the
+/// tier system provides no cognitive-cost gradient — a genuine calibration
+/// finding queued (not shipped) for a future calibrated rebalance.
+///
+/// The pins below are regression guards FOR THE PINNED SEEDS — explicit,
+/// observable markers so a future recalibration (intentional behavior
+/// change) is recognized as such, not mistaken for a flake. They are not a
+/// statistical claim.
+#[test]
+fn tier_mix_envelope_pinned_across_population_sizes() {
+    use mindstrata_sim::agent_tier::AgentTier;
+    use mindstrata_sim::{Simulation, sim::SimConfig};
+
+    fn count_tiers(sim: &Simulation) -> (usize, usize, usize) {
+        let mut focal = 0;
+        let mut secondary = 0;
+        let mut background = 0;
+        for a in &sim.agents {
+            match a.agent_tier.tier {
+                AgentTier::Focal => focal += 1,
+                AgentTier::Secondary => secondary += 1,
+                AgentTier::Background => background += 1,
+            }
+        }
+        (focal, secondary, background)
+    }
+
+    for &(agents, seed) in &[
+        (6u32, 1u64),
+        (12u32, 42u64),
+        (24u32, 7u64),
+        (48u32, 42u64),
+        (48u32, 99u64),
+    ] {
+        let config = SimConfig {
+            seed,
+            max_ticks: 1000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: agents,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(1000);
+        let (focal, secondary, background) = count_tiers(&sim);
+        eprintln!(
+            "PROBE agents={agents} seed={seed}: focal={focal} secondary={secondary} background={background}"
+        );
+        let n = agents as usize;
+        assert_eq!(focal + secondary + background, n, "tier sum must equal population");
+        assert!(focal > 0, "every size needs a Focal core, got {focal}");
+        // The headline finding pinned: Background NEVER appears at any
+        // tested size. If a future recalibration starts demoting to
+        // Background, this trips — the LOD gradient finally materializing
+        // is an explicit, observable change.
+        assert_eq!(
+            background, 0,
+            "Background appeared at {agents} agents — the tier mix changed"
+        );
+        if agents <= 6 || agents >= 48 {
+            // The all-Focal reality at the small-world limit (6 agents) and
+            // the 48-cap: a bug that mass-demotes would trip this.
+            assert!(focal >= n - 2, "extreme-size run unexpectedly non-Focal: {focal}/{n}");
+        } else {
+            // At 12/24 a small Secondary tail is the measured norm; an
+            // accidental mass-promotion OR mass-demotion both trip this.
+            assert!(
+                focal >= n - 4 && focal < n,
+                "mid-size tier envelope broken: {focal}/{n}"
+            );
+        }
+    }
+
+    // Determinism leg: same seed + size must reproduce the identical mix
+    // (the codebase's 3-leg determinism discipline).
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 1000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 48,
+        snapshot_interval: None,
+    };
+    let mut a = Simulation::new(config.clone());
+    a.populate();
+    a.run(1000);
+    let mut b = Simulation::new(config);
+    b.populate();
+    b.run(1000);
+    assert_eq!(count_tiers(&a), count_tiers(&b));
+}
+
 /// §8.1.3 (Iteration 104): the identity-relevance producer fires in live
 /// runs — encoded traces carry the identity-protection recall bias (no
 /// longer the hardcoded 0 baseline), and the retrieval consumer (`× 0.25`
