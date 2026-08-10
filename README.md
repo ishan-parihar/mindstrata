@@ -1,5 +1,7 @@
 # Mindstrata
 
+<!-- T2I HERO SPEC — Subject: a medieval settlement seen as living strata — each of the ten substrate layers (physics, biology, perception, emotion, psychology, social bonds, institutions, culture, noospheric fields, history) rendered as a translucent horizontal band from bedrock up through a village, with individual agents glowing along an emergent path. Composition: cross-section slice, village on top, substrate bands below. Palette: warm stone #8a6f4d → amber torchlight #f59e0b → deep soil #3f2d1e, one luminous teal thread per agent. Style: isometric painterly cross-section, soft light, no text. 16:9. -->
+
 <p align="center">
   <img src="./assets/readme/hero.svg" width="100%" alt="Mindstrata: a medieval settlement where every person carries a complete mind, and history emerges through ten substrate layers — physics, biology, perception, emotion, psychology, social bonds, institutions, culture, noospheric fields, history">
 </p>
@@ -8,7 +10,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/ishan-parihar/mindstrata/ci.yml?style=flat-square)](https://github.com/ishan-parihar/mindstrata/actions)
 [![Rust](https://img.shields.io/badge/rust-1.75+-blue?style=flat-square)](https://www.rust-lang.org)
-[![Tests](https://img.shields.io/badge/tests-1098%20passing-brightgreen?style=flat-square)](#)
+[![Tests](https://img.shields.io/badge/tests-1113%20passing-brightgreen?style=flat-square)](#)
 [![License](https://img.shields.io/badge/license-MIT-purple?style=flat-square)](LICENSE)
 
 ---
@@ -33,6 +35,17 @@ Agents are not omniscient. Each knows only its body, needs, emotions, memories, 
 - **Simulation-first, GUI-later** — the TUI is a debug instrument; the simulation runs headless
 
 The design sits between **The Sims** (individual psychology), **Cities: Skylines** (settlements/economy), and **Dwarf Fortress** (deep emergence) — with the differentiator that *every* agent has a complete cognitive pipeline.
+
+| Dimension | **Mindstrata** | The Sims | Cities: Skylines | Dwarf Fortress | NetLogo-style ABM |
+|---|---|---|---|---|---|
+| **Agent psychology** | Full pipeline: needs → emotions → appraisal → decisions | Shallow moodlets | None | Needs + emotions | Usually none |
+| **Emergent history** | ✅ outcomes from bounded local minds, never global flags | Scripted | Scripted | Legendary emergent | ✅ but abstract |
+| **Determinism** | Byte-identical replay from seed + scenario + input log | Save-dependent | Save-dependent | Deterministic | ✅ |
+| **Scale** | Village (~10² agents, 60+ modules) | Small | City | Fortress | Variable |
+| **Social structure** | Trust, rumor, misinformation, institutions, legitimacy | Relationship sims | Districts | Caste + factions | Basic links |
+| **Openable as a lab** | ✅ TUI debug instrument + headless sim | No | No | Yes | Yes |
+
+Mindstrata is the only one where *every* agent reasons with a complete, inspectable cognitive pipeline — making misinformation, panic, and institutional failure *emergent properties* rather than scripted events.
 
 The substrate architecture is documented in [`docs/architecture/AP2.md`](docs/architecture/AP2.md); live state and remaining work in [`docs/MINDSTRATA_CURRENT_STATE.md`](docs/MINDSTRATA_CURRENT_STATE.md) and [`docs/REMAINING_WORK_REPORT.md`](docs/REMAINING_WORK_REPORT.md).
 
