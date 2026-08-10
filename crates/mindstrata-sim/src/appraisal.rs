@@ -284,6 +284,32 @@ pub fn relief_escalation_factor(relief: Fixed, rate: f64) -> Fixed {
     Fixed::ONE + relief * Fixed::from_f64(rate)
 }
 
+/// §8.1.4 (Iteration 129): the nostalgia preservation rate — a nostalgic
+/// population preserves its collective memory ("the meaningful past woven
+/// into the narrative" — the producer `narrative_meaning × positive` is
+/// the past-salience appraisal) by slowing the daily collective-memory
+/// salience decay. At full nostalgia 1.0 the daily decay falls to exactly
+/// the floor 0.7 (30% slower fade, never fully frozen — memory still
+/// decays without rehearsal, per the Iter-12 linear-decay design). ONE-
+/// SIDED: identity at zero — the calibration probe shows nostalgia is
+/// LIVE in calibrated windows (mean 0.79–0.88, near-saturated: a
+/// uniformly nostalgic village preserves its shared past), so this is a
+/// CALIBRATED change. The factor is deterministic (pure function of the
+/// population mean), no RNG.
+pub const NOSTALGIA_PRESERVATION_RATE: f64 = 0.3;
+pub const NOSTALGIA_PRESERVATION_FLOOR: f64 = 0.7;
+
+/// §8.1.4 (Iteration 129): the nostalgia preservation factor —
+/// `1 − nostalgia × rate` floored at `floor`, ∈ [floor, 1.0] for the
+/// shipped constants. The caller multiplies the collective-memory daily
+/// decay in `tick_all` by the returned factor. The floor guarantees the
+/// preservation never fully freezes memory decay (same never-zero design
+/// as the Iter-122 despair pacifier's floor). One-sided: identity at
+/// zero, monotone below. Deterministic, no RNG.
+pub fn nostalgia_preservation_factor(nostalgia: Fixed, rate: f64, floor: f64) -> Fixed {
+    (Fixed::ONE - nostalgia * Fixed::from_f64(rate)).max(Fixed::from_f64(floor))
+}
+
 /// §8.1.4 (Iteration 127): the help propensity — the combined prosocial
 /// push behind the Help interaction. The caller (the daily social pass)
 /// feeds the internalized "Help Neighbors" norm resistance plus the
@@ -770,6 +796,49 @@ mod tests {
             despair_pacify_factor(Fixed::ONE, 0.8, DESPAIR_PACIFY_FLOOR),
             Fixed::from_f64(0.5),
             "floor 0.5 must bind at high rates"
+        );
+    }
+
+    #[test]
+    fn nostalgia_preservation_factor_is_identity_at_zero_and_floored() {
+        // §8.1.4 (Iteration 129): identity at zero, exact 0.85 at 0.5,
+        // exact floor 0.7 at full nostalgia (the shipped 0.3 rate — a
+        // memory-preservation tier below the escalation amplifiers, from
+        // the past-salience layer). The floor is load-bearing: the
+        // preservation must never fully freeze memory decay (same
+        // never-zero design as the Iter-122 despair pacifier's floor).
+        assert_eq!(
+            nostalgia_preservation_factor(
+                Fixed::ZERO,
+                NOSTALGIA_PRESERVATION_RATE,
+                NOSTALGIA_PRESERVATION_FLOOR
+            ),
+            Fixed::ONE,
+            "zero nostalgia must be a byte-identical identity"
+        );
+        assert_eq!(
+            nostalgia_preservation_factor(
+                Fixed::from_f64(0.5),
+                NOSTALGIA_PRESERVATION_RATE,
+                NOSTALGIA_PRESERVATION_FLOOR
+            ),
+            Fixed::from_f64(0.85),
+            "1 − 0.5 × 0.3 must be exactly 0.85"
+        );
+        assert_eq!(
+            nostalgia_preservation_factor(
+                Fixed::ONE,
+                NOSTALGIA_PRESERVATION_RATE,
+                NOSTALGIA_PRESERVATION_FLOOR
+            ),
+            Fixed::from_f64(0.7),
+            "full nostalgia must hit the exact floor 0.7"
+        );
+        // The floor must actually bind below the unfloored value.
+        assert_eq!(
+            nostalgia_preservation_factor(Fixed::ONE, 0.8, NOSTALGIA_PRESERVATION_FLOOR),
+            Fixed::from_f64(0.7),
+            "floor 0.7 must bind at high rates"
         );
     }
 }

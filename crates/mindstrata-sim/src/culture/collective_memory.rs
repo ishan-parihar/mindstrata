@@ -117,7 +117,18 @@ impl SharedMemory {
 
     /// Decay salience over time (memories fade without rehearsal).
     pub fn decay(&mut self, ticks_elapsed: u64) {
-        let decay_amount = Fixed::from_f64(0.001) * Fixed::from_int(ticks_elapsed as i64);
+        self.decay_preserved(ticks_elapsed, Fixed::ONE);
+    }
+
+    /// Decay salience over time, scaled by a preservation factor
+    /// (§8.1.4, Iteration 129): a nostalgic population's mean nostalgia
+    /// slows the daily fade (`decay × preservation`, preservation ∈
+    /// [0.7, 1.0] for the shipped constants — never fully frozen, per the
+    /// Iter-12 linear-decay design). Deterministic, no RNG.
+    pub fn decay_preserved(&mut self, ticks_elapsed: u64, preservation: Fixed) {
+        let decay_amount = Fixed::from_f64(0.001)
+            * Fixed::from_int(ticks_elapsed as i64)
+            * preservation;
         self.salience = (self.salience - decay_amount).max(Fixed::ZERO);
     }
 }
@@ -241,7 +252,14 @@ impl CollectiveMemory {
     }
 
     /// Decay memories that haven't been rehearsed recently.
-    pub fn tick_decay(&mut self, _tick: u64) {
+    pub fn tick_decay(&mut self, tick: u64) {
+        self.tick_decay_preserved(tick, Fixed::ONE);
+    }
+
+    /// Decay memories that haven't been rehearsed recently, scaled by a
+    /// preservation factor (§8.1.4, Iteration 129 — the nostalgia consumer;
+    /// see `decay_preserved`).
+    pub fn tick_decay_preserved(&mut self, _tick: u64, preservation: Fixed) {
         // The sim calls `tick_all` once per day (daily phase), so decay by a
         // fixed one-day amount here. Decaying by the FULL ticks-since-rehearsal
         // on every daily call accumulated quadratically (0.001·t, 0.001·2t, …),
@@ -250,10 +268,11 @@ impl CollectiveMemory {
         // over ~2.7 years without rehearsal, and the monthly ritual rehearse
         // (+0.05) comfortably outpaces it.
         for mem in &mut self.memories {
-            mem.decay(1);
+            mem.decay_preserved(1, preservation);
         }
         // Cohesion slowly decays without reinforcement.
-        self.cohesion = (self.cohesion - Fixed::from_f64(0.001)).max(Fixed::ZERO);
+        let cohesion_decay = Fixed::from_f64(0.001) * preservation;
+        self.cohesion = (self.cohesion - cohesion_decay).max(Fixed::ZERO);
     }
 
     /// Compute the group's identity strength from shared myths.
@@ -301,8 +320,15 @@ impl CollectiveMemoryRegistry {
 
     /// Tick decay on all group memories.
     pub fn tick_all(&mut self, tick: u64) {
+        self.tick_all_preserved(tick, Fixed::ONE);
+    }
+
+    /// Tick decay on all group memories, scaled by a preservation factor
+    /// (§8.1.4, Iteration 129 — the nostalgia consumer; see
+    /// `decay_preserved`).
+    pub fn tick_all_preserved(&mut self, tick: u64, preservation: Fixed) {
         for entry in &mut self.entries {
-            entry.tick_decay(tick);
+            entry.tick_decay_preserved(tick, preservation);
         }
     }
 }
@@ -403,6 +429,35 @@ mod tests {
         assert!(
             (actual - expected).to_f64().abs() < 0.001,
             "linear daily decay expected {expected:?}, got {actual:?}"
+        );
+    }
+
+    #[test]
+    fn decay_preserved_scales_the_linear_daily_fade() {
+        // §8.1.4 (Iteration 129): `decay_preserved` scales the same linear
+        // daily fade by the preservation factor — at the shipped floor 0.7
+        // a memory loses 0.0007/day instead of 0.001/day; at identity 1.0
+        // it is byte-identical to the un-scaled `decay`. Deterministic,
+        // no RNG.
+        let mut id = CollectiveMemory::new(0);
+        id.add_memory("founding".into(), SharedMemoryKind::Founding, 0, Fixed::ONE);
+        id.memories[0].salience = Fixed::from_f64(0.5);
+        let mut preserved = id.clone();
+        id.tick_decay(1);
+        preserved.tick_decay_preserved(1, Fixed::from_f64(0.7));
+        let id_salience = id.memories[0].salience.to_f64();
+        let preserved_salience = preserved.memories[0].salience.to_f64();
+        assert!(
+            (id_salience - 0.499).abs() < 0.00001,
+            "identity preservation must match the un-scaled decay (got {id_salience})"
+        );
+        assert!(
+            (preserved_salience - 0.4993).abs() < 0.00001,
+            "floor-0.7 preservation must scale the fade to 0.0007/day (got {preserved_salience})"
+        );
+        assert!(
+            preserved_salience > id_salience,
+            "preservation must strictly retain more salience than the un-scaled fade"
         );
     }
 

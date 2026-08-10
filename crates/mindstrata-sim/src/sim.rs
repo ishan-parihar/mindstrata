@@ -7465,7 +7465,40 @@ impl Simulation {
                 }
             }
             // Architecture-plan-2 §13.5: Decay collective memory daily.
-            self.collective_memory_registry.tick_all(tick_u64);
+            // §8.1.4 (Iteration 129): a nostalgic population preserves its
+            // shared past — the daily fade is scaled by the population mean
+            // nostalgia's preservation factor (1 − mean × 0.3, floored at
+            // 0.7 — never fully frozen, per the Iter-12 linear-decay
+            // design). Deterministic (pure function of the mean, no RNG),
+            // and collective-memory salience is NOT part of the golden
+            // metric hash nor any snapshot — zero baseline blast by
+            // construction, while long-horizon memories fade measurably
+            // slower. NOTE (probe-pinned, Iter-129): the daily pass reads
+            // the emotion field at a point where nostalgia saturates at
+            // 1.0, so the factor pins at exactly the floor 0.7 — a UNIFORM
+            // 30% slowdown in every calibrated window (floor-pinned, NOT a
+            // differential consumer like gratitude/relief; the
+            // near-saturation dead-signal risk flagged in planning
+            // applies — the honest value is the baseline
+            // memory-preservation effect, and stress/famine worlds where
+            // nostalgia drops would show the differential).
+            let mean_nostalgia = if self.agents.is_empty() {
+                Fixed::ZERO
+            } else {
+                let sum: Fixed = self
+                    .agents
+                    .iter()
+                    .map(|a| a.emotions.nostalgia)
+                    .fold(Fixed::ZERO, |acc, v| acc + v);
+                sum / Fixed::from_int(self.agents.len() as i64)
+            };
+            let preservation = crate::appraisal::nostalgia_preservation_factor(
+                mean_nostalgia,
+                crate::appraisal::NOSTALGIA_PRESERVATION_RATE,
+                crate::appraisal::NOSTALGIA_PRESERVATION_FLOOR,
+            );
+            self.collective_memory_registry
+                .tick_all_preserved(tick_u64, preservation);
             // §13.5: Capture scarcity crises as trauma memories (episode-
             // guarded — one crisis yields one memory).
             self.record_famine_memory(tick_u64);
@@ -10458,6 +10491,93 @@ mod tests {
                 mem.salience.to_f64(),
             );
         }
+    }
+
+    /// §8.1.4 (Iteration 129): the nostalgia → collective-memory
+    /// preservation wiring, proven through the PUBLIC path (no field
+    /// injection — nostalgia's producer is live everywhere, so an
+    /// injection differential is impossible; instead the daily pass's own
+    /// decay delta is measured). Run past two daily boundaries (5040 =
+    /// 35×144 and 5184 = 36×144) with NO ritual fire in the window (the
+    /// first ritual is at 4320, the next at 8640) and no famine memory:
+    /// the total salience lost over those two days must be strictly LESS
+    /// than the un-scaled 2 × 0.001 × count (the Iter-12 linear daily
+    /// decay) — the pass must have multiplied by a preservation factor <
+    /// 1 derived from the LIVE population mean nostalgia — and strictly
+    /// MORE than the floor-scaled value (preservation never fully
+    /// freezes the fade). If the fold in the daily pass is ever deleted,
+    /// `decayed == unscaled` and this test fails.
+    #[test]
+    fn nostalgia_preserves_collective_memory_salience() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 6_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config.clone());
+        sim.populate();
+        sim.run(5000);
+        let total_salience = |sim: &Simulation| -> f64 {
+            sim.collective_memory_registry
+                .get(0)
+                .map(|cm| {
+                    cm.memories.iter().map(|m| m.salience.to_f64()).sum::<f64>()
+                })
+                .unwrap_or(0.0)
+        };
+        let count = sim
+            .collective_memory_registry
+            .get(0)
+            .map(|cm| cm.memories.len() as f64)
+            .unwrap_or(0.0);
+        assert!(count > 0.0, "the village collective memory must be seeded");
+        let before = total_salience(&sim);
+        // Two daily boundaries: 5040 and 5184. No ritual in this window
+        // (rituals at 4320/8640), no famine memory (calm world).
+        sim.run(200);
+        let after = total_salience(&sim);
+        let decayed = before - after;
+        let unscaled = 2.0 * 0.001 * count;
+        let floor_scaled = unscaled * crate::appraisal::NOSTALGIA_PRESERVATION_FLOOR;
+        assert!(
+            decayed < unscaled,
+            "the daily pass must apply a live-nostalgia preservation factor < 1 \
+             (decayed {decayed:.6} vs un-scaled {unscaled:.6} over 2 days)"
+        );
+        // The daily pass reads the emotion field at a point where nostalgia
+        // saturates at 1.0 in this world — the factor pins at EXACTLY the
+        // floor 0.7 (strongest legal preservation: decayed == floor-scaled
+        // to Fixed precision; the f64 conversion of the two Fixed quantities
+        // can differ in the last ulp, hence the tight 0.0002 band — 7% of
+        // the 0.0028 measurement, far tighter than the 18% band a factor
+        // drift to 0.85 would need). The invariant pins the production
+        // factor AT the floor: if the fold ever weakens (factor → 0.85,
+        // decayed → 0.0034) or strengthens beyond the floor, this fails.
+        // No confounds in the window: the first ritual is at 4320 and the
+        // next at 8640, `record_famine_memory` is episode-guarded (calm
+        // world), and `refresh_derived_views` (sim.rs:8167, daily) only
+        // READS memory salience into derived traumas — it never writes
+        // salience (verified against the source).
+        assert!(
+            (decayed - floor_scaled).abs() <= 0.0002,
+            "the production factor must pin at the floor \
+             (decayed {decayed:.6} vs floor-scaled {floor_scaled:.6})"
+        );
+        // Determinism: identical seed → byte-identical decay delta.
+        let mut again = Simulation::new(config.clone());
+        again.populate();
+        again.run(5000);
+        let b2 = total_salience(&again);
+        again.run(200);
+        assert_eq!(before, b2, "the pre-window salience must be seed-deterministic");
+        assert_eq!(
+            decayed,
+            before - total_salience(&again),
+            "the preservation-scaled decay must be seed-deterministic"
+        );
     }
 
     /// §13: The noosphere zeitgeist must feed back into agents — a hot field

@@ -9510,3 +9510,95 @@ fn relief_escalation_amplifier_is_live_and_deterministic() {
         );
     }
 }
+#[test]
+fn nostalgia_preserves_collective_memory_is_live_and_deterministic() {
+    // §8.1.4 (Iteration 129 — the third CALIBRATED §8.1.4 consumer): the
+    // nostalgia emotion (appraisal producer `narrative_meaning × positive`,
+    // the meaningful-past appraisal) folds into the daily collective-memory
+    // decay as the preservation factor — `× nostalgia_preservation_factor`
+    // (1 − nostalgia × 0.3, floored at 0.7 — a nostalgic village keeps its
+    // shared past alive). Nostalgia is LIVE in calibrated windows (probe
+    // mean 0.78–0.88, max 0.88), and the daily pass reads the mid-tick
+    // field where it saturates at 1.0 → the factor pins at the floor 0.7
+    // (strongest legal preservation). ZERO baseline blast by design:
+    // collective-memory salience is NOT part of the golden metric hash nor
+    // any snapshot, so golden + 14 snapshots stay byte-identical while the
+    // memory fade is measurably slowed (the sim-level decay-delta test
+    // proves the wiring through the public path).
+    //
+    // Leg A (producer reach): nostalgia is a genuinely live producer in
+    // the golden window — the fold has real input.
+    let sim = crate::test_helpers::run_sim(42, 5000);
+    let n = sim.agents.len() as f64;
+    let nostalgia_mean: f64 = sim
+        .agents
+        .iter()
+        .map(|a| a.emotions.nostalgia.to_f64())
+        .sum::<f64>()
+        / n;
+    assert!(
+        nostalgia_mean > 0.5,
+        "nostalgia must be live in the golden window (the fold has input), mean {nostalgia_mean:.4}"
+    );
+
+    // Leg B (the shipped fold contract — deterministic and
+    // regression-proof): the public `nostalgia_preservation_factor` is
+    // exactly what the daily pass calls (a deleted fold term in sim.rs
+    // breaks the sim-level decay-delta wiring test). Identity at zero
+    // nostalgia, exact 0.85 at half, exact floor 0.7 at full with the
+    // shipped 0.3 rate. NO clamp erasure of the floor (the Iter-112
+    // lesson).
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::appraisal::nostalgia_preservation_factor;
+    use mindstrata_sim::culture::collective_memory::CollectiveMemory;
+    use mindstrata_sim::culture::SharedMemoryKind;
+    assert_eq!(
+        nostalgia_preservation_factor(
+            Fixed::ZERO,
+            mindstrata_sim::appraisal::NOSTALGIA_PRESERVATION_RATE,
+            mindstrata_sim::appraisal::NOSTALGIA_PRESERVATION_FLOOR,
+        ),
+        Fixed::ONE,
+        "zero nostalgia must be a byte-identical identity"
+    );
+    assert_eq!(
+        nostalgia_preservation_factor(
+            Fixed::from_f64(0.5),
+            mindstrata_sim::appraisal::NOSTALGIA_PRESERVATION_RATE,
+            mindstrata_sim::appraisal::NOSTALGIA_PRESERVATION_FLOOR,
+        ),
+        Fixed::from_f64(0.85),
+        "half nostalgia × 0.3 must be exactly 0.85"
+    );
+    assert_eq!(
+        nostalgia_preservation_factor(
+            Fixed::ONE,
+            mindstrata_sim::appraisal::NOSTALGIA_PRESERVATION_RATE,
+            mindstrata_sim::appraisal::NOSTALGIA_PRESERVATION_FLOOR,
+        ),
+        Fixed::from_f64(0.7),
+        "full nostalgia must hit the exact floor 0.7"
+    );
+    // The public-path consumer: `decay_preserved` scales the linear fade.
+    let mut id = CollectiveMemory::new(0);
+    id.add_memory("founding".into(), SharedMemoryKind::Founding, 0, Fixed::ONE);
+    id.memories[0].salience = Fixed::from_f64(0.5);
+    let mut preserved = id.clone();
+    id.tick_decay(1);
+    preserved.tick_decay_preserved(1, Fixed::from_f64(0.7));
+    assert!(
+        preserved.memories[0].salience > id.memories[0].salience,
+        "the preserved fade must retain strictly more salience"
+    );
+
+    // Leg C (determinism): nostalgia levels are seed-deterministic — the
+    // fold's input is stable across replays.
+    let again = crate::test_helpers::run_sim(42, 5000);
+    for (x, y) in sim.agents.iter().zip(again.agents.iter()) {
+        assert_eq!(
+            x.emotions.nostalgia.to_raw(),
+            y.emotions.nostalgia.to_raw(),
+            "nostalgia must be seed-deterministic"
+        );
+    }
+}
