@@ -28,7 +28,10 @@ mod agent_lifetime_trace;
 mod scale_tests;
 
 #[cfg(test)]
-mod behavioral_delta;
+pub(crate) mod behavioral_delta;
+
+#[cfg(test)]
+mod long_horizon_tests;
 
 #[cfg(test)]
 mod smoke {

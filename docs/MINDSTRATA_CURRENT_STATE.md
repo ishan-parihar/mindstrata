@@ -2,7 +2,7 @@
 
 **Prepared for:** Lead Game Designer  
 **Date:** August 10, 2026  
-**Codebase Version:** 67,253 lines of Rust across 6 crates, **1,103 tests passing** (849 sim + 234 tests-crate + 20 core), 0 clippy warnings, 0 TODO/FIXME
+**Codebase Version:** 67,253 lines of Rust across 6 crates, **1,105 tests passing** (849 sim + 236 tests-crate + 20 core), 0 clippy warnings, 0 TODO/FIXME
 
 ---
 
@@ -31,7 +31,7 @@ Mindstrata is a **deterministic, emergent human-society simulation** written in 
 
 **Current scale:**
 - 67,253 lines of Rust source code
-- 1,103 automated tests (849 sim unit + 234 tests-crate: integration/property/snapshot/golden/statistical/scale/comparison/behavioral-delta + 20 core)
+- 1,105 automated tests (849 sim unit + 236 tests-crate: integration/property/snapshot/golden/statistical/scale/comparison/behavioral-delta/long-horizon + 20 core)
 - 60+ simulation modules covering biology, psychology, social dynamics, economics, ecology, demography, health, conflict, culture, institutions, and noospheric fields
 - Deterministic replay from any seed
 - CLI with agent psychology inspector, CSV metrics export, scenario runner
@@ -547,7 +547,7 @@ All data-driven specs are validated by `spec_lint.rs` for existence and non-empt
 
 ### 9.1 Test Breakdown
 
-Verified at Iteration 134 via `cargo test -- --list` (tree clean).
+Verified at Iteration 135 via `cargo test -- --list` (tree clean).
 
 | Test Category | Count | Coverage |
 |---|---|---|
@@ -562,8 +562,9 @@ Verified at Iteration 134 via `cargo test -- --list` (tree clean).
 | Comparison | 3 | Cross-config differential harnesses |
 | Agent lifetime trace | 1 | End-to-end agent lifecycle invariants |
 | Behavioral delta | 4 | Same-seed consumer on/off differential harness (Iter 134) |
+| Long horizon | 2 | 50K determinism + emergence sweep, 3 seeds (Iter 135) |
 | Core unit tests (mindstrata-core) | 20 | Kernel correctness |
-| **Total** | **1,103** | 849 sim + 234 tests-crate + 20 core |
+| **Total** | **1,105** | 849 sim + 236 tests-crate + 20 core |
 
 Historical granular rows (scenario battery, economy-under-plague, skeletal+digestive, relational power, speech acts,
 perception, pregnancy, memory, motivation, thermal — Iterations 29–45) are folded into the module counts above.
@@ -572,7 +573,7 @@ perception, pregnancy, memory, motivation, thermal — Iterations 29–45) are f
 
 | Metric | Value |
 |---|---|
-| Tests passing | 1,103/1,103 (100%) |
+| Tests passing | 1,105/1,105 (100%) |
 | Clippy warnings | 0 (strict `-D warnings` gate, restored Iteration 131) |
 | Unsafe code | 0 (`unsafe_code = "forbid"`) |
 | TODO/FIXME comments | 0 (verified at Iteration 133) |
@@ -667,6 +668,8 @@ cargo test -p mindstrata-sim spec_lint
 ## 13. Iteration Changelog
 
 *This document reflects the codebase state as of August 10, 2026. The simulation engine has been upgraded with Architecture Plan 2 implementations: embodied biology, structured psychology, rich social relationships, cultural systems, and noospheric fields. All systems are integrated into a deterministic tick loop with level-of-detail cognition and causal provenance tracking. Each entry below is one grep-able bullet, newest first.
+
+- **Iteration 135 (long-horizon 50K determinism + emergence sweep — the queue §2 gap)**: new `long_horizon_tests` module (2 tests) + `behavioral_delta` promoted to `pub(crate)` so `snapshots_identical` is reusable. (1) `long_horizon_50k_is_deterministic_and_emerges`: seed 42 run twice to 50K — metrics byte-identical (JSON) AND per-agent core-state projection byte-identical (aggregate means can cancel; the projection cannot), plus probe-pinned emergence/invariants: population 12→13, event volume > 100K (probe 1.09M — 10× headroom), memes >= 1, factions >= 1, moral panics fired, rituals EXECUTED (`Ritual.last_occurrence > 0` — registration is seeded at populate, so the durable execution signal is the field `execute()` advances). PROBE FINDING: the `RitualParticipated` Cultural memory trace does NOT survive to 50K — the store decays sparse monthly traces below the eviction threshold between fires, so last_occurrence (not memory) is the correct execution proof. (2) `long_horizon_50k_multi_seed_invariants`: seeds 7/99 to 50K hold every core invariant (bounded population, finite in-range health/stress, non-negative wealth/resources, event liveness). ZERO sim-code changes: 849 sim + 235 integration + golden + 14 snapshots green, strict clippy `-D warnings` clean; adds ~72s wall to the gate (~199s).
 
 - **Iteration 134 (behavioral-delta harness — the queue §2/§6 testing gap)**: new `behavioral_delta` test module (4 tests) + shared `run_sim_with_params` helper (test_helpers.rs; the legacy integration-tests `run_with_params` now delegates). Same-seed baseline-vs-mutated differential with `DeltaReport { knob, baseline, treated, delta, zero_blast }`, `assert_live_delta(min_magnitude)`, `assert_zero_blast()`, and `snapshots_identical()` (JSON-equality, expect-based so a serialization failure panics rather than falsely reporting zero-blast). Demos: harness determinism sanity; conflict_escalation_chance 0.3 → 0.9 LIVE (+1,704 events at seed 42/3000, tol 500); bonding_rate 0.9 direction-blind LIVE on relationship quality (documented NON-MONOTONIC cascade −0.0067, tested via the magnitude contract); reproduction_gestation_rate 1.0 → 0.1 ZERO-BLAST byte-identical (no pregnancies at 2,000 ticks — dormant input, honest identity-at-zero). Probe-pinned calm-window inertness sweep (seed 42): gratitude help multiplier SATURATED (`help_propensity` clamp_01 cap — its blast was the 0 → 0.5 turn-on), meme transmission saturated, trust_sync/sadness identity-at-zero, endocrine_stress_recovery byte-identical (the legacy sensitivity test's one-sided `<= baseline + 0.05` bound passes vacuously — the strict harness exposes it). ZERO sim-code changes: 849 sim + 233 integration + golden + 14 snapshots green, strict clippy `-D warnings` clean.
 

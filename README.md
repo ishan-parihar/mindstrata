@@ -13,6 +13,12 @@
 
 ---
 
+## Why Mindstrata
+
+Most agent simulations are narrative: if `stress > 0.8` then `spawn_revolting()`. Mindstrata simulates the **causes** — need pressure, emotional appraisal, trust erosion, resource scarcity — and lets outcomes **emerge**.
+
+Agents are bounded: each knows only its body, needs, emotions, memories, local perception, and rumors. That bounded knowledge is what makes misinformation, gossip, panic, and institutional failure possible.
+
 ## What Mindstrata Is
 
 Most simulations script outcomes: `if unrest > 0.8 { spawn_revolt() }`. Mindstrata instead simulates the **causes** — need pressure, emotional appraisal, trust erosion, resource scarcity, institutional legitimacy, social influence, rumor propagation — and lets revolt (or recovery) *emerge*.
