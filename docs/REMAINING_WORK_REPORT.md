@@ -43,7 +43,7 @@ The dominant category. A recurring pattern across the campaign: systems were bui
 | **Scenario battery** | 5 scenarios (riverford/drought/famine/pestilence/collapse). More are cheap to add from the spec files (specs/scenarios has riverford + drought; the ShockKind machinery is extensible). |
 | **Statistical emergence** | `statistical_emergence.rs` exists but the documented §18.4 gossip-hops test was vacuous pre-Iter-73; similar audits are due for other §18.4 claims (courtship D4, faction counts, rumor saturation). |
 | **Property tests** | Proptest limited to determinism/bounds — no invariant-style property tests (e.g., "trust never exceeds [0,1]", "enforcement_count monotonic"). |
-| **Snapshot coverage** | 7 insta snapshots, all ≤ 2000-tick horizons (below the first ritual at 4320). A >4320-tick snapshot would capture the entire norm/memory/attraction surface — would require regeneration, deliberately avoided so far. |
+| **Snapshot coverage — RETIRED (Iter 136)** | The first >4320-tick snapshot is live: `snapshot_long_horizon_surface_10000_ticks` pins the full norm/memory/attraction surface at 10000 ticks (both ritual firings, 4320/8640, captured — `executed_ritual_count: 2`, `latest_ritual_occurrence: 8640`), now safe because Iter-135 proved 50K byte-identity. 15 insta snapshots total. Probe-pinned honesty: the attraction surface sits at init defaults in the calm seed-42 village (D4 gate rarely opens), and `Semantic` memory absence marks the schooling surface dormant at 10K. |
 
 ---
 

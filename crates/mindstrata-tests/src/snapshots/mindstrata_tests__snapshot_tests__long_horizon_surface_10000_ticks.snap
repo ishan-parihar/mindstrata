@@ -1,0 +1,46 @@
+---
+source: crates/mindstrata-tests/src/snapshot_tests.rs
+expression: "LongHorizonSurface10000\n{\n    tick: ms.tick, agent_count: ms.agent_count, event_count: ms.event_count,\n    avg_stress: ms.avg_stress, avg_health: ms.avg_health,\n    avg_relationship_trust: ms.avg_relationship_trust,\n    avg_relationship_quality: ms.avg_relationship_quality, polarization_index:\n    ms.polarization_index, active_meme_count: ms.active_meme_count,\n    total_grain: ms.total_grain, total_water: ms.total_water,\n    total_memory_traces, memory_kind_distribution, total_internalized_norms,\n    avg_norm_strength, avg_physical_attraction, avg_personality_attraction,\n    avg_status_attraction, avg_moral_attraction, avg_familiarity,\n    avg_envy_cost, relationship_count, relationship_stage_distribution,\n    executed_ritual_count, latest_ritual_occurrence, institution_count,\n    faction_count,\n}"
+---
+LongHorizonSurface10000 {
+    tick: 10000,
+    agent_count: 12,
+    event_count: 210173,
+    avg_stress: 0.9198666666666666,
+    avg_health: 0.6555666666666666,
+    avg_relationship_trust: 0.519003787878788,
+    avg_relationship_quality: 0.35557348484848483,
+    polarization_index: 0.1098,
+    active_meme_count: 5,
+    total_grain: 55.5002,
+    total_water: 104.3,
+    total_memory_traces: 556,
+    memory_kind_distribution: {
+        "Emotional": 228,
+        "Episodic": 28,
+        "Flashbulb": 174,
+        "Procedural": 1,
+        "Social": 83,
+        "Traumatic": 42,
+    },
+    total_internalized_norms: 60,
+    avg_norm_strength: 0.19105333333333327,
+    avg_physical_attraction: 0.5,
+    avg_personality_attraction: 0.5,
+    avg_status_attraction: 0.2841416666666667,
+    avg_moral_attraction: 0.5,
+    avg_familiarity: 0.7999999999999999,
+    avg_envy_cost: 0.0,
+    relationship_count: 132,
+    relationship_stage_distribution: {
+        "Acquaintance": 34,
+        "Familiar": 32,
+        "PatronClient": 10,
+        "PriestLayperson": 10,
+        "Unnoticed": 46,
+    },
+    executed_ritual_count: 2,
+    latest_ritual_occurrence: 8640,
+    institution_count: 6,
+    faction_count: 3,
+}
