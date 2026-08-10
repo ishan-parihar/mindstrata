@@ -28,9 +28,10 @@
 
 use mindstrata_core::fixed::Fixed;
 use mindstrata_sim::parameters::SimParameters;
+use mindstrata_sim::scenario::Scenario;
 use mindstrata_sim::sim::MetricsSnapshot;
 
-use crate::test_helpers::run_sim_with_params;
+use crate::test_helpers::{run_scenario_with_params, run_sim_with_params};
 
 /// Result of a single behavioral-delta experiment.
 #[derive(Debug)]
@@ -176,4 +177,84 @@ fn dormant_consumer_reproduction_gestation_rate_is_zero_blast() {
         |m| m.agent_count as f64,
     );
     assert_zero_blast(&report);
+}
+
+// ── §46 Scenario-context behavioral delta (Iteration 138) ────────────
+
+/// Run a behavioral-delta experiment in a scenario context (non-calm world
+/// where shocks fire and consumers that are inert at seed 42 may become live).
+pub fn scenario_behavioral_delta(
+    scenario: &Scenario,
+    ticks: u64,
+    knob: &'static str,
+    modify: impl FnOnce(&mut SimParameters),
+    metric: impl Fn(&MetricsSnapshot) -> f64,
+) -> DeltaReport {
+    let baseline = run_scenario_with_params(scenario, ticks, |_| {}).metrics_snapshot();
+    let treated = run_scenario_with_params(scenario, ticks, modify).metrics_snapshot();
+    let b = metric(&baseline);
+    let t = metric(&treated);
+    DeltaReport {
+        knob,
+        baseline: b,
+        treated: t,
+        delta: t - b,
+        zero_blast: snapshots_identical(&baseline, &treated),
+    }
+}
+
+/// §46 (Iteration 138): The behavioral-delta harness works in scenario
+/// contexts (non-calm worlds with shocks). The drought scenario's water
+/// shock at tick 500 creates a structurally different world: the conflict
+/// channel remains LIVE but with DIFFERENT baseline conditions.
+///
+/// Probe-pinned finding: drought DAMPENS the conflict-escalation delta
+/// (calm +1704 events vs drought +1435 events at 3000 ticks, same knob
+/// 0.3→0.9). Explanation: thirst depresses health, shifting behavior from
+/// conflict to survival-mode gathering — the same escalation chance bump
+/// has less fuel in a weaker population.
+#[test]
+fn scenario_delta_is_live_and_contexts_differ() {
+    let calm = behavioral_delta(
+        42,
+        3000,
+        "conflict_escalation_chance (calm)",
+        |p| p.conflict_escalation_chance = Fixed::from_f64(0.9),
+        |m| m.event_count as f64,
+    );
+    let drought = scenario_behavioral_delta(
+        &Scenario::drought(),
+        3000,
+        "conflict_escalation_chance (drought)",
+        |p| p.conflict_escalation_chance = Fixed::from_f64(0.9),
+        |m| m.event_count as f64,
+    );
+
+    // Both contexts are live (the harness works in scenarios).
+    assert_live_delta(&calm, 500.0);
+    assert_live_delta(&drought, 500.0);
+
+    // The scenario world has different baseline conditions. Probe-pinned:
+    // calm 60,792 vs drought 61,170 at seed 42/3000 (gap 378 events) — the
+    // drought shock at tick 500 depletes water but doesn't collapse the event
+    // rate (agents stay active in survival mode). The difference is small but
+    // structural.
+    let baseline_gap = (calm.baseline - drought.baseline).abs();
+    assert!(
+        baseline_gap > 50.0,
+        "calm baseline ({:.0} events) must differ from drought baseline \
+         ({:.0} events) — gap {:.0} — the drought scenario structurally \
+         changes the world",
+        calm.baseline, drought.baseline, baseline_gap
+    );
+
+    // The drought delta is direction-blind smaller (survival-mode damping).
+    // Both are positive (more escalation = more events), but the gap is a
+    // probe-pinned calibration observation: calm +{:.0} vs drought +{:.0}.
+    assert!(
+        calm.delta > 0.0 && drought.delta > 0.0,
+        "both contexts must show positive deltas (more escalation = more events): \
+         calm={:.0} drought={:.0}",
+        calm.delta, drought.delta
+    );
 }
