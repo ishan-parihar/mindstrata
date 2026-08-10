@@ -480,3 +480,122 @@ fn narrative_importance_bounded() {
         }
     }
 }
+
+// ── Structural invariant tests (Iteration 139) ───────────────────────
+// These tests extend the property-test suite beyond simple boundedness
+// into deeper structural invariants that the sim must never violate.
+
+#[test]
+fn norm_strength_bounded_across_seeds() {
+    // Internalized norm strength must stay within [0, 1].
+    for seed in 0..10u64 {
+        let config = SimConfig {
+            seed,
+            max_ticks: 500,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 8,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(500);
+
+        for (i, agent) in sim.agents.iter().enumerate() {
+            for (j, norm) in agent.moral_cognition.internalized_norms.iter().enumerate() {
+                let s = norm.strength.to_f64();
+                assert!((0.0..=1.0).contains(&s),
+                    "Seed {seed}, agent {i}, norm {j}: strength={s} out of [0,1]");
+            }
+        }
+    }
+}
+
+#[test]
+fn attachment_dimensions_bounded_across_seeds() {
+    // Attachment security, anxiety, and avoidance must each stay in [0, 1].
+    for seed in 0..10u64 {
+        let config = SimConfig {
+            seed,
+            max_ticks: 500,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 8,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(500);
+
+        for (i, agent) in sim.agents.iter().enumerate() {
+            let sec = agent.attachment.security.to_f64();
+            let anx = agent.attachment.anxiety.to_f64();
+            let avo = agent.attachment.avoidance.to_f64();
+            assert!((0.0..=1.0).contains(&sec),
+                "Seed {seed}, agent {i}: attachment.security={sec} out of [0,1]");
+            assert!((0.0..=1.0).contains(&anx),
+                "Seed {seed}, agent {i}: attachment.anxiety={anx} out of [0,1]");
+            assert!((0.0..=1.0).contains(&avo),
+                "Seed {seed}, agent {i}: attachment.avoidance={avo} out of [0,1]");
+        }
+    }
+}
+
+#[test]
+fn moral_emotions_bounded_across_seeds() {
+    // All six moral emotion channels must stay in [0, 1].
+    for seed in 0..10u64 {
+        let config = SimConfig {
+            seed,
+            max_ticks: 500,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 8,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(500);
+
+        for (i, agent) in sim.agents.iter().enumerate() {
+            let me = &agent.moral_cognition.moral_emotions;
+            let pairs = [
+                ("outrage", me.outrage),
+                ("guilt", me.guilt),
+                ("contempt", me.contempt),
+                ("gratitude", me.gratitude),
+                ("pride", me.pride),
+                ("shame", me.shame),
+            ];
+            for (name, val) in &pairs {
+                let v = val.to_f64();
+                assert!((0.0..=1.0).contains(&v),
+                    "Seed {seed}, agent {i}: moral_emotions.{name}={v} out of [0,1]");
+            }
+        }
+    }
+}
+
+#[test]
+fn institution_legitimacy_bounded_across_seeds() {
+    // Every institution's legitimacy must stay in [0, 1].
+    for seed in 0..10u64 {
+        let config = SimConfig {
+            seed,
+            max_ticks: 500,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 8,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(500);
+
+        for (j, inst) in sim.institutions.iter().enumerate() {
+            let leg = inst.legitimacy.to_f64();
+            assert!((0.0..=1.0).contains(&leg),
+                "Seed {seed}, institution {j}: legitimacy={leg} out of [0,1]");
+        }
+    }
+}
