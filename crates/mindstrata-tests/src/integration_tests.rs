@@ -7283,6 +7283,73 @@ fn prospection_dread_fires_in_default_runs_and_reaches_decisions() {
         "expected material dread in default runs, got {max_dread:.3}"
     );
 }
+/// §17 (Iteration 144): the section-4 "background-tier behavior unmeasured"
+/// gap — prove the wired tier gates have teeth in a LIVE run. A forced
+/// Background agent (with the Background budget + tracker) must not encode
+/// memories (the §17 gate at sim.rs:8794 skips `runs_memory_encoding()`),
+/// while a forced Focal control (full budget) keeps encoding — the gate is
+/// real, not observational. Reclassification is blocked via
+/// `last_tier_reassign_tick = u64::MAX` so the forced tier persists through
+/// the window (reclassify's interval guard returns early).
+#[test]
+fn background_tier_agents_skip_memory_encoding_in_live_runs() {
+    use mindstrata_sim::agent_tier::{AgentTier, CognitiveBudget};
+
+    let mut sim = run_sim(42, 2000);
+
+    // Force agent 0 → Background (zero memory budget), agent 1 → Focal
+    // (full budget), both with reclassification blocked for the window.
+    {
+        let bg = CognitiveBudget::background();
+        let f = CognitiveBudget::focal();
+        sim.agents[0].agent_tier.tier = AgentTier::Background;
+        sim.agents[0].agent_tier.budget = bg;
+        let a0 = &mut sim.agents[0];
+        a0.agent_tier.budget_tracker.reset(&a0.agent_tier.budget);
+        a0.agent_tier.last_tier_reassign_tick = u64::MAX;
+        sim.agents[1].agent_tier.tier = AgentTier::Focal;
+        sim.agents[1].agent_tier.budget = f;
+        let a1 = &mut sim.agents[1];
+        a1.agent_tier.budget_tracker.reset(&a1.agent_tier.budget);
+        a1.agent_tier.last_tier_reassign_tick = u64::MAX;
+    }
+
+    let bg_before = sim.agents[0].memory.episodes.len();
+    // Window start for the liveness signal — the clock is exactly at the
+    // initial run horizon here (2000). Bound to the sim clock, not a magic
+    // literal, so a horizon change can't silently break the assertion.
+    let window_start = sim.current_tick().as_u64();
+
+    // §17: Background agents skip memory encoding entirely (sim.rs:8794:
+    // `if !runs_memory_encoding() || !can_memory_op() { continue; }`).
+    assert!(!sim.agents[0].agent_tier.tier.runs_memory_encoding());
+    assert!(!sim.agents[0].agent_tier.budget_tracker.can_memory_op());
+    assert!(sim.agents[1].agent_tier.tier.runs_memory_encoding());
+    assert!(sim.agents[1].agent_tier.budget_tracker.can_memory_op());
+
+    sim.run(500);
+
+    // The Background agent's memory must be exactly frozen.
+    let bg_after = sim.agents[0].memory.episodes.len();
+    assert_eq!(
+        bg_after, bg_before,
+        "Background agent encoded memories — the §17 memory gate has no teeth"
+    );
+    // The Focal control must have encoded NEW traces in the window. Count by
+    // trace tick (the store sits at capacity 200, so eviction hides net
+    // growth — newly-encoded traces are the honest signal).
+    let focal_new = sim.agents[1]
+        .memory
+        .episodes
+        .iter()
+        .filter(|m| m.tick > window_start)
+        .count();
+    assert!(
+        focal_new > 0,
+        "Focal control must encode new traces, got {focal_new}"
+    );
+}
+
 /// §8.1.3 (Iteration 104): the identity-relevance producer fires in live
 /// runs — encoded traces carry the identity-protection recall bias (no
 /// longer the hardcoded 0 baseline), and the retrieval consumer (`× 0.25`

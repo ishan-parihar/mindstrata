@@ -589,6 +589,51 @@ mod tests {
     }
 
     #[test]
+    fn reclassify_demotes_secondary_to_background_on_low_relevance() {
+        // The §17.1 Secondary → Background demotion path — an agent with
+        // near-zero narrative importance and no relationships (no social
+        // gravity, no story presence) drops to the aggregate tier. The
+        // budget must follow (Background = zero memory/prospection/social
+        // budgets) so the per-tick gates actually bite.
+        let mut state = AgentTierState::new(AgentTier::Secondary, 0);
+        state.narrative_importance = Fixed::from_f64(0.05);
+        state.reclassify(
+            Fixed::from_f64(0.2), // low status
+            false,
+            false,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            1, // relationship_count < 2
+            1000,
+            10,
+        );
+        assert_eq!(state.tier, AgentTier::Background);
+        assert_eq!(state.budget.max_memory_operations, 0);
+        assert_eq!(state.budget.max_prospections, 0);
+        assert_eq!(state.budget.max_social_inferences, 0);
+    }
+
+    #[test]
+    fn reclassify_keeps_secondary_when_relationships_exist() {
+        // Guard: relationship_count >= 2 must block the demotion even at
+        // near-zero narrative importance — an agent with friends is not
+        // aggregate material.
+        let mut state = AgentTierState::new(AgentTier::Secondary, 0);
+        state.narrative_importance = Fixed::from_f64(0.05);
+        state.reclassify(
+            Fixed::from_f64(0.2),
+            false,
+            false,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            2, // relationship_count >= 2
+            1000,
+            10,
+        );
+        assert_eq!(state.tier, AgentTier::Secondary);
+    }
+
+    #[test]
     fn narrative_importance_increases_with_institutional_role() {
         let mut state = AgentTierState::new(AgentTier::Secondary, 0);
         state.narrative_importance = Fixed::from_f64(0.2);
