@@ -31,6 +31,9 @@ pub enum JournalEntryKind {
     TradeRaid { settlement: String, grain_lost: f64 },
     /// §5 (Iteration 150): A caravan arrived from a neighboring settlement.
     TradeCaravan { settlement: String, grain_gained: f64 },
+    /// §5 (Iteration 151): A formal school term convened — the teacher,
+    /// cohort size, and graduates of the term.
+    SchoolTerm { teacher: u64, cohort: u64, graduates: u64 },
 }
 
 /// A single journal entry.

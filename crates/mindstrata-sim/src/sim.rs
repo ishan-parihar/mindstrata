@@ -4,6 +4,7 @@ use crate::actions::{self, ActionKind};
 use crate::conflict::{self, ConflictKind, ConflictState};
 use crate::culture::{CulturalState, Knowledge, KnowledgeCategory, TechnologyTree};
 use crate::diplomacy::{DiplomacyRegistry, CARAVAN_GRAIN_BASE, EVENT_RELATION_SHIFT, RAID_GRAIN_CAP, RAID_GRAIN_FRACTION};
+use crate::schools::SchoolRegistry;
 use crate::legal::{LegalCase, LegalRegistry, Verdict};
 use crate::logistics;
 use crate::gossip;
@@ -376,6 +377,8 @@ pub struct Simulation {
     /// §5 (Iteration 150): The off-map settlement network — neighboring
     /// villages with relations, caravans, and raids.
     pub diplomacy: DiplomacyRegistry,
+    /// §5 (Iteration 151): Formal-school registry — yearly cohort terms.
+    pub school: SchoolRegistry,
     /// §6.5: Per-tick metric history for observability and CSV export.
     pub metric_history: Vec<MetricsSnapshot>,
     /// §7.3: Tick when last revolution occurred (for cooldown tracking).
@@ -491,6 +494,7 @@ impl Simulation {
             technology: TechnologyTree::riverford(),
             legal: LegalRegistry::new(),
             diplomacy: DiplomacyRegistry::new(),
+            school: SchoolRegistry::new(),
             metric_history: Vec::new(),
             last_revolution_tick: 0,
             last_moral_panic_tick: 0,
@@ -619,6 +623,7 @@ impl Simulation {
             // fresh network; the rng is reseeded from master_seed so the
             // pass replays deterministically from the restore tick onward.
             diplomacy: DiplomacyRegistry::new(),
+            school: SchoolRegistry::new(),
             knowledge_store: snapshot.knowledge_store,
             metric_history: snapshot.metric_history,
             last_revolution_tick: snapshot.last_revolution_tick,
@@ -4427,6 +4432,17 @@ impl Simulation {
         // virgin Economy stream, so no other subsystem's RNG can shift.
         if tick_u64 > 0 && tick_u64.is_multiple_of(crate::diplomacy::DIPLOMACY_CADENCE) {
             self.tick_diplomacy(tick_u64);
+        }
+        // §5 (Iteration 151): the yearly school term — formal cohort
+        // instruction, gated on a School site existing. No default world
+        // places one, so the pass is a structural no-op in every calibrated
+        // window, and it draws no randomness even when a school exists.
+        // Both this pass and the per-tick apprenticeship guard idempotently
+        // (a `has_learned` check and a `contains` before any push), so
+        // whichever runs first in a tick wins and the other skips the
+        // student — the same-tick interplay is self-consistent either way.
+        if tick_u64 > 0 && tick_u64.is_multiple_of(crate::schools::SCHOOL_CADENCE) {
+            self.tick_school_term(tick_u64);
         }
         // Reset work ticks tracker for this tick
         for tick in &mut self.site_work_ticks {
@@ -8676,6 +8692,165 @@ impl Simulation {
                 }
             }
         }
+    }
+
+    /// §5 (Iteration 151): One formal school term — a single competent
+    /// teacher instructs a small cohort of the youngest students in the
+    /// teacher's most advanced knowledge. Gated on a `SiteKind::School`
+    /// existing (no default world places one, so this is a structural no-op
+    /// in every calibrated window). Fully deterministic — teacher and cohort
+    /// selection follow fixed rules and `attempt_teaching` draws no
+    /// randomness — so a term can never perturb any RNG stream.
+    pub fn tick_school_term(&mut self, tick_u64: u64) {
+        // Zero-blast gate: without a schoolhouse there is nothing to convene.
+        if !self
+            .world
+            .sites
+            .iter()
+            .any(|s| s.kind == crate::world::SiteKind::School)
+        {
+            return;
+        }
+        let n = self.agents.len();
+        if n < 2 {
+            return;
+        }
+
+        // Instructor: the most experienced teacher holding at least one
+        // knowledge (highest teaching skill, ties → lowest index).
+        let skills: Vec<Fixed> = self
+            .agents
+            .iter()
+            .map(|a| a.education.teaching_skill)
+            .collect();
+        let held: Vec<bool> = self
+            .agents
+            .iter()
+            .map(|a| !a.cultural.knowledge.is_empty())
+            .collect();
+        let Some(teacher_idx) = crate::schools::select_teacher(&skills, &held) else {
+            return;
+        };
+
+        // Lesson topic: the teacher's most advanced knowledge — the last
+        // element of the store-ordered knowledge vector. `select_teacher`
+        // only returns knowledge-holding indices, but we still degrade
+        // gracefully instead of panicking.
+        let Some(&knowledge_id) = self.agents[teacher_idx].cultural.knowledge.last() else {
+            return;
+        };
+
+        // Cohort: the youngest students who lack the topic and whose
+        // technology prerequisites are met — the same gate the apprenticeship
+        // applies, so schools can never bypass the tech tree.
+        let mut students: Vec<usize> = (0..n)
+            .filter(|&s| s != teacher_idx)
+            .filter(|&s| !self.agents[s].education.has_learned(knowledge_id))
+            .filter(|&s| {
+                self.technology
+                    .can_learn(&self.agents[s].cultural.knowledge, knowledge_id)
+            })
+            .collect();
+        students.sort_by_key(|&s| self.agents[s].age);
+        students.truncate(crate::schools::COHORT_SIZE);
+        if students.is_empty() {
+            return;
+        }
+
+        let cohort = students.len() as u64;
+        let mut graduates: u64 = 0;
+        // Familiarity: how broadly held the knowledge is (holders / agents);
+        // an unseeded innovation scores zero.
+        let familiarity = Fixed::from_f64(
+            self.knowledge_store
+                .iter()
+                .find(|k| k.id == knowledge_id)
+                .map_or(0.0, |k| k.holders as f64 / n as f64),
+        )
+        .clamp_01();
+
+        for &student in &students {
+            let rel_quality = self.relationship_quality(teacher_idx, student);
+            let event = crate::culture::education::attempt_teaching(
+                teacher_idx,
+                student,
+                knowledge_id,
+                &self.agents[teacher_idx].education,
+                &self.agents[student].education,
+                familiarity,
+                rel_quality,
+                tick_u64,
+            );
+            self.agents[student].education.record_learning(event.clone());
+            self.agents[teacher_idx].education.record_teaching(event.clone());
+            if !event.success {
+                continue;
+            }
+            graduates += 1;
+            // The student now holds the knowledge in both education state
+            // and the shared cultural knowledge vector.
+            if !self.agents[student].cultural.knowledge.contains(&knowledge_id) {
+                self.agents[student].cultural.knowledge.push(knowledge_id);
+            }
+            if let Some(k) = self.knowledge_store.iter_mut().find(|k| k.id == knowledge_id) {
+                k.holders += 1;
+            }
+            // §8.1.7: Acquired knowledge is evidence exposure — learning
+            // desacralizes in proportion to the learning rate and the
+            // student's reasoning capacity (same hook as gossip transfer).
+            let reasoning = self.agents[student].cognitive.executive_capacity;
+            self.agents[student]
+                .sacred_values
+                .desacralize_through_exposure(event.learning_rate, reasoning);
+            self.events.push(SimEvent::KnowledgeTransferred {
+                source: AgentId::new(teacher_idx as u64),
+                target: AgentId::new(student as u64),
+                knowledge_id,
+                tick: mindstrata_core::clock::Tick::new(tick_u64),
+            });
+            self.provenance.record_institutional(crate::provenance::InstitutionalTrace {
+                institution_name: "School".into(),
+                tick: tick_u64,
+                decision_kind: "school_teaching".into(),
+                description: format!(
+                    "Agent {teacher_idx} taught knowledge {knowledge_id} to Agent {student} in the school term"
+                ),
+                affected: vec![AgentId::new(teacher_idx as u64), AgentId::new(student as u64)],
+                success: true,
+            });
+
+            // §8.1.3: Semantic memory — the same sparse-encoding discipline
+            // as the apprenticeship (one term per year, small cohort), so the
+            // 200-capacity store is not flooded.
+            let learner = &mut self.agents[student];
+            if learner.agent_tier.tier.runs_memory_encoding()
+                && learner.agent_tier.budget_tracker.can_memory_op()
+            {
+                let _ = learner.agent_tier.budget_tracker.consume_memory_op();
+                let emotional = learner.affect.arousal * Fixed::from_f64(0.6) + Fixed::from_f64(0.1);
+                learner.memory.encode(
+                    MemoryKind::Semantic,
+                    tick_u64,
+                    Fixed::from_f64(0.4),
+                    emotional,
+                    Some(teacher_idx as u32),
+                    MemoryTag::LearnedKnowledge,
+                );
+            }
+        }
+
+        self.school.terms_run += 1;
+        self.school.lessons_taught += students.len() as u64;
+        self.school.graduates += graduates;
+        self.journal.record(
+            tick_u64,
+            AgentId::new(teacher_idx as u64),
+            JournalEntryKind::SchoolTerm {
+                teacher: teacher_idx as u64,
+                cohort,
+                graduates,
+            },
+        );
     }
 
     /// Relationship quality (0–1) between two agents, from the source's

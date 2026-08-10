@@ -16,6 +16,7 @@ pub mod conflict;
 pub mod culture;
 pub mod demography;
 pub mod diplomacy;
+pub mod schools;
 pub mod ecology;
 pub mod factions;
 pub mod gossip;

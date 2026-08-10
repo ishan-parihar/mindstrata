@@ -1818,6 +1818,205 @@ fn diplomacy_caravan_adds_grain_and_warms_relations() {
     assert!(journaled, "the caravan is journaled");
 }
 
+/// §5 (AP2, Iteration 151): the school term is a structural no-op without a
+/// School site — no default world places one, so the yearly pass never
+/// convenes and every calibrated window (golden @2000, snapshots ≤2000) is
+/// byte-identical.
+#[test]
+fn school_system_stays_dormant_without_a_school_site() {
+    let sim = run_sim(42, 2000);
+    assert!(sim.school.is_dormant(), "no school site → no school term");
+    assert_eq!(sim.school.terms_run, 0);
+    assert_eq!(sim.school.lessons_taught, 0);
+    assert_eq!(sim.school.graduates, 0);
+    let journaled = sim
+        .journal()
+        .entries_in_range(0, u64::MAX)
+        .iter()
+        .any(|e| matches!(e.kind, mindstrata_sim::journal::JournalEntryKind::SchoolTerm { .. }));
+    assert!(!journaled, "no school-term entries in a school-free world");
+}
+
+/// §5 (AP2, Iteration 151): with a schoolhouse in the world, one yearly
+/// term convenes — a competent teacher instructs the youngest cohort in the
+/// teacher's most advanced knowledge. The outcome is fully deterministic
+/// (no RNG is drawn), so an identical setup reproduces an identical result.
+#[test]
+fn school_term_teaches_a_cohort_when_a_school_exists() {
+    use mindstrata_sim::world::SiteKind;
+
+    let setup = || {
+        let config = SimConfig {
+            seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
+            num_agents: 12, snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        // Build the schoolhouse: no default world places one.
+        sim.world.sites.push(mindstrata_sim::world::Site {
+            id: mindstrata_core::id::AgentId::new(10_000),
+            kind: SiteKind::School,
+            name: "Village School".into(),
+            owner: None,
+            capacity: 30,
+            storage_capacity: Fixed::ZERO,
+            inventory: vec![],
+        });
+        // A competent instructor holding Crop Rotation (0) and the tier-1
+        // Advanced Irrigation (5, prereq 0) — the most advanced knowledge is
+        // the term's lesson topic.
+        sim.agents[0].education.teaching_skill = Fixed::from_f64(0.9);
+        sim.agents[0].education.learning_aptitude = Fixed::from_f64(0.9);
+        sim.agents[0].cultural.knowledge = vec![0, 5];
+        // Two school-age students holding the prerequisite, youngest first.
+        sim.agents[1].cultural.knowledge = vec![0];
+        sim.agents[1].age = Fixed::from_f64(8.0);
+        sim.agents[2].cultural.knowledge = vec![0];
+        sim.agents[2].age = Fixed::from_f64(9.0);
+        // Everyone else is an adult with no knowledge — they fail the
+        // technology prereq gate, so they can never join the cohort.
+        for a in sim.agents.iter_mut().skip(3) {
+            a.age = Fixed::from_f64(60.0);
+            a.cultural.knowledge.clear();
+        }
+        sim
+    };
+
+    let mut sim = setup();
+    sim.tick_school_term(4320);
+
+    assert_eq!(sim.school.terms_run, 1, "one term convened at the school");
+    assert_eq!(
+        sim.school.lessons_taught, 2,
+        "the cohort is exactly the two students"
+    );
+    assert_eq!(
+        sim.school.graduates, 2,
+        "both students first learned Advanced Irrigation"
+    );
+    for s in [1usize, 2] {
+        assert!(
+            sim.agents[s].education.has_learned(5),
+            "student {s} learned the lesson"
+        );
+        assert!(
+            sim.agents[s].cultural.knowledge.contains(&5),
+            "student {s} holds the knowledge in the shared cultural vector"
+        );
+    }
+    let journaled = sim
+        .journal()
+        .entries_in_range(0, u64::MAX)
+        .iter()
+        .any(|e| {
+            matches!(
+                e.kind,
+                mindstrata_sim::journal::JournalEntryKind::SchoolTerm { cohort: 2, .. }
+            )
+        });
+    assert!(journaled, "the school term is journaled with its cohort size");
+
+    // Determinism: an identical setup produces an identical outcome.
+    let mut again = setup();
+    again.tick_school_term(4320);
+    assert_eq!(again.school.terms_run, sim.school.terms_run);
+    assert_eq!(again.school.lessons_taught, sim.school.lessons_taught);
+    assert_eq!(again.school.graduates, sim.school.graduates);
+}
+
+/// §5 (AP2, Iteration 151): the school applies the same technology gate as
+/// the apprenticeship — a student missing a node's prerequisite is never
+/// taught it, so formal schools cannot bypass the tech tree.
+#[test]
+fn school_term_respects_technology_prerequisites() {
+    use mindstrata_sim::world::SiteKind;
+
+    let config = SimConfig {
+        seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
+        num_agents: 12, snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.world.sites.push(mindstrata_sim::world::Site {
+        id: mindstrata_core::id::AgentId::new(10_000),
+        kind: SiteKind::School,
+        name: "Village School".into(),
+        owner: None,
+        capacity: 30,
+        storage_capacity: Fixed::ZERO,
+        inventory: vec![],
+    });
+    // Teacher knows Crop Rotation (0) and Advanced Irrigation (5, prereq 0).
+    sim.agents[0].education.teaching_skill = Fixed::from_f64(0.9);
+    sim.agents[0].education.learning_aptitude = Fixed::from_f64(0.9);
+    sim.agents[0].cultural.knowledge = vec![0, 5];
+    // Student 1 lacks Crop Rotation entirely; student 2 holds it.
+    sim.agents[1].cultural.knowledge = vec![];
+    sim.agents[1].education.learning_aptitude = Fixed::from_f64(0.9);
+    sim.agents[1].age = Fixed::from_f64(8.0);
+    sim.agents[2].cultural.knowledge = vec![0];
+    sim.agents[2].education.learning_aptitude = Fixed::from_f64(0.9);
+    sim.agents[2].age = Fixed::from_f64(9.0);
+    // Everyone else is an adult with no knowledge — excluded by the gate.
+    for a in sim.agents.iter_mut().skip(3) {
+        a.age = Fixed::from_f64(60.0);
+        a.cultural.knowledge.clear();
+    }
+
+    sim.tick_school_term(4320);
+
+    assert_eq!(
+        sim.school.lessons_taught, 1,
+        "only the prereq-holding student is in the cohort"
+    );
+    assert!(
+        !sim.agents[1].education.has_learned(5),
+        "a prereq-less student never learns the lesson"
+    );
+    assert!(
+        sim.agents[2].education.has_learned(5),
+        "the prereq-holding student learns the lesson"
+    );
+    assert_eq!(sim.school.graduates, 1);
+}
+
+/// §5 (AP2, Iteration 151): the yearly cadence wiring — with a schoolhouse
+/// in the world, the tick loop convenes the term at the 4320-tick mark on
+/// its own, with no manual pass invocation.
+#[test]
+fn school_term_fires_in_the_tick_loop_on_the_yearly_cadence() {
+    use mindstrata_sim::world::SiteKind;
+
+    let config = SimConfig {
+        seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
+        num_agents: 12, snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.world.sites.push(mindstrata_sim::world::Site {
+        id: mindstrata_core::id::AgentId::new(10_000),
+        kind: SiteKind::School,
+        name: "Village School".into(),
+        owner: None,
+        capacity: 30,
+        storage_capacity: Fixed::ZERO,
+        inventory: vec![],
+    });
+    // A robust instructor who stays the most senior holder through the run.
+    sim.agents[0].education.teaching_skill = Fixed::from_f64(0.9);
+    sim.agents[0].education.learning_aptitude = Fixed::from_f64(0.9);
+    sim.agents[0].cultural.knowledge = vec![0, 5];
+    sim.agents[0].age = Fixed::from_f64(40.0);
+
+    sim.run(5000);
+
+    assert!(
+        sim.school.terms_run >= 1,
+        "the yearly pass convened a term at 4320 ticks"
+    );
+    assert!(sim.school.graduates >= 1, "the term graduated at least one student");
+}
+
 /// §5 (AP2, Iteration 147): an emergent drought regime has real teeth in a
 /// live run — after the regime declares, every well drains each tick AND
 /// farm output is suppressed (growth factor ≈0.61 vs ≈1.02 normal). The
