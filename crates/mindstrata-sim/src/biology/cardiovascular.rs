@@ -140,8 +140,10 @@ mod tests {
 
     #[test]
     fn shock_risk_from_severe_blood_loss() {
-        let mut cv = CardiovascularState::default();
-        cv.blood_volume = Fixed::from_f64(0.4);
+        let mut cv = CardiovascularState {
+            blood_volume: Fixed::from_f64(0.4),
+            ..Default::default()
+        };
         cv.tick_update(
             Fixed::ZERO,
             Fixed::from_f64(0.9),

@@ -412,16 +412,20 @@ mod tests {
 
     #[test]
     fn conservatism_decays_with_positive_exposure() {
-        let mut cc = CulturalCognition::default();
-        cc.conservatism = Fixed::from_f64(0.7);
+        let mut cc = CulturalCognition {
+            conservatism: Fixed::from_f64(0.7),
+            ..Default::default()
+        };
         cc.tick_update(Fixed::ONE, Fixed::ZERO);
         assert!(cc.conservatism < Fixed::from_f64(0.7));
     }
 
     #[test]
     fn conservatism_increases_with_negative_exposure() {
-        let mut cc = CulturalCognition::default();
-        cc.conservatism = Fixed::from_f64(0.3);
+        let mut cc = CulturalCognition {
+            conservatism: Fixed::from_f64(0.3),
+            ..Default::default()
+        };
         cc.tick_update(Fixed::ZERO, Fixed::ONE);
         assert!(cc.conservatism > Fixed::from_f64(0.3));
     }

@@ -194,11 +194,13 @@ mod tests {
 
     #[test]
     fn theme_updates_based_on_balance() {
-        let mut n = NarrativeIdentity::default();
-        n.heroism_script = Fixed::from_f64(0.9);
-        n.redemption_script = Fixed::from_f64(0.7);
-        n.contamination_script = Fixed::from_f64(0.1);
-        n.victimhood_script = Fixed::from_f64(0.1);
+        let mut n = NarrativeIdentity {
+            heroism_script: Fixed::from_f64(0.9),
+            redemption_script: Fixed::from_f64(0.7),
+            contamination_script: Fixed::from_f64(0.1),
+            victimhood_script: Fixed::from_f64(0.1),
+            ..Default::default()
+        };
         n.update_theme();
         assert_eq!(n.life_theme, LifeTheme::Mission);
     }

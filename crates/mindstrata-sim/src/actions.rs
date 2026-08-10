@@ -432,14 +432,13 @@ pub fn compute_utility(
     // zero volume. Trade is now genuinely competitive — but ONLY for agents
     // who can afford it: an agent with zero coin must not prefer buying
     // over eating what it can forage.
-    if action.kind == ActionKind::Trade {
-        if coin > Fixed::ZERO {
+    if action.kind == ActionKind::Trade
+        && coin > Fixed::ZERO {
             let coin_pressure = (needs.hunger + needs.thirst) * Fixed::from_f64(0.8);
             let coin_utility = personality.ambition * Fixed::from_f64(0.4);
             let need_pressure_bonus = coin_pressure * Fixed::from_f64(0.8);
             utility += coin_utility + need_pressure_bonus;
         }
-    }
 
     utility -= action.energy_cost * Fixed::from_f64(0.5);
 

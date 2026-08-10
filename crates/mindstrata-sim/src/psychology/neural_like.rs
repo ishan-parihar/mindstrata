@@ -126,7 +126,7 @@ fn isqrt(n: i64) -> i64 {
         x = y;
         // x and n/x are both ≤ n ≤ Fixed raw-domain bounds (~10^8 for the
         // squared scale), so x + n/x cannot overflow i64 here.
-        y = (x + n / x) / 2;
+        y = i64::midpoint(x, n / x);
     }
     x
 }

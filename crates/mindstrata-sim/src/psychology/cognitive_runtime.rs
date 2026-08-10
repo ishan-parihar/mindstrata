@@ -311,8 +311,10 @@ mod tests {
     #[test]
     fn effective_flexibility_used_by_can_switch() {
         // Use low base flexibility so degradation crosses the threshold
-        let mut cr = CognitiveRuntime::default();
-        cr.flexibility = Fixed::from_f64(0.4);
+        let mut cr = CognitiveRuntime {
+            flexibility: Fixed::from_f64(0.4),
+            ..Default::default()
+        };
         cr.update(Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO);
         assert!(cr.can_switch_strategy());
         // fatigue=1.0, pain=1.0 → degradation = 1.0*0.25 + 1.0*0.1 = 0.35

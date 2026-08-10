@@ -193,7 +193,7 @@ mod tests {
         s.form_habit("morning_walk".into(), "morning".into(), Fixed::from_f64(0.3), 0);
         s.form_habit("morning_walk".into(), "morning".into(), Fixed::from_f64(0.3), 1);
         assert_eq!(s.habits.len(), 1);
-        assert!(s.habits[0].repetition_count == 2);
+        assert_eq!(s.habits[0].repetition_count, 2);
     }
 
     #[test]

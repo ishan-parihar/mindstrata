@@ -203,18 +203,22 @@ mod tests {
 
     #[test]
     fn separation_increases_distress() {
-        let mut att = AttachmentSystem::default();
-        att.security = Fixed::from_f64(0.8);
-        att.anxiety = Fixed::from_f64(0.5);
+        let mut att = AttachmentSystem {
+            security: Fixed::from_f64(0.8),
+            anxiety: Fixed::from_f64(0.5),
+            ..Default::default()
+        };
         att.on_separation(Fixed::from_f64(0.7), Fixed::from_f64(0.3));
         assert!(att.separation_distress > Fixed::ZERO);
     }
 
     #[test]
     fn reunion_reduces_distress_for_secure() {
-        let mut att = AttachmentSystem::default();
-        att.style = AttachmentStyle::Secure;
-        att.separation_distress = Fixed::from_f64(0.5);
+        let mut att = AttachmentSystem {
+            style: AttachmentStyle::Secure,
+            separation_distress: Fixed::from_f64(0.5),
+            ..Default::default()
+        };
         att.on_reunion(Fixed::from_f64(0.3), Fixed::from_f64(0.6), Fixed::from_f64(0.4), Fixed::from_f64(0.5));
         assert!(att.separation_distress < Fixed::from_f64(0.5));
     }

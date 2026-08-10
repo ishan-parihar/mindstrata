@@ -102,14 +102,13 @@ fn anna_year_trace() {
                             anna_events.push_str("DIED");
                         }
                     }
-                    SimEvent::MarriageFormed { spouse_a, spouse_b, .. } => {
-                        if *spouse_a == AgentId::new(0) || *spouse_b == AgentId::new(0) {
+                    SimEvent::MarriageFormed { spouse_a, spouse_b, .. }
+                        if (*spouse_a == AgentId::new(0) || *spouse_b == AgentId::new(0)) => {
                             if !anna_events.is_empty() {
                                 anna_events.push('|');
                             }
                             anna_events.push_str("MARRIED");
                         }
-                    }
                     _ => {}
                 }
             }
@@ -184,7 +183,7 @@ fn anna_year_trace() {
     println!("wrote {path} ({YEAR_TICKS} rows)");
     println!(
         "summary: anna_conflicts={anna_conflicts} moral_panics={panics} revolutions={revolutions} anna_died={anna_died} season_boundaries_in_window={}",
-        (YEAR_TICKS / SEASON_TICKS) + if YEAR_TICKS % SEASON_TICKS != 0 { 1 } else { 0 }
+        (YEAR_TICKS / SEASON_TICKS) + if !YEAR_TICKS.is_multiple_of(SEASON_TICKS) { 1 } else { 0 }
     );
 
     // Minimal sanity: trace must have covered the full year.

@@ -484,7 +484,7 @@ impl MemoryStore {
         limit: usize,
     ) -> Vec<RetrievedMemory> {
         let mut ranked: Vec<&MemoryTrace> = self.episodes.iter().collect();
-        ranked.sort_by(|a, b| retrieval_score(b).cmp(&retrieval_score(a)));
+        ranked.sort_by_key(|m| std::cmp::Reverse(retrieval_score(m)));
         ranked.truncate(limit);
         let arousal = arousal.clamp_01();
         ranked

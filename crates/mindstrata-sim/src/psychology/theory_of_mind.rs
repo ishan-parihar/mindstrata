@@ -207,7 +207,7 @@ mod tests {
     fn new_model_starts_neutral() {
         let model = OtherMindModel::new(AgentId::new(1));
         assert_eq!(model.perceived_intent, IntentPerception::Unknown);
-        assert!(model.dehumanization == Fixed::ZERO);
+        assert_eq!(model.dehumanization, Fixed::ZERO);
     }
 
     #[test]

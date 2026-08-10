@@ -231,7 +231,7 @@ fn fertility_non_negative() {
         for (i, agent) in sim.agents.iter().enumerate() {
             if let Some(fertility) = agent.body.fertility {
                 let f = fertility.to_f64();
-                assert!(f >= 0.0 && f <= 1.0,
+                assert!((0.0..=1.0).contains(&f),
                     "Seed {seed}, agent {i}: fertility={f} out of [0,1]");
             }
         }
@@ -379,7 +379,7 @@ fn tier_reclassification_always_valid() {
             let tier = &agent.agent_tier.tier;
             // Tier must be one of the three valid variants
             assert!(matches!(tier, AgentTier::Focal | AgentTier::Secondary | AgentTier::Background),
-                "Seed {seed}, agent {i}: invalid tier {:?}", tier);
+                "Seed {seed}, agent {i}: invalid tier {tier:?}");
         }
     }
 }

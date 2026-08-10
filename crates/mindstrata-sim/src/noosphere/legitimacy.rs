@@ -161,7 +161,7 @@ mod tests {
 
     #[test]
     fn legitimacy_under_pressure() {
-        let mut field = LegitimacyField::new(Fixed::from_f64(0.2));
+        let field = LegitimacyField::new(Fixed::from_f64(0.2));
         assert!(field.under_pressure());
     }
 

@@ -129,8 +129,10 @@ mod tests {
 
     #[test]
     fn infection_triggers_inflammation() {
-        let mut immune = ImmuneState::default();
-        immune.infection_load = Fixed::from_f64(0.5);
+        let mut immune = ImmuneState {
+            infection_load: Fixed::from_f64(0.5),
+            ..Default::default()
+        };
         immune.tick_update(
             Fixed::ONE,
             Fixed::ZERO,
@@ -145,8 +147,10 @@ mod tests {
 
     #[test]
     fn stress_suppresses_immunity() {
-        let mut immune = ImmuneState::default();
-        immune.resistance = Fixed::from_f64(0.7);
+        let mut immune = ImmuneState {
+            resistance: Fixed::from_f64(0.7),
+            ..Default::default()
+        };
         for _ in 0..100 {
             immune.tick_update(
                 Fixed::from_f64(0.3),

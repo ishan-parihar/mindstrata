@@ -5,6 +5,8 @@
 //! These benchmarks establish baseline performance for the simulation tick loop
 //! at various agent counts and tick depths, catching regressions before they ship.
 
+#![allow(missing_docs)] // criterion_group!/criterion_main! generate the public harness fns
+
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
 use mindstrata_sim::{Simulation, sim::SimConfig};
 
@@ -34,7 +36,8 @@ fn bench_single_tick(c: &mut Criterion) {
                 b.iter_batched(
                     || make_sim(42, n, 1000),
                     |mut sim| {
-                        black_box(sim.tick());
+                        let _: () = sim.tick();
+                        black_box(());
                     },
                     criterion::BatchSize::LargeInput,
                 );
@@ -55,7 +58,8 @@ fn bench_100_tick_burst(c: &mut Criterion) {
                 b.iter_batched(
                     || make_sim(42, n, 500),
                     |mut sim| {
-                        black_box(sim.run(100));
+                        let _: () = sim.run(100);
+                        black_box(());
                     },
                     criterion::BatchSize::LargeInput,
                 );
@@ -76,7 +80,8 @@ fn bench_1000_tick_run(c: &mut Criterion) {
                 b.iter_batched(
                     || make_sim(42, n, 2000),
                     |mut sim| {
-                        black_box(sim.run(1000));
+                        let _: () = sim.run(1000);
+                        black_box(());
                     },
                     criterion::BatchSize::LargeInput,
                 );

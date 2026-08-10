@@ -1337,7 +1337,7 @@ impl Simulation {
         if ca == cb {
             return;
         }
-        for clan in self.clan_registry.clans.iter_mut() {
+        for clan in &mut self.clan_registry.clans {
             if clan.id == ca {
                 clan.declare_ally(cb);
                 clan.last_interaction_tick = tick;
@@ -1362,7 +1362,7 @@ impl Simulation {
         if ca == cb {
             return;
         }
-        for clan in self.clan_registry.clans.iter_mut() {
+        for clan in &mut self.clan_registry.clans {
             if clan.id == ca {
                 clan.allies.retain(|&x| x != cb);
                 clan.declare_enemy(cb);
@@ -1980,8 +1980,7 @@ impl Simulation {
             .iter()
             .filter(|m| m.active)
             .max_by_key(|m| m.emotional_charge)
-            .map(|m| m.id as u32)
-            .unwrap_or(0);
+            .map_or(0, |m| m.id as u32);
         let mut cult = crate::social::cult::CultDynamics::new(leader, sacred_id, tick);
         cult.members = members;
         self.cult_registry.register(cult);
@@ -2122,8 +2121,8 @@ impl Simulation {
             .noospheric_field
             .nodes
             .iter()
-            .map(|n| n.effective_activation())
-            .fold(Fixed::ZERO, |acc, a| acc.max(a));
+            .map(super::noosphere::field::SymbolicNode::effective_activation)
+            .fold(Fixed::ZERO, std::cmp::Ord::max);
         if zeitgeist <= Fixed::from_f64(0.4) {
             return; // dormant field — no atmospheric pressure
         }
@@ -2146,7 +2145,7 @@ impl Simulation {
         let recent = self
             .collective_memory_registry
             .get(0)
-            .map_or(false, |cm| {
+            .is_some_and(|cm| {
                 cm.memories.iter().any(|m| {
                     m.kind == SharedMemoryKind::Trauma
                         && m.event_tick > 0
@@ -2936,14 +2935,18 @@ impl Simulation {
             } else {
                 self.agents.iter().map(|a| a.wealth.coin).fold(Fixed::ZERO, |acc, c| acc + c)
                     / Fixed::from_int(self.agents.len() as i64)
-            };
-
-            for i in 0..self.agents.len() {
+            };            // Precomputed ages for the kinship max-relatedness scan below —
+            // the outer loop iterates `&mut self.agents`, so a nested
+            // `self.agents[j].age` read would be a borrow conflict; the ages
+            // are pure reads collected once (deterministic, no RNG).
+            let agent_ages: Vec<Fixed> =
+                self.agents.iter().map(|a| a.age).collect();
+            for (i, agent) in self.agents.iter_mut().enumerate() {
                 // Architecture-plan-2 §11.1: Status dimensions update.
                 // Decay shame and honor gradually; update wealth_rank from relative wealth.
-                self.agents[i].status_v2.decay();
+                agent.status_v2.decay();
                 // Sync authority from existing institutional role_status
-                self.agents[i].status_v2.authority = self.agents[i].status.role_status;
+                agent.status_v2.authority = agent.status.role_status;
                 // §11.1 (AP2): Derive institutional_rank from the agent's highest
                 // institutional role authority (deterministic scan of the
                 // institutions registry — no RNG). Zero when the agent holds no
@@ -2960,24 +2963,24 @@ impl Simulation {
                         }
                     }
                 }
-                self.agents[i].status_v2.institutional_rank = best_role_authority;
+                agent.status_v2.institutional_rank = best_role_authority;
                 if avg_wealth > Fixed::ZERO {
-                    self.agents[i].status_v2.wealth_rank =
-                        (self.agents[i].wealth.coin / avg_wealth * Fixed::from_f64(0.5)).clamp_01();
+                    agent.status_v2.wealth_rank =
+                        (agent.wealth.coin / avg_wealth * Fixed::from_f64(0.5)).clamp_01();
                 }
                 // Update moral_reputation from moral pride and gratitude (weighted average)
-                self.agents[i].status_v2.moral_reputation =
-                    (self.agents[i].moral_cognition.moral_emotions.pride * Fixed::from_f64(0.5)
-                        + self.agents[i].moral_cognition.moral_emotions.gratitude * Fixed::from_f64(0.5))
+                agent.status_v2.moral_reputation =
+                    (agent.moral_cognition.moral_emotions.pride * Fixed::from_f64(0.5)
+                        + agent.moral_cognition.moral_emotions.gratitude * Fixed::from_f64(0.5))
                     .clamp_01();
                 // Update prestige from relationship count (social connections)
-                let num_connections = self.agents[i].relationship_v2s.len() as i64;
+                let num_connections = agent.relationship_v2s.len() as i64;
                 if num_connections > 0 {
-                    let avg_quality: Fixed = self.agents[i].relationship_v2s.iter()
+                    let avg_quality: Fixed = agent.relationship_v2s.iter()
                         .map(crate::social::relationship_v2::RelationshipV2::quality)
                         .fold(Fixed::ZERO, |acc, q| acc + q)
                         / Fixed::from_int(num_connections);
-                    self.agents[i].status_v2.network_centrality = avg_quality;
+                    agent.status_v2.network_centrality = avg_quality;
                 }
                 // §10.4 (Iteration 77): status_attraction was a declared
                 // AttractionModel field with zero production writers — the
@@ -2997,8 +3000,8 @@ impl Simulation {
                 // status_attraction itself feeds only the D4 scenario gate,
                 // but the composite also feeds §10.9 patronage formation
                 // (behavioral), so role-holder status now genuinely matters.
-                let eff_status = self.agents[i].status_v2.effective_status();
-                self.agents[i]
+                let eff_status = agent.status_v2.effective_status();
+                agent
                     .attraction
                     .update_status_attraction(eff_status);
                 // §10.4 (Iteration 78): the two per-agent aversion channels.
@@ -3017,9 +3020,9 @@ impl Simulation {
                     .norms
                     .crime_record(AgentId::new(i as u64))
                     .map_or(Fixed::ZERO, |r| r.notoriety);
-                self.agents[i].attraction.update_social_cost(notoriety);
+                agent.attraction.update_social_cost(notoriety);
                 // NOTE (Iteration 123): both channels below read the LIVE
-                // local `emotions[i]` vec, not `self.agents[i].emotions` —
+                // local `emotions[i]` vec, not `agent.emotions` —
                 // the tick takes each agent's emotions out via
                 // `std::mem::take` at the step-0b parallel-array setup, so
                 // the AGENT field is all-zero until the step-8 writeback
@@ -3031,7 +3034,7 @@ impl Simulation {
                 // violation actually fires the emotion (which calm worlds
                 // never do → zero-blast).
                 let disgust = emotions[i].disgust;
-                self.agents[i].attraction.update_moral_disgust(disgust);
+                agent.attraction.update_moral_disgust(disgust);
                 // §8.1.4 (Iteration 123): the envy aversion channel — the
                 // coveting emotion (`status_threat × incongruent` — wanting
                 // what the higher-status other has) poisons courtship
@@ -3046,7 +3049,7 @@ impl Simulation {
                 // `total_attraction()` is bit-identical (provably
                 // zero-blast).
                 let envy = emotions[i].envy;
-                self.agents[i].attraction.update_envy_cost(envy);
+                agent.attraction.update_envy_cost(envy);
                 // §10.4 (Iteration 79): the last unwired attraction channel —
                 // kinship_penalty, the soft taboo against courting within the
                 // local pool. Derived as the max transitive genetic
@@ -3067,8 +3070,8 @@ impl Simulation {
                 if phases.is_daily {
                     let adult_age = Fixed::from_f64(16.0);
                     let mut max_relatedness = Fixed::ZERO;
-                    for j in 0..self.agents.len() {
-                        if j == i || self.agents[j].age < adult_age {
+                    for (j, age) in agent_ages.iter().enumerate() {
+                        if j == i || *age < adult_age {
                             continue;
                         }
                         let coeff = self.kinship_graph.transitive_coefficient(i, j);
@@ -3076,7 +3079,7 @@ impl Simulation {
                             max_relatedness = coeff;
                         }
                     }
-                    self.agents[i]
+                    agent
                         .attraction
                         .update_kinship_penalty(max_relatedness);
                 }
@@ -3085,7 +3088,7 @@ impl Simulation {
                 // Only decay relationships that have been recently active (dirty)
                 // or are due for the daily full update. Dormant relationships
                 // receive no per-tick decay — they only decay during the daily pass.
-                for rv2 in &mut self.agents[i].relationship_v2s {
+                for rv2 in &mut agent.relationship_v2s {
                     if rv2.is_active_this_tick(tick_u64) {
                         rv2.decay(1);
                         // After daily boundary decay, clear dirty so dormant
@@ -6220,7 +6223,6 @@ impl Simulation {
     /// O(1) layout, agent_diseases parallel vec, partner/parent indices), dead
     /// agents are NOT removed — their slot is repopulated by a newborn child.
     /// This keeps every index-stable registry consistent.
-
     /// Foundational beliefs seeded into every agent at populate, and now also
     /// into newborns (born or replacement) so they can participate in belief
     /// propagation instead of starting with an empty set.
@@ -9467,7 +9469,7 @@ impl Simulation {
                     // The faction leadership becomes the new council.
                     for inst in &mut self.institutions {
                         if inst.kind == InstitutionKind::Council {
-                            inst.members = faction_members.clone();
+                            inst.members.clone_from(&faction_members);
                             for role in &faction_roles {
                                 inst.add_role(role.clone());
                             }
@@ -9756,8 +9758,7 @@ impl Simulation {
                 if d <= PERCEPTION_RADIUS {
                     nearby_count += 1;
                     nearest = nearest.min(d);
-                    stress_sum = stress_sum
-                        + (self.agents[j].emotions.fear + self.agents[j].emotions.anger)
+                    stress_sum += (self.agents[j].emotions.fear + self.agents[j].emotions.anger)
                             * Fixed::from_f64(0.5);
                     peer_status = peer_status.max(self.agents[j].status_v2.effective_status());
                 }
@@ -9767,8 +9768,8 @@ impl Simulation {
             let mut oblig_sum = Fixed::ZERO;
             let mut kin_count: u32 = 0;
             for r in &self.agents[i].relationship_v2s {
-                trust_sum = trust_sum + r.trust;
-                oblig_sum = oblig_sum + r.obligation;
+                trust_sum += r.trust;
+                oblig_sum += r.obligation;
                 if crate::social::relationship_stages::is_kin_stage(r.stage) {
                     kin_count += 1;
                 }
@@ -9778,7 +9779,7 @@ impl Simulation {
             let mut belief_sum = Fixed::ZERO;
             let mut hottest_charge = Fixed::ZERO;
             for b in &self.agents[i].beliefs {
-                belief_sum = belief_sum + b.confidence;
+                belief_sum += b.confidence;
                 hottest_charge = hottest_charge.max(b.emotional_charge);
             }
             let belief_count = self.agents[i].beliefs.len().max(1);
@@ -10540,16 +10541,14 @@ mod tests {
         let total_salience = |sim: &Simulation| -> f64 {
             sim.collective_memory_registry
                 .get(0)
-                .map(|cm| {
+                .map_or(0.0, |cm| {
                     cm.memories.iter().map(|m| m.salience.to_f64()).sum::<f64>()
                 })
-                .unwrap_or(0.0)
         };
         let count = sim
             .collective_memory_registry
             .get(0)
-            .map(|cm| cm.memories.len() as f64)
-            .unwrap_or(0.0);
+            .map_or(0.0, |cm| cm.memories.len() as f64);
         assert!(count > 0.0, "the village collective memory must be seeded");
         let before = total_salience(&sim);
         // Two daily boundaries: 5040 and 5184. No ritual in this window
@@ -10584,7 +10583,7 @@ mod tests {
              (decayed {decayed:.6} vs floor-scaled {floor_scaled:.6})"
         );
         // Determinism: identical seed → byte-identical decay delta.
-        let mut again = Simulation::new(config.clone());
+        let mut again = Simulation::new(config);
         again.populate();
         again.run(5000);
         let b2 = total_salience(&again);
@@ -11047,7 +11046,7 @@ mod tests {
             r.trust = Fixed::from_f64(0.9);
             r.affection = Fixed::from_f64(0.8);
         }
-        let holders_before = sim.knowledge_store.iter().find(|k| k.id == 2).map(|k| k.holders).unwrap_or(0);
+        let holders_before = sim.knowledge_store.iter().find(|k| k.id == 2).map_or(0, |k| k.holders);
         sim.run_apprenticeship_pass(1, Tick::new(1));
         assert!(
             sim.agents[1].education.has_learned(2),
@@ -11063,8 +11062,8 @@ mod tests {
         let learn_ok = sim.agents[1].education.learning_events.iter()
             .any(|e: &EducationEvent| e.knowledge_id == 2 && e.success);
         assert!(learn_ok, "student must record a successful learning event");
-        let holders_after = sim.knowledge_store.iter().find(|k| k.id == 2).map(|k| k.holders).unwrap_or(0);
-        assert!(holders_after >= holders_before + 1, "knowledge holder count must grow");
+        let holders_after = sim.knowledge_store.iter().find(|k| k.id == 2).map_or(0, |k| k.holders);
+        assert!(holders_after > holders_before, "knowledge holder count must grow");
     }
 
     #[test]
@@ -12645,10 +12644,10 @@ mod tests {
         };
         let mut reverent = Simulation::new(config.clone());
         reverent.populate();
-        let mut plain = Simulation::new(config.clone());
+        let mut plain = Simulation::new(config);
         plain.populate();
         for _ in 0..200 {
-            for a in reverent.agents.iter_mut() {
+            for a in &mut reverent.agents {
                 a.emotions.awe = Fixed::ONE;
             }
             reverent.tick();

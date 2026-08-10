@@ -278,7 +278,7 @@ mod tests {
             Fixed::ONE, // perfect justice
             Fixed::ZERO, // no inequality
         );
-        assert!(g == Fixed::ZERO);
+        assert_eq!(g, Fixed::ZERO);
     }
 
     #[test]
@@ -322,7 +322,7 @@ mod tests {
 
         assert_eq!(faction.kind, InstitutionKind::Faction);
         assert_eq!(faction.members.len(), 3);
-        assert!(faction.get_role_holder("Leader") == Some(AgentId::new(0)));
+        assert_eq!(faction.get_role_holder("Leader"), Some(AgentId::new(0)));
         assert!(faction.cohesion > Fixed::from_f64(0.5));
         assert!(faction.legitimacy < Fixed::from_f64(0.5));
     }

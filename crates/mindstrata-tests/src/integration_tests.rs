@@ -154,9 +154,9 @@ fn attachment_affects_emotional_response() {
             .map(|a| a.emotions.fear.to_f64()).sum::<f64>() / secure_agents.len() as f64;
         // Anxious agents should tend toward higher fear (not guaranteed per-agent, but statistically)
         // This is a weak assertion - just verify both groups exist and have plausible fear
-        assert!(avg_anxious_fear >= 0.0 && avg_anxious_fear <= 1.0,
+        assert!((0.0..=1.0).contains(&avg_anxious_fear),
             "Anxious agents should have plausible fear: {avg_anxious_fear}");
-        assert!(avg_secure_fear >= 0.0 && avg_secure_fear <= 1.0,
+        assert!((0.0..=1.0).contains(&avg_secure_fear),
             "Secure agents should have plausible fear: {avg_secure_fear}");
     }
 }
@@ -444,8 +444,7 @@ fn courtship_emerges_from_repeated_positive_interaction() {
     // Max stage should be at least Acquaintance (stage 2) after 2000 ticks
     let stage_value = max_stage_reached as u32;
     assert!(stage_value >= 2,
-        "Max relationship stage should be at least Acquaintance (2), got {:?} ({})",
-        max_stage_reached, stage_value);
+        "Max relationship stage should be at least Acquaintance (2), got {max_stage_reached:?} ({stage_value})");
 }
 
 // ── §18.3: Meme Mutation Over Generations ────────────────────────
@@ -704,7 +703,7 @@ fn council_legitimacy_responds_to_grievance() {
         "council legitimacy should not pin at ~1.0 under high grievance (got {leg:.3})"
     );
     assert!(
-        leg >= 0.0 && leg <= 1.0,
+        (0.0..=1.0).contains(&leg),
         "legitimacy out of range: {leg:.3}"
     );
 }
@@ -1055,7 +1054,7 @@ fn marriages_correlate_with_compatibility_and_status() {
         sim.run(3000);
 
         // Check that married agents have high trust with their partners
-        for (_i, agent) in sim.agents.iter().enumerate() {
+        for agent in &sim.agents {
             if let Some(partner_idx) = agent.partner {
                 if partner_idx < sim.agents.len() {
                     let partner = &sim.agents[partner_idx];
@@ -1315,7 +1314,7 @@ fn rituals_correlate_with_group_stability() {
     }
 
     if ritual_participation_count == 0 || no_ritual_participation_count == 0 {
-        eprintln!("rituals test: insufficient data (ritual={}, no_ritual={})", ritual_participation_count, no_ritual_participation_count);
+        eprintln!("rituals test: insufficient data (ritual={ritual_participation_count}, no_ritual={no_ritual_participation_count})");
     }
     if ritual_participation_count > 0 && no_ritual_participation_count > 0 {
         let ritual_avg = ritual_unity_sum / ritual_participation_count as f64;
@@ -1355,8 +1354,8 @@ fn inequality_correlates_with_faction_formation() {
         let coins: Vec<f64> = sim.agents.iter()
             .map(|a| a.wealth.coin.to_f64())
             .collect();
-        let max_coin = coins.iter().cloned().fold(0.0f64, f64::max);
-        let min_coin = coins.iter().cloned().fold(f64::INFINITY, f64::min);
+        let max_coin = coins.iter().copied().fold(0.0f64, f64::max);
+        let min_coin = coins.iter().copied().fold(f64::INFINITY, f64::min);
         let inequality = max_coin - min_coin;
 
         let faction_count = sim.institutions.iter()
@@ -1374,7 +1373,7 @@ fn inequality_correlates_with_faction_formation() {
 
     // If both groups have data, high inequality should have at least as many factions
     if high_inequality_seeds == 0 || low_inequality_seeds == 0 {
-        eprintln!("inequality test: insufficient data (high_ineq_seeds={}, low_ineq_seeds={})", high_inequality_seeds, low_inequality_seeds);
+        eprintln!("inequality test: insufficient data (high_ineq_seeds={high_inequality_seeds}, low_ineq_seeds={low_inequality_seeds})");
     }
     if high_inequality_seeds > 0 && low_inequality_seeds > 0 {
         let high_avg = high_inequality_factions as f64 / high_inequality_seeds as f64;
@@ -2121,8 +2120,8 @@ fn drought_shock_depletes_water_not_grain() {
     // price must be at least riverford's. (The old `water > grain` check was
     // calibrated to a buggy `clamp_01()` that collapsed the well to ≤1 unit,
     // creating artificial near-zero water — not a real scarcity signal.)
-    let drought_water_price = sim.market.prices.get(1).map(|p| p.price.to_f64()).unwrap_or(0.0);
-    let riverford_water_price = sim_r.market.prices.get(1).map(|p| p.price.to_f64()).unwrap_or(0.0);
+    let drought_water_price = sim.market.prices.get(1).map_or(0.0, |p| p.price.to_f64());
+    let riverford_water_price = sim_r.market.prices.get(1).map_or(0.0, |p| p.price.to_f64());
     assert!(
         drought_water_price >= riverford_water_price,
         "stronger drought must not price water below weaker drought \
@@ -3090,7 +3089,7 @@ fn metrics_csv_exports_real_inequality_tracking() {
     // Gini is a real coefficient in [0, 1] reflecting the coin distribution.
     let gini = ms.gini;
     assert!(
-        gini >= 0.0 && gini <= 1.0,
+        (0.0..=1.0).contains(&gini),
         "gini out of range: {gini:.4}"
     );
     assert!(
@@ -3237,7 +3236,7 @@ fn marriage_forges_spouse_and_inlaw_kinship() {
     // Same age (the marriage gate skips pairs with age_diff > 15).
     sim.agents[0].age = Fixed::from_f64(30.0);
     sim.agents[1].age = Fixed::from_f64(30.0);
-    for r in sim.relationships.iter_mut() {
+    for r in &mut sim.relationships {
         if (r.from == AgentId::new(0) && r.to == AgentId::new(1))
             || (r.from == AgentId::new(1) && r.to == AgentId::new(0))
         {
@@ -3328,7 +3327,7 @@ fn echo_chambers_reinforce_agent_beliefs() {
         let grew_any = early[i].iter().any(|(pid, ec)| {
             a.beliefs.iter()
                 .find(|b| b.proposition_id == *pid)
-                .map_or(false, |h| h.confidence.to_f64() > ec + 0.02)
+                .is_some_and(|h| h.confidence.to_f64() > ec + 0.02)
         });
         if grew_any {
             entrenched += 1;
@@ -3748,7 +3747,7 @@ fn neural_like_runtime_is_live_deterministic_and_bounded() {
     // §9.2 script grammar: every partnered agent's courtship script advanced.
     let partnered = sim.agents.iter().filter(|a| a.partner.is_some()).count();
     let scripts_advanced = sim.agents.iter()
-        .filter(|a| a.neural_like.script.as_ref().map_or(false, |s| s.current_step > 0))
+        .filter(|a| a.neural_like.script.as_ref().is_some_and(|s| s.current_step > 0))
         .count();
     assert_eq!(scripts_advanced, partnered,
         "every partnered agent's courtship script must advance");
@@ -4414,7 +4413,7 @@ fn kin_stages_instantiated_from_kinship_graph() {
     );
 
     // Determinism: same seed + same manual edges → identical stage end-state.
-    let mut sim2 = Simulation::new(config.clone());
+    let mut sim2 = Simulation::new(config);
     sim2.populate();
     sim2.run(144);
     for (a, b, link) in [
@@ -5191,7 +5190,7 @@ fn relational_fields_refresh_deterministically() {
     );
 
     // Seed-determinism: same seed → byte-identical relational fields.
-    let mut sim2 = Simulation::new(config.clone());
+    let mut sim2 = Simulation::new(config);
     sim2.populate();
     sim2.run(1000);
     for (a1, a2) in sim.agents.iter().zip(sim2.agents.iter()) {
@@ -5444,8 +5443,7 @@ fn jealous_bond_dissolution_dissolves_marriage() {
             .iter()
             .find(|m| (m.partner_a == a && m.partner_b == b)
                 || (m.partner_a == b && m.partner_b == a))
-            .map(|m| m.legitimacy)
-            .unwrap_or(Fixed::ZERO);
+            .map_or(Fixed::ZERO, |m| m.legitimacy);
         // Force the bond well past the dissolution threshold — far enough
         // that the daily decay (strain ×0.98) and strength drift toward 0.5
         // cannot rescue it, and a high jealousy load guarantees the negative
@@ -5474,8 +5472,7 @@ fn jealous_bond_dissolution_dissolves_marriage() {
             .iter()
             .find(|m| (m.partner_a == a && m.partner_b == b)
                 || (m.partner_a == b && m.partner_b == a))
-            .map(|m| m.legitimacy)
-            .unwrap_or(Fixed::ZERO);
+            .map_or(Fixed::ZERO, |m| m.legitimacy);
         let separation_signature = legitimacy_after < legitimacy_before
             && legitimacy_after >= legitimacy_before - Fixed::from_f64(0.25);
         (a, b, dissolved && bond_removed && separation_signature)
@@ -7965,12 +7962,12 @@ fn perceived_legitimacy_deters_theft_end_to_end() {
         // The injected 0.9 decays toward the baseline over the window
         // (probe: 0.643 at tick 200 vs the ~0.04 decayed baseline), but stays
         // far above the 0.5 anchor — the surface is live and the consumer's
-        // input is the produced field. The assert anchors on the relative
-        // claim (well above the anchor AND an order of magnitude above the
-        // decayed baseline) rather than the observed value, so a future
+        // input is the produced field. The 0.5 anchor subsumes the
+        // order-of-magnitude claim (0.04 × 10 = 0.4 < 0.5), so the assert
+        // anchors on the stronger relative claim; a future
         // legitimacy-dynamics change re-pins the comment, not the semantics.
         assert!(
-            mean > 0.5 && mean > 0.04 * 10.0,
+            mean > 0.5,
             "injected legitimacy must surface in the refreshed field, got {mean}"
         );
     }
@@ -9055,7 +9052,7 @@ fn envy_poisons_courtship_interest_zero_blast_in_golden_window() {
     // short: the Iter-116 per-tick decay (0.12/tick) would erode the
     // injection to ~0 within 50 ticks.
     let mut injected = crate::test_helpers::run_sim(42, 100);
-    for a in injected.agents.iter_mut() {
+    for a in &mut injected.agents {
         a.emotions.envy = mindstrata_core::fixed::Fixed::ONE;
     }
     injected.run(1); // delta ticks → tick 101
@@ -9063,7 +9060,7 @@ fn envy_poisons_courtship_interest_zero_blast_in_golden_window() {
         .agents
         .iter()
         .map(|a| a.attraction.envy_cost)
-        .fold(mindstrata_core::fixed::Fixed::ONE, |m, c| m.min(c));
+        .fold(mindstrata_core::fixed::Fixed::ONE, std::cmp::Ord::min);
     assert!(
         min_cost > mindstrata_core::fixed::Fixed::from_f64(0.9),
         "every agent's envy_cost must be written from the live emotion, min {min_cost}"
@@ -9314,7 +9311,7 @@ fn jealousy_bond_load_chain_is_zero_blast_and_live_wired() {
         !injected.marriage_registry.pair_bonds.is_empty(),
         "pair bonds must exist by tick 1007 (probe: 5 bonds @1000)"
     );
-    for a in injected.agents.iter_mut() {
+    for a in &mut injected.agents {
         a.emotions.jealousy = mindstrata_core::fixed::Fixed::ONE;
     }
     injected.run(1); // delta ticks → 1008, a daily boundary
@@ -9345,10 +9342,10 @@ fn jealousy_bond_load_chain_is_zero_blast_and_live_wired() {
     // respects the [0, 1] clamp.
     let mut sim_x = crate::test_helpers::run_sim(42, 1007);
     let mut sim_y = crate::test_helpers::run_sim(42, 1007);
-    for ag in sim_x.agents.iter_mut() {
+    for ag in &mut sim_x.agents {
         ag.emotions.jealousy = mindstrata_core::fixed::Fixed::ONE;
     }
-    for ag in sim_y.agents.iter_mut() {
+    for ag in &mut sim_y.agents {
         ag.emotions.jealousy = mindstrata_core::fixed::Fixed::ONE;
     }
     sim_x.run(1);

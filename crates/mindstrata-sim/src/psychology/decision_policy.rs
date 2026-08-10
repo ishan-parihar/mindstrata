@@ -381,7 +381,7 @@ mod tests {
         let dp = DecisionPolicy::default();
         assert!(dp.utility_weights.need_relief > Fixed::ZERO);
         assert!(dp.risk_policy.risk_tolerance > Fixed::ZERO);
-        assert!(dp.success_rate == Fixed::from_f64(0.5));
+        assert_eq!(dp.success_rate, Fixed::from_f64(0.5));
     }
 
     #[test]
@@ -506,7 +506,7 @@ mod tests {
     fn habit_modifier_zero_for_non_routine() {
         let dp = DecisionPolicy::default();
         let mod_nonroutine = dp.habit_modifier(false, Fixed::from_f64(0.9));
-        assert!(mod_nonroutine == Fixed::ZERO);
+        assert_eq!(mod_nonroutine, Fixed::ZERO);
     }
 
     #[test]
@@ -517,7 +517,7 @@ mod tests {
             dp.learn_from_outcome(true, Fixed::from_f64(0.3));
         }
         assert!(dp.success_rate > initial);
-        assert!(dp.decision_count == 10);
+        assert_eq!(dp.decision_count, 10);
     }
 
     #[test]
@@ -532,8 +532,10 @@ mod tests {
 
     #[test]
     fn daily_update_slowly_shifts_weights() {
-        let mut dp = DecisionPolicy::default();
-        dp.success_rate = Fixed::from_f64(0.8); // successful agent
+        let mut dp = DecisionPolicy {
+            success_rate: Fixed::from_f64(0.8), // successful agent
+            ..Default::default()
+        };
         let initial_cost_penalty = dp.utility_weights.cost_penalty;
         for _ in 0..100 {
             dp.daily_update();

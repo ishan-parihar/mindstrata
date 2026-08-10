@@ -296,11 +296,10 @@ impl AttentionState {
                     relevance = Fixed::from_f64(0.9);
                 }
             }
-            SimEvent::AgentAte { agent, .. } | SimEvent::AgentDrank { agent, .. } => {
-                if *agent == agent_id {
+            SimEvent::AgentAte { agent, .. } | SimEvent::AgentDrank { agent, .. }
+                if *agent == agent_id => {
                     relevance = Fixed::from_f64(0.8);
                 }
-            }
             _ => {}
         }
 
@@ -435,7 +434,8 @@ impl AttentionState {
             salience,
             tick,
         });
-        self.salience_map.sort_by(|a, b| b.salience.cmp(&a.salience));
+        self.salience_map
+            .sort_by_key(|s| std::cmp::Reverse(s.salience));
         if self.salience_map.len() > SALIENCE_MAP_CAPACITY {
             self.salience_map.truncate(SALIENCE_MAP_CAPACITY);
         }
@@ -663,7 +663,7 @@ mod tests {
         }
         // Bounded to the top SALIENCE_MAP_CAPACITY winners, sorted descending.
         assert_eq!(attention.salience_map.len(), SALIENCE_MAP_CAPACITY);
-        assert!(attention.salience_map[0].salience == Fixed::from_f64(0.95));
+        assert_eq!(attention.salience_map[0].salience, Fixed::from_f64(0.95));
         assert!(attention.salience_map.iter().all(|s| s.salience >= Fixed::from_f64(0.3)));
         let mut prev = Fixed::ONE;
         for item in &attention.salience_map {
@@ -732,8 +732,10 @@ mod tests {
         // Fresh, identical states — only the bias differs — so habituation
         // starts identical and the comparison isolates the fold.
         let mut neutral = AttentionState::default();
-        let mut vigilant = AttentionState::default();
-        vigilant.threat_bias = Fixed::from_f64(0.7);
+        let mut vigilant = AttentionState {
+            threat_bias: Fixed::from_f64(0.7),
+            ..Default::default()
+        };
         let needs = NeedState::default();
         let affect = Affect::default();
 
@@ -748,8 +750,10 @@ mod tests {
     #[test]
     fn social_bias_amplifies_social_salience() {
         let mut neutral = AttentionState::default();
-        let mut extravert = AttentionState::default();
-        extravert.social_bias = Fixed::from_f64(0.7);
+        let mut extravert = AttentionState {
+            social_bias: Fixed::from_f64(0.7),
+            ..Default::default()
+        };
         let needs = NeedState::default();
         let affect = Affect::default();
 
@@ -765,10 +769,14 @@ mod tests {
     fn resource_events_ignore_perceptual_biases() {
         // Resource percepts have no matching bias dimension — the fold stays
         // 1.0 even at extreme biases, so eating salience is bias-invariant.
-        let mut low = AttentionState::default();
-        low.threat_bias = Fixed::from_f64(0.3);
-        let mut high = AttentionState::default();
-        high.threat_bias = Fixed::from_f64(0.7);
+        let mut low = AttentionState {
+            threat_bias: Fixed::from_f64(0.3),
+            ..Default::default()
+        };
+        let mut high = AttentionState {
+            threat_bias: Fixed::from_f64(0.7),
+            ..Default::default()
+        };
         let needs = NeedState::default();
         let affect = Affect::default();
 

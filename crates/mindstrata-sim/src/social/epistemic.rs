@@ -522,8 +522,10 @@ mod tests {
 
     #[test]
     fn processing_capacity_limits_information() {
-        let mut state = EpistemicState::default();
-        state.processing_capacity = 2;
+        let mut state = EpistemicState {
+            processing_capacity: 2,
+            ..Default::default()
+        };
 
         let personality = make_personality();
         let emotions = make_emotions();
@@ -551,9 +553,11 @@ mod tests {
 
     #[test]
     fn reset_tick_clears_counters() {
-        let mut state = EpistemicState::default();
-        state.info_processed_this_tick = 5;
-        state.information_overload = Fixed::from_f64(0.3);
+        let mut state = EpistemicState {
+            info_processed_this_tick: 5,
+            information_overload: Fixed::from_f64(0.3),
+            ..Default::default()
+        };
         state.reset_tick();
         assert_eq!(state.info_processed_this_tick, 0);
         assert!(state.information_overload < Fixed::from_f64(0.3));
@@ -568,8 +572,10 @@ mod tests {
 
     #[test]
     fn dogmatic_agent_resists_belief_change() {
-        let mut state = EpistemicState::default();
-        state.dogmatism = Fixed::from_f64(0.9);
+        let mut state = EpistemicState {
+            dogmatism: Fixed::from_f64(0.9),
+            ..Default::default()
+        };
 
         let personality = make_personality();
         let emotions = make_emotions();
@@ -581,8 +587,10 @@ mod tests {
         );
 
         // Dogmatic agent should have smaller belief change
-        let mut state2 = EpistemicState::default();
-        state2.dogmatism = Fixed::from_f64(0.1);
+        let mut state2 = EpistemicState {
+            dogmatism: Fixed::from_f64(0.1),
+            ..Default::default()
+        };
         let mut belief2 = make_belief(0, 0.3);
         let delta2 = state2.process_information(
             &mut belief2, &info, &personality, &emotions, 100,

@@ -434,7 +434,7 @@ mod tests {
     /// the O(1) membership cache.
     #[test]
     fn snapshot_postcard_roundtrip_preserves_group_registry() {
-        let mut original = make_snapshot_with_active_group();
+        let original = make_snapshot_with_active_group();
 
         // Verify the original has an active group with cached membership.
         assert_eq!(original.group_registry.active().len(), 1);

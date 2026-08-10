@@ -173,16 +173,20 @@ mod tests {
 
     #[test]
     fn identity_forms_during_adolescence() {
-        let mut dev = DevelopmentalPsychState::default();
-        dev.identity_formation = Fixed::from_f64(0.3);
+        let mut dev = DevelopmentalPsychState {
+            identity_formation: Fixed::from_f64(0.3),
+            ..Default::default()
+        };
         dev.tick_update(Fixed::from_f64(16.0), Fixed::from_f64(0.7), Fixed::from_f64(0.6));
         assert!(dev.identity_formation > Fixed::from_f64(0.3));
     }
 
     #[test]
     fn socialization_builds_during_childhood() {
-        let mut dev = DevelopmentalPsychState::default();
-        dev.socialization_completeness = Fixed::from_f64(0.3);
+        let mut dev = DevelopmentalPsychState {
+            socialization_completeness: Fixed::from_f64(0.3),
+            ..Default::default()
+        };
         dev.tick_update(Fixed::from_f64(8.0), Fixed::from_f64(0.8), Fixed::from_f64(0.5));
         assert!(dev.socialization_completeness > Fixed::from_f64(0.3));
     }

@@ -257,8 +257,8 @@ mod tests {
 
     #[test]
     fn non_contagious_diseases_have_zero_transmission() {
-        assert!(DiseaseKind::WoundInfection.transmission_rate() == Fixed::ZERO);
-        assert!(DiseaseKind::Malnutrition.transmission_rate() == Fixed::ZERO);
+        assert_eq!(DiseaseKind::WoundInfection.transmission_rate(), Fixed::ZERO);
+        assert_eq!(DiseaseKind::Malnutrition.transmission_rate(), Fixed::ZERO);
     }
 
     #[test]

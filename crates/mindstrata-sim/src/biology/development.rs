@@ -199,8 +199,10 @@ mod tests {
 
     #[test]
     fn age_advances() {
-        let mut dev = DevelopmentalState::default();
-        dev.age = Fixed::from_f64(17.0);
+        let mut dev = DevelopmentalState {
+            age: Fixed::from_f64(17.0),
+            ..Default::default()
+        };
         dev.advance_age(Fixed::from_f64(2.0)); // 17 + 2 = 19
         assert_eq!(dev.life_stage, LifeStage::YoungAdult);
     }

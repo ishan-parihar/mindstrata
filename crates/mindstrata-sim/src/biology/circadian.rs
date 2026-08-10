@@ -147,8 +147,10 @@ mod tests {
 
     #[test]
     fn sleep_reduces_pressure() {
-        let mut c = CircadianState::default();
-        c.sleep_pressure = Fixed::from_f64(0.8);
+        let mut c = CircadianState {
+            sleep_pressure: Fixed::from_f64(0.8),
+            ..Default::default()
+        };
         c.tick_update(144, true);
         assert!(c.sleep_pressure < Fixed::from_f64(0.8));
     }

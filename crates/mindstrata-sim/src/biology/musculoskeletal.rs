@@ -125,8 +125,10 @@ mod tests {
 
     #[test]
     fn rest_recovers_fatigue() {
-        let mut m = MuscularState::default();
-        m.fatigue = Fixed::from_f64(0.8);
+        let mut m = MuscularState {
+            fatigue: Fixed::from_f64(0.8),
+            ..Default::default()
+        };
         m.tick_update(Fixed::ZERO, Fixed::ONE, Fixed::ONE, Fixed::from_f64(0.3));
         assert!(m.fatigue < Fixed::from_f64(0.8));
     }

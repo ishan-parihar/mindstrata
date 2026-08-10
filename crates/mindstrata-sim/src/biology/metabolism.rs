@@ -120,8 +120,10 @@ mod tests {
 
     #[test]
     fn dehydration_detected() {
-        let mut m = MetabolicState::default();
-        m.hydration = Fixed::from_f64(0.1);
+        let m = MetabolicState {
+            hydration: Fixed::from_f64(0.1),
+            ..Default::default()
+        };
         assert!(m.in_crisis());
     }
 }

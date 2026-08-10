@@ -226,12 +226,12 @@ mod tests {
 
     #[test]
     fn growth_modifier_winter_is_zero() {
-        assert!(Season::Winter.growth_modifier() == Fixed::ZERO);
+        assert_eq!(Season::Winter.growth_modifier(), Fixed::ZERO);
     }
 
     #[test]
     fn growth_modifier_summer_is_max() {
-        assert!(Season::Summer.growth_modifier() == Fixed::from_f64(1.0));
+        assert_eq!(Season::Summer.growth_modifier(), Fixed::from_f64(1.0));
     }
 
     #[test]

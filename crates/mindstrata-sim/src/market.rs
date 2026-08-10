@@ -500,7 +500,7 @@ mod tests {
         match result {
             TradeResult::Success { total_cost, .. } => {
                 assert!(buyer.coin < Fixed::from_f64(20.0));
-                assert!(buyer.coin == Fixed::from_f64(20.0) - total_cost);
+                assert_eq!(buyer.coin, Fixed::from_f64(20.0) - total_cost);
             }
             _ => panic!("Trade should succeed"),
         }

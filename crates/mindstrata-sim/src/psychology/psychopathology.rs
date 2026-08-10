@@ -203,8 +203,10 @@ mod tests {
 
     #[test]
     fn overall_health_reflects_worst_risk() {
-        let mut p = PsychopathologyState::default();
-        p.anxiety_risk = Fixed::from_f64(0.8);
+        let mut p = PsychopathologyState {
+            anxiety_risk: Fixed::from_f64(0.8),
+            ..Default::default()
+        };
         p.tick_update(
             Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO,
             Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ONE,
