@@ -5,6 +5,7 @@ members = [
     "crates/mindstrata-sim",
     "crates/mindstrata-cli",
     "crates/mindstrata-tui",
+    "crates/mindstrata-render",
     "crates/mindstrata-tests",
     "crates/mindstrata-benches",
 ]
@@ -89,6 +90,9 @@ petgraph = "0.7"
 # TUI
 ratatui = "0.29"
 crossterm = "0.28"
+
+# Rendering (PNG maps)
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 # Testing
 insta = "1"

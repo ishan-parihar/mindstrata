@@ -44,6 +44,11 @@ enum Commands {
         #[arg(long)]
         map: bool,
 
+        /// Render the final world state as a PNG map (terrain + sites +
+        /// agent sprites) to the given path.
+        #[arg(long, value_name = "PATH")]
+        render_map: Option<String>,
+
         /// Inspect a specific agent by ID after simulation.
         #[arg(long)]
         inspect_agent: Option<usize>,
@@ -127,6 +132,7 @@ fn main() {
             mod_dir,
             verbose,
             map,
+            render_map,
             inspect_agent,
             show_relationships,
             market,
@@ -241,6 +247,31 @@ fn main() {
                     }
                 }).collect();
                 println!("{}", mindstrata_tui::render_world_map(sim.world(), &markers));
+            }
+
+            // §5 (Iteration 157): Visual rendering — pixel map export.
+            // The renderer is a pure function of the world state (no RNG,
+            // read-only), so this never perturbs the simulation.
+            if let Some(ref path) = render_map {
+                let agents: Vec<mindstrata_render::RenderAgent> = sim
+                    .agents
+                    .iter()
+                    .enumerate()
+                    .map(|(i, a)| mindstrata_render::RenderAgent::new(a.position.x, a.position.y, i as u8))
+                    .collect();
+                let w = sim.world().width * mindstrata_render::DEFAULT_CELL_PIXELS;
+                let h = sim.world().height * mindstrata_render::DEFAULT_CELL_PIXELS;
+                match mindstrata_render::render_world_png(
+                    sim.world(),
+                    &agents,
+                    mindstrata_render::DEFAULT_CELL_PIXELS,
+                ) {
+                    Ok(png) => match std::fs::write(path, &png) {
+                        Ok(()) => println!("\n  Rendered world map ({w}x{h}px) to: {path}"),
+                        Err(e) => eprintln!("\n  Failed to write rendered map: {e}"),
+                    },
+                    Err(e) => eprintln!("\n  Failed to encode rendered map: {e}"),
+                }
             }
 
             // §17.1: Agent inspector

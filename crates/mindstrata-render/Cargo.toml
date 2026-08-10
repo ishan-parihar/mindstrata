@@ -1,0 +1,14 @@
+[package]
+name = "mindstrata-render"
+description = "Deterministic 2D pixel rendering (PNG maps with agent sprites) for Mindstrata"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mindstrata-core = { workspace = true }
+mindstrata-sim = { workspace = true }
+image = { workspace = true }
+
+[lints]
+workspace = true
