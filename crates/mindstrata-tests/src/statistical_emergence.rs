@@ -139,4 +139,88 @@ mod tests {
         // Allow a lower threshold — the important thing is non-zero variance.
         assert!(max_h - min_h > 0.005, "Hunger should vary across seeds: range={:.4}", max_h - min_h);
     }
+
+    // ── §18.4 Statistical emergence audits (Iteration 137) ────────────────
+
+    /// §18.4 (Iteration 137): The D4 courtship gate (`total_attraction > 0.4`)
+    /// must be structurally reachable in at least some worlds. In the calm
+    /// seed-42 village at 10K, the max total_attraction is ~0.333 (below the
+    /// gate) — but across seeds and agents, the gate should open somewhere.
+    ///
+    /// Runtime note: 10 seeds × 5000 ticks ≈ 33s (documented gate increase,
+    /// matching Iter-135's 72s transparency). A reachability proof needs only
+    /// a representative sample, not exhaustive coverage.
+    #[test]
+    fn courtship_d4_reachable_across_worlds() {
+        let mut seeds_with_max_above_gate = 0u32;
+        let mut global_max = 0.0f64;
+        for seed in 0..10u64 {
+            let config = SimConfig {
+                seed,
+                max_ticks: 5000,
+                world_width: 16,
+                world_height: 16,
+                num_agents: 12,
+                snapshot_interval: None,
+            };
+            let mut sim = Simulation::new(config);
+            sim.populate();
+            sim.run(5000);
+            let seed_max = sim.agents
+                .iter()
+                .map(|a| a.attraction.total_attraction().to_f64())
+                .fold(f64::NEG_INFINITY, f64::max);
+            if seed_max > 0.4 {
+                seeds_with_max_above_gate += 1;
+            }
+            global_max = global_max.max(seed_max);
+        }
+        assert!(
+            seeds_with_max_above_gate > 0,
+            "D4 gate should be reachable in at least one seed \
+             (global max total_attraction={global_max:.4})"
+        );
+        assert!(
+            global_max > 0.4,
+            "global max total_attraction should exceed 0.4, got {global_max:.4}"
+        );
+    }
+
+    /// §18.4 (Iteration 137): Faction formation must vary across seeds — if
+    /// every seed produces the same number of factions, the formation system
+    /// is degenerate (non-deterministic emergence is the expected contract).
+    ///
+    /// Runtime note: 20 seeds × 2000 ticks ≈ 26s (acceptable for the gate;
+    /// ~1.3s per seed).
+    #[test]
+    fn faction_counts_vary_across_worlds() {
+        use mindstrata_sim::institutions::InstitutionKind;
+        let mut counts = std::collections::BTreeSet::new();
+        for seed in 0..20u64 {
+            let config = SimConfig {
+                seed,
+                max_ticks: 2000,
+                world_width: 16,
+                world_height: 16,
+                num_agents: 12,
+                snapshot_interval: None,
+            };
+            let mut sim = Simulation::new(config);
+            sim.populate();
+            sim.run(2000);
+            let faction_count = sim.institutions
+                .iter()
+                .filter(|i| i.kind == InstitutionKind::Faction)
+                .count();
+            counts.insert(faction_count);
+        }
+        assert!(
+            counts.len() > 1,
+            "faction counts should vary across seeds (got {counts:?})"
+        );
+        assert!(
+            counts.iter().any(|&c| c > 0),
+            "at least one seed should form factions (got {counts:?})"
+        );
+    }
 }

@@ -2,7 +2,7 @@
 
 **Prepared for:** Lead Game Designer  
 **Date:** August 10, 2026  
-**Codebase Version:** 67,253 lines of Rust across 6 crates, **1,106 tests passing** (849 sim + 237 tests-crate + 20 core), 0 clippy warnings, 0 TODO/FIXME
+**Codebase Version:** 67,253 lines of Rust across 6 crates, **1,108 tests passing** (849 sim + 239 tests-crate + 20 core), 0 clippy warnings, 0 TODO/FIXME
 
 ---
 
@@ -31,7 +31,7 @@ Mindstrata is a **deterministic, emergent human-society simulation** written in 
 
 **Current scale:**
 - 67,253 lines of Rust source code
-- 1,106 automated tests (849 sim unit + 237 tests-crate: integration/property/snapshot/golden/statistical/scale/comparison/behavioral-delta/long-horizon + 20 core)
+- 1,108 automated tests (849 sim unit + 239 tests-crate: integration/property/snapshot/golden/statistical/scale/comparison/behavioral-delta/long-horizon + 20 core)
 - 60+ simulation modules covering biology, psychology, social dynamics, economics, ecology, demography, health, conflict, culture, institutions, and noospheric fields
 - Deterministic replay from any seed
 - CLI with agent psychology inspector, CSV metrics export, scenario runner
@@ -547,7 +547,7 @@ All data-driven specs are validated by `spec_lint.rs` for existence and non-empt
 
 ### 9.1 Test Breakdown
 
-Verified at Iteration 136 via `cargo test -- --list` (tree clean).
+Verified at Iteration 137 via `cargo test -- --list` (tree clean).
 
 | Test Category | Count | Coverage |
 |---|---|---|
@@ -556,7 +556,7 @@ Verified at Iteration 136 via `cargo test -- --list` (tree clean).
 | Smoke tests | 29 | Fast end-to-end sanity runs |
 | Property tests | 17 | Proptest: determinism, bounds |
 | Snapshot tests | 8 | 15 insta snapshots (agent/endocrine/attachment/institution/relationship-stage/metrics/long-horizon-surface) |
-| Statistical emergence | 6 | Gossip hops, courtship, factions, rumor saturation (§18.4) |
+| Statistical emergence | 8 | Gossip hops, courtship, factions, rumor saturation, D4 reachability, faction variance (§18.4, Iter 137) |
 | Golden replay | 4 | Identical output from same seed, byte-identical vs golden/ baseline |
 | Scale validation | 3 | Full-capacity (MAX_POPULATION 48) cap-safety + all-22-emotion bounds + determinism (Iter 132) |
 | Comparison | 3 | Cross-config differential harnesses |
@@ -564,7 +564,7 @@ Verified at Iteration 136 via `cargo test -- --list` (tree clean).
 | Behavioral delta | 4 | Same-seed consumer on/off differential harness (Iter 134) |
 | Long horizon | 2 | 50K determinism + emergence sweep, 3 seeds (Iter 135) |
 | Core unit tests (mindstrata-core) | 20 | Kernel correctness |
-| **Total** | **1,106** | 849 sim + 237 tests-crate + 20 core |
+| **Total** | **1,108** | 849 sim + 239 tests-crate + 20 core |
 
 Historical granular rows (scenario battery, economy-under-plague, skeletal+digestive, relational power, speech acts,
 perception, pregnancy, memory, motivation, thermal — Iterations 29–45) are folded into the module counts above.
@@ -573,7 +573,7 @@ perception, pregnancy, memory, motivation, thermal — Iterations 29–45) are f
 
 | Metric | Value |
 |---|---|
-| Tests passing | 1,106/1,106 (100%) |
+| Tests passing | 1,108/1,108 (100%) |
 | Clippy warnings | 0 (strict `-D warnings` gate, restored Iteration 131) |
 | Unsafe code | 0 (`unsafe_code = "forbid"`) |
 | TODO/FIXME comments | 0 (verified at Iteration 133) |
@@ -669,6 +669,7 @@ cargo test -p mindstrata-sim spec_lint
 
 *This document reflects the codebase state as of August 10, 2026. The simulation engine has been upgraded with Architecture Plan 2 implementations: embodied biology, structured psychology, rich social relationships, cultural systems, and noospheric fields. All systems are integrated into a deterministic tick loop with level-of-detail cognition and causal provenance tracking. Each entry below is one grep-able bullet, newest first.
 
+- **Iteration 137 (statistical emergence audits — the queue section 2 'statistical emergence' gap CLOSED)**: two new multi-seed audits in `statistical_emergence.rs`. (1) `courtship_d4_reachable_across_worlds`: 10 seeds at 5000 ticks each (~33s), proves the D4 courtship gate (`total_attraction > 0.4`) is structurally reachable in at least one world (calm seed 42 sits at 0.333 — below the gate, so the gate opens only in non-calm seeds, which is the expected contract). (2) `faction_counts_vary_across_worlds`: 20 seeds at 2000 ticks each (~26s), proves faction formation is non-deterministic (counts vary across seeds) and at least one seed forms factions. Existing rumor-saturation coverage (`rumors_transmit_through_population` + `rumor_evidence_degrades_with_transmission_hops`) is adequate — no new rumor audit needed. Runtime note: the two tests add ~59s to the gate (comparable to Iter-135's ~72s long-horizon addition). ZERO sim-code changes: 849 sim + 238 integration + golden + 15 snapshots green, strict clippy `-D warnings` clean.
 - **Iteration 136 (long-horizon surface snapshot — the queue §2 "snapshot coverage" gap RETIRED)**: the first insta snapshot past a ritual firing. All 7 legacy snapshots sat at ≤ 2000 ticks — below the first ritual at 4320 — so ritual EXECUTION, norm internalization, and memory survival were never pinned. New `snapshot_long_horizon_surface_10000_ticks` (snapshot_tests.rs) + `LongHorizonSurface10000` struct: at 10000 ticks (rituals fire at 4320 AND 8640 — both captured) it pins core metrics (population 12, 210K events, stress 0.92 — the stressed-but-surviving village), the memory surface (556 traces across 6 of 9 kinds: Emotional 228 / Flashbulb 174 / Social 83 / Traumatic 42 / Episodic 28 / Procedural 1), the norm surface (60 internalized norms, avg strength 0.19), the attraction surface (population means), the relationship surface (132 edges across 5 stages incl. PatronClient/PriestLayperson), the DURABLE ritual-execution signal (`executed_ritual_count: 2`, `latest_ritual_occurrence: 8640` — participant traces decay below eviction by 50K per the Iter-135 finding, so `last_occurrence` is the liveness proof), and institutions (6, 3 factions). PROBE-PINNED HONESTY (Iter-134 calm-window discipline): the attraction surface's physical/personality/moral channels sit at their init defaults (0.5) — the D4 courtship gate rarely opens in a calm village, so the snapshot pins the DEFAULT surface (only familiarity 0.8 / status 0.28 move); `Semantic` memory's absence signals the schooling/knowledge surface is dormant at 10K (consistent with the Iter-134 saturation sweep); envy_cost 0.0 is legitimate (envy never fires in calm worlds). Baseline generated with INSTA_UPDATE=always and double-run verified byte-identical (~6.5s). ZERO sim-code changes: 849 sim + 236 integration + golden + 15 snapshots green (14 legacy byte-identical, NO regeneration), strict clippy `-D warnings` clean.
 - **Iteration 135 (long-horizon 50K determinism + emergence sweep — the queue §2 gap)**: new `long_horizon_tests` module (2 tests) + `behavioral_delta` promoted to `pub(crate)` so `snapshots_identical` is reusable. (1) `long_horizon_50k_is_deterministic_and_emerges`: seed 42 run twice to 50K — metrics byte-identical (JSON) AND per-agent core-state projection byte-identical (aggregate means can cancel; the projection cannot), plus probe-pinned emergence/invariants: population 12→13, event volume > 100K (probe 1.09M — 10× headroom), memes >= 1, factions >= 1, moral panics fired, rituals EXECUTED (`Ritual.last_occurrence > 0` — registration is seeded at populate, so the durable execution signal is the field `execute()` advances). PROBE FINDING: the `RitualParticipated` Cultural memory trace does NOT survive to 50K — the store decays sparse monthly traces below the eviction threshold between fires, so last_occurrence (not memory) is the correct execution proof. (2) `long_horizon_50k_multi_seed_invariants`: seeds 7/99 to 50K hold every core invariant (bounded population, finite in-range health/stress, non-negative wealth/resources, event liveness). ZERO sim-code changes: 849 sim + 235 integration + golden + 14 snapshots green, strict clippy `-D warnings` clean; adds ~72s wall to the gate (~199s).
 
