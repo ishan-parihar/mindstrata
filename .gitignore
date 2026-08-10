@@ -7,3 +7,14 @@ target/
 # Backup files
 *.bak
 *.superseded
+
+# ---- tool-state / session artifacts (never commit) ----
+.cortexkit/
+.contexty/
+.hive/
+.memsearch/
+.opencode/
+.cortex/
+.sisyphus/
+.oh-my-opencode/
+.history/

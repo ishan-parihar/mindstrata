@@ -28,6 +28,9 @@ mod agent_lifetime_trace;
 mod scale_tests;
 
 #[cfg(test)]
+mod behavioral_delta;
+
+#[cfg(test)]
 mod smoke {
     use mindstrata_core::clock::Tick;
     use mindstrata_core::fixed::Fixed;

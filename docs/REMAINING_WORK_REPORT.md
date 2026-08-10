@@ -1,7 +1,7 @@
 # Mindstrata — Remaining Work Report
 
 **Scope:** refinement, testing, validation, and optimization items still open.
-**Baseline:** commit `5c45f44` (Iteration 132), tree clean, **1,099 workspace tests green** (849 sim + 230 tests-crate + 20 core), zero snapshot drift, strict clippy `-D warnings` clean.
+**Baseline:** commit `d702a1f` (Iteration 133), tree clean, **1,103 workspace tests green** (849 sim + 234 tests-crate + 20 core), zero snapshot drift, strict clippy `-D warnings` clean.
 **Plan status:** AP2 is structurally ~99% complete — every plan-mandated *system* exists and is wired into the deterministic tick loop. The remaining work is overwhelmingly **decisional consumers** (state that is produced but never read back into decisions), **scale/perf hardening**, and **post-AP2 game features**.
 
 ---
@@ -37,7 +37,7 @@ The dominant category. A recurring pattern across the campaign: systems were bui
 
 | Gap | Detail |
 |-----|--------|
-| **Behavioral proofs are uneven** | Many systems are proven by unit tests + liveness (state populates) rather than pre/post behavioral deltas. The strongest behavioral proofs were done once each: Iter-83 conflict probe (28,878→28,736 conflicts, 3→4 factions), Iter-89 coup exposure. A systematic behavioral-delta harness (same seed, consumer on/off) is missing. |
+| **Behavioral proofs — harness BUILT (Iter 134)** | New `behavioral_delta` module makes the same-seed consumer on/off pattern reusable (`run_sim_with_params` + `behavioral_delta()` + `assert_live_delta`/`assert_zero_blast`). Probe-pinned calibration findings from the first sweep: calm-window inertness is pervasive at seed 42 (gratitude/meme knobs SATURATED, trust/sadness/endocrine identity-at-zero — the legacy sensitivity tests pass vacuously on one-sided bounds); the conflict channel is strongly live (+1,704 events for chance 0.3→0.9); bonding_rate cascades NON-MONOTONICALLY. Remaining: applying the harness to the §1 consumers in their firing windows (larger/longer or scenario configs), and per-iteration use as the default proof tool. |
 | **Population scale — RETIRED (Iter 132)** | The designed settlement size is the §19.5.F cap (MAX_POPULATION 48, enforced at populate + every birth gate). New scale_tests.rs validates AT full capacity: populate clamping (request 100/200 → exactly 48), through-run cap-safety sampling (count never exceeds 48 at 100-tick cadence over 600 ticks), all-22-emotion bounds + resource non-negativity at the cap, and full-capacity seed-determinism. Probe-pinned vacuity note: seed-42 village is perfectly healthy (count 48 at every sample to 2000) — the birth gates under churn are covered by the famine/pestilence integration tests. 100s/1000s-agent runs above the cap would require raising MAX_POPULATION (a settlement-design change, queued with §17.4 sparse passes if multi-settlement lands). |
 | **Long-horizon determinism** | Golden replay = 1 test; multi-seed macro health = 5 seeds × 15K (Iter 31). No long-horizon (50K+) determinism/emergence sweep beyond the 30K faction tests. |
 | **Scenario battery** | 5 scenarios (riverford/drought/famine/pestilence/collapse). More are cheap to add from the spec files (specs/scenarios has riverford + drought; the ShockKind machinery is extensible). |
@@ -100,7 +100,7 @@ The dominant category. A recurring pattern across the campaign: systems were bui
 1. ~~Clippy `-D warnings` sweep~~ — DONE (Iter 131): 97 → 0 warning lines, strict gate restored, provably behavior-neutral
 2. ~~Refresh state-doc test tables + restructure the iteration log~~ — DONE (Iter 133): §9.1/§9.2 refreshed to measured reality; `## 13. Iteration Changelog` is one grep-able bullet per iteration (22–132, newest first)
 3. ~~Add the missing 2 pre-existing-warning fixes (sim.rs:8445, integration_tests.rs:5050)~~ — DONE (Iter 131, part of the 97→0 sweep)
-4. Strengthen property tests (invariant-style) + a behavioral-delta harness (same seed, consumer on/off) — the next substantive quick win
+4. ~~Strengthen property tests + build the behavioral-delta harness~~ — DONE (Iter 134): the invariant-style property sweep already existed (17 tests); the reusable `behavioral_delta` same-seed consumer on/off harness is live with 4 validation/demo tests and a documented calm-window inertness sweep
 
 **Behavioral wiring (each recalibrates; highest game-fidelity value):**
 5. §7.2.6 conception→pregnancy→birth pipeline (largest inert channel)

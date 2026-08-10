@@ -1763,20 +1763,9 @@ fn multi_seed_long_horizon_macro_health() {
 // by varying a parameter and asserting a measurably different outcome.
 
 /// Helper: run simulation with custom params, return metrics snapshot.
+/// Delegates to the shared `run_sim_with_params` harness (test_helpers.rs).
 fn run_with_params(seed: u64, ticks: u64, modify: impl FnOnce(&mut mindstrata_sim::parameters::SimParameters)) -> mindstrata_sim::sim::MetricsSnapshot {
-    let config = SimConfig {
-        seed,
-        max_ticks: ticks,
-        world_width: 16,
-        world_height: 16,
-        num_agents: 12,
-        snapshot_interval: None,
-    };
-    let mut sim = Simulation::new(config);
-    modify(&mut sim.params);
-    sim.populate();
-    sim.run(ticks);
-    sim.metrics_snapshot()
+    crate::test_helpers::run_sim_with_params(seed, ticks, modify).metrics_snapshot()
 }
 
 // ── Endocrine Sensitivity ──────────────────────────────────────────
