@@ -310,6 +310,40 @@ pub fn nostalgia_preservation_factor(nostalgia: Fixed, rate: f64, floor: f64) ->
     (Fixed::ONE - nostalgia * Fixed::from_f64(rate)).max(Fixed::from_f64(floor))
 }
 
+/// §8.1.4 (Iteration 130): the awe reverence rate and floor — awe
+/// (producer `|future_implication| × identity_relevance × (1 −
+/// expectedness)`, the overwhelming-significance appraisal — a future of
+/// consequence witnessed unexpectedly) shields perceived legitimacy from
+/// scandal erosion: an awe-struck population experiences institutional
+/// failings as smaller than they are ("reverence forgives"). At full awe
+/// 1.0 the daily scandal damage falls to exactly the floor 0.85 (15%
+/// shielding, never fully canceled — erosion still bites, per the §11.1
+/// legitimacy-balance design). Awe is LIVE in calibrated windows (mean
+/// 0.55–0.65), so this is a CALIBRATED change. HONEST BLAST FRAMING: the
+/// producer is U-SHAPED on `|future_implication|` (`future_implication =
+/// 1 − threat − need_pressure`), so awe fires on overwhelming significance
+/// in EITHER direction — wonder at fortune in calm worlds, dread of
+/// disaster in dire ones — NOT only in calm worlds. The fold's zero
+/// baseline blast (golden + 14 snapshots byte-identical, verified) comes
+/// from the CONSUMER side: scandal erosion floors agent legitimacy at 0
+/// by ~tick 2000 regardless, the 0.5-anchored grievance/theft consumers
+/// never activate, and the continuous motivation-context shift (~0.05
+/// mid-window) stays below decision granularity. Deterministic (pure
+/// function of the emotion), no RNG.
+pub const AWE_REVERENCE_RATE: f64 = 0.15;
+pub const AWE_REVERENCE_FLOOR: f64 = 0.85;
+
+/// §8.1.4 (Iteration 130): the awe reverence factor —
+/// `1 − awe × rate` floored at `floor`, ∈ [floor, 1.0] for the shipped
+/// constants. The caller multiplies the daily `scandal_damage` severity by
+/// the returned factor. The floor guarantees the shielding never fully
+/// cancels legitimacy erosion (same never-zero design as the Iter-122
+/// despair pacifier's floor). One-sided: identity at zero, monotone below.
+/// Deterministic, no RNG.
+pub fn awe_reverence_factor(awe: Fixed, rate: f64, floor: f64) -> Fixed {
+    (Fixed::ONE - awe * Fixed::from_f64(rate)).max(Fixed::from_f64(floor))
+}
+
 /// §8.1.4 (Iteration 127): the help propensity — the combined prosocial
 /// push behind the Help interaction. The caller (the daily social pass)
 /// feeds the internalized "Help Neighbors" norm resistance plus the
@@ -839,6 +873,50 @@ mod tests {
             nostalgia_preservation_factor(Fixed::ONE, 0.8, NOSTALGIA_PRESERVATION_FLOOR),
             Fixed::from_f64(0.7),
             "floor 0.7 must bind at high rates"
+        );
+    }
+
+    #[test]
+    fn awe_reverence_factor_is_identity_at_zero_and_shields() {
+        // §8.1.4 (Iteration 130): identity at zero, exact 0.925 at 0.5,
+        // exact floor 0.85 at full awe (the shipped 0.15 rate — a calm-
+        // world legitimacy-shielding tier below the escalation amplifiers;
+        // the fold only ever slows erosion, never stops it). The floor is
+        // load-bearing: the shielding must never fully cancel scandal
+        // erosion (same never-zero design as the Iter-122 despair
+        // pacifier's floor).
+        assert_eq!(
+            awe_reverence_factor(
+                Fixed::ZERO,
+                AWE_REVERENCE_RATE,
+                AWE_REVERENCE_FLOOR
+            ),
+            Fixed::ONE,
+            "zero awe must be a byte-identical identity"
+        );
+        assert_eq!(
+            awe_reverence_factor(
+                Fixed::from_f64(0.5),
+                AWE_REVERENCE_RATE,
+                AWE_REVERENCE_FLOOR
+            ),
+            Fixed::from_f64(0.925),
+            "1 − 0.5 × 0.15 must be exactly 0.925"
+        );
+        assert_eq!(
+            awe_reverence_factor(
+                Fixed::ONE,
+                AWE_REVERENCE_RATE,
+                AWE_REVERENCE_FLOOR
+            ),
+            Fixed::from_f64(0.85),
+            "full awe must hit the exact floor 0.85"
+        );
+        // The floor must actually bind below the unfloored value.
+        assert_eq!(
+            awe_reverence_factor(Fixed::ONE, 0.8, AWE_REVERENCE_FLOOR),
+            Fixed::from_f64(0.85),
+            "floor 0.85 must bind at high rates"
         );
     }
 }

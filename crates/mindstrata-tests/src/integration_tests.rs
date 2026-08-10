@@ -9602,3 +9602,90 @@ fn nostalgia_preserves_collective_memory_is_live_and_deterministic() {
         );
     }
 }
+#[test]
+fn awe_reverence_shields_legitimacy_is_live_and_deterministic() {
+    // §8.1.4 (Iteration 130 — the LAST §8.1.4 consumer): the awe emotion
+    // (appraisal producer `|future_implication| × identity_relevance ×
+    // (1 − expectedness)`, the overwhelming-significance appraisal) folds
+    // into the daily §11.1 legitimacy erosion as the reverence factor —
+    // `× awe_reverence_factor` (1 − awe × 0.15, floored at 0.85 — an
+    // awe-struck population experiences institutional failings as smaller
+    // than they are, "reverence forgives"). Awe is LIVE in calibrated
+    // windows (mean 0.55–0.65), so this is a CALIBRATED change; the
+    // sim-level wiring test (awe_reverence_shields_legitimacy_from_scandal_erosion)
+    // proves the scandal path multiplies by the factor (scandal-site probe:
+    // pinned awe → factor 0.85, natural awe → factor 0.899). ZERO baseline
+    // blast — verified, and the mechanism is CONSUMER-side: scandal erosion
+    // floors agent legitimacy at 0 by ~tick 2000 in every calibrated window
+    // regardless of the reverence, the 0.5-anchored grievance/theft
+    // consumers never activate (legitimacy < 0.5 after erosion starts), and
+    // the continuous motivation-context shift (~0.05 mid-window) stays
+    // below decision granularity — so golden + 14 snapshots are byte-
+    // identical without regeneration. Honest observability framing: awe's
+    // producer is U-shaped on |future_implication| (fires on significance
+    // in either direction — wonder or dread), and the fold's liveness is
+    // proven by input-pinning (the sim-level wiring test) rather than a
+    // natural long-horizon observable.
+    //
+    // Leg A (producer reach): awe is a genuinely live producer in the
+    // golden window — the fold has real input.
+    let sim = crate::test_helpers::run_sim(42, 5000);
+    let n = sim.agents.len() as f64;
+    let awe_mean: f64 = sim
+        .agents
+        .iter()
+        .map(|a| a.emotions.awe.to_f64())
+        .sum::<f64>()
+        / n;
+    assert!(
+        awe_mean > 0.5,
+        "awe must be live in the golden window (the fold has input), mean {awe_mean:.4}"
+    );
+
+    // Leg B (the shipped fold contract — deterministic and
+    // regression-proof): the public `awe_reverence_factor` is exactly what
+    // the scandal path calls (a deleted fold term in sim.rs breaks the
+    // sim-level wiring test). Identity at zero awe, exact 0.925 at half,
+    // exact floor 0.85 at full with the shipped 0.15 rate. NO clamp
+    // erasure of the floor (the Iter-112 lesson).
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::appraisal::awe_reverence_factor;
+    assert_eq!(
+        awe_reverence_factor(
+            Fixed::ZERO,
+            mindstrata_sim::appraisal::AWE_REVERENCE_RATE,
+            mindstrata_sim::appraisal::AWE_REVERENCE_FLOOR,
+        ),
+        Fixed::ONE,
+        "zero awe must be a byte-identical identity"
+    );
+    assert_eq!(
+        awe_reverence_factor(
+            Fixed::from_f64(0.5),
+            mindstrata_sim::appraisal::AWE_REVERENCE_RATE,
+            mindstrata_sim::appraisal::AWE_REVERENCE_FLOOR,
+        ),
+        Fixed::from_f64(0.925),
+        "half awe × 0.15 must be exactly 0.925"
+    );
+    assert_eq!(
+        awe_reverence_factor(
+            Fixed::ONE,
+            mindstrata_sim::appraisal::AWE_REVERENCE_RATE,
+            mindstrata_sim::appraisal::AWE_REVERENCE_FLOOR,
+        ),
+        Fixed::from_f64(0.85),
+        "full awe must hit the exact floor 0.85"
+    );
+
+    // Leg C (determinism): awe levels are seed-deterministic — the fold's
+    // input is stable across replays.
+    let again = crate::test_helpers::run_sim(42, 5000);
+    for (x, y) in sim.agents.iter().zip(again.agents.iter()) {
+        assert_eq!(
+            x.emotions.awe.to_raw(),
+            y.emotions.awe.to_raw(),
+            "awe must be seed-deterministic"
+        );
+    }
+}

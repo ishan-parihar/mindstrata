@@ -2692,9 +2692,26 @@ impl Simulation {
                     // the council that fails to prevent wrongdoing loses its
                     // perceived rightfulness. Zero-at-zero anchor: no violations
                     // -> no erosion.
+                    // §8.1.4 (Iter-130): awe — overwhelming, unexpected
+                    // significance — shields this erosion: an awe-struck
+                    // population experiences institutional failings as smaller
+                    // than they are ("reverence forgives"). One-sided: identity
+                    // at zero awe. The producer is U-shaped on |future_implication|
+                    // (= 1 − threat − need_pressure), so awe fires on significance
+                    // in EITHER direction (wonder or dread) — the zero baseline
+                    // blast (golden + 14 snapshots byte-identical) is consumer-
+                    // side: erosion floors legitimacy at 0 in every calibrated
+                    // window, the 0.5-anchored grievance/theft consumers never
+                    // activate, and the continuous motivation-context shift stays
+                    // below decision granularity.
+                    let awe_reverence = crate::appraisal::awe_reverence_factor(
+                        emotions[i].awe,
+                        crate::appraisal::AWE_REVERENCE_RATE,
+                        crate::appraisal::AWE_REVERENCE_FLOOR,
+                    );
                     self.agents[i]
                         .legitimacy_field
-                        .scandal_damage(witnessed_violations);
+                        .scandal_damage(witnessed_violations * awe_reverence);
                     let personal_violations = (emotions[i].guilt * Fixed::from_f64(0.4)
                         + emotions[i].shame * Fixed::from_f64(0.3))
                         .clamp_01();
@@ -12601,5 +12618,61 @@ mod tests {
             .max(Fixed::ZERO);
         assert_eq!(amplified.to_f64(), expected_amp.to_f64());
         assert!(amplified > plain, "low legitimacy must amplify grievance");
+    }
+
+    /// §8.1.4 (Iteration 130): the awe reverence fold is LIVE — the daily
+    /// scandal erosion is multiplied by `awe_reverence_factor`, so a run
+    /// whose awe is pinned at saturation (1.0, factor 0.85) must preserve
+    /// strictly more perceived legitimacy than the control (natural awe
+    /// ~0.67, factor ~0.90) over a horizon that is mid-erosion but below
+    /// the floor. AWE CONVERGENCE (probe-pinned): awe converges to the same
+    /// world-determined equilibrium (~0.67 by tick 130) regardless of the
+    /// start value, so a one-shot injection at populate is erased before
+    /// scandal erosion begins (~tick 120) — the differential would vanish.
+    /// The manual-tick harness re-injects awe before EVERY tick, pinning
+    /// the treatment at the 0.85 floor for every scandal call while the
+    /// control's natural awe yields ~0.90; same seed, same RNG stream, same
+    /// call order — any legitimacy divergence is attributable to the fold.
+    #[test]
+    fn awe_reverence_shields_legitimacy_from_scandal_erosion() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut reverent = Simulation::new(config.clone());
+        reverent.populate();
+        let mut plain = Simulation::new(config.clone());
+        plain.populate();
+        for _ in 0..200 {
+            for a in reverent.agents.iter_mut() {
+                a.emotions.awe = Fixed::ONE;
+            }
+            reverent.tick();
+            plain.tick();
+        }
+        let leg_mean = |sim: &Simulation| {
+            let n = sim.agents.len() as f64;
+            sim.agents
+                .iter()
+                .map(|a| a.legitimacy_field.overall.to_f64())
+                .sum::<f64>()
+                / n
+        };
+        let reverent_leg = leg_mean(&reverent);
+        let plain_leg = leg_mean(&plain);
+        assert!(
+            plain_leg < 0.5,
+            "scandal erosion must have fired in the horizon (control {plain_leg:.4})"
+        );
+        assert!(
+            reverent_leg > plain_leg,
+            "awe-saturated run must preserve more legitimacy than the control \
+             (the §8.1.4 reverence fold is wired), reverent {reverent_leg:.4} vs \
+             plain {plain_leg:.4}"
+        );
     }
 }
