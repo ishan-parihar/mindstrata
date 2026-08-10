@@ -5,6 +5,7 @@ use crate::conflict::{self, ConflictKind, ConflictState};
 use crate::culture::{CulturalState, Knowledge, KnowledgeCategory, TechnologyTree};
 use crate::diplomacy::{DiplomacyRegistry, CARAVAN_GRAIN_BASE, EVENT_RELATION_SHIFT, RAID_GRAIN_CAP, RAID_GRAIN_FRACTION};
 use crate::schools::SchoolRegistry;
+use crate::military::{MilitiaMember, MilitaryRegistry, MUSTER_CAP, conscription_eligible, drill_readiness, raid_loss_multiplier};
 use crate::theology::{TheologicalBelief, TheologyRegistry, Temperament, drift_conviction, seed_conviction, should_convert, ELDER_AGE};
 use crate::legal::{LegalCase, LegalRegistry, Verdict};
 use crate::logistics;
@@ -383,6 +384,9 @@ pub struct Simulation {
     /// §5 (Iteration 152): Religious registry — the seeded religion (if
     /// any), per-agent beliefs, and the festival calendar.
     pub theology: TheologyRegistry,
+    /// §5 (Iteration 153): Military registry — the conscription roster,
+    /// collective readiness, and drill tallies.
+    pub military: MilitaryRegistry,
     /// §6.5: Per-tick metric history for observability and CSV export.
     pub metric_history: Vec<MetricsSnapshot>,
     /// §7.3: Tick when last revolution occurred (for cooldown tracking).
@@ -500,6 +504,7 @@ impl Simulation {
             diplomacy: DiplomacyRegistry::new(),
             school: SchoolRegistry::new(),
             theology: TheologyRegistry::new(),
+            military: MilitaryRegistry::new(),
             metric_history: Vec::new(),
             last_revolution_tick: 0,
             last_moral_panic_tick: 0,
@@ -630,6 +635,7 @@ impl Simulation {
             diplomacy: DiplomacyRegistry::new(),
             school: SchoolRegistry::new(),
             theology: TheologyRegistry::new(),
+            military: MilitaryRegistry::new(),
             knowledge_store: snapshot.knowledge_store,
             metric_history: snapshot.metric_history,
             last_revolution_tick: snapshot.last_revolution_tick,
@@ -4457,6 +4463,13 @@ impl Simulation {
         // fully deterministic (no RNG drawn even when a religion exists).
         if tick_u64 > 0 && tick_u64.is_multiple_of(crate::theology::RELIGIOUS_CADENCE) {
             self.tick_theology(tick_u64);
+        }
+        // §5 (Iteration 153): the yearly military pass — conscription and
+        // drills, gated on a Barracks site existing. No default world places
+        // one, so the pass is a structural no-op in every calibrated window,
+        // and it draws no randomness even when a barracks exists.
+        if tick_u64 > 0 && tick_u64.is_multiple_of(crate::military::MILITARY_CADENCE) {
+            self.tick_military(tick_u64);
         }
         // Reset work ticks tracker for this tick
         for tick in &mut self.site_work_ticks {
@@ -8993,6 +9006,75 @@ impl Simulation {
         }
     }
 
+    /// §5 (Iteration 153): One military pass — conscription and drill.
+    /// Gated on a `SiteKind::Barracks` existing (no default world places
+    /// one, so this is a structural no-op in every calibrated window). Fully
+    /// deterministic — conscription and drills follow fixed rules and no RNG
+    /// is drawn — so the pass can never perturb any RNG stream, even in a
+    /// world with a barracks.
+    pub fn tick_military(&mut self, tick_u64: u64) {
+        // Zero-blast gate: without a barracks there is no militia to muster.
+        if !self
+            .world
+            .sites
+            .iter()
+            .any(|s| s.kind == crate::world::SiteKind::Barracks)
+        {
+            return;
+        }
+        let n = self.agents.len();
+        if n == 0 {
+            return;
+        }
+        if self.military.roster.len() < n {
+            self.military.roster.resize(n, None);
+        }
+
+        // Muster: conscript the most dominant eligible adults up to the
+        // barracks cap (dominance is the same combat-power proxy
+        // `resolve_conflict` uses for aggression). Deterministic tie-break:
+        // stable order by descending dominance.
+        let mut candidates: Vec<usize> = (0..n)
+            .filter(|&i| conscription_eligible(self.agents[i].age))
+            .filter(|&i| self.military.roster[i].is_none())
+            .collect();
+        candidates.sort_by(|&a, &b| {
+            self.agents[b]
+                .personality
+                .dominance
+                .cmp(&self.agents[a].personality.dominance)
+        });
+        candidates.truncate(MUSTER_CAP);
+        let mut conscripted: u64 = 0;
+        for i in candidates {
+            self.military.roster[i] = Some(MilitiaMember {
+                enlisted_since: tick_u64,
+                dominance_at_enlistment: self.agents[i].personality.dominance,
+            });
+            self.military.conscripts += 1;
+            conscripted += 1;
+        }
+        if conscripted > 0 {
+            self.military.musters += 1;
+        }
+
+        // Yearly drill: the militia trains, building collective readiness
+        // (the decay applies every year, whether or not they drill).
+        let attenders = self.military.militia_size() as usize;
+        self.military.readiness = drill_readiness(self.military.readiness, attenders, MUSTER_CAP);
+        if attenders > 0 {
+            self.military.drills += 1;
+            self.journal.record(
+                tick_u64,
+                AgentId::new(0),
+                JournalEntryKind::MilitaryDrill {
+                    attenders: attenders as u64,
+                    readiness: self.military.readiness.to_f64(),
+                },
+            );
+        }
+    }
+
     /// Relationship quality (0–1) between two agents, from the source's
     /// relationship_v2 view; defaults to a neutral 0.5 when absent.
     fn relationship_quality(&self, from: usize, to: usize) -> Fixed {
@@ -9165,8 +9247,9 @@ impl Simulation {
                     .map_or(Fixed::ZERO, |st| st.quantity)
             })
             .fold(Fixed::ZERO, |a, b| a + b);
-        let amount = (farm_grain * Fixed::from_f64(RAID_GRAIN_FRACTION))
-            .min(Fixed::from_f64(RAID_GRAIN_CAP));
+        let amount = ((farm_grain * Fixed::from_f64(RAID_GRAIN_FRACTION))
+            .min(Fixed::from_f64(RAID_GRAIN_CAP)))
+            * raid_loss_multiplier(self.military.readiness);
         let mut lost = Fixed::ZERO;
         if amount > Fixed::ZERO {
             let n = farm_indices.len().max(1);

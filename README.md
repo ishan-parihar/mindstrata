@@ -9,8 +9,9 @@
 > **A deterministic, emergent human-society simulation** — a small medieval settlement where every person carries a full psychological mind, biological needs, social relationships, moral values, and institutional memberships. History emerges from first principles, not scripted events.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/ishan-parihar/mindstrata/ci.yml?style=flat-square)](https://github.com/ishan-parihar/mindstrata/actions)
+[![CI](https://github.com/ishan-parihar/mindstrata/actions/workflows/ci.yml/badge.svg)](https://github.com/ishan-parihar/mindstrata/actions/workflows/ci.yml)
 [![Rust](https://img.shields.io/badge/rust-1.75+-blue?style=flat-square)](https://www.rust-lang.org)
-[![Tests](https://img.shields.io/badge/tests-1113%20passing-brightgreen?style=flat-square)](#)
+[![Tests](https://img.shields.io/badge/tests-1100%2B%20passing-brightgreen?style=flat-square)](#)
 [![License](https://img.shields.io/badge/license-MIT-purple?style=flat-square)](LICENSE)
 
 ---

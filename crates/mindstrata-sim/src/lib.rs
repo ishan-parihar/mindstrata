@@ -18,6 +18,7 @@ pub mod demography;
 pub mod diplomacy;
 pub mod schools;
 pub mod theology;
+pub mod military;
 pub mod ecology;
 pub mod factions;
 pub mod gossip;

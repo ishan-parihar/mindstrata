@@ -40,6 +40,9 @@ pub enum JournalEntryKind {
     /// §5 (Iteration 152): A mid-year religious festival was held, with the
     /// attending believer count.
     TheologyFestival { attenders: u64 },
+    /// §5 (Iteration 153): A military drill pass — the militia trained,
+    /// building collective readiness.
+    MilitaryDrill { attenders: u64, readiness: f64 },
 }
 
 /// A single journal entry.
