@@ -1,7 +1,7 @@
 # Mindstrata — Remaining Work Report
 
 **Scope:** refinement, testing, validation, and optimization items still open.
-**Baseline:** commit `f90e58a` (Iteration 89), tree clean, **958 workspace tests green** (772 sim + 186 integration), zero snapshot drift.
+**Baseline:** commit `5c45f44` (Iteration 132), tree clean, **1,099 workspace tests green** (849 sim + 230 tests-crate + 20 core), zero snapshot drift, strict clippy `-D warnings` clean.
 **Plan status:** AP2 is structurally ~99% complete — every plan-mandated *system* exists and is wired into the deterministic tick loop. The remaining work is overwhelmingly **decisional consumers** (state that is produced but never read back into decisions), **scale/perf hardening**, and **post-AP2 game features**.
 
 ---
@@ -51,9 +51,9 @@ The dominant category. A recurring pattern across the campaign: systems were bui
 
 | Item | Detail |
 |------|--------|
-| **State-doc test tables are stale** | §9.1 claims 757 tests / 623 unit / 130 integration / 0 clippy warnings / 349 commits — actual: **958 tests (772 + 186)**, ~93 clippy warning lines, and the commit count has moved on. The "0 warnings" and "0 TODO" claims no longer hold. |
+| **State-doc test tables — RETIRED (Iter 133)** | §9.1/§9.2/header/section-§1 refreshed to measured reality at commit `5c45f44`: **1,099 tests** (849 sim + 230 tests-crate + 20 core, via `cargo test -- --list`), 0 clippy warnings (strict `-D warnings` gate restored Iter 131), 0 TODO/FIXME, 450 commits, 67,253 lines of Rust, date updated. |
 | **Clippy debt — RETIRED (Iter 131)** | The 97-line warning debt is GONE — `cargo clippy --all-targets -- -D warnings` now compiles clean across every crate (sim + tests + core + cli + tui + benches). Sweep: clippy --fix auto-applications + 25 manual field_reassign_with_default initializers + the sim.rs:2940 status-loop enumerate refactor (with the cross-agent kinship read precomputed into `agent_ages`) + sort_by_key/Reverse for the descending sorts + clone_from + the dead `&&` RHS + bench missing_docs. PROVABLY behavior-neutral: 849 sim + 226 integration green, golden byte-identical, 14 snapshots byte-identical. The strict gate is restored. |
-| **State doc navigability** | The iteration history is one giant paragraph per iteration — hard to grep. A structured changelog (one bullet per iteration) would materially help. |
+| **State doc navigability — RESOLVED (Iter 133)** | The Iterations 22–48 wall-of-text footnote became `## 13. Iteration Changelog` in MINDSTRATA_CURRENT_STATE.md: every iteration 22–132 is now one grep-able `- **Iteration NN**` bullet, sorted newest-first (script-verified continuity, no missing/duplicate numbers). |
 | **Golden recalibration queue** | Each decisional consumer in §1 will require a deliberate, documented golden recalibration (Iter-66 precedent: meme mutation). No backlog exists tracking which consumers are slated and in what order. |
 
 ---
@@ -97,10 +97,10 @@ The dominant category. A recurring pattern across the campaign: systems were bui
 ## 6. Recommended Prioritization
 
 **Quick wins (low risk, no recalibration):**
-1. Clippy `-D warnings` sweep (93 warnings — pure quality debt)
-2. Refresh state-doc test tables + restructure the iteration log
-3. Add the missing 2 pre-existing-warning fixes (sim.rs:8445, integration_tests.rs:5050)
-4. Strengthen property tests (invariant-style) + a behavioral-delta harness (same seed, consumer on/off)
+1. ~~Clippy `-D warnings` sweep~~ — DONE (Iter 131): 97 → 0 warning lines, strict gate restored, provably behavior-neutral
+2. ~~Refresh state-doc test tables + restructure the iteration log~~ — DONE (Iter 133): §9.1/§9.2 refreshed to measured reality; `## 13. Iteration Changelog` is one grep-able bullet per iteration (22–132, newest first)
+3. ~~Add the missing 2 pre-existing-warning fixes (sim.rs:8445, integration_tests.rs:5050)~~ — DONE (Iter 131, part of the 97→0 sweep)
+4. Strengthen property tests (invariant-style) + a behavioral-delta harness (same seed, consumer on/off) — the next substantive quick win
 
 **Behavioral wiring (each recalibrates; highest game-fidelity value):**
 5. §7.2.6 conception→pregnancy→birth pipeline (largest inert channel)
@@ -114,4 +114,4 @@ The dominant category. A recurring pattern across the campaign: systems were bui
 
 ---
 
-*Report generated from `docs/architecture/AP2.md`, `docs/MINDSTRATA_CURRENT_STATE.md`, and live codebase audits at commit `f90e58a`. All test counts and clippy numbers verified against the workspace at report time.*
+*Report generated from `docs/architecture/AP2.md`, `docs/MINDSTRATA_CURRENT_STATE.md`, and live codebase audits at commit `5c45f44`. All test counts and clippy numbers verified against the workspace at report time (Iteration 133 refresh).*
