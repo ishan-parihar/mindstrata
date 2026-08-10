@@ -64,7 +64,7 @@ The dominant category. A recurring pattern across the campaign: systems were bui
 |------|--------|
 | **O(n²) daily passes** | Rumor transmission rebuilds the n×n trust matrix daily (fine at 12–48, documented as needing lazy/sparse treatment at scale, §17.4). |
 | **Meme aggregation** | Plan's sparse/lazy aggregation strategy (§17.4) not implemented — linear scans are fine at village scale only. |
-| **Benches** | Only `tick_loop.rs` criterion bench + the CI throughput gate (24 agents/2000 ticks < 30s). No per-system benches (e.g., memory encode hot path, rumor pass), no release-mode behavioral benchmark, no large-population scaling benchmark. |
+| **Benches — PARTIALLY RESOLVED (Iter 141)** | Per-system benches SHIPPED: `subsystems.rs` criterion target isolates the memory-encode hot path (fresh 16.7ns / near-capacity 175ns) and the gossip single-hop pass; `tick_loop.rs` extended to the 48-agent cap + a 10K-tick long-horizon run bench. Still missing: release-mode behavioral benchmark (measurements above are debug-vs-release unverified) and per-system regression thresholds wired into CI. |
 | **Cognitive budget at scale** | `AgentTier`/`CognitiveBudgetTracker` exist but are exercised only implicitly; background-tier behavior at 100s of agents is unmeasured. |
 | **Level-of-detail** | Focal-only narrative (`runs_narrative`) is the main tier gate; the §17.1 Focal/Secondary/Background calibration is not validated against a population mix. |
 

@@ -16,5 +16,9 @@ criterion = { workspace = true }
 name = "tick_loop"
 harness = false
 
+[[bench]]
+name = "subsystems"
+harness = false
+
 [lints]
 workspace = true
