@@ -203,6 +203,19 @@ pub fn scenario_behavioral_delta(
     }
 }
 
+/// Shared probe: conflict-escalation-chance delta in a scenario context.
+/// Extracted (Iteration 140) so every scenario-context differential uses the
+/// identical knob/metric and no test duplicates the drought computation.
+fn conflict_delta_in(scenario: &Scenario) -> DeltaReport {
+    scenario_behavioral_delta(
+        scenario,
+        3000,
+        "conflict_escalation_chance",
+        |p| p.conflict_escalation_chance = Fixed::from_f64(0.9),
+        |m| m.event_count as f64,
+    )
+}
+
 /// §46 (Iteration 138): The behavioral-delta harness works in scenario
 /// contexts (non-calm worlds with shocks). The drought scenario's water
 /// shock at tick 500 creates a structurally different world: the conflict
@@ -215,46 +228,69 @@ pub fn scenario_behavioral_delta(
 /// has less fuel in a weaker population.
 #[test]
 fn scenario_delta_is_live_and_contexts_differ() {
-    let calm = behavioral_delta(
+    let vanilla = behavioral_delta(
         42,
         3000,
-        "conflict_escalation_chance (calm)",
+        "conflict_escalation_chance (vanilla seed 42)",
         |p| p.conflict_escalation_chance = Fixed::from_f64(0.9),
         |m| m.event_count as f64,
     );
-    let drought = scenario_behavioral_delta(
-        &Scenario::drought(),
-        3000,
-        "conflict_escalation_chance (drought)",
-        |p| p.conflict_escalation_chance = Fixed::from_f64(0.9),
-        |m| m.event_count as f64,
-    );
+    let drought = conflict_delta_in(&Scenario::drought());
 
     // Both contexts are live (the harness works in scenarios).
-    assert_live_delta(&calm, 500.0);
+    assert_live_delta(&vanilla, 500.0);
     assert_live_delta(&drought, 500.0);
 
     // The scenario world has different baseline conditions. Probe-pinned:
-    // calm 60,792 vs drought 61,170 at seed 42/3000 (gap 378 events) — the
+    // vanilla 60,792 vs drought 61,170 at seed 42/3000 (gap 378 events) — the
     // drought shock at tick 500 depletes water but doesn't collapse the event
     // rate (agents stay active in survival mode). The difference is small but
     // structural.
-    let baseline_gap = (calm.baseline - drought.baseline).abs();
+    let baseline_gap = (vanilla.baseline - drought.baseline).abs();
     assert!(
         baseline_gap > 50.0,
-        "calm baseline ({:.0} events) must differ from drought baseline \
+        "vanilla baseline ({:.0} events) must differ from drought baseline \
          ({:.0} events) — gap {:.0} — the drought scenario structurally \
          changes the world",
-        calm.baseline, drought.baseline, baseline_gap
+        vanilla.baseline, drought.baseline, baseline_gap
     );
 
     // The drought delta is direction-blind smaller (survival-mode damping).
     // Both are positive (more escalation = more events), but the gap is a
-    // probe-pinned calibration observation: calm +{:.0} vs drought +{:.0}.
+    // probe-pinned calibration observation: vanilla +{:.0} vs drought +{:.0}.
+    assert!(
+        vanilla.delta > 0.0 && drought.delta > 0.0,
+        "both contexts must show positive deltas (more escalation = more events): \
+         vanilla={:.0} drought={:.0}",
+        vanilla.delta, drought.delta
+    );
+}
+
+/// §46 (Iteration 140): The Calm scenario (no shocks) produces a structurally
+/// different baseline from the Drought scenario, proving the scenario battery
+/// is useful for control-vs-treatment differential testing.
+#[test]
+fn calm_scenario_baseline_differs_from_drought() {
+    let calm = conflict_delta_in(&Scenario::calm());
+    let drought = conflict_delta_in(&Scenario::drought());
+
+    // Both are live (the harness works with the new Calm scenario).
+    assert_live_delta(&calm, 500.0);
+    assert_live_delta(&drought, 500.0);
+
+    // The calm baseline (no shocks) differs from the drought baseline.
+    let gap = (calm.baseline - drought.baseline).abs();
+    assert!(
+        gap > 50.0,
+        "calm baseline ({:.0} events) must differ from drought \
+         baseline ({:.0} events) — gap {:.0}",
+        calm.baseline, drought.baseline, gap
+    );
+
+    // Both deltas are positive (more escalation = more events).
     assert!(
         calm.delta > 0.0 && drought.delta > 0.0,
-        "both contexts must show positive deltas (more escalation = more events): \
-         calm={:.0} drought={:.0}",
+        "both contexts must show positive deltas: calm delta={:.0} drought delta={:.0}",
         calm.delta, drought.delta
     );
 }

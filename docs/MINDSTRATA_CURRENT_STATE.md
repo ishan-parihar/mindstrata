@@ -2,7 +2,7 @@
 
 **Prepared for:** Lead Game Designer  
 **Date:** August 10, 2026  
-**Codebase Version:** 67,253 lines of Rust across 6 crates, **1,113 tests passing** (849 sim + 244 tests-crate + 20 core), 0 clippy warnings, 0 TODO/FIXME
+**Codebase Version:** 67,253 lines of Rust across 6 crates, **1,115 tests passing** (850 sim + 245 tests-crate + 20 core), 0 clippy warnings, 0 TODO/FIXME
 
 ---
 
@@ -31,7 +31,7 @@ Mindstrata is a **deterministic, emergent human-society simulation** written in 
 
 **Current scale:**
 - 67,253 lines of Rust source code
-- 1,113 automated tests (849 sim unit + 244 tests-crate: integration/property/snapshot/golden/statistical/scale/comparison/behavioral-delta/long-horizon + 20 core)
+- 1,115 automated tests (850 sim unit + 245 tests-crate: integration/property/snapshot/golden/statistical/scale/comparison/behavioral-delta/long-horizon + 20 core)
 - 60+ simulation modules covering biology, psychology, social dynamics, economics, ecology, demography, health, conflict, culture, institutions, and noospheric fields
 - Deterministic replay from any seed
 - CLI with agent psychology inspector, CSV metrics export, scenario runner
@@ -547,11 +547,11 @@ All data-driven specs are validated by `spec_lint.rs` for existence and non-empt
 
 ### 9.1 Test Breakdown
 
-Verified at Iteration 139 via `cargo test -- --list` (tree clean).
+Verified at Iteration 140 via `cargo test -- --list` (tree clean).
 
 | Test Category | Count | Coverage |
 |---|---|---|
-| Unit tests (mindstrata-sim) | 849 | Per-system correctness across every sim module (biology, psychology, social, culture, noosphere, systems, sim) |
+| Unit tests (mindstrata-sim) | 850 | Per-system correctness across every sim module (biology, psychology, social, culture, noosphere, systems, sim) |
 | Integration tests (mindstrata-tests) | 160 | Full simulation runs (100–20,000 ticks, multi-seed macro health, scenario battery, calibrated consumers) |
 | Smoke tests | 29 | Fast end-to-end sanity runs |
 | Property tests | 21 | Proptest: determinism, bounds, structural invariants (norm strength, attachment, moral emotions, institution legitimacy — Iter 139) |
@@ -561,10 +561,10 @@ Verified at Iteration 139 via `cargo test -- --list` (tree clean).
 | Scale validation | 3 | Full-capacity (MAX_POPULATION 48) cap-safety + all-22-emotion bounds + determinism (Iter 132) |
 | Comparison | 3 | Cross-config differential harnesses |
 | Agent lifetime trace | 1 | End-to-end agent lifecycle invariants |
-| Behavioral delta | 5 | Same-seed consumer on/off differential harness + scenario-context extension (Iter 134/138) |
+| Behavioral delta | 6 | Same-seed consumer on/off differential harness + scenario-context extension (Iter 134/138/140) |
 | Long horizon | 2 | 50K determinism + emergence sweep, 3 seeds (Iter 135) |
 | Core unit tests (mindstrata-core) | 20 | Kernel correctness |
-| **Total** | **1,113** | 849 sim + 244 tests-crate + 20 core |
+| **Total** | **1,115** | 850 sim + 245 tests-crate + 20 core |
 
 Historical granular rows (scenario battery, economy-under-plague, skeletal+digestive, relational power, speech acts,
 perception, pregnancy, memory, motivation, thermal — Iterations 29–45) are folded into the module counts above.
@@ -573,7 +573,7 @@ perception, pregnancy, memory, motivation, thermal — Iterations 29–45) are f
 
 | Metric | Value |
 |---|---|
-| Tests passing | 1,113/1,113 (100%) |
+| Tests passing | 1,115/1,115 (100%) |
 | Clippy warnings | 0 (strict `-D warnings` gate, restored Iteration 131) |
 | Unsafe code | 0 (`unsafe_code = "forbid"`) |
 | TODO/FIXME comments | 0 (verified at Iteration 133) |
@@ -669,6 +669,7 @@ cargo test -p mindstrata-sim spec_lint
 
 *This document reflects the codebase state as of August 10, 2026. The simulation engine has been upgraded with Architecture Plan 2 implementations: embodied biology, structured psychology, rich social relationships, cultural systems, and noospheric fields. All systems are integrated into a deterministic tick loop with level-of-detail cognition and causal provenance tracking. Each entry below is one grep-able bullet, newest first.
 
+- **Iteration 140 (scenario battery — the LAST remaining section 2 gap CLOSED)**: new Calm scenario (control with NO shocks) + `Scenario::calm()` builder + `specs/scenarios/calm.ron` spec + `calm_has_no_shocks` unit test + `calm_scenario_baseline_differs_from_drought` differential test. The calm scenario (no external events) serves as the control for scenario-based differential testing: the conflict channel is live in BOTH calm and drought, and their baselines differ structurally. The shared `conflict_delta_in(scenario)` helper was extracted (Iteration 140) so the Iter-138 drought computation is no longer duplicated — every scenario-context probe now uses the identical knob/metric. Honest scope: this iteration makes ONE intentional additive sim-code change — the `Scenario::calm()` builder (mirrors the 5 existing builders; the calm RON spec pairs with it). Everything else is test-only. Full gate: 850 sim + 244 integration + golden + 15 snapshots + strict clippy `-D warnings` clean. 1,115 workspace tests. The entire section 2 queue is now CLOSED.
 - **Iteration 139 (structural property invariants — the queue section 2 'property tests' gap CLOSED)**: 4 new invariant-style tests in property_tests.rs. (1) `norm_strength_bounded_across_seeds`: every internalized norm's strength field in [0,1] across 10 seeds at 500 ticks. (2) `attachment_dimensions_bounded_across_seeds`: all three attachment axes (security, anxiety, avoidance) in [0,1] across 10 seeds. (3) `moral_emotions_bounded_across_seeds`: all six moral emotion channels (outrage, guilt, contempt, gratitude, pride, shame) in [0,1] across 10 seeds. (4) `institution_legitimacy_bounded_across_seeds`: every institution's legitimacy in [0,1] across 10 seeds. The property tests suite now covers 21 tests (was 17), expanding from pure determinism/bounds into structural invariants. ZERO sim-code changes: 849 sim + 243 integration + golden + 15 snapshots green, strict clippy `-D warnings` clean. 1,113 workspace tests.
 - **Iteration 138 (scenario-context harness — extends the behavioral-delta harness to non-calm worlds)**: new `run_scenario_with_params` helper (test_helpers.rs) and `scenario_behavioral_delta` function (behavioral_delta.rs) enable simulation runs that use a `Scenario` (with shocks like Drought/Famine) instead of a bare `SimConfig`. The parameter mutation is applied before `populate`/`run`, so the same-seed determinism contract holds. Demo test `scenario_delta_is_live_and_contexts_differ`: the conflict-escalation chance knob (0.3->0.9) is LIVE in BOTH the calm seed-42 world AND the drought-scenario world at 3000 ticks. PROBE-PINNED FINDING: drought DAMPENS the conflict delta (calm +1704 events vs drought +1435) — thirst depresses health, shifting behavior from conflict to survival-mode gathering; the same escalation chance has less fuel in a weaker population. The scenario baseline (61,170 events) differs structurally from calm (60,792) by 378 events. Honest scope: does NOT close the scenario-battery row (no new spec files added, only extends the testing harness to use existing scenarios) and does NOT close the behavioral-proofs row (one consumer in one scenario is a demo, not exhaustive application). Gate adds ~8s (one run of the demo). ZERO sim-code changes: 849 sim + 239 integration + golden + 15 snapshots green, strict clippy `-D warnings` clean.
 - **Iteration 137 (statistical emergence audits — the queue section 2 'statistical emergence' gap CLOSED)**: two new multi-seed audits in `statistical_emergence.rs`. (1) `courtship_d4_reachable_across_worlds`: 10 seeds at 5000 ticks each (~33s), proves the D4 courtship gate (`total_attraction > 0.4`) is structurally reachable in at least one world (calm seed 42 sits at 0.333 — below the gate, so the gate opens only in non-calm seeds, which is the expected contract). (2) `faction_counts_vary_across_worlds`: 20 seeds at 2000 ticks each (~26s), proves faction formation is non-deterministic (counts vary across seeds) and at least one seed forms factions. Existing rumor-saturation coverage (`rumors_transmit_through_population` + `rumor_evidence_degrades_with_transmission_hops`) is adequate — no new rumor audit needed. Runtime note: the two tests add ~59s to the gate (comparable to Iter-135's ~72s long-horizon addition). ZERO sim-code changes: 849 sim + 238 integration + golden + 15 snapshots green, strict clippy `-D warnings` clean.

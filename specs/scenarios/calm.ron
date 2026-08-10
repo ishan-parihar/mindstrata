@@ -1,0 +1,14 @@
+// §46 Scenario DSL — Calm
+// A pure village with no shocks — the control scenario for scenario-based
+// differential tests. No external events, just baseline survival dynamics.
+
+Scenario(
+    name: "Calm",
+    description: "A pure village with no shocks. Baseline survival dynamics without festivals, droughts, or other external events.",
+    seed: 42,
+    ticks: 4320,
+    world_width: 16,
+    world_height: 16,
+    num_agents: 12,
+    shocks: [],
+)

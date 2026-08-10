@@ -217,6 +217,27 @@ impl Scenario {
         }
     }
 
+    /// Create the "Calm" scenario — a pure village with no shocks.
+    ///
+    /// Mirrors `specs/scenarios/calm.ron`: no external events, just baseline
+    /// survival dynamics. Useful as a control scenario for scenario-based
+    /// differential testing (e.g., comparing calm vs drought metrics).
+    pub fn calm() -> Self {
+        Self {
+            name: "Calm".into(),
+            description: "A pure village with no shocks. Baseline survival \
+                         dynamics without festivals, droughts, or other \
+                         external events."
+                .into(),
+            seed: 42,
+            ticks: 4320,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            shocks: vec![],
+        }
+    }
+
     /// Convert scenario to simulation config.
     pub fn to_sim_config(&self) -> SimConfig {
         SimConfig {
@@ -279,5 +300,15 @@ mod tests {
         // Verify no unused shock variants exist
         let kinds = [ShockKind::Drought, ShockKind::Festival];
         assert_eq!(kinds.len(), 2);
+    }
+
+    #[test]
+    fn calm_has_no_shocks() {
+        // The control scenario must fire no shocks at any tick.
+        let calm = Scenario::calm();
+        assert!(calm.shocks.is_empty(), "calm scenario must have no shocks");
+        assert!(calm.shock_at(200).is_none(), "calm must not shock at 200");
+        assert!(calm.shock_at(500).is_none(), "calm must not shock at 500");
+        assert!(calm.shock_at(4320).is_none(), "calm must not shock at 4320");
     }
 }
