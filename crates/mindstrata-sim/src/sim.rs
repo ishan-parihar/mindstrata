@@ -348,6 +348,10 @@ pub struct Simulation {
     scenario: Option<Scenario>,
     /// §28: Season tracker for ecology.
     pub season: ecology::SeasonTracker,
+    /// §5 (Iteration 147): continuous weather — temperature/rainfall with
+    /// emergent drought/flood regimes (the Ecology RNG stream is virgin, so
+    /// weather draws cannot perturb any other stream).
+    pub weather: ecology::WeatherTracker,
     /// §28: Ecology configuration.
     pub ecology_config: ecology::EcologyConfig,
     /// §9: Health configuration.
@@ -466,6 +470,7 @@ impl Simulation {
             provenance: CausalProvenance::new(),
             scenario: None,
             season: ecology::SeasonTracker::new(8760),
+            weather: ecology::WeatherTracker::new(ecology::WeatherConfig::default()),
             ecology_config: ecology::EcologyConfig::default(),
             health_config: health::HealthConfig::default(),
             demography_config: demography::DemographyConfig::default(),
@@ -573,6 +578,10 @@ impl Simulation {
             provenance: snapshot.provenance,
             scenario: None,
             season: snapshot.season,
+            // §5 (Iteration 147): snapshots predate weather — restore a fresh
+            // tracker; the rng is reseeded from master_seed so weather replays
+            // deterministically from the restore tick onward.
+            weather: ecology::WeatherTracker::new(ecology::WeatherConfig::default()),
             ecology_config: snapshot.ecology_config,
             health_config: snapshot.health_config,
             demography_config: snapshot.demography_config,
@@ -4306,6 +4315,59 @@ impl Simulation {
             }
         }
 
+        // ── 4a. Weather: continuous temperature/rainfall + emergent regimes ──
+        // The Ecology RNG stream has no other consumer (virgin), so weather's
+        // two draws per tick cannot shift any existing stream's position —
+        // replays stay byte-identical. Weather is computed before production
+        // (growth factor) and spoilage (temperature factor) read it. NB: the
+        // season baseline used here rolled at the PREVIOUS tick's block 16
+        // (season advances after weather), so weather lags a season boundary
+        // by one tick — a deliberate, negligible ordering artifact.
+        let weather_event = self.weather.advance(
+            self.season.current,
+            self.rng.get_mut(RngStream::Ecology),
+        );
+        if let Some(ev) = weather_event {
+            tracing::info!(
+                event = ?ev,
+                rainfall = self.weather.rainfall.to_f64(),
+                temperature = self.weather.temperature.to_f64(),
+                "Weather regime change"
+            );
+        }
+        // Regime-gated well water: an emergent drought drains each well's
+        // water every tick; an emergent flood recharges it. Normal weather
+        // touches nothing — wells only move through consumption and these
+        // regimes, so calibrated windows are unaffected by this block.
+        match self.weather.regime {
+            ecology::WeatherRegime::Drought => {
+                let drain = self.weather.config.drought_water_drain;
+                for site in &mut self.world.sites {
+                    for stock in &mut site.inventory {
+                        if stock.resource_id == WATER_RESOURCE_ID && stock.quantity > Fixed::ZERO {
+                            stock.quantity = (stock.quantity * (Fixed::ONE - drain)).max(Fixed::ZERO);
+                        }
+                    }
+                }
+            }
+            ecology::WeatherRegime::Flood => {
+                let recharge = self.weather.config.flood_water_recharge;
+                for site in &mut self.world.sites {
+                    // Cap recharged wells at the site's storage capacity so a
+                    // sustained flood cannot balloon water past the §19.5.E
+                    // storage contract (the cap only binds during floods,
+                    // which never fire in calibrated windows).
+                    let cap = site.storage_capacity;
+                    for stock in &mut site.inventory {
+                        if stock.resource_id == WATER_RESOURCE_ID && stock.quantity > Fixed::ZERO {
+                            stock.quantity = (stock.quantity * (Fixed::ONE + recharge)).min(cap);
+                        }
+                    }
+                }
+            }
+            ecology::WeatherRegime::Normal => {}
+        }
+
         // ── 4b. Resource operations (extracted) ──
         self.tick_resource_operations(&action_starts, pre_tick_events, tick_u64, tick);
 
@@ -4449,7 +4511,10 @@ impl Simulation {
             for stock in &mut site.inventory {
                 if let Some(res_def) = resource_defs.iter().find(|r| r.id == stock.resource_id) {
                     if res_def.perishable && res_def.spoilage_rate > Fixed::ZERO {
-                        let spoilage = stock.quantity * res_def.spoilage_rate * spoilage_modifier;
+                        // §5 (Iteration 147): weather scales spoilage — ≈1.03
+                        // in normal weather, ×1.2 in a flood, ×0.8 in a drought.
+                        let spoilage = stock.quantity * res_def.spoilage_rate * spoilage_modifier
+                            * self.weather.temperature_factor();
                         stock.quantity = (stock.quantity - spoilage).max(Fixed::ZERO);
                     }
                 }
@@ -8637,7 +8702,11 @@ impl Simulation {
                         .embodied
                         .skeletal
                         .effective_mobility();
-                    let productivity = base * sickness_factor * mobility_factor;
+                    // §5 (Iteration 147): weather scales farm output — the
+                    // growth factor is ≈ identity in normal weather (mild
+                    // calibrated drift) and ≈0.6 during an emergent drought
+                    // (genuine famine pressure).
+                    let productivity = base * sickness_factor * mobility_factor * self.weather.growth_factor();
                     if let Some(farm_idx) = self.world.best_farm_for_work() {
                         self.world.produce_resource(farm_idx, GRAIN_RESOURCE_ID, productivity);
                         // §13.3: Workers earn coin proportional to productivity.

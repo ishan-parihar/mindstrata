@@ -75,7 +75,7 @@ The dominant category. A recurring pattern across the campaign: systems were bui
 **Phase 2 — Deepen:**
 - **Multi-settlement** — neighboring villages, trade routes, diplomacy, conflict
 - **Technology tree** — knowledge prerequisites, innovation chains
-- **Weather system** — temperature, rainfall, droughts, floods (only scripted shocks exist today)
+- ~~**Weather system**~~ — **RESOLVED (Iter 147)** — continuous `WeatherTracker` (temperature + rainfall mean-reverting to seasonal baselines, virgin Ecology RNG stream) with EMERGENT drought/flood regimes wired to three consumers: farm growth (≈1.015 identity normal, ×0.6 drought), spoilage (×1.2 flood / ×0.8 drought), and regime-gated well water. Regimes are rare-to-never in bounded horizons by design (documented); the machinery is proven via re-tuned deterministic configs. Calibrated blast consciously regenerated (golden + 5 snapshots) with 5 behavioral re-pins, all trajectory-cascade from the ~1% production shift.
 - ~~**Time-based resource spoilage**~~ — **RESOLVED (Iter 146): STALE** — per-tick site-inventory rot has been live since Iteration 33 itself (d415b8c, block 10 of `tick_loop`: grain 0.001/tick × season modifier, all seasons positive); the real gap was zero test coverage, now closed by `site_inventory_rots_each_tick_while_stable_resources_do_not` (perishable grain decays in a consumption-isolated chamber while non-perishable water stays exactly stable; seed-deterministic)
 
 **Phase 3 — Add depth:**
