@@ -76,7 +76,7 @@ The dominant category. A recurring pattern across the campaign: systems were bui
 - **Multi-settlement** — neighboring villages, trade routes, diplomacy, conflict
 - **Technology tree** — knowledge prerequisites, innovation chains
 - **Weather system** — temperature, rainfall, droughts, floods (only scripted shocks exist today)
-- **Time-based resource spoilage** — Iter 33 handled storage-overflow spoilage; inventory rot over time remains
+- ~~**Time-based resource spoilage**~~ — **RESOLVED (Iter 146): STALE** — per-tick site-inventory rot has been live since Iteration 33 itself (d415b8c, block 10 of `tick_loop`: grain 0.001/tick × season modifier, all seasons positive); the real gap was zero test coverage, now closed by `site_inventory_rots_each_tick_while_stable_resources_do_not` (perishable grain decays in a consumption-isolated chamber while non-perishable water stays exactly stable; seed-deterministic)
 
 **Phase 3 — Add depth:**
 - **Legal system** — courts, trials, property rights

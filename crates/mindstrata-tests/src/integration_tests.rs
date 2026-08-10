@@ -1274,6 +1274,93 @@ fn propaganda_effectiveness_correlates_with_legitimacy() {
     }
 }
 
+// ── §5 (AP2): Time-based resource spoilage (Iteration 146) ─────────
+
+/// §5 (AP2, Iteration 146): per-tick site-inventory spoilage is LIVE but had
+/// ZERO test coverage — the RWR queue item "inventory rot over time remains"
+/// is stale (the rot block landed with Iteration 33 itself, d415b8c, and
+/// runs every tick in block 10 of `tick_loop`). This test proves the
+/// mechanism in a live run AND pins its isolation from every other inventory
+/// drain, so the decay signal is unambiguously spoilage:
+///
+/// - Consumption (Eat/Drink/trade) targets only `SiteKind::Farm`/`Well`
+///   sites via `accessible_farm_with_grain`/`accessible_well_with_water`;
+/// - Production (farming/well) likewise writes grain/water only into
+///   Farm/Well sites — the chamber never receives a production write;
+/// - Theft (`enforce_theft`) never fires in calibrated windows (0
+///   NormViolated at every horizon, probe-pinned), and even when it fires
+///   it is norm-resistance-gated;
+/// - Storage-overflow spoilage needs total stock > storage_capacity, and
+///   the smallest default capacity is 200 — this test seeds 100 total.
+///
+/// So a non-Farm/non-Well site holding perishable grain (spoilage_rate
+/// 0.001/tick) and non-perishable water (spoilage_rate 0) is a clean decay
+/// chamber: grain must strictly rot every tick — all four seasons carry
+/// positive spoilage modifiers (Spring 0.8, Summer 1.2, Autumn 0.6, Winter
+/// 0.3), so decay is guaranteed in every window — while water must stay
+/// EXACTLY stable.
+#[test]
+fn site_inventory_rots_each_tick_while_stable_resources_do_not() {
+    use mindstrata_sim::world::{GRAIN_RESOURCE_ID, WATER_RESOURCE_ID, SiteKind, World};
+
+    // Deterministic run of the chamber; returns the seeded grain stock, the
+    // final stock quantities, and the chosen site index (world layout is
+    // seed-independent). The seeded grain is returned so the decay assertion
+    // is RELATIVE (grain_after < grain_before) — immune to a future
+    // world_gen change that pre-seeds the chamber site with grain.
+    let outcome = |seed: u64| -> (Fixed, Fixed, Fixed, usize) {
+        let config = SimConfig {
+            seed, max_ticks: 2000, world_width: 16, world_height: 16,
+            num_agents: 12, snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        // Isolation chamber: a site agents never consume from and that never
+        // receives production. Consumption is Farm/Well-only, production is
+        // Farm/Well-only, and 100 total stock sits far under the smallest
+        // storage capacity (200), so overflow spoilage cannot confound.
+        let site_idx = sim.world.sites.iter()
+            .position(|s| s.kind != SiteKind::Farm && s.kind != SiteKind::Well)
+            .expect("default world has a non-Farm/non-Well site");
+        assert!(Fixed::from_f64(100.0) <= sim.world.sites[site_idx].storage_capacity,
+            "test chamber must stay under storage capacity to isolate spoilage");
+        sim.world.produce_resource(site_idx, GRAIN_RESOURCE_ID, Fixed::from_f64(50.0));
+        sim.world.produce_resource(site_idx, WATER_RESOURCE_ID, Fixed::from_f64(50.0));
+        let stock = |w: &World, rid: u64| -> Fixed {
+            w.sites[site_idx].inventory.iter()
+                .find(|r| r.resource_id == rid)
+                .map_or(Fixed::ZERO, |r| r.quantity)
+        };
+        let grain_before = stock(&sim.world, GRAIN_RESOURCE_ID);
+        let water_before = stock(&sim.world, WATER_RESOURCE_ID);
+        assert!(grain_before > Fixed::ZERO && water_before > Fixed::ZERO,
+            "seeded chamber must hold both resources");
+        sim.run(1000);
+        (grain_before, stock(&sim.world, GRAIN_RESOURCE_ID), stock(&sim.world, WATER_RESOURCE_ID), site_idx)
+    };
+
+    let (grain_seed_a, grain_a, water_a, site_a) = outcome(42);
+    let (grain_seed_b, grain_b, water_b, site_b) = outcome(42);
+    assert_eq!(site_a, site_b, "world layout must be seed-independent");
+    // The spoilage path consumes no RNG — a same-seed replay must reproduce
+    // byte-identical final stocks.
+    assert_eq!((grain_seed_a, grain_a, water_a), (grain_seed_b, grain_b, water_b),
+        "per-tick spoilage must be seed-deterministic");
+
+    // Perishable grain rots every tick (0.001/tick × season modifier ≥ 0.3):
+    // over 1000 ticks the stock must strictly decay from its seeded level...
+    assert!(grain_a < grain_seed_a,
+        "perishable grain must rot over time: {} -> {}", grain_seed_a.to_f64(), grain_a.to_f64());
+    // ...but gently (≈30–50% over the window) — never a wipe.
+    assert!(grain_a > Fixed::ZERO,
+        "grain should not be wiped by 1000 ticks of 0.001/tick spoilage");
+    // Non-perishable control: water (spoilage_rate 0) must be EXACTLY
+    // stable — proving the chamber is isolated from consumption/overflow
+    // and the grain drop is spoilage, not an external drain.
+    assert_eq!(water_a, Fixed::from_f64(50.0),
+        "non-perishable water must stay exactly stable: 50.0 -> {}", water_a.to_f64());
+}
+
 /// §18.4: Over multiple seeds, rituals should correlate with group stability.
 /// Institutions with ritual participation should have higher unity than those without.
 #[test]
