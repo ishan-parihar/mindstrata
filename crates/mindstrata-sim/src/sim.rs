@@ -6954,9 +6954,23 @@ impl Simulation {
             return;
         }
 
-        // §17.4: Flush accumulated exposure samples into the aggregator.
+        // §17.4: Flush accumulated exposure samples into the aggregator. This
+        // stays DAILY — the tick loop pushes samples every tick, and dropping
+        // them would lose the observability data.
         let samples = std::mem::take(&mut self.exposure_samples);
         self.meme_aggregator.set_exposure_samples(samples);
+
+        // §17.4 lazy aggregation: the input builds below are O(agents ×
+        // categories) + O(agents × households) — rebuilding them every day
+        // when `aggregate()` would immediately early-return its cached
+        // metrics is pure waste. Gate them behind `should_compute`, the
+        // single source of truth that `aggregate()` itself uses (tick 0
+        // always initializes; then every `aggregation_interval` ticks), so
+        // the aggregate call happens on exactly the same ticks as before
+        // with identical inputs — behavior-preserving by construction.
+        if !self.meme_aggregator.should_compute(tick_u64) {
+            return;
+        }
 
         // Build per-agent meme host lists (agent_idx → meme ids hosted).
         // §13.2 + §17.4: Track which memes each agent hosts.

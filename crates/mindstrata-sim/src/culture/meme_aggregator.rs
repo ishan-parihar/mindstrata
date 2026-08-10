@@ -131,6 +131,15 @@ impl MemeAggregator {
             && tick.is_multiple_of(self.aggregation_interval)
     }
 
+    /// Single source of truth for "does aggregation actually compute on this
+    /// tick": tick 0 always initializes; otherwise the interval gate applies.
+    /// Used both inside [`Self::aggregate`] and by the sim's lazy gate, so a
+    /// change to the cadence semantics can never silently diverge between the
+    /// two sites.
+    pub fn should_compute(&self, tick: u64) -> bool {
+        tick == 0 || self.should_aggregate(tick)
+    }
+
     /// Get the cached metrics from the last aggregation.
     pub fn metrics(&self) -> &AggregatedMemeMetrics {
         &self.cached_metrics
@@ -316,7 +325,7 @@ impl MemeAggregator {
         agent_centrality: &[Fixed],
     ) -> &AggregatedMemeMetrics {
         // Always run on tick 0 for initialization; otherwise respect interval.
-        if tick != 0 && !self.should_aggregate(tick) {
+        if !self.should_compute(tick) {
             return &self.cached_metrics;
         }
 
@@ -474,5 +483,81 @@ mod tests {
     fn for_large_population_has_higher_sample_cap() {
         let agg = MemeAggregator::for_large_population();
         assert_eq!(agg.max_exposure_samples, 50);
+    }
+
+    #[test]
+    fn off_schedule_aggregate_is_mutation_free() {
+        // §17.4 contract that the sim-side lazy gate relies on: calling
+        // `aggregate()` on a non-scheduled tick MUST NOT mutate the cached
+        // metrics — otherwise skipping the call on those days (Iteration 143)
+        // would change observable state. Pin: computed_tick and the cached
+        // totals stay exactly as the last scheduled run left them.
+        let mut agg = MemeAggregator::new();
+        let agent_meme_hosts = vec![vec![0], vec![0], vec![1]];
+        let agent_groups = vec![Some(0), Some(0), Some(1)];
+        let meme_ids = vec![0, 1];
+        let meme_charges = vec![Fixed::from_f64(0.7), Fixed::from_f64(0.4)];
+        let group_labels = vec![(0, "faction".into()), (1, "faction".into())];
+        let centrality = vec![
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.4),
+            Fixed::from_f64(0.6),
+        ];
+
+        // Scheduled run at tick 10.
+        let scheduled = agg.aggregate(
+            10,
+            &agent_meme_hosts,
+            &agent_groups,
+            &meme_ids,
+            &meme_charges,
+            &group_labels,
+            &centrality,
+        );
+        assert_eq!(scheduled.computed_tick, 10);
+        assert_eq!(scheduled.total_active_memes, 2);
+
+        // Off-schedule call at tick 11 must be a no-op.
+        let off = agg.aggregate(
+            11,
+            &agent_meme_hosts,
+            &agent_groups,
+            &meme_ids,
+            &meme_charges,
+            &group_labels,
+            &centrality,
+        );
+        assert_eq!(off.computed_tick, 10); // unchanged from the scheduled run
+        assert_eq!(off.total_active_memes, 2);
+        // last_aggregation_tick must not advance (no wasted work bookkeeping).
+        assert_eq!(agg.last_aggregation_tick, 10);
+    }
+
+    #[test]
+    fn tick_zero_always_initializes_despite_should_aggregate_false() {
+        // `should_aggregate(0)` is false, yet `aggregate(0)` must still
+        // compute — the asymmetry the sim's lazy gate encodes via
+        // `should_compute`. A regression here would silently change what the
+        // cached metrics hold before the first interval tick.
+        let mut agg = MemeAggregator::new();
+        assert!(!agg.should_aggregate(0));
+        assert!(agg.should_compute(0));
+        let agent_meme_hosts = vec![vec![0]];
+        let agent_groups = vec![Some(0)];
+        let meme_ids = vec![0];
+        let meme_charges = vec![Fixed::from_f64(0.5)];
+        let group_labels = vec![(0, "faction".into())];
+        let centrality = vec![Fixed::from_f64(0.5)];
+        let metrics = agg.aggregate(
+            0,
+            &agent_meme_hosts,
+            &agent_groups,
+            &meme_ids,
+            &meme_charges,
+            &group_labels,
+            &centrality,
+        );
+        assert_eq!(metrics.computed_tick, 0);
+        assert_eq!(agg.last_aggregation_tick, 0);
     }
 }
