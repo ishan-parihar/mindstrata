@@ -1,10 +1,14 @@
 # Mindstrata
 
+<p align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Mindstrata: a medieval settlement where every person carries a complete mind, and history emerges through ten substrate layers — physics, biology, perception, emotion, psychology, social bonds, institutions, culture, noospheric fields, history">
+</p>
+
 > **A deterministic, emergent human-society simulation** — a small medieval settlement where every person carries a full psychological mind, biological needs, social relationships, moral values, and institutional memberships. History emerges from first principles, not scripted events.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/ishan-parihar/mindstrata/ci.yml?style=flat-square)](https://github.com/ishan-parihar/mindstrata/actions)
 [![Rust](https://img.shields.io/badge/rust-1.75+-blue?style=flat-square)](https://www.rust-lang.org)
-[![Tests](https://img.shields.io/badge/tests-749%20passing-brightgreen?style=flat-square)](#)
+[![Tests](https://img.shields.io/badge/tests-1098%20passing-brightgreen?style=flat-square)](#)
 [![License](https://img.shields.io/badge/license-MIT-purple?style=flat-square)](LICENSE)
 
 ---
@@ -23,6 +27,8 @@ Agents are not omniscient. Each knows only its body, needs, emotions, memories, 
 - **Simulation-first, GUI-later** — the TUI is a debug instrument; the simulation runs headless
 
 The design sits between **The Sims** (individual psychology), **Cities: Skylines** (settlements/economy), and **Dwarf Fortress** (deep emergence) — with the differentiator that *every* agent has a complete cognitive pipeline.
+
+The substrate architecture is documented in [`docs/architecture/AP2.md`](docs/architecture/AP2.md); live state and remaining work in [`docs/MINDSTRATA_CURRENT_STATE.md`](docs/MINDSTRATA_CURRENT_STATE.md) and [`docs/REMAINING_WORK_REPORT.md`](docs/REMAINING_WORK_REPORT.md).
 
 ## Quick Start
 
@@ -87,7 +93,7 @@ mindstrata/
 
 ## Testing & Determinism
 
-- **749 automated tests** — property tests, golden replay fixtures, statistical emergence checks, integration, and 10K-tick stability
+- **1098 automated tests** — property tests, golden replay fixtures, statistical emergence checks, integration, and 10K-tick stability (count re-derived from the current suite)
 - Tick-loop throughput regression gate enforced in CI (`crates/mindstrata-benches`)
 - `unsafe_code = "forbid"` workspace-wide — the simulation must be memory-safe and deterministic
 
