@@ -2407,6 +2407,94 @@ fn military_is_deterministic_across_identical_setups() {
     }
 }
 
+/// §16.1 (AP2 §5, Iteration 154): the save/load FILE round trip is
+/// lossless — a snapshot written to disk and read back produces identical
+/// postcard bytes and the identical deterministic hash.
+#[test]
+fn snapshot_file_round_trip_preserves_bytes_and_hash() {
+    let sim = run_sim(42, 2000);
+    let snapshot = sim.capture_snapshot();
+    let path = std::env::temp_dir().join(format!("ms_roundtrip_{}.snapshot", std::process::id()));
+    snapshot.save(&path).expect("snapshot saves to disk");
+    let loaded = mindstrata_sim::snapshot::Snapshot::load(&path).expect("snapshot loads from disk");
+    let _ = std::fs::remove_file(&path);
+
+    assert_eq!(loaded.tick, snapshot.tick, "tick survives the round trip");
+    assert_eq!(
+        loaded.to_bytes().expect("bytes"),
+        snapshot.to_bytes().expect("bytes"),
+        "postcard bytes are identical across the disk round trip"
+    );
+    assert_eq!(
+        loaded.deterministic_hash().expect("hash"),
+        snapshot.deterministic_hash().expect("hash"),
+        "the deterministic hash survives the round trip"
+    );
+
+    // The JSON surface round-trips the structural invariants too (float
+    // precision makes it lossy at the byte level, so compare the stable
+    // surface: tick, event count, journal length).
+    let json = snapshot.to_json().expect("json");
+    let from_json = mindstrata_sim::snapshot::Snapshot::from_json(&json).expect("from json");
+    assert_eq!(from_json.tick, snapshot.tick, "JSON preserves the tick");
+    assert_eq!(from_json.event_count(), snapshot.event_count());
+    assert_eq!(from_json.journal_len(), snapshot.journal_len());
+
+    // And the stored hash verifies against the loaded bytes.
+    let hash = snapshot.deterministic_hash().expect("hash");
+    assert!(
+        loaded.verify_hash(hash).expect("verify"),
+        "the loaded bytes verify against the original hash"
+    );
+}
+
+/// §16.1 (AP2 §5, Iteration 154): resume-from-file is lossless — a
+/// simulation restored from a snapshot on disk and run forward reaches
+/// exactly the same world as resuming from the in-memory capture (the
+/// snapshot bytes are identical, so the resume trajectories are too).
+///
+/// Note the resume contract: `from_snapshot` restores the clock but reseeds
+/// the RNG from the master seed at its initial state, so a resumed run is
+/// deterministic (same seed → same trajectory) yet replay-style — it is
+/// not a byte-identical splice of the original run. The CLI's `--load`
+/// behavior is exactly this: deterministic continuation from disk.
+#[test]
+fn snapshot_resume_from_file_matches_in_memory_resume() {
+    let path = std::env::temp_dir().join(format!("ms_resume_{}.snapshot", std::process::id()));
+
+    let sim = run_sim(42, 1000);
+    let in_memory = sim.capture_snapshot();
+    in_memory.save(&path).expect("save at 1000 ticks");
+    let from_file = mindstrata_sim::snapshot::Snapshot::load(&path).expect("load from disk");
+    let _ = std::fs::remove_file(&path);
+
+    let mut resumed_from_file = Simulation::from_snapshot(from_file);
+    resumed_from_file.run(1000);
+    let file_snap = resumed_from_file.capture_snapshot();
+
+    let mut resumed_from_memory = Simulation::from_snapshot(in_memory);
+    resumed_from_memory.run(1000);
+    let memory_snap = resumed_from_memory.capture_snapshot();
+
+    // Human-readable diagnostics before the opaque hash comparison, so a
+    // future drift is debuggable.
+    assert_eq!(
+        file_snap.event_count(),
+        memory_snap.event_count(),
+        "the event counts agree across the resume paths"
+    );
+    assert_eq!(
+        file_snap.journal_len(),
+        memory_snap.journal_len(),
+        "the journal lengths agree across the resume paths"
+    );
+    assert_eq!(
+        file_snap.deterministic_hash().expect("hash"),
+        memory_snap.deterministic_hash().expect("hash"),
+        "resume-from-file equals resume-from-memory (lossless disk round trip)"
+    );
+}
+
 /// §5 (AP2, Iteration 147): an emergent drought regime has real teeth in a
 /// live run — after the regime declares, every well drains each tick AND
 /// farm output is suppressed (growth factor ≈0.61 vs ≈1.02 normal). The

@@ -87,7 +87,7 @@ The dominant category. A recurring pattern across the campaign: systems were bui
 **Phase 4 — Playability:**
 - **Interactive TUI** — the TUI is 999 lines; agent selection / issuing commands is the interactive gap
 - **Visual rendering** — 2D map with agent sprites (no frontend exists)
-- **Save/load UI** — snapshot management
+- ~~**Save/load UI**~~ — **RESOLVED (Iter 154)** — snapshot management is verifiably round-trippable: `Snapshot::save/load` (postcard + JSON), the deterministic hash/verify, and the CLI `--save-snapshot` / `--load-snapshot` resume affordances are now pinned by a file round-trip test, a resume equivalence test, and the crate's first CLI integration test (real binary save→load). The CLI is the save/load UI surface; the interactive TUI screen remains part of the Interactive TUI row.
 - **Modding API** — formal interface for custom content
 
 **Explicitly optional by plan:** §9.3 external LLM role (LLM-driven focal agents) — unimplemented, by design.

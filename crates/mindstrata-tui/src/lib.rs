@@ -14,6 +14,8 @@ use mindstrata_sim::institutions::{Institution, InstitutionalRecord};
 use mindstrata_sim::social::clan::ClanRegistry;
 use mindstrata_sim::social::patronage::PatronageRegistry;
 use mindstrata_sim::provenance::CausalProvenance;
+use mindstrata_sim::theology::{TheologicalBelief, TheologyRegistry};
+use mindstrata_sim::military::MilitaryRegistry;
 
 /// §6: Agent position marker for map rendering.
 pub struct AgentMarker {
@@ -996,4 +998,157 @@ pub fn render_psychology_inspector(
     out.push_str(&format!("  Capacity:         {}\n\n", agent.memory.capacity));
 
     out
+}
+
+// ── §5 (Iterations 152/153): New-system dashboards ──────────────────
+
+/// §5 (Iteration 152): Render the theology dashboard — the seeded
+/// religion, believer tallies, mean conviction, and per-believer state.
+pub fn render_theology_dashboard(registry: &TheologyRegistry) -> String {
+    let mut out = String::new();
+    out.push_str("╔══════════════════════════════════════════╗\n");
+    out.push_str("║  Theology Dashboard                      ║\n");
+    out.push_str("╚══════════════════════════════════════════╝\n\n");
+
+    let Some(religion) = &registry.religion else {
+        out.push_str("  (no religion seeded — theology dormant)\n");
+        return out;
+    };
+    out.push_str(&format!(
+        "  Religion: {} ({})\n",
+        religion.deity.name, religion.doctrine.name
+    ));
+    out.push_str(&format!(
+        "  Deity temperament: {:?}\n",
+        religion.deity.temperament
+    ));
+    out.push_str(&format!(
+        "  Believers: {}/{}   Converts: {}   Festivals: {}\n",
+        registry.believer_count(),
+        registry.beliefs.len(),
+        registry.converts,
+        registry.festivals_held,
+    ));
+    let beliefs: Vec<&TheologicalBelief> = registry.beliefs.iter().flatten().collect();
+    if beliefs.is_empty() {
+        out.push_str("  (no believers yet)\n");
+        return out;
+    }
+    let mean =
+        beliefs.iter().map(|b| b.conviction.to_f64()).sum::<f64>() / beliefs.len() as f64;
+    out.push_str(&format!("  Mean conviction: {mean:.3}\n"));
+    out.push_str("  ── Believers ────────────────────────────────\n");
+    for (i, belief) in registry.beliefs.iter().enumerate() {
+        if let Some(b) = belief {
+            out.push_str(&format!(
+                "  Agent {i}: conviction {:.3}, since {}\n",
+                b.conviction.to_f64(),
+                b.since_tick,
+            ));
+        }
+    }
+    out
+}
+
+/// §5 (Iteration 153): Render the military dashboard — collective
+/// readiness, militia tallies, and the conscription roster.
+pub fn render_military_dashboard(registry: &MilitaryRegistry) -> String {
+    let mut out = String::new();
+    out.push_str("╔══════════════════════════════════════════╗\n");
+    out.push_str("║  Military Dashboard                       ║\n");
+    out.push_str("╚══════════════════════════════════════════╝\n\n");
+
+    if registry.is_dormant() {
+        out.push_str("  (no barracks — military dormant)\n");
+        return out;
+    }
+    out.push_str(&format!(
+        "  Readiness: {:.3}   Militia: {}   Conscripts: {}   Musters: {}   Drills: {}\n",
+        registry.readiness.to_f64(),
+        registry.militia_size(),
+        registry.conscripts,
+        registry.musters,
+        registry.drills,
+    ));
+    out.push_str("  ── Roster ──────────────────────────────────\n");
+    for (i, member) in registry.roster.iter().enumerate() {
+        if let Some(m) = member {
+            out.push_str(&format!(
+                "  Agent {i}: since {}, dominance {:.3}\n",
+                m.enlisted_since,
+                m.dominance_at_enlistment.to_f64(),
+            ));
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mindstrata_sim::military::MilitiaMember;
+    use mindstrata_sim::theology::{Religion, Temperament, TheologicalBelief};
+
+    fn f(x: f64) -> Fixed {
+        Fixed::from_f64(x)
+    }
+
+    #[test]
+    fn theology_dashboard_shows_dormant_state() {
+        let reg = TheologyRegistry::new();
+        let out = render_theology_dashboard(&reg);
+        assert!(out.contains("dormant"), "{out}");
+    }
+
+    #[test]
+    fn theology_dashboard_shows_believers_and_mean_conviction() {
+        let mut reg = TheologyRegistry::new();
+        reg.religion = Some(Religion::seeded(
+            "The Shepherd", Temperament::Benevolent, "The Way", vec![], "The Flock",
+        ));
+        reg.beliefs = vec![
+            Some(TheologicalBelief {
+                conviction: f(0.6),
+                temperament_held: Temperament::Benevolent,
+                since_tick: 4320,
+            }),
+            None,
+        ];
+        let out = render_theology_dashboard(&reg);
+        assert!(out.contains("The Shepherd"), "{out}");
+        assert!(out.contains("Believers: 1/2"), "{out}");
+        assert!(out.contains("Mean conviction: 0.600"), "{out}");
+        assert!(out.contains("Agent 0: conviction 0.600, since 4320"), "{out}");
+    }
+
+    #[test]
+    fn military_dashboard_shows_dormant_state() {
+        let reg = MilitaryRegistry::new();
+        let out = render_military_dashboard(&reg);
+        assert!(out.contains("dormant"), "{out}");
+    }
+
+    #[test]
+    fn military_dashboard_shows_readiness_and_roster() {
+        let mut reg = MilitaryRegistry::new();
+        reg.readiness = f(0.45);
+        reg.conscripts = 2;
+        reg.musters = 1;
+        reg.drills = 2;
+        reg.roster = vec![
+            Some(MilitiaMember {
+                enlisted_since: 4320,
+                dominance_at_enlistment: f(0.7),
+            }),
+            None,
+            Some(MilitiaMember {
+                enlisted_since: 8640,
+                dominance_at_enlistment: f(0.5),
+            }),
+        ];
+        let out = render_military_dashboard(&reg);
+        assert!(out.contains("Readiness: 0.450"), "{out}");
+        assert!(out.contains("Militia: 2"), "{out}");
+        assert!(out.contains("Agent 0: since 4320, dominance 0.700"), "{out}");
+    }
 }
