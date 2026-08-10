@@ -2017,6 +2017,188 @@ fn school_term_fires_in_the_tick_loop_on_the_yearly_cadence() {
     assert!(sim.school.graduates >= 1, "the term graduated at least one student");
 }
 
+/// §5 (AP2, Iteration 152): without a seeded religion the theology system
+/// is dormant — no conversions, no festivals, no journal entries, and every
+/// calibrated window stays byte-identical.
+#[test]
+fn theology_stays_dormant_without_a_seeded_religion() {
+    let sim = run_sim(42, 2000);
+    assert!(sim.theology.is_dormant(), "no religion → no theology");
+    assert_eq!(sim.theology.converts, 0);
+    assert_eq!(sim.theology.festivals_held, 0);
+    assert_eq!(sim.theology.believer_count(), 0);
+    let journaled = sim
+        .journal()
+        .entries_in_range(0, u64::MAX)
+        .iter()
+        .any(|e| {
+            matches!(
+                e.kind,
+                mindstrata_sim::journal::JournalEntryKind::TheologyConversion { .. }
+                    | mindstrata_sim::journal::JournalEntryKind::TheologyFestival { .. }
+            )
+        });
+    assert!(!journaled, "no religious journal entries in a religion-free world");
+}
+
+/// §5 (AP2, Iteration 152): once a religion is seeded, conversion spreads
+/// in two deterministic stages — elders adopt at the first yearly mark,
+/// then social contagion carries the rest — while the mid-year festival
+/// convenes believers and is journaled.
+#[test]
+fn theology_conversion_spreads_from_elders_then_contagion() {
+    use mindstrata_sim::theology::{Religion, Temperament};
+
+    let config = SimConfig {
+        seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
+        num_agents: 12, snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.theology.religion = Some(Religion::seeded(
+        "The Shepherd", Temperament::Benevolent,
+        "The Way", vec!["Tend the flock".into()], "The Flock",
+    ));
+    // Four elders, eight youths.
+    for i in 0..4 {
+        sim.agents[i].age = Fixed::from_f64(50.0);
+    }
+    for i in 4..12 {
+        sim.agents[i].age = Fixed::from_f64(10.0);
+    }
+
+    // Mid-year festival before anyone converts: nothing held.
+    sim.tick_theology(2160);
+    assert_eq!(sim.theology.festivals_held, 0, "empty festivals are not held");
+
+    // First yearly mark: only the elders adopt.
+    sim.tick_theology(4320);
+    assert_eq!(sim.theology.converts, 4, "elders convert first");
+    assert_eq!(sim.theology.believer_count(), 4);
+    for i in 0..4 {
+        assert!(sim.theology.beliefs[i].is_some(), "elder {i} is a believer");
+    }
+    for i in 4..12 {
+        assert!(
+            sim.theology.beliefs[i].is_none(),
+            "youth {i} has not converted yet — no contagion in the same pass"
+        );
+    }
+
+    // Mid-year festival: the four elders attend and it is journaled.
+    sim.tick_theology(6480);
+    assert_eq!(sim.theology.festivals_held, 1);
+    let festival_journaled = sim
+        .journal()
+        .entries_in_range(0, u64::MAX)
+        .iter()
+        .any(|e| {
+            matches!(
+                e.kind,
+                mindstrata_sim::journal::JournalEntryKind::TheologyFestival { attenders: 4 }
+            )
+        });
+    assert!(festival_journaled, "the festival records its four attenders");
+
+    // Second yearly mark: contagion completes — every youth converts.
+    sim.tick_theology(8640);
+    assert_eq!(sim.theology.converts, 12, "contagion carries the village");
+    assert_eq!(sim.theology.believer_count(), 12);
+    for i in 0..12 {
+        let b = sim.theology.beliefs[i].as_ref().expect("everyone believes");
+        assert_eq!(b.temperament_held, Temperament::Benevolent, "theodicy matches the deity");
+        assert!(b.conviction > Fixed::ZERO && b.conviction <= Fixed::ONE);
+        assert_eq!(b.since_tick, if i < 4 { 4320 } else { 8640 });
+    }
+    let conversion_journaled = sim
+        .journal()
+        .entries_in_range(0, u64::MAX)
+        .iter()
+        .any(|e| {
+            matches!(
+                e.kind,
+                mindstrata_sim::journal::JournalEntryKind::TheologyConversion { converts: 8 }
+            )
+        });
+    assert!(conversion_journaled, "the contagion year journals its eight converts");
+}
+
+/// §5 (AP2, Iteration 152): the mid-year festival hallows the doctrine's
+/// sacred value — believers gain it in their sacred-values state.
+#[test]
+fn theology_festival_sacralizes_the_doctrine_value() {
+    use mindstrata_sim::theology::{Religion, Temperament};
+
+    let config = SimConfig {
+        seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
+        num_agents: 12, snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.theology.religion = Some(Religion::seeded(
+        "The Shepherd", Temperament::Benevolent,
+        "The Way", vec![], "The Flock",
+    ));
+    for i in 0..12 {
+        sim.agents[i].age = Fixed::from_f64(50.0);
+    }
+
+    sim.tick_theology(4320); // everyone is an elder → all convert
+    sim.tick_theology(6480); // festival
+
+    assert_eq!(sim.theology.festivals_held, 1);
+    for i in 0..12 {
+        assert!(
+            sim.agents[i].sacred_values.find("The Flock").is_some(),
+            "the festival hallowed the doctrine value for believer {i}"
+        );
+    }
+}
+
+/// §5 (AP2, Iteration 152): the theology pass is fully deterministic — two
+/// identical setups driven through the same pass sequence reach identical
+/// registry state and identical per-agent convictions.
+#[test]
+fn theology_is_deterministic_across_identical_setups() {
+    use mindstrata_sim::theology::{Religion, Temperament};
+
+    let setup = || {
+        let config = SimConfig {
+            seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
+            num_agents: 12, snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.theology.religion = Some(Religion::seeded(
+            "The Shepherd", Temperament::Benevolent,
+            "The Way", vec![], "The Flock",
+        ));
+        for i in 0..4 {
+            sim.agents[i].age = Fixed::from_f64(50.0);
+        }
+        sim
+    };
+
+    let drive = |sim: &mut Simulation| {
+        sim.tick_theology(4320);
+        sim.tick_theology(6480);
+        sim.tick_theology(8640);
+    };
+
+    let mut a = setup();
+    let mut b = setup();
+    drive(&mut a);
+    drive(&mut b);
+
+    assert_eq!(a.theology.converts, b.theology.converts);
+    assert_eq!(a.theology.festivals_held, b.theology.festivals_held);
+    for i in 0..12 {
+        let ca = a.theology.beliefs[i].as_ref().map(|x| x.conviction.to_f64());
+        let cb = b.theology.beliefs[i].as_ref().map(|x| x.conviction.to_f64());
+        assert_eq!(ca, cb, "conviction of agent {i} is identical across runs");
+    }
+}
+
 /// §5 (AP2, Iteration 147): an emergent drought regime has real teeth in a
 /// live run — after the regime declares, every well drains each tick AND
 /// farm output is suppressed (growth factor ≈0.61 vs ≈1.02 normal). The

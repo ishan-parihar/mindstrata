@@ -34,6 +34,12 @@ pub enum JournalEntryKind {
     /// §5 (Iteration 151): A formal school term convened — the teacher,
     /// cohort size, and graduates of the term.
     SchoolTerm { teacher: u64, cohort: u64, graduates: u64 },
+    /// §5 (Iteration 152): A religion's yearly conversion pass recorded a
+    /// number of new converts.
+    TheologyConversion { converts: u64 },
+    /// §5 (Iteration 152): A mid-year religious festival was held, with the
+    /// attending believer count.
+    TheologyFestival { attenders: u64 },
 }
 
 /// A single journal entry.

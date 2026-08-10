@@ -5,6 +5,7 @@ use crate::conflict::{self, ConflictKind, ConflictState};
 use crate::culture::{CulturalState, Knowledge, KnowledgeCategory, TechnologyTree};
 use crate::diplomacy::{DiplomacyRegistry, CARAVAN_GRAIN_BASE, EVENT_RELATION_SHIFT, RAID_GRAIN_CAP, RAID_GRAIN_FRACTION};
 use crate::schools::SchoolRegistry;
+use crate::theology::{TheologicalBelief, TheologyRegistry, Temperament, drift_conviction, seed_conviction, should_convert, ELDER_AGE};
 use crate::legal::{LegalCase, LegalRegistry, Verdict};
 use crate::logistics;
 use crate::gossip;
@@ -379,6 +380,9 @@ pub struct Simulation {
     pub diplomacy: DiplomacyRegistry,
     /// §5 (Iteration 151): Formal-school registry — yearly cohort terms.
     pub school: SchoolRegistry,
+    /// §5 (Iteration 152): Religious registry — the seeded religion (if
+    /// any), per-agent beliefs, and the festival calendar.
+    pub theology: TheologyRegistry,
     /// §6.5: Per-tick metric history for observability and CSV export.
     pub metric_history: Vec<MetricsSnapshot>,
     /// §7.3: Tick when last revolution occurred (for cooldown tracking).
@@ -495,6 +499,7 @@ impl Simulation {
             legal: LegalRegistry::new(),
             diplomacy: DiplomacyRegistry::new(),
             school: SchoolRegistry::new(),
+            theology: TheologyRegistry::new(),
             metric_history: Vec::new(),
             last_revolution_tick: 0,
             last_moral_panic_tick: 0,
@@ -624,6 +629,7 @@ impl Simulation {
             // pass replays deterministically from the restore tick onward.
             diplomacy: DiplomacyRegistry::new(),
             school: SchoolRegistry::new(),
+            theology: TheologyRegistry::new(),
             knowledge_store: snapshot.knowledge_store,
             metric_history: snapshot.metric_history,
             last_revolution_tick: snapshot.last_revolution_tick,
@@ -4443,6 +4449,14 @@ impl Simulation {
         // student — the same-tick interplay is self-consistent either way.
         if tick_u64 > 0 && tick_u64.is_multiple_of(crate::schools::SCHOOL_CADENCE) {
             self.tick_school_term(tick_u64);
+        }
+        // §5 (Iteration 152): the half-year religious pass — conversions and
+        // conviction drift on the yearly mark, festivals on the mid-year
+        // mark. Gated on a seeded Religion (no default world seeds one, so
+        // the pass is a structural no-op in every calibrated window) and
+        // fully deterministic (no RNG drawn even when a religion exists).
+        if tick_u64 > 0 && tick_u64.is_multiple_of(crate::theology::RELIGIOUS_CADENCE) {
+            self.tick_theology(tick_u64);
         }
         // Reset work ticks tracker for this tick
         for tick in &mut self.site_work_ticks {
@@ -8851,6 +8865,132 @@ impl Simulation {
                 graduates,
             },
         );
+    }
+
+    /// §5 (Iteration 152): One religious pass — conversions and conviction
+    /// drift on the yearly mark (4320k), festivals on the mid-year mark
+    /// (2160 + 4320k). Gated on a seeded [`crate::theology::Religion`]: no
+    /// default world seeds one, so this is a structural no-op in every
+    /// calibrated window. Fully deterministic — conversion and drift follow
+    /// fixed rules and no RNG is drawn — so the pass can never perturb any
+    /// RNG stream, even in a world with a live religion.
+    pub fn tick_theology(&mut self, tick_u64: u64) {
+        // Zero-blast gate: a world without a religion has no theology.
+        if self.theology.religion.is_none() {
+            return;
+        }
+        let n = self.agents.len();
+        if n == 0 {
+            return;
+        }
+        if self.theology.beliefs.len() < n {
+            self.theology.beliefs.resize(n, None);
+        }
+
+        // Mid-year festival (2160 + 4320k): hallow the doctrine's sacred
+        // value among believers and boost their conviction. A festival with
+        // no believers yet is not held (nothing to celebrate).
+        if tick_u64.is_multiple_of(2160) && !tick_u64.is_multiple_of(4320) {
+            let attenders = self.theology.believer_count();
+            if attenders == 0 {
+                return;
+            }
+            let sacred_value = self
+                .theology
+                .religion
+                .as_ref()
+                .map(|r| r.doctrine.sacred_value.clone())
+                .unwrap_or_default();
+            for i in 0..n {
+                if self.theology.beliefs[i].is_none() {
+                    continue;
+                }
+                if let Some(b) = self.theology.beliefs[i].as_mut() {
+                    b.conviction = (b.conviction * Fixed::from_f64(1.05)).clamp_01();
+                }
+                self.agents[i].sacred_values.add_or_strengthen(
+                    sacred_value.clone(),
+                    Fixed::from_f64(0.15),
+                    Fixed::from_f64(0.15),
+                );
+            }
+            self.theology.festivals_held += 1;
+            self.journal.record(
+                tick_u64,
+                AgentId::new(0),
+                JournalEntryKind::TheologyFestival { attenders },
+            );
+            return;
+        }
+
+        // Yearly mark (4320k): conversion + conviction drift. Elders
+        // convert freely; everyone else needs social contact with a
+        // believer from BEFORE this pass (the neutral-default relationship
+        // view makes contagion spread fast once the first believer exists —
+        // a two-stage spread: elders adopt, then the village follows).
+        let believers_before: Vec<bool> =
+            self.theology.beliefs.iter().map(Option::is_some).collect();
+        let elder_age = Fixed::from_f64(ELDER_AGE);
+        // The theodicy every new convert adopts — constant across the pass.
+        let temperament = self
+            .theology
+            .religion
+            .as_ref()
+            .map_or(Temperament::Indifferent, |r| r.deity.temperament);
+        let mut converts_this_year: u64 = 0;
+        for i in 0..n {
+            if self.theology.beliefs[i].is_some() {
+                continue;
+            }
+            let is_elder = self.agents[i].age >= elder_age;
+            let has_believer_contact = (0..n).any(|j| {
+                j != i
+                    && believers_before[j]
+                    && self.relationship_quality(i, j) >= Fixed::from_f64(0.3)
+            });
+            if !should_convert(is_elder, has_believer_contact) {
+                continue;
+            }
+            self.theology.beliefs[i] = Some(TheologicalBelief {
+                conviction: seed_conviction(is_elder, self.agents[i].age),
+                temperament_held: temperament,
+                since_tick: tick_u64,
+            });
+            self.theology.converts += 1;
+            converts_this_year += 1;
+        }
+
+        // One year of conviction drift: every belief pulls toward the
+        // community mean.
+        let believers: Vec<usize> = (0..n)
+            .filter(|&i| self.theology.beliefs[i].is_some())
+            .collect();
+        if !believers.is_empty() {
+            let mean = believers
+                .iter()
+                .map(|&i| {
+                    self.theology.beliefs[i]
+                        .as_ref()
+                        .map_or(Fixed::ZERO, |b| b.conviction)
+                        .to_f64()
+                })
+                .sum::<f64>()
+                / believers.len() as f64;
+            let mean_f = Fixed::from_f64(mean);
+            for &i in &believers {
+                if let Some(b) = self.theology.beliefs[i].as_mut() {
+                    b.conviction = drift_conviction(b.conviction, mean_f, 0.1);
+                }
+            }
+        }
+
+        if converts_this_year > 0 {
+            self.journal.record(
+                tick_u64,
+                AgentId::new(0),
+                JournalEntryKind::TheologyConversion { converts: converts_this_year },
+            );
+        }
     }
 
     /// Relationship quality (0–1) between two agents, from the source's
