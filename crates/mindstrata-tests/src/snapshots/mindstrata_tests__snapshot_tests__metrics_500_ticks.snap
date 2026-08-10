@@ -1,17 +1,16 @@
 ---
 source: crates/mindstrata-tests/src/snapshot_tests.rs
-assertion_line: 111
 expression: "Metrics500\n{\n    avg_hunger: ms.avg_hunger, avg_thirst: ms.avg_thirst, avg_fatigue:\n    ms.avg_fatigue, avg_stress: ms.avg_stress, avg_health: ms.avg_health,\n    avg_relationship_trust: ms.avg_relationship_trust,\n    avg_relationship_quality: ms.avg_relationship_quality, polarization_index:\n    ms.polarization_index, agent_count: ms.agent_count as f64,\n    household_count: ms.household_count as f64,\n}"
 ---
 Metrics500 {
-    avg_hunger: 0.07075,
-    avg_thirst: 0.24399999999999994,
-    avg_fatigue: 0.159025,
-    avg_stress: 0.74895,
+    avg_hunger: 0.07275000000000001,
+    avg_thirst: 0.2003333333333333,
+    avg_fatigue: 0.26359166666666667,
+    avg_stress: 0.7848166666666666,
     avg_health: 0.7055666666666666,
     avg_relationship_trust: 0.5057765151515151,
-    avg_relationship_quality: 0.3065037878787878,
-    polarization_index: 0.0759,
+    avg_relationship_quality: 0.30610984848484846,
+    polarization_index: 0.0738,
     agent_count: 12.0,
     household_count: 12.0,
 }

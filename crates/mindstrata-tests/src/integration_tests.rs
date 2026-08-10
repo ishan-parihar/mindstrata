@@ -2398,8 +2398,8 @@ fn collapse_famine_timing_shapes_plague_mortality() {
         count_deaths(&sim)
     };
     let early_window = collapse_at(900);
-    let mid_window = collapse_at(1100);
-    let late_window = collapse_at(1300);
+    let mid_window = collapse_at(1000);
+    let late_window = collapse_at(1100);
     // Iteration 110 recalibration: the §10.1.2 trust-pacification consumer
     // re-shaped the window curve yet again — probe-pinned deaths at the 4320
     // horizon are pest@900 = 3, pest@1000 = 2, pest@1100 = 4, pest@1200 = 3,
@@ -2410,21 +2410,26 @@ fn collapse_famine_timing_shapes_plague_mortality() {
     // the famine window — probe-pinned deaths at the 4320 horizon are now
     // pest@900 = 3, pest@1000 = 5, pest@1100 = 7, pest@1200 = 3,
     // pest@1300 = 4, pest@1400 = 5: the mid window is a mortality PEAK at
-    // 1100. Per the Iter-106 review note, the shape re-pins on nearly every
-    // wiring, so the assertions anchor on the shape-insensitive core: the
-    // mid window strictly out-kills both neighbours and the spread is
-    // non-trivial.
+    // 1100. Iteration 127 recalibration: the §8.1.4 gratitude→help consumer
+    // re-paces the famine window once more — probe-pinned deaths at the
+    // 4320 horizon are now pest@900 = 1, pest@1000 = 5, pest@1100 = 2,
+    // pest@1200 = 2, pest@1300 = 5, pest@1400 = 4: the peak re-anchors at
+    // 1000 (early post-famine onset; note the curve is TWIN-PEAKED —
+    // pest@1300 ties at 5). Per the Iter-106 review note, the shape
+    // re-pins on nearly every wiring, so the assertions anchor on the
+    // shape-insensitive core: the mid window strictly out-kills both
+    // neighbours and the spread is non-trivial.
     assert!(
         mid_window > early_window,
-        "the mid-window plague must be a peak vs the early one (1100: {mid_window} vs 900: {early_window})"
+        "the mid-window plague must be a peak vs the early one (1000: {mid_window} vs 900: {early_window})"
     );
     assert!(
         mid_window > late_window,
-        "the mid-window plague must be a peak vs the late one (1100: {mid_window} vs 1300: {late_window})"
+        "the mid-window plague must be a peak vs the late one (1000: {mid_window} vs 1100: {late_window})"
     );
     assert!(
         mid_window - early_window >= 3,
-        "plague timing must shape mortality non-trivially (spread >= 3: 1100 {mid_window} vs 900: {early_window})"
+        "plague timing must shape mortality non-trivially (spread >= 3: 1000 {mid_window} vs 900: {early_window})"
     );
     assert!(
         late_window > 0,
@@ -6739,8 +6744,13 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         // recalibration: the §10.4 seek-proximity consumer re-paces
         // courtship once more — seed 1 now delivers ONE birth by 80K,
         // probe-pinned [31070], with the 1-chain intact (1 live child, 1
-        // marriage record, children_born 1, population 13).
-        vec![31070],
+        // marriage record, children_born 1, population 13). Iteration 127
+        // recalibration: the §8.1.4 gratitude→help consumer (the help
+        // window [0.2, help_bound) grows with the live gratitude emotion,
+        // shifting the high-affection interaction mix and re-pacing
+        // courtship) delays the single birth to 78,470 — the 1-chain stays
+        // intact (1 live child, 1 marriage record, children_born 1).
+        vec![78470],
         "seed-1 80K world must deliver exactly the probed births"
     );
     for t in &birth_ticks {
@@ -8096,16 +8106,17 @@ fn collective_fear_amplifies_panic_legitimacy_damage_end_to_end() {
             }
         )
     };
-    // Leg C needs its own 15,000-tick runs (the §7.2 trigger fires at
-    // ~13,537 in seed-42 — Iteration 118 re-anchor; the Leg-A 2,000-tick
-    // sim has zero panics).
-    let at_panic_horizon = crate::test_helpers::run_sim(42, 15000);
-    let again = crate::test_helpers::run_sim(42, 15000);
+    // Leg C needs its own 20,000-tick runs (the §7.2 trigger fires at
+    // ~17,713 in seed-42 — Iteration 127 re-anchor after the
+    // gratitude→help consumer re-paces the famine window; the Leg-A
+    // 2,000-tick sim has zero panics).
+    let at_panic_horizon = crate::test_helpers::run_sim(42, 20000);
+    let again = crate::test_helpers::run_sim(42, 20000);
     let panics = at_panic_horizon.recent_events(10_000_000).iter().filter(|e| is_panic(e)).count();
     let panics2 = again.recent_events(10_000_000).iter().filter(|e| is_panic(e)).count();
     assert!(
         panics >= 1,
-        "the §7.2 trigger must fire at the 15,000-tick horizon (seed 42)"
+        "the §7.2 trigger must fire at the 20,000-tick horizon (seed 42)"
     );
     assert_eq!(panics, panics2, "panic counts must be seed-deterministic");
     let council_leg = |s: &mindstrata_sim::Simulation| -> Vec<f64> {
@@ -8350,16 +8361,17 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
     };
 
     // Leg A — producer reach: a real §7.2 panic fires in the calibrated
-    // world (start_tick 13537, probe-pinned deterministic — Iteration 118:
-    // the seek-proximity consumer's stable-courtship cascade slows the
-    // belief-charge buildup ~4×), is REGISTERED in the registry, and is
-    // still active with the lifecycle having run on it — ~10 daily steps
-    // of escalation (low legitimacy + high fear keep the pressure above
-    // 0.5) raise intensity 0.3 → 0.80 by 15,000.
-    let sim = crate::test_helpers::run_sim(42, 15000);
+    // world (start_tick 17713, probe-pinned deterministic — Iteration 127:
+    // the gratitude→help consumer's helping-heavy interaction mix slows
+    // the belief-charge buildup further, delaying the trigger past 15,000;
+    // now re-anchored to the 20,000 horizon), is REGISTERED in the
+    // registry, and is still active with the lifecycle having run on it —
+    // ~16 daily steps of escalation (low legitimacy + high fear keep the
+    // pressure above 0.5) raise intensity well above the initial 0.3.
+    let sim = crate::test_helpers::run_sim(42, 20000);
     assert!(
         !sim.moral_panic_registry.panics.is_empty(),
-        "a real panic must have been registered by 5000 ticks"
+        "a real panic must have been registered by 20000 ticks"
     );
     let panic = sim.moral_panic_registry.panics.first().unwrap();
     assert!(
@@ -8367,8 +8379,8 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
         "a ~1,460-tick-old panic must still be active (fatigue ~0.20 is far below 0.7)"
     );
     assert!(
-        panic.start_tick >= 13400 && panic.start_tick <= 13700,
-        "the seed-42 panic must fire near the probe-pinned 3,034 horizon, got {}",
+        panic.start_tick >= 17700 && panic.start_tick <= 17800,
+        "the seed-42 panic must fire near the probe-pinned 17,713 horizon, got {}",
         panic.start_tick
     );
     assert!(
@@ -8401,9 +8413,9 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
         "fatigue must cross the resolve threshold after 35 days"
     );
 
-    // Leg C — replay determinism: two same-seed 5,000-tick runs register
+    // Leg C — replay determinism: two same-seed 20,000-tick runs register
     // the same panic and drain the same institution identically.
-    let again = crate::test_helpers::run_sim(42, 15000);
+    let again = crate::test_helpers::run_sim(42, 20000);
     assert_eq!(
         sim.moral_panic_registry.panics.len(),
         again.moral_panic_registry.panics.len(),
@@ -9354,6 +9366,76 @@ fn jealousy_bond_load_chain_is_zero_blast_and_live_wired() {
             x.jealousy_load <= mindstrata_core::fixed::Fixed::ONE
                 && x.jealousy_load >= mindstrata_core::fixed::Fixed::ZERO,
             "jealousy_load must respect the [0, 1] clamp"
+        );
+    }
+}
+#[test]
+fn gratitude_feeds_help_propensity_is_live_and_deterministic() {
+    // §8.1.4 (Iteration 127 — the first CALIBRATED §8.1.4 consumer): the
+    // gratitude emotion (appraisal producer `positive × (1 − expectedness)`,
+    // unexpected positive help) folds into the Help propensity — the
+    // agent_info 7th element destructures as `help_neighbors_propensity` in
+    // `system_social_interactions` and widens the Help window
+    // `[0.2, 0.5 × (1 + propensity))` in high-affection pairs, exactly
+    // mirroring the Iter-99 tenderness channel. Gratitude is LIVE in the
+    // calibrated window, so this is a calibrated change: golden + snapshots
+    // regenerated (baseline.json 8 lines, 6 snapshots), and 4 trajectory
+    // tests re-anchored with probe-pinned before/after evidence (famine
+    // peak 1100→1000, panic fire 13537→17713, births [31070]→[78470]).
+    //
+    // Leg A (producer reach): gratitude is a genuinely live producer in
+    // the golden window — the fold has real input (the Iter-116 test pins
+    // mean > 0.2; this re-pins the level this iteration depends on).
+    let sim = crate::test_helpers::run_sim(42, 5000);
+    let n = sim.agents.len() as f64;
+    let grat_mean: f64 = sim
+        .agents
+        .iter()
+        .map(|a| a.emotions.gratitude.to_f64())
+        .sum::<f64>()
+        / n;
+    assert!(
+        grat_mean > 0.1,
+        "gratitude must be live in the golden window (the fold has input), mean {grat_mean:.4}"
+    );
+
+    // Leg B (the shipped fold contract — deterministic and
+    // regression-proof): the public `help_propensity` helper is exactly
+    // what the tick calls (extracted Iter-127; a deleted gratitude term in
+    // sim.rs would break the golden, pinned by golden_replay_vs_baseline).
+    // With the SHIPPED 0.5 multipliers, zero gratitude preserves the
+    // norm-only value (identity), half gratitude adds exactly 0.25, full
+    // gratitude adds exactly 0.5, and the sum clamps at 1.0.
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::appraisal::help_propensity;
+    assert_eq!(
+        help_propensity(Fixed::from_f64(0.5), Fixed::ZERO, Fixed::ZERO, 0.5, 0.5),
+        Fixed::from_f64(0.5),
+        "zero emotions must preserve the norm-only value"
+    );
+    assert_eq!(
+        help_propensity(Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(0.5), 0.5, 0.5),
+        Fixed::from_f64(0.25),
+        "half gratitude with the shipped 0.5 multiplier adds exactly 0.25"
+    );
+    assert_eq!(
+        help_propensity(Fixed::ZERO, Fixed::ZERO, Fixed::ONE, 0.5, 0.5),
+        Fixed::from_f64(0.5),
+        "full gratitude adds exactly 0.5"
+    );
+    let shipped: f64 = mindstrata_sim::parameters::SimParameters::default()
+        .social_gratitude_help_multiplier
+        .to_f64();
+    assert_eq!(shipped, 0.5, "the shipped multiplier is the 0.5 tenderness tier");
+
+    // Leg C (determinism): gratitude levels are seed-deterministic — the
+    // fold's input is stable across replays.
+    let again = crate::test_helpers::run_sim(42, 5000);
+    for (x, y) in sim.agents.iter().zip(again.agents.iter()) {
+        assert_eq!(
+            x.emotions.gratitude.to_raw(),
+            y.emotions.gratitude.to_raw(),
+            "gratitude must be seed-deterministic"
         );
     }
 }

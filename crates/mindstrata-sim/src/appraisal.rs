@@ -255,6 +255,30 @@ pub fn moral_outrage_escalation_factor(outrage: Fixed, rate: f64) -> Fixed {
     Fixed::ONE + outrage * Fixed::from_f64(rate)
 }
 
+/// §8.1.4 (Iteration 127): the help propensity — the combined prosocial
+/// push behind the Help interaction. The caller (the daily social pass)
+/// feeds the internalized "Help Neighbors" norm resistance plus the
+/// tenderness (Iter-99, warmth→caregiving) and gratitude (Iter-127,
+/// reciprocity→caregiving) emotion channels, each weighted by its shipped
+/// multiplier; the result is the tuple element the interaction system
+/// destructures as `help_neighbors_propensity`, widening the Help window
+/// `[0.2, 0.5 × (1 + propensity))` in high-affection pairs. Clamped to
+/// [0, 1] (the Help-window consumer further bounds the decision to
+/// [0.5, 1.0]). Identity at zero emotions: gratitude 0 adds exactly 0
+/// (the norm-only legacy value). Deterministic, no RNG.
+pub fn help_propensity(
+    norm: Fixed,
+    tenderness: Fixed,
+    gratitude: Fixed,
+    tenderness_multiplier: f64,
+    gratitude_multiplier: f64,
+) -> Fixed {
+    (norm
+        + tenderness * Fixed::from_f64(tenderness_multiplier)
+        + gratitude * Fixed::from_f64(gratitude_multiplier))
+        .clamp_01()
+}
+
 /// §8.1.4 (Iteration 122): the despair pacification rate and floor — a
 /// despairing aggressor escalates a failed threat to violence LESS
 /// readily ("nothing I do matters — violence cannot change this"). At
@@ -595,6 +619,40 @@ mod tests {
             contempt_escalation_factor(Fixed::ONE, CONTEMPT_ESCALATION_RATE),
             Fixed::from_f64(1.3),
             "full contempt × 0.3 must be exactly 1.30"
+        );
+    }
+
+    #[test]
+    fn help_propensity_is_identity_at_zero_emotions_and_adds_gratitude() {
+        // §8.1.4 (Iteration 127): gratitude 0 → the norm-only legacy value
+        // (identity), exact +0.25 at half gratitude with the shipped 0.5
+        // multiplier, exact +0.5 at full, clamp at the 1.0 ceiling.
+        // Deterministic, no RNG.
+        assert_eq!(
+            help_propensity(Fixed::from_f64(0.5), Fixed::ZERO, Fixed::ZERO, 0.5, 0.5),
+            Fixed::from_f64(0.5),
+            "zero emotions must preserve the norm-only value"
+        );
+        assert_eq!(
+            help_propensity(Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(0.5), 0.5, 0.5),
+            Fixed::from_f64(0.25),
+            "0.5 gratitude × 0.5 must add exactly 0.25"
+        );
+        assert_eq!(
+            help_propensity(Fixed::ZERO, Fixed::ZERO, Fixed::ONE, 0.5, 0.5),
+            Fixed::from_f64(0.5),
+            "full gratitude adds exactly 0.5"
+        );
+        assert_eq!(
+            help_propensity(
+                Fixed::from_f64(0.7),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
+                0.5,
+                0.5
+            ),
+            Fixed::ONE,
+            "the sum must clamp to the 1.0 ceiling"
         );
     }
 

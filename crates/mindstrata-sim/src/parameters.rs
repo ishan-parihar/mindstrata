@@ -113,6 +113,13 @@ pub struct SimParameters {
     /// channel; folds into the Help-window consumer, clamped by its
     /// [0.5, 1.0] bound).
     pub social_tenderness_help_multiplier: Fixed,
+    /// §8.1.4 (Iteration 127): gratitude multiplier for the help propensity
+    /// (0.5, same tier as tenderness) — a grateful agent (recipient of
+    /// unexpected positive help) reciprocates by helping more (the
+    /// reciprocity→caregiving channel; the appraisal producer is
+    /// `positive × (1 − expectedness)`, LIVE in calibrated windows, so this
+    /// is a CALIBRATED change — golden + snapshots regenerated).
+    pub social_gratitude_help_multiplier: Fixed,
     /// Agreeableness threshold for Teach interaction (0.5).
     pub social_agreeableness_threshold: Fixed,
     /// Friend→Neighbor downgrade threshold (0.4 = Friend downgrades if trust drops below).
@@ -361,6 +368,7 @@ impl Default for SimParameters {
             social_extraversion_multiplier: Fixed::from_f64(0.4),
             social_loneliness_multiplier: Fixed::from_f64(0.3),
             social_tenderness_help_multiplier: Fixed::from_f64(0.5),
+            social_gratitude_help_multiplier: Fixed::from_f64(0.5),
             social_agreeableness_threshold: Fixed::from_f64(0.5),
             social_friend_downgrade_threshold: Fixed::from_f64(0.4),
             social_rival_repair_trust: Fixed::from_f64(0.5),

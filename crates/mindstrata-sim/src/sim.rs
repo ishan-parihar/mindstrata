@@ -3600,20 +3600,30 @@ impl Simulation {
                             .map_or(Fixed::ZERO, |n| {
                                 a.moral_cognition.norm_resistance(n)
                             });
-                        // §8.1.4 (Iteration 99): tenderness folds into the
-                        // help propensity — a tender agent (warm congruence
-                        // toward close others) helps more, mirroring the
-                        // Iter-89 Help Neighbors norm channel. Zero-at-zero:
-                        // tenderness 0 → the norm-only legacy value. The
+                        // §8.1.4 (Iteration 99 + 127): the help propensity
+                        // — the combined prosocial push behind the Help
+                        // interaction (the tuple element the interaction
+                        // system destructures as `help_neighbors_propensity`
+                        // and widens the Help window [0.2, 0.5×(1+p)) with).
+                        // Norm resistance (Iter-89 Help Neighbors) plus
+                        // tenderness (Iter-99, warmth→caregiving) plus
+                        // gratitude (Iter-127, reciprocity→caregiving —
+                        // appraisal producer `positive × (1 − expectedness)`,
+                        // LIVE in calibrated windows, so this is the first
+                        // CALIBRATED §8.1.4 consumer: golden + snapshots
+                        // regenerated with before/after evidence). Zero
+                        // emotions → the norm-only legacy value. The
                         // Help-window consumer clamps to [0.5, 1.0], so the
                         // sum can never overflow the decision window.
-                        let help_propensity = (help_neighbors_name
-                            .map_or(Fixed::ZERO, |n| {
+                        let help_propensity = crate::appraisal::help_propensity(
+                            help_neighbors_name.map_or(Fixed::ZERO, |n| {
                                 a.moral_cognition.norm_resistance(n)
-                            })
-                            + emotions[i].tenderness
-                                * self.params.social_tenderness_help_multiplier)
-                            .clamp_01();
+                            }),
+                            emotions[i].tenderness,
+                            emotions[i].gratitude,
+                            self.params.social_tenderness_help_multiplier.to_f64(),
+                            self.params.social_gratitude_help_multiplier.to_f64(),
+                        );
                         let respect_propensity = respect_elders_name
                             .map_or(Fixed::ZERO, |n| {
                                 a.moral_cognition.norm_resistance(n)
