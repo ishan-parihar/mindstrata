@@ -9247,3 +9247,113 @@ fn moral_outrage_escalation_amplifier_is_zero_blast_in_golden_window() {
         "full outrage must amplify the chance by exactly 1.30"
     );
 }
+#[test]
+fn jealousy_bond_load_chain_is_zero_blast_and_live_wired() {
+    // §10.4 / §8.1.4 (Iteration 126): the jealousy → bond-load → strain →
+    // dissolution chain is FULLY wired in production (the emotion is
+    // produced by appraisal `status_threat × attachment_threat`, the daily
+    // `tick_pair_bonds` pass charges `bond.charge_jealousy(emotion, trust)`
+    // at sim.rs:7041, load > 0.6 records negative strain, and
+    // `should_dissolve()` (strength < 0.1 && strain > 0.8) at sim.rs:7070
+    // dissolves the marriage) — yet the Iter-126 probe pins BOTH the
+    // emotion AND the load at exactly 0 in every calibrated window (both
+    // producer inputs are dormant in calm worlds: no separation distress,
+    // no status challenge). This test pins the zero-blast identity AND
+    // proves the wiring is genuinely live (not a dead channel).
+    //
+    // Leg A (zero-blast pin): the real seed-42 golden population at the
+    // 5000-tick horizon has EVERY agent at exactly `jealousy == 0` and
+    // EVERY pair bond at exactly `jealousy_load == 0`. The charge adds
+    // exactly 0 → bond dynamics are byte-identical → golden stays
+    // byte-identical.
+    let sim = crate::test_helpers::run_sim(42, 5000);
+    assert!(
+        sim.agents
+            .iter()
+            .all(|a| a.emotions.jealousy == mindstrata_core::fixed::Fixed::ZERO),
+        "jealousy must be exactly ZERO for every agent in the golden window"
+    );
+    assert!(
+        sim.marriage_registry
+            .pair_bonds
+            .iter()
+            .all(|b| b.jealousy_load == mindstrata_core::fixed::Fixed::ZERO),
+        "jealousy_load must be exactly ZERO for every bond in the golden window"
+    );
+
+    // Leg B (the wiring is live, not dead): inject `emotions.jealousy =
+    // 1.0` into every agent at tick 1007 (one tick before the daily
+    // boundary 1008 = 7×144), then run exactly ONE tick. The daily
+    // `tick_pair_bonds` pass at the boundary reads the AGENT FIELD — which
+    // at 7627 (after the step-8 writeback at 4105) holds the processed
+    // value taken from the injected state (the Iter-116 decay has applied
+    // once: ≈0.88). The horizon is deliberately one tick: the per-tick
+    // decay (0.12/tick) would erode the injection to ~0 well before the
+    // NEXT daily charge (144 ticks later) — this cadence mismatch is
+    // itself the reason a single-shot injection cannot span a full day,
+    // so the injection must land ON the boundary. The control world (no
+    // injection) must stay at load == 0 — the differential proves the
+    // charge path reads the live emotion.
+    let mut injected = crate::test_helpers::run_sim(42, 1007);
+    let mut control = crate::test_helpers::run_sim(42, 1007);
+    assert!(
+        !injected.marriage_registry.pair_bonds.is_empty(),
+        "pair bonds must exist by tick 1007 (probe: 5 bonds @1000)"
+    );
+    for a in injected.agents.iter_mut() {
+        a.emotions.jealousy = mindstrata_core::fixed::Fixed::ONE;
+    }
+    injected.run(1); // delta ticks → 1008, a daily boundary
+    control.run(1);
+    let max_load = injected
+        .marriage_registry
+        .pair_bonds
+        .iter()
+        .map(|b| b.jealousy_load.to_f64())
+        .fold(0.0f64, f64::max);
+    let control_max = control
+        .marriage_registry
+        .pair_bonds
+        .iter()
+        .map(|b| b.jealousy_load.to_f64())
+        .fold(0.0f64, f64::max);
+    assert!(
+        max_load > 0.01,
+        "the injected jealousy emotion must charge the bond load, max {max_load}"
+    );
+    assert_eq!(
+        control_max, 0.0,
+        "the no-injection control must keep load at exactly zero, got {control_max}"
+    );
+
+    // Leg C (chain determinism + boundedness): two identical injections
+    // charge byte-identically (no RNG in the charge path), and the load
+    // respects the [0, 1] clamp.
+    let mut sim_x = crate::test_helpers::run_sim(42, 1007);
+    let mut sim_y = crate::test_helpers::run_sim(42, 1007);
+    for ag in sim_x.agents.iter_mut() {
+        ag.emotions.jealousy = mindstrata_core::fixed::Fixed::ONE;
+    }
+    for ag in sim_y.agents.iter_mut() {
+        ag.emotions.jealousy = mindstrata_core::fixed::Fixed::ONE;
+    }
+    sim_x.run(1);
+    sim_y.run(1);
+    for (x, y) in sim_x
+        .marriage_registry
+        .pair_bonds
+        .iter()
+        .zip(sim_y.marriage_registry.pair_bonds.iter())
+    {
+        assert_eq!(
+            x.jealousy_load.to_raw(),
+            y.jealousy_load.to_raw(),
+            "identical injections must charge byte-identically"
+        );
+        assert!(
+            x.jealousy_load <= mindstrata_core::fixed::Fixed::ONE
+                && x.jealousy_load >= mindstrata_core::fixed::Fixed::ZERO,
+            "jealousy_load must respect the [0, 1] clamp"
+        );
+    }
+}

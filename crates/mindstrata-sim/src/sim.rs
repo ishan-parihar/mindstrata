@@ -7000,11 +7000,15 @@ impl Simulation {
     /// charge each bond's jealousy load from the partners' appraised jealousy
     /// emotion (weighted by relationship dependence) and drive the
     /// post-marriage romantic-stage ladder (Married → HouseholdFormed →
-    /// Parenthood → Strain ↔ Stabilization). Effects are observational: the
-    /// plan's jealousy-driven breakup (should_dissolve) is a decisional
-    /// consumer reserved for a future behavioral iteration — this pass writes
-    /// only to `pair_bonds`, which no behavioral system reads, so the golden
-    /// baseline is byte-identical.
+    /// Parenthood → Strain ↔ Stabilization). Iteration 126 corrected this
+    /// comment: the pass is NOT observational-only — `should_dissolve()`
+    /// (bond_strength < 0.1 && strain > 0.8) below dissolves the bond and
+    /// its marriage (Separation), so the jealousy → load → strain →
+    /// dissolution chain is a fully decisional §10.4 consumer. In
+    /// calibrated windows both producer inputs (status_threat ×
+    /// attachment_threat) are dormant, so the emotion and the load stay
+    /// exactly zero (probe-pinned, Iter-126) and the golden baseline is
+    /// byte-identical.
     fn tick_pair_bonds(&mut self, tick_u64: u64) {
         let n = self.agents.len();
         if n == 0 {
