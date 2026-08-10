@@ -220,6 +220,41 @@ pub fn contempt_escalation_factor(contempt: Fixed, rate: f64) -> Fixed {
     Fixed::ONE + contempt * Fixed::from_f64(rate)
 }
 
+/// §8.1.4 (Iteration 125): the moral-outrage escalation rate — a morally
+/// outraged aggressor escalates a failed threat to violence MORE readily
+/// ("the violation of the sacred demands retaliation" — the righteous-
+/// indignation layer on the §19.5.H decision, the AP2 §8.1.10 honor-feud
+/// path). At full outrage 1.0 the escalation chance rises exactly 30%
+/// (factor 1.30, mirroring the humiliation/contempt amplifiers — all
+/// three are dignity/moral emotions amplifying the same failed-threat
+/// decision from distinct layers: humiliation is public status loss,
+/// contempt is secure superiority, outrage is moral condemnation of the
+/// target's act). ONE-SIDED: identity at zero — the Iter-125 calibration
+/// probe shows moral_outrage is NEVER produced in any calibrated window
+/// (its appraisal input — `sacredness_violation × goal_relevance` =
+/// `witnessed_unfairness × max_sacredness × max(hunger, thirst, threat)`
+/// — fires at ANY positive witnessed unfairness: there is NO 0.05 gate on
+/// this channel — that threshold only flips the sign of the separate
+/// `fairness` appraisal field — so the exact-zero probe pins
+/// `witnessed_unfairness == 0` exactly, i.e. calm worlds witness no
+/// injustice; probe mean/max 0.0000 across seeds 1/42/99 at 1000–5000
+/// ticks even though every agent carries live sacred values 0.55–0.79
+/// AND live goal_relevance (hunger/thirst pressure) — the channel is
+/// ARMED and waiting, the zero comes from the unfairness input, not
+/// absent machinery), so the factor is exactly 1.0 throughout the
+/// golden/snapshot horizons (provably zero-blast).
+pub const MORAL_OUTRAGE_ESCALATION_RATE: f64 = 0.3;
+
+/// §8.1.4 (Iteration 125): the moral-outrage escalation factor —
+/// `1 + outrage × rate`, ∈ [1.0, 1.3] for the shipped constant. The
+/// caller multiplies the escalation chance in `should_escalate` by the
+/// returned factor. NO clamp (the Iter-112 lesson — `clamp_01` would
+/// silently erase the amplification). One-sided: identity at zero,
+/// monotone above. Deterministic, no RNG.
+pub fn moral_outrage_escalation_factor(outrage: Fixed, rate: f64) -> Fixed {
+    Fixed::ONE + outrage * Fixed::from_f64(rate)
+}
+
 /// §8.1.4 (Iteration 122): the despair pacification rate and floor — a
 /// despairing aggressor escalates a failed threat to violence LESS
 /// readily ("nothing I do matters — violence cannot change this"). At
@@ -560,6 +595,29 @@ mod tests {
             contempt_escalation_factor(Fixed::ONE, CONTEMPT_ESCALATION_RATE),
             Fixed::from_f64(1.3),
             "full contempt × 0.3 must be exactly 1.30"
+        );
+    }
+
+    #[test]
+    fn moral_outrage_escalation_factor_is_identity_at_zero_and_amplifies() {
+        // §8.1.4 (Iteration 125): identity at zero (never produced in
+        // calibrated windows → zero-blast), exact 1.15 at 0.5, exact 1.30
+        // at full outrage. NO clamp — the factor provably exceeds 1.0
+        // (the Iter-112 lesson: `clamp_01` would erase the amplification).
+        assert_eq!(
+            moral_outrage_escalation_factor(Fixed::ZERO, MORAL_OUTRAGE_ESCALATION_RATE),
+            Fixed::ONE,
+            "zero outrage must be a byte-identical identity"
+        );
+        assert_eq!(
+            moral_outrage_escalation_factor(Fixed::from_f64(0.5), MORAL_OUTRAGE_ESCALATION_RATE),
+            Fixed::from_f64(1.15),
+            "0.5 × 0.3 must add exactly 0.15"
+        );
+        assert_eq!(
+            moral_outrage_escalation_factor(Fixed::ONE, MORAL_OUTRAGE_ESCALATION_RATE),
+            Fixed::from_f64(1.3),
+            "full outrage × 0.3 must be exactly 1.30"
         );
     }
 

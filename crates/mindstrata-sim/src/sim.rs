@@ -1638,6 +1638,38 @@ impl Simulation {
         // violent-despair counter-hypothesis (nothing-to-lose violence) is
         // acknowledged and left as a future calibration knob — the
         // rate/floor consts make it trivially tunable.
+        // §8.1.4 (Iteration 125): a morally outraged aggressor escalates a
+        // failed threat to violence MORE readily — `moral_outrage_escalation_factor`
+        // (1 + outrage × rate, factor 1.30 at full outrage) multiplies the
+        // chance chain. This is the THIRD AMPLIFIER alongside the Iter-116
+        // humiliation and Iter-122 contempt factors on the same §19.5.H
+        // decision, from the distinct righteous-indignation layer ("the
+        // violation of the sacred demands retaliation" — the AP2 §8.1.10
+        // honor-feud path): humiliation is public status loss, contempt is
+        // secure superiority, outrage is moral condemnation of the target's
+        // act. ONE-SIDED: identity at zero — the Iter-125 calibration
+        // probe shows moral_outrage is never produced in calibrated windows
+        // (its appraisal input — `sacredness_violation × goal_relevance`
+        // = `witnessed_unfairness × max_sacredness × max(hunger, thirst,
+        // threat)` — fires at ANY positive witnessed unfairness: there is
+        // NO 0.05 gate on this channel — that threshold only flips the
+        // sign of the separate `fairness` appraisal field — so the
+        // exact-zero probe pins `witnessed_unfairness == 0` exactly, i.e.
+        // calm worlds witness no injustice; probe mean/max 0.0000 across
+        // seeds 1/42/99 at 1000–5000 ticks despite every agent carrying
+        // live sacred values 0.55–0.79 AND live goal_relevance — the
+        // channel is ARMED, the zero is the unfairness input, not absent
+        // machinery), so the factor is exactly 1.0 throughout the
+        // golden/snapshot horizons (provably zero-blast).
+        // The RNG draw below stays unconditional (same stream position), so
+        // replay determinism holds at every outrage value — only the
+        // comparison threshold changes. The combined-amplifier ceiling is
+        // clamped at 1.0 by `escalation_chance`, so even all three
+        // amplifiers at saturation cannot exceed it.
+        let outrage_factor = crate::appraisal::moral_outrage_escalation_factor(
+            self.agents[from_idx].emotions.moral_outrage,
+            crate::appraisal::MORAL_OUTRAGE_ESCALATION_RATE,
+        );
         let despair_factor = crate::appraisal::despair_pacify_factor(
             self.agents[from_idx].emotions.despair,
             crate::appraisal::DESPAIR_PACIFY_RATE,
@@ -1651,6 +1683,7 @@ impl Simulation {
             * obligation_factor.to_f64()
             * humiliation_factor.to_f64()
             * contempt_factor.to_f64()
+            * outrage_factor.to_f64()
             * despair_factor.to_f64();
         self.rng.get_mut(RngStream::Social).random::<f64>() < chance
     }
@@ -11370,6 +11403,56 @@ mod tests {
             despairing_escalations < control_escalations,
             "a despairing aggressor must escalate strictly less: \
              {despairing_escalations} vs {control_escalations}"
+        );
+    }
+
+    /// §8.1.4 (Iteration 125): the moral-outrage fold genuinely shifts
+    /// escalation outcomes. Two same-seed worlds differ only in the
+    /// aggressor's `emotions.moral_outrage` (1.0 vs 0.0 — a morally
+    /// outraged aggressor sees the violated sacred as demanding retaliation
+    /// and escalates a failed threat more readily). The RNG draw sequence
+    /// is identical in both (same seed, same call order, exactly one draw
+    /// per `should_escalate`), so the count gap is deterministic: the
+    /// outraged aggressor escalates strictly more often. The factor is
+    /// multiplied into the chance chain AFTER the Iter-122 contempt factor
+    /// and BEFORE the despair pacifier; at full outrage it raises the
+    /// chance by exactly 30% (the appraisal unit test pins the math).
+    #[test]
+    fn moral_outrage_amplifies_escalation_outcomes() {
+        let make_config = || SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut outraged = Simulation::new(make_config());
+        outraged.populate();
+        let mut control = Simulation::new(make_config());
+        control.populate();
+        let (a, b) = cross_clan_pair(&outraged);
+        outraged.agents[a].emotions.moral_outrage = Fixed::ONE;
+        // Control keeps the tick-0 identity (outrage 0 → factor 1.0).
+        let aggression = Fixed::from_f64(1.5); // past the 1.2 threshold
+        let mut outraged_escalations = 0;
+        let mut control_escalations = 0;
+        for _ in 0..500 {
+            if outraged.should_escalate(a, b, true, aggression) {
+                outraged_escalations += 1;
+            }
+            if control.should_escalate(a, b, true, aggression) {
+                control_escalations += 1;
+            }
+        }
+        assert!(
+            control_escalations > 0,
+            "control must escalate at the base rate, got {control_escalations}"
+        );
+        assert!(
+            outraged_escalations > control_escalations,
+            "a morally outraged aggressor must escalate strictly more: \
+             {outraged_escalations} vs {control_escalations}"
         );
     }
 

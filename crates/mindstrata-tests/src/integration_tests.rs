@@ -9167,3 +9167,83 @@ fn motivation_emotional_context_is_live() {
         "amplified pressure must be seed-deterministic"
     );
 }
+#[test]
+fn moral_outrage_escalation_amplifier_is_zero_blast_in_golden_window() {
+    // §8.1.4 (Iteration 125): the moral-outrage escalation amplifier on
+    // `should_escalate` must be provably inert in the calibrated golden
+    // window — the emotion is never produced in calm worlds, so the factor
+    // is exactly 1.0 and the escalation chance chain is byte-identical.
+    //
+    // Leg A (zero-blast pin): the real seed-42 golden population at the
+    // 5000-tick horizon has EVERY agent at exactly `moral_outrage == 0`.
+    // The factor is then exactly 1.0 → the chain is bit-identical to the
+    // pre-fold build → golden stays byte-identical.
+    let sim = crate::test_helpers::run_sim(42, 5000);
+    assert!(
+        sim.agents
+            .iter()
+            .all(|a| a.emotions.moral_outrage == mindstrata_core::fixed::Fixed::ZERO),
+        "moral_outrage must be exactly ZERO for every agent in the golden window"
+    );
+
+    // Leg B (producer-side diagnosis — WHY it is zero): the zero does NOT
+    // come from absent machinery. The producer is `sacredness_violation ×
+    // goal_relevance` = `witnessed_unfairness × max_sacredness ×
+    // max(hunger, thirst, threat)` — it fires at ANY positive
+    // witnessed_unfairness (there is NO 0.05 gate on this channel; that
+    // threshold only flips the sign of the separate `fairness` appraisal
+    // field). Every agent carries live sacred values (mean > 0.5, at
+    // least one agent > 0.6 — the sacredness dimension is populated and
+    // maintained) and live goal_relevance (hunger/thirst pressure in the
+    // scarcity world), so the exact-zero pin of Leg A proves
+    // `witnessed_unfairness == 0` exactly — calm worlds witness no
+    // injustice. The channel is armed and waiting — the first real
+    // witnessed injustice in a conflict-laden world engages it.
+    let n = sim.agents.len() as f64;
+    let sacred_max: f64 = sim
+        .agents
+        .iter()
+        .map(|a| {
+            a.sacred_values
+                .values
+                .iter()
+                .map(|v| v.sacredness.to_f64())
+                .fold(0.0f64, f64::max)
+        })
+        .fold(0.0f64, f64::max);
+    let sacred_mean: f64 = sim
+        .agents
+        .iter()
+        .map(|a| {
+            a.sacred_values
+                .values
+                .iter()
+                .map(|v| v.sacredness.to_f64())
+                .fold(0.0f64, f64::max)
+        })
+        .sum::<f64>()
+        / n;
+    assert!(
+        sacred_mean > 0.5,
+        "sacred values must be live in the golden window (the outrage producer is armed), mean {sacred_mean:.4}"
+    );
+    assert!(
+        sacred_max > 0.6,
+        "at least one agent must carry a strong sacred value (the outrage producer is armed), max {sacred_max:.4}"
+    );
+
+    // Leg C (the wiring is live, not dead): the pure factor is the exact
+    // multiplier the should_escalate fold uses — full outrage must
+    // amplify the chance by exactly 1.30 (proven wired end-to-end by the
+    // identical-RNG unit test in sim.rs). ONE-SIDED: identity at zero,
+    // NO clamp (the Iter-112 lesson).
+    assert_eq!(
+        mindstrata_sim::appraisal::moral_outrage_escalation_factor(
+            mindstrata_core::fixed::Fixed::ONE,
+            mindstrata_sim::appraisal::MORAL_OUTRAGE_ESCALATION_RATE,
+        )
+        .to_f64(),
+        1.3,
+        "full outrage must amplify the chance by exactly 1.30"
+    );
+}
