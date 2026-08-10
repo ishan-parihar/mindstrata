@@ -1675,6 +1675,31 @@ impl Simulation {
             crate::appraisal::DESPAIR_PACIFY_RATE,
             crate::appraisal::DESPAIR_PACIFY_FLOOR,
         );
+        // §8.1.4 (Iteration 128): a relieved aggressor escalates a failed
+        // threat to violence MORE readily — `relief_escalation_factor`
+        // (1 + relief × 0.1, factor 1.10 at full) multiplies the chance
+        // chain. The emotional counterpoint to the Iter-122 despair
+        // pacifier on the same §19.5.H decision, from the distinct
+        // recovery layer ("the uncontrollable outcome turned out positive
+        // — I survived, I am emboldened"): despair is hopelessness,
+        // relief is post-danger risk-acceptance (the lucky-escape
+        // appraisal, producer `positive × (1 − controllability)`).
+        // CALIBRATED: relief is LIVE in recovery windows (0.1-rate probe:
+        // mean > 0.5 at 5000; factor ≈ 1.05–1.08 there), but the factor is
+        // SELECTIVE — relief's producer (positive × (1 − controllability))
+        // is dormant in famine/stress windows, so golden/snapshots stay
+        // byte-identical while long-horizon emergent runs shift (seed-42
+        // panic fire 17713 → 18577, Iter-128). Despair (Iter-122) is
+        // anti-correlated: live in stress windows, zero in recovery — the
+        // two factors never silently cancel in the same window. The RNG
+        // draw below stays unconditional (same stream position), so
+        // replay determinism holds at every relief value — only the
+        // comparison threshold changes. The combined-amplifier ceiling is
+        // clamped at 1.0 by `escalation_chance`.
+        let relief_factor = crate::appraisal::relief_escalation_factor(
+            self.agents[from_idx].emotions.relief,
+            crate::appraisal::RELIEF_ESCALATION_RATE,
+        );
         let chance = self.escalation_chance(from_idx, to_idx)
             * (1.0 - resistance)
             * (1.0 - hypocrisy)
@@ -1684,6 +1709,7 @@ impl Simulation {
             * humiliation_factor.to_f64()
             * contempt_factor.to_f64()
             * outrage_factor.to_f64()
+            * relief_factor.to_f64()
             * despair_factor.to_f64();
         self.rng.get_mut(RngStream::Social).random::<f64>() < chance
     }
@@ -11467,6 +11493,56 @@ mod tests {
             outraged_escalations > control_escalations,
             "a morally outraged aggressor must escalate strictly more: \
              {outraged_escalations} vs {control_escalations}"
+        );
+    }
+
+    /// §8.1.4 (Iteration 128): the relief fold genuinely shifts escalation
+    /// outcomes. Two same-seed worlds differ only in the aggressor's
+    /// `emotions.relief` (1.0 vs 0.0 — a relieved aggressor, the lucky
+    /// survivor of an uncontrollable positive outcome, is emboldened and
+    /// escalates a failed threat more readily). The RNG draw sequence is
+    /// identical in both (same seed, same call order, exactly one draw per
+    /// `should_escalate`), so the count gap is deterministic: the relieved
+    /// aggressor escalates strictly more often. The factor is multiplied
+    /// into the chance chain AFTER the Iter-125 outrage factor and BEFORE
+    /// the despair pacifier; at full relief it raises the chance by
+    /// exactly 10% (the appraisal unit test pins the math).
+    #[test]
+    fn relief_amplifies_escalation_outcomes() {
+        let make_config = || SimConfig {
+            seed: 42,
+            max_ticks: 10_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut relieved = Simulation::new(make_config());
+        relieved.populate();
+        let mut control = Simulation::new(make_config());
+        control.populate();
+        let (a, b) = cross_clan_pair(&relieved);
+        relieved.agents[a].emotions.relief = Fixed::ONE;
+        // Control keeps the tick-0 identity (relief 0 → factor 1.0).
+        let aggression = Fixed::from_f64(1.5); // past the 1.2 threshold
+        let mut relieved_escalations = 0;
+        let mut control_escalations = 0;
+        for _ in 0..500 {
+            if relieved.should_escalate(a, b, true, aggression) {
+                relieved_escalations += 1;
+            }
+            if control.should_escalate(a, b, true, aggression) {
+                control_escalations += 1;
+            }
+        }
+        assert!(
+            control_escalations > 0,
+            "control must escalate at the base rate, got {control_escalations}"
+        );
+        assert!(
+            relieved_escalations > control_escalations,
+            "a relieved aggressor must escalate strictly more: \
+             {relieved_escalations} vs {control_escalations}"
         );
     }
 

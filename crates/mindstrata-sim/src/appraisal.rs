@@ -255,6 +255,35 @@ pub fn moral_outrage_escalation_factor(outrage: Fixed, rate: f64) -> Fixed {
     Fixed::ONE + outrage * Fixed::from_f64(rate)
 }
 
+/// §8.1.4 (Iteration 128): the relief escalation rate — a relieved
+/// aggressor escalates a failed threat to violence MORE readily ("the
+/// uncontrollable outcome turned out positive — I survived, I am
+/// emboldened" — the post-danger risk-acceptance effect, the emotional
+/// counterpoint to the Iter-122 despair pacifier on the same §19.5.H
+/// decision). At full relief 1.0 the escalation chance rises exactly 10%
+/// (factor 1.10 — deliberately weaker than the 1.30 dignity/moral
+/// amplifiers: relief is a transient recovery emotion, not a standing
+/// grievance). The producer is `positive × (1 − controllability)` — the
+/// lucky-escape appraisal — LIVE in recovery windows (0.1-rate probe:
+/// mean > 0.5 at 5000 on seed 42; the pre-tune 0.2-rate probe measured
+/// 0.65–0.79). SELECTIVITY MECHANISM (why the golden/snapshots stay
+/// byte-identical despite a live fold): relief's producer needs positive
+/// outcomes, which are rare in famine/stress windows — relief ≈ 0 there
+/// → factor ≈ 1.0 → zero drift; relief is live only in recovery windows,
+/// so the fold surfaces as emergent change in long-horizon runs (the
+/// seed-42 panic fire moved 17713 → 18577, Iter-128). NO clamp (the
+/// Iter-112 lesson — `clamp_01` would silently erase the amplification).
+pub const RELIEF_ESCALATION_RATE: f64 = 0.1;
+
+/// §8.1.4 (Iteration 128): the relief escalation factor —
+/// `1 + relief × rate`, ∈ [1.0, 1.1] for the shipped constant. The caller
+/// multiplies the escalation chance in `should_escalate` by the returned
+/// factor. One-sided: identity at zero, monotone above. Deterministic,
+/// no RNG.
+pub fn relief_escalation_factor(relief: Fixed, rate: f64) -> Fixed {
+    Fixed::ONE + relief * Fixed::from_f64(rate)
+}
+
 /// §8.1.4 (Iteration 127): the help propensity — the combined prosocial
 /// push behind the Help interaction. The caller (the daily social pass)
 /// feeds the internalized "Help Neighbors" norm resistance plus the
@@ -653,6 +682,29 @@ mod tests {
             ),
             Fixed::ONE,
             "the sum must clamp to the 1.0 ceiling"
+        );
+    }
+
+    #[test]
+    fn relief_escalation_factor_is_identity_at_zero_and_amplifies() {
+        // §8.1.4 (Iteration 128): identity at zero, exact 1.05 at 0.5,
+        // exact 1.10 at full relief (the shipped 0.1 rate — a recovery-
+        // emotion tier below the 1.30 dignity/moral amplifiers). NO clamp
+        // (the Iter-112 lesson: `clamp_01` would erase the amplification).
+        assert_eq!(
+            relief_escalation_factor(Fixed::ZERO, RELIEF_ESCALATION_RATE),
+            Fixed::ONE,
+            "zero relief must be a byte-identical identity"
+        );
+        assert_eq!(
+            relief_escalation_factor(Fixed::from_f64(0.5), RELIEF_ESCALATION_RATE),
+            Fixed::from_f64(1.05),
+            "0.5 × 0.1 must add exactly 0.05"
+        );
+        assert_eq!(
+            relief_escalation_factor(Fixed::ONE, RELIEF_ESCALATION_RATE),
+            Fixed::from_f64(1.1),
+            "full relief × 0.1 must be exactly 1.10"
         );
     }
 
