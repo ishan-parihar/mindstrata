@@ -11338,3 +11338,117 @@ fn awe_reverence_shields_legitimacy_is_live_and_deterministic() {
         );
     }
 }
+
+// ── Phase 4 Modding API (Iteration 156) ──────────────────────────────────────
+
+fn mod_pack_fixture() -> mindstrata_sim::mods::ContentPack {
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::culture::knowledge::KnowledgeCategory;
+    use mindstrata_sim::culture::Knowledge;
+    use mindstrata_sim::mods::{ContentPack, ModManifest};
+    use mindstrata_sim::norms::Norm;
+
+    ContentPack {
+        manifest: ModManifest {
+            name: "River Trade Pact".into(),
+            description: "Integration fixture: one norm + one knowledge item.".into(),
+            version: "1.0.0".into(),
+        },
+        scenario: None,
+        knowledge: vec![Knowledge {
+            id: 100,
+            name: "River Ferry".into(),
+            category: KnowledgeCategory::Craft,
+            difficulty: Fixed::from_f64(0.2),
+            utility: Fixed::from_f64(0.9),
+            holders: 0,
+            discovered_tick: 0,
+        }],
+        norms: vec![Norm {
+            id: 100,
+            name: "Honor River Trade".into(),
+            strength: Fixed::from_f64(0.6),
+            internalization: Fixed::from_f64(0.5),
+            punishment: Fixed::from_f64(0.4),
+            reinforcing_identity: None,
+        }],
+    }
+}
+
+#[test]
+fn content_pack_applies_and_persists_through_full_horizon() {
+    use mindstrata_sim::sim::SimConfig;
+    use mindstrata_sim::Simulation;
+
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 2000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    };
+
+    // Control world: identical config, no pack.
+    let mut control = Simulation::new(config.clone());
+    control.populate();
+    control.run(2000);
+
+    // Modded world: identical config, pack applied BEFORE the run.
+    let mut modded = Simulation::new(config);
+    modded.populate();
+    let applied = modded.apply_content_pack(&mod_pack_fixture()).unwrap();
+    assert_eq!(applied.norms_added, 1, "one norm must be added");
+    assert_eq!(applied.knowledge_added, 1, "one knowledge item must be added");
+    modded.run(2000);
+
+    // The pack's content persists through the entire horizon — the tick loop
+    // never drops or overwrites registry additions.
+    assert!(
+        modded.norms.norms().iter().any(|n| n.id == 100 && n.name == "Honor River Trade"),
+        "mod norm must still be registered after 2000 ticks"
+    );
+    assert!(
+        modded.knowledge_store.iter().any(|k| k.id == 100 && k.name == "River Ferry"),
+        "mod knowledge must still be in the store after 2000 ticks"
+    );
+
+    // The control world was never touched by the pack.
+    assert!(
+        control.norms.norms().iter().all(|n| n.id != 100),
+        "control world must not contain the mod norm"
+    );
+    assert!(
+        control.knowledge_store.iter().all(|k| k.id != 100),
+        "control world must not contain the mod knowledge"
+    );
+
+    // The modded knowledge participates in the world's learning dynamics:
+    // agents acquire it through the existing learning paths (holders grow
+    // from 0). Control's store has no such item at all.
+    let modded_holders = modded
+        .knowledge_store
+        .iter()
+        .find(|k| k.id == 100)
+        .map_or(0, |k| k.holders);
+    assert!(
+        modded_holders > 0,
+        "mod knowledge must be learned by agents over the horizon (holders > 0)"
+    );
+
+    // The injected content must not destabilize the world.
+    let m = modded.metrics_snapshot();
+    assert!(m.agent_count > 0, "population must survive the modded run");
+    assert!(m.total_grain > 0.0, "economy must survive the modded run");
+}
+
+#[test]
+fn content_pack_validation_rejects_duplicate_ids_before_apply() {
+    let mut dup = mod_pack_fixture();
+    dup.norms.push(dup.norms[0].clone());
+    let err = dup.validate().unwrap_err();
+    assert!(
+        err.to_string().contains("duplicate norm id"),
+        "duplicate norm ids must be rejected: {err}"
+    );
+}

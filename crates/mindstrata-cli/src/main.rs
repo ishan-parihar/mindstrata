@@ -13,6 +13,10 @@ struct Cli {
 }
 
 #[derive(Subcommand)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "clap arg container: the Sim variant carries many optional dashboard flags; boxing individual fields would complicate the derive and gain nothing"
+)]
 enum Commands {
     /// Run a headless simulation.
     Sim {
@@ -27,6 +31,10 @@ enum Commands {
         /// Number of initial agents.
         #[arg(long, default_value_t = 12)]
         agents: u32,
+
+        /// Load and apply a content pack (mod) from a directory before running.
+        #[arg(long, value_name = "DIR")]
+        mod_dir: Option<String>,
 
         /// Verbose logging.
         #[arg(short, long)]
@@ -116,6 +124,7 @@ fn main() {
             seed,
             ticks,
             agents,
+            mod_dir,
             verbose,
             map,
             inspect_agent,
@@ -168,6 +177,40 @@ fn main() {
                 s.populate();
                 s
             };
+
+            // §5 (Iteration 156): modding API — apply the content pack (if
+            // any) before running, so mod norms/knowledge affect the whole
+            // run. Strictly opt-in via --mod; no default world loads a pack.
+            if let Some(ref mod_dir) = mod_dir {
+                match mindstrata_sim::mods::ContentPack::load(std::path::Path::new(mod_dir)) {
+                    Ok(pack) => {
+                        println!("  Mod:    {}", pack.describe());
+                        match sim.apply_content_pack(&pack) {
+                            Ok(applied) => {
+                                println!(
+                                    "  Applied: {} norms, {} knowledge items added",
+                                    applied.norms_added, applied.knowledge_added
+                                );
+                                if let Some(ref scenario) = pack.scenario {
+                                    println!(
+                                        "  Pack scenario: '{}' — run it with: scenario {}/scenario.ron",
+                                        scenario.name,
+                                        mod_dir.trim_end_matches('/')
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to apply mod: {e}");
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to load mod from {mod_dir}: {e}");
+                        std::process::exit(1);
+                    }
+                }
+            }
 
             println!("Running {ticks} ticks...");
             let start = std::time::Instant::now();
@@ -352,11 +395,17 @@ fn main() {
                 "famine" => Scenario::famine(),
                 "pestilence" => Scenario::pestilence(),
                 "collapse" => Scenario::collapse(),
-                other => {
-                    eprintln!("Unknown scenario: {other}");
-                    eprintln!("Available: riverford, drought, famine, pestilence, collapse");
-                    std::process::exit(1);
-                }
+                // §5 (Iteration 156): modding API — run any .ron scenario file
+                // by path (e.g. a mod pack's scenario.ron).
+                other => match Scenario::from_file(other) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        eprintln!("Unknown scenario: {other}");
+                        eprintln!("Available: riverford, drought, famine, pestilence, collapse");
+                        eprintln!("Or pass a path to a .ron scenario file: {e}");
+                        std::process::exit(1);
+                    }
+                },
             };
 
             println!("╔══════════════════════════════════════════════╗");

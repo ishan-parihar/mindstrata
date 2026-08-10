@@ -395,7 +395,9 @@ pub struct Simulation {
     pub relationships: Vec<Relationship>,
     events: Vec<SimEvent>,
     journal: EventJournal,
-    norms: NormRegistry,
+    /// §12: Social norms — mod norms are registered post-populate through
+    /// the modding API (`apply_content_pack`), so the registry is pub.
+    pub norms: NormRegistry,
     /// §12: Institutions are first-class entities with legitimacy, roles, and collective psychology.
     pub institutions: Vec<Institution>,
     /// §34: Causal provenance — tracks decision traces and event causality chains.
