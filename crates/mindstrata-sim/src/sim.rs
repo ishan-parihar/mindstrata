@@ -9033,7 +9033,14 @@ impl Simulation {
         // Muster: conscript the most dominant eligible adults up to the
         // barracks cap (dominance is the same combat-power proxy
         // `resolve_conflict` uses for aggression). Deterministic tie-break:
-        // stable order by descending dominance.
+        // stable order by descending dominance. The cap comes from the
+        // barracks' own capacity, never exceeding the hard constant.
+        let site_cap = self
+            .world
+            .sites
+            .iter()
+            .find(|s| s.kind == crate::world::SiteKind::Barracks)
+            .map_or(MUSTER_CAP, |s| (s.capacity as usize).min(MUSTER_CAP));
         let mut candidates: Vec<usize> = (0..n)
             .filter(|&i| conscription_eligible(self.agents[i].age))
             .filter(|&i| self.military.roster[i].is_none())
@@ -9044,7 +9051,7 @@ impl Simulation {
                 .dominance
                 .cmp(&self.agents[a].personality.dominance)
         });
-        candidates.truncate(MUSTER_CAP);
+        candidates.truncate(site_cap);
         let mut conscripted: u64 = 0;
         for i in candidates {
             self.military.roster[i] = Some(MilitiaMember {
@@ -9056,12 +9063,18 @@ impl Simulation {
         }
         if conscripted > 0 {
             self.military.musters += 1;
+            self.journal.record(
+                tick_u64,
+                AgentId::new(0),
+                JournalEntryKind::MilitaryMuster { conscripts: conscripted },
+            );
         }
 
         // Yearly drill: the militia trains, building collective readiness
         // (the decay applies every year, whether or not they drill).
         let attenders = self.military.militia_size() as usize;
-        self.military.readiness = drill_readiness(self.military.readiness, attenders, MUSTER_CAP);
+        self.military.readiness =
+            drill_readiness(self.military.readiness, attenders, site_cap);
         if attenders > 0 {
             self.military.drills += 1;
             self.journal.record(

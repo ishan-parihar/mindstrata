@@ -2199,6 +2199,214 @@ fn theology_is_deterministic_across_identical_setups() {
     }
 }
 
+/// §5 (AP2, Iteration 153): without a Barracks site the military system is
+/// dormant — no conscription, no drills, zero readiness, and every
+/// calibrated window stays byte-identical.
+#[test]
+fn military_stays_dormant_without_a_barracks() {
+    let sim = run_sim(42, 2000);
+    assert!(sim.military.is_dormant(), "no barracks → no militia");
+    assert_eq!(sim.military.conscripts, 0);
+    assert_eq!(sim.military.musters, 0);
+    assert_eq!(sim.military.drills, 0);
+    assert_eq!(sim.military.militia_size(), 0);
+    assert_eq!(sim.military.readiness, Fixed::ZERO);
+    let journaled = sim
+        .journal()
+        .entries_in_range(0, u64::MAX)
+        .iter()
+        .any(|e| {
+            matches!(
+                e.kind,
+                mindstrata_sim::journal::JournalEntryKind::MilitaryDrill { .. }
+                    | mindstrata_sim::journal::JournalEntryKind::MilitaryMuster { .. }
+            )
+        });
+    assert!(!journaled, "no military journal entries in a barracks-free world");
+}
+
+/// §5 (AP2, Iteration 153): once a Barracks exists, the yearly pass
+/// conscripts the most dominant eligible adults up to the cap and drills
+/// them into readiness — journaled each year the militia trains.
+#[test]
+fn military_musters_and_drills_when_a_barracks_exists() {
+    use mindstrata_sim::world::SiteKind;
+
+    let config = SimConfig {
+        seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
+        num_agents: 12, snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    // Build the barracks: no default world places one.
+    sim.world.sites.push(mindstrata_sim::world::Site {
+        id: mindstrata_core::id::AgentId::new(10_000),
+        kind: SiteKind::Barracks,
+        name: "The Garrison".into(),
+        owner: None,
+        capacity: 30,
+        storage_capacity: Fixed::ZERO,
+        inventory: vec![],
+    });
+    // Ten conscription-age adults, two minors.
+    for i in 0..10 {
+        sim.agents[i].age = Fixed::from_f64(25.0);
+    }
+    for i in 10..12 {
+        sim.agents[i].age = Fixed::from_f64(12.0);
+    }
+
+    sim.tick_military(4320);
+
+    assert_eq!(
+        sim.military.conscripts, 8,
+        "the muster conscripts the most dominant adults up to the cap of 8"
+    );
+    assert_eq!(sim.military.musters, 1);
+    assert_eq!(sim.military.militia_size(), 8);
+    assert_eq!(sim.military.drills, 1, "the first drill is held");
+    assert!(sim.military.readiness > Fixed::ZERO, "drills build readiness");
+    // The two minors are never conscripted.
+    assert!(sim.military.roster[10].is_none());
+    assert!(sim.military.roster[11].is_none());
+    let muster_journaled = sim
+        .journal()
+        .entries_in_range(0, u64::MAX)
+        .iter()
+        .any(|e| {
+            matches!(
+                e.kind,
+                mindstrata_sim::journal::JournalEntryKind::MilitaryMuster { conscripts: 8 }
+            )
+        });
+    assert!(muster_journaled, "the muster journals its eight conscripts");
+
+    // A second year drills again — readiness grows (gain 0.15 × 8/8 − 0.05).
+    let before = sim.military.readiness;
+    sim.tick_military(8640);
+    assert_eq!(sim.military.drills, 2);
+    assert!(sim.military.readiness > before, "drilling year-on-year builds readiness");
+    let journaled = sim
+        .journal()
+        .entries_in_range(0, u64::MAX)
+        .iter()
+        .any(|e| {
+            matches!(
+                e.kind,
+                mindstrata_sim::journal::JournalEntryKind::MilitaryDrill { attenders: 8, .. }
+            )
+        });
+    assert!(journaled, "the drills are journaled with their attenders");
+}
+
+/// §5 (AP2, Iteration 153): military readiness has real defensive teeth —
+/// a drilled militia dampens the grain a raid carries off, while an
+/// undefended village takes the full loss.
+#[test]
+fn military_readiness_dampens_raid_grain_loss() {
+    use mindstrata_sim::world::SiteKind;
+
+    let setup = |with_barracks: bool| -> Simulation {
+        let config = SimConfig {
+            seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
+            num_agents: 12, snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        if with_barracks {
+            sim.world.sites.push(mindstrata_sim::world::Site {
+                id: mindstrata_core::id::AgentId::new(10_000),
+                kind: SiteKind::Barracks,
+                name: "The Garrison".into(),
+                owner: None,
+                capacity: 30,
+                storage_capacity: Fixed::ZERO,
+                inventory: vec![],
+            });
+            for i in 0..10 {
+                sim.agents[i].age = Fixed::from_f64(25.0);
+            }
+            // Three years of drills build real readiness.
+            sim.tick_military(4320);
+            sim.tick_military(8640);
+            sim.tick_military(12960);
+        }
+        sim
+    };
+
+    let raid_loss = |sim: &mut Simulation| -> f64 {
+        let grain_before = sim.world.total_food().to_f64();
+        sim.apply_raid(0, 500);
+        grain_before - sim.world.total_food().to_f64()
+    };
+
+    let mut defended = setup(true);
+    let mut undefended = setup(false);
+    assert!(defended.military.readiness > Fixed::ZERO, "the militia drilled");
+    let defended_loss = raid_loss(&mut defended);
+    let undefended_loss = raid_loss(&mut undefended);
+    assert!(undefended_loss > 0.0, "the undefended village takes raid damage");
+    assert!(
+        defended_loss < undefended_loss,
+        "readiness dampens raid losses ({defended_loss} < {undefended_loss})"
+    );
+}
+
+/// §5 (AP2, Iteration 153): the military pass is fully deterministic — two
+/// identical setups driven through the same pass sequence reach identical
+/// registry state.
+#[test]
+fn military_is_deterministic_across_identical_setups() {
+    use mindstrata_sim::world::SiteKind;
+
+    let setup = || {
+        let config = SimConfig {
+            seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
+            num_agents: 12, snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.world.sites.push(mindstrata_sim::world::Site {
+            id: mindstrata_core::id::AgentId::new(10_000),
+            kind: SiteKind::Barracks,
+            name: "The Garrison".into(),
+            owner: None,
+            capacity: 30,
+            storage_capacity: Fixed::ZERO,
+            inventory: vec![],
+        });
+        for i in 0..10 {
+            sim.agents[i].age = Fixed::from_f64(25.0);
+        }
+        sim
+    };
+
+    let drive = |sim: &mut Simulation| {
+        sim.tick_military(4320);
+        sim.tick_military(8640);
+        sim.tick_military(12960);
+    };
+
+    let mut a = setup();
+    let mut b = setup();
+    drive(&mut a);
+    drive(&mut b);
+
+    assert_eq!(a.military.conscripts, b.military.conscripts);
+    assert_eq!(a.military.drills, b.military.drills);
+    assert_eq!(a.military.militia_size(), b.military.militia_size());
+    assert_eq!(
+        a.military.readiness.to_f64(),
+        b.military.readiness.to_f64(),
+        "readiness is identical across runs"
+    );
+    for i in 0..12 {
+        let ea = a.military.roster[i].as_ref().map(|m| m.enlisted_since);
+        let eb = b.military.roster[i].as_ref().map(|m| m.enlisted_since);
+        assert_eq!(ea, eb, "roster slot {i} is identical across runs");
+    }
+}
+
 /// §5 (AP2, Iteration 147): an emergent drought regime has real teeth in a
 /// live run — after the regime declares, every well drains each tick AND
 /// farm output is suppressed (growth factor ≈0.61 vs ≈1.02 normal). The

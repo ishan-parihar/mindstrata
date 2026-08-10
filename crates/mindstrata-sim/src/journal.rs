@@ -43,6 +43,8 @@ pub enum JournalEntryKind {
     /// §5 (Iteration 153): A military drill pass — the militia trained,
     /// building collective readiness.
     MilitaryDrill { attenders: u64, readiness: f64 },
+    /// §5 (Iteration 153): A muster pass conscripted new adults.
+    MilitaryMuster { conscripts: u64 },
 }
 
 /// A single journal entry.
