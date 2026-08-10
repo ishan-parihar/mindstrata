@@ -21,6 +21,7 @@ pub mod gossip;
 pub mod health;
 pub mod institutions;
 pub mod journal;
+pub mod legal;
 pub mod logistics;
 pub mod market;
 pub mod memory;

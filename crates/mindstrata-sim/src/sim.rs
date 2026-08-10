@@ -3,6 +3,7 @@
 use crate::actions::{self, ActionKind};
 use crate::conflict::{self, ConflictKind, ConflictState};
 use crate::culture::{CulturalState, Knowledge, KnowledgeCategory, TechnologyTree};
+use crate::legal::{LegalCase, LegalRegistry, Verdict};
 use crate::logistics;
 use crate::gossip;
 use crate::market::{self, MarketState, WealthState};
@@ -369,6 +370,8 @@ pub struct Simulation {
     /// §19.5.I (Iteration 148): The technology tree — knowledge
     /// prerequisites and innovation chains layered over the flat store.
     pub technology: TechnologyTree,
+    /// §5 (Iteration 149): The court — case records, verdicts, sentences.
+    pub legal: LegalRegistry,
     /// §6.5: Per-tick metric history for observability and CSV export.
     pub metric_history: Vec<MetricsSnapshot>,
     /// §7.3: Tick when last revolution occurred (for cooldown tracking).
@@ -482,6 +485,7 @@ impl Simulation {
             market: MarketState::new(&crate::parameters::SimParameters::default()),
             knowledge_store: Vec::new(),
             technology: TechnologyTree::riverford(),
+            legal: LegalRegistry::new(),
             metric_history: Vec::new(),
             last_revolution_tick: 0,
             last_moral_panic_tick: 0,
@@ -601,6 +605,11 @@ impl Simulation {
                 t.reconcile_discovered(&snapshot.knowledge_store);
                 t
             },
+            // §5 (Iteration 149): snapshots predate the court — restore a
+            // fresh registry; violations (and hence cases) are probe-pinned
+            // absent from every calibrated window, so no mid-run snapshot
+            // can contain a case today.
+            legal: LegalRegistry::new(),
             knowledge_store: snapshot.knowledge_store,
             metric_history: snapshot.metric_history,
             last_revolution_tick: snapshot.last_revolution_tick,
@@ -5104,11 +5113,7 @@ impl Simulation {
         let resource_name = if resource_id == GRAIN_RESOURCE_ID { "grain" } else { "water" };
 
         // §19.5.D: Compute enforcement capacity from Council's enforcement capacity
-        let enforcement = self.institutions.iter()
-            .filter(|i| i.kind == crate::institutions::InstitutionKind::Council)
-            .map(|i| i.enforcement_capacity)
-            .fold(Fixed::ZERO, |a, b| a + b)
-            .min(Fixed::ONE);
+        let enforcement = self.council_enforcement();
 
         // §4.4: Black market reduces detection probability for qualifying agents
         let agent_can_black_market = self.black_market.can_participate(&self.agents[agent_idx].personality);
@@ -5188,6 +5193,24 @@ impl Simulation {
                         .moral_cognition
                         .record_witnessed_enforcement(name);
                 }
+            }
+            // §5 (Iteration 149): the judicial layer — the caught theft is
+            // prosecuted: the court files a case, weighs evidence
+            // (deterministically, no RNG — an owned site is strong
+            // evidence), and adds a supplemental court fine on a Guilty
+            // verdict. The path executes only when a theft is caught
+            // (probe-pinned zero in every calibrated window), so golden and
+            // snapshots stay byte-identical. A self-theft (owner == thief)
+            // is not a crime — no case is filed.
+            if owner != Some(agent_id) {
+                self.prosecute_violation(
+                    norms::NO_THEFT_NORM_ID,
+                    agent_id,
+                    owner,
+                    Some(site_idx),
+                    fine,
+                    tick_u64,
+                );
             }
         }
 
@@ -8691,6 +8714,77 @@ impl Simulation {
         }
     }
 
+    /// Sum of the Councils' enforcement capacity — the court's investigative
+    /// power — capped at one. Shared by theft enforcement and prosecution.
+    fn council_enforcement(&self) -> Fixed {
+        self.institutions
+            .iter()
+            .filter(|i| i.kind == crate::institutions::InstitutionKind::Council)
+            .map(|i| i.enforcement_capacity)
+            .fold(Fixed::ZERO, |a, b| a + b)
+            .min(Fixed::ONE)
+    }
+
+    /// §5 (Iteration 149): The court's entry point — prosecute a violation.
+    /// Files a `LegalCase`, weighs evidence deterministically (Council
+    /// enforcement × owned-site bonus × repeat-offender record — NO RNG is
+    /// drawn, so adjudication cannot perturb any subsystem's stream), applies
+    /// the supplemental court fine on a Guilty verdict, and records the
+    /// outcome in the journal and the provenance store. Public so the
+    /// integration tests can drive the court directly.
+    pub fn prosecute_violation(
+        &mut self,
+        norm_id: u64,
+        accused: AgentId,
+        victim: Option<AgentId>,
+        site_idx: Option<usize>,
+        base_fine: Fixed,
+        tick_u64: u64,
+    ) -> Option<LegalCase> {
+        let owned_site = site_idx.is_some_and(|si| self.world.sites[si].owner.is_some());
+        let enforcement = self.council_enforcement();
+        let case = self.legal.prosecute(
+            norm_id, accused, victim, site_idx, owned_site, enforcement, base_fine, tick_u64,
+        );
+        if case.verdict == Some(Verdict::Guilty) && case.sentence > Fixed::ZERO {
+            // The `AgentId::new(i) == index i` invariant (documented at
+            // AgentBundle) lets us map the accused id straight to its slot.
+            let idx = accused.as_u64() as usize;
+            if idx < self.agents.len() {
+                self.agents[idx].wealth.coin =
+                    (self.agents[idx].wealth.coin - case.sentence).max(Fixed::ZERO);
+            }
+            self.provenance.record_institutional(
+                crate::provenance::InstitutionalTrace {
+                    institution_name: "Council".into(),
+                    tick: tick_u64,
+                    decision_kind: "court_verdict".into(),
+                    description: format!(
+                        "case {}: agent {} guilty (evidence {:.2}) — {:.2} coin court fine",
+                        case.case_id,
+                        accused.as_u64(),
+                        case.evidence_strength.to_f64(),
+                        case.sentence.to_f64()
+                    ),
+                    affected: vec![accused],
+                    success: true,
+                },
+            );
+        }
+        // The verdict is journaled to the accused whether guilty or innocent
+        // — justice is fully observable.
+        self.journal.record(
+            tick_u64,
+            accused,
+            JournalEntryKind::LegalVerdict {
+                case_id: case.case_id,
+                guilty: case.verdict == Some(Verdict::Guilty),
+                sentence: case.sentence.to_f64(),
+            },
+        );
+        Some(case)
+    }
+
     fn tick_resource_operations(&mut self, action_starts: &[(usize, ActionKind)], _pre_tick_events: usize, tick_u64: u64, tick: Tick) {
         // ── 4b. Resource operations, journal recording, intention tracking ──
 
@@ -10396,6 +10490,45 @@ fn self_esteem_support(self_esteem: Fixed) -> Fixed {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// §5 (Iteration 149): the enforce_theft → court wiring — a caught theft
+    /// on an owned site files a case and convicts the thief. Deterministic:
+    /// council enforcement is maxed (detection roll < 1 always catches) and
+    /// the thief's zero risk tolerance keeps them out of the black market
+    /// (which would halve effective enforcement).
+    #[test]
+    fn caught_theft_on_owned_site_is_prosecuted() {
+        let config = SimConfig {
+            seed: 42, max_ticks: 2000, world_width: 16, world_height: 16,
+            num_agents: 12, snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        for inst in &mut sim.institutions {
+            if inst.kind == crate::institutions::InstitutionKind::Council {
+                inst.enforcement_capacity = Fixed::ONE;
+            }
+        }
+        sim.agents[0].personality.risk_tolerance = Fixed::ZERO;
+        let farm_idx = sim.world.sites.iter()
+            .position(|s| s.kind == crate::world::SiteKind::Farm)
+            .expect("riverford has farms");
+        let thief = AgentId::new(0);
+        let victim = AgentId::new(1);
+        sim.world.sites[farm_idx].owner = Some(victim);
+
+        let taken = sim.enforce_theft(
+            0, thief, farm_idx, GRAIN_RESOURCE_ID, Fixed::from_f64(5.0), 100, Tick::new(100),
+        );
+        assert!(taken, "the theft succeeds (no internalized norms before tick 4320)");
+        assert_eq!(sim.legal.cases.len(), 1, "the caught theft files a case");
+        let case = &sim.legal.cases[0];
+        assert_eq!(case.verdict, Some(Verdict::Guilty), "owned-site theft convicts");
+        assert_eq!(case.victim, Some(victim));
+        assert_eq!(case.site_idx, Some(farm_idx));
+        assert_eq!(sim.legal.convictions, 1);
+        assert_eq!(sim.legal.established_tick, Some(100));
+    }
 
     /// §8.1: Self-esteem support is zero at baseline and signed around it.
     #[test]

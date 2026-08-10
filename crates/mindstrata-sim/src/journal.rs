@@ -23,6 +23,9 @@ pub enum JournalEntryKind {
     KnowledgeDiscovered { knowledge_id: u64, name: String },
     /// §19.5.F: Knowledge learned from parent through childhood socialization.
     KnowledgeSocialized { knowledge_id: u64 },
+    /// §5 (Iteration 149): A court returned a verdict on a prosecuted
+    /// violation — the supplemental court fine on a Guilty verdict.
+    LegalVerdict { case_id: u64, guilty: bool, sentence: f64 },
 }
 
 /// A single journal entry.

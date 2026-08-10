@@ -1545,6 +1545,169 @@ fn technology_discovery_pass_fires_on_prereq_mass() {
     );
 }
 
+// ── §5: Legal System (Iteration 149) ────────────────────────────────
+
+/// The court is dormant in calibrated windows — no violation ever fires
+/// (probe-pinned zero NormViolated at every horizon), so no case exists and
+/// golden/snapshots stay byte-identical by construction.
+#[test]
+fn legal_court_absent_in_calibrated_windows() {
+    let sim = run_sim(42, 2000);
+    assert!(sim.legal.cases.is_empty(), "no case may exist inside a calibrated window");
+    assert_eq!(sim.legal.established_tick, None, "the court has not convened");
+    assert_eq!(sim.legal.convictions, 0);
+    assert_eq!(sim.legal.acquittals, 0);
+}
+
+/// The court's entry point: an owned-site theft (strong evidence + Council
+/// enforcement) is convicted, fined, journaled, and counted — and the
+/// verdict is fully deterministic (no RNG drawn).
+#[test]
+fn legal_convicts_owned_site_theft_end_to_end() {
+    use mindstrata_sim::world::SiteKind;
+
+    let config = SimConfig {
+        seed: 42, max_ticks: 2000, world_width: 16, world_height: 16,
+        num_agents: 12, snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    let farm_idx = sim.world.sites.iter().position(|s| s.kind == SiteKind::Farm)
+        .expect("the riverford world has farms");
+    let accused = mindstrata_core::id::AgentId::new(0);
+    let victim = mindstrata_core::id::AgentId::new(1);
+    // Property: the farm is owned — theft of it is a provable crime.
+    sim.world.sites[farm_idx].owner = Some(victim);
+    // Fund the accused so the 10.5-coin court fine (evidence 0.55) is fully
+    // measurable (agents start with ~7.8 coins — less than the sentence).
+    sim.agents[0].wealth.coin = Fixed::from_f64(100.0);
+    let coin_before = sim.agents[0].wealth.coin;
+
+    let case = sim
+        .prosecute_violation(
+            mindstrata_sim::norms::NO_THEFT_NORM_ID,
+            accused,
+            Some(victim),
+            Some(farm_idx),
+            Fixed::from_f64(10.0),
+            500,
+        )
+        .expect("prosecution returns the case");
+
+    assert_eq!(
+        case.verdict,
+        Some(mindstrata_sim::legal::Verdict::Guilty),
+        "owned-site theft with council enforcement is strong evidence"
+    );
+    assert!(case.sentence > Fixed::ZERO, "a Guilty verdict carries a court fine");
+    assert_eq!(case.evidence_strength.to_f64(), 0.55, "0.6 × 0.5 enforcement + 0.25 owned bonus");
+    assert_eq!(sim.legal.convictions, 1);
+    assert_eq!(sim.legal.established_tick, Some(500), "the court convenes on the first case");
+    assert_eq!(
+        sim.agents[0].wealth.coin,
+        coin_before - case.sentence,
+        "the court fine is levied on the accused"
+    );
+    let journaled = sim
+        .journal()
+        .entries_for_agent(accused)
+        .iter()
+        .any(|e| matches!(e.kind, mindstrata_sim::journal::JournalEntryKind::LegalVerdict { guilty: true, .. }));
+    assert!(journaled, "a Guilty verdict is journaled to the accused");
+}
+
+/// With no court power (Council enforcement zeroed) and no owner, the
+/// evidence is nil — the accused is acquitted, no fine is levied, and the
+/// acquittal is counted.
+#[test]
+fn legal_acquits_when_enforcement_is_absent() {
+    let config = SimConfig {
+        seed: 42, max_ticks: 2000, world_width: 16, world_height: 16,
+        num_agents: 12, snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    for inst in &mut sim.institutions {
+        if inst.kind == mindstrata_sim::institutions::InstitutionKind::Council {
+            inst.enforcement_capacity = Fixed::ZERO;
+        }
+    }
+    let accused = mindstrata_core::id::AgentId::new(0);
+    let coin_before = sim.agents[0].wealth.coin;
+
+    let case = sim
+        .prosecute_violation(
+            mindstrata_sim::norms::NO_THEFT_NORM_ID,
+            accused,
+            None,
+            None,
+            Fixed::from_f64(10.0),
+            500,
+        )
+        .expect("prosecution returns the case");
+
+    assert_eq!(
+        case.verdict,
+        Some(mindstrata_sim::legal::Verdict::Innocent),
+        "communal site and no court power → zero evidence"
+    );
+    assert_eq!(case.sentence, Fixed::ZERO, "an acquittal carries no fine");
+    assert_eq!(sim.legal.acquittals, 1);
+    assert_eq!(sim.legal.convictions, 0);
+    assert_eq!(sim.agents[0].wealth.coin, coin_before, "an acquittal levies no fine");
+    // Justice is fully observable — the acquittal is journaled too.
+    let journaled = sim
+        .journal()
+        .entries_for_agent(accused)
+        .iter()
+        .any(|e| matches!(e.kind, mindstrata_sim::journal::JournalEntryKind::LegalVerdict { guilty: false, .. }));
+    assert!(journaled, "an Innocent verdict is journaled to the accused");
+}
+
+/// A repeat offender faces stronger evidence and a harsher supplemental
+/// court fine — the escalation is deterministic and recorded.
+#[test]
+fn legal_repeat_offender_escalates_sentence() {
+    use mindstrata_sim::world::SiteKind;
+
+    let config = SimConfig {
+        seed: 42, max_ticks: 2000, world_width: 16, world_height: 16,
+        num_agents: 12, snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    let farm_idx = sim.world.sites.iter().position(|s| s.kind == SiteKind::Farm)
+        .expect("the riverford world has farms");
+    let accused = mindstrata_core::id::AgentId::new(0);
+    let victim = mindstrata_core::id::AgentId::new(1);
+    sim.world.sites[farm_idx].owner = Some(victim);
+
+    let first = sim
+        .prosecute_violation(
+            mindstrata_sim::norms::NO_THEFT_NORM_ID,
+            accused, Some(victim), Some(farm_idx),
+            Fixed::from_f64(10.0), 500,
+        )
+        .expect("first case");
+    let second = sim
+        .prosecute_violation(
+            mindstrata_sim::norms::NO_THEFT_NORM_ID,
+            accused, Some(victim), Some(farm_idx),
+            Fixed::from_f64(10.0), 600,
+        )
+        .expect("second case");
+
+    assert!(!first.repeat_offender, "first offense is not a repeat");
+    assert!(second.repeat_offender, "second offense is a repeat");
+    assert!(
+        second.sentence > first.sentence,
+        "repeat evidence 0.65 > 0.55 raises the court fine"
+    );
+    assert_eq!(sim.legal.cases.len(), 2);
+    assert_eq!(sim.legal.convictions, 2);
+    assert_eq!(sim.legal.acquittals, 0);
+}
+
 /// §5 (AP2, Iteration 147): an emergent drought regime has real teeth in a
 /// live run — after the regime declares, every well drains each tick AND
 /// farm output is suppressed (growth factor ≈0.61 vs ≈1.02 normal). The

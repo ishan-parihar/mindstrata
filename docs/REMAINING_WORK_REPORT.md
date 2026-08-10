@@ -79,7 +79,7 @@ The dominant category. A recurring pattern across the campaign: systems were bui
 - ~~**Time-based resource spoilage**~~ — **RESOLVED (Iter 146): STALE** — per-tick site-inventory rot has been live since Iteration 33 itself (d415b8c, block 10 of `tick_loop`: grain 0.001/tick × season modifier, all seasons positive); the real gap was zero test coverage, now closed by `site_inventory_rots_each_tick_while_stable_resources_do_not` (perishable grain decays in a consumption-isolated chamber while non-perishable water stays exactly stable; seed-deterministic)
 
 **Phase 3 — Add depth:**
-- **Legal system** — courts, trials, property rights
+- ~~**Legal system**~~ — **RESOLVED (Iter 149)** — new `LegalRegistry` (legal.rs): the Council's "Arbitrate disputes" obligation is finally implemented. Property rights already existed (`Site.owner`, `AccessRight::OwnerOnly`, theft→owner trust loss) — the gap was the judicial layer: caught thefts now file a `LegalCase`, weigh evidence deterministically (0.6×council-enforcement + 0.25×owned-site + 0.1×repeat-offenses, NO RNG), and return a verdict + supplemental court fine. Zero-blast: theft is probe-pinned at zero NormViolated in every calibrated window, so golden + all 15 snapshots stay byte-identical; the immunity is behavioral (no thefts fire), not structural — documented.
 - **Education system** — schools (apprenticeships are live, schools are not)
 - **Religious mechanics** — theological beliefs, calendar (rituals are live)
 - **Military system** — organized warfare, conscription
