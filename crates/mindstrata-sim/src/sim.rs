@@ -12072,14 +12072,15 @@ impl Simulation {
 
                     // Delegate all eligibility checks to the function
                     let already_bonded = self.marriage_registry.find_bond(i, j).is_some();
-                    if !crate::social::courtship::eligible_for_courtship(
+                    let eligible = crate::social::courtship::eligible_for_courtship(
                         self.agents[i].age,
                         self.agents[j].age,
                         kinship_coeff,
                         already_bonded,
                         COURTSHIP_TRUST_THRESHOLD,
                         avg_trust,
-                    ) {
+                    );
+                    if !eligible {
                         continue;
                     }
 
@@ -13654,13 +13655,40 @@ mod tests {
         let mut sim = Simulation::new(config);
         sim.populate();
         let (a, b) = cross_clan_pair(&sim);
-        // Declare the two clans mutual enemies before any marriage can form.
+        // Declare the two clans mutual enemies before any marriage can form,
+        // backed by an active feud so `decay_clan_enmities` cannot clear the
+        // boundary. Iteration-159 note: a feudless test-forged enmity clears
+        // on the first decay pass (~tick 501), so a marriage can form during
+        // the peace window and a LATER feud re-forges the enmity — the
+        // emergent peace-then-war sequence, not an intermarriage violation.
+        // Feuds decay after 500 ticks, so the feud is re-armed each segment
+        // to keep the boundary standing for the whole window.
         sim.forge_clan_enmity(a, b, 0);
-        sim.run(5000);
+        // The feud is seeded at tick 1 (not 0) so the first feud-decay pass
+        // keeps it (feuds with `feud_ticks > tick − 500` survive; a tick-0
+        // feud is dropped at tick 1, silently clearing the boundary).
+        sim.agents[a].feuds.push(b);
+        sim.agents[a].feud_ticks.push(1);
+        sim.agents[b].feuds.push(a);
+        sim.agents[b].feud_ticks.push(1);
+        for _ in 0..10 {
+            sim.run(400);
+            // Re-arm the feud each segment (feuds decay after 500 ticks) so
+            // the enemy boundary stands for the whole window.
+            let now = sim.current_tick().as_u64();
+            sim.agents[a].feuds.push(b);
+            sim.agents[a].feud_ticks.push(now);
+            sim.agents[b].feuds.push(a);
+            sim.agents[b].feud_ticks.push(now);
+        }
+        assert_eq!(sim.current_tick().as_u64(), 4000);
         // Same-clan marriages must still happen...
         let any_married = sim.agents.iter().any(|ag| ag.partner.is_some());
         assert!(any_married, "same-clan marriages must still occur");
-        // ...but no agent may be partnered with a member of an enemy clan.
+        // ...but no agent may be partnered with a member of an enemy clan
+        // (the standing feud keeps the boundary armed for the whole window,
+        // so the marriage gate's zeroing of enemy pairs is the only way to
+        // pair — the invariant is directly observed).
         for i in 0..sim.agents.len() {
             if let Some(j) = sim.agents[i].partner {
                 assert!(

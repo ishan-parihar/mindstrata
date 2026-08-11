@@ -16,6 +16,14 @@
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 
+/// §17.1 (Iteration 159): minimum time a tier must be held before a Focal
+/// demotion may fire. Narrative importance starts near-uniform (~0.31 for
+/// everyone at tick 100) and converges slowly (0.1/tick smoothing) toward
+/// ~0.45–0.65 by tick 1000; demotions before ~tick 900 fire on the
+/// transient, not the differentiated signal, and ratchet the whole village
+/// to Secondary (measured at 24: 4F/20S, 48: 5F/43S).
+const TIER_MATURITY_TICKS: u64 = 900;
+
 /// Simulation tier for an agent — determines which systems run each tick.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default,
@@ -367,21 +375,27 @@ impl AgentTierState {
     /// Promotion criteria (Secondary → Focal):
     /// - High status (wealth + role + social > 0.7)
     /// - Faction leadership or council membership
-    /// - High narrative importance (> 0.7)
-    /// - Crisis involvement (high fear or anger)
+    /// - High narrative importance (> 0.6)
+    /// - Crisis involvement (acute anger — Iteration-159 re-anchor)
     ///
     /// Demotion criteria (Focal → Secondary):
-    /// - Low status, no institutional role, low narrative importance
-    /// - No crisis involvement for 1000+ ticks
+    /// - Low status, no institutional role, low narrative importance (< 0.5)
+    /// - No acute crisis
     ///
     /// Demotion to Background:
     /// - Very low narrative importance (< 0.1) and no relationships
+    ///   (structurally unreachable at village scale — every agent builds a
+    ///   full relationship graph; reserved for sparse multi-settlement runs)
     pub fn reclassify(
         &mut self,
         status_effective: Fixed,
         is_institution_member: bool,
         is_faction_leader: bool,
-        fear: Fixed,
+        // `_fear` is unused since Iteration 159 (crisis is anger-anchored
+        // because chronic fear saturates ~1.0 in every calibrated world);
+        // reserved for the fear-based crisis return once the queued
+        // core-emotion decay iteration lands.
+        _fear: Fixed,
         anger: Fixed,
         relationship_count: usize,
         tick: u64,
@@ -392,17 +406,42 @@ impl AgentTierState {
             return;
         }
 
-        let crisis = fear > Fixed::from_f64(0.6) || anger > Fixed::from_f64(0.6);
+        // §17.1 (Iteration 159): crisis is re-anchored to ACUTE ANGER only.
+        // Probe-pinned root cause of the §17.1 gradient failure: the 8 base
+        // emotions have no proportional decay (the Iter-116 expanded-emotion
+        // decay), so fear saturates at 0.83–1.0 for nearly every agent in
+        // every calibrated world. An absolute fear threshold therefore fires
+        // universally — everyone was promoted to Focal at the first interval
+        // and never demoted (6F/0S at 6, 48F/0S at 48, Background never).
+        // Anger is the acute behavioral activation (threat response, moral
+        // outrage, humiliation) that differentiates genuinely distressed
+        // agents from the chronically-fearful baseline. Zero-anger calm
+        // worlds: crisis never fires → the gradient is driven by role +
+        // narrative importance. Fear-based crisis returns with the queued
+        // core-emotion decay iteration.
+        let crisis = anger > Fixed::from_f64(0.6);
         let high_status = status_effective > Fixed::from_f64(0.7);
         let has_institutional_role = is_institution_member || is_faction_leader;
 
         let new_tier = match self.tier {
             AgentTier::Focal => {
-                // Demote if low status, no role, low importance, no crisis
-                if !high_status
+                // Demote if low status, no role, no acute crisis, and low
+                // importance — gated on tier MATURITY so the demotion only
+                // fires once narrative importance has converged.
+                // Iteration-159 probe: importance starts at ~0.31 for
+                // everyone and converges (0.1/tick smoothing) toward
+                // ~0.45–0.65 by tick 1000; an ungated threshold ratcheted
+                // the whole village at the tick-100 interval (24: 4F/20S,
+                // 48: 5F/43S — the converged floor ~0.5 never re-triggers a
+                // > 0.6 promotion). With the 900-tick maturity gate the
+                // demotion only fires on the converged distribution; the
+                // hysteresis band [0.45, 0.5] against the promotion rule
+                // prevents interval-to-interval oscillation.
+                if tick.saturating_sub(self.last_tier_reassign_tick) >= TIER_MATURITY_TICKS
+                    && !high_status
                     && !has_institutional_role
                     && !crisis
-                    && self.narrative_importance < Fixed::from_f64(0.3)
+                    && self.narrative_importance < Fixed::from_f64(0.45)
                 {
                     AgentTier::Secondary
                 } else {
@@ -410,11 +449,20 @@ impl AgentTierState {
                 }
             }
             AgentTier::Secondary => {
-                // Promote if high status, institutional role, or crisis
+                // Promote if high status, institutional role, acute crisis,
+                // or high importance (> 0.5 — was 0.7, Iteration 159; the
+                // measured convergence floor for non-role agents is ~0.5
+                // (universal fear + full relationship graph), so 0.7/0.55
+                // were unreachable and only role-holders ever became Focal
+                // (5F/43S at the 48-cap — the demotion path was irrelevant
+                // because nobody was Focal to demote). Agents whose
+                // importance crosses 0.5 as it converges are promoted, and
+                // the low tail that stalls below 0.45 stays Secondary — a
+                // genuine, stable gradient).
                 if high_status
                     || has_institutional_role
                     || crisis
-                    || self.narrative_importance > Fixed::from_f64(0.7)
+                    || self.narrative_importance > Fixed::from_f64(0.5)
                 {
                     AgentTier::Focal
                 } else if self.narrative_importance < Fixed::from_f64(0.1) && relationship_count < 2
@@ -586,15 +634,96 @@ mod tests {
 
     #[test]
     fn reclassify_promotes_on_crisis() {
+        // Iteration 159: crisis is acute-anger-driven (fear saturates
+        // chronically at ~1.0 in every calibrated world — a fear threshold
+        // fired universally and blocked the LOD gradient).
         let mut state = AgentTierState::new(AgentTier::Secondary, 0);
         state.reclassify(
             Fixed::from_f64(0.3), // low status
             false,
             false,
-            Fixed::from_f64(0.7), // high fear
-            Fixed::ZERO,
+            Fixed::ZERO,          // fear alone no longer triggers crisis
+            Fixed::from_f64(0.7), // high anger = acute crisis
             0,
             100,
+            10,
+        );
+        assert_eq!(state.tier, AgentTier::Focal);
+    }
+
+    #[test]
+    fn reclassify_chronic_fear_alone_does_not_promote() {
+        // Iteration 159: saturated chronic fear must NOT count as crisis —
+        // otherwise every agent promotes and the gradient never forms.
+        let mut state = AgentTierState::new(AgentTier::Secondary, 0);
+        state.reclassify(
+            Fixed::from_f64(0.3),
+            false,
+            false,
+            Fixed::from_f64(0.99), // chronically terrified
+            Fixed::ZERO,           // but not acutely angry
+            0,
+            100,
+            10,
+        );
+        assert_eq!(state.tier, AgentTier::Secondary);
+    }
+
+    #[test]
+    fn reclassify_demotes_focal_below_importance_threshold() {
+        // Iteration 159: the demotion anchor moved 0.3 → 0.45 (with a 300
+        // tick maturity gate) so the Focal/Secondary gradient materializes
+        // against the measured importance clustering without ratcheting the
+        // whole village at the tick-100 interval.
+        let mut state = AgentTierState::new(AgentTier::Focal, 0);
+        state.narrative_importance = Fixed::from_f64(0.4);
+        state.reclassify(
+            Fixed::from_f64(0.2),
+            false,
+            false,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            0,
+            1000, // mature (>= 300 ticks since last reassign)
+            10,
+        );
+        assert_eq!(state.tier, AgentTier::Secondary);
+    }
+
+    #[test]
+    fn reclassify_keeps_focal_above_importance_threshold() {
+        // The hysteresis band [0.45, 0.55]: an agent at 0.5 stays Focal
+        // (no demotion) without re-promotion churn.
+        let mut state = AgentTierState::new(AgentTier::Focal, 0);
+        state.narrative_importance = Fixed::from_f64(0.5);
+        state.reclassify(
+            Fixed::from_f64(0.2),
+            false,
+            false,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            0,
+            1000,
+            10,
+        );
+        assert_eq!(state.tier, AgentTier::Focal);
+    }
+
+    #[test]
+    fn reclassify_demotion_respects_maturity_gate() {
+        // Iteration 159: an immature tier (held < 300 ticks) must NOT be
+        // demoted — early importance is uniformly low (~0.31) and would
+        // ratchet the whole village to Secondary.
+        let mut state = AgentTierState::new(AgentTier::Focal, 100);
+        state.narrative_importance = Fixed::from_f64(0.3);
+        state.reclassify(
+            Fixed::from_f64(0.2),
+            false,
+            false,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            0,
+            200, // 200 - 100 = 100 < 300 → no demotion
             10,
         );
         assert_eq!(state.tier, AgentTier::Focal);
