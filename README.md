@@ -9,7 +9,8 @@
 > **A deterministic, emergent human-society simulation** — a small medieval settlement where every person carries a full psychological mind, biological needs, social relationships, moral values, and institutional memberships. History emerges from first principles, not scripted events. **But it is far more than a "society sim":** beneath the village lies a complete cognitive-science stack — embodied bodies, nervous systems, appraisal-based emotion, belief systems, and noospheric fields — built to be *deepened* by three architecture plans (AP1 → AP2 → AP3) into a multi-scale civilization simulation.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/ishan-parihar/mindstrata/ci.yml?style=flat-square)](https://github.com/ishan-parihar/mindstrata/actions)
-![LOC](https://img.shields.io/badge/LOC-75.0K-informational?style=flat-square)
+![LOC](https://img.shields.io/badge/LOC-82.3K-informational?style=flat-square)
+<img src="https://img.shields.io/badge/Status-Active-brightgreen" alt="Status">
 [![CI](https://github.com/ishan-parihar/mindstrata/actions/workflows/ci.yml/badge.svg)](https://github.com/ishan-parihar/mindstrata/actions/workflows/ci.yml)
 [![Rust](https://img.shields.io/badge/rust-1.75+-blue?style=flat-square)](https://www.rust-lang.org)
 [![Tests](https://img.shields.io/badge/tests-1238%20passing-brightgreen?style=flat-square)](#)
