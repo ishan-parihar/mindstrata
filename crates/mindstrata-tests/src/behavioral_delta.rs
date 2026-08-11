@@ -269,6 +269,122 @@ fn scenario_delta_is_live_and_contexts_differ() {
     );
 }
 
+// ── §8.1 Firing-window consumers (Iteration 161) ────────────────────
+
+/// §8.1.15 (Iteration 161): the trauma-accumulation consumer is LIVE in a
+/// fear-heavy firing window. `nervous_trauma_accumulation` (0.005 → 0.05)
+/// in the pestilence scenario at 5,000 ticks raises mean fear measurably
+/// (probe-pinned: baseline 0.8323, delta +0.0253) — trauma from the
+/// epidemic's fear/violence feedback accumulates into the nervous system
+/// and feeds back into fear. The calm-window sweep (Iteration 134)
+/// documented this knob as inert; the firing window is where it acts.
+#[test]
+fn live_consumer_trauma_accumulation_fires_in_pestilence_window() {
+    let report = scenario_behavioral_delta(
+        &Scenario::pestilence(),
+        5000,
+        "nervous_trauma_accumulation (pestilence 5000)",
+        |p| p.nervous_trauma_accumulation = Fixed::from_f64(0.05),
+        |m| m.avg_fear,
+    );
+    assert_live_delta(&report, 0.01);
+    assert!(
+        report.delta > 0.0,
+        "more trauma accumulation must RAISE fear, got {report:?}"
+    );
+}
+
+/// §8.1.4 (Iteration 161): the loneliness→social-seeking consumer is LIVE
+/// in a vanilla window. `social_loneliness_multiplier` (0.5 → 0.1) at seed
+/// 42 / 4,000 ticks measurably changes the interaction rate (probe-pinned:
+/// −12,052 events) — loneliness is a real driver of social interaction, so
+/// damping it collapses the social event stream. This consumer was
+/// previously only probed ad-hoc; the harness now pins it permanently.
+#[test]
+fn live_consumer_loneliness_multiplier_fires_in_vanilla_window() {
+    let report = behavioral_delta(
+        42,
+        4000,
+        "social_loneliness_multiplier (vanilla 4000)",
+        |p| p.social_loneliness_multiplier = Fixed::from_f64(0.1),
+        |m| m.event_count as f64,
+    );
+    assert_live_delta(&report, 1000.0);
+    assert!(
+        report.delta < 0.0,
+        "less loneliness-driven interaction must REDUCE events, got {report:?}"
+    );
+}
+
+/// §8.1.4 (Iteration 161): `appraisal_fear_coping_multiplier` is HONESTLY
+/// zero-blast in both a calm vanilla window and the fear-heavy pestilence
+/// window — the consumer is wired (appraisal.rs:442 multiplies the fear
+/// delta) but gated by `(1 − coping_potential)`: agents' coping potential
+/// saturates at 1.0 in these windows, so the factor is 0 and the knob is
+/// byte-identical. This is the documented identity-at-zero half of the
+/// calibration contract — a future change that lets coping drop below 1.0
+/// in-window must consciously update both the wiring and this pin.
+#[test]
+fn dormant_consumer_fear_coping_multiplier_is_gated_zero_blast() {
+    let vanilla = behavioral_delta(
+        42,
+        5000,
+        "appraisal_fear_coping_multiplier (vanilla 5000)",
+        |p| p.appraisal_fear_coping_multiplier = Fixed::from_f64(2.0),
+        |m| m.avg_fear,
+    );
+    assert_zero_blast(&vanilla);
+
+    let pest = scenario_behavioral_delta(
+        &Scenario::pestilence(),
+        5000,
+        "appraisal_fear_coping_multiplier (pestilence 5000)",
+        |p| p.appraisal_fear_coping_multiplier = Fixed::from_f64(2.0),
+        |m| m.avg_fear,
+    );
+    assert_zero_blast(&pest);
+}
+
+/// §7.2.2 (Iteration 161): `endocrine_stress_recovery` is HONESTLY zero-blast
+/// in the fear-heavy pestilence window. The consumer is wired
+/// (biology/mod.rs:291 passes the rate to `stress.update`), but the recovery
+/// term is `rate × parasympathetic_tone` — and parasympathetic tone is ~0
+/// while sympathetic (fight-or-flight) dominates, so the knob is
+/// byte-identical even though stress is high (probe: avg_fear 0.83). The
+/// knob acts only when the parasympathetic branch is active (recovery
+/// windows); this pin documents that the §7.2.2 stress axis is
+/// input-driven in crisis windows.
+#[test]
+fn dormant_consumer_stress_recovery_is_tone_gated_zero_blast() {
+    let report = scenario_behavioral_delta(
+        &Scenario::pestilence(),
+        5000,
+        "endocrine_stress_recovery (pestilence 5000)",
+        |p| p.endocrine_stress_recovery = Fixed::from_f64(0.2),
+        |m| m.avg_stress,
+    );
+    assert_zero_blast(&report);
+}
+
+/// §8.1.8 (Iteration 161): `belief_resistance_baseline` is HONESTLY
+/// zero-blast in vanilla windows up to 20,000 ticks. The consumer is wired
+/// (belief_update.rs:122 reads it as the decay floor), but belief resistance
+/// decays toward the floor from above — resistance already sits AT or below
+/// the 0.5 baseline, so raising the floor to 0.9 changes nothing until a
+/// resistance-raising event pushes it above. The pin documents the belief
+/// decay is floor-bounded only from above.
+#[test]
+fn dormant_consumer_belief_resistance_baseline_is_floor_gated_zero_blast() {
+    let report = behavioral_delta(
+        42,
+        20000,
+        "belief_resistance_baseline (vanilla 20000)",
+        |p| p.belief_resistance_baseline = Fixed::from_f64(0.9),
+        |m| m.event_count as f64,
+    );
+    assert_zero_blast(&report);
+}
+
 /// §46 (Iteration 140): The Calm scenario (no shocks) produces a structurally
 /// different baseline from the Drought scenario, proving the scenario battery
 /// is useful for control-vs-treatment differential testing.
