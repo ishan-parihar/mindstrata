@@ -4109,6 +4109,17 @@ impl Simulation {
                             obey_propensity,
                             Some(i) == authority_idx,
                             emotions[i].loneliness, // §8.1.4 (Iteration 98)
+                            // §8.1.6 (Iteration 162): the sociability
+                            // deviation from the trait-derived baseline —
+                            // zero at construction, drifted by the
+                            // plasticity pass. The interaction gate's third
+                            // channel (socially-tempered agents clear the
+                            // gate more often). Zero-at-zero by construction
+                            // → calibrated runs byte-identical until the
+                            // layer drifts.
+                            a.personality.temperament.sociability
+                                - crate::person::Temperament::from_traits(&a.personality)
+                                    .sociability,
                             // §17.2 (Iteration 158): Background-tier agents
                             // are excluded from the individual social
                             // interaction pass (aggregate simulation).
@@ -4620,23 +4631,44 @@ impl Simulation {
             // developmental plasticity (youth). Writes ONLY the observational
             // temperament layer — the 12 decision-read core traits are
             // untouched, so calibrated runs remain byte-identical.
+            //
+            // §8.1.6 (Iteration 162): the social_engagement and goal_striving
+            // signals were STRUCTURALLY DEAD — probe-pinned at exactly 0.0000
+            // for every agent to 5,000 ticks — so sociability, persistence,
+            // regularity, and approach_withdrawal never drifted (only the
+            // stress-driven reactivity/soothability/sensitivity moved). Two
+            // dead channels, two fixes:
+            //   1. `social_engagement` read `emotions.trust + joy`: appraisal
+            //      NEVER writes `emotions.trust` (pinned 0.0000 at every
+            //      sampled tick) and joy is sporadic. Replaced with the
+            //      live social-need satisfaction `1 − needs.social` (the
+            //      deficit is live, 0.00–0.065 in calm windows, so the
+            //      satisfaction signal sits ~0.93–1.0 — saturated but
+            //      genuine, mirroring the arousal signal's saturation).
+            //   2. `goal_striving` read `recent_attempts/successes`, but the
+            //      outcome pass increments them at tick-action time and the
+            //      derived-state pass `saturating_sub(1)`s them — the two
+            //      cancel within each tick, so the window is ALWAYS 0 at
+            //      this read point (pinned 0/0 at every sample). Replaced
+            //      with the live goal load — the sum of active goal
+            //      priorities clamped to 0..1 (1–2 goals, priority sums
+            //      0.72–1.42 in calm windows). Both replacements stay in
+            //      the Fixed domain (project doctrine), are deterministic
+            //      (no RNG), and now drive the four previously-frozen
+            //      temperament dimensions.
             for (i, agent) in self.agents.iter_mut().enumerate() {
-                let attempts = agent.recent_attempts;
-                // Stay entirely in the Fixed domain (project doctrine — all
-                // simulation values use Fixed for cross-platform determinism).
-                let goal_striving = if attempts > 0 {
-                    (Fixed::from_int(agent.recent_successes as i64)
-                        / Fixed::from_int(attempts as i64))
-                    .clamp_01()
-                } else {
-                    Fixed::ZERO
-                };
+                let goal_striving = goals[i]
+                    .iter()
+                    .fold(Fixed::ZERO, |acc, g| acc + g.priority)
+                    .clamp_01();
                 let signals = crate::person::PlasticitySignals {
                     // Arousal is the in-scope physiological stress proxy
                     // ((fear + anger + joy) × 0.5 from the appraisal block).
                     repeated_stress: affects[i].arousal,
                     recovery: affects[i].valence.clamp_01(),
-                    social_engagement: (emotions[i].trust + emotions[i].joy) * Fixed::from_f64(0.5),
+                    // §8.1.6 (Iteration 162): live social-need satisfaction
+                    // (was the dead `emotions.trust + joy` proxy).
+                    social_engagement: Fixed::ONE - needs[i].social.clamp_01(),
                     goal_striving,
                     identity_integration: agent.self_model.coherence,
                     age_years: agent.age,

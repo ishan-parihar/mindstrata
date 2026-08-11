@@ -439,12 +439,12 @@ fn evolve_relationship_kind(rel: &mut Relationship, params: &crate::parameters::
 /// §5.1: Bonding and conflict rates from `SimParameters`.
 ///
 /// The per-agent info tuple grows with every norm wiring (Iterations 85, 89,
-/// 91, 158) — an intentional flat data-passing shape, not a public API.
+/// 91, 158, 162) — an intentional flat data-passing shape, not a public API.
 #[expect(clippy::type_complexity)]
 pub fn system_social_interactions(
     // (id, openness, agreeableness, extraversion, anger, no_violence_resistance,
     //  help_neighbors_propensity, respect_elders_propensity, is_elder,
-    //  obey_ruler_propensity, is_authority, loneliness, runs_social)
+    //  obey_ruler_propensity, is_authority, loneliness, sociability_dev, runs_social)
     agents: &[(
         AgentId,
         Fixed,
@@ -457,6 +457,7 @@ pub fn system_social_interactions(
         bool,
         Fixed,
         bool,
+        Fixed,
         Fixed,
         bool,
     )],
@@ -476,7 +477,7 @@ pub fn system_social_interactions(
     // agents are excluded both as initiators and as targets. When no agent is
     // Background (every calibrated window — Iter-145 probe pins 0B at every
     // size/seed), the mask is all-true and behavior is byte-identical.
-    let runs_social_mask: Vec<bool> = agents.iter().map(|a| a.12).collect();
+    let runs_social_mask: Vec<bool> = agents.iter().map(|a| a.13).collect();
 
     // The source agent's own elder/authority flags are unused here — the
     // gates read the *target's* status (`agents[target_idx].8` for elder,
@@ -496,6 +497,7 @@ pub fn system_social_interactions(
             obey_ruler_propensity,
             _is_authority,
             loneliness,
+            sociability_dev,
             runs_social,
         ),
     ) in agents.iter().enumerate()
@@ -515,9 +517,17 @@ pub fn system_social_interactions(
         // draw stays unconditional (only the threshold moves — replay
         // determinism holds), and extraversion still dominates the
         // personality channel.
+        //
+        // §8.1.6 (Iteration 162): sociability deviation (live temperament −
+        // trait-derived baseline, accumulated by the plasticity pass) adds a
+        // third gate channel — a socially-tempered agent clears the gate
+        // more often. Zero-at-zero (deviation 0 at construction → legacy
+        // gate, byte-identical until plasticity drifts the layer), RNG draw
+        // stays unconditional (threshold-only change → replay determinism).
         let interact_chance = params.social_interaction_base_chance
             + *extraversion * params.social_extraversion_multiplier
-            + *loneliness * params.social_loneliness_multiplier;
+            + *loneliness * params.social_loneliness_multiplier
+            + *sociability_dev * params.social_sociability_multiplier;
         let roll = Fixed::from_f64(rng.get_mut(RngStream::Social).random_range(0.0..1.0));
 
         if roll > interact_chance {
@@ -1025,6 +1035,7 @@ mod tests {
                     Fixed::ZERO,          // obey_ruler_propensity
                     false,                // is_authority
                     loneliness,           // §8.1.4 (Iteration 98)
+                    Fixed::ZERO,          // §8.1.6 (Iteration 162): sociability_dev
                     true,                 // §17.2 (Iteration 158): runs social
                 ),
                 (
@@ -1039,6 +1050,7 @@ mod tests {
                     false,
                     Fixed::ZERO,
                     false,
+                    Fixed::ZERO,
                     Fixed::ZERO,
                     true,
                 ),
@@ -1087,6 +1099,109 @@ mod tests {
             (params.social_interaction_base_chance
                 + Fixed::ZERO * params.social_extraversion_multiplier
                 + loneliness * params.social_loneliness_multiplier)
+                .to_f64()
+        };
+        assert_eq!(
+            chance(Fixed::ZERO),
+            params.social_interaction_base_chance.to_f64()
+        );
+        assert!(chance(Fixed::from_f64(0.5)) > chance(Fixed::ZERO));
+        assert!(chance(Fixed::ONE) >= chance(Fixed::from_f64(0.5)));
+    }
+
+    /// §8.1.6 (Iteration 162): a socially-tempered agent clears the
+    /// interaction gate more often — `system_social_interactions` adds
+    /// `sociability_dev × social_sociability_multiplier` to
+    /// `interact_chance`. The deviation is zero at construction (byte-
+    /// identical until the plasticity pass drifts the temperament layer),
+    /// the RNG draw stays unconditional, and once a social agent converts an
+    /// extra roll the downstream streams diverge per seed (replay-
+    /// deterministic, not stream-identical).
+    #[test]
+    fn sociability_raises_interaction_gate() {
+        let params = crate::parameters::SimParameters::default();
+        let count_interactions = |sociability_dev: Fixed| -> u32 {
+            let mut rng = RngStreams::new(42);
+            let mut events: Vec<SimEvent> = Vec::new();
+            let mut relationships: Vec<Relationship> = Vec::new();
+            let agent_info = vec![
+                (
+                    AgentId::new(0),
+                    Fixed::from_f64(0.5), // openness
+                    Fixed::from_f64(0.5), // agreeableness
+                    Fixed::ZERO,          // extraversion (0 isolates sociability)
+                    Fixed::ZERO,          // anger
+                    Fixed::ZERO,          // no_violence_resistance
+                    Fixed::ZERO,          // help_neighbors_propensity
+                    Fixed::ZERO,          // respect_elders_propensity
+                    false,                // is_elder
+                    Fixed::ZERO,          // obey_ruler_propensity
+                    false,                // is_authority
+                    Fixed::ZERO,          // loneliness (0 isolates sociability)
+                    sociability_dev,      // §8.1.6 (Iteration 162)
+                    true,                 // §17.2: runs social
+                ),
+                (
+                    AgentId::new(1),
+                    Fixed::from_f64(0.5),
+                    Fixed::from_f64(0.5),
+                    Fixed::ZERO,
+                    Fixed::ZERO,
+                    Fixed::ZERO,
+                    Fixed::ZERO,
+                    Fixed::ZERO,
+                    false,
+                    Fixed::ZERO,
+                    false,
+                    Fixed::ZERO,
+                    Fixed::ZERO,
+                    true,
+                ),
+            ];
+            let positions = vec![(0i32, 0i32), (1i32, 0i32)]; // both within radius 5
+            let same_faction = vec![vec![false, false], vec![false, false]];
+            let mut interactions = 0u32;
+            for _ in 0..1000 {
+                system_social_interactions(
+                    &agent_info,
+                    &positions,
+                    &same_faction,
+                    &mut relationships,
+                    &mut events,
+                    Tick::new(1),
+                    &mut rng,
+                    params.bonding_rate,
+                    params.conflict_escalation_rate,
+                    &params,
+                );
+            }
+            for ev in &events {
+                if let SimEvent::InteractionOccurred { .. } = ev {
+                    interactions += 1;
+                }
+            }
+            interactions
+        };
+        let baseline = count_interactions(Fixed::ZERO);
+        let social = count_interactions(Fixed::from_f64(0.5));
+        assert!(baseline > 0, "non-social agents must still interact");
+        assert!(
+            social > baseline,
+            "socially-tempered agents must clear the gate more often: {social} vs {baseline}"
+        );
+    }
+
+    /// §8.1.6 (Iteration 162): the sociability channel is a pure amplifier —
+    /// with zero extraversion and zero loneliness the legacy gate is
+    /// untouched at zero deviation, and the term only ever raises it.
+    #[test]
+    fn sociability_never_lowers_the_gate() {
+        let params = crate::parameters::SimParameters::default();
+        let chance = |sociability_dev: Fixed| -> f64 {
+            (params.social_interaction_base_chance
+                + Fixed::ZERO * params.social_extraversion_multiplier
+                + Fixed::ZERO * params.social_loneliness_multiplier
+                + sociability_dev * params.social_sociability_multiplier)
                 .to_f64()
         };
         assert_eq!(
@@ -1200,12 +1315,13 @@ mod tests {
                 Fixed::ZERO,
                 false,
                 Fixed::ZERO,
-                true, // §17.2: participates
+                Fixed::ZERO, // §8.1.6 (Iteration 162): sociability_dev
+                true,        // §17.2: participates
             )
         };
         let background = |id: u64| {
             let mut t = social(id);
-            t.12 = false; // §17.2: aggregate tier — no individual interactions
+            t.13 = false; // §17.2: aggregate tier — no individual interactions
             t
         };
 

@@ -1,6 +1,5 @@
 ---
 source: crates/mindstrata-tests/src/snapshot_tests.rs
-assertion_line: 230
 expression: endocrine_states
 ---
 [

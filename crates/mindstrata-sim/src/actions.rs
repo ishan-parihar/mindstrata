@@ -5,7 +5,7 @@
 //! This produces bounded rationality — agents are not perfectly optimal.
 
 use crate::person::{
-    BodyState, Goal, GoalKind, IdentityKind, IdentityState, NeedState, Personality,
+    BodyState, Goal, GoalKind, IdentityKind, IdentityState, NeedState, Personality, Temperament,
 };
 use crate::psychology::neural_like::ActionValues;
 use crate::psychology::DecisionPolicy;
@@ -14,6 +14,28 @@ use mindstrata_core::fixed::Fixed;
 use mindstrata_core::rng::{RngStream, RngStreams};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+
+// ── §8.1.6 (Iteration 162): temperament decision consumers ──────────
+/// How strongly a persistence deviation above the trait-derived baseline
+/// narrows the ±0.05 decision-noise roll (0.5 → a 0.3 deviation halves the
+/// amplitude). Persistence is the plan's "goal adherence under difficulty":
+/// a more persistent agent makes more consistent (less noise-flipped)
+/// choices. Zero-at-zero (deviation 0 → legacy ±0.05), the RNG draw stays
+/// unconditional (only the amplitude changes — replay determinism holds).
+const PERSISTENCE_NOISE_REDUCTION: f64 = 0.5;
+/// Floor for the persistence-scaled noise amplitude — even a maximally
+/// persistent agent keeps a minimal exploration jitter (no full
+/// determinism cliff).
+const PERSISTENCE_NOISE_FLOOR: f64 = 0.02;
+/// Utility bonus per unit of approach-withdrawal deviation for the Wander
+/// action — an approach-biased temperament (deviation above the trait-
+/// derived baseline) explores the world more; a withdrawal-biased one
+/// (negative deviation) wanders less. Sized small (0.05/unit) so it is a
+/// genuine nudge, not a reordering lever: at a typical 0.2–0.5 deviation
+/// the term adds ±0.01–0.025 — comparable to the dread channel's nudge.
+/// Zero-at-zero (deviation 0 → legacy Wander utility), deterministic
+/// (pure utility term — no RNG).
+const APPROACH_WANDER_BONUS: Fixed = Fixed::from_raw(500); // 0.05
 
 /// Bundled context for action selection — replaces the 18-parameter signature.
 ///
@@ -508,10 +530,53 @@ pub fn compute_utility(
     // differentiates them.
     utility += action_values.learned_delta(action.kind.outcome_profile());
 
-    let noise_roll: f64 = rng.get_mut(RngStream::Behavior).random_range(-0.05..0.05);
+    // §8.1.6 (Iteration 162): temperament decision consumers — persistence
+    // narrows the decision-noise amplitude and approach-withdrawal biases
+    // exploration. Both read the deviation of the live temperament layer
+    // from its trait-derived baseline (`Temperament::from_traits`), which
+    // is exactly 0 at construction and drifts only as the plasticity pass
+    // accumulates life experience — so calibrated runs stay byte-identical
+    // until the layer moves. Deterministic (pure utility/amplitude terms;
+    // the noise RNG draw stays unconditional — only its range changes, so
+    // the Behavior-stream position is untouched).
+    let temperament_baseline = Temperament::from_traits(personality);
+    let persistence_dev = personality.temperament.persistence - temperament_baseline.persistence;
+    let approach_dev =
+        personality.temperament.approach_withdrawal - temperament_baseline.approach_withdrawal;
+
+    // Persistence: a persistent agent's choices are more stable — the
+    // ±0.05 exploration jitter shrinks with the deviation (floored so even
+    // maximal persistence keeps a minimal jitter). Zero at zero deviation.
+    let amplitude = noise_amplitude(persistence_dev);
+    let noise_roll: f64 = rng.get_mut(RngStream::Behavior).random_range(-amplitude..amplitude);
     utility += Fixed::from_f64(noise_roll);
 
+    // Approach/withdrawal: an approach-biased agent explores more, a
+    // withdrawal-biased one wanders less.
+    if action.kind == ActionKind::Wander && approach_dev != Fixed::ZERO {
+        utility += approach_dev * APPROACH_WANDER_BONUS;
+    }
+
     utility
+}
+
+/// §8.1.6 (Iteration 162): the decision-noise amplitude for a given
+/// persistence deviation from the trait-derived baseline.
+///
+/// The legacy ±0.05 jitter shrinks by `deviation × PERSISTENCE_NOISE_REDUCTION`
+/// (a 0.5 deviation halves it), floored at [`PERSISTENCE_NOISE_FLOOR`] so even
+/// maximal persistence keeps a minimal exploration jitter. Zero-at-zero:
+/// deviation 0 → exactly 0.05 (legacy amplitude, byte-identical). Deviations
+/// are non-negative in practice (plasticity pushes persistence toward
+/// baseline + goal-striving signal), but negative values are treated as the
+/// legacy amplitude defensively. Deterministic — the caller's RNG draw stays
+/// unconditional (only the range changes).
+fn noise_amplitude(persistence_dev: Fixed) -> f64 {
+    if persistence_dev <= Fixed::ZERO {
+        return 0.05;
+    }
+    (0.05 - persistence_dev.to_f64() * PERSISTENCE_NOISE_REDUCTION * 0.05)
+        .max(PERSISTENCE_NOISE_FLOOR)
 }
 
 /// Classify an action for DecisionPolicy modifier lookup.
@@ -1664,6 +1729,135 @@ mod tests {
         assert!(
             rest_dreadful < rest_calm,
             "dread must push selections away from Rest: {rest_dreadful} vs {rest_calm}"
+        );
+    }
+
+    // ── §8.1.6 (Iteration 162): temperament decision consumers ─────────
+
+    /// §8.1.6 (Iteration 162): `noise_amplitude` shrinks the ±0.05 jitter
+    /// with persistence deviation — zero at zero (byte-identical legacy),
+    /// monotone decreasing, floored so maximal persistence keeps a minimal
+    /// exploration jitter (no full determinism cliff).
+    #[test]
+    fn persistence_narrows_decision_noise_amplitude() {
+        assert_eq!(noise_amplitude(Fixed::ZERO), 0.05);
+        assert_eq!(noise_amplitude(-Fixed::from_f64(0.2)), 0.05, "negative deviation is defensively legacy");
+        assert!(noise_amplitude(Fixed::from_f64(0.3)) < 0.05);
+        assert!(
+            noise_amplitude(Fixed::from_f64(0.6)) < noise_amplitude(Fixed::from_f64(0.3)),
+            "amplitude must be monotone decreasing in deviation"
+        );
+        assert!(
+            noise_amplitude(Fixed::ONE) >= PERSISTENCE_NOISE_FLOOR,
+            "maximal persistence must not clamp below the floor"
+        );
+    }
+
+    /// §8.1.6 (Iteration 162): approach-withdrawal deviation biases the
+    /// Wander action's utility — an approach-biased agent (positive
+    /// deviation) prefers exploration, a withdrawal-biased one (negative
+    /// deviation) wanders less. Deterministic: the same-seed Wander utility
+    /// differs from the zero-deviation baseline by exactly
+    /// `deviation × APPROACH_WANDER_BONUS` (no RNG on this path beyond the
+    /// identical noise stream).
+    #[test]
+    fn approach_deviation_biases_wander_exploration() {
+        let needs = NeedState {
+            hunger: Fixed::from_f64(0.15),
+            thirst: Fixed::from_f64(0.1),
+            fatigue: Fixed::from_f64(0.25),
+            ..Default::default()
+        };
+        let identity = IdentityState::default();
+        let base = make_personality();
+        // Zero-deviation control: live temperament equals the trait-derived baseline.
+        let baseline = Temperament::from_traits(&base);
+        let mut control = base;
+        control.temperament = baseline;
+        // Approach-biased: +0.4 deviation on approach_withdrawal only.
+        let mut approach = control.clone();
+        approach.temperament.approach_withdrawal =
+            baseline.approach_withdrawal + Fixed::from_f64(0.4);
+        // Withdrawal-biased: −0.3 deviation.
+        let mut withdraw = control.clone();
+        withdraw.temperament.approach_withdrawal =
+            baseline.approach_withdrawal - Fixed::from_f64(0.3);
+
+        let wander_util = |p: &Personality| -> Fixed {
+            let mut rng = RngStreams::new(42);
+            compute_utility(
+                &ActionKind::Wander.definition(),
+                &needs,
+                p,
+                &mut rng,
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
+                &identity,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                ActionValues::default(),
+                MotiveCategory::Hunger,
+                Fixed::ZERO,
+                Fixed::ZERO,
+            )
+        };
+        let base_util = wander_util(&control);
+        let approach_util = wander_util(&approach);
+        let withdraw_util = wander_util(&withdraw);
+        assert_eq!(
+            approach_util - base_util,
+            Fixed::from_f64(0.4) * APPROACH_WANDER_BONUS,
+            "approach deviation must add exactly deviation × bonus to Wander"
+        );
+        assert_eq!(
+            withdraw_util - base_util,
+            -Fixed::from_f64(0.3) * APPROACH_WANDER_BONUS,
+            "withdrawal deviation must subtract exactly deviation × bonus from Wander"
+        );
+    }
+
+    /// §8.1.6 (Iteration 162): the approach channel is Wander-specific —
+    /// non-Wander actions are untouched by the deviation (only the identical
+    /// noise stream may differ, which the same-seed call keeps identical).
+    #[test]
+    fn approach_deviation_leaves_non_wander_actions_untouched() {
+        let needs = NeedState {
+            hunger: Fixed::from_f64(0.15),
+            thirst: Fixed::from_f64(0.1),
+            fatigue: Fixed::from_f64(0.25),
+            ..Default::default()
+        };
+        let identity = IdentityState::default();
+        let base = make_personality();
+        let baseline = Temperament::from_traits(&base);
+        let mut control = base;
+        control.temperament = baseline;
+        let mut approach = control.clone();
+        approach.temperament.approach_withdrawal =
+            baseline.approach_withdrawal + Fixed::from_f64(0.4);
+
+        let work_util = |p: &Personality| -> Fixed {
+            let mut rng = RngStreams::new(42);
+            compute_utility(
+                &ActionKind::Work.definition(),
+                &needs,
+                p,
+                &mut rng,
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
+                &identity,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                ActionValues::default(),
+                MotiveCategory::Hunger,
+                Fixed::ZERO,
+                Fixed::ZERO,
+            )
+        };
+        assert_eq!(
+            work_util(&approach),
+            work_util(&control),
+            "approach deviation must not touch non-Wander utility"
         );
     }
 }

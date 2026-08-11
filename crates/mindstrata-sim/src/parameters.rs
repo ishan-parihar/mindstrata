@@ -108,6 +108,26 @@ pub struct SimParameters {
     /// (0.3) — a lonely agent seeks social contact more (the emotion gate's
     /// first read of the loneliness family).
     pub social_loneliness_multiplier: Fixed,
+    /// §8.1.6 (Iteration 162): the sociability-temperament channel of the
+    /// interaction gate — a socially-tempered agent (positive sociability
+    /// deviation from its trait-derived baseline, accumulated by the
+    /// plasticity pass) clears the gate more often. Deviation is zero at
+    /// construction, so this term is byte-identical until life experience
+    /// reshapes the temperament layer.
+    ///
+    /// TUNED (0.3 → 0.15 → 0.08): at 0.3 the probe showed a disproportionate
+    /// blast — post-fix sociability deviations reach 0.3–0.7 in calm
+    /// windows, so 0.3 × 0.7 = +0.21 on top of a loneliness-saturated gate
+    /// (~0.8) clamped the gate to ~1.0 and ERASED the social differentials
+    /// (trust-world escalation 17-vs-17, drought vs control farm output
+    /// 58.96-vs-58.94). At 0.15 the conception pipeline stalled (seed-44
+    /// births collapsed [890,1320,1390,1560,1760] → [310], probe) because
+    /// the gate shift re-paces courtship RNG consumption. At 0.08 the
+    /// channel adds at most +0.06 — the differentials stay live AND the
+    /// pipeline stays healthy (seed-44 births [2890], seed-1 3-chain
+    /// [66730, 67850, 93410]) — a genuine nudge that preserves the
+    /// calibrated envelope.
+    pub social_sociability_multiplier: Fixed,
     /// §8.1.4 (Iteration 99): tenderness multiplier for the help propensity
     /// (0.5) — a tender agent helps neighbors more (the warmth→caregiving
     /// channel; folds into the Help-window consumer, clamped by its
@@ -367,6 +387,13 @@ impl Default for SimParameters {
             social_interaction_base_chance: Fixed::from_f64(0.3),
             social_extraversion_multiplier: Fixed::from_f64(0.4),
             social_loneliness_multiplier: Fixed::from_f64(0.3),
+            // §8.1.6 (Iteration 162): the sociability channel of the
+            // interaction gate. TUNED to 0.08 (was 0.3, then 0.15 — the
+            // pipeline-stall blast, see the field doc): post-fix deviations
+            // reach 0.3–0.7, so 0.08 adds +0.03–0.06 to the gate — a
+            // genuine nudge that keeps the differentials live AND the
+            // conception pipeline healthy.
+            social_sociability_multiplier: Fixed::from_f64(0.08),
             social_tenderness_help_multiplier: Fixed::from_f64(0.5),
             social_gratitude_help_multiplier: Fixed::from_f64(0.5),
             social_agreeableness_threshold: Fixed::from_f64(0.5),
