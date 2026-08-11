@@ -474,13 +474,17 @@ fn main() {
                 "famine" => Scenario::famine(),
                 "pestilence" => Scenario::pestilence(),
                 "collapse" => Scenario::collapse(),
+                // §46 (Iteration 161): the Calm scenario (no shocks) is the
+                // control baseline for differential testing — exposed in the
+                // CLI so a control run is one command away.
+                "calm" => Scenario::calm(),
                 // §5 (Iteration 156): modding API — run any .ron scenario file
                 // by path (e.g. a mod pack's scenario.ron).
                 other => match Scenario::from_file(other) {
                     Ok(s) => s,
                     Err(e) => {
                         eprintln!("Unknown scenario: {other}");
-                        eprintln!("Available: riverford, drought, famine, pestilence, collapse");
+                        eprintln!("Available: riverford, drought, famine, pestilence, collapse, calm");
                         eprintln!("Or pass a path to a .ron scenario file: {e}");
                         std::process::exit(1);
                     }
