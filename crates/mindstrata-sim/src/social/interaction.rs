@@ -156,23 +156,30 @@ pub const DEFAULT_PERCEPTION_RADIUS: i32 = 5;
 /// §2.4: "Agents only perceive events within a radius (e.g., 5 tiles).
 /// Social interactions only possible between agents within perception radius.
 /// This creates natural neighborhoods and social clusters."
+///
+/// §17.2 (Iteration 158): `eligible` is the per-agent social-participation
+/// mask — Background-tier agents (aggregate simulation, no individual
+/// relationships) are never selected as interaction targets. The mask is
+/// aligned with `agent_positions`, so index mapping is unchanged.
 pub fn select_interaction_target(
     agent_idx: usize,
     num_agents: usize,
     agent_positions: &[(i32, i32)], // agent (x, y) positions
     perception_radius: i32,
     rng: &mut RngStreams,
+    eligible: &[bool], // §17.2: false = Background tier, never targeted
 ) -> Option<usize> {
     if num_agents <= 1 {
         return None;
     }
 
-    // Filter to agents within perception radius
+    // Filter to agents within perception radius who participate in social
+    // interactions (Background-tier agents are excluded as targets).
     let ax = agent_positions[agent_idx].0;
     let ay = agent_positions[agent_idx].1;
     let nearby: Vec<usize> = (0..num_agents)
         .filter(|&t| {
-            if t == agent_idx {
+            if t == agent_idx || !eligible[t] {
                 return false;
             }
             let dx = (agent_positions[t].0 - ax).abs();
@@ -432,12 +439,12 @@ fn evolve_relationship_kind(rel: &mut Relationship, params: &crate::parameters::
 /// §5.1: Bonding and conflict rates from `SimParameters`.
 ///
 /// The per-agent info tuple grows with every norm wiring (Iterations 85, 89,
-/// 91) — an intentional flat data-passing shape, not a public API.
+/// 91, 158) — an intentional flat data-passing shape, not a public API.
 #[expect(clippy::type_complexity)]
 pub fn system_social_interactions(
     // (id, openness, agreeableness, extraversion, anger, no_violence_resistance,
     //  help_neighbors_propensity, respect_elders_propensity, is_elder,
-    //  obey_ruler_propensity, is_authority, loneliness)
+    //  obey_ruler_propensity, is_authority, loneliness, runs_social)
     agents: &[(
         AgentId,
         Fixed,
@@ -451,6 +458,7 @@ pub fn system_social_interactions(
         Fixed,
         bool,
         Fixed,
+        bool,
     )],
     agent_positions: &[(i32, i32)],    // §2.4: agent (x, y) positions
     same_faction_matrix: &[Vec<bool>], // §5.4: same_faction_matrix[i][j] = true if agents i,j share a faction
@@ -463,6 +471,12 @@ pub fn system_social_interactions(
     params: &crate::parameters::SimParameters,
 ) {
     let num_agents = agents.len();
+
+    // §17.2 (Iteration 158): the social-participation mask — Background-tier
+    // agents are excluded both as initiators and as targets. When no agent is
+    // Background (every calibrated window — Iter-145 probe pins 0B at every
+    // size/seed), the mask is all-true and behavior is byte-identical.
+    let runs_social_mask: Vec<bool> = agents.iter().map(|a| a.12).collect();
 
     // The source agent's own elder/authority flags are unused here — the
     // gates read the *target's* status (`agents[target_idx].8` for elder,
@@ -482,9 +496,18 @@ pub fn system_social_interactions(
             obey_ruler_propensity,
             _is_authority,
             loneliness,
+            runs_social,
         ),
     ) in agents.iter().enumerate()
     {
+        // §17.2 (Iteration 158): Background agents run aggregate simulation —
+        // they neither initiate nor receive individual social interactions.
+        // The gate sits BEFORE the RNG roll, so a Background source consumes
+        // zero Social-stream draws (the `continue` also skips target
+        // selection). Focal/Secondary agents are unaffected.
+        if !runs_social {
+            continue;
+        }
         // §8.1.4 (Iteration 98): a lonely agent seeks social contact more —
         // loneliness adds to the interaction-chance gate (previously the
         // family was computed by appraisal every tick and never read).
@@ -501,13 +524,15 @@ pub fn system_social_interactions(
             continue;
         }
 
-        // §2.4: Select target within perception radius
+        // §2.4: Select target within perception radius — Background-tier
+        // agents are excluded from the candidate set (mask from §17.2).
         if let Some(target_idx) = select_interaction_target(
             i,
             num_agents,
             agent_positions,
             DEFAULT_PERCEPTION_RADIUS,
             rng,
+            &runs_social_mask,
         ) {
             let target_id = agents[target_idx].0;
 
@@ -1000,6 +1025,7 @@ mod tests {
                     Fixed::ZERO,          // obey_ruler_propensity
                     false,                // is_authority
                     loneliness,           // §8.1.4 (Iteration 98)
+                    true,                 // §17.2 (Iteration 158): runs social
                 ),
                 (
                     AgentId::new(1),
@@ -1014,6 +1040,7 @@ mod tests {
                     Fixed::ZERO,
                     false,
                     Fixed::ZERO,
+                    true,
                 ),
             ];
             let positions = vec![(0i32, 0i32), (1i32, 0i32)]; // both within radius 5
@@ -1068,5 +1095,133 @@ mod tests {
         );
         assert!(chance(Fixed::from_f64(0.5)) > chance(Fixed::ZERO));
         assert!(chance(Fixed::ONE) >= chance(Fixed::from_f64(0.5)));
+    }
+
+    // ── §17.2 (Iteration 158): Background-tier social-participation gate ──
+
+    /// §17.2 (Iteration 158): `select_interaction_target` excludes
+    /// ineligible (Background-tier) candidates — an eligible source whose
+    /// only nearby neighbor is ineligible gets no target at all, and an
+    /// ineligible candidate is never drawn even when mixed with eligible
+    /// ones (the deterministic draw must stay within the eligible subset).
+    #[test]
+    fn target_selection_excludes_ineligible_agents() {
+        // Positions: (0,0) and (1,0) — both within radius 5 of each other.
+        let positions = [(0i32, 0i32), (1i32, 0i32)];
+
+        // Source 0 eligible, target 1 ineligible → no candidate at all.
+        let mut rng = RngStreams::new(42);
+        let none = select_interaction_target(
+            0,
+            2,
+            &positions,
+            DEFAULT_PERCEPTION_RADIUS,
+            &mut rng,
+            &[true, false],
+        );
+        assert_eq!(none, None, "ineligible-only neighborhood must yield no target");
+
+        // Source 0 eligible, targets 1 (ineligible) + 2 (eligible): the draw
+        // must always land on 2 across many rolls.
+        let positions3 = [(0i32, 0i32), (1i32, 0i32), (1i32, 1i32)];
+        let mut rng = RngStreams::new(7);
+        for _ in 0..200 {
+            let picked = select_interaction_target(
+                0,
+                3,
+                &positions3,
+                DEFAULT_PERCEPTION_RADIUS,
+                &mut rng,
+                &[true, false, true],
+            );
+            assert_eq!(picked, Some(2), "eligible subset must be the only pool");
+        }
+    }
+
+    /// §17.2 (Iteration 158): an ineligible (Background) source neither
+    /// initiates interactions nor is selected as a target — `
+    /// system_social_interactions` skips it before the gate roll (so it
+    /// consumes no Social-stream RNG) and the eligibility mask removes it
+    /// from every other agent's candidate set. With a lone ineligible agent
+    /// the pass is a complete no-op (zero events, zero relationships); with
+    /// one ineligible + one eligible pair the eligible pair still
+    /// interacts, proving the gate is differential, not a global freeze.
+    #[test]
+    fn background_sources_never_initiate_or_receive_interactions() {
+        let params = crate::parameters::SimParameters::default();
+        // Element type inferred from the `social`/`background` builders and
+        // the `system_social_interactions` call below (the 13-tuple shape).
+        let run = |agent_info: Vec<_>| -> (u32, u32) {
+            let mut rng = RngStreams::new(42);
+            let mut events: Vec<SimEvent> = Vec::new();
+            let mut relationships: Vec<Relationship> = Vec::new();
+            let n = agent_info.len();
+            let positions: Vec<(i32, i32)> = (0..n).map(|i| (i as i32, 0)).collect();
+            let same_faction = vec![vec![false; n]; n];
+            for _ in 0..1000 {
+                system_social_interactions(
+                    &agent_info,
+                    &positions,
+                    &same_faction,
+                    &mut relationships,
+                    &mut events,
+                    Tick::new(1),
+                    &mut rng,
+                    params.bonding_rate,
+                    params.conflict_escalation_rate,
+                    &params,
+                );
+            }
+            let bg_involved = events
+                .iter()
+                .filter(|ev| {
+                    matches!(ev, SimEvent::InteractionOccurred { from, to, .. }
+                        if from.as_u64() == 0 || to.as_u64() == 0)
+                })
+                .count() as u32;
+            let total = events
+                .iter()
+                .filter(|ev| matches!(ev, SimEvent::InteractionOccurred { .. }))
+                .count() as u32;
+            (bg_involved, total)
+        };
+
+        let social = |id: u64| {
+            (
+                AgentId::new(id),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                false,
+                Fixed::ZERO,
+                false,
+                Fixed::ZERO,
+                true, // §17.2: participates
+            )
+        };
+        let background = |id: u64| {
+            let mut t = social(id);
+            t.12 = false; // §17.2: aggregate tier — no individual interactions
+            t
+        };
+
+        // Lone Background agent: complete no-op.
+        let (bg, total) = run(vec![background(0)]);
+        assert_eq!((bg, total), (0, 0), "lone Background agent must not interact");
+
+        // One Background + two social agents: the eligible pair still
+        // interacts (the Background's ineligibility must not freeze the
+        // rest of the population).
+        let (bg, total) = run(vec![background(0), social(1), social(2)]);
+        assert_eq!(bg, 0, "Background agent must never be involved");
+        assert!(total > 0, "eligible agents must still interact normally");
+
+        // Two social agents (the all-eligible control): full interaction.
+        let (_, total) = run(vec![social(0), social(1)]);
+        assert!(total > 0, "all-eligible control must interact");
     }
 }

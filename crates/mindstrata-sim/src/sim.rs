@@ -4109,6 +4109,13 @@ impl Simulation {
                             obey_propensity,
                             Some(i) == authority_idx,
                             emotions[i].loneliness, // §8.1.4 (Iteration 98)
+                            // §17.2 (Iteration 158): Background-tier agents
+                            // are excluded from the individual social
+                            // interaction pass (aggregate simulation).
+                            // Zero-blast by construction — no agent is ever
+                            // Background in any calibrated window (Iter-145
+                            // probe: 0B at every size/seed).
+                            a.agent_tier.tier.runs_social_interactions(),
                         )
                     })
                     .collect();

@@ -542,6 +542,13 @@ mod tests {
         assert!(AgentTier::Focal.runs_action_selection());
         assert!(AgentTier::Secondary.runs_action_selection());
         assert!(!AgentTier::Background.runs_action_selection());
+
+        // §17.2 (Iteration 158): the social-participation gate now has a
+        // production consumer — Background agents must be excluded from the
+        // individual interaction pass (aggregate simulation).
+        assert!(AgentTier::Focal.runs_social_interactions());
+        assert!(AgentTier::Secondary.runs_social_interactions());
+        assert!(!AgentTier::Background.runs_social_interactions());
     }
 
     #[test]

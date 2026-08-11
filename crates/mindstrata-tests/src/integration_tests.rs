@@ -10099,6 +10099,77 @@ fn background_tier_agents_skip_memory_encoding_in_live_runs() {
     );
 }
 
+/// §17.2 (Iteration 158): the Background-tier social-participation gate is
+/// LIVE — `runs_social_interactions()` now has a production consumer at the
+/// social-interaction call site (the Iter-144 report found the method dead
+/// code: Background agents still ran full social interactions). A forced
+/// Background agent must be absent from the entire InteractionOccurred event
+/// log for the window (neither initiator nor target), while the Focal
+/// population keeps interacting — the gate is differential, not a global
+/// freeze. Reclassification is blocked via `last_tier_reassign_tick =
+/// u64::MAX` so the forced tier persists (reclassify's interval guard
+/// returns early).
+///
+/// ZERO-BLAST by construction: no agent is ever Background in any
+/// calibrated window (Iter-145 probe: 0B at every size/seed), so the mask
+/// is all-true and every existing run is byte-identical.
+#[test]
+fn background_tier_agents_do_not_participate_in_social_interactions() {
+    use mindstrata_sim::agent_tier::{AgentTier, CognitiveBudget};
+    use mindstrata_core::event::SimEvent;
+
+    let mut sim = run_sim(42, 2000);
+
+    // Force agent 0 → Background (no individual social interactions),
+    // block reclassification for the window.
+    {
+        let bg = CognitiveBudget::background();
+        sim.agents[0].agent_tier.tier = AgentTier::Background;
+        sim.agents[0].agent_tier.budget = bg;
+        let a0 = &mut sim.agents[0];
+        a0.agent_tier.budget_tracker.reset(&a0.agent_tier.budget);
+        a0.agent_tier.last_tier_reassign_tick = u64::MAX;
+    }
+    assert!(!sim.agents[0].agent_tier.tier.runs_social_interactions());
+
+    let window_start = sim.current_tick().as_u64();
+    sim.run(500);
+
+    // Scan the full (unbounded) event log for the window: agent 0 must not
+    // appear as either side of any InteractionOccurred.
+    let events = sim.recent_events(usize::MAX);
+    let bg_involved = events
+        .iter()
+        .filter(|ev| {
+            if let SimEvent::InteractionOccurred { from, to, tick, .. } = ev {
+                (from.as_u64() == 0 || to.as_u64() == 0) && tick.as_u64() > window_start
+            } else {
+                false
+            }
+        })
+        .count();
+    assert_eq!(
+        bg_involved, 0,
+        "Background agent participated in {bg_involved} interactions — the §17.2 social gate has no teeth"
+    );
+
+    // Control: the Focal population must still interact in the same window.
+    let others_interacted = events
+        .iter()
+        .filter(|ev| {
+            if let SimEvent::InteractionOccurred { from, to, tick, .. } = ev {
+                from.as_u64() != 0 && to.as_u64() != 0 && tick.as_u64() > window_start
+            } else {
+                false
+            }
+        })
+        .count();
+    assert!(
+        others_interacted > 0,
+        "Focal population stopped interacting — the gate must be differential"
+    );
+}
+
 /// §17.1 (Iteration 145): the section-4 Level-of-Detail gap — the
 /// Focal/Secondary/Background calibration is not validated against a
 /// population mix. This test PINS the measured tier-mix envelope across
