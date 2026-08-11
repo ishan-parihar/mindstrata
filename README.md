@@ -6,12 +6,13 @@
   <img src="./assets/readme/hero.svg" width="100%" alt="Mindstrata: a medieval settlement where every person carries a complete mind, and history emerges through ten substrate layers — physics, biology, perception, emotion, psychology, social bonds, institutions, culture, noospheric fields, history">
 </p>
 
-> **A deterministic, emergent human-society simulation** — a small medieval settlement where every person carries a full psychological mind, biological needs, social relationships, moral values, and institutional memberships. History emerges from first principles, not scripted events.
+> **A deterministic, emergent human-society simulation** — a small medieval settlement where every person carries a full psychological mind, biological needs, social relationships, moral values, and institutional memberships. History emerges from first principles, not scripted events. **But it is far more than a "society sim":** beneath the village lies a complete cognitive-science stack — embodied bodies, nervous systems, appraisal-based emotion, belief systems, and noospheric fields — built to be *deepened* by three architecture plans (AP1 → AP2 → AP3) into a multi-scale civilization simulation.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/ishan-parihar/mindstrata/ci.yml?style=flat-square)](https://github.com/ishan-parihar/mindstrata/actions)
+![LOC](https://img.shields.io/badge/LOC-75.0K-informational?style=flat-square)
 [![CI](https://github.com/ishan-parihar/mindstrata/actions/workflows/ci.yml/badge.svg)](https://github.com/ishan-parihar/mindstrata/actions/workflows/ci.yml)
 [![Rust](https://img.shields.io/badge/rust-1.75+-blue?style=flat-square)](https://www.rust-lang.org)
-[![Tests](https://img.shields.io/badge/tests-1100%2B%20passing-brightgreen?style=flat-square)](#)
+[![Tests](https://img.shields.io/badge/tests-1238%20passing-brightgreen?style=flat-square)](#)
 [![License](https://img.shields.io/badge/license-MIT-purple?style=flat-square)](LICENSE)
 
 ---
@@ -91,6 +92,36 @@ The simulation is layered as ten substrates (see `docs/architecture/AP2.md`), ea
 9. **Noospheric fields** — collective phenomena
 10. **Historical/teleological layer** — trajectory and meaning over time
 
+## Beyond the village — the architecture plans
+
+Mindstrata is designed to be *deepened*, not just extended. Three architecture plans map its evolution (`docs/architecture/`):
+
+### AP1 (implemented) — deterministic human-society simulation
+
+The founding plan: a data-oriented, emergent social-psychological-systemic simulation where every human-scale node has psychological, behavioral, relational, and systemic substrates. TUI as debug instrument, simulation first.
+
+### AP2 (~99% complete) — the agent as an embodied cognitive node
+
+The human-scale deepening plan. The target:
+
+> **Each agent should become a locally bounded, embodied cognitive system whose biology, psychology, relationships, and cultural exposure interact to produce lifelike history.**
+
+An agent is no longer a bundle of traits but a multi-scale cognitive runtime:
+
+```text
+Genome → Organs/Hormones/Body → Nervous System/Arousal/Pain/Interoception
+→ Perception/Attention/Memory → Emotion/Appraisal/Motivation
+→ Identity/Belief/Morality/Narrative → Decision/Action/Speech
+→ Relationships/Attachment/Status/Kinship → Groups/Factions/Institutions/Culture
+→ Noospheric field: rumors, memes, propaganda, collective meaning
+```
+
+Biology modulates psychology but never replaces it; psychology is *predictive*, not just reactive; relationships are first-class systems; culture is an emergent field; and cognition runs at configurable level-of-detail.
+
+### AP3 (planned) — world expansion, PESTLE development, cellular decay
+
+The multi-scale plan: transform a single settlement into a civilization simulation where biology, decay, environment, economy, politics, law, science, religion, military conflict, infrastructure, culture, and noospheric meaning evolve together across villages, cities, nations, planets, and eventually galactic-scale abstractions — while macro-history still emerges from locally bounded agents, never global flags.
+
 ## Workspace Layout
 
 ```
@@ -113,7 +144,7 @@ mindstrata/
 
 ## Testing & Determinism
 
-- **1098 automated tests** — property tests, golden replay fixtures, statistical emergence checks, integration, and 10K-tick stability (count re-derived from the current suite)
+- **1,238 automated tests** — 914 sim + 281 tests-crate (property/golden/statistical/scale/comparison/behavioral-delta/long-horizon) + 11 tui + 3 cli + 9 render + 20 core; deterministic replay from any seed
 - Tick-loop throughput regression gate enforced in CI (`crates/mindstrata-benches`)
 - `unsafe_code = "forbid"` workspace-wide — the simulation must be memory-safe and deterministic
 
@@ -125,3 +156,14 @@ cargo bench -p mindstrata-benches --no-run
 ## License
 
 MIT. See `LICENSE`.
+
+---
+
+## ☕ Support & Sponsorship
+
+If you find this project useful, consider supporting ongoing development:
+
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?style=flat-square&logo=github)](https://github.com/sponsors/ishan-parihar)
+[![Donate](https://img.shields.io/badge/Donate-Razorpay-3395FF?style=flat-square)](https://rzp.io/rzp/ishan-parihar)
+
+Your support funds new features, releases, and infrastructure for the whole ecosystem.
