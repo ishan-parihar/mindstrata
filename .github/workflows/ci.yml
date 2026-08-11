@@ -37,3 +37,12 @@ jobs:
 
       - name: Tick-loop regression gate (explicit run)
         run: cargo test -p mindstrata-tests tick_throughput_regression_gate
+
+      # Iteration 160 (§18.5): release-mode throughput regression gate. The
+      # debug gate above catches order-of-magnitude blowups; this one runs
+      # the shipped configuration (release profile) at the full-capacity
+      # 48-agent world and enforces a hard ticks/sec floor (calibrated on
+      # a mid-range desktop: 1,040 ticks/sec; floor 600 = ~1.7x headroom
+      # for slow shared runners).
+      - name: Release-mode throughput regression gate (§18.5)
+        run: cargo run -p mindstrata-benches --example regression_gate --release
