@@ -60,7 +60,11 @@ fn assert_seed42_emergence_and_invariants(sim: &mindstrata_sim::Simulation) {
     // (probe: 1.09M — 10× headroom so a legitimate event-granularity change
     // does not fail this for the wrong reason), culture spread, and the
     // emergent social structures the campaign wired all fired at least once.
-    assert!(m.event_count > 100_000, "only {} events in 50K ticks", m.event_count);
+    assert!(
+        m.event_count > 100_000,
+        "only {} events in 50K ticks",
+        m.event_count
+    );
     assert!(m.active_meme_count >= 1, "no active memes after 50K ticks");
     let factions = sim
         .institutions
@@ -89,14 +93,28 @@ fn assert_seed42_emergence_and_invariants(sim: &mindstrata_sim::Simulation) {
 
     // Resources never go negative (water legitimately reaches 0.0 in this
     // stressed village — assert non-negativity, not positivity).
-    assert!(m.total_grain >= 0.0, "negative grain at 50K: {}", m.total_grain);
-    assert!(m.total_water >= 0.0, "negative water at 50K: {}", m.total_water);
+    assert!(
+        m.total_grain >= 0.0,
+        "negative grain at 50K: {}",
+        m.total_grain
+    );
+    assert!(
+        m.total_water >= 0.0,
+        "negative water at 50K: {}",
+        m.total_water
+    );
 
     // Core aggregates stay finite and bounded.
-    assert!(m.avg_stress.is_finite() && (0.0..=1.0).contains(&m.avg_stress),
-        "avg_stress {} out of [0,1] at 50K", m.avg_stress);
-    assert!(m.avg_health.is_finite() && (0.0..=1.0).contains(&m.avg_health),
-        "avg_health {} out of [0,1] at 50K", m.avg_health);
+    assert!(
+        m.avg_stress.is_finite() && (0.0..=1.0).contains(&m.avg_stress),
+        "avg_stress {} out of [0,1] at 50K",
+        m.avg_stress
+    );
+    assert!(
+        m.avg_health.is_finite() && (0.0..=1.0).contains(&m.avg_health),
+        "avg_health {} out of [0,1] at 50K",
+        m.avg_health
+    );
 }
 
 /// Per-seed invariant checks at 50K (used by the multi-seed test).
@@ -108,19 +126,35 @@ fn assert_invariants(seed: u64, sim: &mindstrata_sim::Simulation) {
         m.agent_count
     );
     assert!(m.event_count > 0, "seed {seed}: no events in 50K ticks");
-    assert!(m.total_grain >= 0.0, "seed {seed}: negative grain {}", m.total_grain);
-    assert!(m.total_water >= 0.0, "seed {seed}: negative water {}", m.total_water);
+    assert!(
+        m.total_grain >= 0.0,
+        "seed {seed}: negative grain {}",
+        m.total_grain
+    );
+    assert!(
+        m.total_water >= 0.0,
+        "seed {seed}: negative water {}",
+        m.total_water
+    );
     for (i, agent) in sim.agents.iter().enumerate() {
-        assert!(agent.body.health.to_f64().is_finite()
-            && agent.body.health >= Fixed::ZERO
-            && agent.body.health <= Fixed::ONE,
-            "seed {seed} agent {i}: health {} out of [0,1]", agent.body.health.to_f64());
-        assert!(agent.embodied.endocrine.stress.level >= Fixed::ZERO
-            && agent.embodied.endocrine.stress.level <= Fixed::ONE,
+        assert!(
+            agent.body.health.to_f64().is_finite()
+                && agent.body.health >= Fixed::ZERO
+                && agent.body.health <= Fixed::ONE,
+            "seed {seed} agent {i}: health {} out of [0,1]",
+            agent.body.health.to_f64()
+        );
+        assert!(
+            agent.embodied.endocrine.stress.level >= Fixed::ZERO
+                && agent.embodied.endocrine.stress.level <= Fixed::ONE,
             "seed {seed} agent {i}: stress {} out of [0,1]",
-            agent.embodied.endocrine.stress.level.to_f64());
-        assert!(agent.wealth.coin >= Fixed::ZERO,
-            "seed {seed} agent {i}: negative wealth {}", agent.wealth.coin.to_f64());
+            agent.embodied.endocrine.stress.level.to_f64()
+        );
+        assert!(
+            agent.wealth.coin >= Fixed::ZERO,
+            "seed {seed} agent {i}: negative wealth {}",
+            agent.wealth.coin.to_f64()
+        );
     }
 }
 

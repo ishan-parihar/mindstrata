@@ -255,12 +255,18 @@ impl CausalProvenance {
 
     /// Get all decisions made in a specific tick range.
     pub fn decisions_in_range(&self, start_tick: u64, end_tick: u64) -> Vec<&DecisionTrace> {
-        self.decisions.iter().filter(|d| d.tick >= start_tick && d.tick < end_tick).collect()
+        self.decisions
+            .iter()
+            .filter(|d| d.tick >= start_tick && d.tick < end_tick)
+            .collect()
     }
 
     /// Get all events in a specific tick range.
     pub fn events_in_range(&self, start_tick: u64, end_tick: u64) -> Vec<&EventProvenance> {
-        self.events.iter().filter(|e| e.tick >= start_tick && e.tick < end_tick).collect()
+        self.events
+            .iter()
+            .filter(|e| e.tick >= start_tick && e.tick < end_tick)
+            .collect()
     }
 
     /// Get the last N decisions.
@@ -277,12 +283,18 @@ impl CausalProvenance {
 
     /// §19.5.B: Get belief update traces for a specific agent.
     pub fn belief_updates_for_agent(&self, agent: AgentId) -> Vec<&BeliefUpdateTrace> {
-        self.belief_updates.iter().filter(|b| b.agent == agent).collect()
+        self.belief_updates
+            .iter()
+            .filter(|b| b.agent == agent)
+            .collect()
     }
 
     /// §19.5.B: Get institutional traces for a specific institution.
     pub fn institutional_for(&self, name: &str) -> Vec<&InstitutionalTrace> {
-        self.institutional.iter().filter(|i| i.institution_name == name).collect()
+        self.institutional
+            .iter()
+            .filter(|i| i.institution_name == name)
+            .collect()
     }
 
     /// §19.5.B: Get the last N belief update traces.
@@ -319,14 +331,16 @@ impl CausalProvenance {
 
     /// §19.5.J: Get relationship traces for a specific agent (as source or target).
     pub fn relationships_for_agent(&self, agent: AgentId) -> Vec<&RelationshipTrace> {
-        self.relationships.iter()
+        self.relationships
+            .iter()
             .filter(|r| r.from == agent || r.to == agent)
             .collect()
     }
 
     /// §19.5.J: Get relationship traces between two specific agents.
     pub fn relationships_between(&self, from: AgentId, to: AgentId) -> Vec<&RelationshipTrace> {
-        self.relationships.iter()
+        self.relationships
+            .iter()
             .filter(|r| r.from == from && r.to == to)
             .collect()
     }
@@ -351,12 +365,18 @@ impl CausalProvenance {
 
     /// §16.1: Get system traces for a specific agent.
     pub fn system_traces_for_agent(&self, agent: AgentId) -> Vec<&SystemTrace> {
-        self.system_traces.iter().filter(|t| t.agent == agent).collect()
+        self.system_traces
+            .iter()
+            .filter(|t| t.agent == agent)
+            .collect()
     }
 
     /// §16.1: Get system traces for a specific category.
     pub fn system_traces_by_category(&self, category: ProvenanceCategory) -> Vec<&SystemTrace> {
-        self.system_traces.iter().filter(|t| t.category == category).collect()
+        self.system_traces
+            .iter()
+            .filter(|t| t.category == category)
+            .collect()
     }
 
     /// §16.1: Get the last N system traces.
@@ -392,8 +412,6 @@ impl CausalProvenance {
         }
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {

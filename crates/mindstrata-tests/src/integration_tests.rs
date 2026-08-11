@@ -4,9 +4,9 @@
 //! emergent phenomena that require cooperation across biology, psychology,
 //! social, and institutional layers.
 
-use mindstrata_core::fixed::Fixed;
-use mindstrata_sim::{Simulation, sim::SimConfig};
 use crate::test_helpers::run_sim;
+use mindstrata_core::fixed::Fixed;
+use mindstrata_sim::{sim::SimConfig, Simulation};
 
 // ── §31: Mortality / Generational Replacement ─────────────────────
 
@@ -41,26 +41,43 @@ fn elderly_agents_die_and_are_replaced_in_place() {
 
     // Agent count must be UNCHANGED — dead agents are replaced in place, never
     // removed (removal would shift indices and break the AgentId == index invariant).
-    assert_eq!(sim.agents.len(), start_count,
-        "Agent count changed after mass death: {} -> {}", start_count, sim.agents.len());
+    assert_eq!(
+        sim.agents.len(),
+        start_count,
+        "Agent count changed after mass death: {} -> {}",
+        start_count,
+        sim.agents.len()
+    );
 
     // Every slot must now hold a newborn (age ~0), not the forced old age.
     for (i, agent) in sim.agents.iter().enumerate() {
-        assert!(agent.age.to_f64() < 1.0,
-            "Agent {i} not replaced by newborn after death: age={}", agent.age.to_f64());
+        assert!(
+            agent.age.to_f64() < 1.0,
+            "Agent {i} not replaced by newborn after death: age={}",
+            agent.age.to_f64()
+        );
         // Index invariant must hold for every agent.
-        assert!(sim.agents[i].relationship_v2s.len() <= sim.agents.len().saturating_sub(1),
+        assert!(
+            sim.agents[i].relationship_v2s.len() <= sim.agents.len().saturating_sub(1),
             "Agent {i} relationship_v2s inconsistent: {} entries for {} agents",
-            sim.agents[i].relationship_v2s.len(), sim.agents.len());
+            sim.agents[i].relationship_v2s.len(),
+            sim.agents.len()
+        );
     }
 
     // No agent may reference a stale partner/parent that is now a newborn stranger.
     for agent in &sim.agents {
-        assert!(agent.partner.is_none(),
-            "Replacement newborn must not inherit a partner, got {:?}", agent.partner);
-        assert!(agent.parent_a.is_none() && agent.parent_b.is_none(),
+        assert!(
+            agent.partner.is_none(),
+            "Replacement newborn must not inherit a partner, got {:?}",
+            agent.partner
+        );
+        assert!(
+            agent.parent_a.is_none() && agent.parent_b.is_none(),
             "Replacement newborn must not inherit parents, got {:?}/{:?}",
-            agent.parent_a, agent.parent_b);
+            agent.parent_a,
+            agent.parent_b
+        );
     }
 
     // Death events must have been recorded.
@@ -76,8 +93,10 @@ fn marriage_creates_partnerships() {
     let sim = run_sim(42, 2000);
     let married = sim.agents.iter().filter(|a| a.partner.is_some()).count();
     // After 2000 ticks with attraction model, some agents should pair up
-    assert!(married >= 2,
-        "At least 2 agents should be partnered after 2000 ticks, got {married}");
+    assert!(
+        married >= 2,
+        "At least 2 agents should be partnered after 2000 ticks, got {married}"
+    );
 }
 
 #[test]
@@ -87,8 +106,12 @@ fn children_inherit_genetic_traits() {
     // per 3000 ticks no births would occur. This test verifies *inheritance*,
     // not demography cadence, so elevate the rate to produce children.
     let config = SimConfig {
-        seed: 42, max_ticks: 3000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 42,
+        max_ticks: 3000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     };
     let mut sim = Simulation::new(config);
     sim.populate();
@@ -101,24 +124,41 @@ fn children_inherit_genetic_traits() {
     sim.demography_config.birth_rate = mindstrata_core::fixed::Fixed::from_f64(60.0);
     sim.run(3000);
     let children: Vec<_> = sim.agents.iter().filter(|a| a.parent_a.is_some()).collect();
-    assert!(!children.is_empty(), "Some children should be born after 3000 ticks (elevated birth rate)");
+    assert!(
+        !children.is_empty(),
+        "Some children should be born after 3000 ticks (elevated birth rate)"
+    );
 
     for child in &children {
         let parent_a = &sim.agents[child.parent_a.unwrap()];
         // Child genome should be derived from parents - verify child stress_reactivity
         // is within mutation range of parent (parent ± 0.3 is a typical mutation bound)
-        let child_trait = child.embodied.genome.trait_predispositions.stress_reactivity.to_f64();
-        let parent_trait = parent_a.embodied.genome.trait_predispositions.stress_reactivity.to_f64();
+        let child_trait = child
+            .embodied
+            .genome
+            .trait_predispositions
+            .stress_reactivity
+            .to_f64();
+        let parent_trait = parent_a
+            .embodied
+            .genome
+            .trait_predispositions
+            .stress_reactivity
+            .to_f64();
         // Child trait should be within [0,1] (valid Fixed range) and
         // differ from parent (mutation occurred) - genome is recombined from both parents
-        assert!((0.0..=1.0).contains(&child_trait),
-            "Child stress_reactivity={child_trait} should be in [0,1]");
+        assert!(
+            (0.0..=1.0).contains(&child_trait),
+            "Child stress_reactivity={child_trait} should be in [0,1]"
+        );
         // Verify the child has a distinct genome from the parent (mutation happened)
         assert!(child_trait != parent_trait,
             "Child stress_reactivity={child_trait} should differ from parent {parent_trait} (mutation)");
         // Child age must be less than parent age
-        assert!(child.age.to_f64() < parent_a.age.to_f64(),
-            "Child age should be less than parent age");
+        assert!(
+            child.age.to_f64() < parent_a.age.to_f64(),
+            "Child age should be less than parent age"
+        );
     }
 }
 
@@ -129,10 +169,18 @@ fn chronic_stress_accumulates_derived_states() {
     // §18.3: chronic stress increases aggression or depression risk
     let sim = run_sim(42, 2000);
     // After 2000 ticks, some agents should have accumulated trauma or depression risk
-    let has_trauma = sim.agents.iter().any(|a| a.derived.trauma_risk > Fixed::from_f64(0.01));
-    let has_depression = sim.agents.iter().any(|a| a.derived.depression_risk > Fixed::from_f64(0.01));
-    assert!(has_trauma || has_depression,
-        "After 2000 ticks, at least some agents should have accumulated trauma or depression risk");
+    let has_trauma = sim
+        .agents
+        .iter()
+        .any(|a| a.derived.trauma_risk > Fixed::from_f64(0.01));
+    let has_depression = sim
+        .agents
+        .iter()
+        .any(|a| a.derived.depression_risk > Fixed::from_f64(0.01));
+    assert!(
+        has_trauma || has_depression,
+        "After 2000 ticks, at least some agents should have accumulated trauma or depression risk"
+    );
 }
 
 #[test]
@@ -140,24 +188,38 @@ fn attachment_affects_emotional_response() {
     // §18.3: attachment style affects distress response
     let sim = run_sim(42, 500);
     // Agents with anxious attachment should have different fear levels than secure
-    let anxious_agents: Vec<_> = sim.agents.iter()
+    let anxious_agents: Vec<_> = sim
+        .agents
+        .iter()
         .filter(|a| a.attachment.anxiety > Fixed::from_f64(0.6))
         .collect();
-    let secure_agents: Vec<_> = sim.agents.iter()
+    let secure_agents: Vec<_> = sim
+        .agents
+        .iter()
         .filter(|a| a.attachment.anxiety < Fixed::from_f64(0.3))
         .collect();
 
     if !anxious_agents.is_empty() && !secure_agents.is_empty() {
-        let avg_anxious_fear: f64 = anxious_agents.iter()
-            .map(|a| a.emotions.fear.to_f64()).sum::<f64>() / anxious_agents.len() as f64;
-        let avg_secure_fear: f64 = secure_agents.iter()
-            .map(|a| a.emotions.fear.to_f64()).sum::<f64>() / secure_agents.len() as f64;
+        let avg_anxious_fear: f64 = anxious_agents
+            .iter()
+            .map(|a| a.emotions.fear.to_f64())
+            .sum::<f64>()
+            / anxious_agents.len() as f64;
+        let avg_secure_fear: f64 = secure_agents
+            .iter()
+            .map(|a| a.emotions.fear.to_f64())
+            .sum::<f64>()
+            / secure_agents.len() as f64;
         // Anxious agents should tend toward higher fear (not guaranteed per-agent, but statistically)
         // This is a weak assertion - just verify both groups exist and have plausible fear
-        assert!((0.0..=1.0).contains(&avg_anxious_fear),
-            "Anxious agents should have plausible fear: {avg_anxious_fear}");
-        assert!((0.0..=1.0).contains(&avg_secure_fear),
-            "Secure agents should have plausible fear: {avg_secure_fear}");
+        assert!(
+            (0.0..=1.0).contains(&avg_anxious_fear),
+            "Anxious agents should have plausible fear: {avg_anxious_fear}"
+        );
+        assert!(
+            (0.0..=1.0).contains(&avg_secure_fear),
+            "Secure agents should have plausible fear: {avg_secure_fear}"
+        );
     }
 }
 
@@ -171,17 +233,24 @@ fn stress_reduces_planning_depth() {
     let sim = run_sim(42, 2000);
 
     // Partition agents into high-stress and low-stress groups
-    let _high_stress: Vec<_> = sim.agents.iter()
+    let _high_stress: Vec<_> = sim
+        .agents
+        .iter()
         .filter(|a| (a.emotions.fear + a.emotions.anger) > Fixed::from_f64(0.4))
         .collect();
-    let _low_stress: Vec<_> = sim.agents.iter()
+    let _low_stress: Vec<_> = sim
+        .agents
+        .iter()
         .filter(|a| (a.emotions.fear + a.emotions.anger) < Fixed::from_f64(0.15))
         .collect();
 
     // All agents should have non-degraded planning_depth within valid range
     for agent in &sim.agents {
-        assert!(agent.cognitive_runtime.planning_depth >= Fixed::ZERO,
-            "Agent {} has negative planning_depth", agent.name);
+        assert!(
+            agent.cognitive_runtime.planning_depth >= Fixed::ZERO,
+            "Agent {} has negative planning_depth",
+            agent.name
+        );
     }
 
     // Verify stress degrades planning: every agent with stress > 0.5 should
@@ -201,8 +270,6 @@ fn stress_reduces_planning_depth() {
         }
     }
 }
-
-
 
 // ── §10.4 (Iteration 76): Courtship Ladder + Reciprocity Wiring ──────
 
@@ -226,8 +293,10 @@ fn stress_reduces_planning_depth() {
 #[test]
 fn courtship_ladder_advances_in_live_run() {
     let sim = run_sim(45, 10_000);
-    assert!(!sim.active_courtships.is_empty(),
-        "seed 45 forms courtships by 10k ticks");
+    assert!(
+        !sim.active_courtships.is_empty(),
+        "seed 45 forms courtships by 10k ticks"
+    );
     let mut max_stage: Option<mindstrata_sim::social::marriage::RomanticStage> = None;
     for c in &sim.active_courtships {
         if max_stage.is_none_or(|m| c.stage > m) {
@@ -238,11 +307,15 @@ fn courtship_ladder_advances_in_live_run() {
     // (probe-pinned post-Iteration-96; anything >= Flirtation is real
     // progress).
     let max = max_stage.expect("at least one courtship");
-    assert!(max >= mindstrata_sim::social::marriage::RomanticStage::Flirtation,
-        "courtship ladder should climb past Awareness, got {max:?}");
+    assert!(
+        max >= mindstrata_sim::social::marriage::RomanticStage::Flirtation,
+        "courtship ladder should climb past Awareness, got {max:?}"
+    );
     // The ladder concludes at Betrothal — never display post-marriage stages.
-    assert!(max <= mindstrata_sim::social::marriage::RomanticStage::Betrothal,
-        "courtship stage must not exceed Betrothal, got {max:?}");
+    assert!(
+        max <= mindstrata_sim::social::marriage::RomanticStage::Betrothal,
+        "courtship stage must not exceed Betrothal, got {max:?}"
+    );
 }
 
 /// §10.4 (Iteration 101): the attraction floor binds in a live run — a
@@ -259,17 +332,23 @@ fn courtship_ladder_advances_in_live_run() {
 /// ~0.477), so the pin is the suppressed differential, not a freeze.
 #[test]
 fn attraction_floor_stalls_courtship_in_suppressed_attraction_village() {
-    use mindstrata_sim::social::marriage::RomanticStage;
     use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::social::marriage::RomanticStage;
 
     let config = SimConfig {
-        seed: 45, max_ticks: 10_000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 45,
+        max_ticks: 10_000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     };
     // Control leg: the DEFAULT village's courtships climb past the first
     // rungs with a healthy attraction ceiling — the differential baseline.
     let control = run_sim(45, 10_000);
-    let control_max_total = control.agents.iter()
+    let control_max_total = control
+        .agents
+        .iter()
         .map(|a| a.attraction.total_attraction().to_f64())
         .fold(0.0f64, f64::max);
     let mut control_max_stage: Option<RomanticStage> = None;
@@ -305,8 +384,10 @@ fn attraction_floor_stalls_courtship_in_suppressed_attraction_village() {
 
     // Trust-gated courtships still form (eligibility uses avg_trust, not
     // attraction) — but the ladder stalls below the control's ceiling.
-    assert!(!sim.active_courtships.is_empty(),
-        "suppressed-attraction village should still form trust-gated courtships");
+    assert!(
+        !sim.active_courtships.is_empty(),
+        "suppressed-attraction village should still form trust-gated courtships"
+    );
     let mut max_stage: Option<RomanticStage> = None;
     for c in &sim.active_courtships {
         if max_stage.is_none_or(|m| c.stage > m) {
@@ -314,7 +395,10 @@ fn attraction_floor_stalls_courtship_in_suppressed_attraction_village() {
         }
     }
     let max = max_stage.expect("at least one courtship");
-    let max_total = sim.agents.iter().map(|a| a.attraction.total_attraction().to_f64())
+    let max_total = sim
+        .agents
+        .iter()
+        .map(|a| a.attraction.total_attraction().to_f64())
         .fold(0.0f64, f64::max);
     // The differential, measured in the same test: the suppressed village
     // must climb strictly less far AND carry a strictly lower attraction
@@ -324,10 +408,14 @@ fn attraction_floor_stalls_courtship_in_suppressed_attraction_village() {
     let ceiling_msg = format!("suppressed village attraction ceiling must stay below the control's ({max_total:.3} vs control {control_max_total:.3})");
     assert!(max < control_max, "{stall_msg}");
     assert!(max_total < control_max_total, "{ceiling_msg}");
-    assert!(max_total < 0.35,
-        "suppressed ceiling sanity bound, got {max_total:.3}");
-    assert!(control_max >= RomanticStage::Flirtation,
-        "control must actually climb (got {control_max:?}) for the differential to bind");
+    assert!(
+        max_total < 0.35,
+        "suppressed ceiling sanity bound, got {max_total:.3}"
+    );
+    assert!(
+        control_max >= RomanticStage::Flirtation,
+        "control must actually climb (got {control_max:?}) for the differential to bind"
+    );
 }
 
 /// §10.4 (Iteration 76): Courting pairs that actually interact drive the
@@ -344,7 +432,10 @@ fn courtship_interactions_drive_reciprocity_and_d4_gate() {
             any_pos = true;
         }
     }
-    assert!(any_pos, "seed 44 courting pairs record positive interactions");
+    assert!(
+        any_pos,
+        "seed 44 courting pairs record positive interactions"
+    );
     let mut any_recip = false;
     let mut max_total = 0.0f64;
     for a in &sim.agents {
@@ -357,8 +448,10 @@ fn courtship_interactions_drive_reciprocity_and_d4_gate() {
         }
     }
     assert!(any_recip, "reciprocity must mirror into AttractionModel");
-    assert!(max_total > 0.4,
-        "reciprocity should push total_attraction past the 0.4 D4 gate, got {max_total:.3}");
+    assert!(
+        max_total > 0.4,
+        "reciprocity should push total_attraction past the 0.4 D4 gate, got {max_total:.3}"
+    );
 }
 
 /// §10.4 (Iteration 77): AttractionModel.status_attraction is live — the
@@ -387,8 +480,10 @@ fn status_attraction_live_and_d4_reachable() {
         // already-clamped composite) — a future relative/scaled re-derivation
         // must consciously update both the wiring and this assertion.
         let eff = a.status_v2.effective_status();
-        assert_eq!(a.attraction.status_attraction, eff,
-            "status_attraction must mirror effective_status");
+        assert_eq!(
+            a.attraction.status_attraction, eff,
+            "status_attraction must mirror effective_status"
+        );
         let t = a.attraction.total_attraction().to_f64();
         if t > max_total {
             max_total = t;
@@ -397,8 +492,10 @@ fn status_attraction_live_and_d4_reachable() {
     // Probe-pinned post-Iteration-94: max total_attraction 0.511 on seed 44
     // at t=2,000 — the D4 gate is crossed in a default run, without
     // reciprocity.
-    assert!(max_total > 0.4,
-        "status_attraction should push total_attraction past the 0.4 D4 gate, got {max_total:.3}");
+    assert!(
+        max_total > 0.4,
+        "status_attraction should push total_attraction past the 0.4 D4 gate, got {max_total:.3}"
+    );
 }
 
 /// §10.4 (Iteration 77): the status mirror is seed-deterministic — same seed
@@ -408,8 +505,14 @@ fn status_attraction_is_seed_deterministic() {
     let a = run_sim(42, 2000);
     let b = run_sim(42, 2000);
     for (x, y) in a.agents.iter().zip(b.agents.iter()) {
-        assert_eq!(x.attraction.status_attraction, y.attraction.status_attraction);
-        assert_eq!(x.attraction.total_attraction(), y.attraction.total_attraction());
+        assert_eq!(
+            x.attraction.status_attraction,
+            y.attraction.status_attraction
+        );
+        assert_eq!(
+            x.attraction.total_attraction(),
+            y.attraction.total_attraction()
+        );
     }
 }
 
@@ -423,7 +526,8 @@ fn courtship_emerges_from_repeated_positive_interaction() {
     let sim = run_sim(42, 2000);
 
     // Check that some relationship_v2 pairs have progressed beyond Unnoticed
-    let mut max_stage_reached = mindstrata_sim::social::relationship_v2::RelationshipStage::Unnoticed;
+    let mut max_stage_reached =
+        mindstrata_sim::social::relationship_v2::RelationshipStage::Unnoticed;
     let mut progressed_count = 0;
 
     for agent in &sim.agents {
@@ -431,15 +535,18 @@ fn courtship_emerges_from_repeated_positive_interaction() {
             if rv2.stage > max_stage_reached {
                 max_stage_reached = rv2.stage;
             }
-            if rv2.stage >= mindstrata_sim::social::relationship_v2::RelationshipStage::Acquaintance {
+            if rv2.stage >= mindstrata_sim::social::relationship_v2::RelationshipStage::Acquaintance
+            {
                 progressed_count += 1;
             }
         }
     }
 
     // After 2000 ticks, relationships should progress beyond Unnoticed
-    assert!(progressed_count > 0,
-        "At least some relationships should have progressed to Acquaintance or beyond");
+    assert!(
+        progressed_count > 0,
+        "At least some relationships should have progressed to Acquaintance or beyond"
+    );
 
     // Max stage should be at least Acquaintance (stage 2) after 2000 ticks
     let stage_value = max_stage_reached as u32;
@@ -457,21 +564,26 @@ fn meme_mutation_over_generations() {
     let sim = run_sim(42, 2000);
 
     // At least some agents should have cultural knowledge (transmission occurred)
-    let agents_with_knowledge = sim.agents.iter()
+    let agents_with_knowledge = sim
+        .agents
+        .iter()
         .filter(|a| !a.cultural.knowledge.is_empty())
         .count();
-    assert!(agents_with_knowledge > 0,
-        "After 2000 ticks, at least some agents should have cultural knowledge");
+    assert!(
+        agents_with_knowledge > 0,
+        "After 2000 ticks, at least some agents should have cultural knowledge"
+    );
 
     // Verify cultural knowledge spreads to more than one agent (diffusion)
-    assert!(agents_with_knowledge >= 2,
-        "Cultural knowledge should spread to at least 2 agents, got {agents_with_knowledge}");
+    assert!(
+        agents_with_knowledge >= 2,
+        "Cultural knowledge should spread to at least 2 agents, got {agents_with_knowledge}"
+    );
 
     // Verify that the initial seeded knowledge was distributed beyond just
     // the initial agent population - socialization spread knowledge to children
-    let total_knowledge_entries: usize = sim.agents.iter()
-        .map(|a| a.cultural.knowledge.len())
-        .sum();
+    let total_knowledge_entries: usize =
+        sim.agents.iter().map(|a| a.cultural.knowledge.len()).sum();
     assert!(total_knowledge_entries > sim.agents.len() * 2,
         "Total knowledge entries ({total_knowledge_entries}) should exceed 2× agent count, indicating diffusion");
 }
@@ -485,8 +597,10 @@ fn rumor_spreads_through_network() {
     // Gossip events should have occurred
     // Check that social events were produced (interactions occur)
     let event_count = sim.event_count();
-    assert!(event_count > 50,
-        "After 1000 ticks, at least 50 events should have occurred, got {event_count}");
+    assert!(
+        event_count > 50,
+        "After 1000 ticks, at least 50 events should have occurred, got {event_count}"
+    );
 }
 
 #[test]
@@ -494,13 +608,19 @@ fn belief_confidence_shifts_over_time() {
     // §18.3: trusted institution propaganda shifts belief
     let sim = run_sim(42, 1500);
     // At least some agents should have non-default belief confidence
-    let non_default = sim.agents.iter()
-        .filter(|a| a.beliefs.iter().any(|b| {
-            (b.confidence.to_f64() - 0.5).abs() > 0.1
-        }))
+    let non_default = sim
+        .agents
+        .iter()
+        .filter(|a| {
+            a.beliefs
+                .iter()
+                .any(|b| (b.confidence.to_f64() - 0.5).abs() > 0.1)
+        })
         .count();
-    assert!(non_default > 0,
-        "After 1500 ticks, at least some agents should have non-default belief confidence");
+    assert!(
+        non_default > 0,
+        "After 1500 ticks, at least some agents should have non-default belief confidence"
+    );
 }
 
 // ── §18.3: Ritual and Cohesion ───────────────────────────────────
@@ -511,8 +631,11 @@ fn ritual_participation_builds_legitimacy() {
     let sim = run_sim(42, 1000);
     // Institutions should have non-zero cohesion after rituals
     for inst in &sim.institutions {
-        assert!(inst.collective.unity >= Fixed::ZERO,
-            "Institution {} should have non-negative unity", inst.name);
+        assert!(
+            inst.collective.unity >= Fixed::ZERO,
+            "Institution {} should have non-negative unity",
+            inst.name
+        );
     }
 }
 
@@ -535,16 +658,22 @@ fn factions_emerge_from_grievance() {
     // (seeds 99/123 still form factions by 10K). The horizon reflects the
     // emergent ritual-delay, not a dead trigger.
     let sim = run_sim(42, 30000);
-    let factions: Vec<_> = sim.institutions.iter()
+    let factions: Vec<_> = sim
+        .institutions
+        .iter()
         .filter(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Faction)
         .collect();
-    assert!(!factions.is_empty(),
-        "faction should form under shared grievance (seed 42, 10K ticks)");
+    assert!(
+        !factions.is_empty(),
+        "faction should form under shared grievance (seed 42, 10K ticks)"
+    );
     let faction = &factions[0];
-    assert!(faction.members.len() >= 2,
-        "Faction should have at least 2 members, got {}", faction.members.len());
+    assert!(
+        faction.members.len() >= 2,
+        "Faction should have at least 2 members, got {}",
+        faction.members.len()
+    );
 }
-
 
 /// §29.2 (AP2): FactionV2 combat-capability surface is consumed — the v1
 /// protest-suppression decision now feeds the protesting faction's v2 full
@@ -562,67 +691,94 @@ fn factions_emerge_from_grievance() {
 /// harder; resistance never drops below the raw armed core).
 #[test]
 fn faction_v2_fighting_strength_links_to_protests() {
-    use mindstrata_sim::institutions::InstitutionKind;
     use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::institutions::InstitutionKind;
     use mindstrata_sim::social::faction_v2::FactionV2;
 
     // Same horizon as factions_emerge_from_grievance: seed 42 forms its first
     // faction between 20-30K ticks.
     let sim = run_sim(42, 30000);
 
-    let v1_factions: Vec<_> = sim.institutions.iter()
+    let v1_factions: Vec<_> = sim
+        .institutions
+        .iter()
         .filter(|i| i.kind == InstitutionKind::Faction)
         .collect();
-    let v2_active: Vec<_> = sim.faction_v2_registry.factions.iter()
+    let v2_active: Vec<_> = sim
+        .faction_v2_registry
+        .factions
+        .iter()
         .filter(|f| f.active)
         .collect();
 
     // Every formed v1 faction must have a live v2 record (1:1 registration),
     // and vice versa — the suppression consumer matches by leader.
-    assert!(!v1_factions.is_empty(), "v1 factions should form under grievance");
+    assert!(
+        !v1_factions.is_empty(),
+        "v1 factions should form under grievance"
+    );
     assert_eq!(
-        v1_factions.len(), v2_active.len(),
+        v1_factions.len(),
+        v2_active.len(),
         "each v1 faction should have a matching active v2 record"
     );
 
     for v2 in &v2_active {
         // §29.2 linkage: the v2 leader must resolve to a v1 "Leader" role holder.
-        let leader_match = v1_factions.iter()
+        let leader_match = v1_factions
+            .iter()
             .filter_map(|i| i.get_role_holder("Leader"))
             .any(|id| id.as_u64() as usize == v2.leader);
-        assert!(leader_match, "v2 leader {} must match a v1 faction leader", v2.leader);
+        assert!(
+            leader_match,
+            "v2 leader {} must match a v1 faction leader",
+            v2.leader
+        );
 
         // The combat surface is live and bounded.
         let strength = v2.fighting_strength();
         let threat = v2.threat_level();
         let resistance = v2.suppression_resistance();
-        assert!(strength >= Fixed::ZERO && strength <= Fixed::ONE,
-            "fighting strength in [0,1], got {}", strength.to_f64());
-        assert!(threat >= Fixed::ZERO && threat <= Fixed::ONE,
-            "threat level in [0,1], got {}", threat.to_f64());
-        assert!(resistance >= Fixed::ZERO && resistance <= Fixed::ONE,
-            "suppression resistance in [0,1], got {}", resistance.to_f64());
+        assert!(
+            strength >= Fixed::ZERO && strength <= Fixed::ONE,
+            "fighting strength in [0,1], got {}",
+            strength.to_f64()
+        );
+        assert!(
+            threat >= Fixed::ZERO && threat <= Fixed::ONE,
+            "threat level in [0,1], got {}",
+            threat.to_f64()
+        );
+        assert!(
+            resistance >= Fixed::ZERO && resistance <= Fixed::ONE,
+            "suppression resistance in [0,1], got {}",
+            resistance.to_f64()
+        );
         // §29.2 (Iteration 100): the full-threat consumer never weakens the
         // armed-faction mandate — resistance is at least raw fighting strength.
-        assert!(resistance >= strength,
-            "suppression resistance must never fall below the armed core");
-        assert!(strength > Fixed::ZERO || v2.morale <= Fixed::ZERO,
-            "formed faction should have measurable fighting strength");
+        assert!(
+            resistance >= strength,
+            "suppression resistance must never fall below the armed core"
+        );
+        assert!(
+            strength > Fixed::ZERO || v2.morale <= Fixed::ZERO,
+            "formed faction should have measurable fighting strength"
+        );
     }
 
     // The suppression decision is armed-aware: at any given enforcement level,
     // a stronger faction is never suppressed while a weaker one is not. Verify
     // through the public API used by the consumer (council_response with the
     // faction's live resistance).
-    let (suppressed_unarmed, _) = mindstrata_sim::factions::council_response(
-        Fixed::from_f64(0.5), 3, 12, Fixed::ZERO,
-    );
-    let (suppressed_armed, _) = mindstrata_sim::factions::council_response(
-        Fixed::from_f64(0.5), 3, 12, Fixed::ONE,
-    );
+    let (suppressed_unarmed, _) =
+        mindstrata_sim::factions::council_response(Fixed::from_f64(0.5), 3, 12, Fixed::ZERO);
+    let (suppressed_armed, _) =
+        mindstrata_sim::factions::council_response(Fixed::from_f64(0.5), 3, 12, Fixed::ONE);
     assert!(suppressed_unarmed);
-    assert!(!suppressed_armed,
-        "an armed faction (fighting strength 1.0) must resist suppression");
+    assert!(
+        !suppressed_armed,
+        "an armed faction (fighting strength 1.0) must resist suppression"
+    );
 
     // §29.2 (Iteration 100) behavioral deltas — the two fields that had zero
     // consumers now drive the suppression outcome:
@@ -638,9 +794,12 @@ fn faction_v2_fighting_strength_links_to_protests() {
     let radical = base(0.9);
     let r_moderate = moderate.suppression_resistance();
     let r_radical = radical.suppression_resistance();
-    assert!(r_radical > r_moderate,
+    assert!(
+        r_radical > r_moderate,
         "radicalized faction must resist harder ({} vs {})",
-        r_radical.to_f64(), r_moderate.to_f64());
+        r_radical.to_f64(),
+        r_moderate.to_f64()
+    );
 
     // Borderline: there must exist an enforcement level that suppresses the
     // moderate faction's protest yet fails against the radicalized one (same
@@ -649,19 +808,19 @@ fn faction_v2_fighting_strength_links_to_protests() {
     let mut flip_found = false;
     for tenth in 30..=60 {
         let enforcement = Fixed::from_int(tenth) / Fixed::from_int(100);
-        let (suppressed_moderate, _) = mindstrata_sim::factions::council_response(
-            enforcement, 3, 12, r_moderate,
-        );
-        let (suppressed_radical, _) = mindstrata_sim::factions::council_response(
-            enforcement, 3, 12, r_radical,
-        );
+        let (suppressed_moderate, _) =
+            mindstrata_sim::factions::council_response(enforcement, 3, 12, r_moderate);
+        let (suppressed_radical, _) =
+            mindstrata_sim::factions::council_response(enforcement, 3, 12, r_radical);
         if suppressed_moderate && !suppressed_radical {
             flip_found = true;
             break;
         }
     }
-    assert!(flip_found,
-        "an enforcement level must suppress the moderate protest but not the radicalized one");
+    assert!(
+        flip_found,
+        "an enforcement level must suppress the moderate protest but not the radicalized one"
+    );
 }
 
 /// §29.2: Faction membership must be exclusive — an agent in one faction
@@ -671,7 +830,9 @@ fn faction_v2_fighting_strength_links_to_protests() {
 fn faction_memberships_are_exclusive() {
     for seed in [1u64, 7, 42, 99, 123] {
         let sim = run_sim(seed, 20000);
-        let factions: Vec<_> = sim.institutions.iter()
+        let factions: Vec<_> = sim
+            .institutions
+            .iter()
             .filter(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Faction)
             .collect();
         let mut members: Vec<usize> = Vec::new();
@@ -680,9 +841,11 @@ fn faction_memberships_are_exclusive() {
         }
         let unique: std::collections::HashSet<usize> = members.iter().copied().collect();
         assert_eq!(
-            members.len(), unique.len(),
+            members.len(),
+            unique.len(),
             "seed {seed}: faction memberships overlap ({} members, {} unique)",
-            members.len(), unique.len()
+            members.len(),
+            unique.len()
         );
     }
 }
@@ -694,7 +857,9 @@ fn faction_memberships_are_exclusive() {
 fn council_legitimacy_responds_to_grievance() {
     use mindstrata_sim::institutions::InstitutionKind;
     let sim = run_sim(42, 20000);
-    let council = sim.institutions.iter()
+    let council = sim
+        .institutions
+        .iter()
         .find(|i| i.kind == InstitutionKind::Council)
         .expect("council institution should exist");
     let leg = council.legitimacy.to_f64();
@@ -722,20 +887,27 @@ fn biology_psychology_social_coherence() {
     for agent in &sim.agents {
         // Biological-psychological link: high hunger → non-zero stress contribution
         let hunger_stress_contribution = agent.needs.hunger.to_f64() * 0.3;
-        assert!(hunger_stress_contribution >= 0.0,
-            "Hunger stress contribution should be non-negative");
+        assert!(
+            hunger_stress_contribution >= 0.0,
+            "Hunger stress contribution should be non-negative"
+        );
 
         // Social-psychological link: relationship count should correlate with lower social need
         let rel_count = agent.relationship_v2s.len() as f64;
-        assert!(rel_count >= 0.0, "Relationship count should be non-negative");
+        assert!(
+            rel_count >= 0.0,
+            "Relationship count should be non-negative"
+        );
 
         // Cognitive-behavioral link: stress affects heuristic bias
         let stress = (agent.emotions.fear + agent.emotions.anger).to_f64();
         let bias = agent.cognitive.heuristic_bias.to_f64();
         // High stress should push heuristic bias upward (loose check)
         if stress > 0.5 {
-            assert!(bias > 0.15,
-                "Agent with stress={stress} should have heuristic bias > 0.15, got {bias}");
+            assert!(
+                bias > 0.15,
+                "Agent with stress={stress} should have heuristic bias > 0.15, got {bias}"
+            );
         }
     }
 }
@@ -747,12 +919,18 @@ fn institutions_derive_collective_psychology() {
     for inst in &sim.institutions {
         // Collective morale should be bounded [0, 1]
         let morale = inst.collective.morale.to_f64();
-        assert!((0.0..=1.0).contains(&morale),
-            "Institution {} morale={morale} out of [0,1]", inst.name);
+        assert!(
+            (0.0..=1.0).contains(&morale),
+            "Institution {} morale={morale} out of [0,1]",
+            inst.name
+        );
         // Collective unity should be bounded [0, 1]
         let unity = inst.collective.unity.to_f64();
-        assert!((0.0..=1.0).contains(&unity),
-            "Institution {} unity={unity} out of [0,1]", inst.name);
+        assert!(
+            (0.0..=1.0).contains(&unity),
+            "Institution {} unity={unity} out of [0,1]",
+            inst.name
+        );
     }
 }
 
@@ -769,27 +947,38 @@ fn childhood_trauma_increases_attachment_insecurity() {
 
     // Partition agents by childhood trauma history (encoded in attachment.security)
     // Lower security = higher trauma/vulnerability from early development
-    let insecure_agents: Vec<_> = sim.agents.iter()
+    let insecure_agents: Vec<_> = sim
+        .agents
+        .iter()
         .filter(|a| a.attachment.security < Fixed::from_f64(0.35))
         .collect();
-    let secure_agents: Vec<_> = sim.agents.iter()
+    let secure_agents: Vec<_> = sim
+        .agents
+        .iter()
         .filter(|a| a.attachment.security > Fixed::from_f64(0.6))
         .collect();
 
     // Require minimum partition size for meaningful statistical comparison
     if insecure_agents.len() >= 3 && secure_agents.len() >= 3 {
         // Insecure agents should have higher anxiety on average
-        let avg_insecure_anxiety: f64 = insecure_agents.iter()
-            .map(|a| a.attachment.anxiety.to_f64()).sum::<f64>()
+        let avg_insecure_anxiety: f64 = insecure_agents
+            .iter()
+            .map(|a| a.attachment.anxiety.to_f64())
+            .sum::<f64>()
             / insecure_agents.len() as f64;
-        let avg_secure_anxiety: f64 = secure_agents.iter()
-            .map(|a| a.attachment.anxiety.to_f64()).sum::<f64>()
+        let avg_secure_anxiety: f64 = secure_agents
+            .iter()
+            .map(|a| a.attachment.anxiety.to_f64())
+            .sum::<f64>()
             / secure_agents.len() as f64;
         assert!(avg_insecure_anxiety > avg_secure_anxiety,
             "Insecure agents should have higher anxiety ({avg_insecure_anxiety}) than secure ({avg_secure_anxiety})");
     }
     // Even with statistical variance, simulation should be stable
-    assert!(sim.agents.len() >= 10, "All agents should survive 2000 ticks");
+    assert!(
+        sim.agents.len() >= 10,
+        "All agents should survive 2000 ticks"
+    );
 }
 
 // ── §18.3: Courtship → Marriage Chain ────────────────────────────
@@ -803,10 +992,13 @@ fn courtship_to_marriage_chain() {
 
     // After 3000 ticks, some agents should have progressed through
     // the relationship stages: Unnoticed → Acquaintance → Familiar → Partner
-    let progressed = sim.agents.iter()
+    let progressed = sim
+        .agents
+        .iter()
         .flat_map(|a| &a.relationship_v2s)
         .filter(|rv2| {
-            rv2.stage as u32 >= mindstrata_sim::social::relationship_v2::RelationshipStage::Familiar as u32
+            rv2.stage as u32
+                >= mindstrata_sim::social::relationship_v2::RelationshipStage::Familiar as u32
         })
         .count();
     assert!(progressed > 0,
@@ -814,16 +1006,22 @@ fn courtship_to_marriage_chain() {
 
     // Some agents should be partnered (marriage formed from courtship)
     let partnered = sim.agents.iter().filter(|a| a.partner.is_some()).count();
-    assert!(partnered >= 2,
-        "At least 2 agents should be partnered after 3000 ticks, got {partnered}");
+    assert!(
+        partnered >= 2,
+        "At least 2 agents should be partnered after 3000 ticks, got {partnered}"
+    );
 
     // Partnership should be symmetric: if A partners B, then B partners A
     for (i, agent) in sim.agents.iter().enumerate() {
         if let Some(partner_idx) = agent.partner {
             let partner = &sim.agents[partner_idx];
-            assert!(partner.partner == Some(i),
+            assert!(
+                partner.partner == Some(i),
                 "Agent {} partners {}, but {} does not partner back",
-                agent.name, partner.name, partner.name);
+                agent.name,
+                partner.name,
+                partner.name
+            );
         }
     }
 
@@ -831,10 +1029,13 @@ fn courtship_to_marriage_chain() {
     // courtship may contain a married pair (the record ends at Betrothal).
     for (i, agent) in sim.agents.iter().enumerate() {
         if let Some(partner_idx) = agent.partner {
-            assert!(!sim.active_courtships.iter().any(|c| {
-                (c.pursuer == i && c.pursued == partner_idx)
-                    || (c.pursuer == partner_idx && c.pursued == i)
-            }), "married pair ({i}, {partner_idx}) still has an active courtship");
+            assert!(
+                !sim.active_courtships.iter().any(|c| {
+                    (c.pursuer == i && c.pursued == partner_idx)
+                        || (c.pursuer == partner_idx && c.pursued == i)
+                }),
+                "married pair ({i}, {partner_idx}) still has an active courtship"
+            );
         }
     }
 }
@@ -905,8 +1106,14 @@ fn friendships_correlate_with_proximity_across_seeds() {
     if close_total < 10 || far_total < 10 {
         eprintln!("proximity test: guards failed (close={close_total}, far={far_total}) - correlation may need more ticks");
     }
-    assert!(close_total >= 10, "Insufficient close-proximity pairs: {close_total}");
-    assert!(far_total >= 10, "Insufficient far-proximity pairs: {far_total}");
+    assert!(
+        close_total >= 10,
+        "Insufficient close-proximity pairs: {close_total}"
+    );
+    assert!(
+        far_total >= 10,
+        "Insufficient far-proximity pairs: {far_total}"
+    );
 
     // Note: pair counts are directed (both i->j and j->i), not unique pairs.
     // Rates are still correct since both directions are counted symmetrically.
@@ -917,8 +1124,10 @@ fn friendships_correlate_with_proximity_across_seeds() {
     // their pairs into perception range) reroutes pair positions, inverting
     // the tiny gap — probe-pinned 0.476 vs 0.491 (0.015). The band guards
     // GROSS proximity→friendship collapse, not sub-0.05 drift.
-    assert!(close_rate + 0.05 >= far_rate,
-        "Close pairs rate ({close_rate:.3}) should be within 0.05 of far pairs ({far_rate:.3})");
+    assert!(
+        close_rate + 0.05 >= far_rate,
+        "Close pairs rate ({close_rate:.3}) should be within 0.05 of far pairs ({far_rate:.3})"
+    );
 }
 
 /// §18.4: Over multiple seeds, children should resemble parents statistically.
@@ -949,25 +1158,36 @@ fn children_resemble_parents_statistically() {
         for agent in &sim.agents {
             if let Some(parent_idx) = agent.parent_a {
                 let parent = &sim.agents[parent_idx];
-                let child_trait = agent.embodied.genome.trait_predispositions
-                    .stress_reactivity.to_f64();
-                let parent_trait = parent.embodied.genome.trait_predispositions
-                    .stress_reactivity.to_f64();
+                let child_trait = agent
+                    .embodied
+                    .genome
+                    .trait_predispositions
+                    .stress_reactivity
+                    .to_f64();
+                let parent_trait = parent
+                    .embodied
+                    .genome
+                    .trait_predispositions
+                    .stress_reactivity
+                    .to_f64();
                 trait_differences.push((child_trait - parent_trait).abs());
             }
         }
     }
 
-    assert!(!trait_differences.is_empty(),
-        "No parent-child pairs found across 10 seeds");
+    assert!(
+        !trait_differences.is_empty(),
+        "No parent-child pairs found across 10 seeds"
+    );
 
     // Average difference should be less than 0.4 (children resemble parents)
     // 0.4 threshold: genome recombination from two parents typically keeps
     // child trait within ~0.3 of parent mean (mutation + recombination noise).
-    let avg_diff: f64 = trait_differences.iter().sum::<f64>()
-        / trait_differences.len() as f64;
-    assert!(avg_diff < 0.4,
-        "Average parent-child trait difference ({avg_diff:.3}) should be < 0.4");
+    let avg_diff: f64 = trait_differences.iter().sum::<f64>() / trait_differences.len() as f64;
+    assert!(
+        avg_diff < 0.4,
+        "Average parent-child trait difference ({avg_diff:.3}) should be < 0.4"
+    );
 }
 
 /// §18.4: Over multiple seeds, stress should correlate with conflict.
@@ -1060,24 +1280,28 @@ fn marriages_correlate_with_compatibility_and_status() {
                     let partner = &sim.agents[partner_idx];
                     // Married agents should have non-zero trust with each other
                     let has_trust = agent.relationship_v2s.iter().any(|rv2| {
-                        rv2.to.as_u64() as usize == partner_idx
-                            && rv2.trust > Fixed::from_f64(0.2)
+                        rv2.to.as_u64() as usize == partner_idx && rv2.trust > Fixed::from_f64(0.2)
                     });
-                    assert!(has_trust,
+                    assert!(
+                        has_trust,
                         "Agent {} married to {} but has no trust relationship",
-                        agent.name, partner.name);
+                        agent.name, partner.name
+                    );
                     // Status levels should be within 0.5 of each other (assortative)
                     let status_diff = (agent.status_v2.effective_status().to_f64()
-                        - partner.status_v2.effective_status().to_f64()).abs();
-                    assert!(status_diff < 0.7,
+                        - partner.status_v2.effective_status().to_f64())
+                    .abs();
+                    assert!(
+                        status_diff < 0.7,
                         "Agent {} and {} have status diff {status_diff:.3} (> 0.7)",
-                        agent.name, partner.name);
+                        agent.name,
+                        partner.name
+                    );
                 }
             }
         }
     }
 }
-
 
 /// §13.3 (AP2): Rumor transmission is live — rumors created from emotionally
 /// charged gossip actually spread through the population (previously
@@ -1143,10 +1367,10 @@ fn rumor_evidence_degrades_with_transmission_hops() {
             }
         }
         if !single_hop_evidence.is_empty() && !multi_hop_evidence.is_empty() {
-            let single_avg: f64 = single_hop_evidence.iter().sum::<f64>()
-                / single_hop_evidence.len() as f64;
-            let multi_avg: f64 = multi_hop_evidence.iter().sum::<f64>()
-                / multi_hop_evidence.len() as f64;
+            let single_avg: f64 =
+                single_hop_evidence.iter().sum::<f64>() / single_hop_evidence.len() as f64;
+            let multi_avg: f64 =
+                multi_hop_evidence.iter().sum::<f64>() / multi_hop_evidence.len() as f64;
             assert!(
                 single_avg > multi_avg,
                 "seed {seed}: single-hop evidence ({single_avg:.3}) should exceed multi-hop ({multi_avg:.3})"
@@ -1202,19 +1426,27 @@ fn gossip_accuracy_declines_with_hops() {
 
     // If both groups have data, long chains should have lower evidence quality
     if short_chain_evidence.is_empty() || long_chain_evidence.is_empty() {
-        eprintln!("gossip test: insufficient data (short={}, long={})", short_chain_evidence.len(), long_chain_evidence.len());
+        eprintln!(
+            "gossip test: insufficient data (short={}, long={})",
+            short_chain_evidence.len(),
+            long_chain_evidence.len()
+        );
     }
     if !short_chain_evidence.is_empty() && !long_chain_evidence.is_empty() {
-        let short_avg: f64 = short_chain_evidence.iter().sum::<f64>()
-            / short_chain_evidence.len() as f64;
-        let long_avg: f64 = long_chain_evidence.iter().sum::<f64>()
-            / long_chain_evidence.len() as f64;
-        assert!(short_avg >= long_avg,
-            "Short chain evidence ({short_avg:.3}) should be >= long chain ({long_avg:.3})");
+        let short_avg: f64 =
+            short_chain_evidence.iter().sum::<f64>() / short_chain_evidence.len() as f64;
+        let long_avg: f64 =
+            long_chain_evidence.iter().sum::<f64>() / long_chain_evidence.len() as f64;
+        assert!(
+            short_avg >= long_avg,
+            "Short chain evidence ({short_avg:.3}) should be >= long chain ({long_avg:.3})"
+        );
     }
     // At minimum, rumor system should have produced data
-    assert!(!short_chain_evidence.is_empty() || !long_chain_evidence.is_empty(),
-        "Rumor system should produce evidence data across 10 seeds");
+    assert!(
+        !short_chain_evidence.is_empty() || !long_chain_evidence.is_empty(),
+        "Rumor system should produce evidence data across 10 seeds"
+    );
 }
 
 /// §18.4: Over multiple seeds, propaganda effectiveness should correlate with
@@ -1243,7 +1475,10 @@ fn propaganda_effectiveness_correlates_with_legitimacy() {
 
         for inst in &sim.institutions {
             let legitimacy = inst.legitimacy.to_f64();
-            let campaign_count = sim.propaganda_registry.campaigns.iter()
+            let campaign_count = sim
+                .propaganda_registry
+                .campaigns
+                .iter()
                 .filter(|c| c.sponsor == inst.id as usize && c.active)
                 .count();
             if legitimacy > 0.6 {
@@ -1258,7 +1493,9 @@ fn propaganda_effectiveness_correlates_with_legitimacy() {
     // at least as many campaigns (they can sponsor propaganda more effectively)
     if high_legitimacy_campaigns > 0 || low_legitimacy_campaigns > 0 {
         if high_legitimacy_campaigns == 0 && low_legitimacy_campaigns > 0 {
-            eprintln!("propaganda test: only low-legitimacy campaigns found ({low_legitimacy_campaigns})");
+            eprintln!(
+                "propaganda test: only low-legitimacy campaigns found ({low_legitimacy_campaigns})"
+            );
         }
         assert!(high_legitimacy_campaigns >= low_legitimacy_campaigns,
             "High-legitimacy campaigns ({high_legitimacy_campaigns}) should be >= low ({low_legitimacy_campaigns})");
@@ -1268,9 +1505,11 @@ fn propaganda_effectiveness_correlates_with_legitimacy() {
     // sufficient institutional legitimacy to develop over time).
     let total = high_legitimacy_campaigns + low_legitimacy_campaigns;
     if total > 0 {
-        assert!(high_legitimacy_campaigns >= low_legitimacy_campaigns,
+        assert!(
+            high_legitimacy_campaigns >= low_legitimacy_campaigns,
             "Among {total} campaigns, high-legitimacy ({high_legitimacy_campaigns}) \
-             should be >= low ({low_legitimacy_campaigns})");
+             should be >= low ({low_legitimacy_campaigns})"
+        );
     }
 }
 
@@ -1301,7 +1540,7 @@ fn propaganda_effectiveness_correlates_with_legitimacy() {
 /// EXACTLY stable.
 #[test]
 fn site_inventory_rots_each_tick_while_stable_resources_do_not() {
-    use mindstrata_sim::world::{GRAIN_RESOURCE_ID, WATER_RESOURCE_ID, SiteKind, World};
+    use mindstrata_sim::world::{SiteKind, World, GRAIN_RESOURCE_ID, WATER_RESOURCE_ID};
 
     // Deterministic run of the chamber; returns the seeded grain stock, the
     // final stock quantities, and the chosen site index (world layout is
@@ -1310,8 +1549,12 @@ fn site_inventory_rots_each_tick_while_stable_resources_do_not() {
     // world_gen change that pre-seeds the chamber site with grain.
     let outcome = |seed: u64| -> (Fixed, Fixed, Fixed, usize) {
         let config = SimConfig {
-            seed, max_ticks: 2000, world_width: 16, world_height: 16,
-            num_agents: 12, snapshot_interval: None,
+            seed,
+            max_ticks: 2000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
         };
         let mut sim = Simulation::new(config);
         sim.populate();
@@ -1319,24 +1562,40 @@ fn site_inventory_rots_each_tick_while_stable_resources_do_not() {
         // receives production. Consumption is Farm/Well-only, production is
         // Farm/Well-only, and 100 total stock sits far under the smallest
         // storage capacity (200), so overflow spoilage cannot confound.
-        let site_idx = sim.world.sites.iter()
+        let site_idx = sim
+            .world
+            .sites
+            .iter()
             .position(|s| s.kind != SiteKind::Farm && s.kind != SiteKind::Well)
             .expect("default world has a non-Farm/non-Well site");
-        assert!(Fixed::from_f64(100.0) <= sim.world.sites[site_idx].storage_capacity,
-            "test chamber must stay under storage capacity to isolate spoilage");
-        sim.world.produce_resource(site_idx, GRAIN_RESOURCE_ID, Fixed::from_f64(50.0));
-        sim.world.produce_resource(site_idx, WATER_RESOURCE_ID, Fixed::from_f64(50.0));
+        assert!(
+            Fixed::from_f64(100.0) <= sim.world.sites[site_idx].storage_capacity,
+            "test chamber must stay under storage capacity to isolate spoilage"
+        );
+        sim.world
+            .produce_resource(site_idx, GRAIN_RESOURCE_ID, Fixed::from_f64(50.0));
+        sim.world
+            .produce_resource(site_idx, WATER_RESOURCE_ID, Fixed::from_f64(50.0));
         let stock = |w: &World, rid: u64| -> Fixed {
-            w.sites[site_idx].inventory.iter()
+            w.sites[site_idx]
+                .inventory
+                .iter()
                 .find(|r| r.resource_id == rid)
                 .map_or(Fixed::ZERO, |r| r.quantity)
         };
         let grain_before = stock(&sim.world, GRAIN_RESOURCE_ID);
         let water_before = stock(&sim.world, WATER_RESOURCE_ID);
-        assert!(grain_before > Fixed::ZERO && water_before > Fixed::ZERO,
-            "seeded chamber must hold both resources");
+        assert!(
+            grain_before > Fixed::ZERO && water_before > Fixed::ZERO,
+            "seeded chamber must hold both resources"
+        );
         sim.run(1000);
-        (grain_before, stock(&sim.world, GRAIN_RESOURCE_ID), stock(&sim.world, WATER_RESOURCE_ID), site_idx)
+        (
+            grain_before,
+            stock(&sim.world, GRAIN_RESOURCE_ID),
+            stock(&sim.world, WATER_RESOURCE_ID),
+            site_idx,
+        )
     };
 
     let (grain_seed_a, grain_a, water_a, site_a) = outcome(42);
@@ -1344,21 +1603,34 @@ fn site_inventory_rots_each_tick_while_stable_resources_do_not() {
     assert_eq!(site_a, site_b, "world layout must be seed-independent");
     // The spoilage path consumes no RNG — a same-seed replay must reproduce
     // byte-identical final stocks.
-    assert_eq!((grain_seed_a, grain_a, water_a), (grain_seed_b, grain_b, water_b),
-        "per-tick spoilage must be seed-deterministic");
+    assert_eq!(
+        (grain_seed_a, grain_a, water_a),
+        (grain_seed_b, grain_b, water_b),
+        "per-tick spoilage must be seed-deterministic"
+    );
 
     // Perishable grain rots every tick (0.001/tick × season modifier ≥ 0.3):
     // over 1000 ticks the stock must strictly decay from its seeded level...
-    assert!(grain_a < grain_seed_a,
-        "perishable grain must rot over time: {} -> {}", grain_seed_a.to_f64(), grain_a.to_f64());
+    assert!(
+        grain_a < grain_seed_a,
+        "perishable grain must rot over time: {} -> {}",
+        grain_seed_a.to_f64(),
+        grain_a.to_f64()
+    );
     // ...but gently (≈30–50% over the window) — never a wipe.
-    assert!(grain_a > Fixed::ZERO,
-        "grain should not be wiped by 1000 ticks of 0.001/tick spoilage");
+    assert!(
+        grain_a > Fixed::ZERO,
+        "grain should not be wiped by 1000 ticks of 0.001/tick spoilage"
+    );
     // Non-perishable control: water (spoilage_rate 0) must be EXACTLY
     // stable — proving the chamber is isolated from consumption/overflow
     // and the grain drop is spoilage, not an external drain.
-    assert_eq!(water_a, Fixed::from_f64(50.0),
-        "non-perishable water must stay exactly stable: 50.0 -> {}", water_a.to_f64());
+    assert_eq!(
+        water_a,
+        Fixed::from_f64(50.0),
+        "non-perishable water must stay exactly stable: 50.0 -> {}",
+        water_a.to_f64()
+    );
 }
 
 // ── §5 (AP2): Weather system (Iteration 147) ─────────────────────
@@ -1377,8 +1649,12 @@ fn weather_is_live_seed_deterministic_and_bounded() {
 
     let run_weather = |seed: u64| -> (f64, f64, u64, u64) {
         let config = SimConfig {
-            seed, max_ticks: 2000, world_width: 16, world_height: 16,
-            num_agents: 12, snapshot_interval: None,
+            seed,
+            max_ticks: 2000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
         };
         let mut sim = Simulation::new(config);
         sim.populate();
@@ -1394,23 +1670,44 @@ fn weather_is_live_seed_deterministic_and_bounded() {
     let a = run_weather(42);
     let b = run_weather(42);
     assert_eq!(a, b, "weather must be seed-deterministic");
-    assert!((0.0..=1.0).contains(&a.0), "temperature out of [0,1]: {}", a.0);
+    assert!(
+        (0.0..=1.0).contains(&a.0),
+        "temperature out of [0,1]: {}",
+        a.0
+    );
     assert!((0.0..=1.0).contains(&a.1), "rainfall out of [0,1]: {}", a.1);
-    assert_eq!(a.2, 0, "no drought may emerge in a calibrated 2000-tick window");
-    assert_eq!(a.3, 0, "no flood may emerge in a calibrated 2000-tick window");
+    assert_eq!(
+        a.2, 0,
+        "no drought may emerge in a calibrated 2000-tick window"
+    );
+    assert_eq!(
+        a.3, 0,
+        "no flood may emerge in a calibrated 2000-tick window"
+    );
     // Temperature stays warm (Spring baseline 0.6 ± 0.05 noise) and rainfall
     // hovers around the Spring baseline (0.55 ± 0.08) — the weather moved.
-    assert!(a.0 > 0.4 && a.1 > 0.3,
-        "weather must stay near the Spring baseline, got temp {} rain {}", a.0, a.1);
+    assert!(
+        a.0 > 0.4 && a.1 > 0.3,
+        "weather must stay near the Spring baseline, got temp {} rain {}",
+        a.0,
+        a.1
+    );
 
     let mut sim = Simulation::new(SimConfig {
-        seed: 42, max_ticks: 2000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 42,
+        max_ticks: 2000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     });
     sim.populate();
     sim.run(2000);
-    assert_eq!(sim.weather.regime, WeatherRegime::Normal,
-        "calibrated windows must end in the Normal regime");
+    assert_eq!(
+        sim.weather.regime,
+        WeatherRegime::Normal,
+        "calibrated windows must end in the Normal regime"
+    );
 }
 
 // ── §19.5.I: Technology Tree (Iteration 148) ────────────────────────
@@ -1421,14 +1718,24 @@ fn weather_is_live_seed_deterministic_and_bounded() {
 #[test]
 fn technology_store_stays_seeded_in_calibrated_windows() {
     let sim = run_sim(42, 2000);
-    assert_eq!(sim.knowledge_store.len(), 5,
-        "only the five seeded tier-0 nodes may exist at 2000 ticks");
+    assert_eq!(
+        sim.knowledge_store.len(),
+        5,
+        "only the five seeded tier-0 nodes may exist at 2000 ticks"
+    );
     assert!(
         sim.knowledge_store.iter().all(|k| k.id < 5),
         "no tier-1+ node may enter the store inside a calibrated window"
     );
-    assert!(!sim.technology.is_discovered(5), "Advanced Irrigation stays undiscovered");
-    assert_eq!(sim.technology.undiscovered().count(), 6, "five tier-1 + one tier-2 remain hidden");
+    assert!(
+        !sim.technology.is_discovered(5),
+        "Advanced Irrigation stays undiscovered"
+    );
+    assert_eq!(
+        sim.technology.undiscovered().count(),
+        6,
+        "five tier-1 + one tier-2 remain hidden"
+    );
 }
 
 /// Prerequisites gate learning end-to-end: with two tier-1 nodes injected
@@ -1441,8 +1748,12 @@ fn technology_prereqs_gate_learning_end_to_end() {
     use mindstrata_sim::culture::{Knowledge, KnowledgeCategory};
 
     let config = SimConfig {
-        seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
-        num_agents: 24, snapshot_interval: None,
+        seed: 42,
+        max_ticks: 5000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 24,
+        snapshot_interval: None,
     };
     let mut sim = Simulation::new(config);
     sim.populate();
@@ -1452,14 +1763,22 @@ fn technology_prereqs_gate_learning_end_to_end() {
     sim.technology.discovered.insert(5);
     sim.technology.discovered.insert(6);
     sim.knowledge_store.push(Knowledge {
-        id: 5, name: "Advanced Irrigation".into(), category: KnowledgeCategory::Agricultural,
-        difficulty: Fixed::from_f64(0.6), utility: Fixed::from_f64(0.9),
-        holders: 0, discovered_tick: 4320,
+        id: 5,
+        name: "Advanced Irrigation".into(),
+        category: KnowledgeCategory::Agricultural,
+        difficulty: Fixed::from_f64(0.6),
+        utility: Fixed::from_f64(0.9),
+        holders: 0,
+        discovered_tick: 4320,
     });
     sim.knowledge_store.push(Knowledge {
-        id: 6, name: "Metalworking".into(), category: KnowledgeCategory::Craft,
-        difficulty: Fixed::from_f64(0.55), utility: Fixed::from_f64(0.8),
-        holders: 0, discovered_tick: 4320,
+        id: 6,
+        name: "Metalworking".into(),
+        category: KnowledgeCategory::Craft,
+        difficulty: Fixed::from_f64(0.55),
+        utility: Fixed::from_f64(0.8),
+        holders: 0,
+        discovered_tick: 4320,
     });
     // Control A lacks Crop Rotation → must never learn Advanced Irrigation.
     let control_a = 0usize;
@@ -1467,8 +1786,14 @@ fn technology_prereqs_gate_learning_end_to_end() {
     // Control B lacks Well Maintenance → must never learn Metalworking.
     let control_b = 1usize;
     sim.agents[control_b].cultural.knowledge.retain(|k| *k != 1);
-    assert!(!sim.agents[control_a].cultural.knowledge.contains(&0), "control A setup");
-    assert!(!sim.agents[control_b].cultural.knowledge.contains(&1), "control B setup");
+    assert!(
+        !sim.agents[control_a].cultural.knowledge.contains(&0),
+        "control A setup"
+    );
+    assert!(
+        !sim.agents[control_b].cultural.knowledge.contains(&1),
+        "control B setup"
+    );
 
     sim.run(5000);
 
@@ -1481,20 +1806,38 @@ fn technology_prereqs_gate_learning_end_to_end() {
     // transmit a node to a non-holder and trip it.)
     for a in &sim.agents {
         if a.cultural.knowledge.contains(&5) {
-            assert!(a.cultural.knowledge.contains(&0),
-                "every Advanced Irrigation holder must hold Crop Rotation");
+            assert!(
+                a.cultural.knowledge.contains(&0),
+                "every Advanced Irrigation holder must hold Crop Rotation"
+            );
         }
         if a.cultural.knowledge.contains(&6) {
-            assert!(a.cultural.knowledge.contains(&1),
-                "every Metalworking holder must hold Well Maintenance");
+            assert!(
+                a.cultural.knowledge.contains(&1),
+                "every Metalworking holder must hold Well Maintenance"
+            );
         }
     }
     // Positive control: the discovered nodes DID spread — work-innovation and
     // apprenticeship transmit store knowledge to prereq-holding agents.
-    let learners_a = sim.agents.iter().filter(|a| a.cultural.knowledge.contains(&5)).count();
-    let learners_b = sim.agents.iter().filter(|a| a.cultural.knowledge.contains(&6)).count();
-    assert!(learners_a >= 1, "Advanced Irrigation must spread to prereq-holding agents");
-    assert!(learners_b >= 1, "Metalworking must spread to prereq-holding agents");
+    let learners_a = sim
+        .agents
+        .iter()
+        .filter(|a| a.cultural.knowledge.contains(&5))
+        .count();
+    let learners_b = sim
+        .agents
+        .iter()
+        .filter(|a| a.cultural.knowledge.contains(&6))
+        .count();
+    assert!(
+        learners_a >= 1,
+        "Advanced Irrigation must spread to prereq-holding agents"
+    );
+    assert!(
+        learners_b >= 1,
+        "Metalworking must spread to prereq-holding agents"
+    );
 }
 
 /// The discovery pass itself: with a universal prerequisite (Crop Rotation is
@@ -1504,8 +1847,12 @@ fn technology_prereqs_gate_learning_end_to_end() {
 #[test]
 fn technology_discovery_pass_fires_on_prereq_mass() {
     let config = SimConfig {
-        seed: 42, max_ticks: 2000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 42,
+        max_ticks: 2000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     };
     // Positive: universal Crop Rotation → Advanced Irrigation has mass 1.0.
     let mut sim = Simulation::new(config);
@@ -1518,19 +1865,39 @@ fn technology_discovery_pass_fires_on_prereq_mass() {
             break;
         }
     }
-    assert!(fired_pass < 1000, "a universal prerequisite must eventually yield a discovery");
-    let fired_id = sim.knowledge_store.iter().find(|k| k.id >= 5).map(|k| k.id).unwrap();
-    assert!(sim.technology.is_discovered(fired_id), "discovery marks the node in the tree");
-    let entry = sim.knowledge_store.iter().find(|k| k.id == fired_id).unwrap();
+    assert!(
+        fired_pass < 1000,
+        "a universal prerequisite must eventually yield a discovery"
+    );
+    let fired_id = sim
+        .knowledge_store
+        .iter()
+        .find(|k| k.id >= 5)
+        .map(|k| k.id)
+        .unwrap();
+    assert!(
+        sim.technology.is_discovered(fired_id),
+        "discovery marks the node in the tree"
+    );
+    let entry = sim
+        .knowledge_store
+        .iter()
+        .find(|k| k.id == fired_id)
+        .unwrap();
     assert_eq!(
-        entry.discovered_tick, 4320 * (fired_pass as u64 + 1),
+        entry.discovered_tick,
+        4320 * (fired_pass as u64 + 1),
         "the Knowledge entry records the pass that fired it"
     );
 
     // Negative: no one holds any tier-0 prerequisite → no node can fire.
     let mut sim2 = Simulation::new(SimConfig {
-        seed: 42, max_ticks: 2000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 42,
+        max_ticks: 2000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     });
     sim2.populate();
     for a in &mut sim2.agents {
@@ -1553,8 +1920,14 @@ fn technology_discovery_pass_fires_on_prereq_mass() {
 #[test]
 fn legal_court_absent_in_calibrated_windows() {
     let sim = run_sim(42, 2000);
-    assert!(sim.legal.cases.is_empty(), "no case may exist inside a calibrated window");
-    assert_eq!(sim.legal.established_tick, None, "the court has not convened");
+    assert!(
+        sim.legal.cases.is_empty(),
+        "no case may exist inside a calibrated window"
+    );
+    assert_eq!(
+        sim.legal.established_tick, None,
+        "the court has not convened"
+    );
     assert_eq!(sim.legal.convictions, 0);
     assert_eq!(sim.legal.acquittals, 0);
 }
@@ -1567,12 +1940,20 @@ fn legal_convicts_owned_site_theft_end_to_end() {
     use mindstrata_sim::world::SiteKind;
 
     let config = SimConfig {
-        seed: 42, max_ticks: 2000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 42,
+        max_ticks: 2000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     };
     let mut sim = Simulation::new(config);
     sim.populate();
-    let farm_idx = sim.world.sites.iter().position(|s| s.kind == SiteKind::Farm)
+    let farm_idx = sim
+        .world
+        .sites
+        .iter()
+        .position(|s| s.kind == SiteKind::Farm)
         .expect("the riverford world has farms");
     let accused = mindstrata_core::id::AgentId::new(0);
     let victim = mindstrata_core::id::AgentId::new(1);
@@ -1599,20 +1980,32 @@ fn legal_convicts_owned_site_theft_end_to_end() {
         Some(mindstrata_sim::legal::Verdict::Guilty),
         "owned-site theft with council enforcement is strong evidence"
     );
-    assert!(case.sentence > Fixed::ZERO, "a Guilty verdict carries a court fine");
-    assert_eq!(case.evidence_strength.to_f64(), 0.55, "0.6 × 0.5 enforcement + 0.25 owned bonus");
+    assert!(
+        case.sentence > Fixed::ZERO,
+        "a Guilty verdict carries a court fine"
+    );
+    assert_eq!(
+        case.evidence_strength.to_f64(),
+        0.55,
+        "0.6 × 0.5 enforcement + 0.25 owned bonus"
+    );
     assert_eq!(sim.legal.convictions, 1);
-    assert_eq!(sim.legal.established_tick, Some(500), "the court convenes on the first case");
+    assert_eq!(
+        sim.legal.established_tick,
+        Some(500),
+        "the court convenes on the first case"
+    );
     assert_eq!(
         sim.agents[0].wealth.coin,
         coin_before - case.sentence,
         "the court fine is levied on the accused"
     );
-    let journaled = sim
-        .journal()
-        .entries_for_agent(accused)
-        .iter()
-        .any(|e| matches!(e.kind, mindstrata_sim::journal::JournalEntryKind::LegalVerdict { guilty: true, .. }));
+    let journaled = sim.journal().entries_for_agent(accused).iter().any(|e| {
+        matches!(
+            e.kind,
+            mindstrata_sim::journal::JournalEntryKind::LegalVerdict { guilty: true, .. }
+        )
+    });
     assert!(journaled, "a Guilty verdict is journaled to the accused");
 }
 
@@ -1622,8 +2015,12 @@ fn legal_convicts_owned_site_theft_end_to_end() {
 #[test]
 fn legal_acquits_when_enforcement_is_absent() {
     let config = SimConfig {
-        seed: 42, max_ticks: 2000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 42,
+        max_ticks: 2000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     };
     let mut sim = Simulation::new(config);
     sim.populate();
@@ -1654,13 +2051,17 @@ fn legal_acquits_when_enforcement_is_absent() {
     assert_eq!(case.sentence, Fixed::ZERO, "an acquittal carries no fine");
     assert_eq!(sim.legal.acquittals, 1);
     assert_eq!(sim.legal.convictions, 0);
-    assert_eq!(sim.agents[0].wealth.coin, coin_before, "an acquittal levies no fine");
+    assert_eq!(
+        sim.agents[0].wealth.coin, coin_before,
+        "an acquittal levies no fine"
+    );
     // Justice is fully observable — the acquittal is journaled too.
-    let journaled = sim
-        .journal()
-        .entries_for_agent(accused)
-        .iter()
-        .any(|e| matches!(e.kind, mindstrata_sim::journal::JournalEntryKind::LegalVerdict { guilty: false, .. }));
+    let journaled = sim.journal().entries_for_agent(accused).iter().any(|e| {
+        matches!(
+            e.kind,
+            mindstrata_sim::journal::JournalEntryKind::LegalVerdict { guilty: false, .. }
+        )
+    });
     assert!(journaled, "an Innocent verdict is journaled to the accused");
 }
 
@@ -1671,12 +2072,20 @@ fn legal_repeat_offender_escalates_sentence() {
     use mindstrata_sim::world::SiteKind;
 
     let config = SimConfig {
-        seed: 42, max_ticks: 2000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 42,
+        max_ticks: 2000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     };
     let mut sim = Simulation::new(config);
     sim.populate();
-    let farm_idx = sim.world.sites.iter().position(|s| s.kind == SiteKind::Farm)
+    let farm_idx = sim
+        .world
+        .sites
+        .iter()
+        .position(|s| s.kind == SiteKind::Farm)
         .expect("the riverford world has farms");
     let accused = mindstrata_core::id::AgentId::new(0);
     let victim = mindstrata_core::id::AgentId::new(1);
@@ -1685,15 +2094,21 @@ fn legal_repeat_offender_escalates_sentence() {
     let first = sim
         .prosecute_violation(
             mindstrata_sim::norms::NO_THEFT_NORM_ID,
-            accused, Some(victim), Some(farm_idx),
-            Fixed::from_f64(10.0), 500,
+            accused,
+            Some(victim),
+            Some(farm_idx),
+            Fixed::from_f64(10.0),
+            500,
         )
         .expect("first case");
     let second = sim
         .prosecute_violation(
             mindstrata_sim::norms::NO_THEFT_NORM_ID,
-            accused, Some(victim), Some(farm_idx),
-            Fixed::from_f64(10.0), 600,
+            accused,
+            Some(victim),
+            Some(farm_idx),
+            Fixed::from_f64(10.0),
+            600,
         )
         .expect("second case");
 
@@ -1716,11 +2131,17 @@ fn legal_repeat_offender_escalates_sentence() {
 #[test]
 fn diplomacy_dormant_in_calibrated_windows() {
     let sim = run_sim(42, 2000);
-    assert_eq!(sim.diplomacy.pass_count, 0, "no pass may run inside a calibrated window");
+    assert_eq!(
+        sim.diplomacy.pass_count, 0,
+        "no pass may run inside a calibrated window"
+    );
     assert_eq!(sim.diplomacy.raids, 0);
     assert_eq!(sim.diplomacy.caravans, 0);
     assert!(
-        sim.diplomacy.neighbors.iter().all(|n| n.relation == Fixed::ZERO),
+        sim.diplomacy
+            .neighbors
+            .iter()
+            .all(|n| n.relation == Fixed::ZERO),
         "neighbors stay neutral without a pass"
     );
 }
@@ -1732,8 +2153,12 @@ fn diplomacy_dormant_in_calibrated_windows() {
 fn diplomacy_pass_is_live_deterministic_and_events_fire() {
     let run_passes = |seed: u64| -> (u64, u64, u64) {
         let config = SimConfig {
-            seed, max_ticks: 2000, world_width: 16, world_height: 16,
-            num_agents: 12, snapshot_interval: None,
+            seed,
+            max_ticks: 2000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
         };
         let mut sim = Simulation::new(config);
         sim.populate();
@@ -1752,8 +2177,14 @@ fn diplomacy_pass_is_live_deterministic_and_events_fire() {
     assert_eq!(a, b, "the diplomacy pass must be seed-deterministic");
     assert_eq!(a.0, 2000, "every call is one pass");
     assert!(a.1 + a.2 > 0, "2000 passes must eventually fire an event");
-    assert!(a.1 > 0, "hostile-leaning relations must eventually raid (seed 42)");
-    assert!(a.2 > 0, "friendly-leaning relations must eventually caravan (seed 42)");
+    assert!(
+        a.1 > 0,
+        "hostile-leaning relations must eventually raid (seed 42)"
+    );
+    assert!(
+        a.2 > 0,
+        "friendly-leaning relations must eventually caravan (seed 42)"
+    );
 }
 
 /// A raid carries off a fraction of the village's grain, chills the
@@ -1761,13 +2192,20 @@ fn diplomacy_pass_is_live_deterministic_and_events_fire() {
 #[test]
 fn diplomacy_raid_removes_grain_and_chills_relations() {
     let config = SimConfig {
-        seed: 42, max_ticks: 2000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 42,
+        max_ticks: 2000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     };
     let mut sim = Simulation::new(config);
     sim.populate();
     let grain_before = sim.world.total_food();
-    assert!(grain_before > Fixed::ZERO, "the riverford village has grain to raid");
+    assert!(
+        grain_before > Fixed::ZERO,
+        "the riverford village has grain to raid"
+    );
 
     sim.apply_raid(0, 100);
 
@@ -1784,7 +2222,12 @@ fn diplomacy_raid_removes_grain_and_chills_relations() {
         .journal()
         .entries_for_agent(mindstrata_core::id::AgentId::new(0))
         .iter()
-        .any(|e| matches!(e.kind, mindstrata_sim::journal::JournalEntryKind::TradeRaid { .. }));
+        .any(|e| {
+            matches!(
+                e.kind,
+                mindstrata_sim::journal::JournalEntryKind::TradeRaid { .. }
+            )
+        });
     assert!(journaled, "the raid is journaled");
 }
 
@@ -1793,8 +2236,12 @@ fn diplomacy_raid_removes_grain_and_chills_relations() {
 #[test]
 fn diplomacy_caravan_adds_grain_and_warms_relations() {
     let config = SimConfig {
-        seed: 42, max_ticks: 2000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 42,
+        max_ticks: 2000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     };
     let mut sim = Simulation::new(config);
     sim.populate();
@@ -1814,7 +2261,12 @@ fn diplomacy_caravan_adds_grain_and_warms_relations() {
         .journal()
         .entries_for_agent(mindstrata_core::id::AgentId::new(0))
         .iter()
-        .any(|e| matches!(e.kind, mindstrata_sim::journal::JournalEntryKind::TradeCaravan { .. }));
+        .any(|e| {
+            matches!(
+                e.kind,
+                mindstrata_sim::journal::JournalEntryKind::TradeCaravan { .. }
+            )
+        });
     assert!(journaled, "the caravan is journaled");
 }
 
@@ -1829,11 +2281,12 @@ fn school_system_stays_dormant_without_a_school_site() {
     assert_eq!(sim.school.terms_run, 0);
     assert_eq!(sim.school.lessons_taught, 0);
     assert_eq!(sim.school.graduates, 0);
-    let journaled = sim
-        .journal()
-        .entries_in_range(0, u64::MAX)
-        .iter()
-        .any(|e| matches!(e.kind, mindstrata_sim::journal::JournalEntryKind::SchoolTerm { .. }));
+    let journaled = sim.journal().entries_in_range(0, u64::MAX).iter().any(|e| {
+        matches!(
+            e.kind,
+            mindstrata_sim::journal::JournalEntryKind::SchoolTerm { .. }
+        )
+    });
     assert!(!journaled, "no school-term entries in a school-free world");
 }
 
@@ -1847,8 +2300,12 @@ fn school_term_teaches_a_cohort_when_a_school_exists() {
 
     let setup = || {
         let config = SimConfig {
-            seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
-            num_agents: 12, snapshot_interval: None,
+            seed: 42,
+            max_ticks: 5000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
         };
         let mut sim = Simulation::new(config);
         sim.populate();
@@ -1904,17 +2361,16 @@ fn school_term_teaches_a_cohort_when_a_school_exists() {
             "student {s} holds the knowledge in the shared cultural vector"
         );
     }
-    let journaled = sim
-        .journal()
-        .entries_in_range(0, u64::MAX)
-        .iter()
-        .any(|e| {
-            matches!(
-                e.kind,
-                mindstrata_sim::journal::JournalEntryKind::SchoolTerm { cohort: 2, .. }
-            )
-        });
-    assert!(journaled, "the school term is journaled with its cohort size");
+    let journaled = sim.journal().entries_in_range(0, u64::MAX).iter().any(|e| {
+        matches!(
+            e.kind,
+            mindstrata_sim::journal::JournalEntryKind::SchoolTerm { cohort: 2, .. }
+        )
+    });
+    assert!(
+        journaled,
+        "the school term is journaled with its cohort size"
+    );
 
     // Determinism: an identical setup produces an identical outcome.
     let mut again = setup();
@@ -1932,8 +2388,12 @@ fn school_term_respects_technology_prerequisites() {
     use mindstrata_sim::world::SiteKind;
 
     let config = SimConfig {
-        seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 42,
+        max_ticks: 5000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     };
     let mut sim = Simulation::new(config);
     sim.populate();
@@ -1988,8 +2448,12 @@ fn school_term_fires_in_the_tick_loop_on_the_yearly_cadence() {
     use mindstrata_sim::world::SiteKind;
 
     let config = SimConfig {
-        seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 42,
+        max_ticks: 5000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     };
     let mut sim = Simulation::new(config);
     sim.populate();
@@ -2014,7 +2478,10 @@ fn school_term_fires_in_the_tick_loop_on_the_yearly_cadence() {
         sim.school.terms_run >= 1,
         "the yearly pass convened a term at 4320 ticks"
     );
-    assert!(sim.school.graduates >= 1, "the term graduated at least one student");
+    assert!(
+        sim.school.graduates >= 1,
+        "the term graduated at least one student"
+    );
 }
 
 /// §5 (AP2, Iteration 152): without a seeded religion the theology system
@@ -2027,18 +2494,17 @@ fn theology_stays_dormant_without_a_seeded_religion() {
     assert_eq!(sim.theology.converts, 0);
     assert_eq!(sim.theology.festivals_held, 0);
     assert_eq!(sim.theology.believer_count(), 0);
-    let journaled = sim
-        .journal()
-        .entries_in_range(0, u64::MAX)
-        .iter()
-        .any(|e| {
-            matches!(
-                e.kind,
-                mindstrata_sim::journal::JournalEntryKind::TheologyConversion { .. }
-                    | mindstrata_sim::journal::JournalEntryKind::TheologyFestival { .. }
-            )
-        });
-    assert!(!journaled, "no religious journal entries in a religion-free world");
+    let journaled = sim.journal().entries_in_range(0, u64::MAX).iter().any(|e| {
+        matches!(
+            e.kind,
+            mindstrata_sim::journal::JournalEntryKind::TheologyConversion { .. }
+                | mindstrata_sim::journal::JournalEntryKind::TheologyFestival { .. }
+        )
+    });
+    assert!(
+        !journaled,
+        "no religious journal entries in a religion-free world"
+    );
 }
 
 /// §5 (AP2, Iteration 152): once a religion is seeded, conversion spreads
@@ -2050,14 +2516,21 @@ fn theology_conversion_spreads_from_elders_then_contagion() {
     use mindstrata_sim::theology::{Religion, Temperament};
 
     let config = SimConfig {
-        seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 42,
+        max_ticks: 5000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     };
     let mut sim = Simulation::new(config);
     sim.populate();
     sim.theology.religion = Some(Religion::seeded(
-        "The Shepherd", Temperament::Benevolent,
-        "The Way", vec!["Tend the flock".into()], "The Flock",
+        "The Shepherd",
+        Temperament::Benevolent,
+        "The Way",
+        vec!["Tend the flock".into()],
+        "The Flock",
     ));
     // Four elders, eight youths.
     for i in 0..4 {
@@ -2069,7 +2542,10 @@ fn theology_conversion_spreads_from_elders_then_contagion() {
 
     // Mid-year festival before anyone converts: nothing held.
     sim.tick_theology(2160);
-    assert_eq!(sim.theology.festivals_held, 0, "empty festivals are not held");
+    assert_eq!(
+        sim.theology.festivals_held, 0,
+        "empty festivals are not held"
+    );
 
     // First yearly mark: only the elders adopt.
     sim.tick_theology(4320);
@@ -2088,17 +2564,16 @@ fn theology_conversion_spreads_from_elders_then_contagion() {
     // Mid-year festival: the four elders attend and it is journaled.
     sim.tick_theology(6480);
     assert_eq!(sim.theology.festivals_held, 1);
-    let festival_journaled = sim
-        .journal()
-        .entries_in_range(0, u64::MAX)
-        .iter()
-        .any(|e| {
-            matches!(
-                e.kind,
-                mindstrata_sim::journal::JournalEntryKind::TheologyFestival { attenders: 4 }
-            )
-        });
-    assert!(festival_journaled, "the festival records its four attenders");
+    let festival_journaled = sim.journal().entries_in_range(0, u64::MAX).iter().any(|e| {
+        matches!(
+            e.kind,
+            mindstrata_sim::journal::JournalEntryKind::TheologyFestival { attenders: 4 }
+        )
+    });
+    assert!(
+        festival_journaled,
+        "the festival records its four attenders"
+    );
 
     // Second yearly mark: contagion completes — every youth converts.
     sim.tick_theology(8640);
@@ -2106,21 +2581,24 @@ fn theology_conversion_spreads_from_elders_then_contagion() {
     assert_eq!(sim.theology.believer_count(), 12);
     for i in 0..12 {
         let b = sim.theology.beliefs[i].as_ref().expect("everyone believes");
-        assert_eq!(b.temperament_held, Temperament::Benevolent, "theodicy matches the deity");
+        assert_eq!(
+            b.temperament_held,
+            Temperament::Benevolent,
+            "theodicy matches the deity"
+        );
         assert!(b.conviction > Fixed::ZERO && b.conviction <= Fixed::ONE);
         assert_eq!(b.since_tick, if i < 4 { 4320 } else { 8640 });
     }
-    let conversion_journaled = sim
-        .journal()
-        .entries_in_range(0, u64::MAX)
-        .iter()
-        .any(|e| {
-            matches!(
-                e.kind,
-                mindstrata_sim::journal::JournalEntryKind::TheologyConversion { converts: 8 }
-            )
-        });
-    assert!(conversion_journaled, "the contagion year journals its eight converts");
+    let conversion_journaled = sim.journal().entries_in_range(0, u64::MAX).iter().any(|e| {
+        matches!(
+            e.kind,
+            mindstrata_sim::journal::JournalEntryKind::TheologyConversion { converts: 8 }
+        )
+    });
+    assert!(
+        conversion_journaled,
+        "the contagion year journals its eight converts"
+    );
 }
 
 /// §5 (AP2, Iteration 152): the mid-year festival hallows the doctrine's
@@ -2130,14 +2608,21 @@ fn theology_festival_sacralizes_the_doctrine_value() {
     use mindstrata_sim::theology::{Religion, Temperament};
 
     let config = SimConfig {
-        seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 42,
+        max_ticks: 5000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     };
     let mut sim = Simulation::new(config);
     sim.populate();
     sim.theology.religion = Some(Religion::seeded(
-        "The Shepherd", Temperament::Benevolent,
-        "The Way", vec![], "The Flock",
+        "The Shepherd",
+        Temperament::Benevolent,
+        "The Way",
+        vec![],
+        "The Flock",
     ));
     for i in 0..12 {
         sim.agents[i].age = Fixed::from_f64(50.0);
@@ -2164,14 +2649,21 @@ fn theology_is_deterministic_across_identical_setups() {
 
     let setup = || {
         let config = SimConfig {
-            seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
-            num_agents: 12, snapshot_interval: None,
+            seed: 42,
+            max_ticks: 5000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
         };
         let mut sim = Simulation::new(config);
         sim.populate();
         sim.theology.religion = Some(Religion::seeded(
-            "The Shepherd", Temperament::Benevolent,
-            "The Way", vec![], "The Flock",
+            "The Shepherd",
+            Temperament::Benevolent,
+            "The Way",
+            vec![],
+            "The Flock",
         ));
         for i in 0..4 {
             sim.agents[i].age = Fixed::from_f64(50.0);
@@ -2193,8 +2685,12 @@ fn theology_is_deterministic_across_identical_setups() {
     assert_eq!(a.theology.converts, b.theology.converts);
     assert_eq!(a.theology.festivals_held, b.theology.festivals_held);
     for i in 0..12 {
-        let ca = a.theology.beliefs[i].as_ref().map(|x| x.conviction.to_f64());
-        let cb = b.theology.beliefs[i].as_ref().map(|x| x.conviction.to_f64());
+        let ca = a.theology.beliefs[i]
+            .as_ref()
+            .map(|x| x.conviction.to_f64());
+        let cb = b.theology.beliefs[i]
+            .as_ref()
+            .map(|x| x.conviction.to_f64());
         assert_eq!(ca, cb, "conviction of agent {i} is identical across runs");
     }
 }
@@ -2211,18 +2707,17 @@ fn military_stays_dormant_without_a_barracks() {
     assert_eq!(sim.military.drills, 0);
     assert_eq!(sim.military.militia_size(), 0);
     assert_eq!(sim.military.readiness, Fixed::ZERO);
-    let journaled = sim
-        .journal()
-        .entries_in_range(0, u64::MAX)
-        .iter()
-        .any(|e| {
-            matches!(
-                e.kind,
-                mindstrata_sim::journal::JournalEntryKind::MilitaryDrill { .. }
-                    | mindstrata_sim::journal::JournalEntryKind::MilitaryMuster { .. }
-            )
-        });
-    assert!(!journaled, "no military journal entries in a barracks-free world");
+    let journaled = sim.journal().entries_in_range(0, u64::MAX).iter().any(|e| {
+        matches!(
+            e.kind,
+            mindstrata_sim::journal::JournalEntryKind::MilitaryDrill { .. }
+                | mindstrata_sim::journal::JournalEntryKind::MilitaryMuster { .. }
+        )
+    });
+    assert!(
+        !journaled,
+        "no military journal entries in a barracks-free world"
+    );
 }
 
 /// §5 (AP2, Iteration 153): once a Barracks exists, the yearly pass
@@ -2233,8 +2728,12 @@ fn military_musters_and_drills_when_a_barracks_exists() {
     use mindstrata_sim::world::SiteKind;
 
     let config = SimConfig {
-        seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 42,
+        max_ticks: 5000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     };
     let mut sim = Simulation::new(config);
     sim.populate();
@@ -2265,37 +2764,35 @@ fn military_musters_and_drills_when_a_barracks_exists() {
     assert_eq!(sim.military.musters, 1);
     assert_eq!(sim.military.militia_size(), 8);
     assert_eq!(sim.military.drills, 1, "the first drill is held");
-    assert!(sim.military.readiness > Fixed::ZERO, "drills build readiness");
+    assert!(
+        sim.military.readiness > Fixed::ZERO,
+        "drills build readiness"
+    );
     // The two minors are never conscripted.
     assert!(sim.military.roster[10].is_none());
     assert!(sim.military.roster[11].is_none());
-    let muster_journaled = sim
-        .journal()
-        .entries_in_range(0, u64::MAX)
-        .iter()
-        .any(|e| {
-            matches!(
-                e.kind,
-                mindstrata_sim::journal::JournalEntryKind::MilitaryMuster { conscripts: 8 }
-            )
-        });
+    let muster_journaled = sim.journal().entries_in_range(0, u64::MAX).iter().any(|e| {
+        matches!(
+            e.kind,
+            mindstrata_sim::journal::JournalEntryKind::MilitaryMuster { conscripts: 8 }
+        )
+    });
     assert!(muster_journaled, "the muster journals its eight conscripts");
 
     // A second year drills again — readiness grows (gain 0.15 × 8/8 − 0.05).
     let before = sim.military.readiness;
     sim.tick_military(8640);
     assert_eq!(sim.military.drills, 2);
-    assert!(sim.military.readiness > before, "drilling year-on-year builds readiness");
-    let journaled = sim
-        .journal()
-        .entries_in_range(0, u64::MAX)
-        .iter()
-        .any(|e| {
-            matches!(
-                e.kind,
-                mindstrata_sim::journal::JournalEntryKind::MilitaryDrill { attenders: 8, .. }
-            )
-        });
+    assert!(
+        sim.military.readiness > before,
+        "drilling year-on-year builds readiness"
+    );
+    let journaled = sim.journal().entries_in_range(0, u64::MAX).iter().any(|e| {
+        matches!(
+            e.kind,
+            mindstrata_sim::journal::JournalEntryKind::MilitaryDrill { attenders: 8, .. }
+        )
+    });
     assert!(journaled, "the drills are journaled with their attenders");
 }
 
@@ -2308,8 +2805,12 @@ fn military_readiness_dampens_raid_grain_loss() {
 
     let setup = |with_barracks: bool| -> Simulation {
         let config = SimConfig {
-            seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
-            num_agents: 12, snapshot_interval: None,
+            seed: 42,
+            max_ticks: 5000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
         };
         let mut sim = Simulation::new(config);
         sim.populate();
@@ -2342,10 +2843,16 @@ fn military_readiness_dampens_raid_grain_loss() {
 
     let mut defended = setup(true);
     let mut undefended = setup(false);
-    assert!(defended.military.readiness > Fixed::ZERO, "the militia drilled");
+    assert!(
+        defended.military.readiness > Fixed::ZERO,
+        "the militia drilled"
+    );
     let defended_loss = raid_loss(&mut defended);
     let undefended_loss = raid_loss(&mut undefended);
-    assert!(undefended_loss > 0.0, "the undefended village takes raid damage");
+    assert!(
+        undefended_loss > 0.0,
+        "the undefended village takes raid damage"
+    );
     assert!(
         defended_loss < undefended_loss,
         "readiness dampens raid losses ({defended_loss} < {undefended_loss})"
@@ -2361,8 +2868,12 @@ fn military_is_deterministic_across_identical_setups() {
 
     let setup = || {
         let config = SimConfig {
-            seed: 42, max_ticks: 5000, world_width: 16, world_height: 16,
-            num_agents: 12, snapshot_interval: None,
+            seed: 42,
+            max_ticks: 5000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
         };
         let mut sim = Simulation::new(config);
         sim.populate();
@@ -2418,13 +2929,17 @@ fn military_is_deterministic_across_identical_setups() {
 /// settle phase, and tick count, so the only difference is the directive.
 #[test]
 fn commanded_agent_worships_more_than_identical_control() {
-    use mindstrata_sim::person::GoalKind;
     use mindstrata_sim::journal::JournalEntryKind;
+    use mindstrata_sim::person::GoalKind;
 
     let build = || {
         let config = SimConfig {
-            seed: 11, max_ticks: 2000, world_width: 16, world_height: 16,
-            num_agents: 12, snapshot_interval: None,
+            seed: 11,
+            max_ticks: 2000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
         };
         let mut sim = Simulation::new(config);
         sim.populate();
@@ -2467,12 +2982,16 @@ fn commanded_agent_worships_more_than_identical_control() {
 /// autonomous behavior (one-shot nudges, not permanent hijack).
 #[test]
 fn commanded_directive_is_removed_after_satisfaction() {
-    use mindstrata_sim::person::GoalKind;
     use mindstrata_sim::journal::JournalEntryKind;
+    use mindstrata_sim::person::GoalKind;
 
     let config = SimConfig {
-        seed: 29, max_ticks: 2000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 29,
+        max_ticks: 2000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     };
     let mut sim = Simulation::new(config);
     sim.populate();
@@ -2480,7 +2999,10 @@ fn commanded_directive_is_removed_after_satisfaction() {
 
     assert!(sim.command_agent(0, GoalKind::Work));
     assert!(
-        sim.agents[0].goals.iter().any(|g| g.source == mindstrata_sim::person::GoalSource::Command),
+        sim.agents[0]
+            .goals
+            .iter()
+            .any(|g| g.source == mindstrata_sim::person::GoalSource::Command),
         "directive present right after the command"
     );
 
@@ -2504,9 +3026,15 @@ fn commanded_directive_is_removed_after_satisfaction() {
             break;
         }
     }
-    assert!(worked > worked_before, "the commanded Work action must complete");
     assert!(
-        !sim.agents[0].goals.iter().any(|g| g.source == mindstrata_sim::person::GoalSource::Command),
+        worked > worked_before,
+        "the commanded Work action must complete"
+    );
+    assert!(
+        !sim.agents[0]
+            .goals
+            .iter()
+            .any(|g| g.source == mindstrata_sim::person::GoalSource::Command),
         "the consumed directive is removed from the queue"
     );
 }
@@ -2516,12 +3044,16 @@ fn commanded_directive_is_removed_after_satisfaction() {
 /// 1 commanded to Worship journals Worshiped, over the same window.
 #[test]
 fn different_commands_steer_agents_toward_their_own_goals() {
-    use mindstrata_sim::person::GoalKind;
     use mindstrata_sim::journal::JournalEntryKind;
+    use mindstrata_sim::person::GoalKind;
 
     let config = SimConfig {
-        seed: 23, max_ticks: 2000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 23,
+        max_ticks: 2000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     };
     let mut sim = Simulation::new(config);
     sim.populate();
@@ -2533,18 +3065,20 @@ fn different_commands_steer_agents_toward_their_own_goals() {
         sim.tick();
     }
 
-    let agent_entries = |sim: &Simulation, idx: usize| -> Vec<mindstrata_sim::journal::JournalEntryKind> {
-        sim.journal()
-            .entries_for_agent(mindstrata_core::id::AgentId::new(idx as u64))
-            .iter()
-            .map(|e| e.kind.clone())
-            .collect()
-    };
+    let agent_entries =
+        |sim: &Simulation, idx: usize| -> Vec<mindstrata_sim::journal::JournalEntryKind> {
+            sim.journal()
+                .entries_for_agent(mindstrata_core::id::AgentId::new(idx as u64))
+                .iter()
+                .map(|e| e.kind.clone())
+                .collect()
+        };
     let a0 = agent_entries(&sim, 0);
     let a1 = agent_entries(&sim, 1);
 
     assert!(
-        a0.iter().any(|k| matches!(k, JournalEntryKind::Worked { .. })),
+        a0.iter()
+            .any(|k| matches!(k, JournalEntryKind::Worked { .. })),
         "agent 0 (Work command) must have worked: {a0:?}"
     );
     assert!(
@@ -2654,8 +3188,12 @@ fn emergent_drought_regime_drains_wells_and_suppresses_production() {
 
     let run = |drought: bool| -> (f64, f64, u64) {
         let config = SimConfig {
-            seed: 42, max_ticks: 8000, world_width: 16, world_height: 16,
-            num_agents: 12, snapshot_interval: None,
+            seed: 42,
+            max_ticks: 8000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
         };
         let mut sim = Simulation::new(config);
         sim.populate();
@@ -2680,16 +3218,27 @@ fn emergent_drought_regime_drains_wells_and_suppresses_production() {
     let (grain_control, water_control, _) = run(false);
     // Probe-pinned at 5000 ticks (seed 42): grain 59.68 vs control 69.96
     // (−15% production) and water 0 vs control 152 (wells fully drained).
-    assert_eq!(events_drought, 1, "the drought regime must declare exactly once");
-    assert!(grain_drought < grain_control,
-        "drought must suppress farm output: {grain_drought:.2} vs control {grain_control:.2}");
-    assert!(water_drought < water_control,
-        "drought must drain wells: {water_drought:.2} vs control {water_control:.2}");
+    assert_eq!(
+        events_drought, 1,
+        "the drought regime must declare exactly once"
+    );
+    assert!(
+        grain_drought < grain_control,
+        "drought must suppress farm output: {grain_drought:.2} vs control {grain_control:.2}"
+    );
+    assert!(
+        water_drought < water_control,
+        "drought must drain wells: {water_drought:.2} vs control {water_control:.2}"
+    );
 
     // Sanity: the drought world must still be IN the drought at the end.
     let mut sim = Simulation::new(SimConfig {
-        seed: 42, max_ticks: 8000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 42,
+        max_ticks: 8000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     });
     sim.populate();
     sim.weather.config = WeatherConfig {
@@ -2700,8 +3249,11 @@ fn emergent_drought_regime_drains_wells_and_suppresses_production() {
         ..WeatherConfig::default()
     };
     sim.run(5000);
-    assert_eq!(sim.weather.regime, WeatherRegime::Drought,
-        "the pinned dry spell must hold the drought through the window");
+    assert_eq!(
+        sim.weather.regime,
+        WeatherRegime::Drought,
+        "the pinned dry spell must hold the drought through the window"
+    );
 }
 
 /// §5 (AP2, Iteration 147): an emergent flood regime recharges well water —
@@ -2715,8 +3267,12 @@ fn emergent_flood_regime_recharges_wells() {
 
     let run = |flood: bool| -> (f64, u64) {
         let config = SimConfig {
-            seed: 42, max_ticks: 2000, world_width: 16, world_height: 16,
-            num_agents: 12, snapshot_interval: None,
+            seed: 42,
+            max_ticks: 2000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
         };
         let mut sim = Simulation::new(config);
         sim.populate();
@@ -2735,9 +3291,14 @@ fn emergent_flood_regime_recharges_wells() {
 
     let (water_flood, events_flood) = run(true);
     let (water_control, _) = run(false);
-    assert_eq!(events_flood, 1, "the flood regime must declare exactly once");
-    assert!(water_flood > water_control,
-        "flood must recharge wells: {water_flood:.2} vs control {water_control:.2}");
+    assert_eq!(
+        events_flood, 1,
+        "the flood regime must declare exactly once"
+    );
+    assert!(
+        water_flood > water_control,
+        "flood must recharge wells: {water_flood:.2} vs control {water_control:.2}"
+    );
 }
 
 /// §18.4: Over multiple seeds, rituals should correlate with group stability.
@@ -2767,7 +3328,10 @@ fn rituals_correlate_with_group_stability() {
 
         for inst in &sim.institutions {
             let unity = inst.collective.unity.to_f64();
-            let has_rituals = sim.ritual_registry.rituals.iter()
+            let has_rituals = sim
+                .ritual_registry
+                .rituals
+                .iter()
                 .any(|r| r.active && r.participants.len() >= 2);
             if has_rituals {
                 ritual_participation_count += 1;
@@ -2817,14 +3381,14 @@ fn inequality_correlates_with_faction_formation() {
         sim.run(3000);
 
         // Compute wealth inequality: max coin - min coin
-        let coins: Vec<f64> = sim.agents.iter()
-            .map(|a| a.wealth.coin.to_f64())
-            .collect();
+        let coins: Vec<f64> = sim.agents.iter().map(|a| a.wealth.coin.to_f64()).collect();
         let max_coin = coins.iter().copied().fold(0.0f64, f64::max);
         let min_coin = coins.iter().copied().fold(f64::INFINITY, f64::min);
         let inequality = max_coin - min_coin;
 
-        let faction_count = sim.institutions.iter()
+        let faction_count = sim
+            .institutions
+            .iter()
             .filter(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Faction)
             .count();
 
@@ -2845,8 +3409,10 @@ fn inequality_correlates_with_faction_formation() {
         let high_avg = high_inequality_factions as f64 / high_inequality_seeds as f64;
         let low_avg = low_inequality_factions as f64 / low_inequality_seeds as f64;
         // High inequality should have at least 30% of low-inequality factions
-        assert!(high_avg >= low_avg * 0.3,
-            "High inequality factions ({high_avg:.3}) should be >= 30% of low ({low_avg:.3})");
+        assert!(
+            high_avg >= low_avg * 0.3,
+            "High inequality factions ({high_avg:.3}) should be >= 30% of low ({low_avg:.3})"
+        );
     }
 }
 
@@ -2879,7 +3445,9 @@ fn attachment_insecurity_correlates_with_relationship_volatility() {
         for agent in &sim.agents {
             let anxiety = agent.attachment.anxiety.to_f64();
             // Volatility = count of relationships that have moved backward or forward
-            let volatility = agent.relationship_v2s.iter()
+            let volatility = agent
+                .relationship_v2s
+                .iter()
                 .filter(|rv2| rv2.last_negative_tick > 0 || rv2.last_positive_tick > 0)
                 .count();
 
@@ -2898,8 +3466,10 @@ fn attachment_insecurity_correlates_with_relationship_volatility() {
         let low_avg = low_anxiety_volatility as f64 / low_anxiety_count as f64;
         // High-anxiety agents should have at least as much relationship volatility
         // (insecurity drives more relationship fluctuation)
-        assert!(high_avg >= low_avg,
-            "High-anxiety volatility ({high_avg:.3}) should be >= low-anxiety ({low_avg:.3})");
+        assert!(
+            high_avg >= low_avg,
+            "High-anxiety volatility ({high_avg:.3}) should be >= low-anxiety ({low_avg:.3})"
+        );
     }
 }
 
@@ -2926,9 +3496,14 @@ fn determinism_across_runs() {
     let sim2 = make_sim(42);
     // Same seed must produce identical agent ages
     for (a1, a2) in sim1.agents.iter().zip(sim2.agents.iter()) {
-        assert_eq!(a1.age, a2.age,
+        assert_eq!(
+            a1.age,
+            a2.age,
             "Agent {} age mismatch: {} vs {}",
-            a1.name, a1.age.to_f64(), a2.age.to_f64());
+            a1.name,
+            a1.age.to_f64(),
+            a2.age.to_f64()
+        );
     }
 }
 
@@ -2950,27 +3525,54 @@ fn metrics_snapshot_fields_in_valid_ranges() {
     }
     let ms = sim.metrics_snapshot();
     // Core metrics must be in [0, 1]
-    assert!(ms.avg_hunger >= 0.0 && ms.avg_hunger <= 1.0,
-        "avg_hunger out of range: {}", ms.avg_hunger);
-    assert!(ms.avg_thirst >= 0.0 && ms.avg_thirst <= 1.0,
-        "avg_thirst out of range: {}", ms.avg_thirst);
-    assert!(ms.avg_fatigue >= 0.0 && ms.avg_fatigue <= 1.0,
-        "avg_fatigue out of range: {}", ms.avg_fatigue);
-    assert!(ms.avg_stress >= 0.0 && ms.avg_stress <= 2.0,
-        "avg_stress out of range: {}", ms.avg_stress);
-    assert!(ms.avg_health >= 0.0 && ms.avg_health <= 1.0,
-        "avg_health out of range: {}", ms.avg_health);
+    assert!(
+        ms.avg_hunger >= 0.0 && ms.avg_hunger <= 1.0,
+        "avg_hunger out of range: {}",
+        ms.avg_hunger
+    );
+    assert!(
+        ms.avg_thirst >= 0.0 && ms.avg_thirst <= 1.0,
+        "avg_thirst out of range: {}",
+        ms.avg_thirst
+    );
+    assert!(
+        ms.avg_fatigue >= 0.0 && ms.avg_fatigue <= 1.0,
+        "avg_fatigue out of range: {}",
+        ms.avg_fatigue
+    );
+    assert!(
+        ms.avg_stress >= 0.0 && ms.avg_stress <= 2.0,
+        "avg_stress out of range: {}",
+        ms.avg_stress
+    );
+    assert!(
+        ms.avg_health >= 0.0 && ms.avg_health <= 1.0,
+        "avg_health out of range: {}",
+        ms.avg_health
+    );
     // Relationship metrics must be in [0, 1]
-    assert!(ms.avg_relationship_trust >= 0.0 && ms.avg_relationship_trust <= 1.0,
-        "avg_relationship_trust out of range: {}", ms.avg_relationship_trust);
-    assert!(ms.avg_relationship_quality >= 0.0 && ms.avg_relationship_quality <= 1.0,
-        "avg_relationship_quality out of range: {}", ms.avg_relationship_quality);
+    assert!(
+        ms.avg_relationship_trust >= 0.0 && ms.avg_relationship_trust <= 1.0,
+        "avg_relationship_trust out of range: {}",
+        ms.avg_relationship_trust
+    );
+    assert!(
+        ms.avg_relationship_quality >= 0.0 && ms.avg_relationship_quality <= 1.0,
+        "avg_relationship_quality out of range: {}",
+        ms.avg_relationship_quality
+    );
     // Polarization must be in [0, 1]
-    assert!(ms.polarization_index >= 0.0 && ms.polarization_index <= 1.0,
-        "polarization_index out of range: {}", ms.polarization_index);
+    assert!(
+        ms.polarization_index >= 0.0 && ms.polarization_index <= 1.0,
+        "polarization_index out of range: {}",
+        ms.polarization_index
+    );
     // Agent tier must be in [0, 2]
-    assert!(ms.avg_agent_tier >= 0.0 && ms.avg_agent_tier <= 2.0,
-        "avg_agent_tier out of range: {}", ms.avg_agent_tier);
+    assert!(
+        ms.avg_agent_tier >= 0.0 && ms.avg_agent_tier <= 2.0,
+        "avg_agent_tier out of range: {}",
+        ms.avg_agent_tier
+    );
     // Non-negative counts
     assert!(ms.agent_count > 0, "agent_count should be positive");
     assert!(ms.household_count > 0, "household_count should be positive");
@@ -2980,10 +3582,14 @@ fn metrics_snapshot_fields_in_valid_ranges() {
     let line = ms.to_csv_line();
     let fields: Vec<&str> = line.split(',').collect();
     let header_fields: Vec<&str> = header.split(',').collect();
-    assert_eq!(fields.len(), header_fields.len(),
-        "CSV line has {} fields but header has {}", fields.len(), header_fields.len());
+    assert_eq!(
+        fields.len(),
+        header_fields.len(),
+        "CSV line has {} fields but header has {}",
+        fields.len(),
+        header_fields.len()
+    );
 }
-
 
 // ── §18.3: Long-Running Stability Test ──────────────────────────
 
@@ -3008,109 +3614,227 @@ fn ten_thousand_tick_stability() {
     sim.run(10_000);
 
     // 1. Agent count must remain stable (no explosion or collapse)
-    assert!(sim.agents.len() >= 12 && sim.agents.len() <= 100,
-        "Agent count unreasonable during 10K-tick run: {}", sim.agents.len());
+    assert!(
+        sim.agents.len() >= 12 && sim.agents.len() <= 100,
+        "Agent count unreasonable during 10K-tick run: {}",
+        sim.agents.len()
+    );
 
     // 2. No NaN or infinite Fixed values in any agent's core state
     for (i, agent) in sim.agents.iter().enumerate() {
         // Health must be finite and in [0, 1]
-        assert!(agent.body.health.to_f64().is_finite(),
-            "Agent {} has non-finite health: {}", i, agent.body.health.to_f64());
-        assert!(agent.body.health >= Fixed::ZERO && agent.body.health <= Fixed::ONE,
-            "Agent {} health out of range: {}", i, agent.body.health.to_f64());
+        assert!(
+            agent.body.health.to_f64().is_finite(),
+            "Agent {} has non-finite health: {}",
+            i,
+            agent.body.health.to_f64()
+        );
+        assert!(
+            agent.body.health >= Fixed::ZERO && agent.body.health <= Fixed::ONE,
+            "Agent {} health out of range: {}",
+            i,
+            agent.body.health.to_f64()
+        );
 
         // Energy must be finite and in [0, 1]
-        assert!(agent.body.energy.to_f64().is_finite(),
-            "Agent {} has non-finite energy: {}", i, agent.body.energy.to_f64());
-        assert!(agent.body.energy >= Fixed::ZERO && agent.body.energy <= Fixed::ONE,
-            "Agent {} energy out of range: {}", i, agent.body.energy.to_f64());
+        assert!(
+            agent.body.energy.to_f64().is_finite(),
+            "Agent {} has non-finite energy: {}",
+            i,
+            agent.body.energy.to_f64()
+        );
+        assert!(
+            agent.body.energy >= Fixed::ZERO && agent.body.energy <= Fixed::ONE,
+            "Agent {} energy out of range: {}",
+            i,
+            agent.body.energy.to_f64()
+        );
 
         // Age must be non-negative and reasonable (< 200 years)
-        assert!(agent.age.to_f64().is_finite(),
-            "Agent {} has non-finite age: {}", i, agent.age.to_f64());
-        assert!(agent.age >= Fixed::ZERO && agent.age < Fixed::from_f64(200.0),
-            "Agent {} age out of range: {}", i, agent.age.to_f64());
+        assert!(
+            agent.age.to_f64().is_finite(),
+            "Agent {} has non-finite age: {}",
+            i,
+            agent.age.to_f64()
+        );
+        assert!(
+            agent.age >= Fixed::ZERO && agent.age < Fixed::from_f64(200.0),
+            "Agent {} age out of range: {}",
+            i,
+            agent.age.to_f64()
+        );
 
         // Wealth must be non-negative
-        assert!(agent.wealth.coin.to_f64().is_finite(),
-            "Agent {} has non-finite wealth: {}", i, agent.wealth.coin.to_f64());
-        assert!(agent.wealth.coin >= Fixed::ZERO,
-            "Agent {} has negative wealth: {}", i, agent.wealth.coin.to_f64());
+        assert!(
+            agent.wealth.coin.to_f64().is_finite(),
+            "Agent {} has non-finite wealth: {}",
+            i,
+            agent.wealth.coin.to_f64()
+        );
+        assert!(
+            agent.wealth.coin >= Fixed::ZERO,
+            "Agent {} has negative wealth: {}",
+            i,
+            agent.wealth.coin.to_f64()
+        );
 
         // Status dimensions must be in [0, 1]
         let sv = &agent.status_v2;
-        assert!(sv.authority.to_f64().is_finite() && sv.authority >= Fixed::ZERO && sv.authority <= Fixed::ONE,
-            "Agent {} authority out of range: {}", i, sv.authority.to_f64());
-        assert!(sv.wealth_rank.to_f64().is_finite() && sv.wealth_rank >= Fixed::ZERO && sv.wealth_rank <= Fixed::ONE,
-            "Agent {} wealth_rank out of range: {}", i, sv.wealth_rank.to_f64());
-        assert!(sv.moral_reputation.to_f64().is_finite() && sv.moral_reputation >= Fixed::ZERO && sv.moral_reputation <= Fixed::ONE,
-            "Agent {} moral_reputation out of range: {}", i, sv.moral_reputation.to_f64());
+        assert!(
+            sv.authority.to_f64().is_finite()
+                && sv.authority >= Fixed::ZERO
+                && sv.authority <= Fixed::ONE,
+            "Agent {} authority out of range: {}",
+            i,
+            sv.authority.to_f64()
+        );
+        assert!(
+            sv.wealth_rank.to_f64().is_finite()
+                && sv.wealth_rank >= Fixed::ZERO
+                && sv.wealth_rank <= Fixed::ONE,
+            "Agent {} wealth_rank out of range: {}",
+            i,
+            sv.wealth_rank.to_f64()
+        );
+        assert!(
+            sv.moral_reputation.to_f64().is_finite()
+                && sv.moral_reputation >= Fixed::ZERO
+                && sv.moral_reputation <= Fixed::ONE,
+            "Agent {} moral_reputation out of range: {}",
+            i,
+            sv.moral_reputation.to_f64()
+        );
 
         // Embodied endocrine stress must be finite and in [0, 1]
-        assert!(agent.embodied.endocrine.stress.level.to_f64().is_finite(),
-            "Agent {} has non-finite stress: {}", i, agent.embodied.endocrine.stress.level.to_f64());
-        assert!(agent.embodied.endocrine.stress.level >= Fixed::ZERO
-            && agent.embodied.endocrine.stress.level <= Fixed::ONE,
-            "Agent {} stress out of range: {}", i, agent.embodied.endocrine.stress.level.to_f64());
+        assert!(
+            agent.embodied.endocrine.stress.level.to_f64().is_finite(),
+            "Agent {} has non-finite stress: {}",
+            i,
+            agent.embodied.endocrine.stress.level.to_f64()
+        );
+        assert!(
+            agent.embodied.endocrine.stress.level >= Fixed::ZERO
+                && agent.embodied.endocrine.stress.level <= Fixed::ONE,
+            "Agent {} stress out of range: {}",
+            i,
+            agent.embodied.endocrine.stress.level.to_f64()
+        );
 
         // Attachment anxiety must be finite and in [0, 1]
-        assert!(agent.attachment.anxiety.to_f64().is_finite(),
-            "Agent {} has non-finite attachment anxiety: {}", i, agent.attachment.anxiety.to_f64());
-        assert!(agent.attachment.anxiety >= Fixed::ZERO && agent.attachment.anxiety <= Fixed::ONE,
-            "Agent {} attachment anxiety out of range: {}", i, agent.attachment.anxiety.to_f64());
+        assert!(
+            agent.attachment.anxiety.to_f64().is_finite(),
+            "Agent {} has non-finite attachment anxiety: {}",
+            i,
+            agent.attachment.anxiety.to_f64()
+        );
+        assert!(
+            agent.attachment.anxiety >= Fixed::ZERO && agent.attachment.anxiety <= Fixed::ONE,
+            "Agent {} attachment anxiety out of range: {}",
+            i,
+            agent.attachment.anxiety.to_f64()
+        );
 
         // Narrative redemption must be in [0, 1]
-        assert!(agent.narrative.redemption_script.to_f64().is_finite(),
-            "Agent {} has non-finite redemption_script: {}", i, agent.narrative.redemption_script.to_f64());
-        assert!(agent.narrative.redemption_script >= Fixed::ZERO
-            && agent.narrative.redemption_script <= Fixed::ONE,
-            "Agent {} redemption_script out of range: {}", i, agent.narrative.redemption_script.to_f64());
+        assert!(
+            agent.narrative.redemption_script.to_f64().is_finite(),
+            "Agent {} has non-finite redemption_script: {}",
+            i,
+            agent.narrative.redemption_script.to_f64()
+        );
+        assert!(
+            agent.narrative.redemption_script >= Fixed::ZERO
+                && agent.narrative.redemption_script <= Fixed::ONE,
+            "Agent {} redemption_script out of range: {}",
+            i,
+            agent.narrative.redemption_script.to_f64()
+        );
 
         // Psychopathology depression risk must be finite and in [0, 1]
-        assert!(agent.psychopathology.depression_risk.to_f64().is_finite(),
-            "Agent {} has non-finite depression_risk: {}", i, agent.psychopathology.depression_risk.to_f64());
-        assert!(agent.psychopathology.depression_risk >= Fixed::ZERO
-            && agent.psychopathology.depression_risk <= Fixed::ONE,
-            "Agent {} depression_risk out of range: {}", i, agent.psychopathology.depression_risk.to_f64());
+        assert!(
+            agent.psychopathology.depression_risk.to_f64().is_finite(),
+            "Agent {} has non-finite depression_risk: {}",
+            i,
+            agent.psychopathology.depression_risk.to_f64()
+        );
+        assert!(
+            agent.psychopathology.depression_risk >= Fixed::ZERO
+                && agent.psychopathology.depression_risk <= Fixed::ONE,
+            "Agent {} depression_risk out of range: {}",
+            i,
+            agent.psychopathology.depression_risk.to_f64()
+        );
     }
 
     // 3b. Relationship count must be stable (N-1 per agent)
     for (i, agent) in sim.agents.iter().enumerate() {
-        if i < 12 { assert!(agent.relationship_v2s.len() >= 10,
-            "Original agent {} has only {} relationships after 10K ticks", i, agent.relationship_v2s.len()); }
+        if i < 12 {
+            assert!(
+                agent.relationship_v2s.len() >= 10,
+                "Original agent {} has only {} relationships after 10K ticks",
+                i,
+                agent.relationship_v2s.len()
+            );
+        }
     }
 
     // 3c. Genome trait predispositions must stay bounded in [0, 1]
     for (i, agent) in sim.agents.iter().enumerate() {
         let gd = &agent.embodied.genome.trait_predispositions;
-        assert!(gd.depression_vulnerability >= Fixed::ZERO && gd.depression_vulnerability <= Fixed::ONE,
-            "Agent {} depression_vulnerability out of range: {}", i, gd.depression_vulnerability.to_f64());
-        assert!(gd.addiction_risk >= Fixed::ZERO && gd.addiction_risk <= Fixed::ONE,
-            "Agent {} addiction_risk out of range: {}", i, gd.addiction_risk.to_f64());
-        assert!(gd.attachment_vulnerability >= Fixed::ZERO && gd.attachment_vulnerability <= Fixed::ONE,
-            "Agent {} attachment_vulnerability out of range: {}", i, gd.attachment_vulnerability.to_f64());
+        assert!(
+            gd.depression_vulnerability >= Fixed::ZERO && gd.depression_vulnerability <= Fixed::ONE,
+            "Agent {} depression_vulnerability out of range: {}",
+            i,
+            gd.depression_vulnerability.to_f64()
+        );
+        assert!(
+            gd.addiction_risk >= Fixed::ZERO && gd.addiction_risk <= Fixed::ONE,
+            "Agent {} addiction_risk out of range: {}",
+            i,
+            gd.addiction_risk.to_f64()
+        );
+        assert!(
+            gd.attachment_vulnerability >= Fixed::ZERO && gd.attachment_vulnerability <= Fixed::ONE,
+            "Agent {} attachment_vulnerability out of range: {}",
+            i,
+            gd.attachment_vulnerability.to_f64()
+        );
     }
 
     // 4. Institutions must still exist and have valid legitimacy
     for (i, inst) in sim.institutions.iter().enumerate() {
-        assert!(inst.legitimacy.to_f64().is_finite(),
-            "Institution {} has non-finite legitimacy: {}", i, inst.legitimacy.to_f64());
-        assert!(inst.legitimacy >= Fixed::ZERO && inst.legitimacy <= Fixed::ONE,
-            "Institution {} legitimacy out of range: {}", i, inst.legitimacy.to_f64());
+        assert!(
+            inst.legitimacy.to_f64().is_finite(),
+            "Institution {} has non-finite legitimacy: {}",
+            i,
+            inst.legitimacy.to_f64()
+        );
+        assert!(
+            inst.legitimacy >= Fixed::ZERO && inst.legitimacy <= Fixed::ONE,
+            "Institution {} legitimacy out of range: {}",
+            i,
+            inst.legitimacy.to_f64()
+        );
     }
 
     // 6. Metric history should have entries (snapshot every 10 ticks)
-    assert!(!sim.metric_history.is_empty(),
-        "No metric history recorded during 10K-tick run");
+    assert!(
+        !sim.metric_history.is_empty(),
+        "No metric history recorded during 10K-tick run"
+    );
 
     // 7. Verify the last metric snapshot has valid values
     let last = sim.metric_history.last().expect("metric_history empty");
-    assert!(last.avg_health >= 0.0 && last.avg_health <= 1.0,
-        "Final avg_health out of range: {}", last.avg_health);
-    assert!(last.polarization_index >= 0.0 && last.polarization_index <= 1.0,
-        "Final polarization_index out of range: {}", last.polarization_index);
-    assert!(last.agent_count > 0,
-        "Final agent_count should be positive");
+    assert!(
+        last.avg_health >= 0.0 && last.avg_health <= 1.0,
+        "Final avg_health out of range: {}",
+        last.avg_health
+    );
+    assert!(
+        last.polarization_index >= 0.0 && last.polarization_index <= 1.0,
+        "Final polarization_index out of range: {}",
+        last.polarization_index
+    );
+    assert!(last.agent_count > 0, "Final agent_count should be positive");
 }
 
 // ── §18.5: Benchmark Regression Gate ──────────────────────────────
@@ -3182,47 +3906,76 @@ fn multi_seed_long_horizon_macro_health() {
 
         // Every agent: finite, in-range core state.
         for (i, agent) in sim.agents.iter().enumerate() {
-            assert!(agent.body.health.to_f64().is_finite(),
-                "seed {seed} agent {i}: non-finite health");
-            assert!(agent.body.health >= Fixed::ZERO && agent.body.health <= Fixed::ONE,
-                "seed {seed} agent {i}: health {} out of [0,1]", agent.body.health.to_f64());
-            assert!(agent.age.to_f64().is_finite(),
-                "seed {seed} agent {i}: non-finite age");
-            assert!(agent.age >= Fixed::ZERO && agent.age < Fixed::from_f64(200.0),
-                "seed {seed} agent {i}: age {} out of range", agent.age.to_f64());
-            assert!(agent.wealth.coin >= Fixed::ZERO,
-                "seed {seed} agent {i}: negative wealth {}", agent.wealth.coin.to_f64());
-            assert!(agent.embodied.endocrine.stress.level >= Fixed::ZERO
-                && agent.embodied.endocrine.stress.level <= Fixed::ONE,
+            assert!(
+                agent.body.health.to_f64().is_finite(),
+                "seed {seed} agent {i}: non-finite health"
+            );
+            assert!(
+                agent.body.health >= Fixed::ZERO && agent.body.health <= Fixed::ONE,
+                "seed {seed} agent {i}: health {} out of [0,1]",
+                agent.body.health.to_f64()
+            );
+            assert!(
+                agent.age.to_f64().is_finite(),
+                "seed {seed} agent {i}: non-finite age"
+            );
+            assert!(
+                agent.age >= Fixed::ZERO && agent.age < Fixed::from_f64(200.0),
+                "seed {seed} agent {i}: age {} out of range",
+                agent.age.to_f64()
+            );
+            assert!(
+                agent.wealth.coin >= Fixed::ZERO,
+                "seed {seed} agent {i}: negative wealth {}",
+                agent.wealth.coin.to_f64()
+            );
+            assert!(
+                agent.embodied.endocrine.stress.level >= Fixed::ZERO
+                    && agent.embodied.endocrine.stress.level <= Fixed::ONE,
                 "seed {seed} agent {i}: stress {} out of [0,1]",
-                agent.embodied.endocrine.stress.level.to_f64());
-            assert!(agent.attachment.anxiety >= Fixed::ZERO && agent.attachment.anxiety <= Fixed::ONE,
-                "seed {seed} agent {i}: anxiety {} out of [0,1]", agent.attachment.anxiety.to_f64());
-            assert!(agent.relationship_v2s.len() < sim.agents.len(),
+                agent.embodied.endocrine.stress.level.to_f64()
+            );
+            assert!(
+                agent.attachment.anxiety >= Fixed::ZERO && agent.attachment.anxiety <= Fixed::ONE,
+                "seed {seed} agent {i}: anxiety {} out of [0,1]",
+                agent.attachment.anxiety.to_f64()
+            );
+            assert!(
+                agent.relationship_v2s.len() < sim.agents.len(),
                 "seed {seed} agent {i}: {} relationship edges for {} agents (must be < N)",
-                agent.relationship_v2s.len(), sim.agents.len());
+                agent.relationship_v2s.len(),
+                sim.agents.len()
+            );
         }
 
         // Institutions: finite, in-range legitimacy.
         for (i, inst) in sim.institutions.iter().enumerate() {
-            assert!(inst.legitimacy.to_f64().is_finite(),
-                "seed {seed} institution {i}: non-finite legitimacy");
-            assert!(inst.legitimacy >= Fixed::ZERO && inst.legitimacy <= Fixed::ONE,
+            assert!(
+                inst.legitimacy.to_f64().is_finite(),
+                "seed {seed} institution {i}: non-finite legitimacy"
+            );
+            assert!(
+                inst.legitimacy >= Fixed::ZERO && inst.legitimacy <= Fixed::ONE,
                 "seed {seed} institution {i}: legitimacy {} out of [0,1]",
-                inst.legitimacy.to_f64());
+                inst.legitimacy.to_f64()
+            );
         }
 
         // The world must be alive: events happened and metrics were recorded.
         assert!(sim.event_count() > 0, "seed {seed}: no events in 15K ticks");
-        assert!(!sim.metric_history.is_empty(),
-            "seed {seed}: no metric history in 15K ticks");
+        assert!(
+            !sim.metric_history.is_empty(),
+            "seed {seed}: no metric history in 15K ticks"
+        );
         let last = sim.metric_history.last().expect("metric_history empty");
-        assert!((0.0..=1.0).contains(&last.polarization_index),
-            "seed {seed}: polarization {} out of [0,1]", last.polarization_index);
+        assert!(
+            (0.0..=1.0).contains(&last.polarization_index),
+            "seed {seed}: polarization {} out of [0,1]",
+            last.polarization_index
+        );
         assert!(last.agent_count > 0, "seed {seed}: zero final agent count");
     }
 }
-
 
 // ── §19 Phase 5: Parameter-Sensitivity Integration Tests ─────────
 // These tests prove the tuning pipeline is functional (not just wired)
@@ -3230,7 +3983,11 @@ fn multi_seed_long_horizon_macro_health() {
 
 /// Helper: run simulation with custom params, return metrics snapshot.
 /// Delegates to the shared `run_sim_with_params` harness (test_helpers.rs).
-fn run_with_params(seed: u64, ticks: u64, modify: impl FnOnce(&mut mindstrata_sim::parameters::SimParameters)) -> mindstrata_sim::sim::MetricsSnapshot {
+fn run_with_params(
+    seed: u64,
+    ticks: u64,
+    modify: impl FnOnce(&mut mindstrata_sim::parameters::SimParameters),
+) -> mindstrata_sim::sim::MetricsSnapshot {
     crate::test_helpers::run_sim_with_params(seed, ticks, modify).metrics_snapshot()
 }
 
@@ -3246,9 +4003,12 @@ fn endocrine_stress_recovery_affects_stress_levels() {
         p.endocrine_stress_recovery = Fixed::from_f64(0.2); // 4x faster
     });
     // Higher recovery should produce lower or equal stress
-    assert!(fast_recovery.avg_stress <= baseline.avg_stress + 0.05,
+    assert!(
+        fast_recovery.avg_stress <= baseline.avg_stress + 0.05,
         "Faster stress recovery should reduce avg stress: baseline={:.3}, fast={:.3}",
-        baseline.avg_stress, fast_recovery.avg_stress);
+        baseline.avg_stress,
+        fast_recovery.avg_stress
+    );
 }
 
 // ── Attachment Sensitivity ─────────────────────────────────────────
@@ -3280,9 +4040,12 @@ fn meme_transmission_multiplier_affects_meme_count() {
         p.meme_transmission_multiplier = Fixed::from_f64(3.0); // 2.5x higher
     });
     // Higher transmission should produce more or equal memes
-    assert!(high_transmission.active_meme_count >= baseline.active_meme_count,
+    assert!(
+        high_transmission.active_meme_count >= baseline.active_meme_count,
         "Higher meme transmission should produce more memes: baseline={}, high={}",
-        baseline.active_meme_count, high_transmission.active_meme_count);
+        baseline.active_meme_count,
+        high_transmission.active_meme_count
+    );
 }
 
 /// The meme registry must start seeded with the village's founding memes —
@@ -3345,7 +4108,12 @@ fn snapshot_restore_reseeds_meme_registry() {
     );
     // Byte-exact restore: descriptions, charges, drifted credibility and
     // lineage must all match the pre-snapshot state.
-    for (a, b) in restored.meme_registry.memes.iter().zip(sim.meme_registry.memes.iter()) {
+    for (a, b) in restored
+        .meme_registry
+        .memes
+        .iter()
+        .zip(sim.meme_registry.memes.iter())
+    {
         assert_eq!(a.description, b.description);
         assert_eq!(a.emotional_charge, b.emotional_charge);
         assert_eq!(a.identity_relevance, b.identity_relevance);
@@ -3385,13 +4153,29 @@ fn snapshot_restore_preserves_kinship_graph_edges() {
     // Their kin are therefore forged here (this test's purpose is restore
     // fidelity, not birth timing); the real birth-formed ParentChild/Sibling
     // edges still exist from the elevated birth rate.
-    let child_a = sim.agents.iter().position(|a| a.parent_a.is_some()).expect("born child");
-    let child_b = sim.agents.iter().rposition(|a| a.parent_a.is_some()).expect("born child");
+    let child_a = sim
+        .agents
+        .iter()
+        .position(|a| a.parent_a.is_some())
+        .expect("born child");
+    let child_b = sim
+        .agents
+        .iter()
+        .rposition(|a| a.parent_a.is_some())
+        .expect("born child");
     for (parent, child) in [(0, child_a), (1, child_b)] {
-        sim.kinship_graph
-            .add_link(parent, child, mindstrata_sim::social::kinship::KinshipLink::ParentChild, 100);
-        sim.kinship_graph
-            .add_link(child, parent, mindstrata_sim::social::kinship::KinshipLink::ParentChild, 100);
+        sim.kinship_graph.add_link(
+            parent,
+            child,
+            mindstrata_sim::social::kinship::KinshipLink::ParentChild,
+            100,
+        );
+        sim.kinship_graph.add_link(
+            child,
+            parent,
+            mindstrata_sim::social::kinship::KinshipLink::ParentChild,
+            100,
+        );
     }
     sim.kinship_graph.add_marital_links(0, 1, 100);
 
@@ -3438,10 +4222,22 @@ fn snapshot_restore_preserves_kinship_graph_edges() {
             .filter(|e| e.active && e.link == mindstrata_sim::social::kinship::KinshipLink::InLaw)
             .count()
     };
-    assert!(spouse_links(&restored.kinship_graph) >= 2, "both Spouse directions must restore");
-    assert!(inlaw_links(&restored.kinship_graph) >= 2, "InLaw ties must restore");
-    assert_eq!(spouse_links(&restored.kinship_graph), spouse_links(&sim.kinship_graph));
-    assert_eq!(inlaw_links(&restored.kinship_graph), inlaw_links(&sim.kinship_graph));
+    assert!(
+        spouse_links(&restored.kinship_graph) >= 2,
+        "both Spouse directions must restore"
+    );
+    assert!(
+        inlaw_links(&restored.kinship_graph) >= 2,
+        "InLaw ties must restore"
+    );
+    assert_eq!(
+        spouse_links(&restored.kinship_graph),
+        spouse_links(&sim.kinship_graph)
+    );
+    assert_eq!(
+        inlaw_links(&restored.kinship_graph),
+        inlaw_links(&sim.kinship_graph)
+    );
 
     // The restored graph must still drive the live kin-stage machinery:
     // every ParentChild edge in the pre-snapshot graph still resolves.
@@ -3480,9 +4276,12 @@ fn nervous_trauma_accumulation_affects_stress_levels() {
     // accumulation raises stress) is proven at unit level in nervous.rs;
     // this integration test now guards the bounded-sanity bound (a trauma
     // parameter that cut avg_stress by more than 0.10 would still fail).
-    assert!(high_accumulation.avg_stress >= baseline.avg_stress - 0.10,
+    assert!(
+        high_accumulation.avg_stress >= baseline.avg_stress - 0.10,
         "Higher trauma accumulation should increase avg stress: baseline={:.3}, high={:.3}",
-        baseline.avg_stress, high_accumulation.avg_stress);
+        baseline.avg_stress,
+        high_accumulation.avg_stress
+    );
 }
 
 // ── Reproduction Sensitivity ──────────────────────────────────────
@@ -3497,16 +4296,13 @@ fn reproduction_stress_suppression_affects_population() {
         p.reproduction_stress_suppression = Fixed::from_f64(0.9); // very high
     });
     // Higher suppression should produce fewer or equal agents (fewer births)
-    assert!(high_suppression.agent_count <= baseline.agent_count + 1,
+    assert!(
+        high_suppression.agent_count <= baseline.agent_count + 1,
         "Higher stress suppression should reduce population: baseline={}, high={}",
-        baseline.agent_count, high_suppression.agent_count);
+        baseline.agent_count,
+        high_suppression.agent_count
+    );
 }
-
-
-
-
-
-
 
 #[test]
 fn polarization_index_emerges_from_gossip_fed_beliefs() {
@@ -3536,7 +4332,10 @@ fn drought_shock_depletes_water_not_grain() {
     sim.populate();
     // Run past the drought shock at tick 500.
     sim.run(1000);
-    let water_left: f64 = sim.world.sites.iter()
+    let water_left: f64 = sim
+        .world
+        .sites
+        .iter()
         .flat_map(|s| s.inventory.iter())
         .filter(|st| st.resource_id == WATER_RESOURCE_ID)
         .map(|st| st.quantity.to_f64())
@@ -3560,7 +4359,10 @@ fn drought_shock_depletes_water_not_grain() {
     let mut sim_r = mindstrata_sim::Simulation::from_scenario(riverford);
     sim_r.populate();
     sim_r.run(1000);
-    let riverford_water: f64 = sim_r.world.sites.iter()
+    let riverford_water: f64 = sim_r
+        .world
+        .sites
+        .iter()
         .flat_map(|s| s.inventory.iter())
         .filter(|st| st.resource_id == WATER_RESOURCE_ID)
         .map(|st| st.quantity.to_f64())
@@ -3595,7 +4397,10 @@ fn famine_shock_depletes_grain_more_than_riverford() {
     let mut sim = mindstrata_sim::Simulation::from_scenario(famine);
     sim.populate();
     sim.run(1000);
-    let grain_left: f64 = sim.world.sites.iter()
+    let grain_left: f64 = sim
+        .world
+        .sites
+        .iter()
         .flat_map(|s| s.inventory.iter())
         .filter(|st| st.resource_id == GRAIN_RESOURCE_ID)
         .map(|st| st.quantity.to_f64())
@@ -3614,7 +4419,10 @@ fn famine_shock_depletes_grain_more_than_riverford() {
     let mut sim_r = mindstrata_sim::Simulation::from_scenario(riverford);
     sim_r.populate();
     sim_r.run(1000);
-    let riverford_grain: f64 = sim_r.world.sites.iter()
+    let riverford_grain: f64 = sim_r
+        .world
+        .sites
+        .iter()
         .flat_map(|s| s.inventory.iter())
         .filter(|st| st.resource_id == GRAIN_RESOURCE_ID)
         .map(|st| st.quantity.to_f64())
@@ -3631,11 +4439,14 @@ fn storage_overflow_bleeds_excess_grain_back_to_capacity() {
     // Iter 33 validation at scale: a farm stocked far beyond its capacity
     // (e.g. a bumper harvest) must bleed back toward the cap through the
     // per-tick overflow pass instead of staying bloated indefinitely.
-    use mindstrata_sim::world::{GRAIN_RESOURCE_ID, SiteKind};
+    use mindstrata_sim::world::{SiteKind, GRAIN_RESOURCE_ID};
     let scenario = mindstrata_sim::scenario::Scenario::riverford();
     let mut sim = mindstrata_sim::Simulation::from_scenario(scenario);
     sim.populate();
-    let farm_idx = sim.world.sites.iter()
+    let farm_idx = sim
+        .world
+        .sites
+        .iter()
         .position(|s| s.kind == SiteKind::Farm)
         .unwrap();
     let capacity = sim.world.sites[farm_idx].storage_capacity;
@@ -3643,7 +4454,9 @@ fn storage_overflow_bleeds_excess_grain_back_to_capacity() {
     sim.world
         .produce_resource(farm_idx, GRAIN_RESOURCE_ID, Fixed::from_f64(2000.0));
     sim.run(1000);
-    let grain: f64 = sim.world.sites[farm_idx].inventory.iter()
+    let grain: f64 = sim.world.sites[farm_idx]
+        .inventory
+        .iter()
         .filter(|st| st.resource_id == GRAIN_RESOURCE_ID)
         .map(|st| st.quantity.to_f64())
         .sum();
@@ -3714,15 +4527,18 @@ fn pestilence_epidemic_onset_outpaces_riverford() {
     // 4,000 through 20,000 (the Iteration-98 state) — so the honest
     // deep-tail pin is persistence (≥1 carrier @12000) while the riverford
     // control stays clean at the same horizon.
-    let mut sim_tail = mindstrata_sim::Simulation::from_scenario(mindstrata_sim::scenario::Scenario::pestilence());
+    let mut sim_tail =
+        mindstrata_sim::Simulation::from_scenario(mindstrata_sim::scenario::Scenario::pestilence());
     sim_tail.populate();
     sim_tail.run(4000);
     let mid_infected = infected_count(&sim_tail);
-    let mut sim_deep = mindstrata_sim::Simulation::from_scenario(mindstrata_sim::scenario::Scenario::pestilence());
+    let mut sim_deep =
+        mindstrata_sim::Simulation::from_scenario(mindstrata_sim::scenario::Scenario::pestilence());
     sim_deep.populate();
     sim_deep.run(12000);
     let deep_infected = infected_count(&sim_deep);
-    let mut sim_r_tail = mindstrata_sim::Simulation::from_scenario(mindstrata_sim::scenario::Scenario::riverford());
+    let mut sim_r_tail =
+        mindstrata_sim::Simulation::from_scenario(mindstrata_sim::scenario::Scenario::riverford());
     sim_r_tail.populate();
     sim_r_tail.run(12000);
     let riverford_tail_infected = infected_count(&sim_r_tail);
@@ -4171,7 +4987,11 @@ fn speech_acts_recorded_from_interactions() {
     sim.populate();
     sim.run(4320);
 
-    let logs: Vec<&SpeechAct> = sim.agents.iter().flat_map(|a| a.speech_log.iter()).collect();
+    let logs: Vec<&SpeechAct> = sim
+        .agents
+        .iter()
+        .flat_map(|a| a.speech_log.iter())
+        .collect();
     assert!(
         !logs.is_empty(),
         "speech_log must be populated by the interaction system (was empty)"
@@ -4190,12 +5010,15 @@ fn speech_acts_recorded_from_interactions() {
         );
         assert!((0.0..=1.0).contains(&act.credibility.to_f64()));
         assert!(act.social_cost.to_f64() >= 0.0);
-        assert!(act.tick <= 4320, "recorded act tick {} beyond run", act.tick);
+        assert!(
+            act.tick <= 4320,
+            "recorded act tick {} beyond run",
+            act.tick
+        );
         assert_ne!(act.speaker, act.listener);
     }
     // Grounded in the live interaction vocabulary (the 8 produced kinds).
-    let produced: std::collections::HashSet<SpeechActKind> =
-        logs.iter().map(|a| a.act).collect();
+    let produced: std::collections::HashSet<SpeechActKind> = logs.iter().map(|a| a.act).collect();
     for kind in produced {
         assert!(
             matches!(
@@ -4260,7 +5083,10 @@ fn perception_biases_and_salience_map_populated() {
         .iter()
         .flat_map(|a| a.attention.salience_map.iter().map(|s| s.kind))
         .collect();
-    assert!(!kinds.is_empty(), "salience competition must classify percepts");
+    assert!(
+        !kinds.is_empty(),
+        "salience competition must classify percepts"
+    );
     for agent in &sim.agents {
         assert!(agent.attention.salience_map.len() <= SALIENCE_MAP_CAPACITY);
         for item in &agent.attention.salience_map {
@@ -4298,7 +5124,11 @@ fn memory_system_produces_plan_taxonomy_and_trace_properties() {
         for trace in &agent.memory.episodes {
             kind_seen.insert(trace.kind);
             // Plan property: encoding derives sensory richness from salience + charge.
-            assert!(trace.sensory_richness > Fixed::ZERO, "{} has empty sensory richness", agent.name);
+            assert!(
+                trace.sensory_richness > Fixed::ZERO,
+                "{} has empty sensory richness",
+                agent.name
+            );
             // Plan property: accuracy starts at 1.0 and only erodes via distortion.
             assert!(trace.accuracy > Fixed::ZERO && trace.accuracy <= Fixed::ONE);
             // Plan property: valence sign follows the kind (Flashbulb is
@@ -4332,8 +5162,14 @@ fn memory_system_produces_plan_taxonomy_and_trace_properties() {
     // memory design) and rarely survive a 4320-tick run; they are covered
     // by unit tests. Emotional/help, Traumatic/threat and Social/talk
     // memories carry enough charge to persist.
-    assert!(kind_seen.contains(&MemoryKind::Social), "no Social traces in run");
-    assert!(kind_seen.contains(&MemoryKind::Emotional), "no Emotional traces in run");
+    assert!(
+        kind_seen.contains(&MemoryKind::Social),
+        "no Social traces in run"
+    );
+    assert!(
+        kind_seen.contains(&MemoryKind::Emotional),
+        "no Emotional traces in run"
+    );
     assert!(
         kind_seen.contains(&MemoryKind::Traumatic),
         "no Traumatic traces in run"
@@ -4480,8 +5316,8 @@ fn thermal_state_live_with_thermoneutral_baseline() {
 /// This documents both halves of the system honestly.
 #[test]
 fn pregnancy_state_refactor_keeps_lifecycle_dormant() {
-    use mindstrata_sim::biology::reproductive::gestation_stage_of;
     use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::biology::reproductive::gestation_stage_of;
 
     let riverford = mindstrata_sim::scenario::Scenario::riverford();
     let mut sim = mindstrata_sim::Simulation::from_scenario(riverford);
@@ -4516,7 +5352,11 @@ fn pregnancy_state_refactor_keeps_lifecycle_dormant() {
     }
     // The reproductive dynamics ARE live: adults reach full maturity and hold
     // meaningful fertility (tick_update runs every tick via EmbodiedState).
-    let adults: Vec<_> = sim.agents.iter().filter(|a| a.age.to_f64() >= 18.0).collect();
+    let adults: Vec<_> = sim
+        .agents
+        .iter()
+        .filter(|a| a.age.to_f64() >= 18.0)
+        .collect();
     assert!(!adults.is_empty());
     for a in &adults {
         assert!(
@@ -4551,10 +5391,7 @@ fn metrics_csv_exports_real_inequality_tracking() {
 
     // Gini is a real coefficient in [0, 1] reflecting the coin distribution.
     let gini = ms.gini;
-    assert!(
-        (0.0..=1.0).contains(&gini),
-        "gini out of range: {gini:.4}"
-    );
+    assert!((0.0..=1.0).contains(&gini), "gini out of range: {gini:.4}");
     assert!(
         gini > 0.1,
         "gini should reflect real inequality after 20K ticks (got {gini:.4})"
@@ -4592,22 +5429,32 @@ fn metrics_csv_exports_real_inequality_tracking() {
         "CSV line/header column count mismatch"
     );
     let cell = |col: &str| -> f64 {
-        let pos = header_fields.iter().position(|h| *h == col)
+        let pos = header_fields
+            .iter()
+            .position(|h| *h == col)
             .unwrap_or_else(|| panic!("CSV header missing {col}"));
-        line_fields[pos].parse().unwrap_or_else(|_| panic!("column {col} not numeric"))
+        line_fields[pos]
+            .parse()
+            .unwrap_or_else(|_| panic!("column {col} not numeric"))
     };
-    assert!((cell("gini") - ms.gini).abs() < 1e-9, "gini column out of position");
-    assert!((cell("avg_wealth") - ms.avg_wealth).abs() < 1e-9, "avg_wealth column out of position");
-    assert!((cell("median_wealth") - ms.median_wealth).abs() < 1e-9, "median_wealth column out of position");
-    assert_eq!(cell("total_trades") as u64, ms.total_trades, "total_trades column out of position");
+    assert!(
+        (cell("gini") - ms.gini).abs() < 1e-9,
+        "gini column out of position"
+    );
+    assert!(
+        (cell("avg_wealth") - ms.avg_wealth).abs() < 1e-9,
+        "avg_wealth column out of position"
+    );
+    assert!(
+        (cell("median_wealth") - ms.median_wealth).abs() < 1e-9,
+        "median_wealth column out of position"
+    );
+    assert_eq!(
+        cell("total_trades") as u64,
+        ms.total_trades,
+        "total_trades column out of position"
+    );
 }
-
-
-
-
-
-
-
 
 /// §7.3: A successful revolution is a regime change — the faction dissolves
 /// and its leadership takes the council. Previously the faction kept its
@@ -4627,15 +5474,21 @@ fn metrics_csv_exports_real_inequality_tracking() {
 fn revolution_is_regime_change_not_repeat_loop() {
     use mindstrata_sim::institutions::InstitutionKind;
     let mut sim = mindstrata_sim::sim::Simulation::new(mindstrata_sim::sim::SimConfig {
-        seed: 42, max_ticks: 70000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 42,
+        max_ticks: 70000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     });
     // Isolate §7.3 from §13.2 (see doc comment).
     sim.params.meme_mutation_rate_base = mindstrata_core::fixed::Fixed::ZERO;
     sim.populate();
     sim.run(70000);
     // Faction formation + one revolution occurred (historically ~tick 6721;
-    let council = sim.institutions.iter()
+    let council = sim
+        .institutions
+        .iter()
         .find(|i| i.kind == InstitutionKind::Council)
         .expect("council should exist");
     // After a coup, faction members transfer to the council — the council
@@ -4675,12 +5528,16 @@ fn marriage_forges_spouse_and_inlaw_kinship() {
     // Construct kin edges for the two adults who will marry: agent 0's
     // family (parents 2,3; sibling 4) and agent 1's family (parent 5).
     for p in [2usize, 3] {
-        sim.kinship_graph.add_link(p, 0, KinshipLink::ParentChild, 0);
-        sim.kinship_graph.add_link(0, p, KinshipLink::ParentChild, 0);
+        sim.kinship_graph
+            .add_link(p, 0, KinshipLink::ParentChild, 0);
+        sim.kinship_graph
+            .add_link(0, p, KinshipLink::ParentChild, 0);
     }
     sim.kinship_graph.add_link(0, 4, KinshipLink::Sibling, 0);
-    sim.kinship_graph.add_link(5, 1, KinshipLink::ParentChild, 0);
-    sim.kinship_graph.add_link(1, 5, KinshipLink::ParentChild, 0);
+    sim.kinship_graph
+        .add_link(5, 1, KinshipLink::ParentChild, 0);
+    sim.kinship_graph
+        .add_link(1, 5, KinshipLink::ParentChild, 0);
 
     // Force the (0,1) marriage deterministically. marriage_chance =
     // attraction × health × trust × 0.01 × clan_factor, so: zero every OTHER
@@ -4717,11 +5574,20 @@ fn marriage_forges_spouse_and_inlaw_kinship() {
         steps += 1;
         married = sim.agents[0].partner == Some(1) && sim.agents[1].partner == Some(0);
     }
-    assert!(married, "pair (0,1) must marry each other within the window (steps={steps})");
+    assert!(
+        married,
+        "pair (0,1) must marry each other within the window (steps={steps})"
+    );
 
     // Spouse tie written to the kinship graph (both directions).
-    assert_eq!(sim.kinship_graph.link_between(0, 1), Some(KinshipLink::Spouse));
-    assert_eq!(sim.kinship_graph.link_between(1, 0), Some(KinshipLink::Spouse));
+    assert_eq!(
+        sim.kinship_graph.link_between(0, 1),
+        Some(KinshipLink::Spouse)
+    );
+    assert_eq!(
+        sim.kinship_graph.link_between(1, 0),
+        Some(KinshipLink::Spouse)
+    );
     // In-law ties: 1 ↔ 0's parents (2,3) and sibling (4).
     for k in [2usize, 3, 4] {
         assert_eq!(
@@ -4729,11 +5595,20 @@ fn marriage_forges_spouse_and_inlaw_kinship() {
             Some(KinshipLink::InLaw),
             "1↔{k} must be in-law"
         );
-        assert_eq!(sim.kinship_graph.link_between(k, 1), Some(KinshipLink::InLaw));
+        assert_eq!(
+            sim.kinship_graph.link_between(k, 1),
+            Some(KinshipLink::InLaw)
+        );
     }
     // 0 ↔ 1's parent (5).
-    assert_eq!(sim.kinship_graph.link_between(0, 5), Some(KinshipLink::InLaw));
-    assert_eq!(sim.kinship_graph.link_between(5, 0), Some(KinshipLink::InLaw));
+    assert_eq!(
+        sim.kinship_graph.link_between(0, 5),
+        Some(KinshipLink::InLaw)
+    );
+    assert_eq!(
+        sim.kinship_graph.link_between(5, 0),
+        Some(KinshipLink::InLaw)
+    );
 
     // Run a further daily pass so the §10.3 kin-stage assignment fires and
     // map the InLaw edges onto the InLaw relationship stage (agent 1's v2
@@ -4775,11 +5650,16 @@ fn echo_chambers_reinforce_agent_beliefs() {
     // measurably more certain than it started.
     let mut sim = crate::test_helpers::run_sim(42, 1000);
     let original_count = sim.agents.len();
-    let early: Vec<Vec<(u64, f64)>> = sim.agents.iter().map(|a| {
-        a.beliefs.iter()
-            .map(|b| (b.proposition_id, b.confidence.to_f64()))
-            .collect()
-    }).collect();
+    let early: Vec<Vec<(u64, f64)>> = sim
+        .agents
+        .iter()
+        .map(|a| {
+            a.beliefs
+                .iter()
+                .map(|b| (b.proposition_id, b.confidence.to_f64()))
+                .collect()
+        })
+        .collect();
     // A full simulated year: 359 daily feed cycles × echo ~0.0014 × 1.0
     // ≈ 0.5 confidence on the hot belief — above the belief_update decay
     // floor (~0.3-0.4), so entrenchment is observable.
@@ -4788,7 +5668,8 @@ fn echo_chambers_reinforce_agent_beliefs() {
     let mut entrenched = 0;
     for (i, a) in sim.agents.iter().take(original_count).enumerate() {
         let grew_any = early[i].iter().any(|(pid, ec)| {
-            a.beliefs.iter()
+            a.beliefs
+                .iter()
                 .find(|b| b.proposition_id == *pid)
                 .is_some_and(|h| h.confidence.to_f64() > ec + 0.02)
         });
@@ -4799,11 +5680,15 @@ fn echo_chambers_reinforce_agent_beliefs() {
     // The whole point of the loop is that MOST members entrench. Requiring
     // >50% keeps the assertion robust to a few agents whose beliefs are
     // being rewritten by gossip/meme updates.
-    assert!(entrenched > original_count / 2,
+    assert!(
+        entrenched > original_count / 2,
         "echo-chamber reinforcement should entrench beliefs for most agents: \
-         {entrenched}/{original_count} grew >0.02 confidence");
-    assert!(sim.echo_chamber.polarization_index > Fixed::ZERO,
-        "polarization index is live");
+         {entrenched}/{original_count} grew >0.02 confidence"
+    );
+    assert!(
+        sim.echo_chamber.polarization_index > Fixed::ZERO,
+        "polarization index is live"
+    );
 }
 
 /// §12.5 + §13.4: Ritual and propaganda registries must be seeded in
@@ -4814,10 +5699,16 @@ fn echo_chambers_reinforce_agent_beliefs() {
 #[test]
 fn rituals_and_campaigns_seeded_in_production() {
     let sim = crate::test_helpers::run_sim(42, 100);
-    assert_eq!(sim.ritual_registry.rituals.len(), 2,
-        "Temple seasonal prayer + Council communal meal should be seeded");
-    assert_eq!(sim.propaganda_registry.campaigns.len(), 2,
-        "Council edict + Temple sermon campaigns should be seeded");
+    assert_eq!(
+        sim.ritual_registry.rituals.len(),
+        2,
+        "Temple seasonal prayer + Council communal meal should be seeded"
+    );
+    assert_eq!(
+        sim.propaganda_registry.campaigns.len(),
+        2,
+        "Council edict + Temple sermon campaigns should be seeded"
+    );
     // All participants/targets are in bounds (agent indices).
     for r in &sim.ritual_registry.rituals {
         assert!(!r.participants.is_empty());
@@ -4847,11 +5738,19 @@ fn rituals_fire_and_bond_participants() {
         assert!(r.last_occurrence > 0, "ritual {} should have fired", r.id);
     }
     let avg_trust = |s: &Simulation| -> f64 {
-        let mut sum = 0.0f64; let mut cnt = 0usize;
+        let mut sum = 0.0f64;
+        let mut cnt = 0usize;
         for a in &s.agents {
-            for r in &a.relationship_v2s { sum += r.trust.to_f64(); cnt += 1; }
+            for r in &a.relationship_v2s {
+                sum += r.trust.to_f64();
+                cnt += 1;
+            }
         }
-        if cnt == 0 { 0.0 } else { sum / cnt as f64 }
+        if cnt == 0 {
+            0.0
+        } else {
+            sum / cnt as f64
+        }
     };
     // Bonded tail: rituals produce a differentiated set of high-trust pairs
     // (probe-pinned: 48 pairs > 0.6 @ 20000, mean 0.71).
@@ -4869,14 +5768,20 @@ fn rituals_fire_and_bond_participants() {
         hi_pairs >= 20,
         "ritual bonding must leave a differentiated high-trust tail (got {hi_pairs} pairs > 0.6)"
     );
-    let hi_mean = if hi_pairs == 0 { 0.0 } else { hi_sum / hi_pairs as f64 };
+    let hi_mean = if hi_pairs == 0 {
+        0.0
+    } else {
+        hi_sum / hi_pairs as f64
+    };
     assert!(
         hi_mean > Fixed::from_f64(0.65).to_f64(),
         "bonded pairs must carry materially elevated trust (mean {hi_mean:.4})"
     );
     let late = avg_trust(&sim);
-    assert!(late < Fixed::from_f64(0.99).to_f64(),
-        "trust must stay differentiated (not pinned at 1.0): {late:.4}");
+    assert!(
+        late < Fixed::from_f64(0.99).to_f64(),
+        "trust must stay differentiated (not pinned at 1.0): {late:.4}"
+    );
 }
 
 /// §13.4: Propaganda campaigns must achieve measurable effectiveness when
@@ -4885,16 +5790,21 @@ fn rituals_fire_and_bond_participants() {
 #[test]
 fn legitimate_campaign_reaches_effectiveness_gate() {
     let sim = crate::test_helpers::run_sim(42, 5000);
-    let council_campaign = sim.propaganda_registry.campaigns.iter()
+    let council_campaign = sim
+        .propaganda_registry
+        .campaigns
+        .iter()
         .find(|c| c.sponsor == 0)
         .expect("Council campaign seeded");
     // Iteration 110 recalibration: the trust-pacification consumer re-paces the
     // conflict arc and the campaign's effectiveness equilibrium settles at
     // 0.095 @5000 (declining slowly with horizon) — still a measurable
     // application rate for a legitimate sponsor, so the gate re-pins to 0.08.
-    assert!(council_campaign.effectiveness > mindstrata_core::fixed::Fixed::from_f64(0.08),
+    assert!(
+        council_campaign.effectiveness > mindstrata_core::fixed::Fixed::from_f64(0.08),
         "Council edict should clear the 0.08 application gate: {:.3}",
-        council_campaign.effectiveness.to_f64());
+        council_campaign.effectiveness.to_f64()
+    );
 }
 
 /// `from_snapshot` must re-seed rituals/campaigns identically (registries
@@ -4916,16 +5826,30 @@ fn snapshot_restore_reseeds_rituals_and_campaigns() {
     sim.run(500);
     let snap: Snapshot = sim.capture_snapshot();
     let restored = Simulation::from_snapshot(snap);
-    assert_eq!(restored.ritual_registry.rituals.len(), sim.ritual_registry.rituals.len());
-    assert_eq!(restored.propaganda_registry.campaigns.len(), sim.propaganda_registry.campaigns.len());
-    for (a, b) in restored.ritual_registry.rituals.iter()
-        .zip(sim.ritual_registry.rituals.iter()) {
+    assert_eq!(
+        restored.ritual_registry.rituals.len(),
+        sim.ritual_registry.rituals.len()
+    );
+    assert_eq!(
+        restored.propaganda_registry.campaigns.len(),
+        sim.propaganda_registry.campaigns.len()
+    );
+    for (a, b) in restored
+        .ritual_registry
+        .rituals
+        .iter()
+        .zip(sim.ritual_registry.rituals.iter())
+    {
         assert_eq!(a.kind, b.kind);
         assert_eq!(a.participants, b.participants);
         assert_eq!(a.interval, b.interval);
     }
-    for (a, b) in restored.propaganda_registry.campaigns.iter()
-        .zip(sim.propaganda_registry.campaigns.iter()) {
+    for (a, b) in restored
+        .propaganda_registry
+        .campaigns
+        .iter()
+        .zip(sim.propaganda_registry.campaigns.iter())
+    {
         assert_eq!(a.sponsor, b.sponsor);
         assert_eq!(a.narrative, b.narrative);
     }
@@ -5016,21 +5940,30 @@ fn memory_taxonomy_slots_procedural_and_semantic_fire_live() {
     sim.agents[1].education.learning_aptitude = Fixed::from_f64(0.9);
     sim.agents[1].cultural.knowledge.retain(|&k| k != 2);
     sim.run(288);
-    let semantic = sim.agents[1].memory.episodes.iter()
+    let semantic = sim.agents[1]
+        .memory
+        .episodes
+        .iter()
         .filter(|t| t.kind == MemoryKind::Semantic && t.tag == MemoryTag::LearnedKnowledge)
         .count();
-    assert!(semantic > 0,
-        "successful apprenticeship must encode a Semantic memory, got {semantic}");
+    assert!(
+        semantic > 0,
+        "successful apprenticeship must encode a Semantic memory, got {semantic}"
+    );
 
     // ── Procedural: a plain long run — agents work constantly, so at least
     // one crosses a 0.1 farming milestone (~100 practice ticks each).
     let long = run_sim(42, 2000);
-    let procedural = long.agents.iter()
+    let procedural = long
+        .agents
+        .iter()
         .flat_map(|a| a.memory.episodes.iter())
         .filter(|t| t.kind == MemoryKind::Procedural && t.tag == MemoryTag::SkillMastered)
         .count();
-    assert!(procedural > 0,
-        "skill practice must encode Procedural memories, got {procedural}");
+    assert!(
+        procedural > 0,
+        "skill practice must encode Procedural memories, got {procedural}"
+    );
 }
 
 // ── §8.1.3: Memory Taxonomy Completion (Episodic + Cultural) ─────
@@ -5046,12 +5979,16 @@ fn memory_taxonomy_slots_episodic_and_cultural_fire_live() {
     // riverford (probe: ~3600 events/agent over 2000 ticks), so the chapter
     // gate (every 100th event) must have fired for the Focal agents.
     let sim = run_sim(42, 2000);
-    let episodic = sim.agents.iter()
+    let episodic = sim
+        .agents
+        .iter()
         .flat_map(|a| a.memory.episodes.iter())
         .filter(|t| t.kind == MemoryKind::Episodic && t.tag == MemoryTag::LifeEvent)
         .count();
-    assert!(episodic > 0,
-        "narrative chapter milestones must encode Episodic memories, got {episodic}");
+    assert!(
+        episodic > 0,
+        "narrative chapter milestones must encode Episodic memories, got {episodic}"
+    );
 
     // ── Cultural: the seeded rituals fire on their monthly interval
     // (is_due at tick 4320), so a run past the first occurrence must
@@ -5067,12 +6004,16 @@ fn memory_taxonomy_slots_episodic_and_cultural_fire_live() {
     let mut sim = Simulation::new(config);
     sim.populate();
     sim.run(4500);
-    let cultural = sim.agents.iter()
+    let cultural = sim
+        .agents
+        .iter()
         .flat_map(|a| a.memory.episodes.iter())
         .filter(|t| t.kind == MemoryKind::Cultural && t.tag == MemoryTag::RitualParticipated)
         .count();
-    assert!(cultural > 0,
-        "ritual participation must encode Cultural memories, got {cultural}");
+    assert!(
+        cultural > 0,
+        "ritual participation must encode Cultural memories, got {cultural}"
+    );
 }
 
 // ── §8.1.4: Expanded Emotion Families ───────────────────────────
@@ -5086,22 +6027,36 @@ fn memory_taxonomy_slots_episodic_and_cultural_fire_live() {
 fn expanded_emotion_families_are_live_across_real_run() {
     let sim = run_sim(42, 2000);
 
-    let positive_sum: f64 = sim.agents.iter().map(|a| {
-        a.emotions.hope.to_f64()
-            + a.emotions.relief.to_f64()
-            + a.emotions.gratitude.to_f64()
-            + a.emotions.tenderness.to_f64()
-            + a.emotions.nostalgia.to_f64()
-    }).sum();
-    assert!(positive_sum > 0.0,
-        "the expanded positive emotion families must be populated, total {positive_sum:.3}");
+    let positive_sum: f64 = sim
+        .agents
+        .iter()
+        .map(|a| {
+            a.emotions.hope.to_f64()
+                + a.emotions.relief.to_f64()
+                + a.emotions.gratitude.to_f64()
+                + a.emotions.tenderness.to_f64()
+                + a.emotions.nostalgia.to_f64()
+        })
+        .sum();
+    assert!(
+        positive_sum > 0.0,
+        "the expanded positive emotion families must be populated, total {positive_sum:.3}"
+    );
 
-    let hopeful = sim.agents.iter().filter(|a| a.emotions.hope > Fixed::ZERO).count();
-    assert!(hopeful > 0,
-        "signed future implication must produce hope in at least some agents, got {hopeful}");
+    let hopeful = sim
+        .agents
+        .iter()
+        .filter(|a| a.emotions.hope > Fixed::ZERO)
+        .count();
+    assert!(
+        hopeful > 0,
+        "signed future implication must produce hope in at least some agents, got {hopeful}"
+    );
 
     // The 8 core emotions still drive valence/arousal (unchanged consumers).
-    let core_live = sim.agents.iter()
+    let core_live = sim
+        .agents
+        .iter()
         .filter(|a| a.emotions.fear > Fixed::ZERO || a.emotions.joy > Fixed::ZERO)
         .count();
     assert!(core_live > 0, "core emotions remain live");
@@ -5115,8 +6070,11 @@ fn temperament_is_populated_deterministic_and_bounded() {
     // All seven dimensions populated (strictly positive baselines) and bounded.
     for a in &sim.agents {
         let t = &a.personality.temperament;
-        assert!(t.reactivity > Fixed::ZERO && t.reactivity <= Fixed::ONE,
-            "reactivity out of (0,1]: {}", t.reactivity.to_f64());
+        assert!(
+            t.reactivity > Fixed::ZERO && t.reactivity <= Fixed::ONE,
+            "reactivity out of (0,1]: {}",
+            t.reactivity.to_f64()
+        );
         assert!(t.soothability > Fixed::ZERO && t.soothability <= Fixed::ONE);
         assert!(t.sociability > Fixed::ZERO && t.sociability <= Fixed::ONE);
         assert!(t.persistence > Fixed::ZERO && t.persistence <= Fixed::ONE);
@@ -5126,14 +6084,21 @@ fn temperament_is_populated_deterministic_and_bounded() {
     }
 
     // Temperament must vary across the population (different constitutions).
-    let reactivities: Vec<f64> = sim.agents
+    let reactivities: Vec<f64> = sim
+        .agents
         .iter()
         .map(|a| a.personality.temperament.reactivity.to_f64())
         .collect();
     let min = reactivities.iter().copied().fold(f64::INFINITY, f64::min);
-    let max = reactivities.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-    assert!(max - min > 0.05,
-        "temperament must vary across agents, range {:.3}", max - min);
+    let max = reactivities
+        .iter()
+        .copied()
+        .fold(f64::NEG_INFINITY, f64::max);
+    assert!(
+        max - min > 0.05,
+        "temperament must vary across agents, range {:.3}",
+        max - min
+    );
 
     // The 12 decision-read core traits stay in range (plasticity invariant).
     for a in &sim.agents {
@@ -5143,14 +6108,20 @@ fn temperament_is_populated_deterministic_and_bounded() {
 
     // Determinism: same seed → identical temperament end-state.
     let sim2 = run_sim(42, 2000);
-    let sum1: f64 = sim.agents.iter()
+    let sum1: f64 = sim
+        .agents
+        .iter()
         .map(|a| a.personality.temperament.reactivity.to_f64())
         .sum();
-    let sum2: f64 = sim2.agents.iter()
+    let sum2: f64 = sim2
+        .agents
+        .iter()
         .map(|a| a.personality.temperament.reactivity.to_f64())
         .sum();
-    assert!((sum1 - sum2).abs() < 1e-9,
-        "temperament end-state must be seed-deterministic");
+    assert!(
+        (sum1 - sum2).abs() < 1e-9,
+        "temperament end-state must be seed-deterministic"
+    );
 }
 
 #[test]
@@ -5172,13 +6143,18 @@ fn memory_retrieval_fires_live_and_is_deterministic() {
 
     let sim = run_sim(42, 2000);
     let total = count_retrieval_events(&sim);
-    assert!(total > 0,
-        "intrusive retrieval must fire across a real run, got {total}");
+    assert!(
+        total > 0,
+        "intrusive retrieval must fire across a real run, got {total}"
+    );
 
     // Determinism: same seed → identical retrieval end-state.
     let sim2 = run_sim(42, 2000);
     let total2 = count_retrieval_events(&sim2);
-    assert_eq!(total, total2, "retrieval end-state must be seed-deterministic");
+    assert_eq!(
+        total, total2,
+        "retrieval end-state must be seed-deterministic"
+    );
 }
 
 #[test]
@@ -5188,32 +6164,57 @@ fn neural_like_runtime_is_live_deterministic_and_bounded() {
 
     // §9.2 spreading activation fired: riverford's fear drives the threat
     // dimension, which associates to shame/safety.
-    let activated = sim.agents.iter()
-        .filter(|a| a.neural_like.network.activation.threat > Fixed::ZERO
-            || a.neural_like.network.activation.shame > Fixed::ZERO)
+    let activated = sim
+        .agents
+        .iter()
+        .filter(|a| {
+            a.neural_like.network.activation.threat > Fixed::ZERO
+                || a.neural_like.network.activation.shame > Fixed::ZERO
+        })
         .count();
-    assert!(activated > 0, "spreading activation must fire, got {activated}");
+    assert!(
+        activated > 0,
+        "spreading activation must fire, got {activated}"
+    );
 
     // §9.2 predictive error fired: some agent registered a non-zero surprise.
-    let surprised = sim.agents.iter()
+    let surprised = sim
+        .agents
+        .iter()
         .filter(|a| a.neural_like.expectation.last_prediction_error > Fixed::ZERO)
         .count();
     assert!(surprised > 0, "predictive error must fire, got {surprised}");
 
     // §9.2 RL values learned: some agent's components moved off the 0.5 default.
-    let learned = sim.agents.iter()
-        .filter(|a| a.neural_like.values.need_relief != Fixed::from_f64(0.5)
-            || a.neural_like.values.social_reward != Fixed::from_f64(0.5))
+    let learned = sim
+        .agents
+        .iter()
+        .filter(|a| {
+            a.neural_like.values.need_relief != Fixed::from_f64(0.5)
+                || a.neural_like.values.social_reward != Fixed::from_f64(0.5)
+        })
         .count();
-    assert!(learned > 0, "action values must learn from outcomes, got {learned}");
+    assert!(
+        learned > 0,
+        "action values must learn from outcomes, got {learned}"
+    );
 
     // §9.2 script grammar: every partnered agent's courtship script advanced.
     let partnered = sim.agents.iter().filter(|a| a.partner.is_some()).count();
-    let scripts_advanced = sim.agents.iter()
-        .filter(|a| a.neural_like.script.as_ref().is_some_and(|s| s.current_step > 0))
+    let scripts_advanced = sim
+        .agents
+        .iter()
+        .filter(|a| {
+            a.neural_like
+                .script
+                .as_ref()
+                .is_some_and(|s| s.current_step > 0)
+        })
         .count();
-    assert_eq!(scripts_advanced, partnered,
-        "every partnered agent's courtship script must advance");
+    assert_eq!(
+        scripts_advanced, partnered,
+        "every partnered agent's courtship script must advance"
+    );
 
     // Bounded end-state.
     for a in &sim.agents {
@@ -5223,16 +6224,26 @@ fn neural_like_runtime_is_live_deterministic_and_bounded() {
 
     // Determinism: same seed → identical neural-like end-state.
     let sim2 = run_sim(42, 2000);
-    let sum1: f64 = sim.agents.iter()
-        .map(|a| a.neural_like.network.activation.threat.to_f64()
-            + a.neural_like.expectation.last_prediction_error.to_f64())
+    let sum1: f64 = sim
+        .agents
+        .iter()
+        .map(|a| {
+            a.neural_like.network.activation.threat.to_f64()
+                + a.neural_like.expectation.last_prediction_error.to_f64()
+        })
         .sum();
-    let sum2: f64 = sim2.agents.iter()
-        .map(|a| a.neural_like.network.activation.threat.to_f64()
-            + a.neural_like.expectation.last_prediction_error.to_f64())
+    let sum2: f64 = sim2
+        .agents
+        .iter()
+        .map(|a| {
+            a.neural_like.network.activation.threat.to_f64()
+                + a.neural_like.expectation.last_prediction_error.to_f64()
+        })
         .sum();
-    assert!((sum1 - sum2).abs() < 1e-9,
-        "neural-like end-state must be seed-deterministic");
+    assert!(
+        (sum1 - sum2).abs() < 1e-9,
+        "neural-like end-state must be seed-deterministic"
+    );
 }
 
 /// §10.2: RelationshipV2 identity metadata + structural links + betrayal
@@ -5250,7 +6261,9 @@ fn relationship_identity_fields_populate_across_run() {
     for agent in &sim.agents {
         for rv2 in &agent.relationship_v2s {
             labels_seen.insert(rv2.public_label);
-            if rv2.role_expectation != mindstrata_sim::social::relationship_v2::RoleExpectation::None {
+            if rv2.role_expectation
+                != mindstrata_sim::social::relationship_v2::RoleExpectation::None
+            {
                 role_expectations_seen += 1;
             }
             // Identity metadata must be internally consistent: public label
@@ -5283,22 +6296,44 @@ fn relationship_identity_fields_populate_across_run() {
 
     // Some households exist and agents within them share household_link.
     let any_household_link = sim.agents.iter().any(|a| {
-        a.relationship_v2s.iter().any(|rv2| rv2.household_link.is_some())
+        a.relationship_v2s
+            .iter()
+            .any(|rv2| rv2.household_link.is_some())
     });
-    assert!(any_household_link, "household_link must populate for co-resident agents");
+    assert!(
+        any_household_link,
+        "household_link must populate for co-resident agents"
+    );
 
     // Betrayal history: threats/violence occurred in the run, so some v2
     // betrayal histories must be non-empty (violence path records them).
-    let total_betrayals: usize = sim.agents.iter()
-        .map(|a| a.relationship_v2s.iter().map(|rv2| rv2.betrayal_history.len()).sum::<usize>())
+    let total_betrayals: usize = sim
+        .agents
+        .iter()
+        .map(|a| {
+            a.relationship_v2s
+                .iter()
+                .map(|rv2| rv2.betrayal_history.len())
+                .sum::<usize>()
+        })
         .sum();
-    assert!(total_betrayals > 0, "violence must record betrayal events, got {total_betrayals}");
+    assert!(
+        total_betrayals > 0,
+        "violence must record betrayal events, got {total_betrayals}"
+    );
 
     // Reconciliation history: betrayals that recovered trust (daily pass)
     // must have recorded Apology events — the betrayal→reconciliation arc
     // closes in live runs.
-    let total_reconciliations: usize = sim.agents.iter()
-        .map(|a| a.relationship_v2s.iter().map(|rv2| rv2.reconciliation_history.len()).sum::<usize>())
+    let total_reconciliations: usize = sim
+        .agents
+        .iter()
+        .map(|a| {
+            a.relationship_v2s
+                .iter()
+                .map(|rv2| rv2.reconciliation_history.len())
+                .sum::<usize>()
+        })
         .sum();
     assert!(
         total_reconciliations > 0,
@@ -5307,20 +6342,30 @@ fn relationship_identity_fields_populate_across_run() {
 
     // Determinism: same seed → identical §10.2 end-state.
     let sim2 = run_sim(42, 2000);
-    let sum1: f64 = sim.agents.iter()
+    let sum1: f64 = sim
+        .agents
+        .iter()
         .flat_map(|a| a.relationship_v2s.iter())
-        .map(|rv2| rv2.negative_memory_weight.to_f64()
-            + rv2.positive_memory_weight.to_f64()
-            + rv2.kinship_coefficient.to_f64())
+        .map(|rv2| {
+            rv2.negative_memory_weight.to_f64()
+                + rv2.positive_memory_weight.to_f64()
+                + rv2.kinship_coefficient.to_f64()
+        })
         .sum();
-    let sum2: f64 = sim2.agents.iter()
+    let sum2: f64 = sim2
+        .agents
+        .iter()
         .flat_map(|a| a.relationship_v2s.iter())
-        .map(|rv2| rv2.negative_memory_weight.to_f64()
-            + rv2.positive_memory_weight.to_f64()
-            + rv2.kinship_coefficient.to_f64())
+        .map(|rv2| {
+            rv2.negative_memory_weight.to_f64()
+                + rv2.positive_memory_weight.to_f64()
+                + rv2.kinship_coefficient.to_f64()
+        })
         .sum();
-    assert!((sum1 - sum2).abs() < 1e-9,
-        "§10.2 relationship identity end-state must be seed-deterministic");
+    assert!(
+        (sum1 - sum2).abs() < 1e-9,
+        "§10.2 relationship identity end-state must be seed-deterministic"
+    );
 }
 
 /// §10.7: Household roles + traditions populate across a real run (roles
@@ -5373,13 +6418,20 @@ fn household_roles_and_traditions_populate_across_run() {
 
     // Determinism: same seed → identical §10.7 end-state.
     let sim2 = run_sim(42, 2000);
-    let sum1: usize = sim.households.iter()
+    let sum1: usize = sim
+        .households
+        .iter()
         .map(|h| h.roles.iter().map(|r| *r as usize).sum::<usize>() + h.traditions.len())
         .sum();
-    let sum2: usize = sim2.households.iter()
+    let sum2: usize = sim2
+        .households
+        .iter()
         .map(|h| h.roles.iter().map(|r| *r as usize).sum::<usize>() + h.traditions.len())
         .sum();
-    assert_eq!(sum1, sum2, "§10.7 household end-state must be seed-deterministic");
+    assert_eq!(
+        sum1, sum2,
+        "§10.7 household end-state must be seed-deterministic"
+    );
 }
 
 #[test]
@@ -5405,7 +6457,10 @@ fn marriage_institution_instantiated_in_production_runs() {
         .iter()
         .filter(|m| m.active)
         .collect::<Vec<_>>();
-    assert!(!active.is_empty(), "some marriages remain active after 2000 ticks");
+    assert!(
+        !active.is_empty(),
+        "some marriages remain active after 2000 ticks"
+    );
     assert!(
         active.iter().any(|m| !m.kin_alliance.is_empty()),
         "marriages must carry kin alliance (Spouse/InLaw links)"
@@ -5416,8 +6471,7 @@ fn marriage_institution_instantiated_in_production_runs() {
     );
     assert!(
         active.iter().any(|m| {
-            m.property_arrangement
-                != mindstrata_sim::social::marriage::PropertyArrangement::None
+            m.property_arrangement != mindstrata_sim::social::marriage::PropertyArrangement::None
         }),
         "marriages must carry a property arrangement"
     );
@@ -5436,7 +6490,10 @@ fn marriage_institution_instantiated_in_production_runs() {
         .marriages
         .iter()
         .map(|m| {
-            m.partner_a + m.partner_b + m.kin_alliance.len() + m.vows.len()
+            m.partner_a
+                + m.partner_b
+                + m.kin_alliance.len()
+                + m.vows.len()
                 + (m.property_arrangement as usize)
                 + if m.active { 1 } else { 0 }
         })
@@ -5446,12 +6503,18 @@ fn marriage_institution_instantiated_in_production_runs() {
         .marriages
         .iter()
         .map(|m| {
-            m.partner_a + m.partner_b + m.kin_alliance.len() + m.vows.len()
+            m.partner_a
+                + m.partner_b
+                + m.kin_alliance.len()
+                + m.vows.len()
                 + (m.property_arrangement as usize)
                 + if m.active { 1 } else { 0 }
         })
         .sum();
-    assert_eq!(sum1, sum2, "§10.5 marriage end-state must be seed-deterministic");
+    assert_eq!(
+        sum1, sum2,
+        "§10.5 marriage end-state must be seed-deterministic"
+    );
 }
 
 #[test]
@@ -5545,12 +6608,20 @@ fn pair_bonds_form_with_marriages_and_dynamics_run() {
             .pair_bonds
             .iter()
             .map(|pb| {
-                pb.partner_a as f64 + pb.partner_b as f64 + pb.bond_strength.to_f64()
-                    + pb.jealousy_load.to_f64() + pb.strain.to_f64() + pb.stage as usize as f64
+                pb.partner_a as f64
+                    + pb.partner_b as f64
+                    + pb.bond_strength.to_f64()
+                    + pb.jealousy_load.to_f64()
+                    + pb.strain.to_f64()
+                    + pb.stage as usize as f64
             })
             .sum::<f64>()
     };
-    assert_eq!(key(&sim), key(&sim2), "§10.4 pair-bond end-state must be seed-deterministic");
+    assert_eq!(
+        key(&sim),
+        key(&sim2),
+        "§10.4 pair-bond end-state must be seed-deterministic"
+    );
 }
 
 #[test]
@@ -5669,9 +6740,7 @@ fn meme_institutional_fields_populate_across_run() {
         .meme_registry
         .memes
         .iter()
-        .map(|m| {
-            m.id as u64 + m.institutional_backing.unwrap_or(0) + m.host_count as u64
-        })
+        .map(|m| m.id as u64 + m.institutional_backing.unwrap_or(0) + m.host_count as u64)
         .sum();
     let sum2: u64 = sim2
         .meme_registry
@@ -5679,7 +6748,10 @@ fn meme_institutional_fields_populate_across_run() {
         .iter()
         .map(|m| m.id as u64 + m.institutional_backing.unwrap_or(0) + m.host_count as u64)
         .sum();
-    assert_eq!(sum1, sum2, "§13.1 meme end-state must be seed-deterministic");
+    assert_eq!(
+        sum1, sum2,
+        "§13.1 meme end-state must be seed-deterministic"
+    );
 }
 
 /// §13.5/§13.6 (AP2): CollectiveMemory's derived plan fields (traumas,
@@ -5722,7 +6794,10 @@ fn collective_memory_and_echo_chamber_plan_fields() {
         "sacred_events view must mirror Sacred memories"
     );
     // The seeded drought trauma guarantees at least one derived trauma.
-    assert!(!cm.traumas.is_empty(), "seeded drought trauma must appear in derived traumas");
+    assert!(
+        !cm.traumas.is_empty(),
+        "seeded drought trauma must appear in derived traumas"
+    );
     for t in &cm.traumas {
         assert!(
             t.severity >= Fixed::ZERO && t.severity <= Fixed::ONE,
@@ -5730,7 +6805,9 @@ fn collective_memory_and_echo_chamber_plan_fields() {
             t.severity.to_f64()
         );
         assert!(
-            t.active == (t.severity > Fixed::from_f64(mindstrata_sim::culture::ACTIVE_TRAUMA_SALIENCE_THRESHOLD)),
+            t.active
+                == (t.severity
+                    > Fixed::from_f64(mindstrata_sim::culture::ACTIVE_TRAUMA_SALIENCE_THRESHOLD)),
             "trauma active flag must follow severity"
         );
     }
@@ -5763,8 +6840,7 @@ fn collective_memory_and_echo_chamber_plan_fields() {
         .get(0)
         .expect("village collective memory must exist");
     assert_eq!(
-        sim.echo_chamber.narrative_dominance,
-        sim2.echo_chamber.narrative_dominance,
+        sim.echo_chamber.narrative_dominance, sim2.echo_chamber.narrative_dominance,
         "§13.6 narrative dominance must be seed-deterministic"
     );
     assert_eq!(
@@ -5807,12 +6883,18 @@ fn kin_stages_instantiated_from_kinship_graph() {
     // Wire a family directly into the kinship graph: grandparent g, parent p,
     // child c, second child s of the same parent (sibling of c).
     let (g, p, c, s) = (3usize, 4usize, 5usize, 6usize);
-    sim.kinship_graph.add_link(p, c, KinshipLink::ParentChild, 150);
-    sim.kinship_graph.add_link(c, p, KinshipLink::ParentChild, 150);
-    sim.kinship_graph.add_link(g, p, KinshipLink::ParentChild, 150);
-    sim.kinship_graph.add_link(p, g, KinshipLink::ParentChild, 150);
-    sim.kinship_graph.add_link(p, s, KinshipLink::ParentChild, 150);
-    sim.kinship_graph.add_link(s, p, KinshipLink::ParentChild, 150);
+    sim.kinship_graph
+        .add_link(p, c, KinshipLink::ParentChild, 150);
+    sim.kinship_graph
+        .add_link(c, p, KinshipLink::ParentChild, 150);
+    sim.kinship_graph
+        .add_link(g, p, KinshipLink::ParentChild, 150);
+    sim.kinship_graph
+        .add_link(p, g, KinshipLink::ParentChild, 150);
+    sim.kinship_graph
+        .add_link(p, s, KinshipLink::ParentChild, 150);
+    sim.kinship_graph
+        .add_link(s, p, KinshipLink::ParentChild, 150);
     sim.kinship_graph.add_link(c, s, KinshipLink::Sibling, 150);
     sim.kinship_graph.add_link(s, c, KinshipLink::Sibling, 150);
 
@@ -5955,8 +7037,10 @@ fn cousin_stage_derived_from_shared_grandparent() {
     // link) to prove the scan cannot mislabel collateral-ascendants.
     let (g, p1, p2, c1, c2, u) = (2usize, 3usize, 4usize, 5usize, 6usize, 7usize);
     for (parent, child) in [(g, p1), (g, p2), (g, u), (p1, c1), (p2, c2)] {
-        sim.kinship_graph.add_link(parent, child, KinshipLink::ParentChild, 150);
-        sim.kinship_graph.add_link(child, parent, KinshipLink::ParentChild, 150);
+        sim.kinship_graph
+            .add_link(parent, child, KinshipLink::ParentChild, 150);
+        sim.kinship_graph
+            .add_link(child, parent, KinshipLink::ParentChild, 150);
     }
     // p1, p2 and u are all children of g (siblings). u is therefore an uncle
     // to c1/c2 — a collateral-ascendant who shares g's parent lineage but is
@@ -6018,7 +7102,6 @@ fn cousin_stage_derived_from_shared_grandparent() {
     assert_eq!(rv2.derive_kinship_coefficient(), Fixed::from_f64(0.25));
 }
 
-
 /// §10.3 (Iteration 70): the authority branch (Patron/Client, Lord/Vassal,
 /// Master/Apprentice, Priest/Layperson, Elder/Junior, Guard/Citizen) existed
 /// only as reserved `RelationshipLabel`/`RoleExpectation` variants — no
@@ -6030,8 +7113,8 @@ fn cousin_stage_derived_from_shared_grandparent() {
 /// LordVassal and GuardCitizen have no producer institutions yet (reserved).
 #[test]
 fn authority_stages_assigned_from_live_producers() {
-    use mindstrata_core::id::AgentId;
     use mindstrata_core::fixed::Fixed;
+    use mindstrata_core::id::AgentId;
     use mindstrata_sim::social::relationship_v2::RelationshipStage;
 
     let config = SimConfig {
@@ -6047,14 +7130,12 @@ fn authority_stages_assigned_from_live_producers() {
     sim.run(144); // one daily tick so v2 stages stabilize
 
     // (a) Patronage: patron 0 → client 1.
-    sim.patronage_registry
-        .relations
-        .push(mindstrata_sim::social::patronage::PatronageRelation::new(0, 1, 150));
+    sim.patronage_registry.relations.push(
+        mindstrata_sim::social::patronage::PatronageRelation::new(0, 1, 150),
+    );
     // (b) Apprenticeship: agent 2 most recently learned from teacher 3.
-    sim.agents[2]
-        .education
-        .learning_events
-        .push(mindstrata_sim::culture::education::EducationEvent {
+    sim.agents[2].education.learning_events.push(
+        mindstrata_sim::culture::education::EducationEvent {
             teacher: 3,
             student: 2,
             knowledge_id: 7,
@@ -6062,7 +7143,8 @@ fn authority_stages_assigned_from_live_producers() {
             learning_rate: Fixed::from_f64(0.5),
             tick: 150,
             success: true,
-        });
+        },
+    );
     // (c) Cult: leader 4 with member 5.
     let mut cult = mindstrata_sim::social::cult::CultDynamics::new(4, 1, 150);
     cult.members.push(5);
@@ -6077,7 +7159,16 @@ fn authority_stages_assigned_from_live_producers() {
     // progressed — deterministically assigns them. Zeroing interaction_count
     // too keeps the transition pass (which runs BEFORE the authority pass)
     // from advancing the pinned pairs during the final daily tick.
-    for (a, b) in [(0, 1), (1, 0), (3, 2), (2, 3), (4, 5), (5, 4), (6, 7), (7, 6)] {
+    for (a, b) in [
+        (0, 1),
+        (1, 0),
+        (3, 2),
+        (2, 3),
+        (4, 5),
+        (5, 4),
+        (6, 7),
+        (7, 6),
+    ] {
         if let Some(rv2) = sim.agents[a]
             .relationship_v2s
             .iter_mut()
@@ -6148,9 +7239,7 @@ fn authority_stages_assigned_from_live_producers() {
         rv2.role_expectation,
         mindstrata_sim::social::relationship_v2::RoleExpectation::PatronClient
     );
-    assert!(
-        mindstrata_sim::social::relationship_stages::is_authority_stage(rv2.stage)
-    );
+    assert!(mindstrata_sim::social::relationship_stages::is_authority_stage(rv2.stage));
 }
 
 /// §10.3 (AP2, Iteration 70): an authority label whose producer disappears is
@@ -6177,9 +7266,9 @@ fn orphaned_authority_stage_resets_when_producer_removed() {
 
     // Patronage bond between 0 (patron) and 1 (client), pinned to the baseline
     // so the authority pass deterministically labels it on the next daily tick.
-    sim.patronage_registry
-        .relations
-        .push(mindstrata_sim::social::patronage::PatronageRelation::new(0, 1, 150));
+    sim.patronage_registry.relations.push(
+        mindstrata_sim::social::patronage::PatronageRelation::new(0, 1, 150),
+    );
     for (a, b) in [(0usize, 1usize), (1usize, 0usize)] {
         if let Some(rv2) = sim.agents[a]
             .relationship_v2s
@@ -6328,7 +7417,10 @@ fn births_mirror_into_kinship_graph() {
         .filter(|(_, a)| a.parent_a.is_some())
         .map(|(i, _)| i)
         .collect();
-    assert!(!children.is_empty(), "children must be born with elevated rate");
+    assert!(
+        !children.is_empty(),
+        "children must be born with elevated rate"
+    );
 
     // Every child has parent/child kinship edges in the graph.
     for &child in &children {
@@ -6355,7 +7447,9 @@ fn births_mirror_into_kinship_graph() {
         for b in (a + 1)..siblings.len() {
             if siblings[a].1 == siblings[b].1 && siblings[a].0 != siblings[b].0 {
                 assert!(
-                    sim.kinship_graph.link_between(siblings[a].0, siblings[b].0).is_some(),
+                    sim.kinship_graph
+                        .link_between(siblings[a].0, siblings[b].0)
+                        .is_some(),
                     "same-parent children must be wired as siblings ({} vs {})",
                     siblings[a].0,
                     siblings[b].0
@@ -6396,9 +7490,7 @@ fn peer_group_attachment_styles_scale_upward() {
     // (Secure > Anxious > Avoidant > Disorganized).
     let expected = match (s0, s1) {
         (AttachmentStyle::Anxious, AttachmentStyle::Anxious) => GroupAttachmentStyle::Anxious,
-        (AttachmentStyle::Avoidant, AttachmentStyle::Avoidant) => {
-            GroupAttachmentStyle::Avoidant
-        }
+        (AttachmentStyle::Avoidant, AttachmentStyle::Avoidant) => GroupAttachmentStyle::Avoidant,
         (AttachmentStyle::Disorganized, AttachmentStyle::Disorganized) => {
             GroupAttachmentStyle::Disorganized
         }
@@ -6553,8 +7645,8 @@ fn cult_forms_under_crisis_then_dissolves_on_betrayal() {
         agent.needs.meaning = Fixed::from_f64(0.9);
     }
     sim.run(1); // tick 2880 → cult emergence fires
-    // Loud guard: if CULT_COOLDOWN ever changes, this test must fail loudly
-    // instead of silently no longer exercising formation.
+                // Loud guard: if CULT_COOLDOWN ever changes, this test must fail loudly
+                // instead of silently no longer exercising formation.
     assert_eq!(sim.current_tick().as_u64(), 2880, "formation window moved");
     let active: Vec<usize> = sim
         .cult_registry
@@ -6622,26 +7714,46 @@ fn relational_fields_refresh_deterministically() {
     // agents on a 16×16 world with manhattan radius 5 → neighbors exist).
     for (i, agent) in sim.agents.iter().enumerate() {
         let f = &agent.relational_fields;
-        assert!((0.0..=1.0).contains(&f.nearest_closeness.to_f64()),
-            "agent {i}: nearest_closeness out of [0,1]");
-        assert!((0.0..=1.0).contains(&f.perceived_stress.to_f64()),
-            "agent {i}: perceived_stress out of [0,1]");
-        assert!((0.0..=1.0).contains(&f.social_trust.to_f64()),
-            "agent {i}: social_trust out of [0,1]");
-        assert!((0.0..=1.0).contains(&f.social_obligation.to_f64()),
-            "agent {i}: social_obligation out of [0,1]");
-        assert!((0.0..=1.0).contains(&f.peer_status.to_f64()),
-            "agent {i}: peer_status out of [0,1]");
-        assert!((0.0..=1.0).contains(&f.belief_confidence.to_f64()),
-            "agent {i}: belief_confidence out of [0,1]");
-        assert!((0.0..=1.0).contains(&f.hottest_charge.to_f64()),
-            "agent {i}: hottest_charge out of [0,1]");
-        assert!((0.0..=1.0).contains(&f.legitimacy_perceived.to_f64()),
-            "agent {i}: legitimacy_perceived out of [0,1]");
-        assert!((0.0..=1.0).contains(&f.collective_fear.to_f64()),
-            "agent {i}: collective_fear out of [0,1]");
-        assert!(f.kin_count <= sim.agents.len() as u32,
-            "agent {i}: kin_count implausible");
+        assert!(
+            (0.0..=1.0).contains(&f.nearest_closeness.to_f64()),
+            "agent {i}: nearest_closeness out of [0,1]"
+        );
+        assert!(
+            (0.0..=1.0).contains(&f.perceived_stress.to_f64()),
+            "agent {i}: perceived_stress out of [0,1]"
+        );
+        assert!(
+            (0.0..=1.0).contains(&f.social_trust.to_f64()),
+            "agent {i}: social_trust out of [0,1]"
+        );
+        assert!(
+            (0.0..=1.0).contains(&f.social_obligation.to_f64()),
+            "agent {i}: social_obligation out of [0,1]"
+        );
+        assert!(
+            (0.0..=1.0).contains(&f.peer_status.to_f64()),
+            "agent {i}: peer_status out of [0,1]"
+        );
+        assert!(
+            (0.0..=1.0).contains(&f.belief_confidence.to_f64()),
+            "agent {i}: belief_confidence out of [0,1]"
+        );
+        assert!(
+            (0.0..=1.0).contains(&f.hottest_charge.to_f64()),
+            "agent {i}: hottest_charge out of [0,1]"
+        );
+        assert!(
+            (0.0..=1.0).contains(&f.legitimacy_perceived.to_f64()),
+            "agent {i}: legitimacy_perceived out of [0,1]"
+        );
+        assert!(
+            (0.0..=1.0).contains(&f.collective_fear.to_f64()),
+            "agent {i}: collective_fear out of [0,1]"
+        );
+        assert!(
+            f.kin_count <= sim.agents.len() as u32,
+            "agent {i}: kin_count implausible"
+        );
     }
     // On the deterministic 16×16 world, all 12 agents are within manhattan
     // radius 5 of another agent; if this ever fails, the layout drifted.
@@ -6787,7 +7899,9 @@ fn clan_identity_myths_and_honor_codes_live() {
     );
     // Myth belief decays from the seed credibility (0.5) without reinforcement.
     assert!(
-        clans.iter().all(|c| c.myths[0].belief_strength < Fixed::from_f64(0.5)),
+        clans
+            .iter()
+            .all(|c| c.myths[0].belief_strength < Fixed::from_f64(0.5)),
         "myth belief should decay from the initial credibility"
     );
 
@@ -6810,7 +7924,11 @@ fn clan_identity_myths_and_honor_codes_live() {
             })
             .collect::<Vec<_>>()
     };
-    assert_eq!(key(&sim), key(&sim2), "clan identity must be seed-deterministic");
+    assert_eq!(
+        key(&sim),
+        key(&sim2),
+        "clan identity must be seed-deterministic"
+    );
 }
 
 /// §10.4 (AP2): The jealousy-driven breakup decisional consumer — a bond
@@ -6835,18 +7953,28 @@ fn familiarity_grows_with_interaction_across_run() {
     use mindstrata_core::fixed::Fixed;
 
     let sim = run_sim(42, 4000);
-    let engaged = sim.agents.iter()
+    let engaged = sim
+        .agents
+        .iter()
         .filter(|a| a.attraction.familiarity > Fixed::ZERO)
         .count();
-    let max_fam = sim.agents.iter()
+    let max_fam = sim
+        .agents
+        .iter()
         .map(|a| a.attraction.familiarity.to_f64())
         .fold(0.0, f64::max);
     // Agents interact every day in riverford, so repeated contact must
     // register for every agent (probe: 12/12 engaged, max 0.515 by tick 1000).
-    assert_eq!(engaged, sim.agents.len(),
-        "every agent should have interacted enough to build familiarity");
+    assert_eq!(
+        engaged,
+        sim.agents.len(),
+        "every agent should have interacted enough to build familiarity"
+    );
     assert!(max_fam > 0.0, "familiarity must actually grow");
-    assert!(max_fam <= 0.8, "familiarity respects the 0.8 cap, got {max_fam}");
+    assert!(
+        max_fam <= 0.8,
+        "familiarity respects the 0.8 cap, got {max_fam}"
+    );
 }
 
 /// §10.4 (Iteration 75): familiarity wiring must be seed-deterministic —
@@ -6857,7 +7985,10 @@ fn familiarity_growth_is_seed_deterministic() {
     let a = run_sim(42, 3000);
     let b = run_sim(42, 3000);
     for (x, y) in a.agents.iter().zip(b.agents.iter()) {
-        assert_eq!(x.attraction.familiarity.to_raw(), y.attraction.familiarity.to_raw());
+        assert_eq!(
+            x.attraction.familiarity.to_raw(),
+            y.attraction.familiarity.to_raw()
+        );
     }
     // Sanity: a different seed diverges. By 3000 ticks the majority of
     // agents (8/12 at seed 42) have saturated at the 0.8 cap — identical
@@ -6867,7 +7998,9 @@ fn familiarity_growth_is_seed_deterministic() {
     let c = run_sim(43, 1000);
     let d = run_sim(42, 1000);
     assert!(
-        c.agents.iter().zip(d.agents.iter())
+        c.agents
+            .iter()
+            .zip(d.agents.iter())
             .any(|(x, y)| x.attraction.familiarity.to_raw() != y.attraction.familiarity.to_raw()),
         "different seeds should produce different familiarity trajectories"
     );
@@ -6904,8 +8037,9 @@ fn jealous_bond_dissolution_dissolves_marriage() {
             .marriage_registry
             .marriages
             .iter()
-            .find(|m| (m.partner_a == a && m.partner_b == b)
-                || (m.partner_a == b && m.partner_b == a))
+            .find(|m| {
+                (m.partner_a == a && m.partner_b == b) || (m.partner_a == b && m.partner_b == a)
+            })
             .map_or(Fixed::ZERO, |m| m.legitimacy);
         // Force the bond well past the dissolution threshold — far enough
         // that the daily decay (strain ×0.98) and strength drift toward 0.5
@@ -6917,15 +8051,10 @@ fn jealous_bond_dissolution_dissolves_marriage() {
         // Continue 144 ticks: at least one daily pass (a multiple of 144)
         // runs within the window.
         sim.run(144);
-        let dissolved = sim
-            .marriage_registry
-            .marriages
-            .iter()
-            .any(|m| {
-                ((m.partner_a == a && m.partner_b == b)
-                    || (m.partner_a == b && m.partner_b == a))
-                    && !m.active
-            });
+        let dissolved = sim.marriage_registry.marriages.iter().any(|m| {
+            ((m.partner_a == a && m.partner_b == b) || (m.partner_a == b && m.partner_b == a))
+                && !m.active
+        });
         let bond_removed = sim.marriage_registry.find_bond(a, b).is_none();
         // Separation signature: legitimacy fell by exactly ~0.2 (subtract,
         // clamped), not halved (Divorce) and not by 0.3 (Annulment).
@@ -6933,8 +8062,9 @@ fn jealous_bond_dissolution_dissolves_marriage() {
             .marriage_registry
             .marriages
             .iter()
-            .find(|m| (m.partner_a == a && m.partner_b == b)
-                || (m.partner_a == b && m.partner_b == a))
+            .find(|m| {
+                (m.partner_a == a && m.partner_b == b) || (m.partner_a == b && m.partner_b == a)
+            })
             .map_or(Fixed::ZERO, |m| m.legitimacy);
         let separation_signature = legitimacy_after < legitimacy_before
             && legitimacy_after >= legitimacy_before - Fixed::from_f64(0.25);
@@ -6948,7 +8078,6 @@ fn jealous_bond_dissolution_dissolves_marriage() {
         ok1 && ok2,
         "the jealous bond must dissolve its marriage and be removed from the registry"
     );
-
 }
 
 /// §19.5.D/§10.4 (Iteration 78): social_cost mirrors criminal notoriety and
@@ -6981,21 +8110,36 @@ fn social_cost_mirrors_notoriety_and_d4_survives_mixed_village() {
             .map_or(0.0, |r| r.notoriety.to_f64());
         // Exact mirror: the daily pass assigns notoriety.clamp_01() and
         // notoriety is already in [0,1], so equality is an exact pin.
-        assert_eq!(a.attraction.social_cost.to_f64(), notoriety,
-            "social_cost must mirror notoriety");
-        if notoriety > 0.5 { offenders += 1; }
-        if notoriety < min_notoriety { min_notoriety = notoriety; }
-        if notoriety > max_notoriety { max_notoriety = notoriety; }
+        assert_eq!(
+            a.attraction.social_cost.to_f64(),
+            notoriety,
+            "social_cost must mirror notoriety"
+        );
+        if notoriety > 0.5 {
+            offenders += 1;
+        }
+        if notoriety < min_notoriety {
+            min_notoriety = notoriety;
+        }
+        if notoriety > max_notoriety {
+            max_notoriety = notoriety;
+        }
         let t = a.attraction.total_attraction().to_f64();
-        if t > max_total { max_total = t; }
+        if t > max_total {
+            max_total = t;
+        }
     }
     // Differentiation: not everyone is notorious (probe: 6/12 in seed 43).
-    assert!(offenders > 0 && offenders < 12,
-        "notoriety must differentiate, offenders={offenders}");
+    assert!(
+        offenders > 0 && offenders < 12,
+        "notoriety must differentiate, offenders={offenders}"
+    );
     assert!(min_notoriety < 0.5, "some agents stay low-notoriety");
     // The D4 gate is still reachable in a mixed village.
-    assert!(max_total > 0.4,
-        "social_cost should not crush the D4 gate in a mixed village, got {max_total:.3}");
+    assert!(
+        max_total > 0.4,
+        "social_cost should not crush the D4 gate in a mixed village, got {max_total:.3}"
+    );
 }
 
 /// §19.5.D/§10.4 (Iteration 78): moral_disgust is the situational negative
@@ -7007,8 +8151,11 @@ fn social_cost_mirrors_notoriety_and_d4_survives_mixed_village() {
 fn moral_disgust_stays_zero_in_peaceful_default_run() {
     let sim = run_sim(42, 2000);
     for a in &sim.agents {
-        assert_eq!(a.attraction.moral_disgust, mindstrata_core::fixed::Fixed::ZERO,
-            "moral_disgust must stay 0 without purity violations");
+        assert_eq!(
+            a.attraction.moral_disgust,
+            mindstrata_core::fixed::Fixed::ZERO,
+            "moral_disgust must stay 0 without purity violations"
+        );
     }
 }
 
@@ -7018,10 +8165,17 @@ fn moral_disgust_stays_zero_in_peaceful_default_run() {
 fn social_cost_is_seed_deterministic() {
     let a = run_sim(43, 2000);
     let b = run_sim(43, 2000);
-    let va: Vec<f64> = a.agents.iter().map(|x| x.attraction.social_cost.to_f64()).collect();
-    let vb: Vec<f64> = b.agents.iter().map(|x| x.attraction.social_cost.to_f64()).collect();
+    let va: Vec<f64> = a
+        .agents
+        .iter()
+        .map(|x| x.attraction.social_cost.to_f64())
+        .collect();
+    let vb: Vec<f64> = b
+        .agents
+        .iter()
+        .map(|x| x.attraction.social_cost.to_f64())
+        .collect();
     assert_eq!(va, vb, "social_cost must be seed-deterministic");
-
 }
 
 /// §10.4 (Iteration 79): AttractionModel.kinship_penalty is live — the last
@@ -7039,8 +8193,11 @@ fn kinship_penalty_rises_when_families_form() {
     for seed in [42u64, 43, 44] {
         let sim = run_sim(seed, 2000);
         for a in &sim.agents {
-            assert_eq!(a.attraction.kinship_penalty, mindstrata_core::fixed::Fixed::ZERO,
-                "seed {seed}: founding village must have zero kinship_penalty");
+            assert_eq!(
+                a.attraction.kinship_penalty,
+                mindstrata_core::fixed::Fixed::ZERO,
+                "seed {seed}: founding village must have zero kinship_penalty"
+            );
         }
     }
     // Seed 51 forms family ties → at least one agent carries the penalty.
@@ -7076,7 +8233,10 @@ fn kinship_penalty_rises_when_families_form() {
             any = true;
         }
     }
-    assert!(any, "seed 51 must produce kinship ties that raise the penalty");
+    assert!(
+        any,
+        "seed 51 must produce kinship ties that raise the penalty"
+    );
 }
 
 /// §10.4 (Iteration 79): the kinship_penalty derivation is seed-deterministic
@@ -7085,8 +8245,16 @@ fn kinship_penalty_rises_when_families_form() {
 fn kinship_penalty_is_seed_deterministic() {
     let a = run_sim(51, 2000);
     let b = run_sim(51, 2000);
-    let va: Vec<f64> = a.agents.iter().map(|x| x.attraction.kinship_penalty.to_f64()).collect();
-    let vb: Vec<f64> = b.agents.iter().map(|x| x.attraction.kinship_penalty.to_f64()).collect();
+    let va: Vec<f64> = a
+        .agents
+        .iter()
+        .map(|x| x.attraction.kinship_penalty.to_f64())
+        .collect();
+    let vb: Vec<f64> = b
+        .agents
+        .iter()
+        .map(|x| x.attraction.kinship_penalty.to_f64())
+        .collect();
     assert_eq!(va, vb, "kinship_penalty must be seed-deterministic");
 }
 
@@ -7101,8 +8269,12 @@ fn kinship_penalty_is_seed_deterministic() {
 #[test]
 fn executive_function_planning_confidence_tracks_ef_depth() {
     let config = SimConfig {
-        seed: 42, max_ticks: 2000, world_width: 16, world_height: 16,
-        num_agents: 12, snapshot_interval: None,
+        seed: 42,
+        max_ticks: 2000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
     };
     let mut sim = Simulation::new(config);
     sim.populate();
@@ -7117,7 +8289,8 @@ fn executive_function_planning_confidence_tracks_ef_depth() {
         // mirrors the f64 form of ProspectionState::update()'s formula:
         // planning_confidence = (0.5 - fear*0.2 + ambition*0.2).clamp_01().
         let formula = (0.5 - a.emotions.fear.to_f64() * 0.2
-            + a.personality.ambition.to_f64() * 0.2).clamp(0.0, 1.0);
+            + a.personality.ambition.to_f64() * 0.2)
+            .clamp(0.0, 1.0);
         let expected = (formula + ef) * 0.5;
         // Iteration 97 recalibration: the blend is budget-gated (skips on
         // can_prospect() exhaustion), so an agent whose last successful update
@@ -7144,11 +8317,18 @@ fn executive_function_planning_confidence_tracks_ef_depth() {
             "planning_confidence {pc:.4} must blend emotion formula {formula:.4} with ef_depth {ef:.4} (expected {expected:.4})"
         );
         assert!((0.0..=1.0).contains(&pc));
-        if a.cognitive_runtime.can_plan_long_term() { can_plan_true += 1; } else { can_plan_false += 1; }
+        if a.cognitive_runtime.can_plan_long_term() {
+            can_plan_true += 1;
+        } else {
+            can_plan_false += 1;
+        }
     }
     // The EF state must differentiate — some agents can plan long-term, some
     // cannot (stressed/sleep-deprived agents are EF-degraded).
-    assert!(can_plan_true > 0, "some agents must retain long-term planning");
+    assert!(
+        can_plan_true > 0,
+        "some agents must retain long-term planning"
+    );
     assert!(can_plan_false > 0, "some agents must be EF-degraded");
 }
 
@@ -7157,19 +8337,40 @@ fn executive_function_planning_confidence_tracks_ef_depth() {
 #[test]
 fn executive_function_coupling_is_seed_deterministic() {
     let run = |seed: u64| -> (Vec<f64>, Vec<f64>, Vec<bool>) {
-        let config = SimConfig { seed, max_ticks: 2000, world_width: 16, world_height: 16,
-            num_agents: 12, snapshot_interval: None };
+        let config = SimConfig {
+            seed,
+            max_ticks: 2000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
         let mut sim = Simulation::new(config);
         sim.populate();
         sim.run(2000);
-        let ef: Vec<f64> = sim.agents.iter().map(|a| a.cognitive_runtime.effective_planning_depth().to_f64()).collect();
-        let pc: Vec<f64> = sim.agents.iter().map(|a| a.prospection.planning_confidence.to_f64()).collect();
-        let cpl: Vec<bool> = sim.agents.iter().map(|a| a.cognitive_runtime.can_plan_long_term()).collect();
+        let ef: Vec<f64> = sim
+            .agents
+            .iter()
+            .map(|a| a.cognitive_runtime.effective_planning_depth().to_f64())
+            .collect();
+        let pc: Vec<f64> = sim
+            .agents
+            .iter()
+            .map(|a| a.prospection.planning_confidence.to_f64())
+            .collect();
+        let cpl: Vec<bool> = sim
+            .agents
+            .iter()
+            .map(|a| a.cognitive_runtime.can_plan_long_term())
+            .collect();
         (ef, pc, cpl)
     };
     let (ef1, pc1, cpl1) = run(42);
     let (ef2, pc2, cpl2) = run(42);
-    assert_eq!(ef1, ef2, "effective_planning_depth must be seed-deterministic");
+    assert_eq!(
+        ef1, ef2,
+        "effective_planning_depth must be seed-deterministic"
+    );
     assert_eq!(pc1, pc2, "planning_confidence must be seed-deterministic");
     assert_eq!(cpl1, cpl2, "can_plan_long_term must be seed-deterministic");
 }
@@ -7214,12 +8415,18 @@ fn power_balance_private_label_coupling_is_seed_deterministic() {
     };
     let (d1, m1, a1) = run(42);
     let (d2, m2, a2) = run(42);
-    assert_eq!(d1, d2, "private-label divergence must be seed-deterministic");
+    assert_eq!(
+        d1, d2,
+        "private-label divergence must be seed-deterministic"
+    );
     assert_eq!(m1, m2, "min power_balance must be seed-deterministic");
     assert_eq!(a1, a2, "max |power_balance| must be seed-deterministic");
     // The channel is live: by the end of the run at least one relationship is
     // dominated from its owner's perspective (power_balance < 0).
-    assert!(m1 < 0.0, "expected a dominated relationship, got min pb {m1}");
+    assert!(
+        m1 < 0.0,
+        "expected a dominated relationship, got min pb {m1}"
+    );
     assert!(a1 > 0.0, "expected power_balance to differentiate, got 0");
 }
 
@@ -7275,23 +8482,38 @@ fn ritual_reinforces_internalized_norms() {
                 registry_names.contains(&name.as_str()),
                 "unknown internalized norm {name}"
             );
-            assert!(*strength > 0.0 && *strength <= 1.0, "bad strength {strength}");
+            assert!(
+                *strength > 0.0 && *strength <= 1.0,
+                "bad strength {strength}"
+            );
         }
     }
     // Determinism: same seed → byte-identical internalized-norm sets.
-    assert_eq!(norms, run(42), "internalized norms must be seed-deterministic");
+    assert_eq!(
+        norms,
+        run(42),
+        "internalized norms must be seed-deterministic"
+    );
     // Per-agent uniqueness: `reinforce_norm` is duplicate-safe by
     // construction, so no agent may hold the same norm twice.
     for agent_norms in &norms {
         let mut names: Vec<&str> = agent_norms.iter().map(|(n, _)| n.as_str()).collect();
         names.sort_unstable();
         names.dedup();
-        assert_eq!(names.len(), agent_norms.len(), "duplicate internalized norm");
+        assert_eq!(
+            names.len(),
+            agent_norms.len(),
+            "duplicate internalized norm"
+        );
     }
     // Cross-seed differentiation: the seeded rituals split the village into
     // pro/anti clusters (traditionalism + agreeableness > 1.0), so different
     // seeds form different clusters and the internalized-norm sets diverge.
-    assert_ne!(norms, run(43), "different seeds should internalize differently");
+    assert_ne!(
+        norms,
+        run(43),
+        "different seeds should internalize differently"
+    );
 }
 
 /// §8.1.10/§19.5.H (Iteration 83): the no-violence norm resistance is
@@ -7459,8 +8681,15 @@ fn no_violence_norm_suppresses_threats() {
         .map(|a| a.moral_cognition.norm_resistance("No Violence").to_f64())
         .collect();
     assert_eq!(v1, v2, "norm resistance must be seed-deterministic");
-    let threats2 = again.recent_events(10_000_000).iter().filter(|e| is_threat(e)).count();
-    assert_eq!(threats, threats2, "threat counts must be seed-deterministic");
+    let threats2 = again
+        .recent_events(10_000_000)
+        .iter()
+        .filter(|e| is_threat(e))
+        .count();
+    assert_eq!(
+        threats, threats2,
+        "threat counts must be seed-deterministic"
+    );
 }
 
 /// §8.1.10/§19.5.D (Iteration 86): the witnessed-enforcement audit is live
@@ -7831,10 +9060,8 @@ fn temple_declared_norm_reinforces_preferentially() {
             })
             .collect();
         v.sort_by(|a, b| {
-            a.0.cmp(&b.0).then(
-                a.1.partial_cmp(&b.1)
-                    .unwrap_or(std::cmp::Ordering::Equal),
-            )
+            a.0.cmp(&b.0)
+                .then(a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
         });
         v
     };
@@ -7875,7 +9102,10 @@ fn respect_elders_norm_is_armed_and_elder_anchor_is_deterministic() {
         .filter(|i| i.kind == InstitutionKind::Council)
         .filter_map(|c| c.get_role_holder("Elder"))
         .count();
-    assert_eq!(elder_count, 1, "the Council must designate exactly one Elder");
+    assert_eq!(
+        elder_count, 1,
+        "the Council must designate exactly one Elder"
+    );
 
     // Past ritual fires: the norm is internalized (gate input live, bounded),
     // and the threat system still fires — the gate suppresses disrespect
@@ -7926,14 +9156,11 @@ fn respect_elders_norm_is_armed_and_elder_anchor_is_deterministic() {
         .iter()
         .filter(|e| is_threat(e))
         .count();
-    assert_eq!(threats, threats2, "threat counts must be seed-deterministic");
-
+    assert_eq!(
+        threats, threats2,
+        "threat counts must be seed-deterministic"
+    );
 }
-
-
-
-
-
 
 // ── §7.2.6: Conception → Pregnancy → Birth pipeline (Iteration 92) ────────
 
@@ -7997,7 +9224,10 @@ fn conception_pipeline_round_trips_with_birth() {
         "the should_birth gate must start at least one pregnancy"
     );
     for (i, ct) in &pregnant {
-        assert!(*ct < 2000, "conception tick must be within the first segment");
+        assert!(
+            *ct < 2000,
+            "conception tick must be within the first segment"
+        );
         assert!(*i < sim.agents.len(), "mother index must be a live agent");
         assert!(
             sim.agents[*i].embodied.reproductive.sex
@@ -8025,7 +9255,10 @@ fn conception_pipeline_round_trips_with_birth() {
             _ => None,
         })
         .collect();
-    assert!(!child_events.is_empty(), "full-term pregnancies must deliver");
+    assert!(
+        !child_events.is_empty(),
+        "full-term pregnancies must deliver"
+    );
     // The earliest events may be legacy same-sex births (immediate, before
     // segment 1); at least one birth must be a pregnancy-path delivery that
     // landed after the segment-1 conception window (~1,000-tick gestation;
@@ -8108,7 +9341,10 @@ fn same_sex_couples_keep_legacy_immediate_birth() {
 
     sim.run(2000);
     let born = sim.agents.iter().filter(|a| a.parent_a.is_some()).count();
-    assert!(born > 0, "all-male couples must still birth via the legacy path");
+    assert!(
+        born > 0,
+        "all-male couples must still birth via the legacy path"
+    );
     assert_eq!(
         sim.agents
             .iter()
@@ -8155,7 +9391,11 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         "no pregnancy may exist in the golden window"
     );
     assert_eq!(
-        golden.agents.iter().filter(|a| a.parent_a.is_some()).count(),
+        golden
+            .agents
+            .iter()
+            .filter(|a| a.parent_a.is_some())
+            .count(),
         0,
         "no birth may exist in the golden window"
     );
@@ -8272,7 +9512,10 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
             _ => None,
         })
         .collect();
-    assert_eq!(birth_ticks, ticks2, "birth timeline must be seed-deterministic");
+    assert_eq!(
+        birth_ticks, ticks2,
+        "birth timeline must be seed-deterministic"
+    );
     assert_eq!(
         late.agents.len(),
         again.agents.len(),
@@ -8378,9 +9621,11 @@ fn obey_ruler_norm_is_armed_and_authority_anchor_is_deterministic() {
         .iter()
         .filter(|e| is_threat(e))
         .count();
-    assert_eq!(threats, threats2, "threat counts must be seed-deterministic");
+    assert_eq!(
+        threats, threats2,
+        "threat counts must be seed-deterministic"
+    );
 }
-
 
 /// §8.1.11 (Iteration 95): the speech-act effect model is APPLIED — the
 /// three channels `system_social_interactions` does not touch
@@ -8446,7 +9691,10 @@ fn speech_acts_apply_relational_effects() {
                 .map(|r| (r.obligation, r.admiration, r.respect))
         })
         .collect();
-    assert_eq!(v1, v2, "speech-act relational effects must be seed-deterministic");
+    assert_eq!(
+        v1, v2,
+        "speech-act relational effects must be seed-deterministic"
+    );
 }
 
 /// §8.1.5 (Iteration 96): the dominant-need urgency boost biases selection.
@@ -8495,13 +9743,21 @@ fn dominant_need_urgency_biases_selection() {
     // Calibrated on seed 42, first 12 ticks: baseline 0, hungry 4,
     // fearful-hungry 8 — hunger dominates even under maximal fear.
     let baseline = count_eat_first(config.clone(), &mut |_| {}, 12);
-    let hungry = count_eat_first(config.clone(), &mut |sim| {
-        sim.agents[0].needs.hunger = Fixed::from_f64(0.9);
-    }, 12);
-    let fearful_hungry = count_eat_first(config, &mut |sim| {
-        sim.agents[0].needs.hunger = Fixed::from_f64(0.9);
-        sim.agents[0].emotions.fear = Fixed::from_f64(0.8);
-    }, 12);
+    let hungry = count_eat_first(
+        config.clone(),
+        &mut |sim| {
+            sim.agents[0].needs.hunger = Fixed::from_f64(0.9);
+        },
+        12,
+    );
+    let fearful_hungry = count_eat_first(
+        config,
+        &mut |sim| {
+            sim.agents[0].needs.hunger = Fixed::from_f64(0.9);
+            sim.agents[0].emotions.fear = Fixed::from_f64(0.8);
+        },
+        12,
+    );
     assert!(
         hungry > baseline,
         "Hunger-dominant agent0 should select Eat immediately: {hungry} vs {baseline}"
@@ -8549,11 +9805,14 @@ fn loneliness_drives_social_seeking() {
             .count() as u64
     };
     let baseline = count_interactions(&|_| {}, 2000);
-    let lonely = count_interactions(&|sim: &mut Simulation| {
-        for a in &mut sim.agents {
-            a.emotions.loneliness = Fixed::from_f64(0.9);
-        }
-    }, 2000);
+    let lonely = count_interactions(
+        &|sim: &mut Simulation| {
+            for a in &mut sim.agents {
+                a.emotions.loneliness = Fixed::from_f64(0.9);
+            }
+        },
+        2000,
+    );
     // Iteration 106 recalibration: the §11.1 status wiring's patronage
     // divergence dampened the interaction delta on seed 42 — probe-pinned
     // 20,349 vs 17,945 (+13.4%). Iteration 147 recalibration (weather
@@ -8565,12 +9824,18 @@ fn loneliness_drives_social_seeking() {
         "a lonely village must interact strictly more than baseline: {lonely} vs {baseline} (~+8% min)"
     );
     // Determinism: identical seed reproduces the lonely counts byte-for-byte.
-    let again = count_interactions(&|sim: &mut Simulation| {
-        for a in &mut sim.agents {
-            a.emotions.loneliness = Fixed::from_f64(0.9);
-        }
-    }, 2000);
-    assert_eq!(lonely, again, "loneliness-driven interactions must be seed-deterministic");
+    let again = count_interactions(
+        &|sim: &mut Simulation| {
+            for a in &mut sim.agents {
+                a.emotions.loneliness = Fixed::from_f64(0.9);
+            }
+        },
+        2000,
+    );
+    assert_eq!(
+        lonely, again,
+        "loneliness-driven interactions must be seed-deterministic"
+    );
 }
 
 /// §8.1.4 (Iteration 99): the tenderness emotion family's first decision
@@ -8853,7 +10118,7 @@ fn background_tier_agents_skip_memory_encoding_in_live_runs() {
 #[test]
 fn tier_mix_envelope_pinned_across_population_sizes() {
     use mindstrata_sim::agent_tier::AgentTier;
-    use mindstrata_sim::{Simulation, sim::SimConfig};
+    use mindstrata_sim::{sim::SimConfig, Simulation};
 
     fn count_tiers(sim: &Simulation) -> (usize, usize, usize) {
         let mut focal = 0;
@@ -8892,7 +10157,11 @@ fn tier_mix_envelope_pinned_across_population_sizes() {
             "PROBE agents={agents} seed={seed}: focal={focal} secondary={secondary} background={background}"
         );
         let n = agents as usize;
-        assert_eq!(focal + secondary + background, n, "tier sum must equal population");
+        assert_eq!(
+            focal + secondary + background,
+            n,
+            "tier sum must equal population"
+        );
         assert!(focal > 0, "every size needs a Focal core, got {focal}");
         // The headline finding pinned: Background NEVER appears at any
         // tested size. If a future recalibration starts demoting to
@@ -8905,7 +10174,10 @@ fn tier_mix_envelope_pinned_across_population_sizes() {
         if agents <= 6 || agents >= 48 {
             // The all-Focal reality at the small-world limit (6 agents) and
             // the 48-cap: a bug that mass-demotes would trip this.
-            assert!(focal >= n - 2, "extreme-size run unexpectedly non-Focal: {focal}/{n}");
+            assert!(
+                focal >= n - 2,
+                "extreme-size run unexpectedly non-Focal: {focal}/{n}"
+            );
         } else {
             // At 12/24 a small Secondary tail is the measured norm; an
             // accidental mass-promotion OR mass-demotion both trip this.
@@ -9028,8 +10300,7 @@ fn trait_plasticity_drift_amplifies_fear_and_anger_in_default_runs() {
             if craft {
                 let baseline = mindstrata_sim::person::Temperament::from_traits(&a.personality);
                 a.personality.temperament.reactivity =
-                    (baseline.reactivity + mindstrata_core::fixed::Fixed::from_f64(0.9))
-                        .clamp_01();
+                    (baseline.reactivity + mindstrata_core::fixed::Fixed::from_f64(0.9)).clamp_01();
             }
         }
         s.run(5);
@@ -9067,23 +10338,26 @@ fn institutional_rank_weighted_into_effective_status() {
             + s.moral_reputation * mindstrata_core::fixed::Fixed::from_f64(0.1)
             + s.honor * mindstrata_core::fixed::Fixed::from_f64(0.05)
             - s.shame * mindstrata_core::fixed::Fixed::from_f64(0.1))
-            .clamp_01()
+        .clamp_01()
     };
     let mut role_holder_delta_ok = false;
     for a in &sim.agents {
         let eff = a.status_v2.effective_status();
         let leg = legacy(&a.status_v2);
         if a.status_v2.institutional_rank > mindstrata_core::fixed::Fixed::ZERO {
-            let expect =
-                (leg + a.status_v2.institutional_rank * mindstrata_core::fixed::Fixed::from_f64(0.1))
-                    .clamp_01();
+            let expect = (leg
+                + a.status_v2.institutional_rank * mindstrata_core::fixed::Fixed::from_f64(0.1))
+            .clamp_01();
             assert!(
                 (eff - expect).abs() < mindstrata_core::fixed::Fixed::from_f64(0.001),
                 "role-holder composite must be legacy + rank × 0.1: eff {eff:?} expect {expect:?}"
             );
             role_holder_delta_ok = true;
         } else {
-            assert_eq!(eff, leg, "roleless agent composite must match legacy exactly");
+            assert_eq!(
+                eff, leg,
+                "roleless agent composite must match legacy exactly"
+            );
         }
     }
     assert!(
@@ -9102,7 +10376,10 @@ fn institutional_rank_weighted_into_effective_status() {
         .iter()
         .map(|a| a.status_v2.effective_status().to_f64())
         .sum();
-    assert_eq!(sum1, sum2, "§11.1 composite end-state must be seed-deterministic");
+    assert_eq!(
+        sum1, sum2,
+        "§11.1 composite end-state must be seed-deterministic"
+    );
 
     // Behavioral differential: §10.9 patronage formation consumes the composite
     // (patron must be notably higher status than client), so boosted role
@@ -9125,7 +10402,11 @@ fn institutional_rank_weighted_into_effective_status() {
             }
         }
         s.run(2000);
-        s.patronage_registry.relations.iter().filter(|r| r.active).count()
+        s.patronage_registry
+            .relations
+            .iter()
+            .filter(|r| r.active)
+            .count()
     };
     let control = run(false);
     let boosted = run(true);
@@ -9198,7 +10479,10 @@ fn sensory_field_fear_contagion_is_live_and_sustains_fear() {
         .map(|a| a.emotions.fear.to_f64())
         .sum::<f64>()
         / again.agents.len() as f64;
-    assert_eq!(mean_fear, again_mean, "mean fear must be seed-deterministic");
+    assert_eq!(
+        mean_fear, again_mean,
+        "mean fear must be seed-deterministic"
+    );
 }
 
 /// §10.1.2 (Iteration 108): the social field's `kin_count` feeds the
@@ -9311,7 +10595,11 @@ fn noospheric_belief_confidence_sustains_conviction() {
             .map(|b| b.confidence.to_f64())
             .sum::<f64>()
             / sim.agents.iter().map(|a| a.beliefs.len()).sum::<usize>() as f64;
-        let mean_fear: f64 = sim.agents.iter().map(|a| a.emotions.fear.to_f64()).sum::<f64>()
+        let mean_fear: f64 = sim
+            .agents
+            .iter()
+            .map(|a| a.emotions.fear.to_f64())
+            .sum::<f64>()
             / sim.agents.len() as f64;
         (mean, mean_fear)
     }
@@ -9346,8 +10634,8 @@ fn noospheric_belief_confidence_sustains_conviction() {
         use mindstrata_sim::belief_update::update_belief;
         let s = run_sim(42, 2000);
         let rf = s.agents[0].relational_fields.belief_confidence;
-        let factor = mindstrata_sim::social::relational_field::RelationalFields::
-            belief_rigidity_factor(
+        let factor =
+            mindstrata_sim::social::relational_field::RelationalFields::belief_rigidity_factor(
                 rf,
                 Fixed::from_f64(
                     mindstrata_sim::social::relational_field::BELIEF_CONFIDENCE_RIGIDITY,
@@ -9638,14 +10926,8 @@ fn perceived_legitimacy_deters_theft_end_to_end() {
             "decayed legitimacy (below anchor) must also be identity"
         );
         assert!(
-            RelationalFields::legitimacy_deterrence_factor(
-                Fixed::from_f64(0.9),
-                anchor,
-                rate,
-                cap,
-            )
-            .to_f64()
-                < 1.0,
+            RelationalFields::legitimacy_deterrence_factor(Fixed::from_f64(0.9), anchor, rate, cap,)
+                .to_f64() < 1.0,
             "a genuinely legitimate institution must deter the theft amount"
         );
     }
@@ -9726,12 +11008,7 @@ fn collective_fear_amplifies_panic_legitimacy_damage_end_to_end() {
     let rate = Fixed::from_f64(0.5);
     let cap = Fixed::from_f64(0.5);
     assert_eq!(
-        RelationalFields::collective_fear_panic_amplifier(
-            Fixed::from_f64(0.9),
-            anchor,
-            rate,
-            cap,
-        ),
+        RelationalFields::collective_fear_panic_amplifier(Fixed::from_f64(0.9), anchor, rate, cap,),
         Fixed::ONE,
         "below the anchor the amplifier must be identity"
     );
@@ -9759,8 +11036,16 @@ fn collective_fear_amplifies_panic_legitimacy_damage_end_to_end() {
     // 2,000-tick sim has zero panics).
     let at_panic_horizon = crate::test_helpers::run_sim(42, 20000);
     let again = crate::test_helpers::run_sim(42, 20000);
-    let panics = at_panic_horizon.recent_events(10_000_000).iter().filter(|e| is_panic(e)).count();
-    let panics2 = again.recent_events(10_000_000).iter().filter(|e| is_panic(e)).count();
+    let panics = at_panic_horizon
+        .recent_events(10_000_000)
+        .iter()
+        .filter(|e| is_panic(e))
+        .count();
+    let panics2 = again
+        .recent_events(10_000_000)
+        .iter()
+        .filter(|e| is_panic(e))
+        .count();
     assert!(
         panics >= 1,
         "the §7.2 trigger must fire at the 20,000-tick horizon (seed 42)"
@@ -9950,22 +11235,12 @@ fn social_obligation_restrains_escalation_end_to_end() {
     let rate = Fixed::from_f64(0.3);
     let cap = Fixed::from_f64(0.3);
     assert_eq!(
-        RelationalFields::obligation_restraint_factor(
-            Fixed::from_f64(0.456),
-            anchor,
-            rate,
-            cap,
-        ),
+        RelationalFields::obligation_restraint_factor(Fixed::from_f64(0.456), anchor, rate, cap,),
         Fixed::ONE,
         "below the anchor the factor must be identity"
     );
     assert_eq!(
-        RelationalFields::obligation_restraint_factor(
-            Fixed::from_f64(0.6),
-            anchor,
-            rate,
-            cap,
-        ),
+        RelationalFields::obligation_restraint_factor(Fixed::from_f64(0.6), anchor, rate, cap,),
         Fixed::from_f64(0.97),
         "obligation 0.6 must restrain by exactly 0.03"
     );
@@ -10096,106 +11371,138 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
         "the injected panic must survive its first lifecycle step"
     );
     let actual_gap = council_leg(&control) - council_leg(&with_panic);
-    let expected_gap =
-        panic_legitimacy_drain(injected.intensity, PANIC_LEGITIMACY_DRAIN_RATE);
+    let expected_gap = panic_legitimacy_drain(injected.intensity, PANIC_LEGITIMACY_DRAIN_RATE);
     assert_eq!(
         actual_gap, expected_gap,
         "the injected panic must drain exactly its intensity × rate from the council"
     );
 }
-    /// §8.1.4 (Iteration 116): the expanded emotion families' decay works
-    /// end-to-end through a populated world, keeping the produced families at
-    /// meaningful producer-driven levels instead of the pre-Iter-116
-    /// saturation at 1.0, and the never-produced channels stay at the
-    /// identity zero (the zero-blast precondition for the humiliation
-    /// escalation amplifier — whose wiring is proven by the identical-RNG
-    /// unit test in sim.rs).
-    ///
-    /// Leg A — the per-tick proportional decay breaks the saturation: before
-    /// Iter-116 the produced families (awe/relief/hope/gratitude/nostalgia)
-    /// were pinned at exactly 1.0 in every calibrated run (probe-pinned). At
-    /// 5000 ticks they must sit at meaningful producer-driven levels — below
-    /// 0.95 (not saturated) and above 0.2 (not decayed to nothing).
-    /// Leg B — the never-produced channels (humiliation/envy/contempt/
-    /// despair/moral_outrage/disgust/jealousy) stay exactly 0.0 in the calm
-    /// window, which is the zero-blast precondition for the §8.1.4
-    /// humiliation escalation amplifier (factor exactly 1.0 — the fold's
-    /// exact multiplier is pinned below).
-    #[test]
-    fn secondary_emotion_decay_and_humiliation_amplifier_end_to_end() {
-        use mindstrata_sim::appraisal::{
-            humiliation_escalation_factor, HUMILIATION_ESCALATION_RATE,
-        };
-        let config = SimConfig {
-            seed: 42,
-            max_ticks: 10_000,
-            world_width: 16,
-            world_height: 16,
-            num_agents: 12,
-            snapshot_interval: None,
-        };
-        // Legs A + B: natural seed-42 run.
-        let mut sim = Simulation::new(config);
-        sim.populate();
-        sim.run(5000);
-        let n = sim.agents.len() as f64;
-        let mean_of = |f: fn(&mindstrata_sim::sim::AgentBundle) -> Fixed| {
-            sim.agents.iter().map(f).map(Fixed::to_f64).sum::<f64>() / n
-        };
-        for (name, pick) in [
-            ("awe", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.awe)
-                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
-            ("relief", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.relief)
-                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
-            ("hope", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.hope)
-                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
-            ("gratitude", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.gratitude)
-                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
-            ("nostalgia", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.nostalgia)
-                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
-        ] {
-            let m = mean_of(pick);
-            assert!(
-                m < 0.95,
-                "{name} must no longer saturate at 1.0, mean {m:.4} @ 5000"
-            );
-            assert!(
-                m > 0.2,
-                "{name} must keep a meaningful producer-driven level, mean {m:.4} @ 5000"
-            );
-        }
-        for (name, pick) in [
-            ("humiliation", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.humiliation)
-                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
-            ("envy", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.envy)
-                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
-            ("contempt", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.contempt)
-                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
-            ("despair", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.despair)
-                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
-            ("moral_outrage", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.moral_outrage)
-                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
-            ("disgust", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.disgust)
-                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
-            ("jealousy", (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.jealousy)
-                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed),
-        ] {
-            let m = mean_of(pick);
-            assert_eq!(
+/// §8.1.4 (Iteration 116): the expanded emotion families' decay works
+/// end-to-end through a populated world, keeping the produced families at
+/// meaningful producer-driven levels instead of the pre-Iter-116
+/// saturation at 1.0, and the never-produced channels stay at the
+/// identity zero (the zero-blast precondition for the humiliation
+/// escalation amplifier — whose wiring is proven by the identical-RNG
+/// unit test in sim.rs).
+///
+/// Leg A — the per-tick proportional decay breaks the saturation: before
+/// Iter-116 the produced families (awe/relief/hope/gratitude/nostalgia)
+/// were pinned at exactly 1.0 in every calibrated run (probe-pinned). At
+/// 5000 ticks they must sit at meaningful producer-driven levels — below
+/// 0.95 (not saturated) and above 0.2 (not decayed to nothing).
+/// Leg B — the never-produced channels (humiliation/envy/contempt/
+/// despair/moral_outrage/disgust/jealousy) stay exactly 0.0 in the calm
+/// window, which is the zero-blast precondition for the §8.1.4
+/// humiliation escalation amplifier (factor exactly 1.0 — the fold's
+/// exact multiplier is pinned below).
+#[test]
+fn secondary_emotion_decay_and_humiliation_amplifier_end_to_end() {
+    use mindstrata_sim::appraisal::{humiliation_escalation_factor, HUMILIATION_ESCALATION_RATE};
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 10_000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    };
+    // Legs A + B: natural seed-42 run.
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.run(5000);
+    let n = sim.agents.len() as f64;
+    let mean_of = |f: fn(&mindstrata_sim::sim::AgentBundle) -> Fixed| {
+        sim.agents.iter().map(f).map(Fixed::to_f64).sum::<f64>() / n
+    };
+    for (name, pick) in [
+        (
+            "awe",
+            (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.awe)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed,
+        ),
+        (
+            "relief",
+            (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.relief)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed,
+        ),
+        (
+            "hope",
+            (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.hope)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed,
+        ),
+        (
+            "gratitude",
+            (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.gratitude)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed,
+        ),
+        (
+            "nostalgia",
+            (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.nostalgia)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed,
+        ),
+    ] {
+        let m = mean_of(pick);
+        assert!(
+            m < 0.95,
+            "{name} must no longer saturate at 1.0, mean {m:.4} @ 5000"
+        );
+        assert!(
+            m > 0.2,
+            "{name} must keep a meaningful producer-driven level, mean {m:.4} @ 5000"
+        );
+    }
+    for (name, pick) in [
+        (
+            "humiliation",
+            (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.humiliation)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed,
+        ),
+        (
+            "envy",
+            (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.envy)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed,
+        ),
+        (
+            "contempt",
+            (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.contempt)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed,
+        ),
+        (
+            "despair",
+            (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.despair)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed,
+        ),
+        (
+            "moral_outrage",
+            (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.moral_outrage)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed,
+        ),
+        (
+            "disgust",
+            (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.disgust)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed,
+        ),
+        (
+            "jealousy",
+            (|a: &mindstrata_sim::sim::AgentBundle| a.emotions.jealousy)
+                as fn(&mindstrata_sim::sim::AgentBundle) -> Fixed,
+        ),
+    ] {
+        let m = mean_of(pick);
+        assert_eq!(
                 m, 0.0,
                 "{name} must stay at the identity zero in the calm window (amplifier zero-blast), mean {m:.4}"
             );
-        }
-
-        // The pure factor is the exact multiplier the should_escalate fold
-        // uses (proven wired by the identical-RNG unit test in sim.rs).
-        assert_eq!(
-            humiliation_escalation_factor(Fixed::from_f64(1.0), HUMILIATION_ESCALATION_RATE)
-                .to_f64(),
-            1.3,
-            "full humiliation must amplify the chance by exactly 1.30"
-        );
     }
+
+    // The pure factor is the exact multiplier the should_escalate fold
+    // uses (proven wired by the identical-RNG unit test in sim.rs).
+    assert_eq!(
+        humiliation_escalation_factor(Fixed::from_f64(1.0), HUMILIATION_ESCALATION_RATE).to_f64(),
+        1.3,
+        "full humiliation must amplify the chance by exactly 1.30"
+    );
+}
 
 /// §8.1.16 (Iteration 117): the concern-domain discriminator is live
 /// end-to-end — every mental scenario a populated agent holds carries the
@@ -10241,7 +11548,7 @@ fn scenario_kinds_are_stamped_end_to_end() {
         distinct.contains(&ScenarioKind::D2Threat),
         "fear-driven threat scenarios must reach populated agents, got {distinct:?}"
     );
-    }
+}
 
 /// §10.4 (Iteration 118): the "Seek proximity" step un-stalls the courtship
 /// ladder end-to-end — a pair that formed beyond perception radius (the
@@ -10325,9 +11632,8 @@ fn household_food_pooling_feeds_dependents_first_end_to_end() {
         "well-fed head untouched (below threshold)"
     );
     // Reserves: 2.0 + head's surplus contribution (0.02 × 0.25) − 0.1 ration.
-    let expected = Fixed::from_f64(2.0)
-        + Fixed::from_f64(0.02) * Fixed::from_f64(0.25)
-        - Fixed::from_f64(0.1);
+    let expected =
+        Fixed::from_f64(2.0) + Fixed::from_f64(0.02) * Fixed::from_f64(0.25) - Fixed::from_f64(0.1);
     assert!(
         (sim.households[0].food_reserves - expected).to_f64().abs() < 1e-9,
         "pool decremented exactly: {} vs {}",
@@ -10374,13 +11680,11 @@ fn household_food_pooling_feeds_dependents_first_end_to_end() {
     let r_before = sim.households[0].food_reserves;
     sim.tick_household_food_pooling();
     assert_eq!(
-        sim.agents[0].needs.hunger,
-        h_before,
+        sim.agents[0].needs.hunger, h_before,
         "singleton member never fed"
     );
     assert_eq!(
-        sim.households[0].food_reserves,
-        r_before,
+        sim.households[0].food_reserves, r_before,
         "singleton reserves untouched"
     );
 
@@ -10444,7 +11748,10 @@ fn household_food_pooling_feeds_dependents_first_end_to_end() {
     b.tick_household_food_pooling();
     let hunger_a: Vec<f64> = a.agents.iter().map(|x| x.needs.hunger.to_f64()).collect();
     let hunger_b: Vec<f64> = b.agents.iter().map(|x| x.needs.hunger.to_f64()).collect();
-    assert_eq!(hunger_a, hunger_b, "fold is a no-op on all-singleton worlds");
+    assert_eq!(
+        hunger_a, hunger_b,
+        "fold is a no-op on all-singleton worlds"
+    );
     let res_a: Vec<f64> = a
         .households
         .iter()
@@ -10500,7 +11807,10 @@ fn narrative_dominance_steers_cluster_assignment_end_to_end() {
     // momentum 0.05 crosses the 1.0 assignment boundary; without it, not.
     let base = Fixed::from_f64(0.97);
     assert!(base <= Fixed::ONE, "baseline pro_score below the boundary");
-    assert!(base + m > Fixed::ONE, "momentum tips the marginal agent over");
+    assert!(
+        base + m > Fixed::ONE,
+        "momentum tips the marginal agent over"
+    );
 
     // Leg D: end-to-end — inject a dominant narrative into a live seed-42
     // run (credibility 0.8 on every meme → dominance 0.832 > 0.6). The
@@ -10588,7 +11898,10 @@ fn shared_trauma_bonds_peer_groups_end_to_end() {
         .map(|a| a.embodied.nervous.trauma_load.to_f64())
         .sum::<f64>()
         / sim.agents.len() as f64;
-    assert!(mean_trauma > 0.05, "the trauma term is live in the golden window");
+    assert!(
+        mean_trauma > 0.05,
+        "the trauma term is live in the golden window"
+    );
     assert_eq!(
         sim.group_registry.groups.len(),
         0,
@@ -10628,11 +11941,12 @@ fn secondary_emotions_fold_is_zero_blast_in_golden_window() {
     // `despair == 0`. The factors are then exactly 1.0 → the chain is
     // bit-identical to the pre-fold build → golden stays byte-identical.
     let sim = crate::test_helpers::run_sim(42, 5000);
-    let any_nonzero = |f: fn(&mindstrata_sim::person::DiscreteEmotions) -> mindstrata_core::fixed::Fixed| {
-        sim.agents
-            .iter()
-            .any(|a| f(&a.emotions) > mindstrata_core::fixed::Fixed::ZERO)
-    };
+    let any_nonzero =
+        |f: fn(&mindstrata_sim::person::DiscreteEmotions) -> mindstrata_core::fixed::Fixed| {
+            sim.agents
+                .iter()
+                .any(|a| f(&a.emotions) > mindstrata_core::fixed::Fixed::ZERO)
+        };
     assert!(
         !any_nonzero(|e| e.contempt),
         "contempt must be exactly ZERO for every agent in the golden window"
@@ -10649,7 +11963,10 @@ fn secondary_emotions_fold_is_zero_blast_in_golden_window() {
     // calibrated change (golden regeneration), not a zero-blast addition.
     // The contempt/despair choice is the identity-at-zero pair among the
     // six — the only zero-blast-compatible consumers.
-    let mean = |f: fn(&mindstrata_sim::person::DiscreteEmotions) -> mindstrata_core::fixed::Fixed| -> f64 {
+    let mean = |f: fn(
+        &mindstrata_sim::person::DiscreteEmotions,
+    ) -> mindstrata_core::fixed::Fixed|
+     -> f64 {
         sim.agents
             .iter()
             .map(|a| f(&a.emotions).to_f64())
@@ -10757,11 +12074,7 @@ fn motivation_emotional_context_is_live() {
     // pre-fix probe pinned mean motivation.fear at exactly 0.0000).
     let sim = crate::test_helpers::run_sim(42, 5000);
     let mean = |f: fn(&mindstrata_sim::psychology::motivation::MotivationState) -> f64| -> f64 {
-        sim.agents
-            .iter()
-            .map(|a| f(&a.motivation))
-            .sum::<f64>()
-            / sim.agents.len() as f64
+        sim.agents.iter().map(|a| f(&a.motivation)).sum::<f64>() / sim.agents.len() as f64
     };
     let fear_mean = mean(|m| m.fear.to_f64());
     let joy_mean = mean(|m| m.joy.to_f64());
@@ -10790,7 +12103,11 @@ fn motivation_emotional_context_is_live() {
                 .to_f64()
         })
         .sum();
-    let base_sum: f64 = sim.agents.iter().map(|a| a.motivation.safety.pressure().to_f64()).sum();
+    let base_sum: f64 = sim
+        .agents
+        .iter()
+        .map(|a| a.motivation.safety.pressure().to_f64())
+        .sum();
     assert!(
         full_sum > base_sum,
         "Safety pressure must be amplified by the live fear context: {full_sum:.3} vs {base_sum:.3}"
@@ -10801,12 +12118,11 @@ fn motivation_emotional_context_is_live() {
     // pressure_full(Safety) — the emotional factor genuinely multiplies
     // the pressure, not a coincidental population artifact.
     let mut m = sim.agents[0].motivation.clone();
-    let with_fear = m
-        .pressure_full(mindstrata_sim::psychology::motivation::MotiveCategory::Safety);
+    let with_fear = m.pressure_full(mindstrata_sim::psychology::motivation::MotiveCategory::Safety);
     let fear_before = m.fear;
     m.fear = mindstrata_core::fixed::Fixed::ZERO;
-    let without_fear = m
-        .pressure_full(mindstrata_sim::psychology::motivation::MotiveCategory::Safety);
+    let without_fear =
+        m.pressure_full(mindstrata_sim::psychology::motivation::MotiveCategory::Safety);
     assert!(
         with_fear > without_fear,
         "fear {fear_before} must amplify Safety pressure: {with_fear} vs {without_fear}"
@@ -11077,7 +12393,10 @@ fn gratitude_feeds_help_propensity_is_live_and_deterministic() {
     let shipped: f64 = mindstrata_sim::parameters::SimParameters::default()
         .social_gratitude_help_multiplier
         .to_f64();
-    assert_eq!(shipped, 0.5, "the shipped multiplier is the 0.5 tenderness tier");
+    assert_eq!(
+        shipped, 0.5,
+        "the shipped multiplier is the 0.5 tenderness tier"
+    );
 
     // Leg C (determinism): gratitude levels are seed-deterministic — the
     // fold's input is stable across replays.
@@ -11130,7 +12449,10 @@ fn relief_escalation_amplifier_is_live_and_deterministic() {
     use mindstrata_core::fixed::Fixed;
     use mindstrata_sim::appraisal::relief_escalation_factor;
     assert_eq!(
-        relief_escalation_factor(Fixed::ZERO, mindstrata_sim::appraisal::RELIEF_ESCALATION_RATE),
+        relief_escalation_factor(
+            Fixed::ZERO,
+            mindstrata_sim::appraisal::RELIEF_ESCALATION_RATE
+        ),
         Fixed::ONE,
         "zero relief must be a byte-identical identity"
     );
@@ -11143,7 +12465,10 @@ fn relief_escalation_amplifier_is_live_and_deterministic() {
         "half relief × 0.1 must be exactly 1.05"
     );
     assert_eq!(
-        relief_escalation_factor(Fixed::ONE, mindstrata_sim::appraisal::RELIEF_ESCALATION_RATE),
+        relief_escalation_factor(
+            Fixed::ONE,
+            mindstrata_sim::appraisal::RELIEF_ESCALATION_RATE
+        ),
         Fixed::from_f64(1.1),
         "full relief × 0.1 must be exactly 1.10"
     );
@@ -11399,17 +12724,27 @@ fn content_pack_applies_and_persists_through_full_horizon() {
     modded.populate();
     let applied = modded.apply_content_pack(&mod_pack_fixture()).unwrap();
     assert_eq!(applied.norms_added, 1, "one norm must be added");
-    assert_eq!(applied.knowledge_added, 1, "one knowledge item must be added");
+    assert_eq!(
+        applied.knowledge_added, 1,
+        "one knowledge item must be added"
+    );
     modded.run(2000);
 
     // The pack's content persists through the entire horizon — the tick loop
     // never drops or overwrites registry additions.
     assert!(
-        modded.norms.norms().iter().any(|n| n.id == 100 && n.name == "Honor River Trade"),
+        modded
+            .norms
+            .norms()
+            .iter()
+            .any(|n| n.id == 100 && n.name == "Honor River Trade"),
         "mod norm must still be registered after 2000 ticks"
     );
     assert!(
-        modded.knowledge_store.iter().any(|k| k.id == 100 && k.name == "River Ferry"),
+        modded
+            .knowledge_store
+            .iter()
+            .any(|k| k.id == 100 && k.name == "River Ferry"),
         "mod knowledge must still be in the store after 2000 ticks"
     );
 

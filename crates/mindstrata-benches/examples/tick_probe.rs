@@ -4,7 +4,7 @@
 //!
 //! Run with: `cargo run -p mindstrata-benches --example tick_probe --release`
 
-use mindstrata_sim::{Simulation, sim::SimConfig};
+use mindstrata_sim::{sim::SimConfig, Simulation};
 use std::time::Instant;
 
 fn main() {

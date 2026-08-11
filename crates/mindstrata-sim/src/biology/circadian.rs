@@ -81,9 +81,10 @@ impl CircadianState {
 
         // Alertness follows circadian rhythm + sleep pressure
         let circadian_alertness = self.circadian_alertness();
-        self.alertness = (circadian_alertness - self.sleep_pressure * Fixed::from_f64(0.4)
+        self.alertness = (circadian_alertness
+            - self.sleep_pressure * Fixed::from_f64(0.4)
             - self.sleep_debt * Fixed::from_f64(0.3))
-            .clamp_01();
+        .clamp_01();
 
         // Rhythm stability improves with consistent sleep timing
         if is_sleeping && self.sleep_pressure < Fixed::from_f64(0.3) {
@@ -91,7 +92,8 @@ impl CircadianState {
         }
         // Sleep deprivation degrades rhythm
         if self.sleep_debt > Fixed::from_f64(0.5) {
-            self.rhythm_stability = (self.rhythm_stability - Fixed::from_f64(0.0001)).max(Fixed::ZERO);
+            self.rhythm_stability =
+                (self.rhythm_stability - Fixed::from_f64(0.0001)).max(Fixed::ZERO);
         }
     }
 

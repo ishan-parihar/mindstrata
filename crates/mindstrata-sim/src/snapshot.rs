@@ -267,17 +267,29 @@ impl Snapshot {
             total_grain: self.world.total_food().to_f64(),
             total_water: self.world.total_water().to_f64(),
             avg_hunger: if n > 0.0 {
-                self.agents.iter().map(|a| a.needs.hunger.to_f64()).sum::<f64>() / n
+                self.agents
+                    .iter()
+                    .map(|a| a.needs.hunger.to_f64())
+                    .sum::<f64>()
+                    / n
             } else {
                 0.0
             },
             avg_thirst: if n > 0.0 {
-                self.agents.iter().map(|a| a.needs.thirst.to_f64()).sum::<f64>() / n
+                self.agents
+                    .iter()
+                    .map(|a| a.needs.thirst.to_f64())
+                    .sum::<f64>()
+                    / n
             } else {
                 0.0
             },
             avg_fatigue: if n > 0.0 {
-                self.agents.iter().map(|a| a.needs.fatigue.to_f64()).sum::<f64>() / n
+                self.agents
+                    .iter()
+                    .map(|a| a.needs.fatigue.to_f64())
+                    .sum::<f64>()
+                    / n
             } else {
                 0.0
             },
@@ -287,12 +299,17 @@ impl Snapshot {
     /// Generate a filename for this snapshot.
     /// Format: world_seed_{seed}_tick_{tick}.snapshot
     pub fn filename(&self) -> String {
-        format!("world_seed_{}_tick_{}.snapshot", self.config.seed, self.tick)
+        format!(
+            "world_seed_{}_tick_{}.snapshot",
+            self.config.seed, self.tick
+        )
     }
 
     /// Save this snapshot to a file using postcard binary format.
     pub fn save(&self, path: &std::path::Path) -> Result<(), String> {
-        let bytes = self.to_bytes().map_err(|e| format!("Serialization failed: {e}"))?;
+        let bytes = self
+            .to_bytes()
+            .map_err(|e| format!("Serialization failed: {e}"))?;
         std::fs::write(path, &bytes).map_err(|e| format!("File write failed: {e}"))?;
         tracing::info!(
             path = %path.display(),
@@ -306,7 +323,8 @@ impl Snapshot {
     /// Load a snapshot from a file using postcard binary format.
     pub fn load(path: &std::path::Path) -> Result<Self, String> {
         let bytes = std::fs::read(path).map_err(|e| format!("File read failed: {e}"))?;
-        let snapshot = Self::from_bytes(&bytes).map_err(|e| format!("Deserialization failed: {e}"))?;
+        let snapshot =
+            Self::from_bytes(&bytes).map_err(|e| format!("Deserialization failed: {e}"))?;
         tracing::info!(
             path = %path.display(),
             tick = snapshot.tick,

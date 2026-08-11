@@ -209,7 +209,8 @@ impl DecisionPolicy {
                 emotional_relief: Fixed::from_f64(0.15) + neuroticism * Fixed::from_f64(0.1),
                 social_value: Fixed::from_f64(0.1) + extraversion * Fixed::from_f64(0.1),
                 novelty: Fixed::from_f64(0.03) + openness * Fixed::from_f64(0.07),
-                identity_congruence: Fixed::from_f64(0.08) + conscientiousness * Fixed::from_f64(0.05),
+                identity_congruence: Fixed::from_f64(0.08)
+                    + conscientiousness * Fixed::from_f64(0.05),
                 ..UtilityWeights::default()
             },
             moral_weights: MoralWeights {
@@ -238,7 +239,8 @@ impl DecisionPolicy {
                 stress_habit_reliance: Fixed::from_f64(0.2) + neuroticism * Fixed::from_f64(0.2),
             },
             emotional_policy: EmotionalPolicy {
-                anger_bias: Fixed::from_f64(0.2) + (Fixed::ONE - agreeableness) * Fixed::from_f64(0.2),
+                anger_bias: Fixed::from_f64(0.2)
+                    + (Fixed::ONE - agreeableness) * Fixed::from_f64(0.2),
                 fear_bias: Fixed::from_f64(0.3) + neuroticism * Fixed::from_f64(0.2),
                 joy_bias: Fixed::from_f64(0.15) + extraversion * Fixed::from_f64(0.15),
                 sadness_bias: Fixed::from_f64(0.15) + neuroticism * Fixed::from_f64(0.15),
@@ -367,8 +369,7 @@ impl DecisionPolicy {
         // Agents with high cost efficiency slightly increase social weighting
         // (cooperation tends to be efficient in village settings)
         let social_learn = (self.cost_efficiency - Fixed::from_f64(0.5)) * Fixed::from_f64(0.0005);
-        self.social_policy.cooperation =
-            (self.social_policy.cooperation + social_learn).clamp_01();
+        self.social_policy.cooperation = (self.social_policy.cooperation + social_learn).clamp_01();
     }
 }
 
@@ -440,14 +441,22 @@ mod tests {
     fn emotional_modifier_biases_social_actions_under_joy() {
         let dp = DecisionPolicy::default();
         let mod_social = dp.emotional_modifier(
-            Fixed::ZERO, Fixed::ZERO,
-            Fixed::from_f64(0.7), Fixed::ZERO,
-            true, false, false,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::from_f64(0.7),
+            Fixed::ZERO,
+            true,
+            false,
+            false,
         );
         let mod_nonsocial = dp.emotional_modifier(
-            Fixed::ZERO, Fixed::ZERO,
-            Fixed::from_f64(0.7), Fixed::ZERO,
-            false, false, false,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::from_f64(0.7),
+            Fixed::ZERO,
+            false,
+            false,
+            false,
         );
         assert!(mod_social > mod_nonsocial);
     }
@@ -456,14 +465,22 @@ mod tests {
     fn emotional_modifier_biases_safe_actions_under_fear() {
         let dp = DecisionPolicy::default();
         let mod_safe = dp.emotional_modifier(
-            Fixed::ZERO, Fixed::from_f64(0.7),
-            Fixed::ZERO, Fixed::ZERO,
-            false, false, false,
+            Fixed::ZERO,
+            Fixed::from_f64(0.7),
+            Fixed::ZERO,
+            Fixed::ZERO,
+            false,
+            false,
+            false,
         );
         let mod_risky = dp.emotional_modifier(
-            Fixed::ZERO, Fixed::from_f64(0.7),
-            Fixed::ZERO, Fixed::ZERO,
-            false, true, false,
+            Fixed::ZERO,
+            Fixed::from_f64(0.7),
+            Fixed::ZERO,
+            Fixed::ZERO,
+            false,
+            true,
+            false,
         );
         assert!(mod_safe > mod_risky);
     }
@@ -476,7 +493,9 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.7),
             Fixed::from_f64(0.5),
-            false, false, true,
+            false,
+            false,
+            true,
         );
         assert!(mod_harmful < Fixed::ZERO);
     }
@@ -489,7 +508,9 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.7),
             Fixed::from_f64(0.5),
-            true, false, false,
+            true,
+            false,
+            false,
         );
         assert!(mod_prosocial > Fixed::ZERO);
     }

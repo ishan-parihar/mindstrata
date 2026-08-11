@@ -116,16 +116,13 @@ impl CrimeRecord {
         self.offense_count += 1;
         self.last_offense_tick = tick;
         let new_episode = self.episode_count == 0
-            || tick.saturating_sub(self.last_episode_tick)
-                >= ENFORCEMENT_EPISODE_TICKS;
+            || tick.saturating_sub(self.last_episode_tick) >= ENFORCEMENT_EPISODE_TICKS;
         if new_episode {
             self.episode_count += 1;
             self.last_episode_tick = tick;
         }
         // Notoriety grows with distinct episodes, diminishing returns.
-        self.notoriety = Fixed::from_f64(
-            (1.0 - (-0.5 * self.episode_count as f64).exp()).min(1.0),
-        );
+        self.notoriety = Fixed::from_f64((1.0 - (-0.5 * self.episode_count as f64).exp()).min(1.0));
     }
 
     /// Compute punishment multiplier based on criminal history.
@@ -180,7 +177,12 @@ impl NormRegistry {
 
     /// Ensure a crime record exists for an agent, returning its index.
     fn ensure_record_index(&mut self, agent: AgentId) -> usize {
-        if let Some((idx, _)) = self.crime_records.iter().enumerate().find(|(_, (a, _))| *a == agent) {
+        if let Some((idx, _)) = self
+            .crime_records
+            .iter()
+            .enumerate()
+            .find(|(_, (a, _))| *a == agent)
+        {
             return idx;
         }
         self.crime_records.push((agent, CrimeRecord::default()));
@@ -196,7 +198,13 @@ impl NormRegistry {
     }
 
     /// Record a violation with known punishment amount.
-    pub fn record_violation_with_punishment(&mut self, norm_id: u64, violator: AgentId, tick: u64, punishment_applied: Fixed) {
+    pub fn record_violation_with_punishment(
+        &mut self,
+        norm_id: u64,
+        violator: AgentId,
+        tick: u64,
+        punishment_applied: Fixed,
+    ) {
         self.violations.push(NormViolation {
             norm_id,
             violator,
@@ -277,12 +285,7 @@ impl NormRegistry {
     /// Always records the violation (no enforcement probability check).
     /// Use for violations that are always witnessed (e.g., direct confrontation).
     /// Returns the total punishment severity after escalation.
-    pub fn check_violation(
-        &mut self,
-        norm_id: u64,
-        violator: AgentId,
-        tick: u64,
-    ) -> Fixed {
+    pub fn check_violation(&mut self, norm_id: u64, violator: AgentId, tick: u64) -> Fixed {
         if let Some(norm) = self.norms.iter().find(|n| n.id == norm_id) {
             let base_punishment = norm.punishment;
             let idx = self.ensure_record_index(violator);
@@ -401,7 +404,10 @@ mod tests {
         let p_high = registry.compute_pressure(high_conformity, Fixed::ZERO, 0);
 
         // High conformity means LESS violation pressure (more compliant)
-        assert!(p_high < p_low, "High conformity should produce lower violation pressure");
+        assert!(
+            p_high < p_low,
+            "High conformity should produce lower violation pressure"
+        );
     }
 
     #[test]
@@ -499,19 +505,28 @@ mod tests {
         record.record_offense(100);
         assert_eq!(record.offense_count, 1);
         let mult1 = record.punishment_multiplier();
-        assert!((mult1.to_f64() - 1.0).abs() < 0.01, "First offense multiplier should be ~1.0");
+        assert!(
+            (mult1.to_f64() - 1.0).abs() < 0.01,
+            "First offense multiplier should be ~1.0"
+        );
 
         // Second offense: multiplier = 1.5
         record.record_offense(200);
         assert_eq!(record.offense_count, 2);
         let mult2 = record.punishment_multiplier();
-        assert!((mult2.to_f64() - 1.5).abs() < 0.01, "Second offense multiplier should be ~1.5");
+        assert!(
+            (mult2.to_f64() - 1.5).abs() < 0.01,
+            "Second offense multiplier should be ~1.5"
+        );
 
         // Third offense: multiplier = 2.0
         record.record_offense(300);
         assert_eq!(record.offense_count, 3);
         let mult3 = record.punishment_multiplier();
-        assert!((mult3.to_f64() - 2.0).abs() < 0.01, "Third offense multiplier should be ~2.0");
+        assert!(
+            (mult3.to_f64() - 2.0).abs() < 0.01,
+            "Third offense multiplier should be ~2.0"
+        );
     }
 
     #[test]
@@ -519,7 +534,10 @@ mod tests {
         let mut record = CrimeRecord::default();
         record.record_offense(100);
         let n1 = record.notoriety.to_f64();
-        assert!(n1 > 0.0 && n1 < 1.0, "First offense notoriety should be between 0 and 1");
+        assert!(
+            n1 > 0.0 && n1 < 1.0,
+            "First offense notoriety should be between 0 and 1"
+        );
 
         // New episodes (spaced beyond the 400-tick window) grow notoriety.
         record.record_offense(600);
@@ -530,7 +548,10 @@ mod tests {
         for i in 0..20u64 {
             record.record_offense(600 + i * ENFORCEMENT_EPISODE_TICKS);
         }
-        assert!(record.notoriety.to_f64() <= 1.0, "Notoriety should cap at 1.0");
+        assert!(
+            record.notoriety.to_f64() <= 1.0,
+            "Notoriety should cap at 1.0"
+        );
     }
 
     #[test]
@@ -540,7 +561,10 @@ mod tests {
             record.record_offense(i * 100);
         }
         let mult = record.punishment_multiplier();
-        assert!((mult.to_f64() - 3.0).abs() < 0.01, "Punishment multiplier should cap at 3.0");
+        assert!(
+            (mult.to_f64() - 3.0).abs() < 0.01,
+            "Punishment multiplier should cap at 3.0"
+        );
     }
 
     #[test]
@@ -558,19 +582,28 @@ mod tests {
         let agent = AgentId::new(3);
         let enforcement = Fixed::from_f64(0.8); // 80% detection rate
         let rng_detected = Fixed::from_f64(0.5); // rng < 0.8 → caught
-        let rng_missed = Fixed::from_f64(0.9);   // rng > 0.8 → not caught
+        let rng_missed = Fixed::from_f64(0.9); // rng > 0.8 → not caught
 
         // Caught
-        let (pun1, caught1) = registry.check_violation_with_enforcement(0, agent, 100, enforcement, rng_detected);
+        let (pun1, caught1) =
+            registry.check_violation_with_enforcement(0, agent, 100, enforcement, rng_detected);
         assert!(caught1, "Violation should be detected");
-        assert!(pun1 > Fixed::ZERO, "Punishment should be applied when caught");
+        assert!(
+            pun1 > Fixed::ZERO,
+            "Punishment should be applied when caught"
+        );
         assert_eq!(registry.violations().len(), 1);
 
         // Not caught
-        let (pun2, caught2) = registry.check_violation_with_enforcement(0, agent, 200, enforcement, rng_missed);
+        let (pun2, caught2) =
+            registry.check_violation_with_enforcement(0, agent, 200, enforcement, rng_missed);
         assert!(!caught2, "Violation should NOT be detected");
         assert_eq!(pun2, Fixed::ZERO, "No punishment when not caught");
-        assert_eq!(registry.violations().len(), 1, "Violation count should not increase");
+        assert_eq!(
+            registry.violations().len(),
+            1,
+            "Violation count should not increase"
+        );
     }
 
     #[test]
@@ -589,7 +622,13 @@ mod tests {
         let enforcement = Fixed::ONE; // 100% detection
 
         // Any rng_value < 1.0 → caught
-        let (_, caught) = registry.check_violation_with_enforcement(0, agent, 100, enforcement, Fixed::from_f64(0.99));
+        let (_, caught) = registry.check_violation_with_enforcement(
+            0,
+            agent,
+            100,
+            enforcement,
+            Fixed::from_f64(0.99),
+        );
         assert!(caught, "100% enforcement should always catch");
     }
 
@@ -609,7 +648,13 @@ mod tests {
         let enforcement = Fixed::ZERO; // 0% detection
 
         // rng_value > 0.0 → not caught
-        let (_, caught) = registry.check_violation_with_enforcement(0, agent, 100, enforcement, Fixed::from_f64(0.5));
+        let (_, caught) = registry.check_violation_with_enforcement(
+            0,
+            agent,
+            100,
+            enforcement,
+            Fixed::from_f64(0.5),
+        );
         assert!(!caught, "0% enforcement should never catch");
     }
 
@@ -629,16 +674,43 @@ mod tests {
         let enforcement = Fixed::ONE; // always caught
 
         // First offense: 0.4 * 1.0 = 0.4
-        let (pun1, _) = registry.check_violation_with_enforcement(0, agent, 100, enforcement, Fixed::from_f64(0.1));
-        assert!((pun1.to_f64() - 0.4).abs() < 0.01, "First offense: base punishment");
+        let (pun1, _) = registry.check_violation_with_enforcement(
+            0,
+            agent,
+            100,
+            enforcement,
+            Fixed::from_f64(0.1),
+        );
+        assert!(
+            (pun1.to_f64() - 0.4).abs() < 0.01,
+            "First offense: base punishment"
+        );
 
         // Second offense: 0.4 * 1.5 = 0.6
-        let (pun2, _) = registry.check_violation_with_enforcement(0, agent, 200, enforcement, Fixed::from_f64(0.1));
-        assert!((pun2.to_f64() - 0.6).abs() < 0.01, "Second offense: 1.5x multiplier");
+        let (pun2, _) = registry.check_violation_with_enforcement(
+            0,
+            agent,
+            200,
+            enforcement,
+            Fixed::from_f64(0.1),
+        );
+        assert!(
+            (pun2.to_f64() - 0.6).abs() < 0.01,
+            "Second offense: 1.5x multiplier"
+        );
 
         // Third offense: 0.4 * 2.0 = 0.8
-        let (pun3, _) = registry.check_violation_with_enforcement(0, agent, 300, enforcement, Fixed::from_f64(0.1));
-        assert!((pun3.to_f64() - 0.8).abs() < 0.01, "Third offense: 2.0x multiplier");
+        let (pun3, _) = registry.check_violation_with_enforcement(
+            0,
+            agent,
+            300,
+            enforcement,
+            Fixed::from_f64(0.1),
+        );
+        assert!(
+            (pun3.to_f64() - 0.8).abs() < 0.01,
+            "Third offense: 2.0x multiplier"
+        );
 
         // Verify criminal history
         let record = registry.crime_record(agent).unwrap();
@@ -659,10 +731,16 @@ mod tests {
         });
 
         let agent = AgentId::new(4);
-        assert!(registry.crime_record(agent).is_none(), "No record before any violations");
+        assert!(
+            registry.crime_record(agent).is_none(),
+            "No record before any violations"
+        );
 
         registry.check_violation(0, agent, 100);
-        assert!(registry.crime_record(agent).is_some(), "Record exists after violation");
+        assert!(
+            registry.crime_record(agent).is_some(),
+            "Record exists after violation"
+        );
         assert_eq!(registry.crime_record(agent).unwrap().offense_count, 1);
     }
 }

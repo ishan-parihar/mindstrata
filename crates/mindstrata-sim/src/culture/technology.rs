@@ -64,7 +64,15 @@ pub struct TechNode {
 }
 
 impl TechNode {
-    fn new(id: u64, name: &str, category: KnowledgeCategory, difficulty: f64, utility: f64, prereqs: Vec<u64>, tier: u32) -> Self {
+    fn new(
+        id: u64,
+        name: &str,
+        category: KnowledgeCategory,
+        difficulty: f64,
+        utility: f64,
+        prereqs: Vec<u64>,
+        tier: u32,
+    ) -> Self {
         Self {
             id,
             name: name.into(),
@@ -107,20 +115,141 @@ impl TechnologyTree {
             nodes.insert(node.id, node);
         };
         // Tier 0 — the seeded baseline (mirrors knowledge_store ids 0..4).
-        add(TechNode::new(0, "Crop Rotation", KnowledgeCategory::Agricultural, 0.3, 0.8, vec![], 0), true);
-        add(TechNode::new(1, "Well Maintenance", KnowledgeCategory::Craft, 0.4, 0.6, vec![], 0), true);
-        add(TechNode::new(2, "Herbal Medicine", KnowledgeCategory::Medical, 0.7, 0.9, vec![], 0), true);
-        add(TechNode::new(3, "Harvest Prayer", KnowledgeCategory::Philosophical, 0.2, 0.4, vec![], 0), true);
-        add(TechNode::new(4, "Grain Storage", KnowledgeCategory::Agricultural, 0.3, 0.7, vec![], 0), true);
+        add(
+            TechNode::new(
+                0,
+                "Crop Rotation",
+                KnowledgeCategory::Agricultural,
+                0.3,
+                0.8,
+                vec![],
+                0,
+            ),
+            true,
+        );
+        add(
+            TechNode::new(
+                1,
+                "Well Maintenance",
+                KnowledgeCategory::Craft,
+                0.4,
+                0.6,
+                vec![],
+                0,
+            ),
+            true,
+        );
+        add(
+            TechNode::new(
+                2,
+                "Herbal Medicine",
+                KnowledgeCategory::Medical,
+                0.7,
+                0.9,
+                vec![],
+                0,
+            ),
+            true,
+        );
+        add(
+            TechNode::new(
+                3,
+                "Harvest Prayer",
+                KnowledgeCategory::Philosophical,
+                0.2,
+                0.4,
+                vec![],
+                0,
+            ),
+            true,
+        );
+        add(
+            TechNode::new(
+                4,
+                "Grain Storage",
+                KnowledgeCategory::Agricultural,
+                0.3,
+                0.7,
+                vec![],
+                0,
+            ),
+            true,
+        );
         // Tier 1 — each requires its tier-0 seed.
-        add(TechNode::new(5, "Advanced Irrigation", KnowledgeCategory::Agricultural, 0.6, 0.9, vec![0], 1), false);
-        add(TechNode::new(6, "Metalworking", KnowledgeCategory::Craft, 0.55, 0.8, vec![1], 1), false);
-        add(TechNode::new(7, "Surgery", KnowledgeCategory::Medical, 0.8, 0.95, vec![2], 1), false);
-        add(TechNode::new(8, "Astronomy", KnowledgeCategory::Philosophical, 0.5, 0.6, vec![3], 1), false);
-        add(TechNode::new(9, "Fermentation", KnowledgeCategory::Agricultural, 0.5, 0.75, vec![4], 1), false);
+        add(
+            TechNode::new(
+                5,
+                "Advanced Irrigation",
+                KnowledgeCategory::Agricultural,
+                0.6,
+                0.9,
+                vec![0],
+                1,
+            ),
+            false,
+        );
+        add(
+            TechNode::new(
+                6,
+                "Metalworking",
+                KnowledgeCategory::Craft,
+                0.55,
+                0.8,
+                vec![1],
+                1,
+            ),
+            false,
+        );
+        add(
+            TechNode::new(
+                7,
+                "Surgery",
+                KnowledgeCategory::Medical,
+                0.8,
+                0.95,
+                vec![2],
+                1,
+            ),
+            false,
+        );
+        add(
+            TechNode::new(
+                8,
+                "Astronomy",
+                KnowledgeCategory::Philosophical,
+                0.5,
+                0.6,
+                vec![3],
+                1,
+            ),
+            false,
+        );
+        add(
+            TechNode::new(
+                9,
+                "Fermentation",
+                KnowledgeCategory::Agricultural,
+                0.5,
+                0.75,
+                vec![4],
+                1,
+            ),
+            false,
+        );
         // Tier 2 — the innovation chain: requires the seeded craft AND the
         // innovated Metalworking.
-        add(TechNode::new(10, "Steelworking", KnowledgeCategory::Craft, 0.75, 0.95, vec![1, 6], 2), false);
+        add(
+            TechNode::new(
+                10,
+                "Steelworking",
+                KnowledgeCategory::Craft,
+                0.75,
+                0.95,
+                vec![1, 6],
+                2,
+            ),
+            false,
+        );
         Self { nodes, discovered }
     }
 
@@ -129,7 +258,9 @@ impl TechnologyTree {
     /// always learnable, which keeps calibrated windows unchanged.
     #[must_use]
     pub fn can_learn(&self, known: &[u64], id: u64) -> bool {
-        self.nodes.get(&id).is_none_or(|n| n.prereqs.iter().all(|p| known.contains(p)))
+        self.nodes
+            .get(&id)
+            .is_none_or(|n| n.prereqs.iter().all(|p| known.contains(p)))
     }
 
     /// Whether `id` is present in the world (seeded or innovated).
@@ -142,7 +273,9 @@ impl TechnologyTree {
     /// "competence pool" that gates discovery.
     #[must_use]
     pub fn prerequisite_mass(&self, id: u64, agents_known: &[Vec<u64>]) -> Fixed {
-        let Some(node) = self.nodes.get(&id) else { return Fixed::ZERO };
+        let Some(node) = self.nodes.get(&id) else {
+            return Fixed::ZERO;
+        };
         if node.prereqs.is_empty() {
             return Fixed::ONE;
         }
@@ -162,7 +295,9 @@ impl TechnologyTree {
     /// floored at zero — no mass, no discovery.
     #[must_use]
     pub fn discovery_chance(&self, id: u64, agents_known: &[Vec<u64>]) -> Fixed {
-        let Some(node) = self.nodes.get(&id) else { return Fixed::ZERO };
+        let Some(node) = self.nodes.get(&id) else {
+            return Fixed::ZERO;
+        };
         if node.prereqs.is_empty() || self.discovered.contains(&id) {
             return Fixed::ZERO;
         }
@@ -225,8 +360,14 @@ mod tests {
     #[test]
     fn tier_zero_is_always_learnable() {
         let tree = TechnologyTree::riverford();
-        assert!(tree.can_learn(&[], 0), "tier-0 Crop Rotation needs no prereq");
-        assert!(tree.can_learn(&[], 4), "tier-0 Grain Storage needs no prereq");
+        assert!(
+            tree.can_learn(&[], 0),
+            "tier-0 Crop Rotation needs no prereq"
+        );
+        assert!(
+            tree.can_learn(&[], 4),
+            "tier-0 Grain Storage needs no prereq"
+        );
     }
 
     #[test]
@@ -235,7 +376,10 @@ mod tests {
         // Irrigation needs Crop Rotation.
         assert!(!tree.can_learn(&[], 5));
         assert!(tree.can_learn(&known(&[0]), 5));
-        assert!(!tree.can_learn(&known(&[1]), 5), "wrong prereq must not satisfy");
+        assert!(
+            !tree.can_learn(&known(&[1]), 5),
+            "wrong prereq must not satisfy"
+        );
     }
 
     #[test]
@@ -263,12 +407,20 @@ mod tests {
         let empty: Vec<Vec<u64>> = vec![vec![]; 10];
         assert_eq!(tree.discovery_chance(5, &empty), Fixed::ZERO);
         // 4 of 10 hold it → mass 0.4 < 0.5 threshold → zero chance.
-        let partial: Vec<Vec<u64>> = (0..10).map(|i| if i < 4 { known(&[0]) } else { vec![] }).collect();
+        let partial: Vec<Vec<u64>> = (0..10)
+            .map(|i| if i < 4 { known(&[0]) } else { vec![] })
+            .collect();
         assert_eq!(tree.discovery_chance(5, &partial), Fixed::ZERO);
         // 8 of 10 → mass 0.8 → excess 0.3 × rate 0.1 × (1 − 0.6) = 0.012.
-        let enough: Vec<Vec<u64>> = (0..10).map(|i| if i < 8 { known(&[0]) } else { vec![] }).collect();
+        let enough: Vec<Vec<u64>> = (0..10)
+            .map(|i| if i < 8 { known(&[0]) } else { vec![] })
+            .collect();
         let c = tree.discovery_chance(5, &enough);
-        assert!(c > Fixed::ZERO && c < Fixed::from_f64(0.02), "got {}", c.to_f64());
+        assert!(
+            c > Fixed::ZERO && c < Fixed::from_f64(0.02),
+            "got {}",
+            c.to_f64()
+        );
     }
 
     #[test]
@@ -277,18 +429,29 @@ mod tests {
         assert!(!tree.is_discovered(5), "precondition: tier-1 starts hidden");
         let store = vec![
             Knowledge {
-                id: 5, name: "Advanced Irrigation".into(), category: KnowledgeCategory::Agricultural,
-                difficulty: Fixed::from_f64(0.6), utility: Fixed::from_f64(0.9),
-                holders: 0, discovered_tick: 4320,
+                id: 5,
+                name: "Advanced Irrigation".into(),
+                category: KnowledgeCategory::Agricultural,
+                difficulty: Fixed::from_f64(0.6),
+                utility: Fixed::from_f64(0.9),
+                holders: 0,
+                discovered_tick: 4320,
             },
             Knowledge {
-                id: 99, name: "Unknown".into(), category: KnowledgeCategory::Philosophical,
-                difficulty: Fixed::from_f64(0.5), utility: Fixed::from_f64(0.5),
-                holders: 0, discovered_tick: 4320,
+                id: 99,
+                name: "Unknown".into(),
+                category: KnowledgeCategory::Philosophical,
+                difficulty: Fixed::from_f64(0.5),
+                utility: Fixed::from_f64(0.5),
+                holders: 0,
+                discovered_tick: 4320,
             },
         ];
         tree.reconcile_discovered(&store);
-        assert!(tree.is_discovered(5), "a catalog node present in the store is reconciled");
+        assert!(
+            tree.is_discovered(5),
+            "a catalog node present in the store is reconciled"
+        );
         assert!(
             !tree.is_discovered(99),
             "an id absent from the catalog must not be marked discovered"
@@ -298,11 +461,16 @@ mod tests {
     #[test]
     fn discover_adds_node_once_and_returns_knowledge() {
         let mut tree = TechnologyTree::riverford();
-        let k = tree.discover(5, 1234).expect("discovery returns the Knowledge entry");
+        let k = tree
+            .discover(5, 1234)
+            .expect("discovery returns the Knowledge entry");
         assert_eq!(k.id, 5);
         assert_eq!(k.discovered_tick, 1234);
         assert!(tree.is_discovered(5));
-        assert!(tree.discover(5, 2000).is_none(), "second discovery is a no-op");
+        assert!(
+            tree.discover(5, 2000).is_none(),
+            "second discovery is a no-op"
+        );
         // The chain unlocks: now Steelworking needs [1, 6] — 6 still hidden.
         assert!(!tree.is_discovered(6));
     }

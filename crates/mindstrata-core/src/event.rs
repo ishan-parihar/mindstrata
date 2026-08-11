@@ -7,10 +7,10 @@
 //! Every important state change should be captured as an event so that
 //! causal provenance can be traced.
 
+use crate::clock::Tick;
 use crate::conflict::ConflictKind;
 use crate::fixed::Fixed;
 use crate::id::{AgentId, EntityId, ResourceId};
-use crate::clock::Tick;
 use serde::{Deserialize, Serialize};
 
 /// Unique identifier for an event instance.

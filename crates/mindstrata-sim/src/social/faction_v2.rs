@@ -118,12 +118,7 @@ pub struct FactionV2 {
 
 impl FactionV2 {
     /// Create a new faction v2 from grievance and initial member count.
-    pub fn new(
-        leader: usize,
-        members: Vec<usize>,
-        grievance: Fixed,
-        tick: u64,
-    ) -> Self {
+    pub fn new(leader: usize, members: Vec<usize>, grievance: Fixed, tick: u64) -> Self {
         // Higher grievance = higher initial morale and mobilization
         let morale = (grievance * Fixed::from_f64(0.8) + Fixed::from_f64(0.2)).clamp_01();
         let mobilization = (grievance * Fixed::from_f64(0.6) + Fixed::from_f64(0.1)).clamp_01();
@@ -221,13 +216,12 @@ impl FactionV2 {
         // Casualties reduce morale and mobilization
         let morale_hit = loss_fraction * Fixed::from_f64(0.5);
         self.morale = (self.morale - morale_hit).max(Fixed::ZERO);
-        self.mobilization_capacity = (self.mobilization_capacity - loss_fraction * Fixed::from_f64(0.3))
-            .max(Fixed::ZERO);
+        self.mobilization_capacity =
+            (self.mobilization_capacity - loss_fraction * Fixed::from_f64(0.3)).max(Fixed::ZERO);
         // But casualties can increase grievance and legitimacy of violence (martyrdom effect)
         self.grievance = (self.grievance + loss_fraction * Fixed::from_f64(0.1)).clamp_01();
-        self.legitimacy_of_violence = (self.legitimacy_of_violence
-            + loss_fraction * Fixed::from_f64(0.05))
-            .clamp_01();
+        self.legitimacy_of_violence =
+            (self.legitimacy_of_violence + loss_fraction * Fixed::from_f64(0.05)).clamp_01();
     }
 
     /// Daily update — decay morale, consume supplies, adjust cohesion.
@@ -257,7 +251,8 @@ impl FactionV2 {
         self.cohesion = (self.cohesion * dyn_.cohesion_retention).max(Fixed::ZERO);
         // Trust in leadership decays if leader is incompetent — scaled by style.
         if self.leader_competence < Fixed::from_f64(0.3) {
-            self.trust_in_leadership = (self.trust_in_leadership - dyn_.trust_decay).max(Fixed::ZERO);
+            self.trust_in_leadership =
+                (self.trust_in_leadership - dyn_.trust_decay).max(Fixed::ZERO);
         }
     }
 
@@ -273,11 +268,7 @@ impl FactionV2 {
     ///
     /// Returns a probability (0–1) that the recruit will join.
     /// The caller should roll against this probability.
-    pub fn recruitment_chance(
-        &self,
-        recruit_grievance: Fixed,
-        max_members: usize,
-    ) -> Fixed {
+    pub fn recruitment_chance(&self, recruit_grievance: Fixed, max_members: usize) -> Fixed {
         if self.members.len() >= max_members {
             return Fixed::ZERO;
         }

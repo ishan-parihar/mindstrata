@@ -15,9 +15,9 @@
 //!   - Seek social approval → Formalize
 //! ```
 
+use super::marriage::RomanticStage;
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
-use super::marriage::RomanticStage;
 
 /// Minimum attraction as a fraction of the trust threshold for stage advancement.
 const ATTRACTION_FLOOR_RATIO: Fixed = Fixed::from_raw(6000); // 0.6
@@ -114,8 +114,7 @@ impl Courtship {
             let min_attraction = next.base_trust() * ATTRACTION_FLOOR_RATIO;
             let attraction_ok = attraction >= min_attraction;
             let no_record = self.positive_interactions == 0 && self.negative_interactions == 0;
-            let balance_ok =
-                no_record || self.positive_interactions > self.negative_interactions;
+            let balance_ok = no_record || self.positive_interactions > self.negative_interactions;
 
             if trust_ok && attraction_ok && balance_ok {
                 self.stage = next;
@@ -170,7 +169,9 @@ impl Courtship {
         self.reciprocity = (self.reciprocity * Fixed::from_f64(0.98)).max(Fixed::ZERO);
         // Social approval tracks mutual interest: community perception follows
         // how much the pursued returns the pursuer's interest.
-        self.social_approval = (self.social_approval * Fixed::from_f64(0.995) + Fixed::from_f64(0.005) * self.reciprocity).clamp_01();
+        self.social_approval = (self.social_approval * Fixed::from_f64(0.995)
+            + Fixed::from_f64(0.005) * self.reciprocity)
+            .clamp_01();
     }
 
     /// Courtship probability of regression per tick — depends on negative interactions.
@@ -263,20 +264,32 @@ mod tests {
     #[test]
     fn eligibility_checks_adults_only() {
         assert!(!eligible_for_courtship(
-            Fixed::from_f64(12.0), Fixed::from_f64(20.0),
-            Fixed::ZERO, false, Fixed::from_f64(0.3), Fixed::from_f64(0.5),
+            Fixed::from_f64(12.0),
+            Fixed::from_f64(20.0),
+            Fixed::ZERO,
+            false,
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.5),
         ));
         assert!(eligible_for_courtship(
-            Fixed::from_f64(20.0), Fixed::from_f64(22.0),
-            Fixed::ZERO, false, Fixed::from_f64(0.3), Fixed::from_f64(0.5),
+            Fixed::from_f64(20.0),
+            Fixed::from_f64(22.0),
+            Fixed::ZERO,
+            false,
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.5),
         ));
     }
 
     #[test]
     fn eligibility_rejects_close_kin() {
         assert!(!eligible_for_courtship(
-            Fixed::from_f64(20.0), Fixed::from_f64(22.0),
-            Fixed::from_f64(0.5), false, Fixed::from_f64(0.3), Fixed::from_f64(0.5),
+            Fixed::from_f64(20.0),
+            Fixed::from_f64(22.0),
+            Fixed::from_f64(0.5),
+            false,
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.5),
         ));
     }
 
@@ -355,7 +368,8 @@ mod tests {
         courtship.stage = RomanticStage::ActiveCourtship;
         courtship.record_positive(10, Fixed::from_f64(0.6), Fixed::from_f64(0.2));
         assert_eq!(
-            courtship.stage, RomanticStage::ActiveCourtship,
+            courtship.stage,
+            RomanticStage::ActiveCourtship,
             "attraction below the 0.6× floor must stall advancement"
         );
     }

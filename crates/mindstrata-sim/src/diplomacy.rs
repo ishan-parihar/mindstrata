@@ -161,7 +161,10 @@ mod tests {
         let neutral = reg.caravan_chance(Fixed::ZERO);
         let hostile = reg.caravan_chance(Fixed::from_f64(-0.8));
         assert!(friendly > neutral, "friendly neighbors attract caravans");
-        assert!(neutral > hostile, "hostile neighbors attract fewer caravans");
+        assert!(
+            neutral > hostile,
+            "hostile neighbors attract fewer caravans"
+        );
         assert_eq!(reg.caravan_chance(Fixed::from_f64(-1.0)), Fixed::ZERO);
     }
 
@@ -172,14 +175,20 @@ mod tests {
         reg.neighbors[1].relation = Fixed::from_f64(-0.6);
         reg.revert_relations();
         assert!(
-            reg.neighbors[0].relation < Fixed::from_f64(0.8) && reg.neighbors[0].relation > Fixed::ZERO,
+            reg.neighbors[0].relation < Fixed::from_f64(0.8)
+                && reg.neighbors[0].relation > Fixed::ZERO,
             "friendship cools toward neutral"
         );
         assert!(
-            reg.neighbors[1].relation > Fixed::from_f64(-0.6) && reg.neighbors[1].relation < Fixed::ZERO,
+            reg.neighbors[1].relation > Fixed::from_f64(-0.6)
+                && reg.neighbors[1].relation < Fixed::ZERO,
             "hostility cools toward neutral"
         );
-        assert_eq!(reg.neighbors[2].relation, Fixed::ZERO, "neutral stays neutral");
+        assert_eq!(
+            reg.neighbors[2].relation,
+            Fixed::ZERO,
+            "neutral stays neutral"
+        );
         // Repeated reversion drives toward zero but never past it.
         for _ in 0..100 {
             reg.revert_relations();

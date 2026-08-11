@@ -72,7 +72,7 @@ impl PsychopathologyState {
             - social_support * Fixed::from_f64(0.1);
         self.depression_risk = (self.depression_risk * Fixed::from_f64(0.995)
             + depression_input * Fixed::from_f64(0.005))
-            .clamp_01();
+        .clamp_01();
 
         // Anxiety: chronic stress + trauma + sleep deprivation + genetic
         let anxiety_input = chronic_stress * Fixed::from_f64(0.25)
@@ -81,14 +81,14 @@ impl PsychopathologyState {
             - social_support * Fixed::from_f64(0.08);
         self.anxiety_risk = (self.anxiety_risk * Fixed::from_f64(0.995)
             + anxiety_input * Fixed::from_f64(0.005))
-            .clamp_01();
+        .clamp_01();
 
         // PTSD: trauma load + low coping + low support
         let ptsd_input = trauma_load * Fixed::from_f64(0.3)
             + (Fixed::ONE - social_support) * Fixed::from_f64(0.1);
         self.ptsd_risk = (self.ptsd_risk * Fixed::from_f64(0.998)
             + ptsd_input * Fixed::from_f64(0.002))
-            .clamp_01();
+        .clamp_01();
 
         // Paranoia: social isolation + humiliation + low trust
         let paranoia_input = social_isolation * Fixed::from_f64(0.2)
@@ -96,7 +96,7 @@ impl PsychopathologyState {
             + chronic_stress * Fixed::from_f64(0.1);
         self.paranoia_risk = (self.paranoia_risk * Fixed::from_f64(0.997)
             + paranoia_input * Fixed::from_f64(0.003))
-            .clamp_01();
+        .clamp_01();
 
         // Addiction: genetic vulnerability + chronic stress + pain
         let addiction_input = genetic_addiction_risk * Fixed::from_f64(0.2)
@@ -104,21 +104,21 @@ impl PsychopathologyState {
             + chronic_pain * Fixed::from_f64(0.15);
         self.addiction_vulnerability = (self.addiction_vulnerability * Fixed::from_f64(0.999)
             + addiction_input * Fixed::from_f64(0.001))
-            .clamp_01();
+        .clamp_01();
 
         // Dissociation: extreme trauma + pain
-        let dissociation_input = trauma_load * Fixed::from_f64(0.2)
-            + chronic_pain * Fixed::from_f64(0.1);
+        let dissociation_input =
+            trauma_load * Fixed::from_f64(0.2) + chronic_pain * Fixed::from_f64(0.1);
         self.dissociation_risk = (self.dissociation_risk * Fixed::from_f64(0.999)
             + dissociation_input * Fixed::from_f64(0.001))
-            .clamp_01();
+        .clamp_01();
 
         // Grief pathology: loss magnitude + low support
         let grief_input = loss_magnitude * Fixed::from_f64(0.3)
             + (Fixed::ONE - social_support) * Fixed::from_f64(0.15);
         self.grief_pathology_risk = (self.grief_pathology_risk * Fixed::from_f64(0.998)
             + grief_input * Fixed::from_f64(0.002))
-            .clamp_01();
+        .clamp_01();
 
         // Resentment: moral injury + humiliation + low autonomy
         let resentment_input = moral_injury * Fixed::from_f64(0.25)
@@ -126,10 +126,11 @@ impl PsychopathologyState {
             + chronic_stress * Fixed::from_f64(0.1);
         self.resentment_risk = (self.resentment_risk * Fixed::from_f64(0.997)
             + resentment_input * Fixed::from_f64(0.003))
-            .clamp_01();
+        .clamp_01();
 
         // Overall mental health is inverse of worst risk
-        let worst_risk = self.depression_risk
+        let worst_risk = self
+            .depression_risk
             .max(self.anxiety_risk)
             .max(self.ptsd_risk)
             .max(self.paranoia_risk)
@@ -208,8 +209,17 @@ mod tests {
             ..Default::default()
         };
         p.tick_update(
-            Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO,
-            Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ONE,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ONE,
         );
         assert!(p.overall_health < Fixed::from_f64(0.5));
     }

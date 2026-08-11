@@ -37,8 +37,14 @@ impl Default for StressAxis {
 
 impl StressAxis {
     /// Update stress level based on acute input and recovery.
-    pub fn update(&mut self, acute_input: Fixed, parasympathetic_tone: Fixed,
-                  recovery_rate: Fixed, chronic_rate: Fixed, chronic_recovery: Fixed) {
+    pub fn update(
+        &mut self,
+        acute_input: Fixed,
+        parasympathetic_tone: Fixed,
+        recovery_rate: Fixed,
+        chronic_rate: Fixed,
+        chronic_recovery: Fixed,
+    ) {
         let recovery = recovery_rate * parasympathetic_tone;
         let acute_delta = acute_input * self.reactivity;
         let chronic_delta = self.chronic_load * Fixed::from_f64(0.1);
@@ -98,9 +104,8 @@ impl Default for DominanceAxis {
 impl DominanceAxis {
     pub fn update(&mut self, status_change: Fixed, response_rate: Fixed) {
         // Rises with status gains, falls with status losses
-        self.level = (self.level + status_change * response_rate
-            - Fixed::from_f64(0.01))
-            .clamp_01();
+        self.level =
+            (self.level + status_change * response_rate - Fixed::from_f64(0.01)).clamp_01();
     }
 }
 
@@ -216,9 +221,10 @@ impl EndocrineState {
     /// Compute parasympathetic tone from stress and arousal (inverse relationship).
     /// High stress/arousal = low parasympathetic tone.
     pub fn parasympathetic_tone(&self) -> Fixed {
-        (Fixed::ONE - self.stress.level * Fixed::from_f64(0.5)
+        (Fixed::ONE
+            - self.stress.level * Fixed::from_f64(0.5)
             - self.arousal.level * Fixed::from_f64(0.3))
-            .clamp_01()
+        .clamp_01()
     }
 
     /// Stress modifier for cognitive function.
@@ -251,7 +257,13 @@ mod tests {
         };
         let tone = Fixed::from_f64(0.5);
         // Acute input 0, so only recovery happens
-        axis.update(Fixed::ZERO, tone, Fixed::from_f64(0.05), Fixed::from_f64(0.001), Fixed::from_f64(0.0005));
+        axis.update(
+            Fixed::ZERO,
+            tone,
+            Fixed::from_f64(0.05),
+            Fixed::from_f64(0.001),
+            Fixed::from_f64(0.0005),
+        );
         assert!(axis.level < Fixed::from_f64(0.8));
     }
 
@@ -262,7 +274,13 @@ mod tests {
             ..StressAxis::default()
         };
         let tone = Fixed::from_f64(0.5);
-        axis.update(Fixed::from_f64(0.8), tone, Fixed::from_f64(0.05), Fixed::from_f64(0.001), Fixed::from_f64(0.0005));
+        axis.update(
+            Fixed::from_f64(0.8),
+            tone,
+            Fixed::from_f64(0.05),
+            Fixed::from_f64(0.001),
+            Fixed::from_f64(0.0005),
+        );
         assert!(axis.level > Fixed::from_f64(0.2));
     }
 
@@ -299,9 +317,6 @@ mod tests {
         let mut rng2 = rand::rngs::StdRng::seed_from_u64(42);
         let e1 = EndocrineState::random(&mut rng1);
         let e2 = EndocrineState::random(&mut rng2);
-        assert_eq!(
-            e1.stress.reactivity.to_raw(),
-            e2.stress.reactivity.to_raw()
-        );
+        assert_eq!(e1.stress.reactivity.to_raw(), e2.stress.reactivity.to_raw());
     }
 }

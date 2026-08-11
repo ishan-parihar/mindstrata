@@ -242,31 +242,36 @@ impl MotivationState {
         let mut m = Self::default();
         // High extraversion → stronger belonging/attachment/romance needs
         m.belonging.urgency_weight = (m.belonging.urgency_weight
-            + personality.extraversion * Fixed::from_f64(0.3)).clamp_01();
+            + personality.extraversion * Fixed::from_f64(0.3))
+        .clamp_01();
         m.attachment.urgency_weight = (m.attachment.urgency_weight
-            + personality.extraversion * Fixed::from_f64(0.2)).clamp_01();
+            + personality.extraversion * Fixed::from_f64(0.2))
+        .clamp_01();
         m.romance.urgency_weight = (m.romance.urgency_weight
-            + personality.extraversion * Fixed::from_f64(0.15)).clamp_01();
+            + personality.extraversion * Fixed::from_f64(0.15))
+        .clamp_01();
         // High ambition → stronger esteem/recognition needs
-        m.esteem.urgency_weight = (m.esteem.urgency_weight
-            + personality.ambition * Fixed::from_f64(0.3)).clamp_01();
-        m.recognition.urgency_weight = (m.recognition.urgency_weight
-            + personality.ambition * Fixed::from_f64(0.2)).clamp_01();
+        m.esteem.urgency_weight =
+            (m.esteem.urgency_weight + personality.ambition * Fixed::from_f64(0.3)).clamp_01();
+        m.recognition.urgency_weight =
+            (m.recognition.urgency_weight + personality.ambition * Fixed::from_f64(0.2)).clamp_01();
         // High openness → stronger novelty/meaning needs
-        m.novelty.urgency_weight = (m.novelty.urgency_weight
-            + personality.openness * Fixed::from_f64(0.3)).clamp_01();
-        m.meaning.urgency_weight = (m.meaning.urgency_weight
-            + personality.openness * Fixed::from_f64(0.2)).clamp_01();
+        m.novelty.urgency_weight =
+            (m.novelty.urgency_weight + personality.openness * Fixed::from_f64(0.3)).clamp_01();
+        m.meaning.urgency_weight =
+            (m.meaning.urgency_weight + personality.openness * Fixed::from_f64(0.2)).clamp_01();
         // High neuroticism → stronger safety/certainty needs
-        m.safety.urgency_weight = (m.safety.urgency_weight
-            + personality.neuroticism * Fixed::from_f64(0.3)).clamp_01();
+        m.safety.urgency_weight =
+            (m.safety.urgency_weight + personality.neuroticism * Fixed::from_f64(0.3)).clamp_01();
         m.certainty.urgency_weight = (m.certainty.urgency_weight
-            + personality.neuroticism * Fixed::from_f64(0.2)).clamp_01();
+            + personality.neuroticism * Fixed::from_f64(0.2))
+        .clamp_01();
         // High agreeableness → stronger justice/care needs
         m.justice.urgency_weight = (m.justice.urgency_weight
-            + personality.agreeableness * Fixed::from_f64(0.2)).clamp_01();
-        m.care.urgency_weight = (m.care.urgency_weight
-            + personality.agreeableness * Fixed::from_f64(0.2)).clamp_01();
+            + personality.agreeableness * Fixed::from_f64(0.2))
+        .clamp_01();
+        m.care.urgency_weight =
+            (m.care.urgency_weight + personality.agreeableness * Fixed::from_f64(0.2)).clamp_01();
         m
     }
 
@@ -362,11 +367,12 @@ impl MotivationState {
                 Fixed::ONE + self.fear * Fixed::from_f64(0.4)
             }
             MotiveCategory::Justice => Fixed::ONE + self.anger * Fixed::from_f64(0.4),
-            MotiveCategory::Play
-            | MotiveCategory::Belonging
-            | MotiveCategory::Romance => Fixed::ONE + self.joy * Fixed::from_f64(0.3),
-            MotiveCategory::Meaning => (Fixed::ONE - self.sadness * Fixed::from_f64(0.3))
-                .max(Fixed::from_f64(0.5)),
+            MotiveCategory::Play | MotiveCategory::Belonging | MotiveCategory::Romance => {
+                Fixed::ONE + self.joy * Fixed::from_f64(0.3)
+            }
+            MotiveCategory::Meaning => {
+                (Fixed::ONE - self.sadness * Fixed::from_f64(0.3)).max(Fixed::from_f64(0.5))
+            }
             _ => Fixed::ONE,
         };
 
@@ -376,8 +382,9 @@ impl MotivationState {
         // dampener at legit=0 that amplification still out-weighs.
         let legitimacy = match category {
             MotiveCategory::Justice | MotiveCategory::Certainty | MotiveCategory::Safety => {
-                (Fixed::ONE + (self.cultural_legitimacy - Fixed::from_f64(0.5)) * Fixed::from_f64(0.4))
-                    .clamp(Fixed::from_f64(0.7), Fixed::from_f64(1.3))
+                (Fixed::ONE
+                    + (self.cultural_legitimacy - Fixed::from_f64(0.5)) * Fixed::from_f64(0.4))
+                .clamp(Fixed::from_f64(0.7), Fixed::from_f64(1.3))
             }
             _ => Fixed::ONE,
         };
@@ -416,33 +423,92 @@ impl MotivationState {
                 (MotiveCategory::Sleep, self.sleep.pressure()),
                 (MotiveCategory::Safety, self.safety.pressure()),
             ];
-            self.dominant_need = max_bio.iter()
+            self.dominant_need = max_bio
+                .iter()
                 .max_by_key(|(_, p)| p.to_raw())
                 .map_or(MotiveCategory::Hunger, |(c, _)| *c);
         } else {
             // All needs compete equally with the full pressure formula
             let all = [
-                (MotiveCategory::Hunger, self.pressure_full(MotiveCategory::Hunger)),
-                (MotiveCategory::Thirst, self.pressure_full(MotiveCategory::Thirst)),
-                (MotiveCategory::Sleep, self.pressure_full(MotiveCategory::Sleep)),
-                (MotiveCategory::Warmth, self.pressure_full(MotiveCategory::Warmth)),
-                (MotiveCategory::Health, self.pressure_full(MotiveCategory::Health)),
-                (MotiveCategory::Safety, self.pressure_full(MotiveCategory::Safety)),
-                (MotiveCategory::Attachment, self.pressure_full(MotiveCategory::Attachment)),
-                (MotiveCategory::Belonging, self.pressure_full(MotiveCategory::Belonging)),
-                (MotiveCategory::Esteem, self.pressure_full(MotiveCategory::Esteem)),
-                (MotiveCategory::Autonomy, self.pressure_full(MotiveCategory::Autonomy)),
-                (MotiveCategory::Competence, self.pressure_full(MotiveCategory::Competence)),
-                (MotiveCategory::Meaning, self.pressure_full(MotiveCategory::Meaning)),
-                (MotiveCategory::Certainty, self.pressure_full(MotiveCategory::Certainty)),
-                (MotiveCategory::Novelty, self.pressure_full(MotiveCategory::Novelty)),
-                (MotiveCategory::Play, self.pressure_full(MotiveCategory::Play)),
-                (MotiveCategory::Care, self.pressure_full(MotiveCategory::Care)),
-                (MotiveCategory::Romance, self.pressure_full(MotiveCategory::Romance)),
-                (MotiveCategory::Justice, self.pressure_full(MotiveCategory::Justice)),
-                (MotiveCategory::Recognition, self.pressure_full(MotiveCategory::Recognition)),
+                (
+                    MotiveCategory::Hunger,
+                    self.pressure_full(MotiveCategory::Hunger),
+                ),
+                (
+                    MotiveCategory::Thirst,
+                    self.pressure_full(MotiveCategory::Thirst),
+                ),
+                (
+                    MotiveCategory::Sleep,
+                    self.pressure_full(MotiveCategory::Sleep),
+                ),
+                (
+                    MotiveCategory::Warmth,
+                    self.pressure_full(MotiveCategory::Warmth),
+                ),
+                (
+                    MotiveCategory::Health,
+                    self.pressure_full(MotiveCategory::Health),
+                ),
+                (
+                    MotiveCategory::Safety,
+                    self.pressure_full(MotiveCategory::Safety),
+                ),
+                (
+                    MotiveCategory::Attachment,
+                    self.pressure_full(MotiveCategory::Attachment),
+                ),
+                (
+                    MotiveCategory::Belonging,
+                    self.pressure_full(MotiveCategory::Belonging),
+                ),
+                (
+                    MotiveCategory::Esteem,
+                    self.pressure_full(MotiveCategory::Esteem),
+                ),
+                (
+                    MotiveCategory::Autonomy,
+                    self.pressure_full(MotiveCategory::Autonomy),
+                ),
+                (
+                    MotiveCategory::Competence,
+                    self.pressure_full(MotiveCategory::Competence),
+                ),
+                (
+                    MotiveCategory::Meaning,
+                    self.pressure_full(MotiveCategory::Meaning),
+                ),
+                (
+                    MotiveCategory::Certainty,
+                    self.pressure_full(MotiveCategory::Certainty),
+                ),
+                (
+                    MotiveCategory::Novelty,
+                    self.pressure_full(MotiveCategory::Novelty),
+                ),
+                (
+                    MotiveCategory::Play,
+                    self.pressure_full(MotiveCategory::Play),
+                ),
+                (
+                    MotiveCategory::Care,
+                    self.pressure_full(MotiveCategory::Care),
+                ),
+                (
+                    MotiveCategory::Romance,
+                    self.pressure_full(MotiveCategory::Romance),
+                ),
+                (
+                    MotiveCategory::Justice,
+                    self.pressure_full(MotiveCategory::Justice),
+                ),
+                (
+                    MotiveCategory::Recognition,
+                    self.pressure_full(MotiveCategory::Recognition),
+                ),
             ];
-            self.dominant_need = all.iter()
+            self.dominant_need = all
+                .iter()
                 .max_by_key(|(_, p)| p.to_raw())
                 .map_or(MotiveCategory::Hunger, |(c, _)| *c);
         }
@@ -581,7 +647,15 @@ mod tests {
         let mut m = MotivationState::default();
         m.safety.deficit = Fixed::from_f64(0.5);
         let calm = m.pressure_full(MotiveCategory::Safety);
-        m.set_context(Fixed::from_f64(0.9), Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(0.5), Fixed::ZERO, Fixed::ZERO);
+        m.set_context(
+            Fixed::from_f64(0.9),
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::from_f64(0.5),
+            Fixed::ZERO,
+            Fixed::ZERO,
+        );
         let afraid = m.pressure_full(MotiveCategory::Safety);
         assert!(afraid > calm, "fear must amplify safety pressure");
     }
@@ -591,7 +665,15 @@ mod tests {
         let mut m = MotivationState::default();
         m.justice.deficit = Fixed::from_f64(0.5);
         let calm = m.pressure_full(MotiveCategory::Justice);
-        m.set_context(Fixed::ZERO, Fixed::from_f64(0.9), Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(0.5), Fixed::ZERO, Fixed::ZERO);
+        m.set_context(
+            Fixed::ZERO,
+            Fixed::from_f64(0.9),
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::from_f64(0.5),
+            Fixed::ZERO,
+            Fixed::ZERO,
+        );
         let angry = m.pressure_full(MotiveCategory::Justice);
         assert!(angry > calm, "anger must amplify justice pressure");
     }
@@ -603,9 +685,23 @@ mod tests {
         m.hunger.deficit = Fixed::from_f64(0.5);
         let calm = m.pressure_full(MotiveCategory::Belonging);
         let fed = m.pressure_full(MotiveCategory::Hunger);
-        m.set_context(Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(0.9), Fixed::ZERO, Fixed::from_f64(0.5), Fixed::from_f64(0.9), Fixed::ZERO);
-        assert!(m.pressure_full(MotiveCategory::Belonging) > calm, "joy must amplify belonging");
-        assert!(m.pressure_full(MotiveCategory::Hunger) > fed, "food scarcity must amplify hunger");
+        m.set_context(
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::from_f64(0.9),
+            Fixed::ZERO,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.9),
+            Fixed::ZERO,
+        );
+        assert!(
+            m.pressure_full(MotiveCategory::Belonging) > calm,
+            "joy must amplify belonging"
+        );
+        assert!(
+            m.pressure_full(MotiveCategory::Hunger) > fed,
+            "food scarcity must amplify hunger"
+        );
     }
 
     #[test]
@@ -629,7 +725,15 @@ mod tests {
         // Unsaturated regime: hunger deficit small, scarcity high — the
         // five-factor amplification must be visible above the base pressure.
         m.hunger.deficit = Fixed::from_f64(0.2);
-        m.set_context(Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(0.5), Fixed::from_f64(0.9), Fixed::ZERO);
+        m.set_context(
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.9),
+            Fixed::ZERO,
+        );
         let base = m.hunger.pressure();
         let amplified = m.pressure_full(MotiveCategory::Hunger);
         assert!(
@@ -662,8 +766,20 @@ mod tests {
         assert_eq!(m.dominant_need, MotiveCategory::Belonging);
         // Fear (0.9) amplifies safety pressure by 1.36x -> 0.435, flipping the
         // argmax — the formula is genuinely live.
-        m.set_context(Fixed::from_f64(0.9), Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(0.5), Fixed::ZERO, Fixed::ZERO);
+        m.set_context(
+            Fixed::from_f64(0.9),
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::from_f64(0.5),
+            Fixed::ZERO,
+            Fixed::ZERO,
+        );
         m.update_dominant();
-        assert_eq!(m.dominant_need, MotiveCategory::Safety, "fear must flip dominance to safety");
+        assert_eq!(
+            m.dominant_need,
+            MotiveCategory::Safety,
+            "fear must flip dominance to safety"
+        );
     }
 }

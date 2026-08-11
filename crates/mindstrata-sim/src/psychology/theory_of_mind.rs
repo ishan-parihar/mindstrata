@@ -119,22 +119,21 @@ impl OtherMindModel {
         empathy_modifier: Fixed,
     ) {
         // Update trustworthiness perception
-        let trust_delta = observed_honesty * Fixed::from_f64(0.1)
-            - observed_harmful * Fixed::from_f64(0.15);
+        let trust_delta =
+            observed_honesty * Fixed::from_f64(0.1) - observed_harmful * Fixed::from_f64(0.15);
         self.perceived_traits.trustworthiness =
             (self.perceived_traits.trustworthiness + trust_delta).clamp_01();
 
         // Update warmth perception
-        let warmth_delta = observed_helpful * Fixed::from_f64(0.1)
-            - observed_harmful * Fixed::from_f64(0.1);
-        self.perceived_traits.warmth =
-            (self.perceived_traits.warmth + warmth_delta).clamp_01();
+        let warmth_delta =
+            observed_helpful * Fixed::from_f64(0.1) - observed_harmful * Fixed::from_f64(0.1);
+        self.perceived_traits.warmth = (self.perceived_traits.warmth + warmth_delta).clamp_01();
 
         // Update threat level
-        self.perceived_traits.threat_level =
-            (self.perceived_traits.threat_level + observed_harmful * Fixed::from_f64(0.2)
-                - observed_helpful * Fixed::from_f64(0.1))
-                .clamp_01();
+        self.perceived_traits.threat_level = (self.perceived_traits.threat_level
+            + observed_harmful * Fixed::from_f64(0.2)
+            - observed_helpful * Fixed::from_f64(0.1))
+        .clamp_01();
 
         // Update empathy through repeated interaction
         self.empathy = (self.empathy + empathy_modifier * Fixed::from_f64(0.01)).clamp_01();
@@ -144,12 +143,7 @@ impl OtherMindModel {
     }
 
     /// Infer another's intent based on observed behavior and relationship.
-    pub fn infer_intent(
-        &mut self,
-        trust: Fixed,
-        recent_positive: Fixed,
-        recent_negative: Fixed,
-    ) {
+    pub fn infer_intent(&mut self, trust: Fixed, recent_positive: Fixed, recent_negative: Fixed) {
         if recent_negative > Fixed::from_f64(0.3) {
             self.perceived_intent = IntentPerception::Threatening;
         } else if recent_positive > Fixed::from_f64(0.3) && trust > Fixed::from_f64(0.5) {
@@ -162,11 +156,7 @@ impl OtherMindModel {
     }
 
     /// Check if this agent is perceived as an in-group member.
-    pub fn is_in_group(
-        &self,
-        shared_identity: Fixed,
-        trust: Fixed,
-    ) -> bool {
+    pub fn is_in_group(&self, shared_identity: Fixed, trust: Fixed) -> bool {
         shared_identity > Fixed::from_f64(0.5) || trust > Fixed::from_f64(0.7)
     }
 
@@ -190,7 +180,10 @@ impl MindModels {
         if !self.models.iter().any(|m| m.target == target) {
             self.models.push(OtherMindModel::new(target));
         }
-        self.models.iter_mut().find(|m| m.target == target).expect("just pushed model for target")
+        self.models
+            .iter_mut()
+            .find(|m| m.target == target)
+            .expect("just pushed model for target")
     }
 
     /// Get a model for an agent, if it exists.

@@ -97,13 +97,11 @@ impl LegitimacyField {
         for source in &mut self.sources {
             // Non-ritual sources decay at their own rate
             if !source.requires_ritual {
-                source.strength =
-                    (source.strength - source.decay_rate).max(Fixed::ZERO);
+                source.strength = (source.strength - source.decay_rate).max(Fixed::ZERO);
             } else {
                 // Ritual sources decay faster without reinforcement
                 source.strength =
-                    (source.strength - source.decay_rate * Fixed::from_f64(2.0))
-                        .max(Fixed::ZERO);
+                    (source.strength - source.decay_rate * Fixed::from_f64(2.0)).max(Fixed::ZERO);
                 needs_ritual_decay = true;
             }
         }

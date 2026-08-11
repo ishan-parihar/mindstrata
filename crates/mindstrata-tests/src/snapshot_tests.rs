@@ -112,18 +112,21 @@ fn snapshot_agent_metrics_500_ticks() {
     let sim = run_sim(42, 500);
     let ms = sim.metrics_snapshot();
 
-    insta::assert_debug_snapshot!("metrics_500_ticks", Metrics500 {
-        avg_hunger: ms.avg_hunger,
-        avg_thirst: ms.avg_thirst,
-        avg_fatigue: ms.avg_fatigue,
-        avg_stress: ms.avg_stress,
-        avg_health: ms.avg_health,
-        avg_relationship_trust: ms.avg_relationship_trust,
-        avg_relationship_quality: ms.avg_relationship_quality,
-        polarization_index: ms.polarization_index,
-        agent_count: ms.agent_count as f64,
-        household_count: ms.household_count as f64,
-    });
+    insta::assert_debug_snapshot!(
+        "metrics_500_ticks",
+        Metrics500 {
+            avg_hunger: ms.avg_hunger,
+            avg_thirst: ms.avg_thirst,
+            avg_fatigue: ms.avg_fatigue,
+            avg_stress: ms.avg_stress,
+            avg_health: ms.avg_health,
+            avg_relationship_trust: ms.avg_relationship_trust,
+            avg_relationship_quality: ms.avg_relationship_quality,
+            polarization_index: ms.polarization_index,
+            agent_count: ms.agent_count as f64,
+            household_count: ms.household_count as f64,
+        }
+    );
 }
 
 /// §18.5: Snapshot agent metrics after 2000 ticks — catches long-run drift.
@@ -132,17 +135,20 @@ fn snapshot_agent_metrics_2000_ticks() {
     let sim = run_sim(42, 2000);
     let ms = sim.metrics_snapshot();
 
-    insta::assert_debug_snapshot!("metrics_2000_ticks", Metrics2000 {
-        avg_hunger: ms.avg_hunger,
-        avg_thirst: ms.avg_thirst,
-        avg_fatigue: ms.avg_fatigue,
-        avg_stress: ms.avg_stress,
-        avg_health: ms.avg_health,
-        avg_relationship_trust: ms.avg_relationship_trust,
-        polarization_index: ms.polarization_index,
-        agent_count: ms.agent_count as f64,
-        household_count: ms.household_count as f64,
-    });
+    insta::assert_debug_snapshot!(
+        "metrics_2000_ticks",
+        Metrics2000 {
+            avg_hunger: ms.avg_hunger,
+            avg_thirst: ms.avg_thirst,
+            avg_fatigue: ms.avg_fatigue,
+            avg_stress: ms.avg_stress,
+            avg_health: ms.avg_health,
+            avg_relationship_trust: ms.avg_relationship_trust,
+            polarization_index: ms.polarization_index,
+            agent_count: ms.agent_count as f64,
+            household_count: ms.household_count as f64,
+        }
+    );
 }
 
 /// §18.5: Snapshot individual agent state after 1000 ticks — catches per-agent
@@ -151,24 +157,29 @@ fn snapshot_agent_metrics_2000_ticks() {
 fn snapshot_agent_state_1000_ticks() {
     let sim = run_sim(42, 1000);
 
-    let agent_states: Vec<AgentSnapshot> = sim.agents.iter().take(3).map(|a| AgentSnapshot {
-        name: a.name.clone(),
-        age: a.age.to_f64(),
-        health: a.body.health.to_f64(),
-        energy: a.body.energy.to_f64(),
-        hunger: a.needs.hunger.to_f64(),
-        fear: a.emotions.fear.to_f64(),
-        anger: a.emotions.anger.to_f64(),
-        joy: a.emotions.joy.to_f64(),
-        attachment_security: a.attachment.security.to_f64(),
-        attachment_anxiety: a.attachment.anxiety.to_f64(),
-        heuristic_bias: a.cognitive.heuristic_bias.to_f64(),
-        stress_level: a.embodied.endocrine.stress.level.to_f64(),
-        redemption_script: a.narrative.redemption_script.to_f64(),
-        depression_risk: a.psychopathology.depression_risk.to_f64(),
-        authority: a.status_v2.authority.to_f64(),
-        wealth_rank: a.status_v2.wealth_rank.to_f64(),
-    }).collect();
+    let agent_states: Vec<AgentSnapshot> = sim
+        .agents
+        .iter()
+        .take(3)
+        .map(|a| AgentSnapshot {
+            name: a.name.clone(),
+            age: a.age.to_f64(),
+            health: a.body.health.to_f64(),
+            energy: a.body.energy.to_f64(),
+            hunger: a.needs.hunger.to_f64(),
+            fear: a.emotions.fear.to_f64(),
+            anger: a.emotions.anger.to_f64(),
+            joy: a.emotions.joy.to_f64(),
+            attachment_security: a.attachment.security.to_f64(),
+            attachment_anxiety: a.attachment.anxiety.to_f64(),
+            heuristic_bias: a.cognitive.heuristic_bias.to_f64(),
+            stress_level: a.embodied.endocrine.stress.level.to_f64(),
+            redemption_script: a.narrative.redemption_script.to_f64(),
+            depression_risk: a.psychopathology.depression_risk.to_f64(),
+            authority: a.status_v2.authority.to_f64(),
+            wealth_rank: a.status_v2.wealth_rank.to_f64(),
+        })
+        .collect();
 
     insta::assert_debug_snapshot!("agent_states_1000_ticks", agent_states);
 }
@@ -179,16 +190,20 @@ fn snapshot_agent_state_1000_ticks() {
 fn snapshot_institution_state_1000_ticks() {
     let sim = run_sim(42, 1000);
 
-    let inst_states: Vec<InstitutionSnapshot> = sim.institutions.iter().map(|inst| InstitutionSnapshot {
-        name: inst.name.clone(),
-        kind: format!("{:?}", inst.kind),
-        legitimacy: inst.legitimacy.to_f64(),
-        morale: inst.collective.morale.to_f64(),
-        unity: inst.collective.unity.to_f64(),
-        fear: inst.collective.fear.to_f64(),
-        trust_in_leadership: inst.collective.trust_in_leadership.to_f64(),
-        member_count: inst.members.len(),
-    }).collect();
+    let inst_states: Vec<InstitutionSnapshot> = sim
+        .institutions
+        .iter()
+        .map(|inst| InstitutionSnapshot {
+            name: inst.name.clone(),
+            kind: format!("{:?}", inst.kind),
+            legitimacy: inst.legitimacy.to_f64(),
+            morale: inst.collective.morale.to_f64(),
+            unity: inst.collective.unity.to_f64(),
+            fear: inst.collective.fear.to_f64(),
+            trust_in_leadership: inst.collective.trust_in_leadership.to_f64(),
+            member_count: inst.members.len(),
+        })
+        .collect();
 
     insta::assert_debug_snapshot!("institution_states_1000_ticks", inst_states);
 }
@@ -217,19 +232,24 @@ fn snapshot_relationship_stages_2000_ticks() {
 fn snapshot_endocrine_state_500_ticks() {
     let sim = run_sim(42, 500);
 
-    let endocrine_states: Vec<EndocrineSnapshot> = sim.agents.iter().take(3).map(|a| EndocrineSnapshot {
-        name: a.name.clone(),
-        stress: a.embodied.endocrine.stress.level.to_f64(),
-        bonding: a.embodied.endocrine.bonding.level.to_f64(),
-        dominance: a.embodied.endocrine.dominance.level.to_f64(),
-        // Iter 42: the endocrine FertilityAxis was dead state (never updated,
-        // never read) and was removed per the YAGNI directive; the live
-        // fertility lives on the reproductive system.
-        fertility: a.embodied.reproductive.fertility.to_f64(),
-        metabolic_energy: a.embodied.endocrine.metabolic.energy.to_f64(),
-        arousal: a.embodied.endocrine.arousal.level.to_f64(),
-        growth_capacity: a.embodied.endocrine.growth.capacity.to_f64(),
-    }).collect();
+    let endocrine_states: Vec<EndocrineSnapshot> = sim
+        .agents
+        .iter()
+        .take(3)
+        .map(|a| EndocrineSnapshot {
+            name: a.name.clone(),
+            stress: a.embodied.endocrine.stress.level.to_f64(),
+            bonding: a.embodied.endocrine.bonding.level.to_f64(),
+            dominance: a.embodied.endocrine.dominance.level.to_f64(),
+            // Iter 42: the endocrine FertilityAxis was dead state (never updated,
+            // never read) and was removed per the YAGNI directive; the live
+            // fertility lives on the reproductive system.
+            fertility: a.embodied.reproductive.fertility.to_f64(),
+            metabolic_energy: a.embodied.endocrine.metabolic.energy.to_f64(),
+            arousal: a.embodied.endocrine.arousal.level.to_f64(),
+            growth_capacity: a.embodied.endocrine.growth.capacity.to_f64(),
+        })
+        .collect();
 
     insta::assert_debug_snapshot!("endocrine_states_500_ticks", endocrine_states);
 }
@@ -240,12 +260,17 @@ fn snapshot_endocrine_state_500_ticks() {
 fn snapshot_attachment_state_1000_ticks() {
     let sim = run_sim(42, 1000);
 
-    let attachment_states: Vec<AttachmentSnapshot> = sim.agents.iter().take(3).map(|a| AttachmentSnapshot {
-        name: a.name.clone(),
-        security: a.attachment.security.to_f64(),
-        anxiety: a.attachment.anxiety.to_f64(),
-        avoidance: a.attachment.avoidance.to_f64(),
-    }).collect();
+    let attachment_states: Vec<AttachmentSnapshot> = sim
+        .agents
+        .iter()
+        .take(3)
+        .map(|a| AttachmentSnapshot {
+            name: a.name.clone(),
+            security: a.attachment.security.to_f64(),
+            anxiety: a.attachment.anxiety.to_f64(),
+            avoidance: a.attachment.avoidance.to_f64(),
+        })
+        .collect();
 
     insta::assert_debug_snapshot!("attachment_states_1000_ticks", attachment_states);
 }
@@ -327,14 +352,20 @@ fn snapshot_long_horizon_surface_10000_ticks() {
     let mut memory_kind_distribution = BTreeMap::new();
     for a in &sim.agents {
         for t in &a.memory.episodes {
-            *memory_kind_distribution.entry(format!("{:?}", t.kind)).or_insert(0usize) += 1;
+            *memory_kind_distribution
+                .entry(format!("{:?}", t.kind))
+                .or_insert(0usize) += 1;
         }
     }
 
     // Norm surface: internalized norms and their mean strength.
-    let total_internalized_norms: usize =
-        sim.agents.iter().map(|a| a.moral_cognition.internalized_norms.len()).sum();
-    let norm_strength_sum: f64 = sim.agents
+    let total_internalized_norms: usize = sim
+        .agents
+        .iter()
+        .map(|a| a.moral_cognition.internalized_norms.len())
+        .sum();
+    let norm_strength_sum: f64 = sim
+        .agents
         .iter()
         .flat_map(|a| &a.moral_cognition.internalized_norms)
         .map(|n| n.strength.to_f64())
@@ -348,18 +379,42 @@ fn snapshot_long_horizon_surface_10000_ticks() {
     // Attraction surface: population means (0.0 is legitimate — an agent
     // that never evaluated a partner has an untouched attraction model).
     let pop = sim.agents.len().max(1) as f64;
-    let avg_physical_attraction =
-        sim.agents.iter().map(|a| a.attraction.physical_attraction.to_f64()).sum::<f64>() / pop;
-    let avg_personality_attraction =
-        sim.agents.iter().map(|a| a.attraction.personality_attraction.to_f64()).sum::<f64>() / pop;
-    let avg_status_attraction =
-        sim.agents.iter().map(|a| a.attraction.status_attraction.to_f64()).sum::<f64>() / pop;
-    let avg_moral_attraction =
-        sim.agents.iter().map(|a| a.attraction.moral_attraction.to_f64()).sum::<f64>() / pop;
-    let avg_familiarity =
-        sim.agents.iter().map(|a| a.attraction.familiarity.to_f64()).sum::<f64>() / pop;
-    let avg_envy_cost =
-        sim.agents.iter().map(|a| a.attraction.envy_cost.to_f64()).sum::<f64>() / pop;
+    let avg_physical_attraction = sim
+        .agents
+        .iter()
+        .map(|a| a.attraction.physical_attraction.to_f64())
+        .sum::<f64>()
+        / pop;
+    let avg_personality_attraction = sim
+        .agents
+        .iter()
+        .map(|a| a.attraction.personality_attraction.to_f64())
+        .sum::<f64>()
+        / pop;
+    let avg_status_attraction = sim
+        .agents
+        .iter()
+        .map(|a| a.attraction.status_attraction.to_f64())
+        .sum::<f64>()
+        / pop;
+    let avg_moral_attraction = sim
+        .agents
+        .iter()
+        .map(|a| a.attraction.moral_attraction.to_f64())
+        .sum::<f64>()
+        / pop;
+    let avg_familiarity = sim
+        .agents
+        .iter()
+        .map(|a| a.attraction.familiarity.to_f64())
+        .sum::<f64>()
+        / pop;
+    let avg_envy_cost = sim
+        .agents
+        .iter()
+        .map(|a| a.attraction.envy_cost.to_f64())
+        .sum::<f64>()
+        / pop;
 
     // Relationship surface: edges + stage distribution.
     let relationship_count: usize = sim.agents.iter().map(|a| a.relationship_v2s.len()).sum();
@@ -367,52 +422,65 @@ fn snapshot_long_horizon_surface_10000_ticks() {
     for agent in &sim.agents {
         for rv2 in &agent.relationship_v2s {
             let stage_name = format!("{:?}", rv2.stage);
-            *relationship_stage_distribution.entry(stage_name).or_insert(0u32) += 1;
+            *relationship_stage_distribution
+                .entry(stage_name)
+                .or_insert(0u32) += 1;
         }
     }
 
     // Ritual execution: the durable signal (participant traces decay away).
-    let executed_ritual_count = sim.ritual_registry.rituals.iter()
+    let executed_ritual_count = sim
+        .ritual_registry
+        .rituals
+        .iter()
         .filter(|r| r.last_occurrence > 0)
         .count();
-    let latest_ritual_occurrence = sim.ritual_registry.rituals.iter()
+    let latest_ritual_occurrence = sim
+        .ritual_registry
+        .rituals
+        .iter()
         .map(|r| r.last_occurrence)
         .max()
         .unwrap_or(0);
 
     // Institutional surface.
     let institution_count = sim.institutions.len();
-    let faction_count = sim.institutions.iter()
+    let faction_count = sim
+        .institutions
+        .iter()
         .filter(|i| i.kind == InstitutionKind::Faction)
         .count();
 
-    insta::assert_debug_snapshot!("long_horizon_surface_10000_ticks", LongHorizonSurface10000 {
-        tick: ms.tick,
-        agent_count: ms.agent_count,
-        event_count: ms.event_count,
-        avg_stress: ms.avg_stress,
-        avg_health: ms.avg_health,
-        avg_relationship_trust: ms.avg_relationship_trust,
-        avg_relationship_quality: ms.avg_relationship_quality,
-        polarization_index: ms.polarization_index,
-        active_meme_count: ms.active_meme_count,
-        total_grain: ms.total_grain,
-        total_water: ms.total_water,
-        total_memory_traces,
-        memory_kind_distribution,
-        total_internalized_norms,
-        avg_norm_strength,
-        avg_physical_attraction,
-        avg_personality_attraction,
-        avg_status_attraction,
-        avg_moral_attraction,
-        avg_familiarity,
-        avg_envy_cost,
-        relationship_count,
-        relationship_stage_distribution,
-        executed_ritual_count,
-        latest_ritual_occurrence,
-        institution_count,
-        faction_count,
-    });
+    insta::assert_debug_snapshot!(
+        "long_horizon_surface_10000_ticks",
+        LongHorizonSurface10000 {
+            tick: ms.tick,
+            agent_count: ms.agent_count,
+            event_count: ms.event_count,
+            avg_stress: ms.avg_stress,
+            avg_health: ms.avg_health,
+            avg_relationship_trust: ms.avg_relationship_trust,
+            avg_relationship_quality: ms.avg_relationship_quality,
+            polarization_index: ms.polarization_index,
+            active_meme_count: ms.active_meme_count,
+            total_grain: ms.total_grain,
+            total_water: ms.total_water,
+            total_memory_traces,
+            memory_kind_distribution,
+            total_internalized_norms,
+            avg_norm_strength,
+            avg_physical_attraction,
+            avg_personality_attraction,
+            avg_status_attraction,
+            avg_moral_attraction,
+            avg_familiarity,
+            avg_envy_cost,
+            relationship_count,
+            relationship_stage_distribution,
+            executed_ritual_count,
+            latest_ritual_occurrence,
+            institution_count,
+            faction_count,
+        }
+    );
 }

@@ -69,7 +69,7 @@ impl NarrativeFrameSet {
             + self.loss_as_curse * Fixed::from_f64(0.2)
             + self.betrayal_as_unworthiness * Fixed::from_f64(0.2)
             + self.just_world * Fixed::from_f64(0.15))
-            .clamp_01()
+        .clamp_01()
     }
 
     /// Interpret a positive event through the agent's narrative frames.
@@ -80,7 +80,7 @@ impl NarrativeFrameSet {
         (self.success_as_blessing * Fixed::from_f64(0.2)
             + self.survival_as_destiny * Fixed::from_f64(0.2)
             + self.hardship_builds_character * Fixed::from_f64(0.15))
-            .clamp_01()
+        .clamp_01()
     }
 
     /// Resilience factor — how much narrative meaning-making buffers against adversity.
@@ -89,7 +89,7 @@ impl NarrativeFrameSet {
             + self.hardship_builds_character * Fixed::from_f64(0.3)
             + self.survival_as_destiny * Fixed::from_f64(0.2)
             + self.success_as_blessing * Fixed::from_f64(0.2))
-            .clamp_01()
+        .clamp_01()
     }
 
     /// Compute how much this narrative frame set resists countervailing evidence.
@@ -115,15 +115,26 @@ impl NarrativeFrameSet {
     /// agents and only diverges as frames move with experience.
     pub fn daily_update(&mut self, negative_events: Fixed, positive_event_magnitude: Fixed) {
         if negative_events > Fixed::ZERO {
-            self.punishment_as_justice = (self.punishment_as_justice + negative_events * Fixed::from_f64(0.02)).clamp_01();
-            self.loss_as_curse = (self.loss_as_curse + negative_events * Fixed::from_f64(0.02)).clamp_01();
-            self.betrayal_as_unworthiness = (self.betrayal_as_unworthiness + negative_events * Fixed::from_f64(0.015)).clamp_01();
-            self.just_world = (self.just_world - negative_events * Fixed::from_f64(0.01)).max(Fixed::ZERO);
+            self.punishment_as_justice =
+                (self.punishment_as_justice + negative_events * Fixed::from_f64(0.02)).clamp_01();
+            self.loss_as_curse =
+                (self.loss_as_curse + negative_events * Fixed::from_f64(0.02)).clamp_01();
+            self.betrayal_as_unworthiness = (self.betrayal_as_unworthiness
+                + negative_events * Fixed::from_f64(0.015))
+            .clamp_01();
+            self.just_world =
+                (self.just_world - negative_events * Fixed::from_f64(0.01)).max(Fixed::ZERO);
         }
         if positive_event_magnitude > Fixed::ZERO {
-            self.success_as_blessing = (self.success_as_blessing + positive_event_magnitude * Fixed::from_f64(0.02)).clamp_01();
-            self.survival_as_destiny = (self.survival_as_destiny + positive_event_magnitude * Fixed::from_f64(0.015)).clamp_01();
-            self.hardship_builds_character = (self.hardship_builds_character + positive_event_magnitude * Fixed::from_f64(0.015)).clamp_01();
+            self.success_as_blessing = (self.success_as_blessing
+                + positive_event_magnitude * Fixed::from_f64(0.02))
+            .clamp_01();
+            self.survival_as_destiny = (self.survival_as_destiny
+                + positive_event_magnitude * Fixed::from_f64(0.015))
+            .clamp_01();
+            self.hardship_builds_character = (self.hardship_builds_character
+                + positive_event_magnitude * Fixed::from_f64(0.015))
+            .clamp_01();
         }
     }
 }

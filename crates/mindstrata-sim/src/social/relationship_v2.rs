@@ -131,7 +131,9 @@ pub fn stage_progression_threshold(stage: RelationshipStage) -> Fixed {
 /// is derived from institutional role expectations. The public label is what
 /// the community sees; the private label (see [`RelationshipV2::derive_private_label`])
 /// is the emotionally honest view and can diverge from it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
 pub enum RelationshipLabel {
     #[default]
     Unnoticed,
@@ -168,7 +170,9 @@ pub enum RelationshipLabel {
 /// Only `None`/`Caregiver`/`Ally` are currently derived (kin stages); the
 /// authority variants (patron/client, lord/vassal, etc.) are reserved
 /// taxonomy for future institutional-role wiring — not live behavior yet.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
 pub enum RoleExpectation {
     #[default]
     None,
@@ -310,7 +314,8 @@ pub struct RelationshipV2 {
 impl RelationshipV2 {
     pub fn new(from: AgentId, to: AgentId) -> Self {
         Self {
-            from, to,
+            from,
+            to,
             trust: Fixed::from_f64(0.4),
             affection: Fixed::from_f64(0.3),
             respect: Fixed::from_f64(0.3),
@@ -359,7 +364,7 @@ impl RelationshipV2 {
             + self.respect * Fixed::from_f64(0.2)
             + self.intimacy * Fixed::from_f64(0.15)
             + self.commitment * Fixed::from_f64(0.1))
-            .clamp_01()
+        .clamp_01()
     }
 
     /// §11.2: Recompute the power balance of this directed relationship from
@@ -408,7 +413,8 @@ impl RelationshipV2 {
     pub fn record_negative(&mut self, tick: u64, magnitude: Fixed) {
         let vol = self.volatility;
         self.trust = (self.trust - magnitude * vol * Fixed::from_f64(0.03)).max(Fixed::ZERO);
-        self.affection = (self.affection - magnitude * vol * Fixed::from_f64(0.02)).max(Fixed::ZERO);
+        self.affection =
+            (self.affection - magnitude * vol * Fixed::from_f64(0.02)).max(Fixed::ZERO);
         self.resentment = (self.resentment + magnitude * Fixed::from_f64(0.02)).clamp_01();
         self.fear = (self.fear + magnitude * Fixed::from_f64(0.01)).clamp_01();
         // §10.2: negative history accumulates into the memory weight.
@@ -469,11 +475,8 @@ impl RelationshipV2 {
         // §11.2: domination (power_balance < 0 ⇒ the other side holds the
         // leverage) feeds the resentment channel that drives the downgrade.
         let domination = (Fixed::ZERO - self.power_balance).max(Fixed::ZERO);
-        let effective_resentment =
-            (self.resentment + domination * Fixed::from_f64(0.5)).clamp_01();
-        if effective_resentment > self.trust
-            && effective_resentment > Fixed::from_f64(0.4)
-        {
+        let effective_resentment = (self.resentment + domination * Fixed::from_f64(0.5)).clamp_01();
+        if effective_resentment > self.trust && effective_resentment > Fixed::from_f64(0.4) {
             match public {
                 RelationshipLabel::Unnoticed
                 | RelationshipLabel::Noticed
@@ -555,18 +558,12 @@ impl RelationshipV2 {
             kind,
             magnitude,
         });
-        self.negative_memory_weight =
-            (self.negative_memory_weight + magnitude).clamp_01();
+        self.negative_memory_weight = (self.negative_memory_weight + magnitude).clamp_01();
     }
 
     /// §10.2: Record a reconciliation event into the bounded history and
     /// raise the positive memory weight. Only touches new §10.2 fields.
-    pub fn record_reconciliation(
-        &mut self,
-        tick: u64,
-        kind: ReconciliationKind,
-        magnitude: Fixed,
-    ) {
+    pub fn record_reconciliation(&mut self, tick: u64, kind: ReconciliationKind, magnitude: Fixed) {
         const MAX_RECONCILIATIONS: usize = 16;
         if self.reconciliation_history.len() >= MAX_RECONCILIATIONS {
             self.reconciliation_history.remove(0);
@@ -576,8 +573,7 @@ impl RelationshipV2 {
             kind,
             magnitude,
         });
-        self.positive_memory_weight =
-            (self.positive_memory_weight + magnitude).clamp_01();
+        self.positive_memory_weight = (self.positive_memory_weight + magnitude).clamp_01();
     }
 
     pub fn decay(&mut self, ticks_elapsed: u64) {
@@ -684,8 +680,10 @@ mod tests {
         // should NOT be active (i.e., should skip decay).
         let r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
         // Tick 50 is neither dirty nor a daily boundary (144)
-        assert!(!r.is_active_this_tick(50),
-            "Dormant relationship should not be active at non-daily tick");
+        assert!(
+            !r.is_active_this_tick(50),
+            "Dormant relationship should not be active at non-daily tick"
+        );
     }
 
     #[test]
@@ -693,10 +691,14 @@ mod tests {
         // §17.3: On daily boundary (tick % 144 == 0), all relationships
         // should be active for the bulk decay pass.
         let r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
-        assert!(r.is_active_this_tick(144),
-            "Daily boundary should activate all relationships");
-        assert!(r.is_active_this_tick(288),
-            "Daily boundary should activate all relationships");
+        assert!(
+            r.is_active_this_tick(144),
+            "Daily boundary should activate all relationships"
+        );
+        assert!(
+            r.is_active_this_tick(288),
+            "Daily boundary should activate all relationships"
+        );
     }
 
     #[test]
@@ -704,12 +706,16 @@ mod tests {
         let mut r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
         r.record_positive(5, Fixed::from_f64(0.5));
         // At tick 100 (non-daily), still active because dirty
-        assert!(r.is_active_this_tick(100),
-            "Dirty relationship should be active at any tick");
+        assert!(
+            r.is_active_this_tick(100),
+            "Dirty relationship should be active at any tick"
+        );
         // Clear dirty
         r.clear_dirty(100);
-        assert!(!r.is_active_this_tick(100),
-            "After clear_dirty, relationship should be dormant");
+        assert!(
+            !r.is_active_this_tick(100),
+            "After clear_dirty, relationship should be dormant"
+        );
     }
 
     #[test]
@@ -878,7 +884,10 @@ mod tests {
         let mut r = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
         r.record_reconciliation(20, ReconciliationKind::Apology, Fixed::from_f64(0.5));
         assert_eq!(r.reconciliation_history.len(), 1);
-        assert_eq!(r.reconciliation_history[0].kind, ReconciliationKind::Apology);
+        assert_eq!(
+            r.reconciliation_history[0].kind,
+            ReconciliationKind::Apology
+        );
         assert_eq!(r.reconciliation_history[0].tick, 20);
         assert!(r.positive_memory_weight > Fixed::ZERO);
     }
@@ -890,8 +899,16 @@ mod tests {
             r.record_betrayal(t, BetrayalKind::Theft, Fixed::from_f64(0.1));
             r.record_reconciliation(t, ReconciliationKind::Mediation, Fixed::from_f64(0.1));
         }
-        assert_eq!(r.betrayal_history.len(), 16, "betrayal history capped at 16");
-        assert_eq!(r.reconciliation_history.len(), 16, "reconciliation history capped at 16");
+        assert_eq!(
+            r.betrayal_history.len(),
+            16,
+            "betrayal history capped at 16"
+        );
+        assert_eq!(
+            r.reconciliation_history.len(),
+            16,
+            "reconciliation history capped at 16"
+        );
         // The most recent event survives (FIFO eviction).
         assert_eq!(r.betrayal_history.last().map(|e| e.tick), Some(39));
     }

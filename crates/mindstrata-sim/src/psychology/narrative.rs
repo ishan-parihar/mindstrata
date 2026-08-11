@@ -81,67 +81,62 @@ impl NarrativeIdentity {
         has_blame_target: bool,
     ) {
         // Contamination script strengthens with negative events
-        self.contamination_script = (self.contamination_script + severity * Fixed::from_f64(0.01))
-            .clamp_01();
+        self.contamination_script =
+            (self.contamination_script + severity * Fixed::from_f64(0.01)).clamp_01();
 
         // Victimhood strengthens without support
         if social_support < Fixed::from_f64(0.3) {
-            self.victimhood_script = (self.victimhood_script + severity * Fixed::from_f64(0.008))
-                .clamp_01();
+            self.victimhood_script =
+                (self.victimhood_script + severity * Fixed::from_f64(0.008)).clamp_01();
         }
 
         // Heroism strengthens when there's support to overcome
         if social_support > Fixed::from_f64(0.4) {
-            self.heroism_script = (self.heroism_script + severity * Fixed::from_f64(0.005))
-                .clamp_01();
+            self.heroism_script =
+                (self.heroism_script + severity * Fixed::from_f64(0.005)).clamp_01();
         }
 
         // Redemption script strengthens when blame can be externalized
         if has_blame_target {
-            self.redemption_script = (self.redemption_script + Fixed::from_f64(0.003))
-                .clamp_01();
+            self.redemption_script = (self.redemption_script + Fixed::from_f64(0.003)).clamp_01();
         }
 
         // Shame script strengthens from personal failure without external blame
         if !has_blame_target && social_support < Fixed::from_f64(0.2) {
-            self.shame_script = (self.shame_script + severity * Fixed::from_f64(0.005))
-                .clamp_01();
+            self.shame_script = (self.shame_script + severity * Fixed::from_f64(0.005)).clamp_01();
         }
 
         self.events_integrated += 1;
     }
 
     /// Interpret a positive event through the narrative frame.
-    pub fn interpret_positive_event(
-        &mut self,
-        magnitude: Fixed,
-        social_recognition: Fixed,
-    ) {
+    pub fn interpret_positive_event(&mut self, magnitude: Fixed, social_recognition: Fixed) {
         // Redemption script strengthens with positive recovery
-        self.redemption_script = (self.redemption_script + magnitude * Fixed::from_f64(0.005))
-            .clamp_01();
+        self.redemption_script =
+            (self.redemption_script + magnitude * Fixed::from_f64(0.005)).clamp_01();
 
         // Heroism strengthens with recognition
-        self.heroism_script = (self.heroism_script + social_recognition * Fixed::from_f64(0.003))
-            .clamp_01();
+        self.heroism_script =
+            (self.heroism_script + social_recognition * Fixed::from_f64(0.003)).clamp_01();
 
         // Chosenness strengthens with exceptional success
         if magnitude > Fixed::from_f64(0.7) && social_recognition > Fixed::from_f64(0.6) {
-            self.chosenness_script = (self.chosenness_script + Fixed::from_f64(0.002))
-                .clamp_01();
+            self.chosenness_script = (self.chosenness_script + Fixed::from_f64(0.002)).clamp_01();
         }
 
         // Contamination weakens with positive events
-        self.contamination_script = (self.contamination_script - magnitude * Fixed::from_f64(0.003))
-            .max(Fixed::ZERO);
+        self.contamination_script =
+            (self.contamination_script - magnitude * Fixed::from_f64(0.003)).max(Fixed::ZERO);
 
         self.events_integrated += 1;
     }
 
     /// Update the dominant life theme based on current script balance.
     pub fn update_theme(&mut self) {
-        let positive_balance = self.redemption_script + self.heroism_script + self.chosenness_script;
-        let negative_balance = self.contamination_script + self.victimhood_script + self.shame_script;
+        let positive_balance =
+            self.redemption_script + self.heroism_script + self.chosenness_script;
+        let negative_balance =
+            self.contamination_script + self.victimhood_script + self.shame_script;
 
         self.life_theme = if positive_balance > negative_balance * Fixed::from_f64(1.5) {
             if self.heroism_script > self.redemption_script {

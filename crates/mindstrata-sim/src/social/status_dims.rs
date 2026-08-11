@@ -61,7 +61,7 @@ impl StatusDimensions {
             + self.honor * Fixed::from_f64(0.05)
             + self.institutional_rank * Fixed::from_f64(0.1)
             - self.shame * Fixed::from_f64(0.1))
-            .clamp_01()
+        .clamp_01()
     }
 
     pub fn record_victory(&mut self, magnitude: Fixed) {
@@ -154,16 +154,24 @@ mod tests {
                 + s.moral_reputation * Fixed::from_f64(0.1)
                 + s.honor * Fixed::from_f64(0.05)
                 - s.shame * Fixed::from_f64(0.1))
-                .clamp_01()
+            .clamp_01()
         };
         let base = StatusDimensions::default();
-        assert_eq!(base.effective_status(), legacy(&base), "rankless agent must match legacy");
+        assert_eq!(
+            base.effective_status(),
+            legacy(&base),
+            "rankless agent must match legacy"
+        );
         let holder = StatusDimensions {
             institutional_rank: Fixed::from_f64(0.6),
             ..StatusDimensions::default()
         };
         let expected = (legacy(&holder) + Fixed::from_f64(0.06)).clamp_01();
-        assert_eq!(holder.effective_status(), expected, "role-holder must gain rank × 0.1");
+        assert_eq!(
+            holder.effective_status(),
+            expected,
+            "role-holder must gain rank × 0.1"
+        );
         // Saturated status clamps at 1.0 even with the new term.
         let maxed = StatusDimensions {
             dominance: Fixed::ONE,

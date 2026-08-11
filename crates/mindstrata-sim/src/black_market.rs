@@ -46,17 +46,14 @@ pub struct BlackMarketState {
 
 impl BlackMarketState {
     /// Update black market state based on current conditions.
-    pub fn update(
-        &mut self,
-        scarcity: Fixed,
-        enforcement_capacity: Fixed,
-    ) {
+    pub fn update(&mut self, scarcity: Fixed, enforcement_capacity: Fixed) {
         // Black market is active when scarcity is high and enforcement is low
         self.active = scarcity >= BLACK_MARKET_SCARCITY_THRESHOLD
             && enforcement_capacity <= BLACK_MARKET_ENFORCEMENT_THRESHOLD;
 
         // Track volume
-        self.recent_volume.push(Fixed::from_int(self.transactions_this_tick as i64));
+        self.recent_volume
+            .push(Fixed::from_int(self.transactions_this_tick as i64));
         if self.recent_volume.len() > 100 {
             self.recent_volume.remove(0);
         }
@@ -110,42 +107,69 @@ mod tests {
     fn black_market_active_with_high_scarcity_and_low_enforcement() {
         let mut bm = BlackMarketState::default();
         bm.update(Fixed::from_f64(0.6), Fixed::from_f64(0.3));
-        assert!(bm.active, "Black market should be active with high scarcity and low enforcement");
+        assert!(
+            bm.active,
+            "Black market should be active with high scarcity and low enforcement"
+        );
     }
 
     #[test]
     fn black_market_inactive_with_low_scarcity() {
         let mut bm = BlackMarketState::default();
         bm.update(Fixed::from_f64(0.2), Fixed::from_f64(0.3));
-        assert!(!bm.active, "Black market should be inactive with low scarcity");
+        assert!(
+            !bm.active,
+            "Black market should be inactive with low scarcity"
+        );
     }
 
     #[test]
     fn black_market_inactive_with_high_enforcement() {
         let mut bm = BlackMarketState::default();
         bm.update(Fixed::from_f64(0.6), Fixed::from_f64(0.8));
-        assert!(!bm.active, "Black market should be inactive with high enforcement");
+        assert!(
+            !bm.active,
+            "Black market should be inactive with high enforcement"
+        );
     }
 
     #[test]
     fn high_risk_low_conformity_can_participate() {
-        let bm = BlackMarketState { active: true, ..Default::default() };
+        let bm = BlackMarketState {
+            active: true,
+            ..Default::default()
+        };
         let agent = make_personality(0.8, 0.3);
-        assert!(bm.can_participate(&agent), "High risk + low conformity should participate");
+        assert!(
+            bm.can_participate(&agent),
+            "High risk + low conformity should participate"
+        );
     }
 
     #[test]
     fn low_risk_cannot_participate() {
-        let bm = BlackMarketState { active: true, ..Default::default() };
+        let bm = BlackMarketState {
+            active: true,
+            ..Default::default()
+        };
         let agent = make_personality(0.2, 0.3);
-        assert!(!bm.can_participate(&agent), "Low risk tolerance should not participate");
+        assert!(
+            !bm.can_participate(&agent),
+            "Low risk tolerance should not participate"
+        );
     }
 
     #[test]
     fn high_conformity_cannot_participate() {
-        let bm = BlackMarketState { active: true, ..Default::default() };
+        let bm = BlackMarketState {
+            active: true,
+            ..Default::default()
+        };
         let agent = make_personality(0.8, 0.9);
-        assert!(!bm.can_participate(&agent), "High conformity should not participate");
+        assert!(
+            !bm.can_participate(&agent),
+            "High conformity should not participate"
+        );
     }
 
     #[test]
@@ -153,6 +177,9 @@ mod tests {
         let bm = BlackMarketState::default();
         let legal_price = Fixed::from_f64(5.0);
         let bm_price = bm.black_market_price(legal_price);
-        assert!(bm_price > legal_price, "Black market price should be higher than legal price");
+        assert!(
+            bm_price > legal_price,
+            "Black market price should be higher than legal price"
+        );
     }
 }

@@ -159,9 +159,10 @@ impl Meme {
             MemeContent::Accusation | MemeContent::Praise | MemeContent::Rumor => {
                 Fixed::from_f64(0.3)
             }
-            MemeContent::Practical | MemeContent::Joke | MemeContent::Song | MemeContent::Slogan => {
-                Fixed::from_f64(0.2)
-            }
+            MemeContent::Practical
+            | MemeContent::Joke
+            | MemeContent::Song
+            | MemeContent::Slogan => Fixed::from_f64(0.2),
         };
         Self {
             id,
@@ -203,7 +204,8 @@ impl Meme {
         // exactly as the plan's formula specifies. With suppression ZERO this is
         // the identity factor, so the golden baseline stays byte-identical.
         let suppression_factor = Fixed::ONE - self.suppression_level;
-        let base = self.credibility * source_trust
+        let base = self.credibility
+            * source_trust
             * self.emotional_charge
             * self.identity_relevance
             * self.novelty
@@ -289,7 +291,10 @@ impl Meme {
                 parent: self.id,
                 generations: 1,
             },
-            MemeLineage::Derived { parent, generations } => MemeLineage::Derived {
+            MemeLineage::Derived {
+                parent,
+                generations,
+            } => MemeLineage::Derived {
                 parent: *parent,
                 generations: generations + 1,
             },
@@ -315,15 +320,13 @@ impl Meme {
 }
 
 /// Registry of all memes in the simulation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MemeRegistry {
     /// All memes, indexed by id.
     pub memes: Vec<Meme>,
     /// Next available meme id.
     next_id: usize,
 }
-
 
 impl MemeRegistry {
     /// Register a new meme and return its id.
@@ -367,7 +370,16 @@ mod tests {
 
     #[test]
     fn new_meme_has_sane_defaults() {
-        let m = Meme::new(0, "test".into(), MemeContent::Moral, Fixed::from_f64(0.5), Fixed::from_f64(0.3), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        let m = Meme::new(
+            0,
+            "test".into(),
+            MemeContent::Moral,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.3),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.1),
+        );
         assert_eq!(m.id, 0);
         assert!(m.novelty > Fixed::ZERO);
         assert!(m.active);
@@ -375,23 +387,58 @@ mod tests {
 
     #[test]
     fn transmission_chance_scales_with_trust() {
-        let m = Meme::new(0, "test".into(), MemeContent::Moral, Fixed::from_f64(0.8), Fixed::from_f64(0.6), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
-        let high_trust = m.transmission_chance(Fixed::from_f64(0.9), Fixed::ONE, Fixed::ZERO, Fixed::ONE);
-        let low_trust = m.transmission_chance(Fixed::from_f64(0.2), Fixed::ONE, Fixed::ZERO, Fixed::ONE);
+        let m = Meme::new(
+            0,
+            "test".into(),
+            MemeContent::Moral,
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.6),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.1),
+        );
+        let high_trust =
+            m.transmission_chance(Fixed::from_f64(0.9), Fixed::ONE, Fixed::ZERO, Fixed::ONE);
+        let low_trust =
+            m.transmission_chance(Fixed::from_f64(0.2), Fixed::ONE, Fixed::ZERO, Fixed::ONE);
         assert!(high_trust > low_trust);
     }
 
     #[test]
     fn skepticism_reduces_transmission() {
-        let m = Meme::new(0, "test".into(), MemeContent::Moral, Fixed::from_f64(0.8), Fixed::from_f64(0.6), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
-        let no_skepticism = m.transmission_chance(Fixed::from_f64(0.5), Fixed::ONE, Fixed::ZERO, Fixed::ONE);
-        let high_skepticism = m.transmission_chance(Fixed::from_f64(0.5), Fixed::ONE, Fixed::from_f64(0.8), Fixed::ONE);
+        let m = Meme::new(
+            0,
+            "test".into(),
+            MemeContent::Moral,
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.6),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.1),
+        );
+        let no_skepticism =
+            m.transmission_chance(Fixed::from_f64(0.5), Fixed::ONE, Fixed::ZERO, Fixed::ONE);
+        let high_skepticism = m.transmission_chance(
+            Fixed::from_f64(0.5),
+            Fixed::ONE,
+            Fixed::from_f64(0.8),
+            Fixed::ONE,
+        );
         assert!(no_skepticism > high_skepticism);
     }
 
     #[test]
     fn sacred_meme_resists_mutation() {
-        let mut sacred = Meme::new(0, "sacred".into(), MemeContent::Theological, Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        let mut sacred = Meme::new(
+            0,
+            "sacred".into(),
+            MemeContent::Theological,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.1),
+        );
         sacred.sacredness = Fixed::ONE;
         sacred.mutation_rate = Fixed::ONE;
         // Even with max mutation rate, sacred memes resist
@@ -400,7 +447,16 @@ mod tests {
 
     #[test]
     fn novelty_decays() {
-        let mut m = Meme::new(0, "test".into(), MemeContent::Moral, Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        let mut m = Meme::new(
+            0,
+            "test".into(),
+            MemeContent::Moral,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.1),
+        );
         let before = m.novelty;
         m.tick_decay(Fixed::from_f64(0.998));
         assert!(m.novelty < before);
@@ -409,7 +465,16 @@ mod tests {
     #[test]
     fn registry_register_and_get() {
         let mut reg = MemeRegistry::default();
-        let m = Meme::new(0, "test".into(), MemeContent::Moral, Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        let m = Meme::new(
+            0,
+            "test".into(),
+            MemeContent::Moral,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.1),
+        );
         let id = reg.register(m);
         assert_eq!(id, 0);
         assert!(reg.get(0).is_some());
@@ -419,8 +484,26 @@ mod tests {
     #[test]
     fn registry_active_count() {
         let mut reg = MemeRegistry::default();
-        let m1 = Meme::new(0, "a".into(), MemeContent::Moral, Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
-        let mut m2 = Meme::new(0, "b".into(), MemeContent::Moral, Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        let m1 = Meme::new(
+            0,
+            "a".into(),
+            MemeContent::Moral,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.1),
+        );
+        let mut m2 = Meme::new(
+            0,
+            "b".into(),
+            MemeContent::Moral,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.1),
+        );
         m2.active = false;
         reg.register(m1);
         reg.register(m2);
@@ -431,18 +514,48 @@ mod tests {
 
     #[test]
     fn new_meme_defaults_institutional_fields() {
-        let m = Meme::new(0, "t".into(), MemeContent::Moral, Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        let m = Meme::new(
+            0,
+            "t".into(),
+            MemeContent::Moral,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.1),
+        );
         assert_eq!(m.lineage, MemeLineage::Founding);
         assert_eq!(m.institutional_backing, None);
         assert_eq!(m.suppression_level, Fixed::ZERO);
-        assert!(m.complexity > Fixed::ZERO, "complexity derived from content type");
+        assert!(
+            m.complexity > Fixed::ZERO,
+            "complexity derived from content type"
+        );
     }
 
     #[test]
     fn complexity_derived_by_content_type() {
         // §13.1: abstract/sacred content is more complex than practical.
-        let theological = Meme::new(0, "t".into(), MemeContent::Theological, Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
-        let practical = Meme::new(0, "p".into(), MemeContent::Practical, Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        let theological = Meme::new(
+            0,
+            "t".into(),
+            MemeContent::Theological,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.1),
+        );
+        let practical = Meme::new(
+            0,
+            "p".into(),
+            MemeContent::Practical,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.1),
+        );
         assert!(theological.complexity > practical.complexity);
     }
 
@@ -450,27 +563,75 @@ mod tests {
     fn suppression_reduces_transmission() {
         // §13.1: suppression gates transmission `× (1 - suppression)`;
         // zero suppression is the identity (baseline-compatible).
-        let base = Meme::new(0, "t".into(), MemeContent::Moral, Fixed::from_f64(0.8), Fixed::from_f64(0.6), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
-        let free = base.transmission_chance(Fixed::from_f64(0.9), Fixed::ONE, Fixed::ZERO, Fixed::ONE);
+        let base = Meme::new(
+            0,
+            "t".into(),
+            MemeContent::Moral,
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.6),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.1),
+        );
+        let free =
+            base.transmission_chance(Fixed::from_f64(0.9), Fixed::ONE, Fixed::ZERO, Fixed::ONE);
         let mut suppressed = base.clone();
         suppressed.suppression_level = Fixed::from_f64(0.7);
-        let gated = suppressed.transmission_chance(Fixed::from_f64(0.9), Fixed::ONE, Fixed::ZERO, Fixed::ONE);
+        let gated = suppressed.transmission_chance(
+            Fixed::from_f64(0.9),
+            Fixed::ONE,
+            Fixed::ZERO,
+            Fixed::ONE,
+        );
         assert!(gated < free, "suppressed meme transmits less");
         // Zero suppression is identity: free == unsuppressed baseline.
-        assert_eq!(free, base.transmission_chance(Fixed::from_f64(0.9), Fixed::ONE, Fixed::ZERO, Fixed::ONE));
+        assert_eq!(
+            free,
+            base.transmission_chance(Fixed::from_f64(0.9), Fixed::ONE, Fixed::ZERO, Fixed::ONE)
+        );
     }
 
     #[test]
     fn lineage_derived_tracks_parent_and_generations() {
-        let mut derived = Meme::new(0, "d".into(), MemeContent::Rumor, Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
-        derived.lineage = MemeLineage::Derived { parent: 3, generations: 2 };
-        assert_eq!(derived.lineage, MemeLineage::Derived { parent: 3, generations: 2 });
+        let mut derived = Meme::new(
+            0,
+            "d".into(),
+            MemeContent::Rumor,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.1),
+        );
+        derived.lineage = MemeLineage::Derived {
+            parent: 3,
+            generations: 2,
+        };
+        assert_eq!(
+            derived.lineage,
+            MemeLineage::Derived {
+                parent: 3,
+                generations: 2
+            }
+        );
     }
 
     #[test]
     fn institutional_fields_serde_roundtrip() {
-        let mut m = Meme::new(0, "t".into(), MemeContent::Political, Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
-        m.lineage = MemeLineage::Derived { parent: 1, generations: 3 };
+        let mut m = Meme::new(
+            0,
+            "t".into(),
+            MemeContent::Political,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.1),
+        );
+        m.lineage = MemeLineage::Derived {
+            parent: 1,
+            generations: 3,
+        };
         m.institutional_backing = Some(7);
         m.suppression_level = Fixed::from_f64(0.4);
         let json = serde_json::to_string(&m).unwrap();
@@ -538,38 +699,57 @@ mod tests {
     /// memes more readily than a critical agent.
     #[test]
     fn gullible_agent_accepts_more_memes() {
-        let m = Meme::new(0, "test".into(), MemeContent::Conspiracy,
-            Fixed::from_f64(0.8), Fixed::from_f64(0.7), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        let m = Meme::new(
+            0,
+            "test".into(),
+            MemeContent::Conspiracy,
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.7),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.1),
+        );
         // Gullible: high conspiracy_susceptibility → high susceptibility
         //   susceptibility = 0.8 * 0.6 + 0.2 = 0.68
         //   skepticism = 0.2 * (1 - 0.7*0.5) * 0.6 = 0.066
-        let gullible_sus = Fixed::from_f64(0.8) * Fixed::from_f64(0.6)
-            + Fixed::from_f64(0.2);
+        let gullible_sus = Fixed::from_f64(0.8) * Fixed::from_f64(0.6) + Fixed::from_f64(0.2);
         let gullible_sk = Fixed::from_f64(0.2)
             * (Fixed::ONE - Fixed::from_f64(0.7) * Fixed::from_f64(0.5))
             * Fixed::from_f64(0.6);
-        let gullible = m.transmission_chance(Fixed::from_f64(0.7), gullible_sus, gullible_sk, Fixed::ONE);
+        let gullible =
+            m.transmission_chance(Fixed::from_f64(0.7), gullible_sus, gullible_sk, Fixed::ONE);
 
         // Critical: low conspiracy_susceptibility → low susceptibility
         //   susceptibility = 0.1 * 0.6 + 0.2 = 0.26
         //   skepticism = 0.8 * (1 - 0.2*0.5) * 0.6 = 0.432
-        let critical_sus = Fixed::from_f64(0.1) * Fixed::from_f64(0.6)
-            + Fixed::from_f64(0.2);
+        let critical_sus = Fixed::from_f64(0.1) * Fixed::from_f64(0.6) + Fixed::from_f64(0.2);
         let critical_sk = Fixed::from_f64(0.8)
             * (Fixed::ONE - Fixed::from_f64(0.2) * Fixed::from_f64(0.5))
             * Fixed::from_f64(0.6);
-        let critical = m.transmission_chance(Fixed::from_f64(0.7), critical_sus, critical_sk, Fixed::ONE);
+        let critical =
+            m.transmission_chance(Fixed::from_f64(0.7), critical_sus, critical_sk, Fixed::ONE);
 
-        assert!(gullible > critical,
+        assert!(
+            gullible > critical,
             "Gullible agent ({}) should accept more than critical ({})",
-            gullible.to_f64(), critical.to_f64());
+            gullible.to_f64(),
+            critical.to_f64()
+        );
     }
 
     /// §13.2: Dogmatic agents resist skepticism more than open agents.
     #[test]
     fn dogmatism_reduces_skepticism_effectiveness() {
-        let m = Meme::new(0, "test".into(), MemeContent::Moral,
-            Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        let m = Meme::new(
+            0,
+            "test".into(),
+            MemeContent::Moral,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.1),
+        );
         // Dogmatic: source_monitoring=0.8, dogmatism=0.9
         //   skepticism = 0.8 * (1 - 0.9*0.5) * 0.6 = 0.264
         let dogmatic_sk = Fixed::from_f64(0.8)
@@ -581,44 +761,86 @@ mod tests {
             * (Fixed::ONE - Fixed::from_f64(0.1) * Fixed::from_f64(0.5))
             * Fixed::from_f64(0.6);
         let dogmatic_chance = m.transmission_chance(
-            Fixed::from_f64(0.5), Fixed::from_f64(0.5), dogmatic_sk, Fixed::ONE);
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            dogmatic_sk,
+            Fixed::ONE,
+        );
         let open_chance = m.transmission_chance(
-            Fixed::from_f64(0.5), Fixed::from_f64(0.5), open_sk, Fixed::ONE);
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            open_sk,
+            Fixed::ONE,
+        );
 
-        assert!(dogmatic_chance > open_chance,
+        assert!(
+            dogmatic_chance > open_chance,
             "Dogmatic agent ({}) should be more susceptible than open ({})",
-            dogmatic_chance.to_f64(), open_chance.to_f64());
+            dogmatic_chance.to_f64(),
+            open_chance.to_f64()
+        );
     }
 
     /// Transmission multiplier actually scales transmission chance.
     #[test]
     fn transmission_multiplier_scales_chance() {
-        let m = Meme::new(0, "test".into(), MemeContent::Moral,
-            Fixed::from_f64(0.8), Fixed::from_f64(0.6), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        let m = Meme::new(
+            0,
+            "test".into(),
+            MemeContent::Moral,
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.6),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.1),
+        );
         let no_boost = m.transmission_chance(
-            Fixed::from_f64(0.5), Fixed::from_f64(0.5), Fixed::ZERO, Fixed::ONE);
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::ZERO,
+            Fixed::ONE,
+        );
         let high_boost = m.transmission_chance(
-            Fixed::from_f64(0.5), Fixed::from_f64(0.5), Fixed::ZERO, Fixed::from_f64(1.5));
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::ZERO,
+            Fixed::from_f64(1.5),
+        );
         let low_boost = m.transmission_chance(
-            Fixed::from_f64(0.5), Fixed::from_f64(0.5), Fixed::ZERO, Fixed::from_f64(0.5));
-        assert!(high_boost > no_boost,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::ZERO,
+            Fixed::from_f64(0.5),
+        );
+        assert!(
+            high_boost > no_boost,
             "High multiplier ({}) should produce higher chance than baseline ({})",
-            high_boost.to_f64(), no_boost.to_f64());
-        assert!(no_boost > low_boost,
+            high_boost.to_f64(),
+            no_boost.to_f64()
+        );
+        assert!(
+            no_boost > low_boost,
             "Baseline ({}) should produce higher chance than low multiplier ({})",
-            no_boost.to_f64(), low_boost.to_f64());
+            no_boost.to_f64(),
+            low_boost.to_f64()
+        );
     }
 
     /// §13.2: Suspicion floors ensure even critical agents aren't perfectly immune.
     #[test]
     fn suspicion_floor_prevents_perfect_immunity() {
         // Perfect agent: conspiracy_susceptibility=0, source_monitoring=1, dogmatism=0
-        let perfect_sus = Fixed::from_f64(0.0) * Fixed::from_f64(0.6)
-            + Fixed::from_f64(0.2);
-        assert!(perfect_sus >= Fixed::from_f64(0.2),
-            "Suspicion floor of 0.2 not enforced: {}", perfect_sus.to_f64());
-        assert!(perfect_sus <= Fixed::ONE,
-            "Suspicion should not exceed 1.0: {}", perfect_sus.to_f64());
+        let perfect_sus = Fixed::from_f64(0.0) * Fixed::from_f64(0.6) + Fixed::from_f64(0.2);
+        assert!(
+            perfect_sus >= Fixed::from_f64(0.2),
+            "Suspicion floor of 0.2 not enforced: {}",
+            perfect_sus.to_f64()
+        );
+        assert!(
+            perfect_sus <= Fixed::ONE,
+            "Suspicion should not exceed 1.0: {}",
+            perfect_sus.to_f64()
+        );
     }
 
     // ── §13.2 Meme mutation tests ────────────────────────────────────
@@ -626,8 +848,16 @@ mod tests {
     /// A zero multiplier is the identity factor: no mutation ever fires.
     #[test]
     fn should_mutate_scaled_zero_multiplier_never_mutates() {
-        let m = Meme::new(0, "t".into(), MemeContent::Rumor,
-            Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.5));
+        let m = Meme::new(
+            0,
+            "t".into(),
+            MemeContent::Rumor,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+        );
         // multiplier ZERO → identity factor → never mutates, even at rng 0.
         assert!(!m.should_mutate_scaled(Fixed::ZERO, Fixed::ZERO));
         // multiplier ONE with rng 0 → mutates (0 < 0.5).
@@ -637,8 +867,16 @@ mod tests {
     /// Sacred memes resist mutation (rate × (1 − sacredness)).
     #[test]
     fn sacred_memes_resist_mutation() {
-        let mut m = Meme::new(0, "t".into(), MemeContent::Theological,
-            Fixed::from_f64(0.5), Fixed::from_f64(0.5), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.5));
+        let mut m = Meme::new(
+            0,
+            "t".into(),
+            MemeContent::Theological,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+        );
         m.sacredness = Fixed::from_f64(0.9);
         // effective rate = 0.5 × (1 − 0.9) = 0.05
         assert!(!m.should_mutate(Fixed::from_f64(0.2)));
@@ -649,8 +887,16 @@ mod tests {
     /// charged, identity-relevant, viral memes.
     #[test]
     fn mutation_magnitude_is_bounded_and_derived_from_five_sources() {
-        let m = Meme::new(0, "t".into(), MemeContent::Conspiracy,
-            Fixed::from_f64(0.8), Fixed::from_f64(0.7), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        let m = Meme::new(
+            0,
+            "t".into(),
+            MemeContent::Conspiracy,
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.7),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.1),
+        );
         let mag = m.mutation_magnitude();
         assert!(mag > Fixed::ZERO && mag <= Fixed::ONE);
         // A highly charged, identity-relevant, viral meme drifts strongly.
@@ -661,17 +907,37 @@ mod tests {
     /// the derived lineage with an incrementing generation count.
     #[test]
     fn mutate_drifts_fields_and_records_lineage() {
-        let mut m = Meme::new(0, "t".into(), MemeContent::Rumor,
-            Fixed::from_f64(0.2), Fixed::from_f64(0.2), 0, Fixed::from_f64(0.5), Fixed::from_f64(0.1));
+        let mut m = Meme::new(
+            0,
+            "t".into(),
+            MemeContent::Rumor,
+            Fixed::from_f64(0.2),
+            Fixed::from_f64(0.2),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.1),
+        );
         let mag = m.mutation_magnitude();
         let cred_before = m.credibility;
         let charge_before = m.emotional_charge;
         m.mutate(mag);
         assert!(m.credibility <= cred_before);
         assert!(m.emotional_charge >= charge_before);
-        assert_eq!(m.lineage, MemeLineage::Derived { parent: 0, generations: 1 });
+        assert_eq!(
+            m.lineage,
+            MemeLineage::Derived {
+                parent: 0,
+                generations: 1
+            }
+        );
         // Second mutation increments the generation count.
         m.mutate(mag);
-        assert_eq!(m.lineage, MemeLineage::Derived { parent: 0, generations: 2 });
+        assert_eq!(
+            m.lineage,
+            MemeLineage::Derived {
+                parent: 0,
+                generations: 2
+            }
+        );
     }
 }

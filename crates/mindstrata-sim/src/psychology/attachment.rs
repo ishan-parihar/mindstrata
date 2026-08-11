@@ -126,8 +126,13 @@ impl AttachmentSystem {
     }
 
     /// React to reunion with an attachment figure.
-    pub fn on_reunion(&mut self, secure_recovery: Fixed, anxious_recovery: Fixed,
-                      avoidant_recovery: Fixed, disorganized_recovery: Fixed) {
+    pub fn on_reunion(
+        &mut self,
+        secure_recovery: Fixed,
+        anxious_recovery: Fixed,
+        avoidant_recovery: Fixed,
+        disorganized_recovery: Fixed,
+    ) {
         match self.style {
             AttachmentStyle::Secure => {
                 // Quick recovery
@@ -140,44 +145,59 @@ impl AttachmentSystem {
             }
             AttachmentStyle::Avoidant => {
                 // Appears to recover quickly but internally stressed
-                self.separation_distress = (self.separation_distress * avoidant_recovery).clamp_01();
+                self.separation_distress =
+                    (self.separation_distress * avoidant_recovery).clamp_01();
             }
             AttachmentStyle::Disorganized => {
                 // Unpredictable — may oscillate
-                self.separation_distress = (self.separation_distress * disorganized_recovery).clamp_01();
+                self.separation_distress =
+                    (self.separation_distress * disorganized_recovery).clamp_01();
             }
         }
     }
 
     /// Receive comfort from an attachment figure.
-    pub fn receive_comfort(&mut self, comfort_quality: Fixed, secure_comfort: Fixed,
-                          anxious_comfort: Fixed, avoidant_comfort: Fixed,
-                          disorganized_comfort: Fixed, security_gain: Fixed) {
+    pub fn receive_comfort(
+        &mut self,
+        comfort_quality: Fixed,
+        secure_comfort: Fixed,
+        anxious_comfort: Fixed,
+        avoidant_comfort: Fixed,
+        disorganized_comfort: Fixed,
+        security_gain: Fixed,
+    ) {
         let effectiveness = self.soothing_receptivity * comfort_quality;
         match self.style {
             AttachmentStyle::Secure => {
-                self.separation_distress = (self.separation_distress - effectiveness * secure_comfort).max(Fixed::ZERO);
+                self.separation_distress =
+                    (self.separation_distress - effectiveness * secure_comfort).max(Fixed::ZERO);
                 self.security = (self.security + effectiveness * security_gain).clamp_01();
             }
             AttachmentStyle::Anxious => {
                 // Partially soothed but anxiety remains
-                self.separation_distress = (self.separation_distress - effectiveness * anxious_comfort).max(Fixed::ZERO);
+                self.separation_distress =
+                    (self.separation_distress - effectiveness * anxious_comfort).max(Fixed::ZERO);
             }
             AttachmentStyle::Avoidant => {
                 // May reject comfort, but still benefits slightly
-                self.separation_distress = (self.separation_distress - effectiveness * avoidant_comfort).max(Fixed::ZERO);
+                self.separation_distress =
+                    (self.separation_distress - effectiveness * avoidant_comfort).max(Fixed::ZERO);
             }
             AttachmentStyle::Disorganized => {
                 // Unpredictable response
-                self.separation_distress = (self.separation_distress - effectiveness * disorganized_comfort).max(Fixed::ZERO);
+                self.separation_distress = (self.separation_distress
+                    - effectiveness * disorganized_comfort)
+                    .max(Fixed::ZERO);
             }
         }
     }
 
     /// Compute attachment activation level (how much attachment concerns are salient).
     pub fn activation_level(&self) -> Fixed {
-        (self.anxiety + self.separation_distress + (Fixed::ONE - self.security) * Fixed::from_f64(0.3))
-            .clamp_01()
+        (self.anxiety
+            + self.separation_distress
+            + (Fixed::ONE - self.security) * Fixed::from_f64(0.3))
+        .clamp_01()
     }
 }
 
@@ -196,7 +216,11 @@ mod tests {
     #[test]
     fn trauma_creates_insecure_attachment() {
         let mut att = AttachmentSystem::default();
-        att.initialize(Fixed::from_f64(0.3), Fixed::from_f64(0.8), Fixed::from_f64(0.7));
+        att.initialize(
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.7),
+        );
         assert_ne!(att.style, AttachmentStyle::Secure);
         assert!(att.security < Fixed::from_f64(0.5));
     }
@@ -219,7 +243,12 @@ mod tests {
             separation_distress: Fixed::from_f64(0.5),
             ..Default::default()
         };
-        att.on_reunion(Fixed::from_f64(0.3), Fixed::from_f64(0.6), Fixed::from_f64(0.4), Fixed::from_f64(0.5));
+        att.on_reunion(
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.6),
+            Fixed::from_f64(0.4),
+            Fixed::from_f64(0.5),
+        );
         assert!(att.separation_distress < Fixed::from_f64(0.5));
     }
 }

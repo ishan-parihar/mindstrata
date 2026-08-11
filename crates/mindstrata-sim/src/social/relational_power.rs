@@ -70,7 +70,7 @@ impl RelationalPower {
         let status_advantage = status_advantage.clamp(Fixed::from_f64(-1.0), Fixed::ONE);
         let dependence_b_on_a = (commitment_b_to_a * Fixed::from_f64(0.6)
             + attachment_b_to_a * Fixed::from_f64(0.4))
-            .clamp_01();
+        .clamp_01();
         Self {
             dependence_a_on_b,
             dependence_b_on_a,
@@ -85,7 +85,7 @@ impl RelationalPower {
                 + status_advantage.max(Fixed::ZERO) * Fixed::from_f64(0.3),
             moral_obligation: (obligation_b_to_a * Fixed::from_f64(0.5)
                 + moral_debt_b_to_a * Fixed::from_f64(0.5))
-                .clamp_01(),
+            .clamp_01(),
             // Alternatives = inverse of B's dependence on A.
             alternative_options: (Fixed::ONE - dependence_b_on_a).clamp_01(),
         }
@@ -100,7 +100,9 @@ impl RelationalPower {
     /// [-1, 1] so it is directly comparable across relationships.
     #[must_use]
     pub fn power_balance(&self) -> Fixed {
-        let a_power = self.resource_control + self.social_leverage + self.coercive_capacity
+        let a_power = self.resource_control
+            + self.social_leverage
+            + self.coercive_capacity
             + self.emotional_leverage;
         (a_power - self.alternative_options).clamp(Fixed::from_f64(-1.0), Fixed::ONE)
     }

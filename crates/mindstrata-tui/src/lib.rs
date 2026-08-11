@@ -8,17 +8,17 @@ use crossterm::event::KeyCode;
 use mindstrata_core::event::SimEvent;
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::id::AgentId;
-use mindstrata_sim::world::{World, Terrain, SiteKind};
-use mindstrata_sim::sim::AgentSummary;
-use mindstrata_sim::person::{Belief, GoalKind, Relationship};
-use mindstrata_sim::market::MarketState;
-use mindstrata_sim::psychology::attachment::{AttachmentStyle, CaregivingStyle};
 use mindstrata_sim::institutions::{Institution, InstitutionalRecord};
+use mindstrata_sim::market::MarketState;
+use mindstrata_sim::military::MilitaryRegistry;
+use mindstrata_sim::person::{Belief, GoalKind, Relationship};
+use mindstrata_sim::provenance::CausalProvenance;
+use mindstrata_sim::psychology::attachment::{AttachmentStyle, CaregivingStyle};
+use mindstrata_sim::sim::AgentSummary;
 use mindstrata_sim::social::clan::ClanRegistry;
 use mindstrata_sim::social::patronage::PatronageRegistry;
-use mindstrata_sim::provenance::CausalProvenance;
 use mindstrata_sim::theology::{TheologicalBelief, TheologyRegistry};
-use mindstrata_sim::military::MilitaryRegistry;
+use mindstrata_sim::world::{SiteKind, Terrain, World};
 
 /// §6: Agent position marker for map rendering.
 pub struct AgentMarker {
@@ -45,7 +45,8 @@ pub fn render_world_map(world: &World, agent_markers: &[AgentMarker]) -> String 
         out.push_str(&format!("{:1} ", y % 10));
         for x in 0..world.width {
             // Check if an agent is at this position
-            let agent_at_pos: Option<&AgentMarker> = agent_markers.iter()
+            let agent_at_pos: Option<&AgentMarker> = agent_markers
+                .iter()
                 .find(|m| m.x == x as i32 && m.y == y as i32);
 
             if let Some(marker) = agent_at_pos {
@@ -53,7 +54,9 @@ pub fn render_world_map(world: &World, agent_markers: &[AgentMarker]) -> String 
             } else if let Some(tile) = world.tile(x as i32, y as i32) {
                 let ch = if tile.site.is_some() {
                     // Find site kind
-                    world.sites.iter()
+                    world
+                        .sites
+                        .iter()
                         .find(|s| tile.site == Some(s.id))
                         .map_or('?', |s| match s.kind {
                             SiteKind::House => 'H',
@@ -164,14 +167,23 @@ pub fn render_agent_inspector(summary: &AgentSummary, relationships: &[Relations
          Intention: {}
 \
          Attention: {:5.2}\n",
-        summary.name, summary.index,
-        summary.health.to_f64(), summary.energy.to_f64(),
-        summary.hunger.to_f64(), summary.thirst.to_f64(),
+        summary.name,
+        summary.index,
+        summary.health.to_f64(),
+        summary.energy.to_f64(),
+        summary.hunger.to_f64(),
+        summary.thirst.to_f64(),
         summary.fatigue.to_f64(),
-        summary.valence.to_f64(), summary.joy.to_f64(),
-        summary.fear.to_f64(), summary.anger.to_f64(),
+        summary.valence.to_f64(),
+        summary.joy.to_f64(),
+        summary.fear.to_f64(),
+        summary.anger.to_f64(),
         summary.current_action,
-        if summary.has_intention { "active" } else { "none" },
+        if summary.has_intention {
+            "active"
+        } else {
+            "none"
+        },
         summary.attention_budget.to_f64(),
     ));
 
@@ -186,9 +198,11 @@ pub fn render_agent_inspector(summary: &AgentSummary, relationships: &[Relations
     let avo_bar_len = (summary.attachment_avoidance.to_f64() * 20.0) as usize;
     let avo_bar: String = "█".repeat(avo_bar_len.min(20)) + &"░".repeat(20 - avo_bar_len.min(20));
     let prot_bar_len = (summary.attachment_protest_threshold.to_f64() * 20.0) as usize;
-    let prot_bar: String = "█".repeat(prot_bar_len.min(20)) + &"░".repeat(20 - prot_bar_len.min(20));
+    let prot_bar: String =
+        "█".repeat(prot_bar_len.min(20)) + &"░".repeat(20 - prot_bar_len.min(20));
     let sooth_bar_len = (summary.attachment_soothing_receptivity.to_f64() * 20.0) as usize;
-    let sooth_bar: String = "█".repeat(sooth_bar_len.min(20)) + &"░".repeat(20 - sooth_bar_len.min(20));
+    let sooth_bar: String =
+        "█".repeat(sooth_bar_len.min(20)) + &"░".repeat(20 - sooth_bar_len.min(20));
     let dis_bar_len = (summary.attachment_separation_distress.to_f64() * 20.0) as usize;
     let dis_bar: String = "█".repeat(dis_bar_len.min(20)) + &"░".repeat(20 - dis_bar_len.min(20));
     out.push_str(&format!(
@@ -201,16 +215,23 @@ pub fn render_agent_inspector(summary: &AgentSummary, relationships: &[Relations
          Protest thr:{:5.2} [{}]\n\
          Soothing:   {:5.2} [{}]\n\
          Sep. dist:  {:5.2} [{}]\n",
-        summary.attachment_security.to_f64(), sec_bar,
-        summary.attachment_anxiety.to_f64(), anx_bar,
-        summary.attachment_avoidance.to_f64(), avo_bar,
-        summary.attachment_protest_threshold.to_f64(), prot_bar,
-        summary.attachment_soothing_receptivity.to_f64(), sooth_bar,
-        summary.attachment_separation_distress.to_f64(), dis_bar,
+        summary.attachment_security.to_f64(),
+        sec_bar,
+        summary.attachment_anxiety.to_f64(),
+        anx_bar,
+        summary.attachment_avoidance.to_f64(),
+        avo_bar,
+        summary.attachment_protest_threshold.to_f64(),
+        prot_bar,
+        summary.attachment_soothing_receptivity.to_f64(),
+        sooth_bar,
+        summary.attachment_separation_distress.to_f64(),
+        dis_bar,
     ));
 
     // Show relationships for this agent
-    let rels: Vec<&Relationship> = relationships.iter()
+    let rels: Vec<&Relationship> = relationships
+        .iter()
         .filter(|r| r.from == agent_id)
         .collect();
     if !rels.is_empty() {
@@ -218,7 +239,9 @@ pub fn render_agent_inspector(summary: &AgentSummary, relationships: &[Relations
         for r in rels.iter().take(5) {
             out.push_str(&format!(
                 "  → Agent {} trust={:.2} affection={:.2}\n",
-                r.to.as_u64(), r.trust.to_f64(), r.affection.to_f64()
+                r.to.as_u64(),
+                r.trust.to_f64(),
+                r.affection.to_f64()
             ));
         }
         if rels.len() > 5 {
@@ -236,13 +259,19 @@ pub fn render_relationship_view(
     relationships: &[Relationship],
     agents: &[AgentSummary],
 ) -> String {
-    let from_name = agents.get(from_id.as_u64() as usize)
+    let from_name = agents
+        .get(from_id.as_u64() as usize)
         .map_or("?", |s| s.name.as_str());
-    let to_name = agents.get(to_id.as_u64() as usize)
+    let to_name = agents
+        .get(to_id.as_u64() as usize)
         .map_or("?", |s| s.name.as_str());
 
-    let forward = relationships.iter().find(|r| r.from == from_id && r.to == to_id);
-    let backward = relationships.iter().find(|r| r.from == to_id && r.to == from_id);
+    let forward = relationships
+        .iter()
+        .find(|r| r.from == from_id && r.to == to_id);
+    let backward = relationships
+        .iter()
+        .find(|r| r.from == to_id && r.to == from_id);
 
     let mut out = String::new();
     out.push_str(&format!(
@@ -258,8 +287,10 @@ pub fn render_relationship_view(
              affection:  {:.2}\n\
              respect:    {:.2}\n\
              obligation: {:.2}\n",
-            r.trust.to_f64(), r.affection.to_f64(),
-            r.respect.to_f64(), r.obligation.to_f64(),
+            r.trust.to_f64(),
+            r.affection.to_f64(),
+            r.respect.to_f64(),
+            r.obligation.to_f64(),
         ));
     } else {
         out.push_str("  (no relationship)\n");
@@ -272,8 +303,10 @@ pub fn render_relationship_view(
              affection:  {:.2}\n\
              respect:    {:.2}\n\
              obligation: {:.2}\n",
-            r.trust.to_f64(), r.affection.to_f64(),
-            r.respect.to_f64(), r.obligation.to_f64(),
+            r.trust.to_f64(),
+            r.affection.to_f64(),
+            r.respect.to_f64(),
+            r.obligation.to_f64(),
         ));
     } else {
         out.push_str("  (no relationship)\n");
@@ -338,10 +371,13 @@ pub fn render_dashboard(
          Valence:     {avg_valence:+.3}\n\
          Joy:         {avg_joy:.3}\n\
          Fear:        {avg_fear:.3}\n",
-        config.season, config.year,
+        config.season,
+        config.year,
         agents.len(),
-        config.institution_count, config.faction_count,
-        config.grain, config.water,
+        config.institution_count,
+        config.faction_count,
+        config.grain,
+        config.water,
     )
 }
 
@@ -396,11 +432,7 @@ pub fn render_market_dashboard(market: &MarketState) -> String {
 // ── §17.1: Belief Inspector ────────────────────────────────────────────
 
 /// §17.1: Render an agent's beliefs.
-pub fn render_belief_inspector(
-    agent_name: &str,
-    agent_id: usize,
-    beliefs: &[Belief],
-) -> String {
+pub fn render_belief_inspector(agent_name: &str, agent_id: usize, beliefs: &[Belief]) -> String {
     let mut out = String::new();
     out.push_str("╔══════════════════════════════════════════╗\n");
     out.push_str("║  Belief Inspector                        ║\n");
@@ -472,7 +504,8 @@ pub fn render_faction_dashboard(institutions: &[Institution]) -> String {
         out.push_str(&format!(
             "  {} [{}]\n\
              │ Legitimacy: {:.3}  Cohesion: {:.3}  Members: {}\n",
-            inst.name, kind_str,
+            inst.name,
+            kind_str,
             inst.legitimacy.to_f64(),
             inst.collective.unity.to_f64(),
             inst.members.len(),
@@ -516,11 +549,7 @@ pub fn render_clan_dashboard(clans: &ClanRegistry) -> String {
             clan.grievance.to_f64(),
         ));
         if !clan.enemies.is_empty() {
-            let enemies: Vec<String> = clan
-                .enemies
-                .iter()
-                .map(|e| format!("Clan {e}"))
-                .collect();
+            let enemies: Vec<String> = clan.enemies.iter().map(|e| format!("Clan {e}")).collect();
             out.push_str(&format!("  │ ⚔ Enemies: {}\n", enemies.join(", ")));
         } else {
             out.push_str("  │ ⚔ Enemies: none\n");
@@ -606,7 +635,10 @@ pub fn render_institutional_records(
         let status = if r.success { "✓" } else { "✗" };
         out.push_str(&format!(
             "  [{:>5}] {} {} ({} affected)\n",
-            r.tick, status, r.action, r.affected.len()
+            r.tick,
+            status,
+            r.action,
+            r.affected.len()
         ));
     }
 
@@ -636,7 +668,11 @@ pub fn render_decision_traces(
 
     for trace in &traces[start..] {
         let routine = if trace.from_routine { " [routine]" } else { "" };
-        let interrupted = if trace.interrupted_by_critical_needs { " [interrupted]" } else { "" };
+        let interrupted = if trace.interrupted_by_critical_needs {
+            " [interrupted]"
+        } else {
+            ""
+        };
         out.push_str(&format!(
             "  [{:>5}] {}{}{}\n",
             trace.tick, trace.action_name, routine, interrupted
@@ -644,7 +680,9 @@ pub fn render_decision_traces(
         for factor in &trace.factors {
             out.push_str(&format!(
                 "        {}: {:.3} — {}\n",
-                factor.kind, factor.magnitude.to_f64(), factor.description
+                factor.kind,
+                factor.magnitude.to_f64(),
+                factor.description
             ));
         }
     }
@@ -665,10 +703,16 @@ pub fn render_event_log_detailed(events: &[SimEvent], n: usize) -> String {
                 out.push_str(&format!("  [{tick:>5}] 🍞 Agent {} ate\n", agent.as_u64()));
             }
             SimEvent::AgentDrank { agent, .. } => {
-                out.push_str(&format!("  [{tick:>5}] 💧 Agent {} drank\n", agent.as_u64()));
+                out.push_str(&format!(
+                    "  [{tick:>5}] 💧 Agent {} drank\n",
+                    agent.as_u64()
+                ));
             }
             SimEvent::AgentRested { agent, .. } => {
-                out.push_str(&format!("  [{tick:>5}] 😴 Agent {} rested\n", agent.as_u64()));
+                out.push_str(&format!(
+                    "  [{tick:>5}] 😴 Agent {} rested\n",
+                    agent.as_u64()
+                ));
             }
             SimEvent::InteractionOccurred { from, to, kind, .. } => {
                 let icon = match kind {
@@ -682,71 +726,143 @@ pub fn render_event_log_detailed(events: &[SimEvent], n: usize) -> String {
                 };
                 out.push_str(&format!(
                     "  [{tick:>5}] {} Agent {} → Agent {}\n",
-                    icon, from.as_u64(), to.as_u64()
+                    icon,
+                    from.as_u64(),
+                    to.as_u64()
                 ));
             }
-            SimEvent::RelationshipChanged { from, to, trust_delta, affection_delta, .. } => {
+            SimEvent::RelationshipChanged {
+                from,
+                to,
+                trust_delta,
+                affection_delta,
+                ..
+            } => {
                 out.push_str(&format!(
                     "  [{tick:>5}] 📊 {}→{} trust {:+.3} affection {:+.3}\n",
-                    from.as_u64(), to.as_u64(),
-                    trust_delta.to_f64(), affection_delta.to_f64()
+                    from.as_u64(),
+                    to.as_u64(),
+                    trust_delta.to_f64(),
+                    affection_delta.to_f64()
                 ));
             }
-            SimEvent::RumorSpread { source, target, content_hash, distortion, .. } => {
+            SimEvent::RumorSpread {
+                source,
+                target,
+                content_hash,
+                distortion,
+                ..
+            } => {
                 out.push_str(&format!(
                     "  [{tick:>5}] 🗣️ Rumor {}→{} prop={} distortion={:.3}\n",
-                    source.as_u64(), target.as_u64(),
-                    content_hash, distortion.to_f64()
+                    source.as_u64(),
+                    target.as_u64(),
+                    content_hash,
+                    distortion.to_f64()
                 ));
             }
-            SimEvent::KnowledgeTransferred { source, target, knowledge_id, .. } => {
+            SimEvent::KnowledgeTransferred {
+                source,
+                target,
+                knowledge_id,
+                ..
+            } => {
                 out.push_str(&format!(
                     "  [{tick:>5}] 📚 Knowledge {}→{} id={}\n",
-                    source.as_u64(), target.as_u64(), knowledge_id
+                    source.as_u64(),
+                    target.as_u64(),
+                    knowledge_id
                 ));
             }
-            SimEvent::ConflictOccurred { aggressor, target, kind, injury, fear_induced, .. } => {
+            SimEvent::ConflictOccurred {
+                aggressor,
+                target,
+                kind,
+                injury,
+                fear_induced,
+                ..
+            } => {
                 out.push_str(&format!(
                     "  [{tick:>5}] ⚔️ Conflict {}→{} {} injury={:.3} fear={:.3}\n",
-                    aggressor.as_u64(), target.as_u64(), kind,
-                    injury.to_f64(), fear_induced.to_f64()
+                    aggressor.as_u64(),
+                    target.as_u64(),
+                    kind,
+                    injury.to_f64(),
+                    fear_induced.to_f64()
                 ));
             }
-            SimEvent::FeudFormed { party_a, party_b, .. } => {
+            SimEvent::FeudFormed {
+                party_a, party_b, ..
+            } => {
                 out.push_str(&format!(
                     "  [{tick:>5}] 🔥 Feud formed {}↔{}\n",
-                    party_a.as_u64(), party_b.as_u64()
+                    party_a.as_u64(),
+                    party_b.as_u64()
                 ));
             }
-            SimEvent::MarriageFormed { spouse_a, spouse_b, .. } => {
+            SimEvent::MarriageFormed {
+                spouse_a, spouse_b, ..
+            } => {
                 out.push_str(&format!(
                     "  [{tick:>5}] 💍 Marriage {}↔{}\n",
-                    spouse_a.as_u64(), spouse_b.as_u64()
+                    spouse_a.as_u64(),
+                    spouse_b.as_u64()
                 ));
             }
-            SimEvent::ChildBorn { child, parent_a, parent_b, .. } => {
+            SimEvent::ChildBorn {
+                child,
+                parent_a,
+                parent_b,
+                ..
+            } => {
                 out.push_str(&format!(
                     "  [{tick:>5}] 👶 Child {} born ({} + {})\n",
-                    child.as_u64(), parent_a.as_u64(), parent_b.as_u64()
+                    child.as_u64(),
+                    parent_a.as_u64(),
+                    parent_b.as_u64()
                 ));
             }
-            SimEvent::NormViolated { agent, norm_id, witnesses, .. } => {
+            SimEvent::NormViolated {
+                agent,
+                norm_id,
+                witnesses,
+                ..
+            } => {
                 out.push_str(&format!(
                     "  [{tick:>5}] ⚖️ Agent {} violated norm {} ({} witnesses)\n",
-                    agent.as_u64(), norm_id, witnesses.len()
+                    agent.as_u64(),
+                    norm_id,
+                    witnesses.len()
                 ));
             }
             SimEvent::AgentSpawned { agent, .. } => {
-                out.push_str(&format!("  [{tick:>5}] 🌱 Agent {} spawned\n", agent.as_u64()));
+                out.push_str(&format!(
+                    "  [{tick:>5}] 🌱 Agent {} spawned\n",
+                    agent.as_u64()
+                ));
             }
             SimEvent::AgentDied { agent, cause, .. } => {
-                out.push_str(&format!("  [{tick:>5}] 💀 Agent {} died ({:?})\n", agent.as_u64(), cause));
+                out.push_str(&format!(
+                    "  [{tick:>5}] 💀 Agent {} died ({:?})\n",
+                    agent.as_u64(),
+                    cause
+                ));
             }
-            SimEvent::TradeOccurred { buyer, seller, good, quantity, price, .. } => {
+            SimEvent::TradeOccurred {
+                buyer,
+                seller,
+                good,
+                quantity,
+                price,
+                ..
+            } => {
                 out.push_str(&format!(
                     "  [{tick:>5}] 💰 Trade {}→{} good={} qty={:.2} price={:.1}\n",
-                    buyer.as_u64(), seller.as_u64(), good,
-                    quantity.to_f64(), price.to_f64()
+                    buyer.as_u64(),
+                    seller.as_u64(),
+                    good,
+                    quantity.to_f64(),
+                    price.to_f64()
                 ));
             }
             _ => {
@@ -767,7 +883,7 @@ pub fn render_psychology_inspector(
     agent_name: &str,
     agent: &mindstrata_sim::sim::AgentBundle,
 ) -> String {
-    use mindstrata_sim::person::{IdentityKind, GoalSource};
+    use mindstrata_sim::person::{GoalSource, IdentityKind};
     let mut out = String::new();
     out.push_str("╔══════════════════════════════════════════════════════════╗\n");
     out.push_str("║  Psychology Inspector — Full Cognitive Pipeline          ║\n");
@@ -776,8 +892,15 @@ pub fn render_psychology_inspector(
 
     // ── Body ──
     out.push_str("── §22.1: Body State ──\n\n");
-    out.push_str(&format!("  Health:      {:5.2}   Energy:    {:5.2}\n", agent.body.health.to_f64(), agent.body.energy.to_f64()));
-    out.push_str(&format!("  Age:         {:5.1} years\n\n", agent.age.to_f64()));
+    out.push_str(&format!(
+        "  Health:      {:5.2}   Energy:    {:5.2}\n",
+        agent.body.health.to_f64(),
+        agent.body.energy.to_f64()
+    ));
+    out.push_str(&format!(
+        "  Age:         {:5.1} years\n\n",
+        agent.age.to_f64()
+    ));
 
     // ── Needs (nonlinear pressure) ──
     out.push_str("── §9.1: Need State (nonlinear pressure) ──\n\n");
@@ -823,9 +946,18 @@ pub fn render_psychology_inspector(
 
     // ── Dimensional Emotion (Affect) ──
     out.push_str("── §22.2: Dimensional Emotion (Affect) ──\n\n");
-    out.push_str(&format!("  Valence:   {:+5.2}   (positive=joy, negative=sadness/fear)\n", agent.affect.valence.to_f64()));
-    out.push_str(&format!("  Arousal:    {:5.2}   (high=activated, low=calm)\n", agent.affect.arousal.to_f64()));
-    out.push_str(&format!("  Control:    {:5.2}   (high=in control, low=helpless)\n\n", agent.affect.control.to_f64()));
+    out.push_str(&format!(
+        "  Valence:   {:+5.2}   (positive=joy, negative=sadness/fear)\n",
+        agent.affect.valence.to_f64()
+    ));
+    out.push_str(&format!(
+        "  Arousal:    {:5.2}   (high=activated, low=calm)\n",
+        agent.affect.arousal.to_f64()
+    ));
+    out.push_str(&format!(
+        "  Control:    {:5.2}   (high=in control, low=helpless)\n\n",
+        agent.affect.control.to_f64()
+    ));
 
     // ── Discrete Emotions ──
     out.push_str("── §22.2: Discrete Emotions ──\n\n");
@@ -848,11 +980,26 @@ pub fn render_psychology_inspector(
 
     // ── Cognitive State (Bounded Rationality) ──
     out.push_str("── §22.1: Cognitive State (Bounded Rationality) ──\n\n");
-    out.push_str(&format!("  Attention Cap:  {:5.2}\n", agent.cognitive.attention_capacity.to_f64()));
-    out.push_str(&format!("  Executive Cap:  {:5.2}\n", agent.cognitive.executive_capacity.to_f64()));
-    out.push_str(&format!("  Stress:         {:5.2}\n", agent.cognitive.stress.to_f64()));
-    out.push_str(&format!("  Planning Horiz: {} ticks\n", agent.cognitive.planning_horizon));
-    out.push_str(&format!("  Heuristic Bias: {:5.2}   (high=uses shortcuts)\n\n", agent.cognitive.heuristic_bias.to_f64()));
+    out.push_str(&format!(
+        "  Attention Cap:  {:5.2}\n",
+        agent.cognitive.attention_capacity.to_f64()
+    ));
+    out.push_str(&format!(
+        "  Executive Cap:  {:5.2}\n",
+        agent.cognitive.executive_capacity.to_f64()
+    ));
+    out.push_str(&format!(
+        "  Stress:         {:5.2}\n",
+        agent.cognitive.stress.to_f64()
+    ));
+    out.push_str(&format!(
+        "  Planning Horiz: {} ticks\n",
+        agent.cognitive.planning_horizon
+    ));
+    out.push_str(&format!(
+        "  Heuristic Bias: {:5.2}   (high=uses shortcuts)\n\n",
+        agent.cognitive.heuristic_bias.to_f64()
+    ));
 
     // ── Moral Values (§22.1) ──
     out.push_str("── §22.1: Moral Values (Moral Foundations) ──\n\n");
@@ -883,17 +1030,37 @@ pub fn render_psychology_inspector(
         };
         let bar_len = (identity.strength.to_f64() * 20.0) as usize;
         let bar: String = "█".repeat(bar_len.min(20)) + &"░".repeat(20 - bar_len.min(20));
-        out.push_str(&format!("  {:<12} {:5.2} [{}]\n", kind_str, identity.strength.to_f64(), bar));
+        out.push_str(&format!(
+            "  {:<12} {:5.2} [{}]\n",
+            kind_str,
+            identity.strength.to_f64(),
+            bar
+        ));
     }
     out.push('\n');
 
     // ── Derived Mental States ──
     out.push_str("── §22: Derived Mental States ──\n\n");
-    out.push_str(&format!("  Trauma Risk:  {:5.2}\n", agent.derived.trauma_risk.to_f64()));
-    out.push_str(&format!("  Depress Risk: {:5.2}\n", agent.derived.depression_risk.to_f64()));
-    out.push_str(&format!("  Resilience:   {:5.2}\n", agent.derived.resilience.to_f64()));
-    out.push_str(&format!("  Ambition:     {:5.2}\n", agent.derived.ambition.to_f64()));
-    out.push_str(&format!("  Resentment:   {:5.2}\n\n", agent.derived.resentment.to_f64()));
+    out.push_str(&format!(
+        "  Trauma Risk:  {:5.2}\n",
+        agent.derived.trauma_risk.to_f64()
+    ));
+    out.push_str(&format!(
+        "  Depress Risk: {:5.2}\n",
+        agent.derived.depression_risk.to_f64()
+    ));
+    out.push_str(&format!(
+        "  Resilience:   {:5.2}\n",
+        agent.derived.resilience.to_f64()
+    ));
+    out.push_str(&format!(
+        "  Ambition:     {:5.2}\n",
+        agent.derived.ambition.to_f64()
+    ));
+    out.push_str(&format!(
+        "  Resentment:   {:5.2}\n\n",
+        agent.derived.resentment.to_f64()
+    ));
 
     // ── Attachment System (§8.1.14) ──
     out.push_str("── §8.1.14: Attachment System ──\n\n");
@@ -918,9 +1085,19 @@ pub fn render_psychology_inspector(
 
     // ── Status ──
     out.push_str("── §19.5.G: Status ──\n\n");
-    out.push_str(&format!("  Wealth:       {:5.2}  (coins: {})\n", agent.status.wealth_status.to_f64(), agent.wealth.coin.to_f64()));
-    out.push_str(&format!("  Social:       {:5.2}\n", agent.status.social_status.to_f64()));
-    out.push_str(&format!("  Role:         {:5.2}\n\n", agent.status.role_status.to_f64()));
+    out.push_str(&format!(
+        "  Wealth:       {:5.2}  (coins: {})\n",
+        agent.status.wealth_status.to_f64(),
+        agent.wealth.coin.to_f64()
+    ));
+    out.push_str(&format!(
+        "  Social:       {:5.2}\n",
+        agent.status.social_status.to_f64()
+    ));
+    out.push_str(&format!(
+        "  Role:         {:5.2}\n\n",
+        agent.status.role_status.to_f64()
+    ));
 
     // ── Skills ──
     out.push_str("── §4.2: Skills ──\n\n");
@@ -942,10 +1119,14 @@ pub fn render_psychology_inspector(
         out.push_str("  (no beliefs)\n\n");
     } else {
         for belief in &agent.beliefs {
-            out.push_str(&format!("  Proposition {}: conf={:.2} charge={:.2} resist={:.2} linkage={:.2}\n",
-                belief.proposition_id, belief.confidence.to_f64(),
-                belief.emotional_charge.to_f64(), belief.resistance.to_f64(),
-                belief.identity_linkage.to_f64()));
+            out.push_str(&format!(
+                "  Proposition {}: conf={:.2} charge={:.2} resist={:.2} linkage={:.2}\n",
+                belief.proposition_id,
+                belief.confidence.to_f64(),
+                belief.emotional_charge.to_f64(),
+                belief.resistance.to_f64(),
+                belief.identity_linkage.to_f64()
+            ));
         }
         out.push('\n');
     }
@@ -955,10 +1136,26 @@ pub fn render_psychology_inspector(
     if let Some(ref intention) = agent.intention {
         out.push_str(&format!("  Goal:      {:?}\n", intention.goal_kind));
         out.push_str(&format!("  Formed:    tick {}\n", intention.formed_tick));
-        out.push_str(&format!("  Commit:    {:5.2}\n", intention.commitment.to_f64()));
-        out.push_str(&format!("  Duration:  {} ticks\n", intention.duration_ticks));
-        out.push_str(&format!("  Failures:  {}\n", intention.consecutive_failures));
-        out.push_str(&format!("  Status:    {}\n\n", if intention.completed { "COMPLETED" } else { "in progress" }));
+        out.push_str(&format!(
+            "  Commit:    {:5.2}\n",
+            intention.commitment.to_f64()
+        ));
+        out.push_str(&format!(
+            "  Duration:  {} ticks\n",
+            intention.duration_ticks
+        ));
+        out.push_str(&format!(
+            "  Failures:  {}\n",
+            intention.consecutive_failures
+        ));
+        out.push_str(&format!(
+            "  Status:    {}\n\n",
+            if intention.completed {
+                "COMPLETED"
+            } else {
+                "in progress"
+            }
+        ));
     } else {
         out.push_str("  (no active intention)\n\n");
     }
@@ -975,7 +1172,12 @@ pub fn render_psychology_inspector(
                 GoalSource::Emotion => "emotion",
                 GoalSource::Command => "command",
             };
-            out.push_str(&format!("  {:?}  priority={:.2}  source={}\n", goal.kind, goal.priority.to_f64(), source_str));
+            out.push_str(&format!(
+                "  {:?}  priority={:.2}  source={}\n",
+                goal.kind,
+                goal.priority.to_f64(),
+                source_str
+            ));
         }
         if agent.goals.len() > 5 {
             out.push_str(&format!("  ... and {} more\n", agent.goals.len() - 5));
@@ -985,21 +1187,45 @@ pub fn render_psychology_inspector(
 
     // ── Conflict State ──
     out.push_str("── §19.5.H: Conflict State ──\n\n");
-    out.push_str(&format!("  Trauma:           {:5.2}\n", agent.conflict.trauma.to_f64()));
-    out.push_str(&format!("  Combat fatigue:   {:5.2}\n", agent.conflict.combat_fatigue.to_f64()));
-    out.push_str(&format!("  Conflicts:        {}\n", agent.conflict.conflict_count));
-    out.push_str(&format!("  Injuries:         {}\n", agent.conflict.injuries_received));
+    out.push_str(&format!(
+        "  Trauma:           {:5.2}\n",
+        agent.conflict.trauma.to_f64()
+    ));
+    out.push_str(&format!(
+        "  Combat fatigue:   {:5.2}\n",
+        agent.conflict.combat_fatigue.to_f64()
+    ));
+    out.push_str(&format!(
+        "  Conflicts:        {}\n",
+        agent.conflict.conflict_count
+    ));
+    out.push_str(&format!(
+        "  Injuries:         {}\n",
+        agent.conflict.injuries_received
+    ));
     out.push_str(&format!("  Active feuds:     {}\n\n", agent.feuds.len()));
 
     // ── Cultural Knowledge ──
     out.push_str("── §19.5.I: Cultural Knowledge ──\n\n");
-    out.push_str(&format!("  Knowledge count:  {}\n", agent.cultural.knowledge.len()));
-    out.push_str(&format!("  Openness:         {:5.2}\n\n", agent.cultural.openness.to_f64()));
+    out.push_str(&format!(
+        "  Knowledge count:  {}\n",
+        agent.cultural.knowledge.len()
+    ));
+    out.push_str(&format!(
+        "  Openness:         {:5.2}\n\n",
+        agent.cultural.openness.to_f64()
+    ));
 
     // ── Memory ──
     out.push_str("── §22.5: Memory ──\n\n");
-    out.push_str(&format!("  Total memories:   {}\n", agent.memory.episodes.len()));
-    out.push_str(&format!("  Capacity:         {}\n\n", agent.memory.capacity));
+    out.push_str(&format!(
+        "  Total memories:   {}\n",
+        agent.memory.episodes.len()
+    ));
+    out.push_str(&format!(
+        "  Capacity:         {}\n\n",
+        agent.memory.capacity
+    ));
 
     out
 }
@@ -1038,8 +1264,7 @@ pub fn render_theology_dashboard(registry: &TheologyRegistry) -> String {
         out.push_str("  (no believers yet)\n");
         return out;
     }
-    let mean =
-        beliefs.iter().map(|b| b.conviction.to_f64()).sum::<f64>() / beliefs.len() as f64;
+    let mean = beliefs.iter().map(|b| b.conviction.to_f64()).sum::<f64>() / beliefs.len() as f64;
     out.push_str(&format!("  Mean conviction: {mean:.3}\n"));
     out.push_str("  ── Believers ────────────────────────────────\n");
     for (i, belief) in registry.beliefs.iter().enumerate() {
@@ -1242,7 +1467,11 @@ mod tests {
     fn theology_dashboard_shows_believers_and_mean_conviction() {
         let mut reg = TheologyRegistry::new();
         reg.religion = Some(Religion::seeded(
-            "The Shepherd", Temperament::Benevolent, "The Way", vec![], "The Flock",
+            "The Shepherd",
+            Temperament::Benevolent,
+            "The Way",
+            vec![],
+            "The Flock",
         ));
         reg.beliefs = vec![
             Some(TheologicalBelief {
@@ -1256,7 +1485,10 @@ mod tests {
         assert!(out.contains("The Shepherd"), "{out}");
         assert!(out.contains("Believers: 1/2"), "{out}");
         assert!(out.contains("Mean conviction: 0.600"), "{out}");
-        assert!(out.contains("Agent 0: conviction 0.600, since 4320"), "{out}");
+        assert!(
+            out.contains("Agent 0: conviction 0.600, since 4320"),
+            "{out}"
+        );
     }
 
     #[test]
@@ -1274,7 +1506,10 @@ mod tests {
         assert_eq!(key_to_command(KeyCode::Char('e')), Some(GoalKind::Eat));
         assert_eq!(key_to_command(KeyCode::Char('d')), Some(GoalKind::Drink));
         assert_eq!(key_to_command(KeyCode::Char('r')), Some(GoalKind::Rest));
-        assert_eq!(key_to_command(KeyCode::Char('s')), Some(GoalKind::Socialize));
+        assert_eq!(
+            key_to_command(KeyCode::Char('s')),
+            Some(GoalKind::Socialize)
+        );
         assert_eq!(key_to_command(KeyCode::Char('p')), Some(GoalKind::Worship));
     }
 
@@ -1343,7 +1578,10 @@ mod tests {
     fn mark_selected_agent_row_ignores_out_of_range_selection() {
         let text = "header\n────\nanna\n";
         let out = mark_selected_agent_row(text, 9);
-        assert!(out.lines().all(|l| l.starts_with(' ')), "no row marked: {out}");
+        assert!(
+            out.lines().all(|l| l.starts_with(' ')),
+            "no row marked: {out}"
+        );
     }
 
     #[test]
@@ -1367,6 +1605,9 @@ mod tests {
         let out = render_military_dashboard(&reg);
         assert!(out.contains("Readiness: 0.450"), "{out}");
         assert!(out.contains("Militia: 2"), "{out}");
-        assert!(out.contains("Agent 0: since 4320, dominance 0.700"), "{out}");
+        assert!(
+            out.contains("Agent 0: since 4320, dominance 0.700"),
+            "{out}"
+        );
     }
 }

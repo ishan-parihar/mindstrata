@@ -1,18 +1,16 @@
 //! World generation — terrain, sites, resources, and agent placement.
 
-use crate::world::{AccessRight, Region, ResourceDef, ResourceStock, Site, SiteKind, Terrain, Tile, World, GRAIN_RESOURCE_ID, COIN_RESOURCE_ID};
+use crate::world::{
+    AccessRight, Region, ResourceDef, ResourceStock, Site, SiteKind, Terrain, Tile, World,
+    COIN_RESOURCE_ID, GRAIN_RESOURCE_ID,
+};
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::id::EntityId;
-use mindstrata_core::rng::{RngStreams, RngStream};
+use mindstrata_core::rng::{RngStream, RngStreams};
 use rand::Rng;
 
 /// Place a site at (x, y) if the coordinates are in bounds.
-fn place_site(
-    world: &mut World,
-    x: i32,
-    y: i32,
-    site: Site,
-) -> bool {
+fn place_site(world: &mut World, x: i32, y: i32, site: Site) -> bool {
     if let Some(tile) = world.tile_mut(x, y) {
         tile.site = Some(site.id);
         world.sites.push(site);

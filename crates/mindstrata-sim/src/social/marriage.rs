@@ -131,7 +131,9 @@ pub enum PropertyArrangement {
 /// deterministic `derive_institution` mapping only emits Fidelity/Provision/
 /// Care/Honor/Obedience today; the reserved variants exist for future
 /// ceremony-type wiring (e.g. martial or religious orders).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize,
+)]
 pub enum Vow {
     /// Fidelity — sexual and emotional exclusivity.
     #[default]
@@ -221,14 +223,16 @@ impl PairBond {
     /// Record a positive interaction within the bond.
     pub fn record_positive(&mut self, tick: u64, magnitude: Fixed) {
         self.bond_strength = (self.bond_strength + magnitude * Fixed::from_f64(0.02)).clamp_01();
-        self.emotional_intimacy = (self.emotional_intimacy + magnitude * Fixed::from_f64(0.015)).clamp_01();
+        self.emotional_intimacy =
+            (self.emotional_intimacy + magnitude * Fixed::from_f64(0.015)).clamp_01();
         self.strain = (self.strain - magnitude * Fixed::from_f64(0.01)).max(Fixed::ZERO);
         self.last_positive_tick = tick;
     }
 
     /// Record a negative interaction within the bond.
     pub fn record_negative(&mut self, tick: u64, magnitude: Fixed) {
-        self.bond_strength = (self.bond_strength - magnitude * Fixed::from_f64(0.03)).max(Fixed::ZERO);
+        self.bond_strength =
+            (self.bond_strength - magnitude * Fixed::from_f64(0.03)).max(Fixed::ZERO);
         self.strain = (self.strain + magnitude * Fixed::from_f64(0.025)).clamp_01();
         self.last_negative_tick = tick;
     }
@@ -259,9 +263,8 @@ impl PairBond {
     /// (partner trust) determines how heavily that threat lands on the bond.
     pub fn charge_jealousy(&mut self, jealousy_emotion: Fixed, dependence: Fixed) {
         let weight = Fixed::from_f64(0.35) + Fixed::from_f64(0.65) * dependence;
-        self.jealousy_load = (self.jealousy_load
-            + jealousy_emotion * weight * Fixed::from_f64(0.15))
-            .clamp_01();
+        self.jealousy_load =
+            (self.jealousy_load + jealousy_emotion * weight * Fixed::from_f64(0.15)).clamp_01();
     }
 
     /// §10.4 (AP2): Advance the post-marriage romantic-stage ladder.
@@ -368,12 +371,7 @@ pub struct Marriage {
 
 impl Marriage {
     /// Create a new marriage.
-    pub fn new(
-        partner_a: usize,
-        partner_b: usize,
-        marriage_type: MarriageType,
-        tick: u64,
-    ) -> Self {
+    pub fn new(partner_a: usize, partner_b: usize, marriage_type: MarriageType, tick: u64) -> Self {
         Self {
             partner_a,
             partner_b,
@@ -515,8 +513,7 @@ impl MarriageRegistry {
             }
         }
         // Remove dissolved pair bonds where the bond has fully decayed
-        self.pair_bonds
-            .retain(|pb| pb.bond_strength > Fixed::ZERO);
+        self.pair_bonds.retain(|pb| pb.bond_strength > Fixed::ZERO);
     }
 }
 
@@ -560,8 +557,10 @@ mod tests {
         low.charge_jealousy(Fixed::from_f64(0.5), Fixed::ZERO);
         let mut high = PairBond::new(0, 1, 0);
         high.charge_jealousy(Fixed::from_f64(0.5), Fixed::ONE);
-        assert!(high.jealousy_load > low.jealousy_load,
-            "dependence must amplify jealousy charge");
+        assert!(
+            high.jealousy_load > low.jealousy_load,
+            "dependence must amplify jealousy charge"
+        );
         assert!(high.jealousy_load > Fixed::ZERO && high.jealousy_load <= Fixed::ONE);
     }
 
@@ -630,7 +629,10 @@ mod tests {
     #[test]
     fn marriage_new_initializes_institutional_fields_empty() {
         let m = Marriage::new(0, 1, MarriageType::Chosen, 100);
-        assert!(m.kin_alliance.is_empty(), "no kin alliance before derivation");
+        assert!(
+            m.kin_alliance.is_empty(),
+            "no kin alliance before derivation"
+        );
         assert_eq!(
             m.property_arrangement,
             PropertyArrangement::None,
@@ -673,11 +675,7 @@ mod tests {
     #[test]
     fn derive_institution_wealth_gap_selects_bride_price_or_dowry() {
         let mut groom_richer = Marriage::new(0, 1, MarriageType::Arranged, 100);
-        groom_richer.derive_institution(
-            Vec::new(),
-            Fixed::from_f64(20.0),
-            Fixed::from_f64(5.0),
-        );
+        groom_richer.derive_institution(Vec::new(), Fixed::from_f64(20.0), Fixed::from_f64(5.0));
         assert_eq!(
             groom_richer.property_arrangement,
             PropertyArrangement::BridePrice,
@@ -685,11 +683,7 @@ mod tests {
         );
 
         let mut bride_richer = Marriage::new(0, 1, MarriageType::Arranged, 100);
-        bride_richer.derive_institution(
-            Vec::new(),
-            Fixed::from_f64(5.0),
-            Fixed::from_f64(20.0),
-        );
+        bride_richer.derive_institution(Vec::new(), Fixed::from_f64(5.0), Fixed::from_f64(20.0));
         assert_eq!(
             bride_richer.property_arrangement,
             PropertyArrangement::Dowry,

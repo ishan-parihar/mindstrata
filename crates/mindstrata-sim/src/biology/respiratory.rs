@@ -50,26 +50,27 @@ impl RespiratoryState {
         let exertion_effect = exertion * Fixed::from_f64(0.3);
         self.breathlessness = (self.breathlessness * Fixed::from_f64(0.9)
             + exertion_effect * Fixed::from_f64(0.1))
-            .clamp_01();
+        .clamp_01();
 
         // Oxygenation inversely related to breathlessness and disease
         self.oxygenation = (Fixed::from_f64(1.0)
             - self.breathlessness * Fixed::from_f64(0.4)
             - self.disease_load * Fixed::from_f64(0.3)
             - self.irritation * Fixed::from_f64(0.1))
-            .clamp_01();
+        .clamp_01();
 
         // Environmental irritation accumulates
         self.irritation = (smoke_exposure * Fixed::from_f64(0.15)
             + cold_exposure * Fixed::from_f64(0.05)
             + damp_housing * Fixed::from_f64(0.08))
-            .clamp_01();
+        .clamp_01();
 
         // Lung health degrades slowly with chronic irritation and age
         if self.irritation > Fixed::from_f64(0.3) {
             self.lung_health = (self.lung_health - Fixed::from_f64(0.0001)).max(Fixed::ZERO);
         }
-        self.lung_health = (self.lung_health - age_modifier * Fixed::from_f64(0.00005)).max(Fixed::ZERO);
+        self.lung_health =
+            (self.lung_health - age_modifier * Fixed::from_f64(0.00005)).max(Fixed::ZERO);
 
         // Disease load decays with good health
         if self.lung_health > Fixed::from_f64(0.5) {
@@ -79,7 +80,7 @@ impl RespiratoryState {
         // Endurance modifier derived from lung health and oxygenation
         self.endurance_modifier = (self.lung_health * Fixed::from_f64(0.5)
             + self.oxygenation * Fixed::from_f64(0.5))
-            .clamp_01();
+        .clamp_01();
     }
 
     /// Effective respiratory capacity for physical tasks.
@@ -114,7 +115,13 @@ mod tests {
     fn smoke_sets_irritation() {
         let mut r = RespiratoryState::default();
         // smoke_exposure * 0.15 = 0.12
-        r.tick_update(Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(0.8), Fixed::ZERO, Fixed::from_f64(0.3));
+        r.tick_update(
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::from_f64(0.8),
+            Fixed::ZERO,
+            Fixed::from_f64(0.3),
+        );
         assert!(r.irritation > Fixed::from_f64(0.1));
     }
 
@@ -124,7 +131,13 @@ mod tests {
         let initial = r.lung_health;
         // irritation = 3.0 * 0.15 = 0.45 > 0.3 threshold
         for _ in 0..100 {
-            r.tick_update(Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(3.0), Fixed::ZERO, Fixed::from_f64(0.3));
+            r.tick_update(
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::from_f64(3.0),
+                Fixed::ZERO,
+                Fixed::from_f64(0.3),
+            );
         }
         assert!(r.lung_health < initial);
     }

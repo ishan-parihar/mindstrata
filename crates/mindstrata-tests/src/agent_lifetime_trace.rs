@@ -70,7 +70,13 @@ fn anna_year_trace() {
             let all = sim.recent_events(new_events);
             for ev in &all[prev_events..new_events] {
                 match ev {
-                    SimEvent::ConflictOccurred { aggressor, target, kind, fear_induced, .. } => {
+                    SimEvent::ConflictOccurred {
+                        aggressor,
+                        target,
+                        kind,
+                        fear_induced,
+                        ..
+                    } => {
                         if matches!(kind, ConflictKind::MoralPanic) {
                             this_panic = true;
                         }
@@ -85,7 +91,11 @@ fn anna_year_trace() {
                             if !anna_events.is_empty() {
                                 anna_events.push('|');
                             }
-                            let role = if *aggressor == AgentId::new(0) { "agg" } else { "tgt" };
+                            let role = if *aggressor == AgentId::new(0) {
+                                "agg"
+                            } else {
+                                "tgt"
+                            };
                             anna_events.push_str(&format!(
                                 "{role}:{:?}:{:.2}",
                                 kind,
@@ -102,13 +112,14 @@ fn anna_year_trace() {
                             anna_events.push_str("DIED");
                         }
                     }
-                    SimEvent::MarriageFormed { spouse_a, spouse_b, .. }
-                        if (*spouse_a == AgentId::new(0) || *spouse_b == AgentId::new(0)) => {
-                            if !anna_events.is_empty() {
-                                anna_events.push('|');
-                            }
-                            anna_events.push_str("MARRIED");
+                    SimEvent::MarriageFormed {
+                        spouse_a, spouse_b, ..
+                    } if (*spouse_a == AgentId::new(0) || *spouse_b == AgentId::new(0)) => {
+                        if !anna_events.is_empty() {
+                            anna_events.push('|');
                         }
+                        anna_events.push_str("MARRIED");
+                    }
                     _ => {}
                 }
             }
@@ -171,7 +182,11 @@ fn anna_year_trace() {
         out.push_str(&format!("{b0c},{b0e},{b1c},{b1e},"));
         out.push_str(&format!(
             "{events_this_tick},{},{},{}",
-            if anna_events.is_empty() { "-" } else { &anna_events },
+            if anna_events.is_empty() {
+                "-"
+            } else {
+                &anna_events
+            },
             if this_panic { "1" } else { "0" },
             if this_rev { "1" } else { "0" }
         ));

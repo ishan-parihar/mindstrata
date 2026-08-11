@@ -95,18 +95,13 @@ impl MoralPanic {
     ) -> Fixed {
         let fear_pressure = self.fear_level * Fixed::from_f64(0.3);
         let gossip_pressure = self.gossip_amplification * Fixed::from_f64(0.2);
-        let legitimacy_vacuum =
-            (Fixed::ONE - institutional_legitimacy) * Fixed::from_f64(0.25);
+        let legitimacy_vacuum = (Fixed::ONE - institutional_legitimacy) * Fixed::from_f64(0.25);
         let community_fear_pressure = community_fear * Fixed::from_f64(0.25);
         (fear_pressure + gossip_pressure + legitimacy_vacuum + community_fear_pressure).clamp_01()
     }
 
     /// Should the panic resolve?
-    pub fn should_resolve(
-        &self,
-        institutional_response: Fixed,
-        community_fatigue: Fixed,
-    ) -> bool {
+    pub fn should_resolve(&self, institutional_response: Fixed, community_fatigue: Fixed) -> bool {
         // Panic resolves when institutions crack down, or when people are tired
         institutional_response > Fixed::from_f64(0.6)
             || community_fatigue > Fixed::from_f64(0.7)
@@ -117,8 +112,7 @@ impl MoralPanic {
     pub fn escalate(&mut self, tick: u64) {
         self.intensity = (self.intensity + Fixed::from_f64(0.05)).clamp_01();
         self.fear_level = (self.fear_level + Fixed::from_f64(0.03)).clamp_01();
-        self.gossip_amplification =
-            (self.gossip_amplification + Fixed::from_f64(0.02)).clamp_01();
+        self.gossip_amplification = (self.gossip_amplification + Fixed::from_f64(0.02)).clamp_01();
         self.last_escalation_tick = tick;
     }
 
@@ -217,9 +211,7 @@ pub struct MoralPanicRegistry {
 
 impl MoralPanicRegistry {
     pub fn new() -> Self {
-        Self {
-            panics: Vec::new(),
-        }
+        Self { panics: Vec::new() }
     }
 
     /// Register a new moral panic and return its index.
@@ -243,8 +235,8 @@ mod tests {
     fn panic_escalation_pressure() {
         let panic = MoralPanic::new(PanicTrigger::MoralViolation, Some(0), 0);
         let pressure = panic.escalation_pressure(
-            Fixed::from_f64(0.3),  // low legitimacy
-            Fixed::from_f64(0.7),  // high community fear
+            Fixed::from_f64(0.3), // low legitimacy
+            Fixed::from_f64(0.7), // high community fear
         );
         assert!(pressure > Fixed::from_f64(0.2));
     }
@@ -253,8 +245,8 @@ mod tests {
     fn panic_resolves_with_institutional_response() {
         let panic = MoralPanic::new(PanicTrigger::MoralViolation, Some(0), 0);
         assert!(panic.should_resolve(
-            Fixed::from_f64(0.8),  // strong institutional response
-            Fixed::from_f64(0.3),  // moderate fatigue
+            Fixed::from_f64(0.8), // strong institutional response
+            Fixed::from_f64(0.3), // moderate fatigue
         ));
     }
 
@@ -325,8 +317,7 @@ mod tests {
         // (self-reinforcing), and once fatigue crosses 0.7 it resolves
         // even while escalation pressure is still high.
         let mut panic = MoralPanic::new(PanicTrigger::InstitutionalCorruption, None, 0);
-        let pressure =
-            panic.escalation_pressure(Fixed::from_f64(0.2), Fixed::from_f64(0.8));
+        let pressure = panic.escalation_pressure(Fixed::from_f64(0.2), Fixed::from_f64(0.8));
         assert!(
             pressure > Fixed::from_f64(PANIC_ESCALATION_THRESHOLD),
             "low legitimacy + high fear must exceed the escalation threshold"

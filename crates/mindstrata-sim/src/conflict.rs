@@ -48,19 +48,25 @@ impl ConflictState {
     pub fn update(&mut self, params: &crate::parameters::SimParameters) {
         // Combat fatigue decays when not in combat
         if !self.in_combat {
-            self.combat_fatigue = (self.combat_fatigue - params.conflict_combat_fatigue_decay).max(Fixed::ZERO);
+            self.combat_fatigue =
+                (self.combat_fatigue - params.conflict_combat_fatigue_decay).max(Fixed::ZERO);
         }
         // Trauma decays very slowly (years to recover)
         self.trauma = (self.trauma - params.conflict_trauma_decay).max(Fixed::ZERO);
     }
 
     /// Record a conflict incident.
-    pub fn record_conflict(&mut self, kind: ConflictKind, params: &crate::parameters::SimParameters) {
+    pub fn record_conflict(
+        &mut self,
+        kind: ConflictKind,
+        params: &crate::parameters::SimParameters,
+    ) {
         self.conflict_count += 1;
         self.trauma = (self.trauma + kind.trauma_rate()).clamp_01();
         if kind == ConflictKind::Combat || kind == ConflictKind::Violence {
             self.in_combat = true;
-            self.combat_fatigue = (self.combat_fatigue + params.conflict_combat_fatigue_rate).clamp_01();
+            self.combat_fatigue =
+                (self.combat_fatigue + params.conflict_combat_fatigue_rate).clamp_01();
         }
     }
 
@@ -109,14 +115,17 @@ pub fn resolve_conflict(
     // Personality modifiers
     let aggression = aggressor_personality.dominance * params.conflict_dominance_weight
         + aggressor_personality.risk_tolerance * params.conflict_risk_weight;
-    let injury = (base_injury + aggression * params.conflict_aggression_injury_multiplier).clamp_01();
+    let injury =
+        (base_injury + aggression * params.conflict_aggression_injury_multiplier).clamp_01();
 
     // Fear induction: already fearful targets are more affected
-    let fear_sensitivity = target_emotions.fear * params.conflict_fear_sensitivity_weight + params.conflict_fear_sensitivity_base;
+    let fear_sensitivity = target_emotions.fear * params.conflict_fear_sensitivity_weight
+        + params.conflict_fear_sensitivity_base;
     let fear_induced = (kind.fear_induction() * fear_sensitivity).clamp_01();
 
     // Trauma: prior trauma makes new trauma worse (PTSD-like)
-    let trauma_multiplier = Fixed::ONE + target_conflict_state.trauma * params.conflict_trauma_multiplier;
+    let trauma_multiplier =
+        Fixed::ONE + target_conflict_state.trauma * params.conflict_trauma_multiplier;
     let trauma = (kind.trauma_rate() * trauma_multiplier).clamp_01();
 
     // Casualty check: very low health + severe injury = death
@@ -134,11 +143,10 @@ pub fn resolve_conflict(
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use crate::parameters::SimParameters;
     use super::*;
+    use crate::parameters::SimParameters;
 
     fn make_personality() -> Personality {
         Personality {
@@ -228,8 +236,10 @@ mod tests {
             &SimParameters::default(),
         );
 
-        assert!(r2.trauma_accumulated > r1.trauma_accumulated,
-            "Prior trauma should increase new trauma accumulation");
+        assert!(
+            r2.trauma_accumulated > r1.trauma_accumulated,
+            "Prior trauma should increase new trauma accumulation"
+        );
     }
 
     #[test]
@@ -248,7 +258,10 @@ mod tests {
             Fixed::from_f64(0.1), // favorable rng
             &SimParameters::default(),
         );
-        assert!(!r_healthy.target_died, "Healthy agents should not die easily");
+        assert!(
+            !r_healthy.target_died,
+            "Healthy agents should not die easily"
+        );
 
         // Low health: might die
         let mut deaths = 0;
@@ -267,7 +280,10 @@ mod tests {
                 deaths += 1;
             }
         }
-        assert!(deaths > 0, "Low health agents should sometimes die in combat");
+        assert!(
+            deaths > 0,
+            "Low health agents should sometimes die in combat"
+        );
     }
 
     #[test]

@@ -88,7 +88,7 @@ impl PatronageRelation {
             + self.satisfaction * Fixed::from_f64(0.3)
             + self.patron_obligation * Fixed::from_f64(0.1)
             + self.client_dependence * Fixed::from_f64(0.1))
-            .clamp_01()
+        .clamp_01()
     }
 
     /// Check if the patronage should dissolve.
@@ -108,8 +108,8 @@ impl PatronageRelation {
         // Satisfaction depends on both sides getting what they want
         let patron_satisfied = self.labor_contribution * Fixed::from_f64(0.5)
             + self.political_support * Fixed::from_f64(0.5);
-        let client_satisfied = self.provision * Fixed::from_f64(0.7)
-            + self.patron_obligation * Fixed::from_f64(0.3);
+        let client_satisfied =
+            self.provision * Fixed::from_f64(0.7) + self.patron_obligation * Fixed::from_f64(0.3);
         self.satisfaction = (patron_satisfied + client_satisfied) * Fixed::from_f64(0.5);
         // Slow decay if not actively reinforced
         self.provision = (self.provision * Fixed::from_f64(0.999)).max(Fixed::ZERO);

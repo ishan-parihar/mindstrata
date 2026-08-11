@@ -5,7 +5,7 @@
 //! this module closes that gap — cap enforcement, through-birth safety,
 //! invariant cleanliness, and determinism at the designed maximum.
 
-use mindstrata_sim::{Simulation, sim::SimConfig};
+use mindstrata_sim::{sim::SimConfig, Simulation};
 
 fn full_capacity_config(seed: u64, ticks: u64) -> SimConfig {
     SimConfig {
@@ -43,7 +43,11 @@ fn population_cap_enforced_at_populate() {
     // At-cap and below-cap requests pass through intact.
     let mut at_cap = Simulation::new(full_capacity_config(42, 100));
     at_cap.populate();
-    assert_eq!(at_cap.agent_count(), cap, "at-cap request must pass through");
+    assert_eq!(
+        at_cap.agent_count(),
+        cap,
+        "at-cap request must pass through"
+    );
     let mut small = Simulation::new(SimConfig {
         seed: 42,
         max_ticks: 100,
@@ -53,7 +57,11 @@ fn population_cap_enforced_at_populate() {
         snapshot_interval: None,
     });
     small.populate();
-    assert_eq!(small.agent_count(), 12, "below-cap request must pass through");
+    assert_eq!(
+        small.agent_count(),
+        12,
+        "below-cap request must pass through"
+    );
 }
 
 /// §19.5.F + §2: at full capacity the population NEVER exceeds the cap
@@ -143,11 +151,26 @@ fn full_capacity_run_is_deterministic_and_healthy() {
     };
     let a = run(42);
     let b = run(42);
-    assert_eq!(a.avg_hunger, b.avg_hunger, "hunger must be seed-deterministic");
-    assert_eq!(a.avg_valence, b.avg_valence, "valence must be seed-deterministic");
-    assert_eq!(a.total_grain, b.total_grain, "grain must be seed-deterministic");
-    assert_eq!(a.event_count, b.event_count, "events must be seed-deterministic");
-    assert_eq!(a.agent_count, b.agent_count, "agent count must be seed-deterministic");
+    assert_eq!(
+        a.avg_hunger, b.avg_hunger,
+        "hunger must be seed-deterministic"
+    );
+    assert_eq!(
+        a.avg_valence, b.avg_valence,
+        "valence must be seed-deterministic"
+    );
+    assert_eq!(
+        a.total_grain, b.total_grain,
+        "grain must be seed-deterministic"
+    );
+    assert_eq!(
+        a.event_count, b.event_count,
+        "events must be seed-deterministic"
+    );
+    assert_eq!(
+        a.agent_count, b.agent_count,
+        "agent count must be seed-deterministic"
+    );
     // End-state health at the cap.
     assert!(
         a.agent_count >= mindstrata_sim::population_cap::MAX_POPULATION as u64 / 2,

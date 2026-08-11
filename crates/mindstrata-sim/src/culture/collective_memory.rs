@@ -111,8 +111,7 @@ impl SharedMemory {
         self.rehearsal_count += 1;
         // Each rehearsal strengthens salience slightly, but also increases distortion
         self.salience = (self.salience + Fixed::from_f64(0.05)).clamp_01();
-        self.distortion_level =
-            (self.distortion_level + Fixed::from_f64(0.01)).clamp_01();
+        self.distortion_level = (self.distortion_level + Fixed::from_f64(0.01)).clamp_01();
     }
 
     /// Decay salience over time (memories fade without rehearsal).
@@ -126,9 +125,8 @@ impl SharedMemory {
     /// [0.7, 1.0] for the shipped constants — never fully frozen, per the
     /// Iter-12 linear-decay design). Deterministic, no RNG.
     pub fn decay_preserved(&mut self, ticks_elapsed: u64, preservation: Fixed) {
-        let decay_amount = Fixed::from_f64(0.001)
-            * Fixed::from_int(ticks_elapsed as i64)
-            * preservation;
+        let decay_amount =
+            Fixed::from_f64(0.001) * Fixed::from_int(ticks_elapsed as i64) * preservation;
         self.salience = (self.salience - decay_amount).max(Fixed::ZERO);
     }
 }
@@ -222,8 +220,7 @@ impl CollectiveMemory {
         }
         self.memories.push(mem);
         // New shared events strengthen cohesion
-        self.cohesion =
-            (self.cohesion + emotional_charge * Fixed::from_f64(0.05)).clamp_01();
+        self.cohesion = (self.cohesion + emotional_charge * Fixed::from_f64(0.05)).clamp_01();
         id
     }
 
@@ -295,13 +292,11 @@ impl CollectiveMemory {
 }
 
 /// Registry of collective memories for all groups.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CollectiveMemoryRegistry {
     /// All collective memories, indexed by group_id.
     pub entries: Vec<CollectiveMemory>,
 }
-
 
 impl CollectiveMemoryRegistry {
     /// Get or create collective memory for a group.
@@ -309,7 +304,9 @@ impl CollectiveMemoryRegistry {
         if !self.entries.iter().any(|e| e.group_id == group_id) {
             self.entries.push(CollectiveMemory::new(group_id));
         }
-        self.entries.iter_mut().find(|e| e.group_id == group_id)
+        self.entries
+            .iter_mut()
+            .find(|e| e.group_id == group_id)
             .expect("just inserted")
     }
 
@@ -350,7 +347,12 @@ mod tests {
     fn add_memory_increments_id() {
         let mut cm = CollectiveMemory::new(0);
         let id1 = cm.add_memory("founding".into(), SharedMemoryKind::Founding, 0, Fixed::ONE);
-        let id2 = cm.add_memory("victory".into(), SharedMemoryKind::Triumph, 100, Fixed::from_f64(0.8));
+        let id2 = cm.add_memory(
+            "victory".into(),
+            SharedMemoryKind::Triumph,
+            100,
+            Fixed::from_f64(0.8),
+        );
         assert_eq!(id1, 0);
         assert_eq!(id2, 1);
         assert_eq!(cm.memories.len(), 2);
@@ -366,7 +368,12 @@ mod tests {
     #[test]
     fn rehearsal_strengthens_salience() {
         let mut cm = CollectiveMemory::new(0);
-        let id = cm.add_memory("event".into(), SharedMemoryKind::Triumph, 0, Fixed::from_f64(0.5));
+        let id = cm.add_memory(
+            "event".into(),
+            SharedMemoryKind::Triumph,
+            0,
+            Fixed::from_f64(0.5),
+        );
         // Decay salience first so rehearsal can increase it
         cm.memories[id].salience = Fixed::from_f64(0.5);
         let before = cm.memories[id].salience;
@@ -389,7 +396,12 @@ mod tests {
     fn identity_strength_scales_with_myths_and_heroes() {
         let mut cm = CollectiveMemory::new(0);
         let empty_identity = cm.identity_strength();
-        cm.add_memory("founding".into(), SharedMemoryKind::Founding, 0, Fixed::from_f64(0.8));
+        cm.add_memory(
+            "founding".into(),
+            SharedMemoryKind::Founding,
+            0,
+            Fixed::from_f64(0.8),
+        );
         cm.add_hero(1);
         let full_identity = cm.identity_strength();
         assert!(full_identity > empty_identity);
@@ -398,8 +410,18 @@ mod tests {
     #[test]
     fn trauma_load_from_traumas() {
         let mut cm = CollectiveMemory::new(0);
-        cm.add_memory("disaster".into(), SharedMemoryKind::Trauma, 0, Fixed::from_f64(0.9));
-        cm.add_memory("victory".into(), SharedMemoryKind::Triumph, 0, Fixed::from_f64(0.8));
+        cm.add_memory(
+            "disaster".into(),
+            SharedMemoryKind::Trauma,
+            0,
+            Fixed::from_f64(0.9),
+        );
+        cm.add_memory(
+            "victory".into(),
+            SharedMemoryKind::Triumph,
+            0,
+            Fixed::from_f64(0.8),
+        );
         let load = cm.trauma_load();
         assert!(load > Fixed::ZERO);
     }
@@ -464,8 +486,18 @@ mod tests {
     #[test]
     fn refresh_derived_views_maps_trauma_memories_to_shared_traumas() {
         let mut cm = CollectiveMemory::new(0);
-        cm.add_memory("drought".into(), SharedMemoryKind::Trauma, 500, Fixed::from_f64(0.9));
-        cm.add_memory("victory".into(), SharedMemoryKind::Triumph, 600, Fixed::from_f64(0.8));
+        cm.add_memory(
+            "drought".into(),
+            SharedMemoryKind::Trauma,
+            500,
+            Fixed::from_f64(0.9),
+        );
+        cm.add_memory(
+            "victory".into(),
+            SharedMemoryKind::Triumph,
+            600,
+            Fixed::from_f64(0.8),
+        );
         cm.memories[0].salience = Fixed::from_f64(0.7);
         cm.refresh_derived_views();
         assert_eq!(cm.traumas.len(), 1);
@@ -479,7 +511,12 @@ mod tests {
     fn refresh_derived_views_maps_sacred_memories_to_event_ids() {
         let mut cm = CollectiveMemory::new(0);
         let id = cm.add_memory("covenant".into(), SharedMemoryKind::Sacred, 900, Fixed::ONE);
-        cm.add_memory("routine".into(), SharedMemoryKind::Moral, 950, Fixed::from_f64(0.3));
+        cm.add_memory(
+            "routine".into(),
+            SharedMemoryKind::Moral,
+            950,
+            Fixed::from_f64(0.3),
+        );
         cm.refresh_derived_views();
         assert_eq!(cm.sacred_events.len(), 1);
         assert_eq!(cm.sacred_events[0], EventId::new(id as u64));
@@ -488,7 +525,12 @@ mod tests {
     #[test]
     fn inactive_trauma_when_salience_fades() {
         let mut cm = CollectiveMemory::new(0);
-        cm.add_memory("famine".into(), SharedMemoryKind::Trauma, 100, Fixed::from_f64(0.9));
+        cm.add_memory(
+            "famine".into(),
+            SharedMemoryKind::Trauma,
+            100,
+            Fixed::from_f64(0.9),
+        );
         cm.memories[0].salience = Fixed::from_f64(0.05);
         cm.refresh_derived_views();
         assert_eq!(cm.traumas.len(), 1);

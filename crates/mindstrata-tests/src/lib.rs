@@ -38,8 +38,8 @@ mod smoke {
     use mindstrata_core::clock::Tick;
     use mindstrata_core::fixed::Fixed;
     use mindstrata_core::rng::RngStreams;
-    use mindstrata_sim::{Simulation, sim::SimConfig};
     use mindstrata_sim::scenario::Scenario;
+    use mindstrata_sim::{sim::SimConfig, Simulation};
 
     #[test]
     fn simulation_runs_without_panic() {
@@ -90,7 +90,10 @@ mod smoke {
         sim.populate();
 
         let world = sim.world();
-        assert!(!world.sites.is_empty(), "World should have sites after populate");
+        assert!(
+            !world.sites.is_empty(),
+            "World should have sites after populate"
+        );
         assert!(!world.regions.is_empty(), "World should have regions");
         assert!(!world.resources.is_empty(), "World should have resources");
 
@@ -141,11 +144,21 @@ mod smoke {
         sim.run(100);
 
         let summaries = sim.agent_summaries();
-        let avg_hunger: f64 = summaries.iter().map(|s| s.hunger.to_f64()).sum::<f64>() / summaries.len() as f64;
-        assert!(avg_hunger > 0.0, "Average hunger should be non-zero after 100 ticks, got {avg_hunger}");
+        let avg_hunger: f64 =
+            summaries.iter().map(|s| s.hunger.to_f64()).sum::<f64>() / summaries.len() as f64;
+        assert!(
+            avg_hunger > 0.0,
+            "Average hunger should be non-zero after 100 ticks, got {avg_hunger}"
+        );
 
-        let actions: Vec<_> = summaries.iter().map(|s| s.current_action.as_str()).collect();
-        assert!(actions.iter().any(|a| *a != "Idle"), "At least some agents should be performing actions");
+        let actions: Vec<_> = summaries
+            .iter()
+            .map(|s| s.current_action.as_str())
+            .collect();
+        assert!(
+            actions.iter().any(|a| *a != "Idle"),
+            "At least some agents should be performing actions"
+        );
     }
 
     #[test]
@@ -162,12 +175,20 @@ mod smoke {
         let mut sim1 = Simulation::new(config.clone());
         sim1.populate();
         sim1.run(50);
-        let hunger1: Vec<f64> = sim1.agent_summaries().iter().map(|s| s.hunger.to_f64()).collect();
+        let hunger1: Vec<f64> = sim1
+            .agent_summaries()
+            .iter()
+            .map(|s| s.hunger.to_f64())
+            .collect();
 
         let mut sim2 = Simulation::new(config);
         sim2.populate();
         sim2.run(50);
-        let hunger2: Vec<f64> = sim2.agent_summaries().iter().map(|s| s.hunger.to_f64()).collect();
+        let hunger2: Vec<f64> = sim2
+            .agent_summaries()
+            .iter()
+            .map(|s| s.hunger.to_f64())
+            .collect();
 
         assert_eq!(hunger1, hunger2, "Same seed should produce same results");
     }
@@ -188,11 +209,20 @@ mod smoke {
 
         // Verify default norms are registered
         let norms = sim.norms();
-        assert!(!norms.norms().is_empty(), "Default norms should be registered");
-        assert!(norms.norms().len() >= 4, "Should have at least 4 default norms");
+        assert!(
+            !norms.norms().is_empty(),
+            "Default norms should be registered"
+        );
+        assert!(
+            norms.norms().len() >= 4,
+            "Should have at least 4 default norms"
+        );
 
         // Verify violations list is initially empty
-        assert!(norms.violations().is_empty(), "No violations before simulation runs");
+        assert!(
+            norms.violations().is_empty(),
+            "No violations before simulation runs"
+        );
 
         // Run 100 ticks — social interactions should occur
         sim.run(100);
@@ -215,7 +245,9 @@ mod smoke {
         sim.populate();
 
         // Record initial belief confidence for each agent
-        let initial_confidence: Vec<f64> = sim.agents.iter()
+        let initial_confidence: Vec<f64> = sim
+            .agents
+            .iter()
             .map(|a| a.beliefs.iter().map(|b| b.confidence.to_f64()).sum::<f64>())
             .collect();
 
@@ -223,15 +255,21 @@ mod smoke {
         sim.run(200);
 
         // Belief confidences should have changed through gossip
-        let final_confidence: Vec<f64> = sim.agents.iter()
+        let final_confidence: Vec<f64> = sim
+            .agents
+            .iter()
             .map(|a| a.beliefs.iter().map(|b| b.confidence.to_f64()).sum::<f64>())
             .collect();
 
         // At least some agents should have different belief confidence (gossip mutated them)
-        let confidence_changed = initial_confidence.iter().zip(final_confidence.iter())
+        let confidence_changed = initial_confidence
+            .iter()
+            .zip(final_confidence.iter())
             .any(|(i, f)| (*i - *f).abs() > 0.001);
-        assert!(confidence_changed,
-            "Gossip should mutate belief confidences over 200 ticks");
+        assert!(
+            confidence_changed,
+            "Gossip should mutate belief confidences over 200 ticks"
+        );
     }
 
     #[test]
@@ -249,15 +287,23 @@ mod smoke {
         sim.run(500);
 
         let summaries = sim.agent_summaries();
-        let action_counts = summaries.iter().fold(std::collections::HashMap::new(), |mut acc, s| {
-            *acc.entry(s.current_action.clone()).or_insert(0) += 1;
-            acc
-        });
+        let action_counts =
+            summaries
+                .iter()
+                .fold(std::collections::HashMap::new(), |mut acc, s| {
+                    *acc.entry(s.current_action.clone()).or_insert(0) += 1;
+                    acc
+                });
         // Agents should perform diverse actions (not all Idle)
-        assert!(action_counts.len() > 1, "Agents should perform diverse actions, got: {action_counts:?}");
+        assert!(
+            action_counts.len() > 1,
+            "Agents should perform diverse actions, got: {action_counts:?}"
+        );
         // Work should appear (norm pressure rewards it for conformist farmers)
-        assert!(action_counts.contains_key("Work"),
-            "Work should appear in action distribution: {action_counts:?}");
+        assert!(
+            action_counts.contains_key("Work"),
+            "Work should appear in action distribution: {action_counts:?}"
+        );
     }
 
     #[test]
@@ -279,8 +325,14 @@ mod smoke {
         // After 500 ticks with witness reputation, trust should分化
         // (some relationships low from witnessing threats, some high from witnessing help)
         let relationships = &sim.relationships;
-        let min_trust = relationships.iter().map(|r| r.trust.to_f64()).fold(f64::INFINITY, f64::min);
-        let max_trust = relationships.iter().map(|r| r.trust.to_f64()).fold(f64::NEG_INFINITY, f64::max);
+        let min_trust = relationships
+            .iter()
+            .map(|r| r.trust.to_f64())
+            .fold(f64::INFINITY, f64::min);
+        let max_trust = relationships
+            .iter()
+            .map(|r| r.trust.to_f64())
+            .fold(f64::NEG_INFINITY, f64::max);
 
         // Trust range should be wider than initial range (0.3..0.7) due to witness effects
         assert!(max_trust - min_trust > 0.2,
@@ -304,12 +356,20 @@ mod smoke {
         // After 100 ticks, agents should have addressed critical needs
         // (interrupt mechanism forces Eat/Drink when hunger/thirst > 0.9)
         let summaries = sim.agent_summaries();
-        let avg_hunger: f64 = summaries.iter().map(|s| s.hunger.to_f64()).sum::<f64>() / summaries.len() as f64;
-        let avg_thirst: f64 = summaries.iter().map(|s| s.thirst.to_f64()).sum::<f64>() / summaries.len() as f64;
+        let avg_hunger: f64 =
+            summaries.iter().map(|s| s.hunger.to_f64()).sum::<f64>() / summaries.len() as f64;
+        let avg_thirst: f64 =
+            summaries.iter().map(|s| s.thirst.to_f64()).sum::<f64>() / summaries.len() as f64;
 
         // Agents should not all be starving or dehydrated (interrupt mechanism works)
-        assert!(avg_hunger < 0.85, "Average hunger should stay below 0.85 with interrupts: got {avg_hunger}");
-        assert!(avg_thirst < 0.85, "Average thirst should stay below 0.85 with interrupts: got {avg_thirst}");
+        assert!(
+            avg_hunger < 0.85,
+            "Average hunger should stay below 0.85 with interrupts: got {avg_hunger}"
+        );
+        assert!(
+            avg_thirst < 0.85,
+            "Average thirst should stay below 0.85 with interrupts: got {avg_thirst}"
+        );
     }
 
     #[test]
@@ -326,29 +386,60 @@ mod smoke {
         sim.populate();
 
         // Verify institutions are created
-        assert!(!sim.institutions.is_empty(), "Institutions should be created during populate");
-        assert!(sim.institutions.len() >= 3, "Should have at least 3 institutions (Council, Temple, Market)");
+        assert!(
+            !sim.institutions.is_empty(),
+            "Institutions should be created during populate"
+        );
+        assert!(
+            sim.institutions.len() >= 3,
+            "Should have at least 3 institutions (Council, Temple, Market)"
+        );
 
         // Verify Council has Elder role assigned by personality
         {
-            let council = sim.institutions.iter().find(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Council).unwrap();
-            assert!(council.get_role_holder("Elder").is_some(), "Council should have an Elder assigned");
-            assert!(council.members.len() >= 2, "Council should have at least 2 members");
+            let council = sim
+                .institutions
+                .iter()
+                .find(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Council)
+                .unwrap();
+            assert!(
+                council.get_role_holder("Elder").is_some(),
+                "Council should have an Elder assigned"
+            );
+            assert!(
+                council.members.len() >= 2,
+                "Council should have at least 2 members"
+            );
 
             // Verify Temple has Priest role assigned by personality
-            let temple = sim.institutions.iter().find(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Temple).unwrap();
-            assert!(temple.get_role_holder("Priest").is_some(), "Temple should have a Priest assigned");
+            let temple = sim
+                .institutions
+                .iter()
+                .find(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Temple)
+                .unwrap();
+            assert!(
+                temple.get_role_holder("Priest").is_some(),
+                "Temple should have a Priest assigned"
+            );
         }
 
         // Run 200 ticks — collective psychology should be derived
         sim.run(200);
 
         // Verify collective psychology was derived (morale should be non-zero)
-        let council = sim.institutions.iter().find(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Council).unwrap();
-        assert!(council.collective.morale > mindstrata_core::fixed::Fixed::ZERO,
-            "Council morale should be derived from member states");
-        assert!(council.collective.unity > mindstrata_core::fixed::Fixed::ZERO,
-            "Council unity should be derived from member trust distribution");
+        let council = sim
+            .institutions
+            .iter()
+            .find(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Council)
+            .unwrap();
+        assert!(
+            council.collective.morale > mindstrata_core::fixed::Fixed::ZERO,
+            "Council morale should be derived from member states"
+        );
+        assert!(
+            council.collective.unity > mindstrata_core::fixed::Fixed::ZERO,
+            "Council unity should be derived from member trust distribution"
+        );
     }
 
     #[test]
@@ -366,8 +457,14 @@ mod smoke {
 
         // All agents should have village routines
         for agent in &sim.agents {
-            assert!(agent.routine.preferred_action(mindstrata_core::clock::Tick::new(36)).0 != mindstrata_sim::actions::ActionKind::Idle,
-                "Agents should have active routines that prefer Work during work hours");
+            assert!(
+                agent
+                    .routine
+                    .preferred_action(mindstrata_core::clock::Tick::new(36))
+                    .0
+                    != mindstrata_sim::actions::ActionKind::Idle,
+                "Agents should have active routines that prefer Work during work hours"
+            );
         }
 
         // Run 500 ticks — routines should create behavioral patterns
@@ -375,8 +472,12 @@ mod smoke {
 
         // Agents should be alive and functional
         let summaries = sim.agent_summaries();
-        let avg_hunger: f64 = summaries.iter().map(|s| s.hunger.to_f64()).sum::<f64>() / summaries.len() as f64;
-        assert!(avg_hunger < 0.9, "Routines should help agents manage needs: avg_hunger={avg_hunger}");
+        let avg_hunger: f64 =
+            summaries.iter().map(|s| s.hunger.to_f64()).sum::<f64>() / summaries.len() as f64;
+        assert!(
+            avg_hunger < 0.9,
+            "Routines should help agents manage needs: avg_hunger={avg_hunger}"
+        );
     }
 
     #[test]
@@ -401,7 +502,11 @@ mod smoke {
             }
         }
 
-        assert_eq!(snapshots.len(), 3, "Should have 3 snapshots at ticks 100, 500, 1000");
+        assert_eq!(
+            snapshots.len(),
+            3,
+            "Should have 3 snapshots at ticks 100, 500, 1000"
+        );
 
         let s100 = &snapshots[0];
         let s500 = &snapshots[1];
@@ -411,15 +516,33 @@ mod smoke {
         assert_eq!(s500.tick, 500);
         assert_eq!(s1000.tick, 1000);
 
-        assert!(s1000.avg_hunger < 0.95, "Agents should not all be starving: avg_hunger={}", s1000.avg_hunger);
-        assert!(s1000.avg_thirst < 0.95, "Agents should not all be dehydrated: avg_thirst={}", s1000.avg_thirst);
+        assert!(
+            s1000.avg_hunger < 0.95,
+            "Agents should not all be starving: avg_hunger={}",
+            s1000.avg_hunger
+        );
+        assert!(
+            s1000.avg_thirst < 0.95,
+            "Agents should not all be dehydrated: avg_thirst={}",
+            s1000.avg_thirst
+        );
 
-        assert!(s500.total_grain != s1000.total_grain || s100.total_grain != s1000.total_grain,
+        assert!(
+            s500.total_grain != s1000.total_grain || s100.total_grain != s1000.total_grain,
             "Grain should fluctuate: s100={}, s500={}, s1000={}",
-            s100.total_grain, s500.total_grain, s1000.total_grain);
+            s100.total_grain,
+            s500.total_grain,
+            s1000.total_grain
+        );
 
-        assert!(s1000.event_count > s500.event_count, "Events should accumulate");
-        assert!(s1000.journal_len > s500.journal_len, "Journal should accumulate");
+        assert!(
+            s1000.event_count > s500.event_count,
+            "Events should accumulate"
+        );
+        assert!(
+            s1000.journal_len > s500.journal_len,
+            "Journal should accumulate"
+        );
 
         let mut sim2 = Simulation::new(SimConfig {
             seed: 42,
@@ -433,10 +556,22 @@ mod smoke {
         sim2.run(1000);
         let s2_final = sim2.metrics_snapshot();
 
-        assert_eq!(s1000.avg_hunger, s2_final.avg_hunger, "Determinism failed for hunger");
-        assert_eq!(s1000.avg_joy, s2_final.avg_joy, "Determinism failed for joy");
-        assert_eq!(s1000.total_grain, s2_final.total_grain, "Determinism failed for grain");
-        assert_eq!(s1000.event_count, s2_final.event_count, "Determinism failed for events");
+        assert_eq!(
+            s1000.avg_hunger, s2_final.avg_hunger,
+            "Determinism failed for hunger"
+        );
+        assert_eq!(
+            s1000.avg_joy, s2_final.avg_joy,
+            "Determinism failed for joy"
+        );
+        assert_eq!(
+            s1000.total_grain, s2_final.total_grain,
+            "Determinism failed for grain"
+        );
+        assert_eq!(
+            s1000.event_count, s2_final.event_count,
+            "Determinism failed for events"
+        );
     }
 
     #[test]
@@ -474,31 +609,50 @@ mod smoke {
 
         // Simulate 200 ticks — states should accumulate
         for _ in 0..200 {
-            stressed.compute(&stressed_input, Fixed::from_f64(0.995), Fixed::from_f64(0.005));
+            stressed.compute(
+                &stressed_input,
+                Fixed::from_f64(0.995),
+                Fixed::from_f64(0.005),
+            );
             calm.compute(&calm_input, Fixed::from_f64(0.995), Fixed::from_f64(0.005));
         }
 
         // Stressed agent should have higher trauma and depression risk
-        assert!(stressed.trauma_risk > calm.trauma_risk,
+        assert!(
+            stressed.trauma_risk > calm.trauma_risk,
             "Stressed agent should have higher trauma risk: stressed={:.3}, calm={:.3}",
-            stressed.trauma_risk.to_f64(), calm.trauma_risk.to_f64());
-        assert!(stressed.depression_risk > calm.depression_risk,
+            stressed.trauma_risk.to_f64(),
+            calm.trauma_risk.to_f64()
+        );
+        assert!(
+            stressed.depression_risk > calm.depression_risk,
             "Stressed agent should have higher depression risk: stressed={:.3}, calm={:.3}",
-            stressed.depression_risk.to_f64(), calm.depression_risk.to_f64());
-        assert!(stressed.resentment > calm.resentment,
+            stressed.depression_risk.to_f64(),
+            calm.depression_risk.to_f64()
+        );
+        assert!(
+            stressed.resentment > calm.resentment,
             "Stressed agent should have higher resentment: stressed={:.3}, calm={:.3}",
-            stressed.resentment.to_f64(), calm.resentment.to_f64());
-        assert!(calm.resilience > stressed.resilience,
+            stressed.resentment.to_f64(),
+            calm.resentment.to_f64()
+        );
+        assert!(
+            calm.resilience > stressed.resilience,
             "Calm agent should have higher resilience: calm={:.3}, stressed={:.3}",
-            calm.resilience.to_f64(), stressed.resilience.to_f64());
-        assert!(calm.ambition > stressed.ambition,
+            calm.resilience.to_f64(),
+            stressed.resilience.to_f64()
+        );
+        assert!(
+            calm.ambition > stressed.ambition,
             "Calm agent should have higher ambition: calm={:.3}, stressed={:.3}",
-            calm.ambition.to_f64(), stressed.ambition.to_f64());
+            calm.ambition.to_f64(),
+            stressed.ambition.to_f64()
+        );
     }
 
     #[test]
     fn snapshot_roundtrip_with_simulation() {
-        use mindstrata_sim::sim::{Simulation, SimConfig};
+        use mindstrata_sim::sim::{SimConfig, Simulation};
         use mindstrata_sim::snapshot::{Snapshot, SNAPSHOT_VERSION};
 
         let mut sim = Simulation::new(SimConfig {
@@ -517,8 +671,14 @@ mod smoke {
         assert_eq!(snapshot.version, SNAPSHOT_VERSION);
         assert_eq!(snapshot.tick, 100);
         // §19.5.F: Population may grow from births during simulation
-        assert!(snapshot.agents.len() >= 12, "Should have at least 12 agents after 100 ticks");
-        assert!(!snapshot.events.is_empty(), "Should have events after 100 ticks");
+        assert!(
+            snapshot.agents.len() >= 12,
+            "Should have at least 12 agents after 100 ticks"
+        );
+        assert!(
+            !snapshot.events.is_empty(),
+            "Should have events after 100 ticks"
+        );
 
         // Serialize to bytes and back
         let bytes = snapshot.to_bytes().expect("Failed to serialize snapshot");
@@ -538,7 +698,7 @@ mod smoke {
 
     #[test]
     fn snapshot_deterministic_roundtrip() {
-        use mindstrata_sim::sim::{Simulation, SimConfig};
+        use mindstrata_sim::sim::{SimConfig, Simulation};
         use mindstrata_sim::snapshot::Snapshot;
 
         let config = SimConfig {
@@ -569,18 +729,32 @@ mod smoke {
         let s2 = sim2.metrics_snapshot();
 
         assert_eq!(s1.tick, s2.tick, "Tick mismatch after roundtrip");
-        assert_eq!(s1.avg_hunger, s2.avg_hunger, "Hunger mismatch after roundtrip");
+        assert_eq!(
+            s1.avg_hunger, s2.avg_hunger,
+            "Hunger mismatch after roundtrip"
+        );
         assert_eq!(s1.avg_joy, s2.avg_joy, "Joy mismatch after roundtrip");
-        assert_eq!(s1.total_grain, s2.total_grain, "Grain mismatch after roundtrip");
-        assert_eq!(s1.event_count, s2.event_count, "Event count mismatch after roundtrip");
-        assert_eq!(s1.agent_count, s2.agent_count, "Agent count mismatch after roundtrip");
+        assert_eq!(
+            s1.total_grain, s2.total_grain,
+            "Grain mismatch after roundtrip"
+        );
+        assert_eq!(
+            s1.event_count, s2.event_count,
+            "Event count mismatch after roundtrip"
+        );
+        assert_eq!(
+            s1.agent_count, s2.agent_count,
+            "Agent count mismatch after roundtrip"
+        );
     }
 
     #[test]
     fn resource_access_rights_enforced() {
         use mindstrata_core::fixed::Fixed;
         use mindstrata_core::id::EntityId;
-        use mindstrata_sim::world::{AccessRight, ResourceStock, Site, SiteKind, World, GRAIN_RESOURCE_ID};
+        use mindstrata_sim::world::{
+            AccessRight, ResourceStock, Site, SiteKind, World, GRAIN_RESOURCE_ID,
+        };
 
         let mut world = World::new(4, 4);
 
@@ -605,12 +779,16 @@ mod smoke {
 
         // Owner can access (pass empty institutions for access check)
         let empty_institutions: Vec<mindstrata_sim::institutions::Institution> = Vec::new();
-        assert!(world.can_access_resource(0, GRAIN_RESOURCE_ID, owner_id, &empty_institutions),
-            "Owner should be able to access their own resources");
+        assert!(
+            world.can_access_resource(0, GRAIN_RESOURCE_ID, owner_id, &empty_institutions),
+            "Owner should be able to access their own resources"
+        );
 
         // Stranger cannot access
-        assert!(!world.can_access_resource(0, GRAIN_RESOURCE_ID, stranger_id, &empty_institutions),
-            "Non-owner should NOT be able to access OwnerOnly resources");
+        assert!(
+            !world.can_access_resource(0, GRAIN_RESOURCE_ID, stranger_id, &empty_institutions),
+            "Non-owner should NOT be able to access OwnerOnly resources"
+        );
 
         // Public resources are accessible to everyone
         let well = Site {
@@ -629,10 +807,14 @@ mod smoke {
         };
         world.sites.push(well);
 
-        assert!(world.can_access_resource(1, 1, owner_id, &empty_institutions),
-            "Public resources should be accessible to everyone");
-        assert!(world.can_access_resource(1, 1, stranger_id, &empty_institutions),
-            "Public resources should be accessible to everyone");
+        assert!(
+            world.can_access_resource(1, 1, owner_id, &empty_institutions),
+            "Public resources should be accessible to everyone"
+        );
+        assert!(
+            world.can_access_resource(1, 1, stranger_id, &empty_institutions),
+            "Public resources should be accessible to everyone"
+        );
     }
 
     // ── §19.5.F §19.5.I New Mechanics Tests ───────────────────────
@@ -653,8 +835,11 @@ mod smoke {
         // After 1000 ticks, some agents should have died and inheritance should have occurred.
         // Verify no agent has negative wealth (inheritance doesn't lose money).
         for agent in &sim.agents {
-            assert!(agent.wealth.coin >= Fixed::ZERO,
-                "Agent {} has negative wealth after inheritance", agent.name);
+            assert!(
+                agent.wealth.coin >= Fixed::ZERO,
+                "Agent {} has negative wealth after inheritance",
+                agent.name
+            );
         }
     }
 
@@ -673,12 +858,16 @@ mod smoke {
         sim.run(2000);
         // After 2000 ticks, some children should have been born and socialized.
         // At least some agents should have more knowledge than the initial set.
-        let max_knowledge = sim.agents.iter()
+        let max_knowledge = sim
+            .agents
+            .iter()
             .map(|a| a.cultural.knowledge.len())
             .max()
             .unwrap_or(0);
-        assert!(max_knowledge >= 2,
-            "Some agents should have learned knowledge through socialization: max={max_knowledge}");
+        assert!(
+            max_knowledge >= 2,
+            "Some agents should have learned knowledge through socialization: max={max_knowledge}"
+        );
     }
 
     #[test]
@@ -696,7 +885,9 @@ mod smoke {
         sim.run(2000);
         // After 2000 ticks, at least one agent should know more than the max initial knowledge.
         // Initial max is 4 (Crop Rotation + Well Maintenance + Herbal Medicine + Grain Storage).
-        let max_knowledge = sim.agents.iter()
+        let max_knowledge = sim
+            .agents
+            .iter()
             .map(|a| a.cultural.knowledge.len())
             .max()
             .unwrap_or(0);
@@ -714,17 +905,26 @@ mod smoke {
         let mut bm = BlackMarketState::default();
         // High scarcity + low enforcement → active
         bm.update(Fixed::from_f64(0.6), Fixed::from_f64(0.3));
-        assert!(bm.active, "Black market should be active with scarcity > 0.4 and enforcement < 0.5");
+        assert!(
+            bm.active,
+            "Black market should be active with scarcity > 0.4 and enforcement < 0.5"
+        );
 
         // Low scarcity → inactive
         let mut bm2 = BlackMarketState::default();
         bm2.update(Fixed::from_f64(0.1), Fixed::from_f64(0.3));
-        assert!(!bm2.active, "Black market should be inactive with low scarcity");
+        assert!(
+            !bm2.active,
+            "Black market should be inactive with low scarcity"
+        );
 
         // High enforcement → inactive
         let mut bm3 = BlackMarketState::default();
         bm3.update(Fixed::from_f64(0.8), Fixed::from_f64(0.8));
-        assert!(!bm3.active, "Black market should be inactive with high enforcement");
+        assert!(
+            !bm3.active,
+            "Black market should be inactive with high enforcement"
+        );
     }
 
     #[test]
@@ -737,8 +937,11 @@ mod smoke {
         let legal_price = Fixed::from_f64(10.0);
         let bm_price = bm.black_market_price(legal_price);
         let expected = legal_price * BLACK_MARKET_PRICE_MULTIPLIER;
-        assert_eq!(bm_price.to_f64(), expected.to_f64(),
-            "Black market price should be legal price × multiplier");
+        assert_eq!(
+            bm_price.to_f64(),
+            expected.to_f64(),
+            "Black market price should be legal price × multiplier"
+        );
     }
 
     #[test]
@@ -766,8 +969,10 @@ mod smoke {
             impulsivity: Fixed::from_f64(0.5),
             temperament: mindstrata_sim::person::Temperament::default(),
         };
-        assert!(bm.can_participate(&risk_taker),
-            "High risk tolerance + low conformity should participate");
+        assert!(
+            bm.can_participate(&risk_taker),
+            "High risk tolerance + low conformity should participate"
+        );
 
         // High conformity → cannot participate
         let conformist = Personality {
@@ -775,8 +980,10 @@ mod smoke {
             conformity: Fixed::from_f64(0.8),
             ..risk_taker
         };
-        assert!(!bm.can_participate(&conformist),
-            "High conformity should prevent participation");
+        assert!(
+            !bm.can_participate(&conformist),
+            "High conformity should prevent participation"
+        );
 
         // Low risk tolerance → cannot participate
         let cautious = Personality {
@@ -784,13 +991,15 @@ mod smoke {
             conformity: Fixed::from_f64(0.3),
             ..risk_taker
         };
-        assert!(!bm.can_participate(&cautious),
-            "Low risk tolerance should prevent participation");
+        assert!(
+            !bm.can_participate(&cautious),
+            "Low risk tolerance should prevent participation"
+        );
     }
 
     #[test]
     fn snapshot_roundtrip_preserves_agent_state() {
-        use mindstrata_sim::sim::{Simulation, SimConfig};
+        use mindstrata_sim::sim::{SimConfig, Simulation};
         use mindstrata_sim::snapshot::{Snapshot, SNAPSHOT_VERSION};
 
         let config = SimConfig {
@@ -809,7 +1018,10 @@ mod smoke {
         let snapshot = sim1.save_snapshot();
         assert_eq!(snapshot.version, SNAPSHOT_VERSION);
         assert_eq!(snapshot.tick, 200);
-        assert!(snapshot.agents.len() >= 12, "Should have at least 12 agents");
+        assert!(
+            snapshot.agents.len() >= 12,
+            "Should have at least 12 agents"
+        );
 
         // Serialize to bytes and back
         let bytes = snapshot.to_bytes().expect("Snapshot serialization failed");
@@ -828,8 +1040,8 @@ mod smoke {
 
     #[test]
     fn move_action_has_completion_detection() {
-        use mindstrata_sim::actions::ActionKind;
         use mindstrata_core::fixed::Fixed;
+        use mindstrata_sim::actions::ActionKind;
 
         let config = SimConfig {
             seed: 42,
@@ -846,14 +1058,24 @@ mod smoke {
         sim.run(200);
 
         // Verify Move action definition exists and has correct duration
-        let move_def = ActionKind::Move { target_x: 5, target_y: 5 };
-        assert_eq!(move_def.definition().duration_ticks, 1, "Move should take 1 tick per step");
-        assert!(move_def.definition().energy_cost > Fixed::ZERO, "Move should have energy cost");
+        let move_def = ActionKind::Move {
+            target_x: 5,
+            target_y: 5,
+        };
+        assert_eq!(
+            move_def.definition().duration_ticks,
+            1,
+            "Move should take 1 tick per step"
+        );
+        assert!(
+            move_def.definition().energy_cost > Fixed::ZERO,
+            "Move should have energy cost"
+        );
     }
 
     #[test]
     fn feuding_agents_use_move_action() {
-        use mindstrata_sim::sim::{Simulation, SimConfig};
+        use mindstrata_sim::sim::{SimConfig, Simulation};
 
         let config = SimConfig {
             seed: 42,
@@ -872,16 +1094,22 @@ mod smoke {
         // If feuds exist, agents should use Move instead of Wander
         if has_feuds {
             let summaries = sim.agent_summaries();
-            let action_counts = summaries.iter().fold(std::collections::HashMap::new(), |mut acc, s| {
-                *acc.entry(s.current_action.clone()).or_insert(0) += 1;
-                acc
-            });
+            let action_counts =
+                summaries
+                    .iter()
+                    .fold(std::collections::HashMap::new(), |mut acc, s| {
+                        *acc.entry(s.current_action.clone()).or_insert(0) += 1;
+                        acc
+                    });
             // Move should appear in the action distribution if feuds exist
             // (agents that are angry and feuding will Move toward targets)
             let total = action_counts.values().sum::<u32>();
             assert!(total > 0, "Should have actions recorded");
         }
         // The key assertion is that the simulation doesn't panic with feuding Move actions
-        assert!(sim.current_tick().as_u64() >= 500, "Simulation should run to completion");
+        assert!(
+            sim.current_tick().as_u64() >= 500,
+            "Simulation should run to completion"
+        );
     }
 }

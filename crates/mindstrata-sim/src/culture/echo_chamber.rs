@@ -109,23 +109,20 @@ impl BeliefCluster {
     ///               × (1 / (1 + cross_cutting_ties))
     /// ```
     pub fn echo_strength(&self) -> Fixed {
-        let tie_penalty = Fixed::ONE
-            / (Fixed::ONE + Fixed::from_int(self.cross_cutting_ties as i64));
-        (self.cohesion * self.identity_fusion * self.outgroup_hostility * tie_penalty)
-            .clamp_01()
+        let tie_penalty =
+            Fixed::ONE / (Fixed::ONE + Fixed::from_int(self.cross_cutting_ties as i64));
+        (self.cohesion * self.identity_fusion * self.outgroup_hostility * tie_penalty).clamp_01()
     }
 
     /// Tick update — cohesion changes slowly, ties may weaken.
     pub fn tick_update(&mut self) {
         // Outgroup hostility can grow if emotional charge is high
         if self.emotional_charge > Fixed::from_f64(0.6) {
-            self.outgroup_hostility =
-                (self.outgroup_hostility + Fixed::from_f64(0.002)).clamp_01();
+            self.outgroup_hostility = (self.outgroup_hostility + Fixed::from_f64(0.002)).clamp_01();
         }
         // Identity fusion grows with emotional charge
         self.identity_fusion =
-            (self.identity_fusion + self.emotional_charge * Fixed::from_f64(0.001))
-                .clamp_01();
+            (self.identity_fusion + self.emotional_charge * Fixed::from_f64(0.001)).clamp_01();
     }
 }
 
@@ -250,11 +247,7 @@ impl EchoChamberState {
         // (n_clusters − 1)) undercounted by an order of magnitude once trust
         // could actually rise, making tie_ratio > 1 and clamping polarization
         // to 0.0000 forever.
-        self.total_cross_cutting_ties = self
-            .clusters
-            .iter()
-            .map(|c| c.cross_cutting_ties)
-            .sum();
+        self.total_cross_cutting_ties = self.clusters.iter().map(|c| c.cross_cutting_ties).sum();
         let tie_ratio = if self.clusters.len() > 1 {
             let mut max_possible: u64 = 0;
             for a in 0..self.clusters.len() {
@@ -445,7 +438,11 @@ mod tests {
             Fixed::from_f64(NARRATIVE_DOMINANCE_THRESHOLD),
             Fixed::from_f64(NARRATIVE_MOMENTUM_RATE),
         );
-        assert_eq!(m, Fixed::ZERO, "at/below the threshold the fold is identity");
+        assert_eq!(
+            m,
+            Fixed::ZERO,
+            "at/below the threshold the fold is identity"
+        );
         let mut state2 = EchoChamberState::new();
         state2.narrative_dominance.insert(0, Fixed::from_f64(0.2));
         assert_eq!(

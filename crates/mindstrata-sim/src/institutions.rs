@@ -241,7 +241,13 @@ impl Institution {
     }
 
     /// Record an institutional action.
-    pub fn record_action(&mut self, tick: u64, action: String, affected: Vec<AgentId>, success: bool) {
+    pub fn record_action(
+        &mut self,
+        tick: u64,
+        action: String,
+        affected: Vec<AgentId>,
+        success: bool,
+    ) {
         self.records.push(InstitutionalRecord {
             tick,
             action,
@@ -255,7 +261,11 @@ impl Institution {
     ///
     /// INVARIANT: AgentId::new(i) == index i. The member_wealth vec must be built
     /// from institution.members using agent_id.as_u64() as the index.
-    pub fn collect_taxes(&mut self, tax_rate: Fixed, member_wealth: &mut [(AgentId, Fixed)]) -> Fixed {
+    pub fn collect_taxes(
+        &mut self,
+        tax_rate: Fixed,
+        member_wealth: &mut [(AgentId, Fixed)],
+    ) -> Fixed {
         let mut total = Fixed::ZERO;
         for (agent, wealth) in member_wealth.iter_mut() {
             if self.has_member(*agent) {
@@ -325,7 +335,10 @@ impl Institution {
 
     /// Get the agent holding a specific role.
     pub fn get_role_holder(&self, role_name: &str) -> Option<AgentId> {
-        self.roles.iter().find(|r| r.name == role_name).and_then(|r| r.holder)
+        self.roles
+            .iter()
+            .find(|r| r.name == role_name)
+            .and_then(|r| r.holder)
     }
 
     /// Derive collective psychology from member states.
@@ -364,16 +377,21 @@ impl Institution {
         self.collective.unity = (Fixed::ONE - variance).clamp_01();
 
         // Fear = corruption + low legitimacy
-        self.collective.fear = (self.corruption + (Fixed::ONE - self.legitimacy) * Fixed::from_f64(0.3)).clamp_01();
+        self.collective.fear =
+            (self.corruption + (Fixed::ONE - self.legitimacy) * Fixed::from_f64(0.3)).clamp_01();
 
         // Ambition = morale * (1 - fear)
-        self.collective.ambition = (self.collective.morale * (Fixed::ONE - self.collective.fear)).clamp_01();
+        self.collective.ambition =
+            (self.collective.morale * (Fixed::ONE - self.collective.fear)).clamp_01();
 
         // Trust in leadership = legitimacy * (1 - corruption)
-        self.collective.trust_in_leadership = (self.legitimacy * (Fixed::ONE - self.corruption)).clamp_01();
+        self.collective.trust_in_leadership =
+            (self.legitimacy * (Fixed::ONE - self.corruption)).clamp_01();
 
         // Ideological rigidity = high cohesion + high legitimacy
-        self.collective.ideological_rigidity = (self.cohesion * Fixed::from_f64(0.5) + self.legitimacy * Fixed::from_f64(0.5)).clamp_01();
+        self.collective.ideological_rigidity = (self.cohesion * Fixed::from_f64(0.5)
+            + self.legitimacy * Fixed::from_f64(0.5))
+        .clamp_01();
     }
 
     /// Decay legitimacy over time (institutions lose legitimacy without reinforcement).
@@ -491,8 +509,16 @@ mod tests {
     #[test]
     fn collective_psychology_derivation() {
         let mut inst = Institution::new(0, InstitutionKind::Council, "Test".into());
-        let morales = vec![Fixed::from_f64(0.6), Fixed::from_f64(0.8), Fixed::from_f64(0.7)];
-        let trusts = vec![Fixed::from_f64(0.5), Fixed::from_f64(0.5), Fixed::from_f64(0.5)];
+        let morales = vec![
+            Fixed::from_f64(0.6),
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.7),
+        ];
+        let trusts = vec![
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+        ];
         inst.derive_collective_psychology(&morales, &trusts);
 
         assert!(inst.collective.morale > Fixed::ZERO);
@@ -511,9 +537,15 @@ mod tests {
     fn default_institutions_count() {
         let institutions = default_institutions();
         assert_eq!(institutions.len(), 3);
-        assert!(institutions.iter().any(|i| i.kind == InstitutionKind::Council));
-        assert!(institutions.iter().any(|i| i.kind == InstitutionKind::Temple));
-        assert!(institutions.iter().any(|i| i.kind == InstitutionKind::Market));
+        assert!(institutions
+            .iter()
+            .any(|i| i.kind == InstitutionKind::Council));
+        assert!(institutions
+            .iter()
+            .any(|i| i.kind == InstitutionKind::Temple));
+        assert!(institutions
+            .iter()
+            .any(|i| i.kind == InstitutionKind::Market));
     }
 
     #[test]
@@ -562,7 +594,7 @@ mod tests {
         let collected = inst.collect_taxes(Fixed::from_f64(0.1), &mut wealth);
         assert!(collected > Fixed::ZERO);
         assert!(wealth[0].1 < Fixed::from_f64(100.0)); // taxed
-        assert!(wealth[1].1 < Fixed::from_f64(50.0));  // taxed
+        assert!(wealth[1].1 < Fixed::from_f64(50.0)); // taxed
         assert_eq!(inst.treasury, collected);
     }
 
@@ -576,9 +608,7 @@ mod tests {
             obligations: vec![],
         });
         inst.treasury = Fixed::from_f64(100.0);
-        let mut wealth = vec![
-            (AgentId::new(0), Fixed::from_f64(50.0)),
-        ];
+        let mut wealth = vec![(AgentId::new(0), Fixed::from_f64(50.0))];
         let paid = inst.pay_wages(Fixed::from_f64(10.0), &mut wealth);
         assert!(paid > Fixed::ZERO);
         assert!(wealth[0].1 > Fixed::from_f64(50.0)); // paid
@@ -622,9 +652,7 @@ mod tests {
             obligations: vec![],
         });
         inst.treasury = Fixed::from_f64(1.0); // not enough for wage of 5.0
-        let mut wealth = vec![
-            (AgentId::new(0), Fixed::from_f64(50.0)),
-        ];
+        let mut wealth = vec![(AgentId::new(0), Fixed::from_f64(50.0))];
         let paid = inst.pay_wages(Fixed::from_f64(5.0), &mut wealth);
         assert_eq!(paid, Fixed::ZERO); // can't afford
         assert_eq!(wealth[0].1, Fixed::from_f64(50.0)); // wealth unchanged
@@ -662,7 +690,7 @@ mod tests {
         let mut wealth = vec![(AgentId::new(0), Fixed::from_f64(100.0))];
         let _ = inst.collect_taxes(Fixed::from_f64(0.1), &mut wealth);
         assert!(inst.treasury > Fixed::ZERO); // 10.0
-        // Then pay wages from treasury
+                                              // Then pay wages from treasury
         let paid = inst.pay_wages(Fixed::from_f64(5.0), &mut wealth);
         assert_eq!(paid, Fixed::from_f64(5.0));
         assert!((inst.treasury.to_f64() - 5.0).abs() < 0.1); // 10.0 - 5.0

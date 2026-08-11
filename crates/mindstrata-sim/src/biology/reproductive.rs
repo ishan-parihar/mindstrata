@@ -37,7 +37,6 @@ pub struct ReproductiveUpdateParams {
     pub age_decline_rate: Fixed,
     /// Gestation rate multiplier (higher = faster pregnancy). Range: 0.5–2.0, default 1.0.
     pub gestation_rate_mult: Fixed,
-
 }
 
 impl Default for ReproductiveUpdateParams {
@@ -46,7 +45,6 @@ impl Default for ReproductiveUpdateParams {
             stress_suppression: Fixed::from_f64(0.3),
             age_decline_rate: Fixed::from_f64(0.03),
             gestation_rate_mult: Fixed::from_f64(1.0),
-
         }
     }
 }
@@ -189,16 +187,18 @@ impl ReproductiveState {
                 let decline = (age_years - Fixed::from_f64(35.0)) * params.age_decline_rate;
                 (Fixed::ONE - decline).max(Fixed::from_f64(0.1))
             };
-            self.fertility = age_factor * health * (Fixed::ONE - stress_level * params.stress_suppression);
+            self.fertility =
+                age_factor * health * (Fixed::ONE - stress_level * params.stress_suppression);
             self.libido = (Fixed::from_f64(0.5) + bonding_axis * Fixed::from_f64(0.3)
                 - stress_level * Fixed::from_f64(0.2))
-                .clamp_01();
+            .clamp_01();
         }
 
         // Pregnancy progression (§7.2.6) — identical gestation dynamics to the
         // pre-Iter-42 flat `pregnancy_progress`, now inside `Option<PregnancyState>`.
         if let Some(p) = &mut self.pregnancy {
-            let gestation_rate = Fixed::from_f64(0.001) * health * nutrition * params.gestation_rate_mult;
+            let gestation_rate =
+                Fixed::from_f64(0.001) * health * nutrition * params.gestation_rate_mult;
             p.gestation_progress = (p.gestation_progress + gestation_rate).clamp_01();
             p.gestation_stage = gestation_stage_of(p.gestation_progress);
             // Observational maternal burden (never consumed — zero drift):
@@ -220,8 +220,8 @@ impl ReproductiveState {
 
         // Parental drive increases with pair bonding
         if self.pair_bond_strength > Fixed::from_f64(0.5) {
-            self.parental_drive = (self.parental_drive + bonding_axis * Fixed::from_f64(0.0005))
-                .clamp_01();
+            self.parental_drive =
+                (self.parental_drive + bonding_axis * Fixed::from_f64(0.0005)).clamp_01();
         }
     }
 
@@ -347,9 +347,18 @@ mod tests {
     #[test]
     fn gestation_stage_derivation() {
         assert_eq!(gestation_stage_of(Fixed::ZERO), GestationStage::Early);
-        assert_eq!(gestation_stage_of(Fixed::from_f64(0.32)), GestationStage::Early);
-        assert_eq!(gestation_stage_of(Fixed::from_f64(0.5)), GestationStage::Mid);
-        assert_eq!(gestation_stage_of(Fixed::from_f64(0.9)), GestationStage::Late);
+        assert_eq!(
+            gestation_stage_of(Fixed::from_f64(0.32)),
+            GestationStage::Early
+        );
+        assert_eq!(
+            gestation_stage_of(Fixed::from_f64(0.5)),
+            GestationStage::Mid
+        );
+        assert_eq!(
+            gestation_stage_of(Fixed::from_f64(0.9)),
+            GestationStage::Late
+        );
         assert_eq!(gestation_stage_of(Fixed::ONE), GestationStage::FullTerm);
     }
 
@@ -426,7 +435,10 @@ mod tests {
         assert_eq!(r.children_born, 1);
         // The Option lifecycle round-trips: a fresh conception is now possible.
         let reconceived = (0..300).any(|_| r.attempt_conception(Fixed::ONE, Fixed::ONE, &mut rng));
-        assert!(reconceived, "re-conception possible after full-term completion");
+        assert!(
+            reconceived,
+            "re-conception possible after full-term completion"
+        );
     }
 
     #[test]

@@ -239,9 +239,8 @@ impl PredictiveExpectation {
     /// EMA-updates the expectation toward the outcome.
     pub fn observe(&mut self, outcome: Fixed) -> Fixed {
         let error = (outcome - self.expectation).abs();
-        self.expectation = (self.expectation
-            + (outcome - self.expectation) * self.learning_rate)
-            .clamp_01();
+        self.expectation =
+            (self.expectation + (outcome - self.expectation) * self.learning_rate).clamp_01();
         self.last_prediction_error = error.clamp_01();
         error
     }
@@ -280,10 +279,7 @@ impl Default for ActionValues {
 impl ActionValues {
     /// Evaluate the action value for a context (cost/risk provided by caller).
     pub fn value(&self, cost: Fixed, risk: Fixed) -> Fixed {
-        (self.need_relief
-            + self.emotional_relief
-            + self.social_reward
-            + self.identity_congruence
+        (self.need_relief + self.emotional_relief + self.social_reward + self.identity_congruence
             - cost
             - risk)
             .clamp(-Fixed::ONE, Fixed::ONE)
@@ -345,7 +341,8 @@ impl ActionValues {
         self.need_relief = (self.need_relief + (need - self.need_relief) * alpha).clamp_01();
         self.emotional_relief =
             (self.emotional_relief + (emotional - self.emotional_relief) * alpha).clamp_01();
-        self.social_reward = (self.social_reward + (social - self.social_reward) * alpha).clamp_01();
+        self.social_reward =
+            (self.social_reward + (social - self.social_reward) * alpha).clamp_01();
         self.identity_congruence =
             (self.identity_congruence + (identity - self.identity_congruence) * alpha).clamp_01();
     }
@@ -418,8 +415,16 @@ mod tests {
     #[test]
     fn fixed_sqrt_matches_known_values() {
         assert_eq!(fixed_sqrt(Fixed::ONE), Fixed::ONE, "sqrt(1.0) == 1.0");
-        assert_eq!(fixed_sqrt(Fixed::from_f64(0.25)), Fixed::from_f64(0.5), "sqrt(0.25) == 0.5");
-        assert_eq!(fixed_sqrt(Fixed::from_f64(4.0)), Fixed::from_f64(2.0), "sqrt(4.0) == 2.0");
+        assert_eq!(
+            fixed_sqrt(Fixed::from_f64(0.25)),
+            Fixed::from_f64(0.5),
+            "sqrt(0.25) == 0.5"
+        );
+        assert_eq!(
+            fixed_sqrt(Fixed::from_f64(4.0)),
+            Fixed::from_f64(2.0),
+            "sqrt(4.0) == 2.0"
+        );
         assert_eq!(fixed_sqrt(Fixed::ZERO), Fixed::ZERO, "sqrt(0.0) == 0.0");
     }
 
@@ -435,7 +440,11 @@ mod tests {
         };
         let s1 = a.cosine_similarity(&b).expect("identical nonzero vectors");
         assert_eq!(s1, Fixed::ONE, "identical vectors are maximally similar");
-        assert_eq!(a.cosine_similarity(&b), a.cosine_similarity(&b), "deterministic");
+        assert_eq!(
+            a.cosine_similarity(&b),
+            a.cosine_similarity(&b),
+            "deterministic"
+        );
 
         let c = ConceptVector {
             threat: Fixed::ONE,
@@ -446,7 +455,11 @@ mod tests {
             Fixed::ZERO,
             "orthogonal dimensions are dissimilar"
         );
-        assert_eq!(ConceptVector::default().cosine_similarity(&a), None, "zero vector → None");
+        assert_eq!(
+            ConceptVector::default().cosine_similarity(&a),
+            None,
+            "zero vector → None"
+        );
     }
 
     #[test]
@@ -463,9 +476,18 @@ mod tests {
         assert_eq!(net.activation, net2.activation, "spread is deterministic");
         // threat → shame (edge 0.3), threat → safety (edge 0.25), and
         // threat → scarcity (edge 0.3) propagate on the first step.
-        assert!(net.activation.shame > Fixed::ZERO, "threat associates to shame");
-        assert!(net.activation.safety > Fixed::ZERO, "threat associates to safety");
-        assert!(net.activation.scarcity > Fixed::ZERO, "threat associates to scarcity");
+        assert!(
+            net.activation.shame > Fixed::ZERO,
+            "threat associates to shame"
+        );
+        assert!(
+            net.activation.safety > Fixed::ZERO,
+            "threat associates to safety"
+        );
+        assert!(
+            net.activation.scarcity > Fixed::ZERO,
+            "threat associates to scarcity"
+        );
         assert!(net.activation.shame <= Fixed::ONE && net.activation.threat <= Fixed::ONE);
     }
 
@@ -474,8 +496,14 @@ mod tests {
         let mut p = PredictiveExpectation::default();
         assert_eq!(p.expectation, Fixed::from_f64(0.5));
         let e1 = p.observe(Fixed::from_f64(0.9));
-        assert!(e1 > Fixed::from_f64(0.3), "first surprise is large, got {e1:?}");
-        assert!(p.expectation > Fixed::from_f64(0.5), "expectation rises toward the outcome");
+        assert!(
+            e1 > Fixed::from_f64(0.3),
+            "first surprise is large, got {e1:?}"
+        );
+        assert!(
+            p.expectation > Fixed::from_f64(0.5),
+            "expectation rises toward the outcome"
+        );
         // Observing the same outcome again shrinks the error (learning).
         let e2 = p.observe(Fixed::from_f64(0.9));
         assert!(e2 < e1, "repeated outcomes shrink prediction error");
@@ -489,7 +517,11 @@ mod tests {
         // (4 × 0.5) would otherwise saturate both sides at the 1.0 clamp.
         let before = v.value(Fixed::from_f64(0.8), Fixed::from_f64(0.8));
         v.learn_from_outcome(false, Fixed::ONE, Fixed::ONE, Fixed::ONE, Fixed::ONE);
-        assert_eq!(v.value(Fixed::from_f64(0.8), Fixed::from_f64(0.8)), before, "failure: no learning");
+        assert_eq!(
+            v.value(Fixed::from_f64(0.8), Fixed::from_f64(0.8)),
+            before,
+            "failure: no learning"
+        );
         v.learn_from_outcome(true, Fixed::ONE, Fixed::ONE, Fixed::ONE, Fixed::ONE);
         let after = v.value(Fixed::from_f64(0.8), Fixed::from_f64(0.8));
         assert!(after > before, "successful outcomes raise learned value");
@@ -503,7 +535,12 @@ mod tests {
         // outcome profile of successful actions.
         let v = ActionValues::default();
         // Work profile: (need 0.4, emotional 0, social 0, identity 0.1)
-        let work = [Fixed::from_f64(0.4), Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(0.1)];
+        let work = [
+            Fixed::from_f64(0.4),
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::from_f64(0.1),
+        ];
         assert_eq!(
             v.learned_delta(work),
             Fixed::ZERO,
@@ -517,12 +554,22 @@ mod tests {
         // 0.5 sum, so the baseline terms cancel in the comparison).
         let mut learned = ActionValues::default();
         for _ in 0..60 {
-            learned.learn_from_outcome(true, Fixed::from_f64(0.4), Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(0.1));
+            learned.learn_from_outcome(
+                true,
+                Fixed::from_f64(0.4),
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::from_f64(0.1),
+            );
         }
         let work_delta = learned.learned_delta(work);
         // Socialize profile: (need 0, emotional 0.1, social 0.4, identity 0)
-        let socialize =
-            [Fixed::ZERO, Fixed::from_f64(0.1), Fixed::from_f64(0.4), Fixed::ZERO];
+        let socialize = [
+            Fixed::ZERO,
+            Fixed::from_f64(0.1),
+            Fixed::from_f64(0.4),
+            Fixed::ZERO,
+        ];
         let socialize_delta = learned.learned_delta(socialize);
         assert!(
             work_delta > socialize_delta,
@@ -532,7 +579,13 @@ mod tests {
         // And a symmetric control: a socialize-learner flips the preference.
         let mut social_learner = ActionValues::default();
         for _ in 0..60 {
-            social_learner.learn_from_outcome(true, Fixed::ZERO, Fixed::from_f64(0.1), Fixed::from_f64(0.4), Fixed::ZERO);
+            social_learner.learn_from_outcome(
+                true,
+                Fixed::ZERO,
+                Fixed::from_f64(0.1),
+                Fixed::from_f64(0.4),
+                Fixed::ZERO,
+            );
         }
         assert!(
             social_learner.learned_delta(socialize) > social_learner.learned_delta(work),

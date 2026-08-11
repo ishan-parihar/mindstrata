@@ -77,7 +77,7 @@ impl Default for CognitiveRuntime {
             effective_capacity: Fixed::ZERO, // computed below
             base_impulsivity: Fixed::from_f64(0.3),
             current_impulsivity: Fixed::from_f64(0.3),
-            effective_inhibition: Fixed::ZERO, // computed below
+            effective_inhibition: Fixed::ZERO,  // computed below
             effective_flexibility: Fixed::ZERO, // computed below
         };
         s.recompute(Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO);
@@ -91,14 +91,14 @@ impl CognitiveRuntime {
         let base = (personality.conscientiousness + personality.openness) / Fixed::from_int(2);
         let inhibition = (personality.conscientiousness * Fixed::from_f64(0.6)
             + (Fixed::ONE - personality.impulsivity) * Fixed::from_f64(0.4))
-            .clamp_01();
+        .clamp_01();
         let flexibility = (personality.openness * Fixed::from_f64(0.6)
             + personality.extraversion * Fixed::from_f64(0.4))
-            .clamp_01();
+        .clamp_01();
         let planning = (personality.conscientiousness * Fixed::from_f64(0.5)
             + personality.openness * Fixed::from_f64(0.3)
             + (Fixed::ONE - personality.impulsivity) * Fixed::from_f64(0.2))
-            .clamp_01();
+        .clamp_01();
         let mut s = Self {
             working_memory_capacity: base,
             inhibition,
@@ -106,14 +106,14 @@ impl CognitiveRuntime {
             planning_depth: planning,
             self_monitoring: (personality.conscientiousness * Fixed::from_f64(0.6)
                 + personality.openness * Fixed::from_f64(0.4))
-                .clamp_01(),
+            .clamp_01(),
             error_sensitivity: (personality.neuroticism * Fixed::from_f64(0.4)
                 + personality.conscientiousness * Fixed::from_f64(0.6))
-                .clamp_01(),
+            .clamp_01(),
             effective_capacity: Fixed::ZERO, // computed below
             base_impulsivity: personality.impulsivity,
             current_impulsivity: personality.impulsivity,
-            effective_inhibition: Fixed::ZERO, // computed below
+            effective_inhibition: Fixed::ZERO,  // computed below
             effective_flexibility: Fixed::ZERO, // computed below
         };
         s.recompute(Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO);
@@ -127,13 +127,7 @@ impl CognitiveRuntime {
     ///
     /// All effective fields are dampened signals that track current state,
     /// not accumulators — they recover when stress drops.
-    pub fn update(
-        &mut self,
-        stress: Fixed,
-        fatigue: Fixed,
-        pain: Fixed,
-        trauma: Fixed,
-    ) {
+    pub fn update(&mut self, stress: Fixed, fatigue: Fixed, pain: Fixed, trauma: Fixed) {
         self.recompute(stress, fatigue, pain, trauma);
     }
 
@@ -149,13 +143,7 @@ impl CognitiveRuntime {
     ///   where stress_push = stress_load × 0.15
     ///   and recovery = excess × 0.08  (excess = current - base)
     /// ```
-    fn recompute(
-        &mut self,
-        stress: Fixed,
-        fatigue: Fixed,
-        pain: Fixed,
-        trauma: Fixed,
-    ) {
+    fn recompute(&mut self, stress: Fixed, fatigue: Fixed, pain: Fixed, trauma: Fixed) {
         let stress_load = stress * Fixed::from_f64(0.3)
             + fatigue * Fixed::from_f64(0.2)
             + pain * Fixed::from_f64(0.15);
@@ -164,14 +152,12 @@ impl CognitiveRuntime {
         self.effective_inhibition = (self.inhibition * (Fixed::ONE - stress_load)).clamp_01();
 
         // Effective flexibility: base inhibited by fatigue and pain
-        let flex_degradation = fatigue * Fixed::from_f64(0.25)
-            + pain * Fixed::from_f64(0.1);
-        self.effective_flexibility = (self.flexibility * (Fixed::ONE - flex_degradation)).clamp_01();
+        let flex_degradation = fatigue * Fixed::from_f64(0.25) + pain * Fixed::from_f64(0.1);
+        self.effective_flexibility =
+            (self.flexibility * (Fixed::ONE - flex_degradation)).clamp_01();
 
         // Effective capacity: multiplicative degradation from all factors
-        self.effective_capacity = self.compute_effective_capacity(
-            stress, fatigue, pain, trauma,
-        );
+        self.effective_capacity = self.compute_effective_capacity(stress, fatigue, pain, trauma);
 
         // Impulsivity: always decay toward base, then stress pushes above.
         // This creates a proper equilibrium: steady-state = base + stress_push / 0.08.
@@ -179,8 +165,8 @@ impl CognitiveRuntime {
         if excess > Fixed::ZERO {
             // Decay 8% of excess toward base each tick
             let decay = excess * Fixed::from_f64(0.08);
-            self.current_impulsivity = (self.current_impulsivity - decay)
-                .max(self.base_impulsivity);
+            self.current_impulsivity =
+                (self.current_impulsivity - decay).max(self.base_impulsivity);
         }
         // Stress pushes impulsivity above base
         let stress_push = stress_load * Fixed::from_f64(0.15);
@@ -212,8 +198,7 @@ impl CognitiveRuntime {
     ///
     /// Returns true if effective capacity and planning depth are above threshold.
     pub fn can_plan_long_term(&self) -> bool {
-        self.effective_capacity > Fixed::from_f64(0.4)
-            && self.planning_depth > Fixed::from_f64(0.3)
+        self.effective_capacity > Fixed::from_f64(0.4) && self.planning_depth > Fixed::from_f64(0.3)
     }
 
     /// Can the agent resist an impulse right now?
@@ -270,7 +255,10 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.5),
         );
-        assert!(cr.current_impulsivity > baseline, "stress should increase impulsivity");
+        assert!(
+            cr.current_impulsivity > baseline,
+            "stress should increase impulsivity"
+        );
     }
 
     #[test]
@@ -293,8 +281,14 @@ mod tests {
             cr.update(Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO);
         }
         let recovered = cr.current_impulsivity;
-        assert!(recovered < stressed, "impulsivity should decrease when stress drops");
-        assert!(recovered >= base, "impulsivity should never drop below base");
+        assert!(
+            recovered < stressed,
+            "impulsivity should decrease when stress drops"
+        );
+        assert!(
+            recovered >= base,
+            "impulsivity should never drop below base"
+        );
     }
 
     #[test]
@@ -320,15 +314,23 @@ mod tests {
         // fatigue=1.0, pain=1.0 → degradation = 1.0*0.25 + 1.0*0.1 = 0.35
         // effective_flex = 0.4 * (1 - 0.35) = 0.26 < 0.3 → cannot switch
         cr.update(Fixed::ZERO, Fixed::ONE, Fixed::ONE, Fixed::ZERO);
-        assert!(!cr.can_switch_strategy(),
-            "effective_flexibility={:?}", cr.effective_flexibility);
+        assert!(
+            !cr.can_switch_strategy(),
+            "effective_flexibility={:?}",
+            cr.effective_flexibility
+        );
     }
 
     #[test]
     fn planning_blocked_when_capacity_low() {
         let mut cr = CognitiveRuntime::default();
         assert!(cr.can_plan_long_term());
-        cr.update(Fixed::from_f64(0.9), Fixed::from_f64(0.9), Fixed::ZERO, Fixed::ZERO);
+        cr.update(
+            Fixed::from_f64(0.9),
+            Fixed::from_f64(0.9),
+            Fixed::ZERO,
+            Fixed::ZERO,
+        );
         assert!(!cr.can_plan_long_term());
     }
 
@@ -347,7 +349,12 @@ mod tests {
     fn effective_planning_depth_scales_with_capacity() {
         let mut cr = CognitiveRuntime::default();
         let full_depth = cr.effective_planning_depth();
-        cr.update(Fixed::from_f64(0.8), Fixed::from_f64(0.8), Fixed::ZERO, Fixed::ZERO);
+        cr.update(
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.8),
+            Fixed::ZERO,
+            Fixed::ZERO,
+        );
         assert!(cr.effective_planning_depth() < full_depth);
     }
 

@@ -56,7 +56,8 @@ impl PainState {
     /// Update pain levels each tick.
     pub fn update(&mut self, injury_input: Fixed) {
         // Acute pain from injury
-        self.acute = (self.acute * Fixed::from_f64(0.95) + injury_input * Fixed::from_f64(0.3)).clamp_01();
+        self.acute =
+            (self.acute * Fixed::from_f64(0.95) + injury_input * Fixed::from_f64(0.3)).clamp_01();
         // Chronic pain accumulates from repeated acute pain
         if self.acute > Fixed::from_f64(0.5) {
             self.chronic = (self.chronic + Fixed::from_f64(0.0005)).clamp_01();
@@ -64,7 +65,8 @@ impl PainState {
             self.chronic = (self.chronic - Fixed::from_f64(0.0002)).max(Fixed::ZERO);
         }
         // Attention demand follows pain level
-        self.attention_demand = (self.acute * Fixed::from_f64(0.7) + self.chronic * Fixed::from_f64(0.3)).clamp_01();
+        self.attention_demand =
+            (self.acute * Fixed::from_f64(0.7) + self.chronic * Fixed::from_f64(0.3)).clamp_01();
     }
 
     /// Total effective pain for cognitive modulation.
@@ -181,12 +183,15 @@ impl NervousSystemState {
         // Sympathetic activation from threat
         let sympathetic_delta = threat_input * Fixed::from_f64(0.2);
         let sympathetic_recovery = self.parasympathetic_tone * params.sympathetic_recovery_rate;
-        self.sympathetic_arousal = (self.sympathetic_arousal + sympathetic_delta - sympathetic_recovery).clamp_01();
+        self.sympathetic_arousal =
+            (self.sympathetic_arousal + sympathetic_delta - sympathetic_recovery).clamp_01();
 
         // Parasympathetic recovery from safety
         let parasympathetic_buildup = safety_input * params.parasympathetic_buildup_rate;
         let parasympathetic_drain = self.sympathetic_arousal * Fixed::from_f64(0.05);
-        self.parasympathetic_tone = (self.parasympathetic_tone + parasympathetic_buildup - parasympathetic_drain).clamp_01();
+        self.parasympathetic_tone = (self.parasympathetic_tone + parasympathetic_buildup
+            - parasympathetic_drain)
+            .clamp_01();
 
         // Pain update
         self.pain.update(injury_input);
@@ -201,10 +206,11 @@ impl NervousSystemState {
         // Dissociation risk from extreme trauma
         self.dissociation_risk = (self.trauma_load * Fixed::from_f64(0.8)
             + self.pain.effective_pain() * Fixed::from_f64(0.2))
-            .clamp_01();
+        .clamp_01();
 
         // Startle sensitivity elevated by trauma
-        self.startle_sensitivity = (Fixed::from_f64(0.3) + self.trauma_load * Fixed::from_f64(0.5)).clamp_01();
+        self.startle_sensitivity =
+            (Fixed::from_f64(0.3) + self.trauma_load * Fixed::from_f64(0.5)).clamp_01();
 
         // Sleep pressure
         if sleep_tick {
@@ -217,7 +223,7 @@ impl NervousSystemState {
         self.neuroplasticity = (Fixed::from_f64(0.6)
             - self.trauma_load * Fixed::from_f64(0.3)
             - self.pain.chronic * Fixed::from_f64(0.1))
-            .clamp_01();
+        .clamp_01();
     }
 
     /// Effective arousal for cognitive modulation.
@@ -264,7 +270,13 @@ mod tests {
         let mut ns = NervousSystemState::default();
         let params = NervousUpdateParams::default();
         for _ in 0..100 {
-            ns.update(Fixed::from_f64(0.9), Fixed::ZERO, Fixed::ZERO, false, params);
+            ns.update(
+                Fixed::from_f64(0.9),
+                Fixed::ZERO,
+                Fixed::ZERO,
+                false,
+                params,
+            );
         }
         assert!(ns.trauma_load > Fixed::ZERO);
     }
@@ -278,7 +290,13 @@ mod tests {
         };
         let params = NervousUpdateParams::default();
         for _ in 0..50 {
-            ns.update(Fixed::ZERO, Fixed::from_f64(0.8), Fixed::ZERO, false, params);
+            ns.update(
+                Fixed::ZERO,
+                Fixed::from_f64(0.8),
+                Fixed::ZERO,
+                false,
+                params,
+            );
         }
         assert!(ns.parasympathetic_tone > Fixed::from_f64(0.1));
     }

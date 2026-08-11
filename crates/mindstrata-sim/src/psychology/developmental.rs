@@ -132,7 +132,8 @@ impl DevelopmentalPsychState {
         // Socialization completeness builds through childhood and adolescence
         if age < 18.0 {
             let social_rate = Fixed::from_f64(0.001) * social_support;
-            self.socialization_completeness = (self.socialization_completeness + social_rate).clamp_01();
+            self.socialization_completeness =
+                (self.socialization_completeness + social_rate).clamp_01();
         }
 
         // Cognitive development follows life stage
@@ -152,18 +153,24 @@ impl DevelopmentalPsychState {
     /// Record a positive socialization event.
     pub fn positive_socialization(&mut self, quality: Fixed) {
         self.history.positive_socialization += 1;
-        self.socialization_completeness = (self.socialization_completeness + quality * Fixed::from_f64(0.01)).clamp_01();
+        self.socialization_completeness =
+            (self.socialization_completeness + quality * Fixed::from_f64(0.01)).clamp_01();
     }
 
     /// Record a negative socialization event (trauma, abuse, neglect).
     pub fn negative_socialization(&mut self, severity: Fixed) {
         self.history.negative_socialization += 1;
-        self.history.trauma_history = (self.history.trauma_history + severity * Fixed::from_f64(0.02)).clamp_01();
+        self.history.trauma_history =
+            (self.history.trauma_history + severity * Fixed::from_f64(0.02)).clamp_01();
     }
 
     /// Record an educational event.
     pub fn record_education(&mut self, skill: String, quality: Fixed, tick: u64) {
-        self.history.education_events.push(EducationEvent { skill, quality, tick });
+        self.history.education_events.push(EducationEvent {
+            skill,
+            quality,
+            tick,
+        });
     }
 }
 
@@ -177,7 +184,11 @@ mod tests {
             identity_formation: Fixed::from_f64(0.3),
             ..Default::default()
         };
-        dev.tick_update(Fixed::from_f64(16.0), Fixed::from_f64(0.7), Fixed::from_f64(0.6));
+        dev.tick_update(
+            Fixed::from_f64(16.0),
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.6),
+        );
         assert!(dev.identity_formation > Fixed::from_f64(0.3));
     }
 
@@ -187,7 +198,11 @@ mod tests {
             socialization_completeness: Fixed::from_f64(0.3),
             ..Default::default()
         };
-        dev.tick_update(Fixed::from_f64(8.0), Fixed::from_f64(0.8), Fixed::from_f64(0.5));
+        dev.tick_update(
+            Fixed::from_f64(8.0),
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.5),
+        );
         assert!(dev.socialization_completeness > Fixed::from_f64(0.3));
     }
 

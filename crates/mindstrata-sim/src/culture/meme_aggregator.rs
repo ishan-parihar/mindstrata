@@ -212,10 +212,12 @@ impl MemeAggregator {
             } else {
                 let total_charge: Fixed = prevalence_vec
                     .iter()
-                    
                     .filter_map(|(mid, _)| {
-                        meme_ids.iter().position(|id| id == mid)
-                            .and_then(|pos| meme_emotional_charges.get(pos)).copied()
+                        meme_ids
+                            .iter()
+                            .position(|id| id == mid)
+                            .and_then(|pos| meme_emotional_charges.get(pos))
+                            .copied()
                     })
                     .fold(Fixed::ZERO, |acc, c| acc + c);
                 let charge_count = prevalence_vec.len().max(1) as i64;
@@ -245,7 +247,7 @@ impl MemeAggregator {
             } else {
                 (Fixed::ONE
                     - (variance / Fixed::from_int(prevalence_vec.len() as i64)).min(Fixed::ONE))
-                    .max(Fixed::ZERO)
+                .max(Fixed::ZERO)
             };
 
             result.push(GroupMemePrevalence {
@@ -331,7 +333,11 @@ impl MemeAggregator {
 
         // 1. Compute group prevalence with actual emotional charges
         let group_prevalences = self.compute_group_prevalence(
-            agent_meme_hosts, agent_groups, meme_ids, group_labels, meme_emotional_charges,
+            agent_meme_hosts,
+            agent_groups,
+            meme_ids,
+            group_labels,
+            meme_emotional_charges,
         );
 
         // 2. Find most viral meme
@@ -364,7 +370,9 @@ impl MemeAggregator {
         let avg_centrality = if meme_host_centralities.is_empty() {
             Fixed::ZERO
         } else {
-            let total: Fixed = meme_host_centralities.iter().fold(Fixed::ZERO, |acc, c| acc + *c);
+            let total: Fixed = meme_host_centralities
+                .iter()
+                .fold(Fixed::ZERO, |acc, c| acc + *c);
             total / Fixed::from_int(meme_host_centralities.len() as i64)
         };
 

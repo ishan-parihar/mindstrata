@@ -365,7 +365,7 @@ pub fn help_propensity(
     (norm
         + tenderness * Fixed::from_f64(tenderness_multiplier)
         + gratitude * Fixed::from_f64(gratitude_multiplier))
-        .clamp_01()
+    .clamp_01()
 }
 
 /// §8.1.4 (Iteration 122): the despair pacification rate and floor — a
@@ -395,7 +395,11 @@ pub fn despair_pacify_factor(despair: Fixed, rate: f64, floor: f64) -> Fixed {
     (Fixed::ONE - despair * Fixed::from_f64(rate)).max(Fixed::from_f64(floor))
 }
 
-pub fn appraise(appraisal: &Appraisal, _tick: Tick, params: &crate::parameters::SimParameters) -> EmotionDelta {
+pub fn appraise(
+    appraisal: &Appraisal,
+    _tick: Tick,
+    params: &crate::parameters::SimParameters,
+) -> EmotionDelta {
     let mut delta = EmotionDelta::default();
 
     if appraisal.goal_relevance > params.appraisal_goal_relevance_threshold {
@@ -428,7 +432,7 @@ pub fn appraise(appraisal: &Appraisal, _tick: Tick, params: &crate::parameters::
                         // Unfair treatment intensifies anger
                         delta.anger = (delta.anger
                             + appraisal.fairness.abs() * Fixed::from_f64(0.3))
-                            .clamp_01();
+                        .clamp_01();
                     }
                 }
                 Agency::Circumstance | Agency::Unknown => {
@@ -467,8 +471,10 @@ pub fn appraise(appraisal: &Appraisal, _tick: Tick, params: &crate::parameters::
     // contempt — looking down on the unfair from a secure position.
     delta.contempt = ((Fixed::ONE - appraisal.status_threat) * unfair).clamp_01();
     // awe — overwhelming, unexpected significance.
-    delta.awe = (appraisal.future_implication.abs() * appraisal.identity_relevance
-        * (Fixed::ONE - appraisal.expectedness)).clamp_01();
+    delta.awe = (appraisal.future_implication.abs()
+        * appraisal.identity_relevance
+        * (Fixed::ONE - appraisal.expectedness))
+        .clamp_01();
     // gratitude — unexpected positive help.
     delta.gratitude = (positive * (Fixed::ONE - appraisal.expectedness)).clamp_01();
     // jealousy — threat to a valued attachment/status bond.
@@ -476,8 +482,8 @@ pub fn appraise(appraisal: &Appraisal, _tick: Tick, params: &crate::parameters::
     // envy — wanting what the higher-status other has.
     delta.envy = (appraisal.status_threat * incongruent).clamp_01();
     // loneliness — attachment threat with no visible social presence.
-    delta.loneliness = (appraisal.attachment_threat
-        * (Fixed::ONE - appraisal.social_visibility)).clamp_01();
+    delta.loneliness =
+        (appraisal.attachment_threat * (Fixed::ONE - appraisal.social_visibility)).clamp_01();
     // tenderness — warm congruence toward close others.
     delta.tenderness = (positive * (Fixed::ONE - appraisal.status_threat)).clamp_01();
     // humiliation — public status loss.
@@ -495,8 +501,8 @@ pub fn appraise(appraisal: &Appraisal, _tick: Tick, params: &crate::parameters::
 
 #[cfg(test)]
 mod tests {
-    use crate::parameters::SimParameters;
     use super::*;
+    use crate::parameters::SimParameters;
     use mindstrata_core::rng::RngStreams;
 
     #[test]
@@ -572,10 +578,7 @@ mod tests {
             narrative_meaning: Fixed::ZERO,
         };
         let delta = appraise(&appraisal, Tick::new(0), &SimParameters::default());
-        assert!(
-            delta.fear > Fixed::ZERO,
-            "Low coping should increase fear"
-        );
+        assert!(delta.fear > Fixed::ZERO, "Low coping should increase fear");
     }
 
     /// §8.1.4: The deepened appraisal dimensions drive the expanded emotion
@@ -606,13 +609,32 @@ mod tests {
             narrative_meaning: Fixed::from_f64(0.8),
         };
         let delta = appraise(&base, Tick::new(0), &params);
-        assert!(delta.moral_outrage > Fixed::ZERO, "sacredness violation → moral outrage");
+        assert!(
+            delta.moral_outrage > Fixed::ZERO,
+            "sacredness violation → moral outrage"
+        );
         assert!(delta.disgust > Fixed::ZERO, "purity violation → disgust");
-        assert!(delta.envy > Fixed::ZERO, "status threat + incongruence → envy");
-        assert!(delta.humiliation > Fixed::ZERO, "status threat + identity → humiliation");
-        assert!(delta.loneliness > Fixed::ZERO, "attachment threat → loneliness");
-        assert!(delta.hope > Fixed::ZERO, "positive future implication → hope");
-        assert_eq!(delta.despair, Fixed::ZERO, "positive future implication → no despair");
+        assert!(
+            delta.envy > Fixed::ZERO,
+            "status threat + incongruence → envy"
+        );
+        assert!(
+            delta.humiliation > Fixed::ZERO,
+            "status threat + identity → humiliation"
+        );
+        assert!(
+            delta.loneliness > Fixed::ZERO,
+            "attachment threat → loneliness"
+        );
+        assert!(
+            delta.hope > Fixed::ZERO,
+            "positive future implication → hope"
+        );
+        assert_eq!(
+            delta.despair,
+            Fixed::ZERO,
+            "positive future implication → no despair"
+        );
 
         // A fully-neutral appraisal (all dimensions at their Defaults, the
         // 8 core included) → all 14 new deltas at zero: the expanded families
@@ -651,10 +673,7 @@ mod tests {
             Fixed::from_f64(0.2),
             "0.5 × (1 − 0.6) must be exactly 0.2"
         );
-        assert_eq!(
-            secondary_emotion_decay(Fixed::ZERO, 0.12),
-            Fixed::ZERO
-        );
+        assert_eq!(secondary_emotion_decay(Fixed::ZERO, 0.12), Fixed::ZERO);
         // The shipped per-tick rate must sit in the meaningful band (1–15%).
         assert!(
             (0.01..0.15).contains(&SECONDARY_EMOTION_DECAY_RATE),
@@ -799,11 +818,7 @@ mod tests {
         // must never fully erase the escalation chance (same never-zero
         // design as the Iter-110 trust pacifier's cap).
         assert_eq!(
-            despair_pacify_factor(
-                Fixed::ZERO,
-                DESPAIR_PACIFY_RATE,
-                DESPAIR_PACIFY_FLOOR
-            ),
+            despair_pacify_factor(Fixed::ZERO, DESPAIR_PACIFY_RATE, DESPAIR_PACIFY_FLOOR),
             Fixed::ONE,
             "zero despair must be a byte-identical identity"
         );
@@ -817,11 +832,7 @@ mod tests {
             "1 − 0.5 × 0.5 must be exactly 0.75"
         );
         assert_eq!(
-            despair_pacify_factor(
-                Fixed::ONE,
-                DESPAIR_PACIFY_RATE,
-                DESPAIR_PACIFY_FLOOR
-            ),
+            despair_pacify_factor(Fixed::ONE, DESPAIR_PACIFY_RATE, DESPAIR_PACIFY_FLOOR),
             Fixed::from_f64(0.5),
             "full despair must hit the exact floor 0.5"
         );
@@ -886,11 +897,7 @@ mod tests {
         // erosion (same never-zero design as the Iter-122 despair
         // pacifier's floor).
         assert_eq!(
-            awe_reverence_factor(
-                Fixed::ZERO,
-                AWE_REVERENCE_RATE,
-                AWE_REVERENCE_FLOOR
-            ),
+            awe_reverence_factor(Fixed::ZERO, AWE_REVERENCE_RATE, AWE_REVERENCE_FLOOR),
             Fixed::ONE,
             "zero awe must be a byte-identical identity"
         );
@@ -904,11 +911,7 @@ mod tests {
             "1 − 0.5 × 0.15 must be exactly 0.925"
         );
         assert_eq!(
-            awe_reverence_factor(
-                Fixed::ONE,
-                AWE_REVERENCE_RATE,
-                AWE_REVERENCE_FLOOR
-            ),
+            awe_reverence_factor(Fixed::ONE, AWE_REVERENCE_RATE, AWE_REVERENCE_FLOOR),
             Fixed::from_f64(0.85),
             "full awe must hit the exact floor 0.85"
         );

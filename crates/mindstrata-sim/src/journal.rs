@@ -9,42 +9,88 @@ use serde::{Deserialize, Serialize};
 /// Kinds of events worth recording in the journal.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum JournalEntryKind {
-    Consumed { resource: String, amount: f64 },
-    Worked { productivity: f64 },
+    Consumed {
+        resource: String,
+        amount: f64,
+    },
+    Worked {
+        productivity: f64,
+    },
     Worshiped,
     Rested,
-    TheftDetected { resource: String, amount: f64, fine: f64 },
-    CommittedViolence { target: u64, injury: f64 },
+    TheftDetected {
+        resource: String,
+        amount: f64,
+        fine: f64,
+    },
+    CommittedViolence {
+        target: u64,
+        injury: f64,
+    },
     /// §19.5.F: Wealth inherited from a deceased agent.
-    Inheritance { heir_count: u64, amount: f64 },
+    Inheritance {
+        heir_count: u64,
+        amount: f64,
+    },
     /// §31: An agent died (generational replacement fills the slot).
-    Died { age: f64, cause: String },
+    Died {
+        age: f64,
+        cause: String,
+    },
     /// §19.5.I: Knowledge discovered through work or exploration.
-    KnowledgeDiscovered { knowledge_id: u64, name: String },
+    KnowledgeDiscovered {
+        knowledge_id: u64,
+        name: String,
+    },
     /// §19.5.F: Knowledge learned from parent through childhood socialization.
-    KnowledgeSocialized { knowledge_id: u64 },
+    KnowledgeSocialized {
+        knowledge_id: u64,
+    },
     /// §5 (Iteration 149): A court returned a verdict on a prosecuted
     /// violation — the supplemental court fine on a Guilty verdict.
-    LegalVerdict { case_id: u64, guilty: bool, sentence: f64 },
+    LegalVerdict {
+        case_id: u64,
+        guilty: bool,
+        sentence: f64,
+    },
     /// §5 (Iteration 150): A hostile neighboring settlement raided the
     /// village granary.
-    TradeRaid { settlement: String, grain_lost: f64 },
+    TradeRaid {
+        settlement: String,
+        grain_lost: f64,
+    },
     /// §5 (Iteration 150): A caravan arrived from a neighboring settlement.
-    TradeCaravan { settlement: String, grain_gained: f64 },
+    TradeCaravan {
+        settlement: String,
+        grain_gained: f64,
+    },
     /// §5 (Iteration 151): A formal school term convened — the teacher,
     /// cohort size, and graduates of the term.
-    SchoolTerm { teacher: u64, cohort: u64, graduates: u64 },
+    SchoolTerm {
+        teacher: u64,
+        cohort: u64,
+        graduates: u64,
+    },
     /// §5 (Iteration 152): A religion's yearly conversion pass recorded a
     /// number of new converts.
-    TheologyConversion { converts: u64 },
+    TheologyConversion {
+        converts: u64,
+    },
     /// §5 (Iteration 152): A mid-year religious festival was held, with the
     /// attending believer count.
-    TheologyFestival { attenders: u64 },
+    TheologyFestival {
+        attenders: u64,
+    },
     /// §5 (Iteration 153): A military drill pass — the militia trained,
     /// building collective readiness.
-    MilitaryDrill { attenders: u64, readiness: f64 },
+    MilitaryDrill {
+        attenders: u64,
+        readiness: f64,
+    },
     /// §5 (Iteration 153): A muster pass conscripted new adults.
-    MilitaryMuster { conscripts: u64 },
+    MilitaryMuster {
+        conscripts: u64,
+    },
 }
 
 /// A single journal entry.
@@ -81,7 +127,10 @@ impl EventJournal {
 
     /// Get entries in a tick range.
     pub fn entries_in_range(&self, start: u64, end: u64) -> Vec<&JournalEntry> {
-        self.entries.iter().filter(|e| e.tick >= start && e.tick < end).collect()
+        self.entries
+            .iter()
+            .filter(|e| e.tick >= start && e.tick < end)
+            .collect()
     }
 
     /// Get the last N entries.
@@ -111,7 +160,14 @@ mod tests {
         let agent = AgentId::new(0);
 
         journal.record(100, agent, JournalEntryKind::Worshiped);
-        journal.record(101, agent, JournalEntryKind::Consumed { resource: "grain".into(), amount: 0.5 });
+        journal.record(
+            101,
+            agent,
+            JournalEntryKind::Consumed {
+                resource: "grain".into(),
+                amount: 0.5,
+            },
+        );
 
         assert_eq!(journal.len(), 2);
         assert!(!journal.is_empty());

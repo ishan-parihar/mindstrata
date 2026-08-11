@@ -17,8 +17,9 @@ use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 
 /// Simulation tier for an agent — determines which systems run each tick.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default,
+)]
 pub enum AgentTier {
     /// Full simulation: biology, psychology, relationships, memory, prospection, narrative.
     Focal,
@@ -28,7 +29,6 @@ pub enum AgentTier {
     /// Aggregate simulation: household-level behavior, statistical belief updates, minimal memory.
     Background,
 }
-
 
 impl AgentTier {
     /// Does this tier run the full biological update (endocrine, metabolism, cardiovascular, etc.)?
@@ -185,7 +185,10 @@ impl CognitiveBudget {
 /// paths (e.g., skip prospection, use cached appraisal, skip ToM update).
 #[derive(Debug, Clone)]
 #[must_use]
-#[expect(clippy::struct_field_names, reason = "all fields track remaining budget for a specific cognitive operation")]
+#[expect(
+    clippy::struct_field_names,
+    reason = "all fields track remaining budget for a specific cognitive operation"
+)]
 pub struct CognitiveBudgetTracker {
     remaining_appraisals: u32,
     remaining_memory_operations: u32,
@@ -396,7 +399,9 @@ impl AgentTierState {
         let new_tier = match self.tier {
             AgentTier::Focal => {
                 // Demote if low status, no role, low importance, no crisis
-                if !high_status && !has_institutional_role && !crisis
+                if !high_status
+                    && !has_institutional_role
+                    && !crisis
                     && self.narrative_importance < Fixed::from_f64(0.3)
                 {
                     AgentTier::Secondary
@@ -406,12 +411,13 @@ impl AgentTierState {
             }
             AgentTier::Secondary => {
                 // Promote if high status, institutional role, or crisis
-                if high_status || has_institutional_role || crisis
+                if high_status
+                    || has_institutional_role
+                    || crisis
                     || self.narrative_importance > Fixed::from_f64(0.7)
                 {
                     AgentTier::Focal
-                } else if self.narrative_importance < Fixed::from_f64(0.1)
-                    && relationship_count < 2
+                } else if self.narrative_importance < Fixed::from_f64(0.1) && relationship_count < 2
                 {
                     AgentTier::Background
                 } else {
@@ -420,7 +426,9 @@ impl AgentTierState {
             }
             AgentTier::Background => {
                 // Promote if any relevance signal appears
-                if high_status || has_institutional_role || crisis
+                if high_status
+                    || has_institutional_role
+                    || crisis
                     || self.narrative_importance > Fixed::from_f64(0.3)
                     || relationship_count >= 2
                 {
@@ -466,10 +474,12 @@ impl AgentTierState {
             .min(Fixed::from_f64(0.15));
 
         // Slowly move toward the target importance (smoothing factor 0.1)
-        let target = (role_bonus + network_bonus + emotion_bonus + event_bonus + Fixed::from_f64(0.15)).clamp_01();
-        self.narrative_importance =
-            (self.narrative_importance * Fixed::from_f64(0.9) + target * Fixed::from_f64(0.1))
+        let target =
+            (role_bonus + network_bonus + emotion_bonus + event_bonus + Fixed::from_f64(0.15))
                 .clamp_01();
+        self.narrative_importance = (self.narrative_importance * Fixed::from_f64(0.9)
+            + target * Fixed::from_f64(0.1))
+        .clamp_01();
     }
 }
 
@@ -491,10 +501,22 @@ mod tests {
 
     #[test]
     fn for_tier_matches_individual_constructors() {
-        assert_eq!(CognitiveBudget::for_tier(AgentTier::Focal).max_appraisals, 20);
-        assert_eq!(CognitiveBudget::for_tier(AgentTier::Secondary).max_appraisals, 5);
-        assert_eq!(CognitiveBudget::for_tier(AgentTier::Background).max_memory_operations, 0);
-        assert_eq!(CognitiveBudget::for_tier(AgentTier::Background).max_appraisals, 1);
+        assert_eq!(
+            CognitiveBudget::for_tier(AgentTier::Focal).max_appraisals,
+            20
+        );
+        assert_eq!(
+            CognitiveBudget::for_tier(AgentTier::Secondary).max_appraisals,
+            5
+        );
+        assert_eq!(
+            CognitiveBudget::for_tier(AgentTier::Background).max_memory_operations,
+            0
+        );
+        assert_eq!(
+            CognitiveBudget::for_tier(AgentTier::Background).max_appraisals,
+            1
+        );
     }
 
     #[test]
@@ -526,7 +548,7 @@ mod tests {
     fn reclassify_promotes_secondary_to_focal_on_high_status() {
         let mut state = AgentTierState::new(AgentTier::Secondary, 0);
         state.reclassify(
-            Fixed::from_f64(0.8),  // high status
+            Fixed::from_f64(0.8), // high status
             false,
             false,
             Fixed::ZERO,
@@ -724,8 +746,14 @@ mod tests {
         assert_eq!(state.budget_tracker.remaining_prospections(), 0);
         // Promote to focal
         state.reclassify(
-            Fixed::from_f64(0.8), false, false,
-            Fixed::ZERO, Fixed::ZERO, 0, 100, 10,
+            Fixed::from_f64(0.8),
+            false,
+            false,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            0,
+            100,
+            10,
         );
         assert_eq!(state.tier, AgentTier::Focal);
         // Budget tracker should now have focal limits

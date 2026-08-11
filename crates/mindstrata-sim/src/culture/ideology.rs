@@ -72,7 +72,8 @@ impl Ideology {
             // Dogmatism resists change
             let resistance = self.dogmatism * axis.conviction;
             let effective_pressure = pressure * (Fixed::ONE - resistance);
-            axis.position = (axis.position + (target - axis.position) * effective_pressure).clamp_01();
+            axis.position =
+                (axis.position + (target - axis.position) * effective_pressure).clamp_01();
         }
     }
 
@@ -149,8 +150,7 @@ impl BeliefEcology {
             }
         }
         if pairs > 0 {
-            self.polarization_index =
-                (total_distance / Fixed::from_int(pairs)).clamp_01();
+            self.polarization_index = (total_distance / Fixed::from_int(pairs)).clamp_01();
         }
         // Cross-cutting ties reduce polarization
         self.polarization_index =
@@ -206,12 +206,20 @@ mod tests {
     fn polarization_increases_with_clusters() {
         let mut ecology = BeliefEcology::default();
         ecology.clusters.push(BeliefCluster {
-            center: vec![IdeologyAxis { name: "a".into(), position: Fixed::ZERO, conviction: Fixed::from_f64(0.5) }],
+            center: vec![IdeologyAxis {
+                name: "a".into(),
+                position: Fixed::ZERO,
+                conviction: Fixed::from_f64(0.5),
+            }],
             size: 5,
             cohesion: Fixed::from_f64(0.8),
         });
         ecology.clusters.push(BeliefCluster {
-            center: vec![IdeologyAxis { name: "a".into(), position: Fixed::ONE, conviction: Fixed::from_f64(0.5) }],
+            center: vec![IdeologyAxis {
+                name: "a".into(),
+                position: Fixed::ONE,
+                conviction: Fixed::from_f64(0.5),
+            }],
             size: 5,
             cohesion: Fixed::from_f64(0.8),
         });

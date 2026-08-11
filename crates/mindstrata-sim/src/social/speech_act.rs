@@ -164,8 +164,10 @@ impl SpeechAct {
         // trusted). A neutral tone (0.5) is the calibrated default.
         let credibility_scale = Fixed::from_f64(0.5) + self.credibility * Fixed::from_f64(0.5);
         SpeechEffect {
-            trust_delta: (base_trust * credibility_scale).clamp(Fixed::from_f64(-0.2), Fixed::from_f64(0.2)),
-            affection_delta: (base_affection * credibility_scale).clamp(Fixed::from_f64(-0.2), Fixed::from_f64(0.2)),
+            trust_delta: (base_trust * credibility_scale)
+                .clamp(Fixed::from_f64(-0.2), Fixed::from_f64(0.2)),
+            affection_delta: (base_affection * credibility_scale)
+                .clamp(Fixed::from_f64(-0.2), Fixed::from_f64(0.2)),
             status_delta: status_effect(self.act),
             obligation_delta: obligation_effect(self.act),
             reputation_delta: reputation_effect(self.act),
@@ -232,10 +234,14 @@ fn social_cost(act: SpeechActKind) -> Fixed {
         | SpeechActKind::Excommunicate
         | SpeechActKind::Curse
         | SpeechActKind::Accuse => Fixed::from_f64(0.3),
-        SpeechActKind::Insult | SpeechActKind::Command | SpeechActKind::Deny => Fixed::from_f64(0.15),
+        SpeechActKind::Insult | SpeechActKind::Command | SpeechActKind::Deny => {
+            Fixed::from_f64(0.15)
+        }
         SpeechActKind::Confess => Fixed::from_f64(0.2),
         SpeechActKind::Gossip => Fixed::from_f64(0.1),
-        SpeechActKind::Promise | SpeechActKind::Propose | SpeechActKind::Vow => Fixed::from_f64(0.1),
+        SpeechActKind::Promise | SpeechActKind::Propose | SpeechActKind::Vow => {
+            Fixed::from_f64(0.1)
+        }
         _ => Fixed::from_f64(0.05),
     }
 }
@@ -245,23 +251,43 @@ fn relational_intent(act: SpeechActKind) -> RelationalIntent {
     match act {
         SpeechActKind::Inform | SpeechActKind::Persuade => RelationalIntent::Affiliate,
         SpeechActKind::Promise | SpeechActKind::Vow => RelationalIntent::Commit,
-        SpeechActKind::Threaten | SpeechActKind::Command | SpeechActKind::Curse
+        SpeechActKind::Threaten
+        | SpeechActKind::Command
+        | SpeechActKind::Curse
         | SpeechActKind::Excommunicate => RelationalIntent::Dominate,
-        SpeechActKind::Request | SpeechActKind::Flirt | SpeechActKind::Propose => RelationalIntent::Solicit,
-        SpeechActKind::Apologize | SpeechActKind::Reassure | SpeechActKind::Confess => RelationalIntent::Repair,
-        SpeechActKind::Insult | SpeechActKind::Accuse | SpeechActKind::Deny => RelationalIntent::Distance,
-        SpeechActKind::Praise | SpeechActKind::Bless | SpeechActKind::Gossip => RelationalIntent::Affiliate,
+        SpeechActKind::Request | SpeechActKind::Flirt | SpeechActKind::Propose => {
+            RelationalIntent::Solicit
+        }
+        SpeechActKind::Apologize | SpeechActKind::Reassure | SpeechActKind::Confess => {
+            RelationalIntent::Repair
+        }
+        SpeechActKind::Insult | SpeechActKind::Accuse | SpeechActKind::Deny => {
+            RelationalIntent::Distance
+        }
+        SpeechActKind::Praise | SpeechActKind::Bless | SpeechActKind::Gossip => {
+            RelationalIntent::Affiliate
+        }
     }
 }
 
 fn domain(act: SpeechActKind) -> ActDomain {
     match act {
-        SpeechActKind::Inform | SpeechActKind::Persuade | SpeechActKind::Deny => ActDomain::Informational,
-        SpeechActKind::Promise | SpeechActKind::Apologize | SpeechActKind::Reassure
-        | SpeechActKind::Flirt | SpeechActKind::Propose | SpeechActKind::Vow
-        | SpeechActKind::Praise | SpeechActKind::Request => ActDomain::Relational,
-        SpeechActKind::Threaten | SpeechActKind::Command | SpeechActKind::Insult
-        | SpeechActKind::Accuse | SpeechActKind::Excommunicate => ActDomain::Coercive,
+        SpeechActKind::Inform | SpeechActKind::Persuade | SpeechActKind::Deny => {
+            ActDomain::Informational
+        }
+        SpeechActKind::Promise
+        | SpeechActKind::Apologize
+        | SpeechActKind::Reassure
+        | SpeechActKind::Flirt
+        | SpeechActKind::Propose
+        | SpeechActKind::Vow
+        | SpeechActKind::Praise
+        | SpeechActKind::Request => ActDomain::Relational,
+        SpeechActKind::Threaten
+        | SpeechActKind::Command
+        | SpeechActKind::Insult
+        | SpeechActKind::Accuse
+        | SpeechActKind::Excommunicate => ActDomain::Coercive,
         SpeechActKind::Bless | SpeechActKind::Curse | SpeechActKind::Confess => ActDomain::Sacred,
         SpeechActKind::Gossip => ActDomain::Expressive,
     }
@@ -271,10 +297,16 @@ fn domain(act: SpeechActKind) -> ActDomain {
 /// abuse lowers it.
 fn status_effect(act: SpeechActKind) -> Fixed {
     match act {
-        SpeechActKind::Praise | SpeechActKind::Bless | SpeechActKind::Reassure
-        | SpeechActKind::Flirt | SpeechActKind::Propose => Fixed::from_f64(0.02),
-        SpeechActKind::Insult | SpeechActKind::Accuse | SpeechActKind::Curse
-        | SpeechActKind::Excommunicate | SpeechActKind::Threaten => Fixed::from_f64(-0.02),
+        SpeechActKind::Praise
+        | SpeechActKind::Bless
+        | SpeechActKind::Reassure
+        | SpeechActKind::Flirt
+        | SpeechActKind::Propose => Fixed::from_f64(0.02),
+        SpeechActKind::Insult
+        | SpeechActKind::Accuse
+        | SpeechActKind::Curse
+        | SpeechActKind::Excommunicate
+        | SpeechActKind::Threaten => Fixed::from_f64(-0.02),
         _ => Fixed::ZERO,
     }
 }
@@ -282,7 +314,9 @@ fn status_effect(act: SpeechActKind) -> Fixed {
 /// Effect on obligation: commitments create debt, denials cancel it.
 fn obligation_effect(act: SpeechActKind) -> Fixed {
     match act {
-        SpeechActKind::Promise | SpeechActKind::Vow | SpeechActKind::Apologize => Fixed::from_f64(0.03),
+        SpeechActKind::Promise | SpeechActKind::Vow | SpeechActKind::Apologize => {
+            Fixed::from_f64(0.03)
+        }
         SpeechActKind::Request | SpeechActKind::Command => Fixed::from_f64(0.01),
         SpeechActKind::Deny => Fixed::from_f64(-0.02),
         _ => Fixed::ZERO,
@@ -293,10 +327,15 @@ fn obligation_effect(act: SpeechActKind) -> Fixed {
 /// standing; aggression and gossip cost it.
 fn reputation_effect(act: SpeechActKind) -> Fixed {
     match act {
-        SpeechActKind::Inform | SpeechActKind::Praise | SpeechActKind::Bless
+        SpeechActKind::Inform
+        | SpeechActKind::Praise
+        | SpeechActKind::Bless
         | SpeechActKind::Persuade => Fixed::from_f64(0.01),
-        SpeechActKind::Insult | SpeechActKind::Threaten | SpeechActKind::Curse
-        | SpeechActKind::Accuse | SpeechActKind::Excommunicate => Fixed::from_f64(-0.02),
+        SpeechActKind::Insult
+        | SpeechActKind::Threaten
+        | SpeechActKind::Curse
+        | SpeechActKind::Accuse
+        | SpeechActKind::Excommunicate => Fixed::from_f64(-0.02),
         SpeechActKind::Gossip => Fixed::from_f64(-0.005),
         _ => Fixed::ZERO,
     }
@@ -368,19 +407,37 @@ mod tests {
         ] {
             act.act = kind;
             let effect = act.resolve_effect();
-            assert!(effect.trust_delta > Fixed::ZERO, "{kind:?} must raise trust");
-            assert!(effect.affection_delta > Fixed::ZERO, "{kind:?} must raise affection");
+            assert!(
+                effect.trust_delta > Fixed::ZERO,
+                "{kind:?} must raise trust"
+            );
+            assert!(
+                effect.affection_delta > Fixed::ZERO,
+                "{kind:?} must raise affection"
+            );
         }
     }
 
     #[test]
     fn negative_acts_lower_trust_and_affection() {
-        for kind in [SpeechActKind::Threaten, SpeechActKind::Insult, SpeechActKind::Curse, SpeechActKind::Accuse, SpeechActKind::Excommunicate] {
+        for kind in [
+            SpeechActKind::Threaten,
+            SpeechActKind::Insult,
+            SpeechActKind::Curse,
+            SpeechActKind::Accuse,
+            SpeechActKind::Excommunicate,
+        ] {
             let mut act = act_of(InteractionKind::Threaten);
             act.act = kind;
             let effect = act.resolve_effect();
-            assert!(effect.trust_delta < Fixed::ZERO, "{kind:?} must lower trust");
-            assert!(effect.affection_delta < Fixed::ZERO, "{kind:?} must lower affection");
+            assert!(
+                effect.trust_delta < Fixed::ZERO,
+                "{kind:?} must lower trust"
+            );
+            assert!(
+                effect.affection_delta < Fixed::ZERO,
+                "{kind:?} must lower affection"
+            );
         }
     }
 
@@ -470,7 +527,7 @@ mod tests {
                 std::slice::from_mut(&mut rel),
                 &mut events,
                 Tick::new(1),
-                false, // out-group: negative deltas get penalized, sign preserved
+                false,      // out-group: negative deltas get penalized, sign preserved
                 Fixed::ONE, // bonding_rate
                 Fixed::ONE, // conflict_escalation_rate
                 &crate::parameters::SimParameters::default(),
@@ -494,13 +551,26 @@ mod tests {
     #[test]
     fn effect_deltas_stay_bounded() {
         for kind in [
-            SpeechActKind::Inform, SpeechActKind::Request, SpeechActKind::Command,
-            SpeechActKind::Promise, SpeechActKind::Threaten, SpeechActKind::Apologize,
-            SpeechActKind::Praise, SpeechActKind::Insult, SpeechActKind::Gossip,
-            SpeechActKind::Confess, SpeechActKind::Bless, SpeechActKind::Curse,
-            SpeechActKind::Persuade, SpeechActKind::Accuse, SpeechActKind::Deny,
-            SpeechActKind::Reassure, SpeechActKind::Flirt, SpeechActKind::Propose,
-            SpeechActKind::Vow, SpeechActKind::Excommunicate,
+            SpeechActKind::Inform,
+            SpeechActKind::Request,
+            SpeechActKind::Command,
+            SpeechActKind::Promise,
+            SpeechActKind::Threaten,
+            SpeechActKind::Apologize,
+            SpeechActKind::Praise,
+            SpeechActKind::Insult,
+            SpeechActKind::Gossip,
+            SpeechActKind::Confess,
+            SpeechActKind::Bless,
+            SpeechActKind::Curse,
+            SpeechActKind::Persuade,
+            SpeechActKind::Accuse,
+            SpeechActKind::Deny,
+            SpeechActKind::Reassure,
+            SpeechActKind::Flirt,
+            SpeechActKind::Propose,
+            SpeechActKind::Vow,
+            SpeechActKind::Excommunicate,
         ] {
             let mut act = act_of(InteractionKind::Talk);
             act.act = kind;

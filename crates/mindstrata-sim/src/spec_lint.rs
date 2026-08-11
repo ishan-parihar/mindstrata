@@ -53,7 +53,9 @@ fn net_depth(line: &str) -> i32 {
 fn lint_actions(specs_dir: &Path) -> Vec<LintIssue> {
     let mut issues = Vec::new();
     let path = specs_dir.join("actions.ron");
-    let content = if let Ok(c) = std::fs::read_to_string(&path) { c } else {
+    let content = if let Ok(c) = std::fs::read_to_string(&path) {
+        c
+    } else {
         issues.push(LintIssue {
             severity: LintSeverity::Warning,
             spec_file: "actions.ron".into(),
@@ -68,8 +70,12 @@ fn lint_actions(specs_dir: &Path) -> Vec<LintIssue> {
     let items = extract_items(&inner);
 
     for (id, fields) in items {
-        let has_preconditions = fields.iter().any(|f| f.starts_with("preconditions") && f.contains('[') && !f.contains("[]"));
-        let has_effects = fields.iter().any(|f| f.starts_with("effects") && f.contains('[') && !f.contains("[]"));
+        let has_preconditions = fields
+            .iter()
+            .any(|f| f.starts_with("preconditions") && f.contains('[') && !f.contains("[]"));
+        let has_effects = fields
+            .iter()
+            .any(|f| f.starts_with("effects") && f.contains('[') && !f.contains("[]"));
 
         if has_preconditions && !has_effects {
             issues.push(LintIssue {
@@ -96,7 +102,9 @@ fn lint_actions(specs_dir: &Path) -> Vec<LintIssue> {
 fn lint_norms(specs_dir: &Path) -> Vec<LintIssue> {
     let mut issues = Vec::new();
     let path = specs_dir.join("norms.ron");
-    let content = if let Ok(c) = std::fs::read_to_string(&path) { c } else {
+    let content = if let Ok(c) = std::fs::read_to_string(&path) {
+        c
+    } else {
         issues.push(LintIssue {
             severity: LintSeverity::Warning,
             spec_file: "norms.ron".into(),
@@ -138,7 +146,9 @@ fn lint_norms(specs_dir: &Path) -> Vec<LintIssue> {
 fn lint_propositions(specs_dir: &Path) -> Vec<LintIssue> {
     let mut issues = Vec::new();
     let path = specs_dir.join("propositions.ron");
-    let content = if let Ok(c) = std::fs::read_to_string(&path) { c } else {
+    let content = if let Ok(c) = std::fs::read_to_string(&path) {
+        c
+    } else {
         issues.push(LintIssue {
             severity: LintSeverity::Warning,
             spec_file: "propositions.ron".into(),
@@ -184,21 +194,48 @@ fn lint_data_driven_specs(specs_dir: &Path) -> Vec<LintIssue> {
         ("biology/hormones.ron", "biology::endocrine::EndocrineState"),
         ("biology/organs.ron", "biology organ systems"),
         ("biology/diseases_v2.ron", "health::Disease definitions"),
-        ("biology/life_stages.ron", "biology::development::DevelopmentalStage"),
-        ("biology/reproduction.ron", "biology::reproductive::ReproductiveState"),
-        ("psychology/cognitive_systems.ron", "psychology::cognitive_runtime::CognitiveRuntime"),
+        (
+            "biology/life_stages.ron",
+            "biology::development::DevelopmentalStage",
+        ),
+        (
+            "biology/reproduction.ron",
+            "biology::reproductive::ReproductiveState",
+        ),
+        (
+            "psychology/cognitive_systems.ron",
+            "psychology::cognitive_runtime::CognitiveRuntime",
+        ),
         ("psychology/emotions_v2.ron", "appraisal::DiscreteEmotions"),
-        ("psychology/regulation_strategies.ron", "psychology::emotion_regulation"),
-        ("psychology/identity_frames.ron", "psychology::self_model::IdentityState"),
-        ("psychology/moral_foundations.ron", "psychology::moral_cognition::MoralFoundations"),
+        (
+            "psychology/regulation_strategies.ron",
+            "psychology::emotion_regulation",
+        ),
+        (
+            "psychology/identity_frames.ron",
+            "psychology::self_model::IdentityState",
+        ),
+        (
+            "psychology/moral_foundations.ron",
+            "psychology::moral_cognition::MoralFoundations",
+        ),
         ("social/courtship.ron", "social::courtship::Courtship"),
         ("social/marriage.ron", "social::marriage::Marriage"),
         ("social/kinship.ron", "social::kinship::KinshipGraph"),
-        ("social/status_roles.ron", "social::status_dims::StatusDimensions"),
+        (
+            "social/status_roles.ron",
+            "social::status_dims::StatusDimensions",
+        ),
         ("culture/rituals.ron", "culture::ritual::Ritual"),
-        ("culture/propaganda.ron", "culture::propaganda::PropagandaCampaign"),
+        (
+            "culture/propaganda.ron",
+            "culture::propaganda::PropagandaCampaign",
+        ),
         ("culture/taboos_v2.ron", "culture taboo definitions"),
-        ("culture/sacred_symbols.ron", "culture::sacred::SacredValues"),
+        (
+            "culture/sacred_symbols.ron",
+            "culture::sacred::SacredValues",
+        ),
         ("culture/education.ron", "culture::education"),
     ];
 
@@ -209,9 +246,7 @@ fn lint_data_driven_specs(specs_dir: &Path) -> Vec<LintIssue> {
                 severity: LintSeverity::Warning,
                 spec_file: file.to_string(),
                 spec_id: "N/A".into(),
-                message: format!(
-                    "Data-driven spec file missing: {file} (maps to {rust_mapping})"
-                ),
+                message: format!("Data-driven spec file missing: {file} (maps to {rust_mapping})"),
             });
             continue;
         }
@@ -256,7 +291,9 @@ fn lint_data_driven_specs(specs_dir: &Path) -> Vec<LintIssue> {
 fn lint_systems(specs_dir: &Path) -> Vec<LintIssue> {
     let mut issues = Vec::new();
     let path = specs_dir.join("systems.ron");
-    let content = if let Ok(c) = std::fs::read_to_string(&path) { c } else {
+    let content = if let Ok(c) = std::fs::read_to_string(&path) {
+        c
+    } else {
         issues.push(LintIssue {
             severity: LintSeverity::Warning,
             spec_file: "systems.ron".into(),
@@ -446,14 +483,16 @@ mod tests {
     fn lint_all_specs_passes() {
         let specs_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../specs");
         if !specs_dir.exists() {
-            eprintln!(
-                "Skipping spec lint test — specs/ directory not found at {specs_dir:?}"
-            );
+            eprintln!("Skipping spec lint test — specs/ directory not found at {specs_dir:?}");
             return;
         }
         let issues = lint_all(&specs_dir);
         let has_errors = issues.iter().any(|i| i.severity == LintSeverity::Error);
-        assert!(!has_errors, "Spec lint errors found:\n{}", format_report(&issues));
+        assert!(
+            !has_errors,
+            "Spec lint errors found:\n{}",
+            format_report(&issues)
+        );
     }
 
     #[test]

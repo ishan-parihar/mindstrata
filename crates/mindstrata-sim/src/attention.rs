@@ -202,7 +202,10 @@ impl AttentionState {
         // so a neutral-bias agent is byte-identical to the pre-Iter-97 gate;
         // a hypervigilant agent's threat percepts, an extravert's social
         // percepts, and an open agent's novel percepts score higher).
-        let raw_salience = base_intensity * novelty * relevance * self.salience_bias
+        let raw_salience = base_intensity
+            * novelty
+            * relevance
+            * self.salience_bias
             * self.percept_bias_factor(event);
         let salience = (raw_salience - habituation_penalty).clamp_01();
 
@@ -228,9 +231,7 @@ impl AttentionState {
             // Other interactions are mild
             SimEvent::InteractionOccurred { .. } => Fixed::from_f64(0.4),
             // Resource events are moderate
-            SimEvent::AgentAte { .. } | SimEvent::AgentDrank { .. } => {
-                Fixed::from_f64(0.3)
-            }
+            SimEvent::AgentAte { .. } | SimEvent::AgentDrank { .. } => Fixed::from_f64(0.3),
             // Relationship changes are moderate
             SimEvent::RelationshipChanged { trust_delta, .. } => {
                 // Large trust changes are more intense
@@ -297,23 +298,20 @@ impl AttentionState {
                 }
             }
             SimEvent::AgentAte { agent, .. } | SimEvent::AgentDrank { agent, .. }
-                if *agent == agent_id => {
-                    relevance = Fixed::from_f64(0.8);
-                }
+                if *agent == agent_id =>
+            {
+                relevance = Fixed::from_f64(0.8);
+            }
             _ => {}
         }
 
         // Hungry agents find food-related events more relevant
-        if needs.hunger > Fixed::from_f64(0.7)
-            && matches!(event, SimEvent::AgentAte { .. })
-        {
+        if needs.hunger > Fixed::from_f64(0.7) && matches!(event, SimEvent::AgentAte { .. }) {
             relevance = (relevance + Fixed::from_f64(0.3)).clamp_01();
         }
 
         // Thirsty agents find water-related events more relevant
-        if needs.thirst > Fixed::from_f64(0.7)
-            && matches!(event, SimEvent::AgentDrank { .. })
-        {
+        if needs.thirst > Fixed::from_f64(0.7) && matches!(event, SimEvent::AgentDrank { .. }) {
             relevance = (relevance + Fixed::from_f64(0.3)).clamp_01();
         }
 
@@ -355,20 +353,16 @@ impl AttentionState {
                 kind: InteractionKind::Threaten | InteractionKind::Insult,
                 ..
             } => {
-                self.habituation.threat =
-                    (self.habituation.threat + increment).clamp_01();
+                self.habituation.threat = (self.habituation.threat + increment).clamp_01();
             }
             SimEvent::InteractionOccurred { .. } => {
-                self.habituation.social =
-                    (self.habituation.social + increment).clamp_01();
+                self.habituation.social = (self.habituation.social + increment).clamp_01();
             }
             SimEvent::AgentAte { .. } | SimEvent::AgentDrank { .. } => {
-                self.habituation.resource =
-                    (self.habituation.resource + increment).clamp_01();
+                self.habituation.resource = (self.habituation.resource + increment).clamp_01();
             }
             SimEvent::RelationshipChanged { .. } => {
-                self.habituation.emotional =
-                    (self.habituation.emotional + increment).clamp_01();
+                self.habituation.emotional = (self.habituation.emotional + increment).clamp_01();
             }
             _ => {}
         }
@@ -408,14 +402,14 @@ impl AttentionState {
         let threat_input = fear + anger + trauma_risk;
         self.threat_bias = (Fixed::from_raw(5000)
             + (threat_input - Fixed::ONE) * Fixed::from_f64(0.2))
-            .clamp(Fixed::from_f64(0.3), Fixed::from_f64(0.7));
+        .clamp(Fixed::from_f64(0.3), Fixed::from_f64(0.7));
         self.social_bias = (Fixed::from_raw(5000)
             + (extraversion - Fixed::from_f64(0.5)) * Fixed::from_f64(0.3)
             + (attachment_security - Fixed::from_f64(0.5)) * Fixed::from_f64(0.2))
-            .clamp(Fixed::from_f64(0.3), Fixed::from_f64(0.7));
+        .clamp(Fixed::from_f64(0.3), Fixed::from_f64(0.7));
         self.novelty_bias = (Fixed::from_raw(5000)
             + (openness - Fixed::from_f64(0.5)) * Fixed::from_f64(0.3))
-            .clamp(Fixed::from_f64(0.3), Fixed::from_f64(0.7));
+        .clamp(Fixed::from_f64(0.3), Fixed::from_f64(0.7));
     }
 
     /// §8.1.2: Record a percept into the salience competition. Keeps the top
@@ -475,8 +469,11 @@ mod tests {
         let salience = attention.compute_salience(&threat_event, agent_id, &needs, &affect);
         // base_intensity(0.9) * novelty(1.0) * relevance(0.9) * bias(0.5) = 0.405
         // This is the highest salience category — threat events dominate.
-        assert!(salience > Fixed::from_f64(0.3),
-            "Threat events should be highly salient, got {}", salience.to_f64());
+        assert!(
+            salience > Fixed::from_f64(0.3),
+            "Threat events should be highly salient, got {}",
+            salience.to_f64()
+        );
     }
 
     #[test]
@@ -503,11 +500,15 @@ mod tests {
         };
 
         let salience_direct = attention.compute_salience(&direct_event, agent_id, &needs, &affect);
-        let salience_indirect = attention.compute_salience(&indirect_event, agent_id, &needs, &affect);
+        let salience_indirect =
+            attention.compute_salience(&indirect_event, agent_id, &needs, &affect);
 
-        assert!(salience_direct > salience_indirect,
+        assert!(
+            salience_direct > salience_indirect,
             "Direct events should be more salient: direct={}, indirect={}",
-            salience_direct.to_f64(), salience_indirect.to_f64());
+            salience_direct.to_f64(),
+            salience_indirect.to_f64()
+        );
     }
 
     #[test]
@@ -527,9 +528,12 @@ mod tests {
         let salience_first = attention.compute_salience(&event, agent_id, &needs, &affect);
         let salience_second = attention.compute_salience(&event, agent_id, &needs, &affect);
 
-        assert!(salience_second <= salience_first,
+        assert!(
+            salience_second <= salience_first,
             "Habituation should reduce salience: first={}, second={}",
-            salience_first.to_f64(), salience_second.to_f64());
+            salience_first.to_f64(),
+            salience_second.to_f64()
+        );
     }
 
     #[test]
@@ -554,11 +558,15 @@ mod tests {
         };
 
         let salience_hungry = attention.compute_salience(&event, agent_id, &hungry_needs, &affect);
-        let salience_satiated = attention.compute_salience(&event, agent_id, &satiated_needs, &affect);
+        let salience_satiated =
+            attention.compute_salience(&event, agent_id, &satiated_needs, &affect);
 
-        assert!(salience_hungry > salience_satiated,
+        assert!(
+            salience_hungry > salience_satiated,
             "Hungry agents should find food events more salient: hungry={}, satiated={}",
-            salience_hungry.to_f64(), salience_satiated.to_f64());
+            salience_hungry.to_f64(),
+            salience_satiated.to_f64()
+        );
     }
 
     #[test]
@@ -664,7 +672,10 @@ mod tests {
         // Bounded to the top SALIENCE_MAP_CAPACITY winners, sorted descending.
         assert_eq!(attention.salience_map.len(), SALIENCE_MAP_CAPACITY);
         assert_eq!(attention.salience_map[0].salience, Fixed::from_f64(0.95));
-        assert!(attention.salience_map.iter().all(|s| s.salience >= Fixed::from_f64(0.3)));
+        assert!(attention
+            .salience_map
+            .iter()
+            .all(|s| s.salience >= Fixed::from_f64(0.3)));
         let mut prev = Fixed::ONE;
         for item in &attention.salience_map {
             assert!(item.salience <= prev);
@@ -740,7 +751,8 @@ mod tests {
         let affect = Affect::default();
 
         let s_neutral = neutral.compute_salience(&threat_event(), AgentId::new(0), &needs, &affect);
-        let s_vigilant = vigilant.compute_salience(&threat_event(), AgentId::new(0), &needs, &affect);
+        let s_vigilant =
+            vigilant.compute_salience(&threat_event(), AgentId::new(0), &needs, &affect);
         assert!(
             s_vigilant > s_neutral,
             "Threat-biased agent should notice threats more: {s_vigilant} vs {s_neutral}"
@@ -758,7 +770,8 @@ mod tests {
         let affect = Affect::default();
 
         let s_neutral = neutral.compute_salience(&talk_event(), AgentId::new(0), &needs, &affect);
-        let s_extravert = extravert.compute_salience(&talk_event(), AgentId::new(0), &needs, &affect);
+        let s_extravert =
+            extravert.compute_salience(&talk_event(), AgentId::new(0), &needs, &affect);
         assert!(
             s_extravert > s_neutral,
             "Socially biased agent should notice interactions more: {s_extravert} vs {s_neutral}"

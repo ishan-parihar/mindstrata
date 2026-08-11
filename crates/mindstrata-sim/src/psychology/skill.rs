@@ -101,17 +101,15 @@ impl SkillState {
     }
 
     /// Form a new habit through repetition.
-    pub fn form_habit(
-        &mut self,
-        description: String,
-        trigger: String,
-        strength: Fixed,
-        tick: u64,
-    ) {
+    pub fn form_habit(&mut self, description: String, trigger: String, strength: Fixed, tick: u64) {
         // Check if habit already exists
         if self.habits.iter().any(|h| h.description == description) {
             // Strengthen existing habit
-            if let Some(habit) = self.habits.iter_mut().find(|h| h.description == description) {
+            if let Some(habit) = self
+                .habits
+                .iter_mut()
+                .find(|h| h.description == description)
+            {
                 habit.strength = (habit.strength + Fixed::from_f64(0.05)).clamp_01();
                 habit.repetition_count += 1;
                 habit.last_performed = tick;
@@ -130,7 +128,8 @@ impl SkillState {
     /// Execute a habit (returns true if a habit was performed).
     pub fn execute_habit(&mut self, trigger: &str, tick: u64) -> Option<String> {
         // Find strongest habit matching trigger
-        let best = self.habits
+        let best = self
+            .habits
             .iter()
             .enumerate()
             .filter(|(_, h)| h.trigger == trigger)
@@ -138,7 +137,8 @@ impl SkillState {
             .map(|(i, _)| i);
 
         if let Some(idx) = best {
-            self.habits[idx].strength = (self.habits[idx].strength + Fixed::from_f64(0.01)).clamp_01();
+            self.habits[idx].strength =
+                (self.habits[idx].strength + Fixed::from_f64(0.01)).clamp_01();
             self.habits[idx].repetition_count += 1;
             self.habits[idx].last_performed = tick;
             Some(self.habits[idx].description.clone())
@@ -154,7 +154,11 @@ impl SkillState {
         let avg_habit_strength = if self.habits.is_empty() {
             Fixed::ZERO
         } else {
-            let total: Fixed = self.habits.iter().map(|h| h.strength).fold(Fixed::ZERO, |a, b| a + b);
+            let total: Fixed = self
+                .habits
+                .iter()
+                .map(|h| h.strength)
+                .fold(Fixed::ZERO, |a, b| a + b);
             total / Fixed::from_f64(self.habits.len() as f64)
         };
         self.automaticity = (avg_habit_strength * Fixed::from_f64(0.5) + stress_boost).clamp_01();
@@ -190,8 +194,18 @@ mod tests {
     #[test]
     fn habit_forms_through_repetition() {
         let mut s = SkillState::default();
-        s.form_habit("morning_walk".into(), "morning".into(), Fixed::from_f64(0.3), 0);
-        s.form_habit("morning_walk".into(), "morning".into(), Fixed::from_f64(0.3), 1);
+        s.form_habit(
+            "morning_walk".into(),
+            "morning".into(),
+            Fixed::from_f64(0.3),
+            0,
+        );
+        s.form_habit(
+            "morning_walk".into(),
+            "morning".into(),
+            Fixed::from_f64(0.3),
+            1,
+        );
         assert_eq!(s.habits.len(), 1);
         assert_eq!(s.habits[0].repetition_count, 2);
     }

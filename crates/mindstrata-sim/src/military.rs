@@ -136,7 +136,10 @@ mod tests {
 
     #[test]
     fn conscription_eligible_window_is_18_to_39() {
-        assert!(!conscription_eligible(f(17.9)), "minors are not conscripted");
+        assert!(
+            !conscription_eligible(f(17.9)),
+            "minors are not conscripted"
+        );
         assert!(conscription_eligible(f(18.0)), "18 is eligible");
         assert!(conscription_eligible(f(39.9)), "39 is eligible");
         assert!(!conscription_eligible(f(40.0)), "40+ elders are exempt");

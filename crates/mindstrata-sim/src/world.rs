@@ -237,7 +237,11 @@ impl World {
     /// Consume a quantity of a resource from a site. Returns amount actually taken.
     pub fn consume_resource(&mut self, site_idx: usize, resource_id: u64, amount: Fixed) -> Fixed {
         if let Some(site) = self.sites.get_mut(site_idx) {
-            if let Some(stock) = site.inventory.iter_mut().find(|s| s.resource_id == resource_id) {
+            if let Some(stock) = site
+                .inventory
+                .iter_mut()
+                .find(|s| s.resource_id == resource_id)
+            {
                 let taken = amount.min(stock.quantity);
                 stock.quantity = (stock.quantity - taken).max(Fixed::ZERO);
                 return taken;
@@ -249,7 +253,11 @@ impl World {
     /// Produce a quantity of a resource at a site (e.g. farming generates grain).
     pub fn produce_resource(&mut self, site_idx: usize, resource_id: u64, amount: Fixed) {
         if let Some(site) = self.sites.get_mut(site_idx) {
-            if let Some(stock) = site.inventory.iter_mut().find(|s| s.resource_id == resource_id) {
+            if let Some(stock) = site
+                .inventory
+                .iter_mut()
+                .find(|s| s.resource_id == resource_id)
+            {
                 stock.quantity += amount;
             } else {
                 site.inventory.push(ResourceStock {
@@ -283,7 +291,12 @@ impl World {
     }
 
     /// §6: Find the nearest site of a given kind to a position (by Manhattan distance).
-    pub fn nearest_site_of_kind_to_pos(&self, kind: SiteKind, pos_x: i32, pos_y: i32) -> Option<usize> {
+    pub fn nearest_site_of_kind_to_pos(
+        &self,
+        kind: SiteKind,
+        pos_x: i32,
+        pos_y: i32,
+    ) -> Option<usize> {
         let mut best: Option<(usize, i32)> = None;
         for (i, site) in self.sites.iter().enumerate() {
             if site.kind == kind {
@@ -301,7 +314,12 @@ impl World {
     }
 
     /// §6: Find the nearest site of any of the given kinds to a position.
-    pub fn nearest_site_of_kinds_to_pos(&self, kinds: &[SiteKind], pos_x: i32, pos_y: i32) -> Option<usize> {
+    pub fn nearest_site_of_kinds_to_pos(
+        &self,
+        kinds: &[SiteKind],
+        pos_x: i32,
+        pos_y: i32,
+    ) -> Option<usize> {
         let mut best: Option<(usize, i32)> = None;
         for (i, site) in self.sites.iter().enumerate() {
             if kinds.contains(&site.kind) {
@@ -325,26 +343,48 @@ impl World {
 
     /// Find a farm site with available grain.
     pub fn farm_with_grain(&self) -> Option<usize> {
-        self.sites.iter().enumerate().find(|(_, s)| {
-            s.kind == SiteKind::Farm && s.inventory.iter().any(|r| r.resource_id == GRAIN_RESOURCE_ID && r.quantity > Fixed::ZERO)
-        }).map(|(i, _)| i)
+        self.sites
+            .iter()
+            .enumerate()
+            .find(|(_, s)| {
+                s.kind == SiteKind::Farm
+                    && s.inventory
+                        .iter()
+                        .any(|r| r.resource_id == GRAIN_RESOURCE_ID && r.quantity > Fixed::ZERO)
+            })
+            .map(|(i, _)| i)
     }
 
     /// Find a well site with available water.
     pub fn well_with_water(&self) -> Option<usize> {
-        self.sites.iter().enumerate().find(|(_, s)| {
-            s.kind == SiteKind::Well && s.inventory.iter().any(|r| r.resource_id == WATER_RESOURCE_ID && r.quantity > Fixed::ZERO)
-        }).map(|(i, _)| i)
+        self.sites
+            .iter()
+            .enumerate()
+            .find(|(_, s)| {
+                s.kind == SiteKind::Well
+                    && s.inventory
+                        .iter()
+                        .any(|r| r.resource_id == WATER_RESOURCE_ID && r.quantity > Fixed::ZERO)
+            })
+            .map(|(i, _)| i)
     }
 
     /// Find the most productive farm site (highest grain stock) for work.
     pub fn best_farm_for_work(&self) -> Option<usize> {
-        self.sites.iter().enumerate()
+        self.sites
+            .iter()
+            .enumerate()
             .filter(|(_, s)| s.kind == SiteKind::Farm)
             .max_by(|(_, a), (_, b)| {
-                let fa = a.inventory.iter().find(|r| r.resource_id == GRAIN_RESOURCE_ID)
+                let fa = a
+                    .inventory
+                    .iter()
+                    .find(|r| r.resource_id == GRAIN_RESOURCE_ID)
                     .map_or(Fixed::ZERO, |r| r.quantity);
-                let fb = b.inventory.iter().find(|r| r.resource_id == GRAIN_RESOURCE_ID)
+                let fb = b
+                    .inventory
+                    .iter()
+                    .find(|r| r.resource_id == GRAIN_RESOURCE_ID)
                     .map_or(Fixed::ZERO, |r| r.quantity);
                 fa.cmp(&fb)
             })
@@ -379,38 +419,78 @@ impl World {
     }
 
     /// §19.5.E: Find a site with accessible grain for an agent.
-    pub fn accessible_farm_with_grain(&self, agent_id: EntityId, institutions: &[Institution]) -> Option<usize> {
-        self.sites.iter().enumerate().find(|(i, s)| {
-            s.kind == SiteKind::Farm
-                && s.inventory.iter().any(|r| r.resource_id == GRAIN_RESOURCE_ID && r.quantity > Fixed::ZERO)
-                && self.can_access_resource(*i, GRAIN_RESOURCE_ID, agent_id, institutions)
-        }).map(|(i, _)| i)
+    pub fn accessible_farm_with_grain(
+        &self,
+        agent_id: EntityId,
+        institutions: &[Institution],
+    ) -> Option<usize> {
+        self.sites
+            .iter()
+            .enumerate()
+            .find(|(i, s)| {
+                s.kind == SiteKind::Farm
+                    && s.inventory
+                        .iter()
+                        .any(|r| r.resource_id == GRAIN_RESOURCE_ID && r.quantity > Fixed::ZERO)
+                    && self.can_access_resource(*i, GRAIN_RESOURCE_ID, agent_id, institutions)
+            })
+            .map(|(i, _)| i)
     }
 
     /// §19.5.E: Find a site with accessible water for an agent.
-    pub fn accessible_well_with_water(&self, agent_id: EntityId, institutions: &[Institution]) -> Option<usize> {
-        self.sites.iter().enumerate().find(|(i, s)| {
-            s.kind == SiteKind::Well
-                && s.inventory.iter().any(|r| r.resource_id == WATER_RESOURCE_ID && r.quantity > Fixed::ZERO)
-                && self.can_access_resource(*i, WATER_RESOURCE_ID, agent_id, institutions)
-        }).map(|(i, _)| i)
+    pub fn accessible_well_with_water(
+        &self,
+        agent_id: EntityId,
+        institutions: &[Institution],
+    ) -> Option<usize> {
+        self.sites
+            .iter()
+            .enumerate()
+            .find(|(i, s)| {
+                s.kind == SiteKind::Well
+                    && s.inventory
+                        .iter()
+                        .any(|r| r.resource_id == WATER_RESOURCE_ID && r.quantity > Fixed::ZERO)
+                    && self.can_access_resource(*i, WATER_RESOURCE_ID, agent_id, institutions)
+            })
+            .map(|(i, _)| i)
     }
 
     /// §19.5.D: Find a site with grain that an agent cannot access (for theft tracking).
-    pub fn inaccessible_farm_with_grain(&self, agent_id: EntityId, institutions: &[Institution]) -> Option<usize> {
-        self.sites.iter().enumerate().find(|(i, s)| {
-            s.kind == SiteKind::Farm
-                && s.inventory.iter().any(|r| r.resource_id == GRAIN_RESOURCE_ID && r.quantity > Fixed::ZERO)
-                && !self.can_access_resource(*i, GRAIN_RESOURCE_ID, agent_id, institutions)
-        }).map(|(i, _)| i)
+    pub fn inaccessible_farm_with_grain(
+        &self,
+        agent_id: EntityId,
+        institutions: &[Institution],
+    ) -> Option<usize> {
+        self.sites
+            .iter()
+            .enumerate()
+            .find(|(i, s)| {
+                s.kind == SiteKind::Farm
+                    && s.inventory
+                        .iter()
+                        .any(|r| r.resource_id == GRAIN_RESOURCE_ID && r.quantity > Fixed::ZERO)
+                    && !self.can_access_resource(*i, GRAIN_RESOURCE_ID, agent_id, institutions)
+            })
+            .map(|(i, _)| i)
     }
 
     /// §19.5.D: Find a site with water that an agent cannot access (for theft tracking).
-    pub fn inaccessible_well_with_water(&self, agent_id: EntityId, institutions: &[Institution]) -> Option<usize> {
-        self.sites.iter().enumerate().find(|(i, s)| {
-            s.kind == SiteKind::Well
-                && s.inventory.iter().any(|r| r.resource_id == WATER_RESOURCE_ID && r.quantity > Fixed::ZERO)
-                && !self.can_access_resource(*i, WATER_RESOURCE_ID, agent_id, institutions)
-        }).map(|(i, _)| i)
+    pub fn inaccessible_well_with_water(
+        &self,
+        agent_id: EntityId,
+        institutions: &[Institution],
+    ) -> Option<usize> {
+        self.sites
+            .iter()
+            .enumerate()
+            .find(|(i, s)| {
+                s.kind == SiteKind::Well
+                    && s.inventory
+                        .iter()
+                        .any(|r| r.resource_id == WATER_RESOURCE_ID && r.quantity > Fixed::ZERO)
+                    && !self.can_access_resource(*i, WATER_RESOURCE_ID, agent_id, institutions)
+            })
+            .map(|(i, _)| i)
     }
 }

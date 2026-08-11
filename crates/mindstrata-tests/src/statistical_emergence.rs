@@ -6,7 +6,7 @@
 
 #[cfg(test)]
 mod tests {
-    use mindstrata_sim::{Simulation, sim::SimConfig};
+    use mindstrata_sim::{sim::SimConfig, Simulation};
 
     fn run_sim(seed: u64, ticks: u64) -> mindstrata_sim::sim::MetricsSnapshot {
         let config = SimConfig {
@@ -117,8 +117,14 @@ mod tests {
         let stats = collect_stats(NUM_SEEDS, TICKS);
         let avg_grain = mean(&stats.total_grain);
         let avg_water = mean(&stats.total_water);
-        assert!(avg_grain > 0.0, "Average grain should be > 0, got {avg_grain:.3}");
-        assert!(avg_water > 0.0, "Average water should be > 0, got {avg_water:.3}");
+        assert!(
+            avg_grain > 0.0,
+            "Average grain should be > 0, got {avg_grain:.3}"
+        );
+        assert!(
+            avg_water > 0.0,
+            "Average water should be > 0, got {avg_water:.3}"
+        );
     }
 
     #[test]
@@ -126,18 +132,33 @@ mod tests {
         // §11: Social interactions should occur
         let stats = collect_stats(NUM_SEEDS, TICKS);
         let avg_events = mean_u64(&stats.event_count);
-        assert!(avg_events > 12.0, "Average event count should exceed agent count, got {avg_events:.0}");
+        assert!(
+            avg_events > 12.0,
+            "Average event count should exceed agent count, got {avg_events:.0}"
+        );
     }
 
     #[test]
     fn emergent_behavior_varies_by_seed() {
         // Different seeds should produce meaningfully different outcomes
         let stats = collect_stats(10, TICKS);
-        let min_h = stats.avg_hunger.iter().copied().fold(f64::INFINITY, f64::min);
-        let max_h = stats.avg_hunger.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        let min_h = stats
+            .avg_hunger
+            .iter()
+            .copied()
+            .fold(f64::INFINITY, f64::min);
+        let max_h = stats
+            .avg_hunger
+            .iter()
+            .copied()
+            .fold(f64::NEG_INFINITY, f64::max);
         // §9.1: Goal deduplication and routine bias reduce cross-seed variance.
         // Allow a lower threshold — the important thing is non-zero variance.
-        assert!(max_h - min_h > 0.005, "Hunger should vary across seeds: range={:.4}", max_h - min_h);
+        assert!(
+            max_h - min_h > 0.005,
+            "Hunger should vary across seeds: range={:.4}",
+            max_h - min_h
+        );
     }
 
     // ── §18.4 Statistical emergence audits (Iteration 137) ────────────────
@@ -166,7 +187,8 @@ mod tests {
             let mut sim = Simulation::new(config);
             sim.populate();
             sim.run(5000);
-            let seed_max = sim.agents
+            let seed_max = sim
+                .agents
                 .iter()
                 .map(|a| a.attraction.total_attraction().to_f64())
                 .fold(f64::NEG_INFINITY, f64::max);
@@ -208,7 +230,8 @@ mod tests {
             let mut sim = Simulation::new(config);
             sim.populate();
             sim.run(2000);
-            let faction_count = sim.institutions
+            let faction_count = sim
+                .institutions
                 .iter()
                 .filter(|i| i.kind == InstitutionKind::Faction)
                 .count();

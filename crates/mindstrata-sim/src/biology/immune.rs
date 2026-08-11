@@ -57,7 +57,8 @@ impl ImmuneState {
         self.resistance = (self.resistance + sleep_boost).clamp_01();
 
         // Age reduces immune function
-        self.resistance = (self.resistance - age_modifier * Fixed::from_f64(0.0001)).max(Fixed::ZERO);
+        self.resistance =
+            (self.resistance - age_modifier * Fixed::from_f64(0.0001)).max(Fixed::ZERO);
 
         // Infection triggers immune response
         if self.infection_load > Fixed::ZERO {
@@ -77,7 +78,8 @@ impl ImmuneState {
 
         // Crowding increases infection risk
         if crowding > Fixed::from_f64(0.5) && hygiene < Fixed::from_f64(0.3) {
-            let exposure = (crowding - Fixed::from_f64(0.5)) * (Fixed::ONE - hygiene) * Fixed::from_f64(0.001);
+            let exposure =
+                (crowding - Fixed::from_f64(0.5)) * (Fixed::ONE - hygiene) * Fixed::from_f64(0.001);
             self.infection_load = (self.infection_load + exposure).clamp_01();
         }
 
@@ -90,7 +92,7 @@ impl ImmuneState {
         // Recovery capacity derived from resistance and nutrition
         self.recovery_capacity = (self.resistance * Fixed::from_f64(0.6)
             + nutrition_quality * Fixed::from_f64(0.4))
-            .clamp_01();
+        .clamp_01();
     }
 
     /// Whether the agent is currently sick.

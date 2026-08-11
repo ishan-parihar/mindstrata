@@ -2,7 +2,7 @@
 
 use mindstrata_sim::parameters::SimParameters;
 use mindstrata_sim::scenario::Scenario;
-use mindstrata_sim::{Simulation, sim::SimConfig};
+use mindstrata_sim::{sim::SimConfig, Simulation};
 
 /// Run a simulation with given seed and tick count, returning it for inspection.
 ///

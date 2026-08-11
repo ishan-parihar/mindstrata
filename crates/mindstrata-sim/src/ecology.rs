@@ -212,13 +212,15 @@ impl WeatherTracker {
     /// (the Ecology stream in production) — deterministic for a seeded rng.
     pub fn advance(&mut self, season: Season, rng: &mut impl rand::Rng) -> Option<WeatherEvent> {
         // Temperature: revert toward the seasonal baseline, add noise.
-        let temp_noise = Fixed::from_f64(rng.random_range(-1.0f64..1.0)) * self.config.temperature_noise;
+        let temp_noise =
+            Fixed::from_f64(rng.random_range(-1.0f64..1.0)) * self.config.temperature_noise;
         self.temperature = (self.temperature
             + (season.temperature_modifier() - self.temperature) * self.config.mean_reversion
             + temp_noise)
             .clamp_01();
         // Rainfall: same mean-reversion toward the seasonal baseline.
-        let rain_noise = Fixed::from_f64(rng.random_range(-1.0f64..1.0)) * self.config.rainfall_noise;
+        let rain_noise =
+            Fixed::from_f64(rng.random_range(-1.0f64..1.0)) * self.config.rainfall_noise;
         self.rainfall = (self.rainfall
             + (season.rainfall_baseline() - self.rainfall) * self.config.mean_reversion
             + rain_noise)
@@ -373,8 +375,11 @@ pub fn system_ecology(
     let growth = season.current.growth_modifier();
     let n = site_fertilities.len();
 
-    debug_assert_eq!(site_fertilities.len(), site_work_ticks.len(),
-        "ecology: site_fertilities and site_work_ticks length mismatch");
+    debug_assert_eq!(
+        site_fertilities.len(),
+        site_work_ticks.len(),
+        "ecology: site_fertilities and site_work_ticks length mismatch"
+    );
     for i in 0..n {
         // Overfarming decay: more work = more decay
         // Guard against mismatched site_work_ticks length (e.g. empty world)
@@ -467,7 +472,12 @@ mod tests {
         let mut fertilities = vec![Fixed::from_f64(0.8); 3];
         let work_ticks = vec![10, 0, 5];
 
-        system_ecology(&SeasonTracker::new(100), &mut fertilities, &work_ticks, &config);
+        system_ecology(
+            &SeasonTracker::new(100),
+            &mut fertilities,
+            &work_ticks,
+            &config,
+        );
 
         // Site 0 had work, should have lower fertility
         assert!(fertilities[0] < Fixed::from_f64(0.8));
@@ -519,12 +529,22 @@ mod tests {
             let mut rng = ChaCha8Rng::seed_from_u64(7);
             for _ in 0..1000 {
                 tracker.advance(Season::Spring, &mut rng);
-                assert!((Fixed::ZERO..=Fixed::ONE).contains(&tracker.temperature),
-                    "temperature out of [0,1]: {}", tracker.temperature.to_f64());
-                assert!((Fixed::ZERO..=Fixed::ONE).contains(&tracker.rainfall),
-                    "rainfall out of [0,1]: {}", tracker.rainfall.to_f64());
+                assert!(
+                    (Fixed::ZERO..=Fixed::ONE).contains(&tracker.temperature),
+                    "temperature out of [0,1]: {}",
+                    tracker.temperature.to_f64()
+                );
+                assert!(
+                    (Fixed::ZERO..=Fixed::ONE).contains(&tracker.rainfall),
+                    "rainfall out of [0,1]: {}",
+                    tracker.rainfall.to_f64()
+                );
             }
-            (tracker.temperature.to_raw(), tracker.rainfall.to_raw(), tracker.regime)
+            (
+                tracker.temperature.to_raw(),
+                tracker.rainfall.to_raw(),
+                tracker.regime,
+            )
         };
         assert_eq!(run(), run(), "weather must be seed-deterministic");
     }
@@ -546,7 +566,10 @@ mod tests {
         // the threshold then) — the first drought_ticks - 1 must be silent.
         for tick in 0..9 {
             let ev = tracker.advance(Season::Spring, &mut rng);
-            assert!(ev.is_none(), "no event before the dry spell completes (tick {tick})");
+            assert!(
+                ev.is_none(),
+                "no event before the dry spell completes (tick {tick})"
+            );
         }
         let ev = tracker.advance(Season::Spring, &mut rng);
         assert_eq!(ev, Some(WeatherEvent::DroughtStarted));
@@ -588,15 +611,21 @@ mod tests {
         normal.regime = WeatherRegime::Normal;
         let g_normal = normal.growth_factor();
         // ≈ 1.015 at the rainfall baseline — near-identity, mild calibrated drift.
-        assert!(g_normal > Fixed::ONE && g_normal < Fixed::from_f64(1.05),
-            "normal growth factor should hover at identity, got {}", g_normal.to_f64());
+        assert!(
+            g_normal > Fixed::ONE && g_normal < Fixed::from_f64(1.05),
+            "normal growth factor should hover at identity, got {}",
+            g_normal.to_f64()
+        );
 
         let mut drought = normal.clone();
         drought.rainfall = Fixed::from_f64(0.1);
         drought.regime = WeatherRegime::Drought;
         let g_drought = drought.growth_factor();
-        assert!(g_drought < Fixed::from_f64(0.7),
-            "drought must nearly halve farm output, got {}", g_drought.to_f64());
+        assert!(
+            g_drought < Fixed::from_f64(0.7),
+            "drought must nearly halve farm output, got {}",
+            g_drought.to_f64()
+        );
         assert!(g_drought < g_normal);
 
         // Last use of `normal` — move instead of clone (clippy).
@@ -613,16 +642,25 @@ mod tests {
         normal.temperature = Fixed::from_f64(0.6);
         normal.regime = WeatherRegime::Normal;
         let t_normal = normal.temperature_factor();
-        assert!(t_normal > Fixed::ONE && t_normal < Fixed::from_f64(1.1),
-            "normal temperature factor should hover at identity, got {}", t_normal.to_f64());
+        assert!(
+            t_normal > Fixed::ONE && t_normal < Fixed::from_f64(1.1),
+            "normal temperature factor should hover at identity, got {}",
+            t_normal.to_f64()
+        );
 
         let mut flood = normal.clone();
         flood.regime = WeatherRegime::Flood;
-        assert!(flood.temperature_factor() > t_normal, "flood must rot food faster");
+        assert!(
+            flood.temperature_factor() > t_normal,
+            "flood must rot food faster"
+        );
 
         // Last use of `normal` — move instead of clone (clippy).
         let mut drought = normal;
         drought.regime = WeatherRegime::Drought;
-        assert!(drought.temperature_factor() < t_normal, "drought must keep food better");
+        assert!(
+            drought.temperature_factor() < t_normal,
+            "drought must keep food better"
+        );
     }
 }

@@ -241,7 +241,8 @@ impl NoosphericField {
     pub fn decay_all(&mut self, decay_rate: Fixed) {
         for node in &mut self.nodes {
             // Sacred concepts decay slower
-            let effective_decay = decay_rate * (Fixed::ONE - node.sacredness * Fixed::from_f64(0.8));
+            let effective_decay =
+                decay_rate * (Fixed::ONE - node.sacredness * Fixed::from_f64(0.8));
             node.activation = (node.activation - effective_decay).max(Fixed::ZERO);
         }
     }

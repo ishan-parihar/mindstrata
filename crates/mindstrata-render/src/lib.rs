@@ -200,11 +200,7 @@ fn fill_circle(
 ///
 /// Out-of-bounds agent positions are ignored. The result is fully
 /// deterministic: identical inputs yield identical pixels.
-pub fn render_world_rgba(
-    world: &World,
-    agents: &[RenderAgent],
-    cell_pixels: u32,
-) -> RenderedImage {
+pub fn render_world_rgba(world: &World, agents: &[RenderAgent], cell_pixels: u32) -> RenderedImage {
     let cell = cell_pixels.max(2);
     // PNG forbids zero dimensions — clamp so ANY world (even a degenerate
     // 0x0 one) still produces a valid image. The buffer is pre-filled with a
@@ -252,7 +248,16 @@ pub fn render_world_rgba(
         if x0 + side > image_width || y0 + side > image_height {
             continue;
         }
-        fill_block(&mut rgba, image_width, image_height, x0, y0, side, side, color);
+        fill_block(
+            &mut rgba,
+            image_width,
+            image_height,
+            x0,
+            y0,
+            side,
+            side,
+            color,
+        );
     }
 
     // 3. Agent sprites on top.
@@ -390,7 +395,10 @@ mod tests {
         // The Farm sits on the Forest cell (0,0): its center must be the farm
         // color, while a bare-corner pixel stays Forest (inset leaves margin).
         let i = (6 * img.width + 6) as usize * 4;
-        assert_eq!([img.rgba[i], img.rgba[i + 1], img.rgba[i + 2]], site_color(SiteKind::Farm));
+        assert_eq!(
+            [img.rgba[i], img.rgba[i + 1], img.rgba[i + 2]],
+            site_color(SiteKind::Farm)
+        );
         // A corner pixel of the same cell keeps the terrain color (inset 20%).
         let corner = 1usize;
         let c = corner * 4;
@@ -468,5 +476,4 @@ mod tests {
             assert_eq!(px[3], 255, "all pixels must be opaque");
         }
     }
-
 }

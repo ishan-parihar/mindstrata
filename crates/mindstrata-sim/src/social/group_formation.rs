@@ -83,8 +83,8 @@ impl GroupCandidate {
             // (`TRAUMA_BONDING_WEIGHT` = 0.2, matching shared_grievance),
             // the plan's "bonding after shared trauma" effect from §7.2.
             + self.shared_trauma * Fixed::from_f64(TRAUMA_BONDING_WEIGHT);
-        let negative =
-            self.social_cost * Fixed::from_f64(0.15) + self.institutional_suppression * Fixed::from_f64(0.15);
+        let negative = self.social_cost * Fixed::from_f64(0.15)
+            + self.institutional_suppression * Fixed::from_f64(0.15);
         (positive - negative).clamp_01()
     }
 
@@ -232,8 +232,7 @@ impl PeerGroup {
     /// Daily update — decay cohesion (style-dependent, §12.3) and check
     /// dissolution.
     pub fn daily_update(&mut self) {
-        self.cohesion =
-            (self.cohesion * self.attachment_style.cohesion_retention()).clamp_01();
+        self.cohesion = (self.cohesion * self.attachment_style.cohesion_retention()).clamp_01();
         if self.cohesion < Fixed::from_f64(0.1) || self.members.len() < 2 {
             self.active = false;
         }
@@ -260,7 +259,10 @@ impl Default for GroupRegistry {
 
 impl GroupRegistry {
     pub fn new() -> Self {
-        Self { groups: Vec::new(), active_members: HashSet::new() }
+        Self {
+            groups: Vec::new(),
+            active_members: HashSet::new(),
+        }
     }
 
     pub fn register(&mut self, group: PeerGroup) -> GroupId {
@@ -285,7 +287,9 @@ impl GroupRegistry {
 
     /// Return all active groups.
     pub fn active(&self) -> Vec<(GroupId, &PeerGroup)> {
-        self.groups.iter().enumerate()
+        self.groups
+            .iter()
+            .enumerate()
             .filter(|(_, g)| g.active)
             .collect()
     }
@@ -340,8 +344,12 @@ pub fn evaluate_peer_group(
     }
     let mean_age: Fixed = agent_ages.iter().fold(Fixed::ZERO, |acc, a| acc + *a)
         / Fixed::from_int(agent_ages.len() as i64);
-    let age_variance: Fixed = agent_ages.iter()
-        .map(|a| { let diff = *a - mean_age; diff * diff })
+    let age_variance: Fixed = agent_ages
+        .iter()
+        .map(|a| {
+            let diff = *a - mean_age;
+            diff * diff
+        })
         .fold(Fixed::ZERO, |acc, v| acc + v)
         / Fixed::from_int(agent_ages.len() as i64);
     let age_similarity = (Fixed::ONE - age_variance * Fixed::from_f64(0.1)).clamp_01();
@@ -374,7 +382,8 @@ pub fn compute_group_cohesion(
         + repeated_interaction * Fixed::from_f64(0.3)
         + external_threat * Fixed::from_f64(0.2)
         + institutional_support * Fixed::from_f64(0.2);
-    let time_bonus = Fixed::from_f64(time_since_formation as f64 * 0.0001).min(Fixed::from_f64(0.1));
+    let time_bonus =
+        Fixed::from_f64(time_since_formation as f64 * 0.0001).min(Fixed::from_f64(0.1));
     (base + time_bonus).clamp_01()
 }
 
@@ -422,7 +431,11 @@ mod tests {
         let p0 = base.formation_pressure();
         let p1 = bonded.formation_pressure();
         assert!(p1 > p0, "trauma adds bonding pressure");
-        assert_eq!(p1, p0 + Fixed::from_f64(0.2), "trauma weighs like grievance (0.2)");
+        assert_eq!(
+            p1,
+            p0 + Fixed::from_f64(0.2),
+            "trauma weighs like grievance (0.2)"
+        );
     }
 
     #[test]
@@ -444,7 +457,10 @@ mod tests {
         // 0.5×0.2 + 0.5×0.2 + 0.5×0.15 + 0.5×0.15 − 0.2×0.15 = 0.35 − 0.03 = 0.32
         assert!(!candidate.should_form());
         candidate.shared_trauma = Fixed::ONE; // +0.2 → 0.52
-        assert!(candidate.should_form(), "shared trauma bonds the group into form");
+        assert!(
+            candidate.should_form(),
+            "shared trauma bonds the group into form"
+        );
     }
 
     #[test]
@@ -458,12 +474,18 @@ mod tests {
     #[test]
     fn group_cohesion_increases_with_shared_identity() {
         let low = compute_group_cohesion(
-            Fixed::from_f64(0.2), Fixed::from_f64(0.3),
-            Fixed::from_f64(0.1), Fixed::from_f64(0.1), 100,
+            Fixed::from_f64(0.2),
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.1),
+            Fixed::from_f64(0.1),
+            100,
         );
         let high = compute_group_cohesion(
-            Fixed::from_f64(0.8), Fixed::from_f64(0.3),
-            Fixed::from_f64(0.1), Fixed::from_f64(0.1), 100,
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.1),
+            Fixed::from_f64(0.1),
+            100,
         );
         assert!(high > low);
     }
@@ -474,7 +496,8 @@ mod tests {
             &[0, 1],
             &[Fixed::from_f64(25.0), Fixed::from_f64(26.0)],
             &[Fixed::from_f64(0.5), Fixed::from_f64(0.6)],
-            Fixed::from_f64(0.3), 0,
+            Fixed::from_f64(0.3),
+            0,
         );
         assert!(result.is_none());
     }
@@ -646,9 +669,7 @@ mod tests {
 
     #[test]
     fn group_attachment_style_ties_resolve_to_higher_priority() {
-        use crate::psychology::attachment::AttachmentStyle::{
-            Anxious, Avoidant, Secure,
-        };
+        use crate::psychology::attachment::AttachmentStyle::{Anxious, Avoidant, Secure};
         // 1v1v1v1 tie → Secure (highest priority).
         assert_eq!(
             derive_group_attachment_style(&[Secure, Anxious, Avoidant]),

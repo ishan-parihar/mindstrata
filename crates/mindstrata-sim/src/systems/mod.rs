@@ -38,7 +38,12 @@ impl<'a> SystemContext<'a> {
         world: &'a mut World,
         events: &'a mut Vec<mindstrata_core::event::SimEvent>,
     ) -> Self {
-        Self { tick, rng, world, events }
+        Self {
+            tick,
+            rng,
+            world,
+            events,
+        }
     }
 }
 
@@ -61,17 +66,15 @@ pub fn system_need_decay_with_params(
         need.social = (need.social + params.social_decay_rate).clamp_01();
         need.meaning = (need.meaning + params.meaning_decay_rate).clamp_01();
         // Esteem and autonomy decay at 2/3 the meaning rate
-        need.esteem = (need.esteem + params.meaning_decay_rate * Fixed::from_f64(0.6667)).clamp_01();
-        need.autonomy = (need.autonomy + params.meaning_decay_rate * Fixed::from_f64(0.6667)).clamp_01();
+        need.esteem =
+            (need.esteem + params.meaning_decay_rate * Fixed::from_f64(0.6667)).clamp_01();
+        need.autonomy =
+            (need.autonomy + params.meaning_decay_rate * Fixed::from_f64(0.6667)).clamp_01();
     }
 }
 
 /// Decay needs each tick: deficits grow over time.
-pub fn system_need_decay(
-    _ctx: &mut SystemContext,
-    _bodies: &[BodyState],
-    needs: &mut [NeedState],
-) {
+pub fn system_need_decay(_ctx: &mut SystemContext, _bodies: &[BodyState], needs: &mut [NeedState]) {
     let decay_rate = Fixed::from_f64(0.001); // per-tick deficit growth
 
     for need in needs.iter_mut() {
@@ -166,11 +169,31 @@ pub fn system_goal_generation(
         // ── Need-driven goals (§24 primary source) ──
         // §24: Only one goal per GoalKind — update priority if goal already exists
         let need_goals: &[(crate::person::GoalKind, Fixed, Fixed)] = &[
-            (crate::person::GoalKind::Eat, need.hunger, Fixed::from_f64(0.5)),
-            (crate::person::GoalKind::Drink, need.thirst, Fixed::from_f64(0.5)),
-            (crate::person::GoalKind::Rest, need.fatigue, Fixed::from_f64(0.6)),
-            (crate::person::GoalKind::Socialize, need.social, Fixed::from_f64(0.7)),
-            (crate::person::GoalKind::Worship, need.meaning, Fixed::from_f64(0.7)),
+            (
+                crate::person::GoalKind::Eat,
+                need.hunger,
+                Fixed::from_f64(0.5),
+            ),
+            (
+                crate::person::GoalKind::Drink,
+                need.thirst,
+                Fixed::from_f64(0.5),
+            ),
+            (
+                crate::person::GoalKind::Rest,
+                need.fatigue,
+                Fixed::from_f64(0.6),
+            ),
+            (
+                crate::person::GoalKind::Socialize,
+                need.social,
+                Fixed::from_f64(0.7),
+            ),
+            (
+                crate::person::GoalKind::Worship,
+                need.meaning,
+                Fixed::from_f64(0.7),
+            ),
         ];
         for (kind, pressure, threshold) in need_goals {
             if *pressure > *threshold {
@@ -198,7 +221,10 @@ pub fn system_goal_generation(
             // Fear → SeekSafety goal
             if emo.fear > Fixed::from_f64(0.5) {
                 let fear_prio = emo.fear * Fixed::from_f64(0.8);
-                if let Some(existing) = agent_goals.iter_mut().find(|g| g.kind == crate::person::GoalKind::SeekSafety) {
+                if let Some(existing) = agent_goals
+                    .iter_mut()
+                    .find(|g| g.kind == crate::person::GoalKind::SeekSafety)
+                {
                     existing.priority = existing.priority.max(fear_prio);
                 } else {
                     agent_goals.push(crate::person::Goal {
@@ -214,7 +240,10 @@ pub fn system_goal_generation(
             // High anger → Work (aggressive productivity) when hunger is manageable
             if emo.anger > Fixed::from_f64(0.5) && need.hunger < Fixed::from_f64(0.8) {
                 let anger_prio = emo.anger * Fixed::from_f64(0.3);
-                if let Some(existing) = agent_goals.iter_mut().find(|g| g.kind == crate::person::GoalKind::Work) {
+                if let Some(existing) = agent_goals
+                    .iter_mut()
+                    .find(|g| g.kind == crate::person::GoalKind::Work)
+                {
                     existing.priority = existing.priority.max(anger_prio);
                 } else {
                     agent_goals.push(crate::person::Goal {
@@ -230,7 +259,10 @@ pub fn system_goal_generation(
             // High joy → Socialize goal
             if emo.joy > Fixed::from_f64(0.5) && need.social > Fixed::from_f64(0.3) {
                 let joy_prio = emo.joy * Fixed::from_f64(0.4);
-                if let Some(existing) = agent_goals.iter_mut().find(|g| g.kind == crate::person::GoalKind::Socialize) {
+                if let Some(existing) = agent_goals
+                    .iter_mut()
+                    .find(|g| g.kind == crate::person::GoalKind::Socialize)
+                {
                     existing.priority = existing.priority.max(joy_prio);
                 } else {
                     agent_goals.push(crate::person::Goal {
@@ -250,11 +282,12 @@ pub fn system_goal_generation(
         if i < personalities.len() {
             let personality = &personalities[i];
             // Ambitious agents generate Work goals even without pressing need
-            if personality.ambition > Fixed::from_f64(0.6)
-                && need.fatigue < Fixed::from_f64(0.5)
-            {
+            if personality.ambition > Fixed::from_f64(0.6) && need.fatigue < Fixed::from_f64(0.5) {
                 let id_priority = personality.ambition * Fixed::from_f64(0.4);
-                if let Some(existing) = agent_goals.iter_mut().find(|g| g.kind == crate::person::GoalKind::Work) {
+                if let Some(existing) = agent_goals
+                    .iter_mut()
+                    .find(|g| g.kind == crate::person::GoalKind::Work)
+                {
                     existing.priority = existing.priority.max(id_priority);
                 } else {
                     agent_goals.push(crate::person::Goal {
@@ -271,7 +304,10 @@ pub fn system_goal_generation(
                 && need.meaning > Fixed::from_f64(0.4)
             {
                 let id_priority = personality.traditionalism * Fixed::from_f64(0.3);
-                if let Some(existing) = agent_goals.iter_mut().find(|g| g.kind == crate::person::GoalKind::Worship) {
+                if let Some(existing) = agent_goals
+                    .iter_mut()
+                    .find(|g| g.kind == crate::person::GoalKind::Worship)
+                {
                     existing.priority = existing.priority.max(id_priority);
                 } else {
                     agent_goals.push(crate::person::Goal {
@@ -284,11 +320,13 @@ pub fn system_goal_generation(
                 }
             }
             // Extraverted agents generate Socialize goals more readily
-            if personality.extraversion > Fixed::from_f64(0.6)
-                && need.social > Fixed::from_f64(0.4)
+            if personality.extraversion > Fixed::from_f64(0.6) && need.social > Fixed::from_f64(0.4)
             {
                 let id_priority = personality.extraversion * Fixed::from_f64(0.3);
-                if let Some(existing) = agent_goals.iter_mut().find(|g| g.kind == crate::person::GoalKind::Socialize) {
+                if let Some(existing) = agent_goals
+                    .iter_mut()
+                    .find(|g| g.kind == crate::person::GoalKind::Socialize)
+                {
                     existing.priority = existing.priority.max(id_priority);
                 } else {
                     agent_goals.push(crate::person::Goal {

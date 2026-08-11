@@ -4,7 +4,7 @@
 //! against golden baselines stored in `golden/`. If a baseline changes, the test
 //! fails and the developer must inspect whether the change was intended.
 
-use mindstrata_sim::{Simulation, sim::SimConfig};
+use mindstrata_sim::{sim::SimConfig, Simulation};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
@@ -59,7 +59,14 @@ fn run_golden(seed: u64, ticks: u64) -> GoldenBaseline {
     let summaries = sim.agent_summaries();
     let agent_data: Vec<(f64, f64, f64, f64)> = summaries
         .iter()
-        .map(|s| (s.hunger.to_f64(), s.thirst.to_f64(), s.fatigue.to_f64(), s.valence.to_f64()))
+        .map(|s| {
+            (
+                s.hunger.to_f64(),
+                s.thirst.to_f64(),
+                s.fatigue.to_f64(),
+                s.valence.to_f64(),
+            )
+        })
         .collect();
 
     let event_count_hash = {
@@ -71,7 +78,12 @@ fn run_golden(seed: u64, ticks: u64) -> GoldenBaseline {
     GoldenBaseline {
         metric_hash: hash_metrics(&metrics),
         event_hash: event_count_hash,
-        agent_hash: hash_metrics(&agent_data.iter().flat_map(|(a, b, c, d)| [*a, *b, *c, *d]).collect::<Vec<_>>()),
+        agent_hash: hash_metrics(
+            &agent_data
+                .iter()
+                .flat_map(|(a, b, c, d)| [*a, *b, *c, *d])
+                .collect::<Vec<_>>(),
+        ),
         agent_count: ms.agent_count,
         total_grain: ms.total_grain,
         total_water: ms.total_water,
@@ -112,10 +124,16 @@ mod tests {
     fn golden_replay_deterministic() {
         let b1 = run_golden(TEST_SEED, TEST_TICKS);
         let b2 = run_golden(TEST_SEED, TEST_TICKS);
-        assert_eq!(b1.metric_hash, b2.metric_hash, "Metric hash not deterministic");
+        assert_eq!(
+            b1.metric_hash, b2.metric_hash,
+            "Metric hash not deterministic"
+        );
         assert_eq!(b1.event_hash, b2.event_hash, "Event hash not deterministic");
         assert_eq!(b1.agent_hash, b2.agent_hash, "Agent hash not deterministic");
-        assert_eq!(b1.agent_count, b2.agent_count, "Agent count not deterministic");
+        assert_eq!(
+            b1.agent_count, b2.agent_count,
+            "Agent count not deterministic"
+        );
     }
 
     #[test]
@@ -151,15 +169,21 @@ mod tests {
         assert_eq!(b.metric_hash, baseline.metric_hash,
             "\n⚠️  Golden baseline changed!\n  Scenario: {}\n  Seed: {}\n  Old: {:016x}\n  New: {:016x}\n  Update: {:?}",
             baseline.scenario, baseline.seed, baseline.metric_hash, b.metric_hash, path);
-        assert_eq!(b.agent_count, baseline.agent_count,
-            "Agent count changed! Old: {}, New: {}", baseline.agent_count, b.agent_count);
+        assert_eq!(
+            b.agent_count, baseline.agent_count,
+            "Agent count changed! Old: {}, New: {}",
+            baseline.agent_count, b.agent_count
+        );
     }
 
     #[test]
     fn golden_replay_different_seeds_differ() {
         let b1 = run_golden(42, 500);
         let b2 = run_golden(99, 500);
-        assert_ne!(b1.metric_hash, b2.metric_hash, "Different seeds should produce different metric hashes");
+        assert_ne!(
+            b1.metric_hash, b2.metric_hash,
+            "Different seeds should produce different metric hashes"
+        );
     }
 
     #[test]
@@ -167,6 +191,9 @@ mod tests {
         let b = run_golden(TEST_SEED, TEST_TICKS);
         assert!(b.agent_count > 0, "Simulation should have agents");
         // §19.5.F: Population may grow from births during simulation
-        assert!(b.agent_count <= 48, "Should not exceed population cap of 48");
+        assert!(
+            b.agent_count <= 48,
+            "Should not exceed population cap of 48"
+        );
     }
 }

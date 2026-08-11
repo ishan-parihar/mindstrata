@@ -70,7 +70,13 @@ impl PriceTracker {
 
     /// Update price based on current supply and demand.
     /// Uses exponential moving average for smoothing.
-    pub fn update(&mut self, supply: Fixed, demand: Fixed, tick: u64, params: &crate::parameters::SimParameters) {
+    pub fn update(
+        &mut self,
+        supply: Fixed,
+        demand: Fixed,
+        tick: u64,
+        params: &crate::parameters::SimParameters,
+    ) {
         // Only update once per tick
         if tick == self.last_update_tick && self.last_update_tick > 0 {
             return;
@@ -280,8 +286,14 @@ pub fn direct_trade(
 
     // Trust discount: high trust → lower price, low trust → higher price
     // Trust 1.0 → 80% of base price, Trust 0.0 → 120% of base price
-    let trust_modifier = Fixed::ONE - trust * params.market_trust_discount + (Fixed::ONE - trust) * params.market_trust_discount;
-    let price = (base_price * trust_modifier).max(market.prices.get(resource_id as usize).map_or(Fixed::ONE, |p| p.price_floor));
+    let trust_modifier = Fixed::ONE - trust * params.market_trust_discount
+        + (Fixed::ONE - trust) * params.market_trust_discount;
+    let price = (base_price * trust_modifier).max(
+        market
+            .prices
+            .get(resource_id as usize)
+            .map_or(Fixed::ONE, |p| p.price_floor),
+    );
 
     let total_cost = price * quantity;
 
@@ -325,24 +337,26 @@ pub fn compute_supply(world: &World, resource_id: u64) -> Fixed {
 ///
 /// Demand is weighted by need pressure: agents with high hunger
 /// demand more grain, etc.
-pub fn compute_demand(agents: &[(NeedState, WealthState)], resource_id: u64, params: &crate::parameters::SimParameters) -> Fixed {
-    agents
-        .iter()
-        .fold(Fixed::ZERO, |acc, (needs, wealth)| {
-            // Linear need pressure scaled by demand weight. The weight is set
-            // to the expected per-agent consumption (EXPECTED_GRAIN_PER_AGENT
-            // ≈ 10), so demand is the same order of magnitude as aggregate
-            // supply — without this, hunger²·2 was ~2 units vs ~100 units of
-            // supply, pinning prices at the floor forever.
-            let need_pressure = match resource_id {
-                0 => needs.hunger * params.market_demand_weight, // grain
-                1 => needs.thirst * params.market_demand_weight, // water
-                _ => Fixed::ZERO,
-            };
-            // Only demand if agent can afford something
-            let purchasing_power = (wealth.coin / params.market_purchasing_power_divisor).clamp_01();
-            acc + need_pressure * purchasing_power
-        })
+pub fn compute_demand(
+    agents: &[(NeedState, WealthState)],
+    resource_id: u64,
+    params: &crate::parameters::SimParameters,
+) -> Fixed {
+    agents.iter().fold(Fixed::ZERO, |acc, (needs, wealth)| {
+        // Linear need pressure scaled by demand weight. The weight is set
+        // to the expected per-agent consumption (EXPECTED_GRAIN_PER_AGENT
+        // ≈ 10), so demand is the same order of magnitude as aggregate
+        // supply — without this, hunger²·2 was ~2 units vs ~100 units of
+        // supply, pinning prices at the floor forever.
+        let need_pressure = match resource_id {
+            0 => needs.hunger * params.market_demand_weight, // grain
+            1 => needs.thirst * params.market_demand_weight, // water
+            _ => Fixed::ZERO,
+        };
+        // Only demand if agent can afford something
+        let purchasing_power = (wealth.coin / params.market_purchasing_power_divisor).clamp_01();
+        acc + need_pressure * purchasing_power
+    })
 }
 
 // ── Inequality Metrics ──────────────────────────────────────────────────
@@ -434,7 +448,11 @@ pub fn system_market(
 ///
 /// When a resource is scarce, the effective "cost" of acquiring it increases,
 /// making alternatives more attractive. This creates economic pressure.
-pub fn scarcity_modifier(supply: Fixed, max_expected: Fixed, params: &crate::parameters::SimParameters) -> Fixed {
+pub fn scarcity_modifier(
+    supply: Fixed,
+    max_expected: Fixed,
+    params: &crate::parameters::SimParameters,
+) -> Fixed {
     if supply <= Fixed::ZERO {
         params.market_scarcity_extreme // extreme scarcity → 2x cost
     } else if supply >= max_expected {
@@ -448,24 +466,40 @@ pub fn scarcity_modifier(supply: Fixed, max_expected: Fixed, params: &crate::par
 
 #[cfg(test)]
 mod tests {
-    use crate::parameters::SimParameters;
     use super::*;
+    use crate::parameters::SimParameters;
     use crate::world::GRAIN_RESOURCE_ID;
 
     #[test]
     fn price_rises_with_scarcity() {
         let mut tracker = PriceTracker::new(Fixed::from_f64(5.0));
         // High demand, low supply → price should rise
-        tracker.update(Fixed::from_f64(1.0), Fixed::from_f64(10.0), 1, &SimParameters::default());
-        assert!(tracker.price > Fixed::from_f64(5.0), "Price should rise with scarcity");
+        tracker.update(
+            Fixed::from_f64(1.0),
+            Fixed::from_f64(10.0),
+            1,
+            &SimParameters::default(),
+        );
+        assert!(
+            tracker.price > Fixed::from_f64(5.0),
+            "Price should rise with scarcity"
+        );
     }
 
     #[test]
     fn price_falls_with_abundance() {
         let mut tracker = PriceTracker::new(Fixed::from_f64(5.0));
         // Low demand, high supply → price should fall
-        tracker.update(Fixed::from_f64(10.0), Fixed::from_f64(1.0), 1, &SimParameters::default());
-        assert!(tracker.price < Fixed::from_f64(5.0), "Price should fall with abundance");
+        tracker.update(
+            Fixed::from_f64(10.0),
+            Fixed::from_f64(1.0),
+            1,
+            &SimParameters::default(),
+        );
+        assert!(
+            tracker.price < Fixed::from_f64(5.0),
+            "Price should fall with abundance"
+        );
     }
 
     #[test]
@@ -476,7 +510,10 @@ mod tests {
             Fixed::from_f64(10.0),
         ];
         let gini = compute_gini(&wealths);
-        assert!(gini < Fixed::from_f64(0.01), "Gini should be near 0 for equal wealth");
+        assert!(
+            gini < Fixed::from_f64(0.01),
+            "Gini should be near 0 for equal wealth"
+        );
     }
 
     #[test]
@@ -487,16 +524,27 @@ mod tests {
             Fixed::from_f64(0.0),
         ];
         let gini = compute_gini(&wealths);
-        assert!(gini > Fixed::from_f64(0.5), "Gini should be high for unequal wealth");
+        assert!(
+            gini > Fixed::from_f64(0.5),
+            "Gini should be high for unequal wealth"
+        );
     }
 
     #[test]
     fn trade_reduces_buyer_coin() {
-        let mut buyer = WealthState { coin: Fixed::from_f64(20.0) };
+        let mut buyer = WealthState {
+            coin: Fixed::from_f64(20.0),
+        };
         let mut seller_stock = Fixed::from_f64(5.0);
         let mut market = MarketState::new(&SimParameters::default());
 
-        let result = execute_trade(&mut buyer, &mut seller_stock, 0, Fixed::from_f64(1.0), &mut market);
+        let result = execute_trade(
+            &mut buyer,
+            &mut seller_stock,
+            0,
+            Fixed::from_f64(1.0),
+            &mut market,
+        );
         match result {
             TradeResult::Success { total_cost, .. } => {
                 assert!(buyer.coin < Fixed::from_f64(20.0));
@@ -508,27 +556,62 @@ mod tests {
 
     #[test]
     fn trade_fails_with_insufficient_funds() {
-        let mut buyer = WealthState { coin: Fixed::from_f64(1.0) };
+        let mut buyer = WealthState {
+            coin: Fixed::from_f64(1.0),
+        };
         let mut seller_stock = Fixed::from_f64(5.0);
         let mut market = MarketState::new(&SimParameters::default());
 
-        let result = execute_trade(&mut buyer, &mut seller_stock, 0, Fixed::from_f64(1.0), &mut market);
+        let result = execute_trade(
+            &mut buyer,
+            &mut seller_stock,
+            0,
+            Fixed::from_f64(1.0),
+            &mut market,
+        );
         assert!(matches!(result, TradeResult::InsufficientFunds));
     }
 
     #[test]
     fn direct_trade_respects_trust() {
-        let mut buyer_high_trust = WealthState { coin: Fixed::from_f64(100.0) };
-        let mut buyer_low_trust = WealthState { coin: Fixed::from_f64(100.0) };
+        let mut buyer_high_trust = WealthState {
+            coin: Fixed::from_f64(100.0),
+        };
+        let mut buyer_low_trust = WealthState {
+            coin: Fixed::from_f64(100.0),
+        };
         let mut stock1 = Fixed::from_f64(10.0);
         let mut stock2 = Fixed::from_f64(10.0);
         let mut market = MarketState::new(&SimParameters::default());
 
-        let r1 = direct_trade(&mut buyer_high_trust, &mut stock1, 0, Fixed::from_f64(1.0), Fixed::from_f64(0.9), &mut market, &SimParameters::default());
-        let r2 = direct_trade(&mut buyer_low_trust, &mut stock2, 0, Fixed::from_f64(1.0), Fixed::from_f64(0.1), &mut market, &SimParameters::default());
+        let r1 = direct_trade(
+            &mut buyer_high_trust,
+            &mut stock1,
+            0,
+            Fixed::from_f64(1.0),
+            Fixed::from_f64(0.9),
+            &mut market,
+            &SimParameters::default(),
+        );
+        let r2 = direct_trade(
+            &mut buyer_low_trust,
+            &mut stock2,
+            0,
+            Fixed::from_f64(1.0),
+            Fixed::from_f64(0.1),
+            &mut market,
+            &SimParameters::default(),
+        );
 
         match (r1, r2) {
-            (TradeResult::Success { total_cost: cost1, .. }, TradeResult::Success { total_cost: cost2, .. }) => {
+            (
+                TradeResult::Success {
+                    total_cost: cost1, ..
+                },
+                TradeResult::Success {
+                    total_cost: cost2, ..
+                },
+            ) => {
                 assert!(cost1 < cost2, "High trust should get lower price");
             }
             _ => panic!("Both trades should succeed"),
@@ -537,9 +620,20 @@ mod tests {
 
     #[test]
     fn scarcity_modifier_increases_with_scarcity() {
-        let abundant = scarcity_modifier(Fixed::from_f64(10.0), Fixed::from_f64(10.0), &SimParameters::default());
-        let scarce = scarcity_modifier(Fixed::from_f64(1.0), Fixed::from_f64(10.0), &SimParameters::default());
-        assert!(scarce > abundant, "Scarcity modifier should increase with scarcity");
+        let abundant = scarcity_modifier(
+            Fixed::from_f64(10.0),
+            Fixed::from_f64(10.0),
+            &SimParameters::default(),
+        );
+        let scarce = scarcity_modifier(
+            Fixed::from_f64(1.0),
+            Fixed::from_f64(10.0),
+            &SimParameters::default(),
+        );
+        assert!(
+            scarce > abundant,
+            "Scarcity modifier should increase with scarcity"
+        );
     }
 
     #[test]
@@ -555,9 +649,17 @@ mod tests {
         let mut tracker = PriceTracker::new(Fixed::from_f64(2.0));
         // Extreme abundance should not drop below floor
         for tick in 1..1000 {
-            tracker.update(Fixed::from_f64(100.0), Fixed::from_f64(0.01), tick, &SimParameters::default());
+            tracker.update(
+                Fixed::from_f64(100.0),
+                Fixed::from_f64(0.01),
+                tick,
+                &SimParameters::default(),
+            );
         }
-        assert!(tracker.price >= tracker.price_floor, "Price should not go below floor");
+        assert!(
+            tracker.price >= tracker.price_floor,
+            "Price should not go below floor"
+        );
     }
 
     #[test]
@@ -565,8 +667,16 @@ mod tests {
         let mut tracker = PriceTracker::new(Fixed::from_f64(5.0));
         // Extreme scarcity should not exceed ceiling
         for tick in 1..1000 {
-            tracker.update(Fixed::from_f64(0.01), Fixed::from_f64(100.0), tick, &SimParameters::default());
+            tracker.update(
+                Fixed::from_f64(0.01),
+                Fixed::from_f64(100.0),
+                tick,
+                &SimParameters::default(),
+            );
         }
-        assert!(tracker.price <= tracker.price_ceiling, "Price should not exceed ceiling");
+        assert!(
+            tracker.price <= tracker.price_ceiling,
+            "Price should not exceed ceiling"
+        );
     }
 }

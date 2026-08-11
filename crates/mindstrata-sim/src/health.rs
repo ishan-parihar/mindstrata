@@ -150,7 +150,8 @@ pub fn should_contract(
     // Prolonged contact increases risk
     let contact_factor = Fixed::from_int(proximity_ticks as i64) * Fixed::from_f64(0.01);
 
-    let effective_rate = (base_rate + contact_factor - health_resistance - immunity_bonus).clamp_01();
+    let effective_rate =
+        (base_rate + contact_factor - health_resistance - immunity_bonus).clamp_01();
 
     rng_value < effective_rate
 }
@@ -270,11 +271,26 @@ mod tests {
 
         // Pass high hunger/fatigue to prevent natural recovery from overriding disease
         for _ in 0..200 {
-            system_health(&mut health, &mut energy, &mut diseases, Fixed::from_f64(0.8), Fixed::from_f64(0.8), &config);
+            system_health(
+                &mut health,
+                &mut energy,
+                &mut diseases,
+                Fixed::from_f64(0.8),
+                Fixed::from_f64(0.8),
+                &config,
+            );
         }
 
-        assert!(health < Fixed::from_f64(0.8), "Health should decrease with fever: {}", health.to_f64());
-        assert!(energy < Fixed::from_f64(0.9), "Energy should decrease with fever: {}", energy.to_f64());
+        assert!(
+            health < Fixed::from_f64(0.8),
+            "Health should decrease with fever: {}",
+            health.to_f64()
+        );
+        assert!(
+            energy < Fixed::from_f64(0.9),
+            "Energy should decrease with fever: {}",
+            energy.to_f64()
+        );
     }
 
     #[test]
@@ -285,7 +301,14 @@ mod tests {
         let mut diseases = Vec::new();
 
         // High hunger triggers malnutrition
-        system_health(&mut health, &mut energy, &mut diseases, Fixed::from_f64(0.8), Fixed::ZERO, &config);
+        system_health(
+            &mut health,
+            &mut energy,
+            &mut diseases,
+            Fixed::from_f64(0.8),
+            Fixed::ZERO,
+            &config,
+        );
 
         assert!(health < Fixed::from_f64(0.9));
     }
@@ -297,7 +320,14 @@ mod tests {
         let mut energy = Fixed::from_f64(0.4);
         let mut diseases = Vec::new();
 
-        system_health(&mut health, &mut energy, &mut diseases, Fixed::ZERO, Fixed::ZERO, &config);
+        system_health(
+            &mut health,
+            &mut energy,
+            &mut diseases,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            &config,
+        );
 
         assert!(health > Fixed::from_f64(0.5));
         assert!(energy > Fixed::from_f64(0.4));
@@ -312,7 +342,14 @@ mod tests {
 
         // Fast-forward past cold duration (200 ticks)
         for _ in 0..300 {
-            system_health(&mut health, &mut energy, &mut diseases, Fixed::ZERO, Fixed::ZERO, &config);
+            system_health(
+                &mut health,
+                &mut energy,
+                &mut diseases,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                &config,
+            );
         }
 
         assert!(diseases.is_empty());
@@ -350,11 +387,14 @@ mod tests {
     fn work_impairment_respects_floor_for_stacked_diseases() {
         // Three peak-severity epidemics (total severity 2.1) drive the
         // multiplier to the 0.2 floor rather than below zero.
-        let sick = vec![ActiveDisease {
-            kind: DiseaseKind::Epidemic,
-            ticks_infected: 264, // 1/3 of the 800-tick duration = severity peak
-            severity_modifier: Fixed::ONE,
-        }; 3];
+        let sick = vec![
+            ActiveDisease {
+                kind: DiseaseKind::Epidemic,
+                ticks_infected: 264, // 1/3 of the 800-tick duration = severity peak
+                severity_modifier: Fixed::ONE,
+            };
+            3
+        ];
         let factor = work_impairment(&sick);
         assert!(
             factor == Fixed::from_f64(0.2),

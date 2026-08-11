@@ -9,9 +9,9 @@
 //! - household formation,
 //! - clan identity.
 
-use std::collections::{HashSet, VecDeque};
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
+use std::collections::{HashSet, VecDeque};
 
 /// The type of kinship link between two agents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -119,7 +119,8 @@ impl KinshipGraph {
     }
 
     pub fn kin_of(&self, agent: usize) -> Vec<&KinshipEdge> {
-        self.edges.iter()
+        self.edges
+            .iter()
             .filter(|e| e.active && e.from == agent)
             .collect()
     }
@@ -127,7 +128,8 @@ impl KinshipGraph {
     /// Compute the kinship coefficient between two agents (highest along any path).
     /// Checks both directions to handle unidirectional parent→child edges.
     pub fn coefficient_between(&self, a: usize, b: usize) -> Fixed {
-        self.edges.iter()
+        self.edges
+            .iter()
             .filter(|e| e.active && ((e.from == a && e.to == b) || (e.from == b && e.to == a)))
             .map(|e| e.coefficient)
             .max_by_key(|c| c.to_raw())
@@ -321,7 +323,7 @@ mod tests {
     fn kinship_graph_active_count() {
         let mut g = KinshipGraph::default();
         g.add_link(0, 1, KinshipLink::ParentChild, 0); // 1 edge (unidirectional)
-        g.add_link(1, 2, KinshipLink::Sibling, 0);     // 2 edges (bidirectional mirror)
+        g.add_link(1, 2, KinshipLink::Sibling, 0); // 2 edges (bidirectional mirror)
         assert_eq!(g.active_count(), 3);
     }
 
@@ -371,7 +373,7 @@ mod tests {
             g.add_link(0, p, KinshipLink::ParentChild, 0);
         }
         g.add_link(0, 4, KinshipLink::Sibling, 0); // mirrored automatically
-        // b = 1: parent 5 and sibling 6.
+                                                   // b = 1: parent 5 and sibling 6.
         g.add_link(5, 1, KinshipLink::ParentChild, 0);
         g.add_link(1, 5, KinshipLink::ParentChild, 0);
         g.add_link(1, 6, KinshipLink::Sibling, 0); // mirrored automatically
@@ -392,7 +394,10 @@ mod tests {
         }
         // Marital edges are non-biological: inert for the incest taboo.
         assert_eq!(g.coefficient_between(1, 2), Fixed::ZERO);
-        assert!(g.can_marry(1, 2), "in-law ties must not block courtship via coefficient");
+        assert!(
+            g.can_marry(1, 2),
+            "in-law ties must not block courtship via coefficient"
+        );
     }
 
     #[test]

@@ -12,9 +12,9 @@
 //! §Phase 8: "Factions form around grievance. Agents recruit others.
 //! Institutions respond to unrest."
 
+use crate::institutions::{Institution, InstitutionKind, Role};
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::id::AgentId;
-use crate::institutions::{Institution, InstitutionKind, Role};
 
 /// Minimum grievance threshold for an agent to be recruitable into a faction.
 pub const RECRUITMENT_GRIEVANCE_THRESHOLD: Fixed = Fixed::from_raw(4000); // 0.4
@@ -122,19 +122,17 @@ pub fn select_leader(
     }
 
     // Score each candidate: ambition * 0.4 + dominance * 0.3 + extraversion * 0.2 - anger * 0.1
-    let best = candidates
-        .iter()
-        .max_by(|a, b| {
-            let score_a = a.1 * Fixed::from_f64(0.4)
-                + a.2 * Fixed::from_f64(0.3)
-                + a.3 * Fixed::from_f64(0.2)
+    let best = candidates.iter().max_by(|a, b| {
+        let score_a =
+            a.1 * Fixed::from_f64(0.4) + a.2 * Fixed::from_f64(0.3) + a.3 * Fixed::from_f64(0.2)
                 - a.4 * Fixed::from_f64(0.1);
-            let score_b = b.1 * Fixed::from_f64(0.4)
-                + b.2 * Fixed::from_f64(0.3)
-                + b.3 * Fixed::from_f64(0.2)
+        let score_b =
+            b.1 * Fixed::from_f64(0.4) + b.2 * Fixed::from_f64(0.3) + b.3 * Fixed::from_f64(0.2)
                 - b.4 * Fixed::from_f64(0.1);
-            score_a.partial_cmp(&score_b).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        score_a
+            .partial_cmp(&score_b)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     best.map(|c| c.0)
 }
@@ -199,7 +197,8 @@ pub fn protest_legitimacy_effect(protest_size: usize, total_population: usize) -
         return Fixed::ZERO;
     }
     // Larger protests cause more legitimacy damage
-    let size_ratio = Fixed::from_int(protest_size as i64) / Fixed::from_int(total_population as i64);
+    let size_ratio =
+        Fixed::from_int(protest_size as i64) / Fixed::from_int(total_population as i64);
     (PROTEST_LEGITIMACY_DAMAGE * size_ratio * Fixed::from_f64(2.0)).clamp_01()
 }
 
@@ -222,7 +221,8 @@ pub fn council_response(
         return (false, Fixed::ZERO);
     }
 
-    let size_ratio = Fixed::from_int(protest_size as i64) / Fixed::from_int(total_population as i64);
+    let size_ratio =
+        Fixed::from_int(protest_size as i64) / Fixed::from_int(total_population as i64);
     // §29.2: armed factions resist suppression — effective size grows with
     // fighting strength (mobilization × morale × (1 − casualties)).
     let effective_ratio = size_ratio * (Fixed::ONE + protest_strength.clamp_01());
@@ -275,7 +275,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
-            Fixed::ONE, // perfect justice
+            Fixed::ONE,  // perfect justice
             Fixed::ZERO, // no inequality
         );
         assert_eq!(g, Fixed::ZERO);
@@ -298,9 +298,27 @@ mod tests {
     #[test]
     fn leader_selection_prefers_high_ambition() {
         let candidates = vec![
-            (AgentId::new(0), Fixed::from_f64(0.3), Fixed::from_f64(0.5), Fixed::from_f64(0.5), Fixed::from_f64(0.1)),
-            (AgentId::new(1), Fixed::from_f64(0.9), Fixed::from_f64(0.7), Fixed::from_f64(0.6), Fixed::from_f64(0.2)),
-            (AgentId::new(2), Fixed::from_f64(0.5), Fixed::from_f64(0.4), Fixed::from_f64(0.3), Fixed::from_f64(0.1)),
+            (
+                AgentId::new(0),
+                Fixed::from_f64(0.3),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.1),
+            ),
+            (
+                AgentId::new(1),
+                Fixed::from_f64(0.9),
+                Fixed::from_f64(0.7),
+                Fixed::from_f64(0.6),
+                Fixed::from_f64(0.2),
+            ),
+            (
+                AgentId::new(2),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.4),
+                Fixed::from_f64(0.3),
+                Fixed::from_f64(0.1),
+            ),
         ];
         let leader = select_leader(&candidates);
         assert_eq!(leader, Some(AgentId::new(1)));
@@ -361,21 +379,11 @@ mod tests {
     #[test]
     fn council_suppression_works() {
         // Strong council, small protest = suppressed
-        let (suppressed, _) = council_response(
-            Fixed::from_f64(0.7),
-            2,
-            12,
-            Fixed::ZERO,
-        );
+        let (suppressed, _) = council_response(Fixed::from_f64(0.7), 2, 12, Fixed::ZERO);
         assert!(suppressed);
 
         // Weak council, large protest = not suppressed
-        let (suppressed, _) = council_response(
-            Fixed::from_f64(0.2),
-            8,
-            12,
-            Fixed::ZERO,
-        );
+        let (suppressed, _) = council_response(Fixed::from_f64(0.2), 8, 12, Fixed::ZERO);
         assert!(!suppressed);
     }
 
@@ -384,12 +392,9 @@ mod tests {
         // With protest_strength = 0 the armed-scale factor is 1.0 — the
         // effective ratio equals the plain size ratio, so suppression and
         // legitimacy outcomes must match the pre-§29.2 logic exactly.
-        let (suppressed_a, effect_a) = council_response(
-            Fixed::from_f64(0.5), 3, 12, Fixed::ZERO,
-        );
-        let (suppressed_b, effect_b) = council_response(
-            Fixed::from_f64(0.5), 3, 12, Fixed::from_f64(0.001),
-        );
+        let (suppressed_a, effect_a) = council_response(Fixed::from_f64(0.5), 3, 12, Fixed::ZERO);
+        let (suppressed_b, effect_b) =
+            council_response(Fixed::from_f64(0.5), 3, 12, Fixed::from_f64(0.001));
         assert_eq!(suppressed_a, suppressed_b);
         assert_eq!(effect_a, effect_b);
     }
@@ -400,12 +405,8 @@ mod tests {
         // Unarmed (0.0): threshold 0.5 − 0.25 = 0.25 > 0 → suppressed.
         // Armed (1.0): effective ratio 0.25 × 2.0 = 0.5 → threshold 0.0 →
         // not suppressed. The same crowd with fighting strength resists.
-        let (suppressed_unarmed, _) = council_response(
-            Fixed::from_f64(0.5), 3, 12, Fixed::ZERO,
-        );
-        let (suppressed_armed, _) = council_response(
-            Fixed::from_f64(0.5), 3, 12, Fixed::ONE,
-        );
+        let (suppressed_unarmed, _) = council_response(Fixed::from_f64(0.5), 3, 12, Fixed::ZERO);
+        let (suppressed_armed, _) = council_response(Fixed::from_f64(0.5), 3, 12, Fixed::ONE);
         assert!(suppressed_unarmed);
         assert!(!suppressed_armed);
     }
@@ -414,12 +415,10 @@ mod tests {
     fn higher_strength_is_never_easier_to_suppress() {
         for strength_a in [0.0f64, 0.3, 0.6, 0.9] {
             for strength_b in [0.1f64, 0.4, 0.7, 1.0] {
-                let (suppressed_a, _) = council_response(
-                    Fixed::from_f64(0.5), 4, 12, Fixed::from_f64(strength_a),
-                );
-                let (suppressed_b, _) = council_response(
-                    Fixed::from_f64(0.5), 4, 12, Fixed::from_f64(strength_b),
-                );
+                let (suppressed_a, _) =
+                    council_response(Fixed::from_f64(0.5), 4, 12, Fixed::from_f64(strength_a));
+                let (suppressed_b, _) =
+                    council_response(Fixed::from_f64(0.5), 4, 12, Fixed::from_f64(strength_b));
                 // A stronger faction is never suppressed while a weaker one is
                 // not (stronger factions only ever resist suppression).
                 assert!(

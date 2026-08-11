@@ -20,7 +20,7 @@ use mindstrata_core::fixed::Fixed;
 use mindstrata_sim::gossip::process_gossip;
 use mindstrata_sim::memory::{MemoryKind, MemoryStore, MemoryTag};
 use mindstrata_sim::person::Belief;
-use mindstrata_sim::{Simulation, sim::SimConfig};
+use mindstrata_sim::{sim::SimConfig, Simulation};
 
 /// Build a populated simulation and run it briefly so agents carry realistic
 /// emotion/personality/belief state for the subsystem benchmarks.
@@ -140,9 +140,5 @@ fn bench_gossip_process(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(
-    benches,
-    bench_memory_encode,
-    bench_gossip_process,
-);
+criterion_group!(benches, bench_memory_encode, bench_gossip_process,);
 criterion_main!(benches);

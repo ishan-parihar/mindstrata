@@ -68,7 +68,7 @@ impl ThermalState {
         let metabolic_warmth = energy_reserves * Fixed::from_f64(0.01);
         self.body_temperature = (self.body_temperature + temp_delta * Fixed::from_f64(0.001)
             - metabolic_warmth * self.cold_stress * Fixed::from_f64(0.001))
-            .clamp_01();
+        .clamp_01();
     }
 }
 

@@ -50,11 +50,10 @@ pub use cult::{CultDynamics, CultRegistry};
 pub use epistemic::EpistemicState;
 pub use faction_v2::{FactionV2, FactionV2Registry};
 pub use group_formation::{
-    derive_group_attachment_style, GroupAttachmentStyle, GroupCandidate, GroupId,
-    GroupRegistry, GroupType, PeerGroup,
+    derive_group_attachment_style, GroupAttachmentStyle, GroupCandidate, GroupId, GroupRegistry,
+    GroupType, PeerGroup,
 };
 pub mod relational_field;
-pub use relational_field::{RelationalFields, PERCEPTION_RADIUS};
 pub use household::Household;
 pub use interaction::{
     process_interaction, select_interaction_target, system_social_interactions, Interaction,
@@ -62,7 +61,10 @@ pub use interaction::{
 pub use kinship::KinshipGraph;
 pub use marriage::{Marriage, MarriageRegistry, PairBond, RomanticStage};
 pub use patronage::{PatronageRegistry, PatronageRelation};
+pub use relational_field::{RelationalFields, PERCEPTION_RADIUS};
 pub use relationship_stages::{try_advance_stage, try_regress_stage};
-pub use relationship_v2::{RelationshipV2, RelationshipStage};
-pub use speech_act::{ActDomain, RelationalIntent, SpeechAct, SpeechActKind, SpeechEffect, SPEECH_LOG_CAPACITY};
+pub use relationship_v2::{RelationshipStage, RelationshipV2};
+pub use speech_act::{
+    ActDomain, RelationalIntent, SpeechAct, SpeechActKind, SpeechEffect, SPEECH_LOG_CAPACITY,
+};
 pub use status_dims::StatusDimensions;

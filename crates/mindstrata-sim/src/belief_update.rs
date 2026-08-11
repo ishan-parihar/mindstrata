@@ -49,7 +49,8 @@ pub fn update_belief(
 
     // §19.5.A: Blend explicit source_trust with belief's source base_trust.
     // This means the evidence source of the belief itself modulates trust.
-    let blended_trust = (source_trust + belief.source.base_trust()) * params.belief_trust_blend_factor;
+    let blended_trust =
+        (source_trust + belief.source.base_trust()) * params.belief_trust_blend_factor;
 
     // §19.5.A: Track social reinforcement count when social evidence confirms belief.
     if social_reinforcement_delta > Fixed::ZERO {
@@ -63,8 +64,10 @@ pub fn update_belief(
         + social_reinforcement_delta;
 
     // Identity protection bias: beliefs with high identity linkage resist change
-    let identity_protection = if belief.identity_linkage > params.belief_identity_linkage_threshold {
-        let protection = Fixed::ONE - belief.identity_linkage * params.belief_identity_protection_strength;
+    let identity_protection = if belief.identity_linkage > params.belief_identity_linkage_threshold
+    {
+        let protection =
+            Fixed::ONE - belief.identity_linkage * params.belief_identity_protection_strength;
         belief.confidence * (Fixed::ONE - protection) + base_update * protection
     } else {
         base_update
@@ -76,7 +79,8 @@ pub fn update_belief(
     // Reinforcement decays resistance over time
     let time_since_reinforce = current_tick.saturating_sub(belief.last_reinforced_tick);
     if time_since_reinforce > 0 && evidence_strength > Fixed::ZERO {
-        let decay = params.belief_resistance_decay_rate * Fixed::from_int(time_since_reinforce as i64);
+        let decay =
+            params.belief_resistance_decay_rate * Fixed::from_int(time_since_reinforce as i64);
         belief.resistance = (belief.resistance - decay).clamp_01();
         belief.last_reinforced_tick = current_tick;
     }
@@ -109,7 +113,11 @@ pub fn update_beliefs(
 }
 
 /// Decay belief resistance over time (beliefs become slightly easier to update).
-pub fn decay_belief_resistance(beliefs: &mut [Belief], decay_rate: Fixed, params: &crate::parameters::SimParameters) {
+pub fn decay_belief_resistance(
+    beliefs: &mut [Belief],
+    decay_rate: Fixed,
+    params: &crate::parameters::SimParameters,
+) {
     for belief in beliefs.iter_mut() {
         let baseline = params.belief_resistance_baseline;
         if belief.resistance > baseline {

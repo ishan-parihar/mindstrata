@@ -309,28 +309,27 @@ impl ProspectionState {
 
     /// Select the best scenario to pursue based on expected value.
     pub fn best_scenario(&self) -> Option<&MentalScenario> {
-        self.scenarios
-            .iter()
-            .max_by(|a, b| {
-                let val_a = a.expected_need_relief + a.expected_valence * Fixed::from_f64(0.5)
-                    - a.risk * Fixed::from_f64(0.3);
-                let val_b = b.expected_need_relief + b.expected_valence * Fixed::from_f64(0.5)
-                    - b.risk * Fixed::from_f64(0.3);
-                val_a.to_raw().cmp(&val_b.to_raw())
-            })
+        self.scenarios.iter().max_by(|a, b| {
+            let val_a = a.expected_need_relief + a.expected_valence * Fixed::from_f64(0.5)
+                - a.risk * Fixed::from_f64(0.3);
+            let val_b = b.expected_need_relief + b.expected_valence * Fixed::from_f64(0.5)
+                - b.risk * Fixed::from_f64(0.3);
+            val_a.to_raw().cmp(&val_b.to_raw())
+        })
     }
 
     /// Update prospection state based on current emotions and trauma.
     pub fn update(&mut self, fear: Fixed, ambition: Fixed, trauma_load: Fixed, depression: Fixed) {
         // Fear amplifies catastrophic bias
-        self.catastrophic_bias = (Fixed::from_f64(0.2) + trauma_load * Fixed::from_f64(0.3)
+        self.catastrophic_bias = (Fixed::from_f64(0.2)
+            + trauma_load * Fixed::from_f64(0.3)
             + fear * Fixed::from_f64(0.2))
-            .clamp_01();
+        .clamp_01();
 
         // Ambition amplifies optimism
         self.optimism_bias = (Fixed::from_f64(0.3) + ambition * Fixed::from_f64(0.3)
             - depression * Fixed::from_f64(0.2))
-            .clamp_01();
+        .clamp_01();
 
         // Depression reduces hope
         self.hope = (self.hope - depression * Fixed::from_f64(0.01)).max(Fixed::ZERO);
@@ -338,7 +337,7 @@ impl ProspectionState {
         // Planning confidence affected by cognitive state
         self.planning_confidence = (Fixed::from_f64(0.5) - fear * Fixed::from_f64(0.2)
             + ambition * Fixed::from_f64(0.2))
-            .clamp_01();
+        .clamp_01();
     }
 
     /// Clear scenarios (e.g., after major life event).
@@ -431,7 +430,10 @@ mod tests {
         );
         let s = pro.scenarios.last().unwrap();
         assert!(s.description.contains("harvest fails"));
-        assert!(s.expected_valence < Fixed::ZERO, "scarcity scenarios are dread");
+        assert!(
+            s.expected_valence < Fixed::ZERO,
+            "scarcity scenarios are dread"
+        );
     }
 
     #[test]
@@ -453,7 +455,12 @@ mod tests {
                 can_plan_long_term: true,
             },
         );
-        assert!(pro.scenarios.last().unwrap().description.contains("come to harm"));
+        assert!(pro
+            .scenarios
+            .last()
+            .unwrap()
+            .description
+            .contains("come to harm"));
     }
 
     #[test]
@@ -475,7 +482,12 @@ mod tests {
                 can_plan_long_term: true,
             },
         );
-        assert!(pro.scenarios.last().unwrap().description.contains("council may punish"));
+        assert!(pro
+            .scenarios
+            .last()
+            .unwrap()
+            .description
+            .contains("council may punish"));
     }
 
     #[test]
@@ -498,7 +510,12 @@ mod tests {
                 can_plan_long_term: true,
             },
         );
-        assert!(!attached.scenarios.last().unwrap().description.contains("court"));
+        assert!(!attached
+            .scenarios
+            .last()
+            .unwrap()
+            .description
+            .contains("court"));
         // Unattached with low attraction: no courtship scenario either.
         let mut low = ProspectionState::default();
         low.generate_daily_scenario(
@@ -536,7 +553,12 @@ mod tests {
                 can_plan_long_term: true,
             },
         );
-        assert!(viable.scenarios.last().unwrap().description.contains("court"));
+        assert!(viable
+            .scenarios
+            .last()
+            .unwrap()
+            .description
+            .contains("court"));
     }
 
     #[test]
@@ -558,7 +580,12 @@ mod tests {
                 can_plan_long_term: true,
             },
         );
-        assert!(pro.scenarios.last().unwrap().description.contains("gain respect"));
+        assert!(pro
+            .scenarios
+            .last()
+            .unwrap()
+            .description
+            .contains("gain respect"));
     }
 
     #[test]
@@ -581,7 +608,12 @@ mod tests {
                 can_plan_long_term: true,
             },
         );
-        assert!(intact.scenarios.last().unwrap().description.contains("gain respect"));
+        assert!(intact
+            .scenarios
+            .last()
+            .unwrap()
+            .description
+            .contains("gain respect"));
         // Ambitious agent with degraded EF: falls through to the D6 hopeful default.
         let mut degraded = ProspectionState::default();
         degraded.generate_daily_scenario(
@@ -650,7 +682,10 @@ mod tests {
         );
         let s = pro.scenarios.last().unwrap();
         assert!(s.description.contains("rains come"));
-        assert!(s.expected_valence > Fixed::ZERO, "default scenario is hopeful");
+        assert!(
+            s.expected_valence > Fixed::ZERO,
+            "default scenario is hopeful"
+        );
     }
 
     #[test]
@@ -701,8 +736,14 @@ mod tests {
             },
         );
         pro.evaluate_scenarios();
-        assert!(pro.dread > baseline_dread, "scenario evaluation must raise dread");
-        assert!(pro.hope <= baseline_hope, "dread scenario must not raise hope");
+        assert!(
+            pro.dread > baseline_dread,
+            "scenario evaluation must raise dread"
+        );
+        assert!(
+            pro.hope <= baseline_hope,
+            "dread scenario must not raise hope"
+        );
     }
 
     /// §8.1.16 (Iteration 117): `generate_daily_scenario` stamps each
@@ -715,8 +756,13 @@ mod tests {
     /// from the default.
     #[test]
     fn daily_scenario_kinds_are_stamped_per_domain() {
-        let inputs = |hunger: Fixed, fear: Fixed, anger: Fixed, ambition: Fixed,
-                      has_partner: bool, attraction: Fixed, can_plan: bool| ScenarioInputs {
+        let inputs = |hunger: Fixed,
+                      fear: Fixed,
+                      anger: Fixed,
+                      ambition: Fixed,
+                      has_partner: bool,
+                      attraction: Fixed,
+                      can_plan: bool| ScenarioInputs {
             hunger,
             thirst: Fixed::ZERO,
             safety: Fixed::ZERO,
@@ -732,27 +778,99 @@ mod tests {
         let mut pro = ProspectionState::default();
 
         // D1 scarcity (hunger beats a zero elsewheres).
-        pro.generate_daily_scenario(1, inputs(Fixed::from_f64(0.8), Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, false, Fixed::ZERO, true));
+        pro.generate_daily_scenario(
+            1,
+            inputs(
+                Fixed::from_f64(0.8),
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                false,
+                Fixed::ZERO,
+                true,
+            ),
+        );
         assert_eq!(pro.scenarios.last().unwrap().kind, ScenarioKind::D1Scarcity);
 
         // D2 threat (fear 0.6, hunger below the scarcity gate).
-        pro.generate_daily_scenario(2, inputs(Fixed::from_f64(0.3), Fixed::from_f64(0.6), Fixed::ZERO, Fixed::ZERO, false, Fixed::ZERO, true));
+        pro.generate_daily_scenario(
+            2,
+            inputs(
+                Fixed::from_f64(0.3),
+                Fixed::from_f64(0.6),
+                Fixed::ZERO,
+                Fixed::ZERO,
+                false,
+                Fixed::ZERO,
+                true,
+            ),
+        );
         assert_eq!(pro.scenarios.last().unwrap().kind, ScenarioKind::D2Threat);
 
         // D3 injustice (anger 0.6, everything else calm).
-        pro.generate_daily_scenario(3, inputs(Fixed::from_f64(0.3), Fixed::ZERO, Fixed::from_f64(0.6), Fixed::ZERO, false, Fixed::ZERO, true));
-        assert_eq!(pro.scenarios.last().unwrap().kind, ScenarioKind::D3Injustice);
+        pro.generate_daily_scenario(
+            3,
+            inputs(
+                Fixed::from_f64(0.3),
+                Fixed::ZERO,
+                Fixed::from_f64(0.6),
+                Fixed::ZERO,
+                false,
+                Fixed::ZERO,
+                true,
+            ),
+        );
+        assert_eq!(
+            pro.scenarios.last().unwrap().kind,
+            ScenarioKind::D3Injustice
+        );
 
         // D4 courtship (unattached with attraction 0.6, else calm).
-        pro.generate_daily_scenario(4, inputs(Fixed::from_f64(0.3), Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, false, Fixed::from_f64(0.6), true));
-        assert_eq!(pro.scenarios.last().unwrap().kind, ScenarioKind::D4Courtship);
+        pro.generate_daily_scenario(
+            4,
+            inputs(
+                Fixed::from_f64(0.3),
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                false,
+                Fixed::from_f64(0.6),
+                true,
+            ),
+        );
+        assert_eq!(
+            pro.scenarios.last().unwrap().kind,
+            ScenarioKind::D4Courtship
+        );
 
         // D5 ambition (ambition 0.7 + intact EF, else calm).
-        pro.generate_daily_scenario(5, inputs(Fixed::from_f64(0.3), Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(0.7), false, Fixed::ZERO, true));
+        pro.generate_daily_scenario(
+            5,
+            inputs(
+                Fixed::from_f64(0.3),
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::from_f64(0.7),
+                false,
+                Fixed::ZERO,
+                true,
+            ),
+        );
         assert_eq!(pro.scenarios.last().unwrap().kind, ScenarioKind::D5Ambition);
 
         // D6 hopeful default (all calm).
-        pro.generate_daily_scenario(6, inputs(Fixed::from_f64(0.3), Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, false, Fixed::ZERO, true));
+        pro.generate_daily_scenario(
+            6,
+            inputs(
+                Fixed::from_f64(0.3),
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                false,
+                Fixed::ZERO,
+                true,
+            ),
+        );
         assert_eq!(pro.scenarios.last().unwrap().kind, ScenarioKind::D6Hopeful);
     }
 
@@ -778,17 +896,11 @@ mod tests {
 
         // Fear amplifies dread (the catastrophic-bias channel).
         pro.update(Fixed::from_f64(0.5), Fixed::ZERO, Fixed::ZERO, Fixed::ZERO);
-        assert!(
-            pro.catastrophic_bias > base_cat,
-            "fear must amplify dread"
-        );
+        assert!(pro.catastrophic_bias > base_cat, "fear must amplify dread");
 
         // Ambition amplifies hope (the optimism-bias channel).
         pro.update(Fixed::ZERO, Fixed::from_f64(0.5), Fixed::ZERO, Fixed::ZERO);
-        assert!(
-            pro.optimism_bias > base_opt,
-            "ambition must amplify hope"
-        );
+        assert!(pro.optimism_bias > base_opt, "ambition must amplify hope");
 
         // Depression reduces hope and tempers optimism.
         pro.hope = Fixed::from_f64(0.5);

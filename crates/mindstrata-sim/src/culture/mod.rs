@@ -22,8 +22,8 @@
 //! ```
 
 pub mod collective_memory;
-pub mod education;
 pub mod echo_chamber;
+pub mod education;
 pub mod ideology;
 pub mod knowledge;
 pub mod meme;
@@ -35,11 +35,18 @@ pub mod rumor_v2;
 pub mod sacred;
 pub mod technology;
 
-pub use collective_memory::{ACTIVE_TRAUMA_SALIENCE_THRESHOLD, CollectiveMemory, CollectiveMemoryRegistry, SharedMemory, SharedMemoryKind, SharedTrauma};
+pub use collective_memory::{
+    CollectiveMemory, CollectiveMemoryRegistry, SharedMemory, SharedMemoryKind, SharedTrauma,
+    ACTIVE_TRAUMA_SALIENCE_THRESHOLD,
+};
 pub use echo_chamber::{BeliefCluster as EchoBeliefCluster, EchoChamberState};
-pub use education::{EducationState, EducationEvent};
-pub use ideology::{BeliefEcology, BeliefCluster, Ideology, IdeologyAxis};
-pub use knowledge::{cultural_pressure, diffuse_knowledge, taboo_severity, CulturalState, DiffusionResult, EffectTarget, Ideology as KnowledgeIdeology, IdeologyValue, Knowledge, KnowledgeCategory, Practice, PracticeCategory, PracticeEffect};
+pub use education::{EducationEvent, EducationState};
+pub use ideology::{BeliefCluster, BeliefEcology, Ideology, IdeologyAxis};
+pub use knowledge::{
+    cultural_pressure, diffuse_knowledge, taboo_severity, CulturalState, DiffusionResult,
+    EffectTarget, Ideology as KnowledgeIdeology, IdeologyValue, Knowledge, KnowledgeCategory,
+    Practice, PracticeCategory, PracticeEffect,
+};
 pub use meme::{Meme, MemeContent, MemeRegistry};
 pub use meme_aggregator::{AggregatedMemeMetrics, MemeAggregator};
 pub use narrative_frame::{NarrativeFrame, NarrativeFrameSet};

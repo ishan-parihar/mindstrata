@@ -63,19 +63,15 @@ impl EducationState {
         (self.teaching_skill * Fixed::from_f64(0.4)
             + knowledge_familiarity * Fixed::from_f64(0.3)
             + self.teaching_patience * Fixed::from_f64(0.3))
-            .clamp_01()
+        .clamp_01()
     }
 
     /// Compute the effective learning rate for a specific knowledge transfer.
-    pub fn effective_learning(
-        &self,
-        teacher_quality: Fixed,
-        relationship_quality: Fixed,
-    ) -> Fixed {
+    pub fn effective_learning(&self, teacher_quality: Fixed, relationship_quality: Fixed) -> Fixed {
         (self.learning_aptitude * Fixed::from_f64(0.3)
             + teacher_quality * Fixed::from_f64(0.4)
             + relationship_quality * Fixed::from_f64(0.3))
-            .clamp_01()
+        .clamp_01()
     }
 
     /// Check if this agent has learned a specific knowledge id.
@@ -133,8 +129,7 @@ pub fn attempt_teaching(
     tick: u64,
 ) -> EducationEvent {
     let quality = teacher_education.effective_teaching(knowledge_familiarity);
-    let learning_rate =
-        student_education.effective_learning(quality, relationship_quality);
+    let learning_rate = student_education.effective_learning(quality, relationship_quality);
 
     // Success chance depends on learning rate and some randomness
     // (caller should provide deterministic roll)
@@ -183,14 +178,8 @@ mod tests {
             learning_aptitude: Fixed::from_f64(0.2),
             ..EducationState::default()
         };
-        let rate_high = high_apt.effective_learning(
-            Fixed::from_f64(0.5),
-            Fixed::from_f64(0.5),
-        );
-        let rate_low = low_apt.effective_learning(
-            Fixed::from_f64(0.5),
-            Fixed::from_f64(0.5),
-        );
+        let rate_high = high_apt.effective_learning(Fixed::from_f64(0.5), Fixed::from_f64(0.5));
+        let rate_low = low_apt.effective_learning(Fixed::from_f64(0.5), Fixed::from_f64(0.5));
         assert!(rate_high > rate_low);
     }
 

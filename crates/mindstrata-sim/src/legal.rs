@@ -133,7 +133,11 @@ impl LegalRegistry {
         prior_convictions: u32,
         enforcement: Fixed,
     ) -> Fixed {
-        let owned = if owned_site { OWNED_SITE_EVIDENCE_BONUS } else { 0.0 };
+        let owned = if owned_site {
+            OWNED_SITE_EVIDENCE_BONUS
+        } else {
+            0.0
+        };
         let repeat = REPEAT_OFFENDER_EVIDENCE_BONUS * prior_convictions.min(3) as f64;
         let total = enforcement.to_f64() * ENFORCEMENT_EVIDENCE_WEIGHT + owned + repeat;
         Fixed::from_f64(total).clamp_01()
@@ -170,7 +174,11 @@ impl LegalRegistry {
             site_idx,
             tick_filed: tick,
             evidence_strength: evidence,
-            verdict: Some(if guilty { Verdict::Guilty } else { Verdict::Innocent }),
+            verdict: Some(if guilty {
+                Verdict::Guilty
+            } else {
+                Verdict::Innocent
+            }),
             sentence,
             repeat_offender: prior > 0,
         };
@@ -200,7 +208,11 @@ mod tests {
         let reg = LegalRegistry::new();
         let none = Fixed::ZERO;
         let half = Fixed::from_f64(0.5);
-        assert_eq!(reg.evidence_strength(false, 0, none), Fixed::ZERO, "no court power, communal site");
+        assert_eq!(
+            reg.evidence_strength(false, 0, none),
+            Fixed::ZERO,
+            "no court power, communal site"
+        );
         let communal = reg.evidence_strength(false, 0, half);
         assert_eq!(communal.to_f64(), 0.3, "0.6 × 0.5 enforcement");
         let owned = reg.evidence_strength(true, 0, half);
@@ -215,27 +227,58 @@ mod tests {
         let once = reg.evidence_strength(true, 1, half);
         let thrice = reg.evidence_strength(true, 3, half);
         let ten = reg.evidence_strength(true, 10, half);
-        assert!(once > reg.evidence_strength(true, 0, half), "repeat record adds evidence");
-        assert_eq!(thrice, ten, "the repeat bonus saturates at three prior convictions");
+        assert!(
+            once > reg.evidence_strength(true, 0, half),
+            "repeat record adds evidence"
+        );
+        assert_eq!(
+            thrice, ten,
+            "the repeat bonus saturates at three prior convictions"
+        );
     }
 
     #[test]
     fn owned_site_theft_with_court_power_is_convicted() {
         let mut reg = LegalRegistry::new();
         let fine = Fixed::from_f64(10.0);
-        let case = reg.prosecute(7, A, Some(V), Some(3), true, Fixed::from_f64(0.5), fine, 100);
+        let case = reg.prosecute(
+            7,
+            A,
+            Some(V),
+            Some(3),
+            true,
+            Fixed::from_f64(0.5),
+            fine,
+            100,
+        );
         assert_eq!(case.verdict, Some(Verdict::Guilty), "evidence 0.55 ≥ 0.5");
-        assert!(case.sentence > Fixed::ZERO, "a Guilty verdict carries a court fine");
+        assert!(
+            case.sentence > Fixed::ZERO,
+            "a Guilty verdict carries a court fine"
+        );
         assert_eq!(case.sentence.to_f64(), 10.0 * 1.05, "fine × (0.5 + 0.55)");
         assert_eq!(case.evidence_strength.to_f64(), 0.55);
         assert_eq!(reg.convictions, 1);
-        assert_eq!(reg.established_tick, Some(100), "the court convenes on the first case");
+        assert_eq!(
+            reg.established_tick,
+            Some(100),
+            "the court convenes on the first case"
+        );
     }
 
     #[test]
     fn weak_evidence_acquits_without_sentence() {
         let mut reg = LegalRegistry::new();
-        let case = reg.prosecute(7, A, None, None, false, Fixed::ZERO, Fixed::from_f64(10.0), 50);
+        let case = reg.prosecute(
+            7,
+            A,
+            None,
+            None,
+            false,
+            Fixed::ZERO,
+            Fixed::from_f64(10.0),
+            50,
+        );
         assert_eq!(case.verdict, Some(Verdict::Innocent), "evidence 0 < 0.5");
         assert_eq!(case.sentence, Fixed::ZERO, "an acquittal carries no fine");
         assert_eq!(reg.acquittals, 1);
@@ -246,11 +289,32 @@ mod tests {
     fn repeat_offender_faces_harsher_sentence() {
         let mut reg = LegalRegistry::new();
         let fine = Fixed::from_f64(10.0);
-        let first = reg.prosecute(7, A, Some(V), Some(3), true, Fixed::from_f64(0.5), fine, 100);
+        let first = reg.prosecute(
+            7,
+            A,
+            Some(V),
+            Some(3),
+            true,
+            Fixed::from_f64(0.5),
+            fine,
+            100,
+        );
         assert!(!first.repeat_offender, "first offense is not a repeat");
-        let second = reg.prosecute(7, A, Some(V), Some(3), true, Fixed::from_f64(0.5), fine, 200);
+        let second = reg.prosecute(
+            7,
+            A,
+            Some(V),
+            Some(3),
+            true,
+            Fixed::from_f64(0.5),
+            fine,
+            200,
+        );
         assert!(second.repeat_offender, "second offense is a repeat");
-        assert!(second.sentence > first.sentence, "repeat evidence 0.65 > 0.55 raises the fine");
+        assert!(
+            second.sentence > first.sentence,
+            "repeat evidence 0.65 > 0.55 raises the fine"
+        );
         // Both offenses are on the record now; the repeat_offender flag above
         // (computed at filing time, before the second case was pushed) is what
         // proves the timing semantics.
@@ -261,9 +325,31 @@ mod tests {
     #[test]
     fn prior_convictions_counts_only_guilty_verdicts() {
         let mut reg = LegalRegistry::new();
-        reg.prosecute(7, A, None, None, false, Fixed::ZERO, Fixed::from_f64(10.0), 50); // acquittal
-        reg.prosecute(7, A, Some(V), Some(3), true, Fixed::from_f64(0.5), Fixed::from_f64(10.0), 100); // conviction
-        assert_eq!(reg.prior_convictions(A), 1, "acquittals do not count against the accused");
+        reg.prosecute(
+            7,
+            A,
+            None,
+            None,
+            false,
+            Fixed::ZERO,
+            Fixed::from_f64(10.0),
+            50,
+        ); // acquittal
+        reg.prosecute(
+            7,
+            A,
+            Some(V),
+            Some(3),
+            true,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(10.0),
+            100,
+        ); // conviction
+        assert_eq!(
+            reg.prior_convictions(A),
+            1,
+            "acquittals do not count against the accused"
+        );
         assert_eq!(reg.cases.len(), 2);
         assert_eq!(reg.next_case_id, 2);
     }

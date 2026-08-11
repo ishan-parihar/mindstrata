@@ -383,12 +383,7 @@ impl RelationalFields {
     /// zero throughout the golden/snapshot horizons (provably zero-blast).
     /// Monotone above the anchor, capped so the daily envy pressure stays
     /// bounded, deterministic (no RNG).
-    pub fn envy_delta(
-        peer_status: Fixed,
-        anchor: Fixed,
-        rate: Fixed,
-        cap: Fixed,
-    ) -> Fixed {
+    pub fn envy_delta(peer_status: Fixed, anchor: Fixed, rate: Fixed, cap: Fixed) -> Fixed {
         let above_anchor = (peer_status - anchor).max(Fixed::ZERO);
         // No clamp needed: above_anchor ∈ [0, 1], rate and cap are small, so
         // the delta is provably in [0, cap] ⊆ [0, 0.15] for the shipped
@@ -416,17 +411,14 @@ impl RelationalFields {
         if values.is_empty() {
             return Fixed::ZERO;
         }
-        values.iter().fold(Fixed::ZERO, |acc, &v| acc + v)
-            / Fixed::from_int(values.len() as i64)
+        values.iter().fold(Fixed::ZERO, |acc, &v| acc + v) / Fixed::from_int(values.len() as i64)
     }
 
     /// Normalized closeness of a manhattan distance: 1 at distance 1,
     /// 0 at `PERCEPTION_RADIUS` and beyond (linear in between).
     pub fn closeness(distance: i32) -> Fixed {
         let d = distance.clamp(1, PERCEPTION_RADIUS);
-        Fixed::from_f64(
-            (PERCEPTION_RADIUS - d) as f64 / (PERCEPTION_RADIUS - 1) as f64,
-        )
+        Fixed::from_f64((PERCEPTION_RADIUS - d) as f64 / (PERCEPTION_RADIUS - 1) as f64)
     }
 }
 
@@ -446,26 +438,17 @@ mod tests {
             Fixed::from_f64(0.4),
             Fixed::from_f64(0.6),
         ];
-        assert_eq!(
-            RelationalFields::mean(&vals),
-            Fixed::from_f64(0.4)
-        );
+        assert_eq!(RelationalFields::mean(&vals), Fixed::from_f64(0.4));
     }
 
     #[test]
     fn closeness_is_one_at_adjacency() {
-        assert_eq!(
-            RelationalFields::closeness(1),
-            Fixed::from_f64(1.0)
-        );
+        assert_eq!(RelationalFields::closeness(1), Fixed::from_f64(1.0));
     }
 
     #[test]
     fn closeness_decays_to_zero_at_radius() {
-        assert_eq!(
-            RelationalFields::closeness(PERCEPTION_RADIUS),
-            Fixed::ZERO
-        );
+        assert_eq!(RelationalFields::closeness(PERCEPTION_RADIUS), Fixed::ZERO);
         assert_eq!(RelationalFields::closeness(99), Fixed::ZERO);
     }
 
@@ -475,7 +458,10 @@ mod tests {
         // neighbors) must contribute nothing; the contribution is monotone
         // in both stress and rate, bounded by the clamp, and deterministic.
         let rate = Fixed::from_f64(FEAR_CONTAGION_RATE);
-        assert_eq!(RelationalFields::contagion_delta(Fixed::ZERO, rate), Fixed::ZERO);
+        assert_eq!(
+            RelationalFields::contagion_delta(Fixed::ZERO, rate),
+            Fixed::ZERO
+        );
         assert_eq!(
             RelationalFields::contagion_delta(Fixed::from_f64(0.2), Fixed::ZERO),
             Fixed::ZERO
@@ -615,27 +601,14 @@ mod tests {
             "below the anchor (decayed legitimacy) must also be identity"
         );
         assert_eq!(
-            RelationalFields::legitimacy_deterrence_factor(
-                Fixed::from_f64(0.8),
-                anchor,
-                rate,
-                cap,
-            ),
+            RelationalFields::legitimacy_deterrence_factor(Fixed::from_f64(0.8), anchor, rate, cap,),
             Fixed::from_f64(0.85),
             "legitimacy 0.8 must deter by exactly 0.15"
         );
-        let low = RelationalFields::legitimacy_deterrence_factor(
-            Fixed::from_f64(0.6),
-            anchor,
-            rate,
-            cap,
-        );
-        let high = RelationalFields::legitimacy_deterrence_factor(
-            Fixed::from_f64(0.9),
-            anchor,
-            rate,
-            cap,
-        );
+        let low =
+            RelationalFields::legitimacy_deterrence_factor(Fixed::from_f64(0.6), anchor, rate, cap);
+        let high =
+            RelationalFields::legitimacy_deterrence_factor(Fixed::from_f64(0.9), anchor, rate, cap);
         assert!(low > high, "higher legitimacy must deter more");
         assert_eq!(
             RelationalFields::legitimacy_deterrence_factor(Fixed::ONE, anchor, rate, cap),
@@ -742,27 +715,14 @@ mod tests {
             "below the anchor (seed-42 max 0.456@5000) must also be identity"
         );
         assert_eq!(
-            RelationalFields::obligation_restraint_factor(
-                Fixed::from_f64(0.6),
-                anchor,
-                rate,
-                cap,
-            ),
+            RelationalFields::obligation_restraint_factor(Fixed::from_f64(0.6), anchor, rate, cap,),
             Fixed::from_f64(0.97),
             "obligation 0.6 must restrain by exactly 0.03"
         );
-        let low = RelationalFields::obligation_restraint_factor(
-            Fixed::from_f64(0.55),
-            anchor,
-            rate,
-            cap,
-        );
-        let high = RelationalFields::obligation_restraint_factor(
-            Fixed::from_f64(0.8),
-            anchor,
-            rate,
-            cap,
-        );
+        let low =
+            RelationalFields::obligation_restraint_factor(Fixed::from_f64(0.55), anchor, rate, cap);
+        let high =
+            RelationalFields::obligation_restraint_factor(Fixed::from_f64(0.8), anchor, rate, cap);
         assert!(low > high, "higher obligation must restrain more");
         // Full obligation: (1.0 − 0.5) × 0.3 = 0.15 reduction.
         assert_eq!(
@@ -836,13 +796,7 @@ mod tests {
             "envy_apply must add the delta to anger on the real path"
         );
         assert_eq!(
-            RelationalFields::envy_apply(
-                Fixed::from_f64(0.99),
-                Fixed::ONE,
-                anchor,
-                rate,
-                cap,
-            ),
+            RelationalFields::envy_apply(Fixed::from_f64(0.99), Fixed::ONE, anchor, rate, cap,),
             Fixed::ONE,
             "anger + delta above 1.0 must saturate at the clamp"
         );
@@ -866,7 +820,10 @@ mod tests {
         );
         let low = RelationalFields::belief_rigidity_factor(Fixed::from_f64(0.2), rigidity);
         let high = RelationalFields::belief_rigidity_factor(Fixed::from_f64(0.8), rigidity);
-        assert!(low < high, "higher confidence must scale resistance up more");
+        assert!(
+            low < high,
+            "higher confidence must scale resistance up more"
+        );
         assert_eq!(
             RelationalFields::belief_rigidity_factor(Fixed::ONE, rigidity),
             Fixed::from_f64(1.5),

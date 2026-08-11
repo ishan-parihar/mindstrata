@@ -8,9 +8,7 @@ use std::fmt;
 /// 1 tick = 15 minutes of in-game time.
 /// 1 day  = 96 ticks.
 /// 1 year = 35 040 ticks.
-#[derive(
-    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
-)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 pub struct Tick(u64);
 
 impl Tick {
@@ -57,13 +55,7 @@ impl Tick {
 
 impl fmt::Debug for Tick {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Tick({}, day={}, h={})",
-            self.0,
-            self.day(),
-            self.hour()
-        )
+        write!(f, "Tick({}, day={}, h={})", self.0, self.day(), self.hour())
     }
 }
 

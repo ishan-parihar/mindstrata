@@ -248,7 +248,7 @@ pub struct DiffusionResult {
 /// §19.5.I: "Knowledge diffusion" — knowledge spreads through social networks.
 pub fn diffuse_knowledge(
     teacher_knowledge: &Knowledge,
-    teacher_skill: Fixed, // teacher's ability to teach
+    teacher_skill: Fixed,    // teacher's ability to teach
     student_openness: Fixed, // student's willingness to learn
     relationship_trust: Fixed,
     student_existing_knowledge: &[u64],
@@ -268,12 +268,12 @@ pub fn diffuse_knowledge(
         + student_openness * Fixed::from_f64(0.3)
         + relationship_trust * Fixed::from_f64(0.2)
         + difficulty_penalty * Fixed::from_f64(0.2))
-        .clamp_01();
+    .clamp_01();
 
     // Fidelity depends on teacher skill and difficulty
     let fidelity = (teacher_skill * Fixed::from_f64(0.5)
         + (Fixed::ONE - teacher_knowledge.difficulty) * Fixed::from_f64(0.5))
-        .clamp_01();
+    .clamp_01();
 
     DiffusionResult {
         knowledge_id: teacher_knowledge.id,
@@ -311,7 +311,8 @@ pub fn taboo_severity(
 
     let base_severity = practice.emotional_charge;
     let traditionalism_boost = agent_traditionalism * Fixed::from_f64(0.3);
-    let witness_multiplier = Fixed::ONE + Fixed::from_int(witness_count as i64) * Fixed::from_f64(0.1);
+    let witness_multiplier =
+        Fixed::ONE + Fixed::from_int(witness_count as i64) * Fixed::from_f64(0.1);
 
     (base_severity + traditionalism_boost) * witness_multiplier * Fixed::from_f64(0.5)
 }
@@ -352,7 +353,10 @@ mod tests {
             Fixed::from_f64(0.6), // decent trust
             &[],
         );
-        assert!(result.accepted, "Knowledge should be transferred to open student");
+        assert!(
+            result.accepted,
+            "Knowledge should be transferred to open student"
+        );
         assert!(result.fidelity > Fixed::ZERO);
     }
 
@@ -366,7 +370,10 @@ mod tests {
             Fixed::from_f64(0.6),
             &[0], // already knows this
         );
-        assert!(!result.accepted, "Should not transfer already known knowledge");
+        assert!(
+            !result.accepted,
+            "Should not transfer already known knowledge"
+        );
     }
 
     #[test]
@@ -377,8 +384,11 @@ mod tests {
             Fixed::from_f64(0.9), // very traditional agent
             Fixed::from_f64(0.2), // not very open
         );
-        assert!(pressure > Fixed::from_f64(0.5),
-            "Traditional agents should feel strong cultural pressure: {}", pressure.to_f64());
+        assert!(
+            pressure > Fixed::from_f64(0.5),
+            "Traditional agents should feel strong cultural pressure: {}",
+            pressure.to_f64()
+        );
     }
 
     #[test]
@@ -389,8 +399,11 @@ mod tests {
             Fixed::from_f64(0.2), // not traditional
             Fixed::from_f64(0.9), // very open
         );
-        assert!(pressure < Fixed::from_f64(0.5),
-            "Open agents should feel less cultural pressure: {}", pressure.to_f64());
+        assert!(
+            pressure < Fixed::from_f64(0.5),
+            "Open agents should feel less cultural pressure: {}",
+            pressure.to_f64()
+        );
     }
 
     #[test]
@@ -409,15 +422,21 @@ mod tests {
         let severity_no_witness = taboo_severity(&practice, Fixed::from_f64(0.5), 0);
         let severity_with_witnesses = taboo_severity(&practice, Fixed::from_f64(0.5), 5);
 
-        assert!(severity_with_witnesses > severity_no_witness,
-            "More witnesses should increase taboo severity");
+        assert!(
+            severity_with_witnesses > severity_no_witness,
+            "More witnesses should increase taboo severity"
+        );
     }
 
     #[test]
     fn non_taboo_has_zero_severity() {
         let practice = Practice::new(0, "Normal Practice".into(), PracticeCategory::Custom);
         let severity = taboo_severity(&practice, Fixed::from_f64(0.5), 10);
-        assert_eq!(severity, Fixed::ZERO, "Non-taboo practices should have zero severity");
+        assert_eq!(
+            severity,
+            Fixed::ZERO,
+            "Non-taboo practices should have zero severity"
+        );
     }
 
     #[test]

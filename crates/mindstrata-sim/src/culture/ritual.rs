@@ -107,8 +107,8 @@ impl Ritual {
         tick: u64,
     ) -> Self {
         let bonding_effect = (emotional_intensity + sacredness) * Fixed::from_f64(0.5);
-        let norm_reinforcement = sacredness * Fixed::from_f64(0.6)
-            + emotional_intensity * Fixed::from_f64(0.4);
+        let norm_reinforcement =
+            sacredness * Fixed::from_f64(0.6) + emotional_intensity * Fixed::from_f64(0.4);
         Self {
             id,
             kind,
@@ -182,15 +182,13 @@ impl Ritual {
 }
 
 /// Registry of all rituals in the simulation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RitualRegistry {
     /// All rituals.
     pub rituals: Vec<Ritual>,
     /// Next available ritual id.
     next_id: usize,
 }
-
 
 impl RitualRegistry {
     /// Register a new ritual and return its id.
@@ -210,7 +208,8 @@ impl RitualRegistry {
 
     /// Get all rituals due at the current tick.
     pub fn due_rituals(&self, tick: u64) -> Vec<&Ritual> {
-        self.rituals.iter()
+        self.rituals
+            .iter()
             .filter(|r| r.active && r.is_due(tick))
             .collect()
     }
@@ -228,9 +227,15 @@ mod tests {
     #[test]
     fn new_ritual_has_sane_defaults() {
         let r = Ritual::new(
-            0, RitualKind::HarvestFestival, "Harvest".into(), 0,
-            Fixed::from_f64(0.7), Fixed::from_f64(0.8),
-            Fixed::from_f64(0.1), 144, 0,
+            0,
+            RitualKind::HarvestFestival,
+            "Harvest".into(),
+            0,
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.1),
+            144,
+            0,
         );
         assert_eq!(r.id, 0);
         assert!(r.active);
@@ -240,9 +245,15 @@ mod tests {
     #[test]
     fn pair_bonding_scales_with_synchrony() {
         let r = Ritual::new(
-            0, RitualKind::CommunalMeal, "Meal".into(), 0,
-            Fixed::from_f64(0.5), Fixed::from_f64(0.5),
-            Fixed::from_f64(0.05), 0, 0,
+            0,
+            RitualKind::CommunalMeal,
+            "Meal".into(),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.05),
+            0,
+            0,
         );
         let low_sync = r.pair_bonding(Fixed::ZERO);
         let mut r2 = r;
@@ -254,9 +265,15 @@ mod tests {
     #[test]
     fn is_due_after_interval() {
         let r = Ritual::new(
-            0, RitualKind::SeasonalPrayer, "Prayer".into(), 0,
-            Fixed::from_f64(0.5), Fixed::from_f64(0.5),
-            Fixed::from_f64(0.05), 144, 0,
+            0,
+            RitualKind::SeasonalPrayer,
+            "Prayer".into(),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.05),
+            144,
+            0,
         );
         assert!(!r.is_due(50));
         assert!(r.is_due(144));
@@ -265,9 +282,15 @@ mod tests {
     #[test]
     fn execute_updates_last_occurrence() {
         let mut r = Ritual::new(
-            0, RitualKind::SeasonalPrayer, "Prayer".into(), 0,
-            Fixed::from_f64(0.5), Fixed::from_f64(0.5),
-            Fixed::from_f64(0.05), 144, 0,
+            0,
+            RitualKind::SeasonalPrayer,
+            "Prayer".into(),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.05),
+            144,
+            0,
         );
         r.execute(100);
         assert_eq!(r.last_occurrence, 100);
@@ -277,9 +300,15 @@ mod tests {
     fn registry_register_and_get() {
         let mut reg = RitualRegistry::default();
         let r = Ritual::new(
-            0, RitualKind::HarvestFestival, "Harvest".into(), 0,
-            Fixed::from_f64(0.5), Fixed::from_f64(0.5),
-            Fixed::from_f64(0.05), 144, 0,
+            0,
+            RitualKind::HarvestFestival,
+            "Harvest".into(),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.05),
+            144,
+            0,
         );
         let id = reg.register(r);
         assert_eq!(id, 0);
@@ -290,14 +319,26 @@ mod tests {
     fn due_rituals_returns_only_due() {
         let mut reg = RitualRegistry::default();
         let r1 = Ritual::new(
-            0, RitualKind::SeasonalPrayer, "Prayer".into(), 0,
-            Fixed::from_f64(0.5), Fixed::from_f64(0.5),
-            Fixed::from_f64(0.05), 100, 0,
+            0,
+            RitualKind::SeasonalPrayer,
+            "Prayer".into(),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.05),
+            100,
+            0,
         );
         let r2 = Ritual::new(
-            0, RitualKind::CommunalMeal, "Meal".into(), 0,
-            Fixed::from_f64(0.5), Fixed::from_f64(0.5),
-            Fixed::from_f64(0.05), 200, 0,
+            0,
+            RitualKind::CommunalMeal,
+            "Meal".into(),
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.05),
+            200,
+            0,
         );
         reg.register(r1);
         reg.register(r2);
@@ -325,18 +366,11 @@ mod tests {
             0,
         );
         let base = ritual.norm_reinforcement_for(Fixed::from_f64(0.4));
-        let declared = ritual.norm_reinforcement_for_institutional(
-            Fixed::from_f64(0.4),
-            true,
-        );
-        let undeclared = ritual.norm_reinforcement_for_institutional(
-            Fixed::from_f64(0.4),
-            false,
-        );
+        let declared = ritual.norm_reinforcement_for_institutional(Fixed::from_f64(0.4), true);
+        let undeclared = ritual.norm_reinforcement_for_institutional(Fixed::from_f64(0.4), false);
         assert!(base > Fixed::ZERO, "the seeded ritual must reinforce");
         assert_eq!(
-            undeclared,
-            base,
+            undeclared, base,
             "a non-declared norm keeps the legacy base reinforcement"
         );
         assert_eq!(

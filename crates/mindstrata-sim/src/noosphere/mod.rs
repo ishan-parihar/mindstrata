@@ -12,6 +12,6 @@ pub mod field;
 pub mod legitimacy;
 pub mod moral_panic;
 
-pub use field::{NoosphericField, SymbolicNode, SymbolicEdge};
+pub use field::{NoosphericField, SymbolicEdge, SymbolicNode};
 pub use legitimacy::{LegitimacyField, LegitimacySource};
 pub use moral_panic::{MoralPanic, MoralPanicRegistry, PanicTrigger};

@@ -129,9 +129,8 @@ pub fn age_agent(
         + health_factor * Fixed::from_f64(0.1)
         + health_collapse * Fixed::from_f64(0.5)
         + energy_factor * Fixed::from_f64(0.05))
-        .clamp_01();
-    let elapsed_years =
-        Fixed::from_f64(ticks_elapsed as f64 / config.ticks_per_year as f64);
+    .clamp_01();
+    let elapsed_years = Fixed::from_f64(ticks_elapsed as f64 / config.ticks_per_year as f64);
     let death_chance = (annual_rate * elapsed_years).clamp_01();
     (new_age, rng_value < death_chance)
 }
@@ -214,7 +213,12 @@ mod tests {
             let (new_age, _) = age_agent(age, Fixed::ONE, Fixed::ONE, 1, &config, Fixed::ZERO);
             age = new_age;
         }
-        assert!(age > initial, "Age should increase after 50 ticks: {} > {}", age.to_f64(), initial.to_f64());
+        assert!(
+            age > initial,
+            "Age should increase after 50 ticks: {} > {}",
+            age.to_f64(),
+            initial.to_f64()
+        );
     }
 
     #[test]
@@ -224,11 +228,16 @@ mod tests {
         let config = DemographyConfig::default();
         let initial = Fixed::from_f64(38.0);
         let mut age = initial;
-        for _ in 0..3504 { // 35040 ticks = 1 year at 10 ticks per demography step
+        for _ in 0..3504 {
+            // 35040 ticks = 1 year at 10 ticks per demography step
             let (new_age, _) = age_agent(age, Fixed::ONE, Fixed::ONE, 10, &config, Fixed::ZERO);
             age = new_age;
         }
-        assert!(age > initial, "Age should advance ~1 year over 35040 ticks: {}", age.to_f64());
+        assert!(
+            age > initial,
+            "Age should advance ~1 year over 35040 ticks: {}",
+            age.to_f64()
+        );
     }
 
     #[test]
@@ -255,7 +264,10 @@ mod tests {
         }
         // Per-step annual rate 0.15*0.95 + 0.09 + 0.045 ≈ 0.28 × 0.1yr ≈ 2.8%
         // → expected ~28 deaths / 1000. Sanity: some die, not all.
-        assert!(deaths > 0 && deaths < 1000, "Probabilistic death expected: {deaths}/1000");
+        assert!(
+            deaths > 0 && deaths < 1000,
+            "Probabilistic death expected: {deaths}/1000"
+        );
     }
 
     #[test]
@@ -286,7 +298,13 @@ mod tests {
     fn birth_requires_partner() {
         let config = DemographyConfig::default();
         assert!(!should_birth(
-            false, Fixed::ONE, 25.0, 0, 10, &config, Fixed::ZERO,
+            false,
+            Fixed::ONE,
+            25.0,
+            0,
+            10,
+            &config,
+            Fixed::ZERO,
         ));
     }
 
@@ -301,10 +319,22 @@ mod tests {
         // 10 elapsed ticks = 0.1 year → no-kids rate 0.3*0.1 = 0.03,
         // five-kids rate (0.3 - 0.1) * 0.1 = 0.02. rng 0.025 discriminates.
         let no_kids = should_birth(
-            true, Fixed::ONE, 25.0, 0, 10, &config, Fixed::from_f64(0.025),
+            true,
+            Fixed::ONE,
+            25.0,
+            0,
+            10,
+            &config,
+            Fixed::from_f64(0.025),
         );
         let many_kids = should_birth(
-            true, Fixed::ONE, 25.0, 5, 10, &config, Fixed::from_f64(0.025),
+            true,
+            Fixed::ONE,
+            25.0,
+            5,
+            10,
+            &config,
+            Fixed::from_f64(0.025),
         );
         assert!(no_kids, "0-kid couple should get a birth at 0.025 < 0.03");
         assert!(!many_kids, "5-kid couple should not at 0.025 > 0.02");
@@ -321,16 +351,31 @@ mod tests {
         };
         // 10 ticks = 0.000285 years → probability ~8.6e-5. rng 0.01 must NOT birth.
         let too_low = should_birth(
-            true, Fixed::ONE, 25.0, 0, 10, &config, Fixed::from_f64(0.01),
+            true,
+            Fixed::ONE,
+            25.0,
+            0,
+            10,
+            &config,
+            Fixed::from_f64(0.01),
         );
-        assert!(!too_low, "Annual rate must be scaled per period, not rolled raw");
+        assert!(
+            !too_low,
+            "Annual rate must be scaled per period, not rolled raw"
+        );
     }
 
     #[test]
     fn unhealthy_mother_no_birth() {
         let config = DemographyConfig::default();
         assert!(!should_birth(
-            true, Fixed::from_f64(0.1), 25.0, 0, 10, &config, Fixed::ZERO,
+            true,
+            Fixed::from_f64(0.1),
+            25.0,
+            0,
+            10,
+            &config,
+            Fixed::ZERO,
         ));
     }
 }

@@ -38,7 +38,7 @@ impl SacredValue {
         let emotional_charge = sacredness * Fixed::from_f64(0.8);
         let tradeoff_resistance = (sacredness * Fixed::from_f64(0.9)
             + identity_linkage * Fixed::from_f64(0.1))
-            .clamp_01();
+        .clamp_01();
         Self {
             name,
             sacredness,
@@ -52,7 +52,7 @@ impl SacredValue {
     pub fn violation_outrage(&self, violation_severity: Fixed) -> Fixed {
         (self.emotional_charge * violation_severity * Fixed::from_f64(0.5)
             + self.identity_linkage * violation_severity * Fixed::from_f64(0.3))
-            .clamp_01()
+        .clamp_01()
     }
 
     /// Compute resistance to updating this value when presented with evidence.
@@ -60,21 +60,26 @@ impl SacredValue {
         (self.sacredness * Fixed::from_f64(0.4)
             + self.identity_linkage * Fixed::from_f64(0.3)
             + self.tradeoff_resistance * Fixed::from_f64(0.3))
-            .clamp_01()
+        .clamp_01()
     }
 
     /// Attempt to desacred this value through evidence or reasoning.
     ///
     /// Returns true if the value was desacred.
-    pub fn attempt_desacred(&mut self, evidence_strength: Fixed, reasoning_capacity: Fixed) -> bool {
+    pub fn attempt_desacred(
+        &mut self,
+        evidence_strength: Fixed,
+        reasoning_capacity: Fixed,
+    ) -> bool {
         let resistance = self.update_resistance();
         let desacred_pressure = evidence_strength * reasoning_capacity * (Fixed::ONE - resistance);
         if desacred_pressure > Fixed::from_f64(0.1) {
-            self.sacredness = (self.sacredness - desacred_pressure * Fixed::from_f64(0.05)).max(Fixed::ZERO);
+            self.sacredness =
+                (self.sacredness - desacred_pressure * Fixed::from_f64(0.05)).max(Fixed::ZERO);
             self.emotional_charge = self.sacredness * Fixed::from_f64(0.8);
             self.tradeoff_resistance = (self.sacredness * Fixed::from_f64(0.9)
                 + self.identity_linkage * Fixed::from_f64(0.1))
-                .clamp_01();
+            .clamp_01();
             self.sacredness < Fixed::from_f64(0.1) // desacred if below threshold
         } else {
             false
@@ -138,10 +143,13 @@ impl SacredValues {
     /// Add a sacred value (or strengthen existing).
     pub fn add_or_strengthen(&mut self, name: String, sacredness: Fixed, identity_linkage: Fixed) {
         if let Some(existing) = self.values.iter_mut().find(|v| v.name == name) {
-            existing.sacredness = (existing.sacredness + sacredness * Fixed::from_f64(0.1)).clamp_01();
-            existing.identity_linkage = (existing.identity_linkage + identity_linkage * Fixed::from_f64(0.1)).clamp_01();
+            existing.sacredness =
+                (existing.sacredness + sacredness * Fixed::from_f64(0.1)).clamp_01();
+            existing.identity_linkage =
+                (existing.identity_linkage + identity_linkage * Fixed::from_f64(0.1)).clamp_01();
         } else {
-            self.values.push(SacredValue::new(name, sacredness, identity_linkage));
+            self.values
+                .push(SacredValue::new(name, sacredness, identity_linkage));
         }
     }
 
@@ -157,7 +165,11 @@ impl SacredValues {
     /// or zero reasoning yields zero pressure, so typical calm agents are
     /// untouched; only sustained high-absorption learning by high-reasoning
     /// agents secularizes them.
-    pub fn desacralize_through_exposure(&mut self, evidence_strength: Fixed, reasoning_capacity: Fixed) -> usize {
+    pub fn desacralize_through_exposure(
+        &mut self,
+        evidence_strength: Fixed,
+        reasoning_capacity: Fixed,
+    ) -> usize {
         let mut fully_desacred = 0;
         for value in &mut self.values {
             if value.attempt_desacred(evidence_strength, reasoning_capacity) {
@@ -181,7 +193,11 @@ mod tests {
 
     #[test]
     fn sacred_value_resists_update() {
-        let sv = SacredValue::new("divine_law".into(), Fixed::from_f64(0.95), Fixed::from_f64(0.9));
+        let sv = SacredValue::new(
+            "divine_law".into(),
+            Fixed::from_f64(0.95),
+            Fixed::from_f64(0.9),
+        );
         assert!(sv.update_resistance() > Fixed::from_f64(0.5));
     }
 
@@ -208,22 +224,43 @@ mod tests {
     fn very_sacred_value_resists_desacralization() {
         // A maximally sacred, identity-linked value has resistance ~0.9,
         // so even strong evidence × reasoning stays under the gate.
-        let mut sv = SacredValue::new("divine_law".into(), Fixed::from_f64(0.95), Fixed::from_f64(0.9));
+        let mut sv = SacredValue::new(
+            "divine_law".into(),
+            Fixed::from_f64(0.95),
+            Fixed::from_f64(0.9),
+        );
         let initial = sv.sacredness;
         sv.attempt_desacred(Fixed::from_f64(1.0), Fixed::from_f64(1.0));
-        assert_eq!(sv.sacredness, initial, "very sacred values resist secularization");
+        assert_eq!(
+            sv.sacredness, initial,
+            "very sacred values resist secularization"
+        );
     }
 
     #[test]
     fn desacralize_through_exposure_applies_to_all_values() {
         let mut sv = SacredValues::default();
-        sv.add_or_strengthen("mid_sacred".into(), Fixed::from_f64(0.5), Fixed::from_f64(0.3));
-        sv.add_or_strengthen("very_sacred".into(), Fixed::from_f64(0.95), Fixed::from_f64(0.9));
+        sv.add_or_strengthen(
+            "mid_sacred".into(),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.3),
+        );
+        sv.add_or_strengthen(
+            "very_sacred".into(),
+            Fixed::from_f64(0.95),
+            Fixed::from_f64(0.9),
+        );
         let mid_before = sv.values[0].sacredness;
         let sacred_before = sv.values[1].sacredness;
         let fully = sv.desacralize_through_exposure(Fixed::from_f64(0.8), Fixed::from_f64(0.8));
-        assert!(sv.values[0].sacredness < mid_before, "mid-sacredness value erodes");
-        assert_eq!(sv.values[1].sacredness, sacred_before, "very sacred value resists");
+        assert!(
+            sv.values[0].sacredness < mid_before,
+            "mid-sacredness value erodes"
+        );
+        assert_eq!(
+            sv.values[1].sacredness, sacred_before,
+            "very sacred value resists"
+        );
         // Pressure is too small to fully desacred a 0.5 value in one shot.
         assert_eq!(fully, 0);
     }
@@ -231,9 +268,16 @@ mod tests {
     #[test]
     fn desacralize_through_exposure_counts_fully_desacred() {
         let mut sv = SacredValues::default();
-        sv.add_or_strengthen("nearly_profane".into(), Fixed::from_f64(0.12), Fixed::from_f64(0.1));
+        sv.add_or_strengthen(
+            "nearly_profane".into(),
+            Fixed::from_f64(0.12),
+            Fixed::from_f64(0.1),
+        );
         let fully = sv.desacralize_through_exposure(Fixed::from_f64(1.0), Fixed::from_f64(1.0));
-        assert_eq!(fully, 1, "a value pushed below 0.1 sacredness counts as desacred");
+        assert_eq!(
+            fully, 1,
+            "a value pushed below 0.1 sacredness counts as desacred"
+        );
     }
 
     #[test]
@@ -259,7 +303,10 @@ mod tests {
         let mut high = SacredValues::default();
         high.add_or_strengthen("honor".into(), Fixed::from_f64(0.9), Fixed::from_f64(0.9));
         let witnessed = Fixed::from_f64(0.4);
-        assert!(high.amplify_witnessed_violations(witnessed) > low.amplify_witnessed_violations(witnessed));
+        assert!(
+            high.amplify_witnessed_violations(witnessed)
+                > low.amplify_witnessed_violations(witnessed)
+        );
         // Amplification never shrinks the witnessed magnitude.
         assert!(low.amplify_witnessed_violations(witnessed) >= witnessed);
     }

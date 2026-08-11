@@ -178,14 +178,14 @@ impl SelfModel {
         social_support: Fixed,
     ) {
         // Contamination script strengthens with negative events
-        self.narrative.contamination_script =
-            (self.narrative.contamination_script + negative_events * Fixed::from_f64(0.01))
-                .clamp_01();
+        self.narrative.contamination_script = (self.narrative.contamination_script
+            + negative_events * Fixed::from_f64(0.01))
+        .clamp_01();
         // Redemption script strengthens with positive events + social support
-        self.narrative.redemption_script =
-            (self.narrative.redemption_script + positive_events * Fixed::from_f64(0.01)
-                + social_support * Fixed::from_f64(0.005))
-                .clamp_01();
+        self.narrative.redemption_script = (self.narrative.redemption_script
+            + positive_events * Fixed::from_f64(0.01)
+            + social_support * Fixed::from_f64(0.005))
+        .clamp_01();
         // Heroism script strengthens with overcoming adversity
         if negative_events > Fixed::from_f64(0.5) && social_support > Fixed::from_f64(0.3) {
             self.narrative.heroism_script =
@@ -215,7 +215,8 @@ impl SelfModel {
     /// self-esteem tracks the long-run story rather than daily noise.
     pub fn reconcile_self_esteem(&mut self) {
         let positive_balance = self.narrative.redemption_script + self.narrative.heroism_script;
-        let negative_balance = self.narrative.contamination_script + self.narrative.victimhood_script;
+        let negative_balance =
+            self.narrative.contamination_script + self.narrative.victimhood_script;
         let balance = positive_balance - negative_balance; // range ≈ −2..2
         let target = (Fixed::from_f64(0.5) + balance * Fixed::from_f64(0.125)).clamp_01();
         self.self_esteem = self.self_esteem + (target - self.self_esteem) * Fixed::from_f64(0.05);
@@ -239,7 +240,10 @@ mod tests {
         for _ in 0..50 {
             sm.reconcile_self_esteem();
         }
-        assert!(sm.self_esteem < start, "eroded narrative lowers self-esteem");
+        assert!(
+            sm.self_esteem < start,
+            "eroded narrative lowers self-esteem"
+        );
         assert!(sm.self_esteem < Fixed::from_f64(0.5));
         // A redemption/heroism-heavy narrative lifts self-esteem.
         let mut sm2 = SelfModel::default();

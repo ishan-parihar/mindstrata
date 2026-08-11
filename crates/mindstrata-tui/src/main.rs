@@ -34,7 +34,7 @@ use mindstrata_tui::{
 use ratatui::layout::{Constraint, Layout};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Paragraph, Wrap};
-use ratatui::{Frame, init, restore};
+use ratatui::{init, restore, Frame};
 
 /// Command-line arguments with defaults, parsed manually (no clap in this crate).
 struct Args {
@@ -45,7 +45,11 @@ struct Args {
 
 impl Default for Args {
     fn default() -> Self {
-        Self { seed: 42, agents: 12, delay_ms: 120 }
+        Self {
+            seed: 42,
+            agents: 12,
+            delay_ms: 120,
+        }
     }
 }
 
@@ -170,17 +174,27 @@ fn draw(frame: &mut Frame, sim: &Simulation, ui: &UiState) {
     ])
     .split(frame.area());
 
-    let run_state = if ui.auto_play { "▶ RUNNING" } else { "⏸ PAUSED" };
+    let run_state = if ui.auto_play {
+        "▶ RUNNING"
+    } else {
+        "⏸ PAUSED"
+    };
     let header = format!(
         " Mindstrata Interactive  |  Tick {:>6}  |  {}  |  view: {}  |  [q] quit",
         sim.current_tick().as_u64(),
         run_state,
         ui.view.label(),
     );
-    frame.render_widget(Paragraph::new(Line::from(header)).block(Block::bordered()), chunks[0]);
+    frame.render_widget(
+        Paragraph::new(Line::from(header)).block(Block::bordered()),
+        chunks[0],
+    );
 
     let body = render_view(sim, ui);
-    let overflow = body.lines().count().saturating_sub(chunks[1].height as usize);
+    let overflow = body
+        .lines()
+        .count()
+        .saturating_sub(chunks[1].height as usize);
     frame.render_widget(
         Paragraph::new(body)
             .wrap(Wrap { trim: false })
@@ -189,14 +203,20 @@ fn draw(frame: &mut Frame, sim: &Simulation, ui: &UiState) {
     );
 
     let selected = ui.selected_agent.min(sim.agents.len().saturating_sub(1));
-    let sel_name = sim.agents.get(selected).map_or_else(|| "?".into(), |a| a.name.clone());
+    let sel_name = sim
+        .agents
+        .get(selected)
+        .map_or_else(|| "?".into(), |a| a.name.clone());
     let command = ui.last_command.as_deref().unwrap_or("—");
     let footer = format!(
         " selected: {selected} ({sel_name})  |  steps: {}  |  ↑↓ select · space run · n step · \
          t view · w/e/d/r/s/p command · x clear  |  last: {command}",
         ui.manual_steps,
     );
-    frame.render_widget(Paragraph::new(Line::from(footer)).block(Block::bordered()), chunks[2]);
+    frame.render_widget(
+        Paragraph::new(Line::from(footer)).block(Block::bordered()),
+        chunks[2],
+    );
 }
 
 fn render_view(sim: &Simulation, ui: &UiState) -> String {
@@ -221,7 +241,10 @@ fn render_view(sim: &Simulation, ui: &UiState) -> String {
                 &config,
             )
         }
-        View::Agents => mark_selected_agent_row(&render_agent_list(&sim.agent_summaries()), ui.selected_agent),
+        View::Agents => mark_selected_agent_row(
+            &render_agent_list(&sim.agent_summaries()),
+            ui.selected_agent,
+        ),
         View::Inspector => {
             let summaries = sim.agent_summaries();
             let idx = ui.selected_agent.min(summaries.len().saturating_sub(1));

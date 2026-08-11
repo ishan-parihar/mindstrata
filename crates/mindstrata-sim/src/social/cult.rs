@@ -133,7 +133,7 @@ impl CultDynamics {
             + self.boundary_strictness * Fixed::from_f64(0.1)
             + self.thought_terminating_cliches * Fixed::from_f64(0.1)
             + self.exit_cost * Fixed::from_f64(0.1))
-            .clamp_01()
+        .clamp_01()
     }
 
     /// Check if the cult should dissolve based on current conditions.
@@ -194,8 +194,8 @@ impl CultDynamics {
         // Identity fusion is sticky but decays slowly without reinforcement
         self.identity_fusion = (self.identity_fusion * Fixed::from_f64(0.995)).max(Fixed::ZERO);
         // Isolation can grow if boundaries are strict
-        self.isolation = (self.isolation + self.boundary_strictness * Fixed::from_f64(0.001))
-            .clamp_01();
+        self.isolation =
+            (self.isolation + self.boundary_strictness * Fixed::from_f64(0.001)).clamp_01();
     }
 }
 

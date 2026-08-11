@@ -167,7 +167,10 @@ mod tests {
 
     #[test]
     fn kinship_penalty_reduces_attraction() {
-        let mut a = AttractionModel { physical_attraction: Fixed::from_f64(0.8), ..AttractionModel::default() };
+        let mut a = AttractionModel {
+            physical_attraction: Fixed::from_f64(0.8),
+            ..AttractionModel::default()
+        };
         let without = a.total_attraction();
         a.kinship_penalty = Fixed::from_f64(0.9);
         assert!(a.total_attraction() < without);
@@ -356,4 +359,3 @@ mod tests {
         assert!(a.total_attraction() > base);
     }
 }
-

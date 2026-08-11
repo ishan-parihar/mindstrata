@@ -3,7 +3,7 @@
 //! - **Scenario Comparison**: Run two configurations and compare metric trajectories.
 //! - **Replay Diffing**: Compare two golden baselines and report divergences.
 
-use mindstrata_sim::{Simulation, sim::SimConfig};
+use mindstrata_sim::{sim::SimConfig, Simulation};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
@@ -182,10 +182,7 @@ pub fn produce_baseline_trajectory(config: &SimConfig, sample_interval: u64) -> 
 }
 
 /// Diff two baseline trajectories and report divergences.
-pub fn diff_baselines(
-    baseline_a: &[BaselinePoint],
-    baseline_b: &[BaselinePoint],
-) -> DiffResult {
+pub fn diff_baselines(baseline_a: &[BaselinePoint], baseline_b: &[BaselinePoint]) -> DiffResult {
     let mut entries = Vec::new();
     let mut identical = true;
 
@@ -250,12 +247,20 @@ mod tests {
     #[test]
     fn different_seeds_produce_different_trajectories() {
         let config_a = SimConfig {
-            seed: 42, max_ticks: 50, world_width: 16, world_height: 16,
-            num_agents: 6, snapshot_interval: None,
+            seed: 42,
+            max_ticks: 50,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 6,
+            snapshot_interval: None,
         };
         let config_b = SimConfig {
-            seed: 99, max_ticks: 50, world_width: 16, world_height: 16,
-            num_agents: 6, snapshot_interval: None,
+            seed: 99,
+            max_ticks: 50,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 6,
+            snapshot_interval: None,
         };
         let points_a = collect_trajectory(&config_a, 10);
         let points_b = collect_trajectory(&config_b, 10);
@@ -267,18 +272,28 @@ mod tests {
                 break;
             }
         }
-        assert!(has_divergence, "Different seeds should produce different trajectories");
+        assert!(
+            has_divergence,
+            "Different seeds should produce different trajectories"
+        );
     }
 
     #[test]
     fn baseline_roundtrip_is_deterministic() {
         let config = SimConfig {
-            seed: 42, max_ticks: 30, world_width: 16, world_height: 16,
-            num_agents: 6, snapshot_interval: None,
+            seed: 42,
+            max_ticks: 30,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 6,
+            snapshot_interval: None,
         };
         let baseline_a = produce_baseline_trajectory(&config, 10);
         let baseline_b = produce_baseline_trajectory(&config, 10);
         let diff = diff_baselines(&baseline_a, &baseline_b);
-        assert!(diff.identical, "Same config should produce identical baselines");
+        assert!(
+            diff.identical,
+            "Same config should produce identical baselines"
+        );
     }
 }

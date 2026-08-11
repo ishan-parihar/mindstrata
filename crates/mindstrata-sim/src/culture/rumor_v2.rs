@@ -155,11 +155,9 @@ impl RumorV2 {
         // `evidence_quality × fidelity^hops`. Degrades the *stored* field so
         // hop distortion is observable state, not just a transient in the
         // chance formula.
-        self.evidence_quality =
-            (self.evidence_quality * Fixed::from_f64(0.85)).clamp_01();
+        self.evidence_quality = (self.evidence_quality * Fixed::from_f64(0.85)).clamp_01();
         // Emotional charge amplifies with each retelling
-        self.emotional_charge =
-            (self.emotional_charge + Fixed::from_f64(0.02)).clamp_01();
+        self.emotional_charge = (self.emotional_charge + Fixed::from_f64(0.02)).clamp_01();
     }
 
     /// Compute moral panic pressure from this rumor.
@@ -180,8 +178,7 @@ impl RumorV2 {
         let ticks_since_transmission = tick.saturating_sub(self.last_transmitted_tick);
         // Decay prevalence slowly (rumors fade if not repeated)
         if ticks_since_transmission > 50 {
-            let decay_factor =
-                Fixed::from_f64(0.995).powi((ticks_since_transmission / 50) as u32);
+            let decay_factor = Fixed::from_f64(0.995).powi((ticks_since_transmission / 50) as u32);
             self.prevalence = (self.prevalence * decay_factor).clamp_01();
         }
         // Very old rumors become inactive
@@ -199,15 +196,13 @@ impl RumorV2 {
 }
 
 /// Registry of all rumors in the simulation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RumorRegistry {
     /// All rumors.
     pub rumors: Vec<RumorV2>,
     /// Next available rumor id.
     next_id: usize,
 }
-
 
 impl RumorRegistry {
     /// Register a new rumor and return its id.
@@ -406,12 +401,10 @@ mod tests {
             Fixed::from_f64(0.5),
             0,
         );
-        let chance_no_hops =
-            r.transmission_chance(Fixed::ONE, Fixed::ONE, Fixed::ZERO, 100);
+        let chance_no_hops = r.transmission_chance(Fixed::ONE, Fixed::ONE, Fixed::ZERO, 100);
         r.record_transmission(1, 1);
         r.record_transmission(2, 2);
-        let chance_2_hops =
-            r.transmission_chance(Fixed::ONE, Fixed::ONE, Fixed::ZERO, 100);
+        let chance_2_hops = r.transmission_chance(Fixed::ONE, Fixed::ONE, Fixed::ZERO, 100);
         assert!(chance_no_hops > chance_2_hops);
     }
 
@@ -441,9 +434,13 @@ mod tests {
         // lowest skepticism; listener 2 has low trust (0.1).
         let mut reg = RumorRegistry::default();
         reg.register(RumorV2::new(
-            0, "test".into(), None,
-            Fixed::from_f64(0.5), Fixed::from_f64(0.9),
-            Fixed::from_f64(0.6), 0,
+            0,
+            "test".into(),
+            None,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.9),
+            Fixed::from_f64(0.6),
+            0,
         ));
         reg.rumors[0].record_source(0, 0); // originator 0
         let trust = vec![
@@ -471,33 +468,60 @@ mod tests {
         fn build() -> RumorRegistry {
             let mut reg = RumorRegistry::default();
             reg.register(RumorV2::new(
-                0, "a".into(), None,
-                Fixed::from_f64(0.5), Fixed::from_f64(0.9),
-                Fixed::from_f64(0.6), 0,
+                0,
+                "a".into(),
+                None,
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.9),
+                Fixed::from_f64(0.6),
+                0,
             ));
             reg.register(RumorV2::new(
-                1, "b".into(), Some(2),
-                Fixed::from_f64(0.8), Fixed::from_f64(0.7),
-                Fixed::from_f64(0.5), 0,
+                1,
+                "b".into(),
+                Some(2),
+                Fixed::from_f64(0.8),
+                Fixed::from_f64(0.7),
+                Fixed::from_f64(0.5),
+                0,
             ));
             reg.rumors[0].record_source(0, 0);
             reg.rumors[1].record_source(3, 0);
             reg
         }
         let trust = vec![
-            vec![Fixed::ZERO, Fixed::from_f64(0.5), Fixed::from_f64(0.5), Fixed::from_f64(0.5)],
-            vec![Fixed::from_f64(0.9), Fixed::ZERO, Fixed::from_f64(0.5), Fixed::from_f64(0.5)],
-            vec![Fixed::from_f64(0.1), Fixed::from_f64(0.5), Fixed::ZERO, Fixed::from_f64(0.5)],
-            vec![Fixed::from_f64(0.3), Fixed::from_f64(0.5), Fixed::from_f64(0.5), Fixed::ZERO],
+            vec![
+                Fixed::ZERO,
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
+            ],
+            vec![
+                Fixed::from_f64(0.9),
+                Fixed::ZERO,
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
+            ],
+            vec![
+                Fixed::from_f64(0.1),
+                Fixed::from_f64(0.5),
+                Fixed::ZERO,
+                Fixed::from_f64(0.5),
+            ],
+            vec![
+                Fixed::from_f64(0.3),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
+                Fixed::ZERO,
+            ],
         ];
         let susceptibility = vec![Fixed::from_f64(0.8); 4];
         let skepticism = vec![Fixed::ZERO; 4];
         let escalation = vec![Fixed::ONE; 4];
 
         let mut matrix_reg = build();
-        let matrix_hops = matrix_reg.transmission_pass(
-            &trust, &susceptibility, &skepticism, &escalation, 10, 1,
-        );
+        let matrix_hops =
+            matrix_reg.transmission_pass(&trust, &susceptibility, &skepticism, &escalation, 10, 1);
 
         let mut lazy_reg = build();
         let lazy_hops = lazy_reg.transmission_pass_lazy(
@@ -554,9 +578,13 @@ mod tests {
     fn transmission_pass_is_deterministic_and_avoids_chain_repeats() {
         let mut reg = RumorRegistry::default();
         reg.register(RumorV2::new(
-            0, "test".into(), None,
-            Fixed::from_f64(0.5), Fixed::from_f64(0.9),
-            Fixed::from_f64(0.6), 0,
+            0,
+            "test".into(),
+            None,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.9),
+            Fixed::from_f64(0.6),
+            0,
         ));
         reg.rumors[0].record_source(0, 0);
         let trust = vec![
@@ -568,9 +596,11 @@ mod tests {
         let skepticism = vec![Fixed::ZERO; 3];
         let escalation = vec![Fixed::ONE; 3];
         // Same inputs → same result (no RNG).
-        let hops_a = reg.transmission_pass(&trust, &susceptibility, &skepticism, &escalation, 10, 1);
+        let hops_a =
+            reg.transmission_pass(&trust, &susceptibility, &skepticism, &escalation, 10, 1);
         let chain_a = reg.rumors[0].source_chain.clone();
-        let hops_b = reg.transmission_pass(&trust, &susceptibility, &skepticism, &escalation, 10, 2);
+        let hops_b =
+            reg.transmission_pass(&trust, &susceptibility, &skepticism, &escalation, 10, 2);
         assert_eq!(hops_a, 1);
         assert_eq!(hops_b, 1);
         // The second pass must pick a *different* listener (no repeats), and
@@ -587,9 +617,13 @@ mod tests {
         let build = |escalation: Fixed| {
             let mut reg = RumorRegistry::default();
             reg.register(RumorV2::new(
-                0, "test".into(), None,
-                Fixed::from_f64(0.3), Fixed::from_f64(0.4),
-                Fixed::from_f64(0.3), 0,
+                0,
+                "test".into(),
+                None,
+                Fixed::from_f64(0.3),
+                Fixed::from_f64(0.4),
+                Fixed::from_f64(0.3),
+                0,
             ));
             reg.rumors[0].record_source(0, 0);
             let trust = vec![
@@ -600,9 +634,7 @@ mod tests {
             let susceptibility = vec![Fixed::from_f64(0.5); 3];
             let skepticism = vec![Fixed::from_f64(0.4); 3];
             let escalations = vec![escalation, Fixed::ONE, Fixed::ONE];
-            reg.transmission_pass(
-                &trust, &susceptibility, &skepticism, &escalations, 10, 1,
-            )
+            reg.transmission_pass(&trust, &susceptibility, &skepticism, &escalations, 10, 1)
         };
         let secure_hops = build(Fixed::from_f64(1.0));
         let anxious_hops = build(Fixed::from_f64(1.5));
@@ -621,8 +653,7 @@ mod tests {
             Fixed::from_f64(0.6),
             0,
         );
-        let no_skepticism =
-            r.transmission_chance(Fixed::ONE, Fixed::ONE, Fixed::ZERO, 100);
+        let no_skepticism = r.transmission_chance(Fixed::ONE, Fixed::ONE, Fixed::ZERO, 100);
         let high_skepticism =
             r.transmission_chance(Fixed::ONE, Fixed::ONE, Fixed::from_f64(0.8), 100);
         assert!(no_skepticism > high_skepticism);
@@ -685,14 +716,22 @@ mod tests {
     fn rumors_targeting_filters_correctly() {
         let mut reg = RumorRegistry::default();
         reg.register(RumorV2::new(
-            0, "about alice".into(), Some(0),
-            Fixed::from_f64(0.5), Fixed::from_f64(0.5),
-            Fixed::from_f64(0.5), 0,
+            0,
+            "about alice".into(),
+            Some(0),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            0,
         ));
         reg.register(RumorV2::new(
-            0, "about bob".into(), Some(1),
-            Fixed::from_f64(0.5), Fixed::from_f64(0.5),
-            Fixed::from_f64(0.5), 0,
+            0,
+            "about bob".into(),
+            Some(1),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            0,
         ));
         let about_0 = reg.rumors_targeting(0);
         assert_eq!(about_0.len(), 1);

@@ -105,8 +105,7 @@ impl SkeletalState {
         if age > Fixed::from_f64(60.0) {
             self.developmental_stage = SkeletalMaturity::Frail;
             let frailty = ((age - Fixed::from_f64(60.0)) * Fixed::from_f64(0.002)).clamp_01();
-            self.structural_integrity =
-                (Fixed::ONE - frailty).max(Fixed::from_f64(0.3));
+            self.structural_integrity = (Fixed::ONE - frailty).max(Fixed::from_f64(0.3));
         } else {
             if self.developmental_stage == SkeletalMaturity::Frail {
                 // (Only reachable if an agent were re-aged down; defensive.)
@@ -119,7 +118,7 @@ impl SkeletalState {
         if injury > Fixed::from_f64(0.5) {
             self.fracture_risk = (self.fracture_risk
                 + (injury - Fixed::from_f64(0.5)) * Fixed::from_f64(0.01))
-                .clamp_01();
+            .clamp_01();
         } else {
             self.fracture_risk = (self.fracture_risk - Fixed::from_f64(0.0005)).max(Fixed::ZERO);
         }
@@ -146,7 +145,7 @@ impl SkeletalState {
         // Mobility penalty: frailty + chronic pain. Exactly 0.0 at baseline.
         self.mobility_penalty = ((Fixed::ONE - self.structural_integrity) * Fixed::from_f64(0.5)
             + self.chronic_pain * Fixed::from_f64(0.3))
-            .clamp_01();
+        .clamp_01();
     }
 
     /// Mobility multiplier — exactly 1.0 at baseline; falls under frailty,
@@ -182,10 +181,22 @@ mod tests {
 
     #[test]
     fn adult_stage_from_age() {
-        assert_eq!(SkeletalState::from_age(Fixed::from_f64(30.0)).developmental_stage, SkeletalMaturity::Adult);
-        assert_eq!(SkeletalState::from_age(Fixed::from_f64(8.0)).developmental_stage, SkeletalMaturity::Growing);
-        assert_eq!(SkeletalState::from_age(Fixed::from_f64(15.0)).developmental_stage, SkeletalMaturity::Maturing);
-        assert_eq!(SkeletalState::from_age(Fixed::from_f64(70.0)).developmental_stage, SkeletalMaturity::Frail);
+        assert_eq!(
+            SkeletalState::from_age(Fixed::from_f64(30.0)).developmental_stage,
+            SkeletalMaturity::Adult
+        );
+        assert_eq!(
+            SkeletalState::from_age(Fixed::from_f64(8.0)).developmental_stage,
+            SkeletalMaturity::Growing
+        );
+        assert_eq!(
+            SkeletalState::from_age(Fixed::from_f64(15.0)).developmental_stage,
+            SkeletalMaturity::Maturing
+        );
+        assert_eq!(
+            SkeletalState::from_age(Fixed::from_f64(70.0)).developmental_stage,
+            SkeletalMaturity::Frail
+        );
     }
 
     #[test]
@@ -201,7 +212,11 @@ mod tests {
     fn severe_injury_accumulates_fracture_risk_and_chronic_pain() {
         let mut s = SkeletalState::default();
         for _ in 0..50 {
-            s.tick_update(Fixed::from_f64(40.0), Fixed::from_f64(0.8), Fixed::from_f64(0.6));
+            s.tick_update(
+                Fixed::from_f64(40.0),
+                Fixed::from_f64(0.8),
+                Fixed::from_f64(0.6),
+            );
         }
         assert!(s.fracture_risk > Fixed::ZERO);
         assert!(s.chronic_pain > Fixed::ZERO);

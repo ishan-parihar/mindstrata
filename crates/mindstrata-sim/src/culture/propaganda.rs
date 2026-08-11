@@ -118,11 +118,7 @@ impl PropagandaCampaign {
     /// effectiveness = legitimacy × intensity × channel_bonus
     ///               × (1 - resistance) × (1 - coercion_penalty)
     /// ```
-    pub fn compute_effectiveness(
-        &mut self,
-        institutional_legitimacy: Fixed,
-        audience_fear: Fixed,
-    ) {
+    pub fn compute_effectiveness(&mut self, institutional_legitimacy: Fixed, audience_fear: Fixed) {
         let channel_bonus = Fixed::from_f64(0.1) * Fixed::from_int(self.channels.len() as i64);
         let coercion_penalty = self.coercion * Fixed::from_f64(0.3);
         let fear_boost = audience_fear * Fixed::from_f64(0.2);
@@ -159,15 +155,13 @@ impl PropagandaCampaign {
 }
 
 /// Registry of all propaganda campaigns.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PropagandaRegistry {
     /// All campaigns.
     pub campaigns: Vec<PropagandaCampaign>,
     /// Next available campaign id.
     next_id: usize,
 }
-
 
 impl PropagandaRegistry {
     /// Register a new campaign and return its id.
@@ -209,8 +203,14 @@ mod tests {
     #[test]
     fn new_campaign_has_sane_defaults() {
         let c = PropagandaCampaign::new(
-            0, 0, vec![1, 2], "test narrative".into(),
-            Fixed::from_f64(0.7), vec![PropagandaChannel::Sermon], 100, 0,
+            0,
+            0,
+            vec![1, 2],
+            "test narrative".into(),
+            Fixed::from_f64(0.7),
+            vec![PropagandaChannel::Sermon],
+            100,
+            0,
         );
         assert_eq!(c.id, 0);
         assert!(c.active);
@@ -220,8 +220,14 @@ mod tests {
     #[test]
     fn effectiveness_scales_with_legitimacy() {
         let mut c = PropagandaCampaign::new(
-            0, 0, vec![], "test".into(),
-            Fixed::from_f64(0.5), vec![PropagandaChannel::Sermon], 100, 0,
+            0,
+            0,
+            vec![],
+            "test".into(),
+            Fixed::from_f64(0.5),
+            vec![PropagandaChannel::Sermon],
+            100,
+            0,
         );
         c.compute_effectiveness(Fixed::from_f64(0.9), Fixed::ZERO);
         let high_legit = c.effectiveness;
@@ -233,8 +239,14 @@ mod tests {
     #[test]
     fn tick_decreases_remaining() {
         let mut c = PropagandaCampaign::new(
-            0, 0, vec![], "test".into(),
-            Fixed::from_f64(0.5), vec![], 10, 0,
+            0,
+            0,
+            vec![],
+            "test".into(),
+            Fixed::from_f64(0.5),
+            vec![],
+            10,
+            0,
         );
         c.tick(Fixed::from_f64(0.002));
         assert_eq!(c.remaining, 9);
@@ -243,8 +255,14 @@ mod tests {
     #[test]
     fn campaign_deactivates_when_expired() {
         let mut c = PropagandaCampaign::new(
-            0, 0, vec![], "test".into(),
-            Fixed::from_f64(0.5), vec![], 1, 0,
+            0,
+            0,
+            vec![],
+            "test".into(),
+            Fixed::from_f64(0.5),
+            vec![],
+            1,
+            0,
         );
         c.tick(Fixed::from_f64(0.002));
         assert!(!c.active);
@@ -253,8 +271,14 @@ mod tests {
     #[test]
     fn pushback_increases_resistance() {
         let mut c = PropagandaCampaign::new(
-            0, 0, vec![], "test".into(),
-            Fixed::from_f64(0.5), vec![], 100, 0,
+            0,
+            0,
+            vec![],
+            "test".into(),
+            Fixed::from_f64(0.5),
+            vec![],
+            100,
+            0,
         );
         c.record_pushback(Fixed::from_f64(0.3));
         assert!(c.resistance > Fixed::ZERO);
@@ -264,8 +288,14 @@ mod tests {
     fn registry_register_and_get() {
         let mut reg = PropagandaRegistry::default();
         let c = PropagandaCampaign::new(
-            0, 0, vec![], "test".into(),
-            Fixed::from_f64(0.5), vec![], 100, 0,
+            0,
+            0,
+            vec![],
+            "test".into(),
+            Fixed::from_f64(0.5),
+            vec![],
+            100,
+            0,
         );
         let id = reg.register(c);
         assert_eq!(id, 0);

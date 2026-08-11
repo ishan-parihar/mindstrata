@@ -7,9 +7,9 @@
 //! social meaning beyond numeric trust/affection values. Stage transitions
 //! depend on interaction count, trust, affection, fear, and context.
 
-use mindstrata_core::fixed::Fixed;
 use super::kinship::KinshipLink;
 use super::relationship_v2::RelationshipStage;
+use mindstrata_core::fixed::Fixed;
 
 /// Minimum interaction count to advance beyond each stage.
 pub fn min_interactions_for_stage(stage: RelationshipStage) -> u32 {
@@ -150,9 +150,9 @@ pub fn kin_stage_for_link(link: KinshipLink) -> Option<RelationshipStage> {
         KinshipLink::ParentChild => Some(RelationshipStage::ParentChild),
         KinshipLink::Sibling => Some(RelationshipStage::Sibling),
         KinshipLink::InLaw => Some(RelationshipStage::InLaw),
-        KinshipLink::Adoptive
-        | KinshipLink::Godparent
-        | KinshipLink::OathSibling => Some(RelationshipStage::Kin),
+        KinshipLink::Adoptive | KinshipLink::Godparent | KinshipLink::OathSibling => {
+            Some(RelationshipStage::Kin)
+        }
         KinshipLink::Spouse => None,
     }
 }
@@ -344,7 +344,10 @@ mod tests {
         );
         rv2.stage = s;
         assert_eq!(rv2.derive_kinship_coefficient(), Fixed::from_f64(0.25));
-        assert_eq!(rv2.derive_role_expectation(), super::super::relationship_v2::RoleExpectation::Caregiver);
+        assert_eq!(
+            rv2.derive_role_expectation(),
+            super::super::relationship_v2::RoleExpectation::Caregiver
+        );
     }
 
     #[test]
@@ -359,7 +362,10 @@ mod tests {
             RelationshipStage::GuardCitizen,
         ];
         for &s in &authority {
-            assert!(is_authority_stage(s), "{s:?} must be recognized as authority");
+            assert!(
+                is_authority_stage(s),
+                "{s:?} must be recognized as authority"
+            );
             assert!(!is_kin_stage(s), "{s:?} must not be a kin stage");
             // Assigned, not advanced.
             assert_eq!(min_interactions_for_stage(s), 0);
@@ -377,10 +383,7 @@ mod tests {
             mindstrata_core::id::AgentId::new(1),
         );
         rv2.stage = RelationshipStage::PatronClient;
-        assert_eq!(
-            rv2.derive_public_label(),
-            RelationshipLabel::PatronClient
-        );
+        assert_eq!(rv2.derive_public_label(), RelationshipLabel::PatronClient);
         assert_eq!(rv2.derive_role_expectation(), RoleExpectation::PatronClient);
         // Authority is not blood kin.
         assert_eq!(rv2.derive_kinship_coefficient(), Fixed::ZERO);

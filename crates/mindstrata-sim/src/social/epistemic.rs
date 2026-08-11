@@ -143,7 +143,11 @@ impl TrustNetwork {
 
     /// Update trust for an institution.
     pub fn update_institution_trust(&mut self, inst_id: u64, delta: Fixed) {
-        if let Some((_, trust)) = self.institution_trust.iter_mut().find(|(id, _)| *id == inst_id) {
+        if let Some((_, trust)) = self
+            .institution_trust
+            .iter_mut()
+            .find(|(id, _)| *id == inst_id)
+        {
             *trust = (*trust + delta).clamp_01();
         } else {
             let new_trust = (Fixed::from_f64(0.5) + delta).clamp_01();
@@ -365,7 +369,8 @@ impl EpistemicState {
         };
 
         // Conspiracy-susceptible agents accept emotionally charged information
-        let conspiracy_fit = self.conspiracy_susceptibility * emotional_charge * Fixed::from_f64(0.1);
+        let conspiracy_fit =
+            self.conspiracy_susceptibility * emotional_charge * Fixed::from_f64(0.1);
 
         (fear_fit + anger_fit + conspiracy_fit).clamp_01()
     }
@@ -374,14 +379,16 @@ impl EpistemicState {
     pub fn reset_tick(&mut self) {
         self.info_processed_this_tick = 0;
         // Information overload decays each tick
-        self.information_overload = (self.information_overload - Fixed::from_f64(0.05)).max(Fixed::ZERO);
+        self.information_overload =
+            (self.information_overload - Fixed::from_f64(0.05)).max(Fixed::ZERO);
     }
 
     /// Add information overload from processing too much.
     pub fn add_overload(&mut self, amount: Fixed) {
         self.information_overload = (self.information_overload + amount).clamp_01();
         // Overload reduces processing capacity using Fixed arithmetic for determinism
-        let capacity_fixed = Fixed::from_f64(10.0) * (Fixed::ONE - self.information_overload * Fixed::from_f64(0.5));
+        let capacity_fixed =
+            Fixed::from_f64(10.0) * (Fixed::ONE - self.information_overload * Fixed::from_f64(0.5));
         self.processing_capacity = capacity_fixed.to_raw() as u32 / 1000; // Fixed has 1000 scaling
     }
 }
@@ -485,18 +492,23 @@ mod tests {
 
         let mut belief = make_belief(0, 0.5);
         let info_direct = make_info(InformationSource::DirectObservation, 0.7);
-        let delta_direct = state.process_information(
-            &mut belief, &info_direct, &personality, &emotions, 100,
-        );
+        let delta_direct =
+            state.process_information(&mut belief, &info_direct, &personality, &emotions, 100);
 
         let mut belief2 = make_belief(0, 0.5);
         let info_unknown = make_info(InformationSource::Unknown, 0.7);
         let delta_unknown = EpistemicState::default().process_information(
-            &mut belief2, &info_unknown, &personality, &emotions, 100,
+            &mut belief2,
+            &info_unknown,
+            &personality,
+            &emotions,
+            100,
         );
 
-        assert!(delta_direct > delta_unknown,
-            "Direct observation should produce larger belief change than unknown source");
+        assert!(
+            delta_direct > delta_unknown,
+            "Direct observation should produce larger belief change than unknown source"
+        );
     }
 
     #[test]
@@ -533,22 +545,20 @@ mod tests {
 
         // Process using the SAME state (not clone) so info_processed_this_tick accumulates
         let mut belief1 = make_belief(0, 0.3);
-        let delta1 = state.process_information(
-            &mut belief1, &info, &personality, &emotions, 100,
-        );
+        let delta1 = state.process_information(&mut belief1, &info, &personality, &emotions, 100);
         assert_ne!(delta1, Fixed::ZERO, "First info should be processed");
 
         let mut belief2 = make_belief(1, 0.3);
-        let delta2 = state.process_information(
-            &mut belief2, &info, &personality, &emotions, 100,
-        );
+        let delta2 = state.process_information(&mut belief2, &info, &personality, &emotions, 100);
         assert_ne!(delta2, Fixed::ZERO, "Second info should be processed");
 
         let mut belief3 = make_belief(2, 0.3);
-        let delta3 = state.process_information(
-            &mut belief3, &info, &personality, &emotions, 100,
+        let delta3 = state.process_information(&mut belief3, &info, &personality, &emotions, 100);
+        assert_eq!(
+            delta3,
+            Fixed::ZERO,
+            "Third info should be rejected (over capacity)"
         );
-        assert_eq!(delta3, Fixed::ZERO, "Third info should be rejected (over capacity)");
     }
 
     #[test]
@@ -565,9 +575,16 @@ mod tests {
 
     #[test]
     fn information_source_base_trust_values() {
-        assert!(InformationSource::DirectObservation.base_trust() > InformationSource::Unknown.base_trust());
-        assert!(InformationSource::TrustedPeer.base_trust() > InformationSource::Unknown.base_trust());
-        assert!(InformationSource::Institutional.base_trust() > InformationSource::Unknown.base_trust());
+        assert!(
+            InformationSource::DirectObservation.base_trust()
+                > InformationSource::Unknown.base_trust()
+        );
+        assert!(
+            InformationSource::TrustedPeer.base_trust() > InformationSource::Unknown.base_trust()
+        );
+        assert!(
+            InformationSource::Institutional.base_trust() > InformationSource::Unknown.base_trust()
+        );
     }
 
     #[test]
@@ -582,9 +599,7 @@ mod tests {
         let info = make_info(InformationSource::DirectObservation, 0.8);
 
         let mut belief = make_belief(0, 0.3);
-        let delta = state.process_information(
-            &mut belief, &info, &personality, &emotions, 100,
-        );
+        let delta = state.process_information(&mut belief, &info, &personality, &emotions, 100);
 
         // Dogmatic agent should have smaller belief change
         let mut state2 = EpistemicState {
@@ -592,12 +607,13 @@ mod tests {
             ..Default::default()
         };
         let mut belief2 = make_belief(0, 0.3);
-        let delta2 = state2.process_information(
-            &mut belief2, &info, &personality, &emotions, 100,
-        );
+        let delta2 = state2.process_information(&mut belief2, &info, &personality, &emotions, 100);
 
-        assert!(delta.abs() < delta2.abs(),
+        assert!(
+            delta.abs() < delta2.abs(),
             "Dogmatic agent should have smaller belief change: {} vs {}",
-            delta.to_f64(), delta2.to_f64());
+            delta.to_f64(),
+            delta2.to_f64()
+        );
     }
 }

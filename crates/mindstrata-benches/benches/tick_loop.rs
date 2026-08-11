@@ -7,8 +7,8 @@
 
 #![allow(missing_docs)] // criterion_group!/criterion_main! generate the public harness fns
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use mindstrata_sim::{Simulation, sim::SimConfig};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use mindstrata_sim::{sim::SimConfig, Simulation};
 
 /// Build a Simulation with given parameters, populated but not yet ticked.
 fn make_sim(seed: u64, num_agents: u32, ticks: u64) -> Simulation {

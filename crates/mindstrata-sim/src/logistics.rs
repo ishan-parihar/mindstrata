@@ -93,7 +93,11 @@ impl CarryingCapacity {
 
 /// Local scarcity pricing modifier.
 /// §19.5.E: "Local scarcity" — prices vary by local supply/demand.
-pub fn local_scarcity_modifier(site_inventory: &[ResourceStock], resource_id: u64, max_expected: Fixed) -> Fixed {
+pub fn local_scarcity_modifier(
+    site_inventory: &[ResourceStock],
+    resource_id: u64,
+    max_expected: Fixed,
+) -> Fixed {
     let total = site_inventory
         .iter()
         .filter(|s| s.resource_id == resource_id)
@@ -143,7 +147,9 @@ impl StorageCapacity {
 
     /// Update current_used from site inventory.
     pub fn update_from_inventory(&mut self, inventory: &[ResourceStock]) {
-        self.current_used = inventory.iter().fold(Fixed::ZERO, |acc, s| acc + s.quantity);
+        self.current_used = inventory
+            .iter()
+            .fold(Fixed::ZERO, |acc, s| acc + s.quantity);
     }
 }
 
@@ -193,7 +199,10 @@ mod tests {
     fn local_scarcity_high_when_empty() {
         let inventory = vec![];
         let modifier = local_scarcity_modifier(&inventory, 0, Fixed::from_f64(10.0));
-        assert!(modifier > Fixed::from_f64(2.0), "Empty site should have high scarcity modifier");
+        assert!(
+            modifier > Fixed::from_f64(2.0),
+            "Empty site should have high scarcity modifier"
+        );
     }
 
     #[test]
@@ -205,7 +214,10 @@ mod tests {
             access: crate::world::AccessRight::Public,
         }];
         let modifier = local_scarcity_modifier(&inventory, 0, Fixed::from_f64(10.0));
-        assert!(modifier < Fixed::from_f64(1.0), "Full site should have low scarcity modifier");
+        assert!(
+            modifier < Fixed::from_f64(1.0),
+            "Full site should have low scarcity modifier"
+        );
     }
 
     #[test]
@@ -219,16 +231,8 @@ mod tests {
 
     #[test]
     fn carrying_cost_increases_with_load() {
-        let low = carrying_cost(
-            Fixed::from_f64(1.0),
-            Fixed::from_f64(5.0),
-            Fixed::ZERO,
-        );
-        let high = carrying_cost(
-            Fixed::from_f64(4.0),
-            Fixed::from_f64(5.0),
-            Fixed::ZERO,
-        );
+        let low = carrying_cost(Fixed::from_f64(1.0), Fixed::from_f64(5.0), Fixed::ZERO);
+        let high = carrying_cost(Fixed::from_f64(4.0), Fixed::from_f64(5.0), Fixed::ZERO);
         assert!(high > low, "Higher load should cost more");
     }
 

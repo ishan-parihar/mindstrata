@@ -113,7 +113,13 @@ impl Clan {
     }
 
     /// Add a founding myth to the clan.
-    pub fn add_myth(&mut self, description: String, belief: Fixed, emotional: Fixed, aggression: bool) {
+    pub fn add_myth(
+        &mut self,
+        description: String,
+        belief: Fixed,
+        emotional: Fixed,
+        aggression: bool,
+    ) {
         self.myths.push(ClanMyth {
             description,
             belief_strength: belief,
@@ -199,8 +205,8 @@ impl Clan {
             .iter()
             .map(|h| h.strength)
             .fold(Fixed::ZERO, |a, b| a + b);
-        let identity_boost = myth_strength * Fixed::from_f64(0.002)
-            + honor_strength * Fixed::from_f64(0.001);
+        let identity_boost =
+            myth_strength * Fixed::from_f64(0.002) + honor_strength * Fixed::from_f64(0.001);
         if identity_boost <= Fixed::ZERO {
             // No living identity → no resonance (cohesion/prestige stay put).
             return;
@@ -285,8 +291,17 @@ mod tests {
     #[test]
     fn clan_creation_structure() {
         let mut clan = Clan::new(0, Some(0), Some(0), vec![0, 1], 0);
-        clan.add_honor_code("Do not steal".into(), Fixed::from_f64(0.8), Fixed::from_f64(0.5));
-        clan.add_myth("We descend from the mountain kings".into(), Fixed::from_f64(0.7), Fixed::from_f64(0.6), false);
+        clan.add_honor_code(
+            "Do not steal".into(),
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.5),
+        );
+        clan.add_myth(
+            "We descend from the mountain kings".into(),
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.6),
+            false,
+        );
 
         assert_eq!(clan.core_households, vec![0, 1]);
         assert_eq!(clan.honor_codes.len(), 1);
@@ -306,7 +321,7 @@ mod tests {
         assert!(clan_a.is_enemy(1));
         assert!(clan_b.is_enemy(0));
         assert!(!clan_a.is_enemy(0)); // no self-enmity
-        // Enmity reduces cohesion
+                                      // Enmity reduces cohesion
         assert!(clan_a.cohesion < Fixed::from_f64(0.5));
     }
 
@@ -354,7 +369,10 @@ mod tests {
         clan.cohesion = Fixed::from_f64(0.7);
 
         let power = clan.power();
-        assert!(power > Fixed::from_f64(0.3), "Clan with prestige and cohesion should have significant power");
+        assert!(
+            power > Fixed::from_f64(0.3),
+            "Clan with prestige and cohesion should have significant power"
+        );
     }
 
     #[test]
@@ -397,12 +415,20 @@ mod tests {
     #[test]
     fn myth_belief_decay() {
         let mut clan = Clan::new(0, None, None, vec![0], 0);
-        clan.add_myth("Test myth".into(), Fixed::from_f64(0.8), Fixed::from_f64(0.5), false);
+        clan.add_myth(
+            "Test myth".into(),
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.5),
+            false,
+        );
 
         clan.daily_update();
 
         let myth = &clan.myths[0];
-        assert!(myth.belief_strength < Fixed::from_f64(0.8), "Myth belief should decay without reinforcement");
+        assert!(
+            myth.belief_strength < Fixed::from_f64(0.8),
+            "Myth belief should decay without reinforcement"
+        );
     }
 
     // ── §10.8 Clan identity (myth resonance) tests ────────────────────
@@ -411,13 +437,28 @@ mod tests {
     #[test]
     fn clan_myth_resonance_lifts_cohesion_and_prestige() {
         let mut clan = Clan::new(0, Some(0), None, vec![0], 0);
-        clan.add_myth("The river sustains us".into(), Fixed::from_f64(0.9), Fixed::from_f64(0.8), false);
-        clan.add_honor_code("Honor the elders".into(), Fixed::from_f64(0.6), Fixed::from_f64(0.4));
+        clan.add_myth(
+            "The river sustains us".into(),
+            Fixed::from_f64(0.9),
+            Fixed::from_f64(0.8),
+            false,
+        );
+        clan.add_honor_code(
+            "Honor the elders".into(),
+            Fixed::from_f64(0.6),
+            Fixed::from_f64(0.4),
+        );
         let cohesion_before = clan.cohesion;
         let prestige_before = clan.prestige;
         clan.myth_resonance_day();
-        assert!(clan.cohesion > cohesion_before, "myth resonance must lift cohesion");
-        assert!(clan.prestige > prestige_before, "myth resonance must lift prestige");
+        assert!(
+            clan.cohesion > cohesion_before,
+            "myth resonance must lift cohesion"
+        );
+        assert!(
+            clan.prestige > prestige_before,
+            "myth resonance must lift prestige"
+        );
         // Still bounded.
         assert!(clan.cohesion <= Fixed::ONE && clan.prestige <= Fixed::ONE);
     }

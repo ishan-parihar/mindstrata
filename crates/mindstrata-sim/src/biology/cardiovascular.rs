@@ -71,24 +71,25 @@ impl CardiovascularState {
         self.cardiac_capacity = (Fixed::from_f64(0.8)
             - age_modifier * Fixed::from_f64(0.001)
             - stress_level * Fixed::from_f64(0.0003))
-            .clamp_01();
+        .clamp_01();
 
         // Blood pressure responds to stress
         self.blood_pressure = (Fixed::from_f64(0.5) + stress_level * Fixed::from_f64(0.2)
             - self.fitness * Fixed::from_f64(0.1))
-            .clamp_01();
+        .clamp_01();
 
         // Shock risk from severe blood loss + stress
         self.shock_risk = if self.blood_volume < Fixed::from_f64(0.6) {
             ((Fixed::from_f64(0.6) - self.blood_volume) * Fixed::from_f64(2.0)
                 + stress_level * Fixed::from_f64(0.3))
-                .clamp_01()
+            .clamp_01()
         } else {
             Fixed::ZERO
         };
 
         // Recovery rate influenced by fitness
-        self.recovery_rate = (self.fitness * Fixed::from_f64(0.6) + Fixed::from_f64(0.2)).clamp_01();
+        self.recovery_rate =
+            (self.fitness * Fixed::from_f64(0.6) + Fixed::from_f64(0.2)).clamp_01();
     }
 
     /// Effective stamina for physical tasks (0–1).
@@ -96,7 +97,7 @@ impl CardiovascularState {
         (self.fitness * Fixed::from_f64(0.4)
             + self.blood_volume * Fixed::from_f64(0.3)
             + self.cardiac_capacity * Fixed::from_f64(0.3))
-            .clamp_01()
+        .clamp_01()
     }
 
     /// Whether the agent is at risk of collapse.

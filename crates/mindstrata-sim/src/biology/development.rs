@@ -156,16 +156,11 @@ impl DevelopmentalState {
     }
 
     /// Compute environment quality from current conditions.
-    pub fn update_environment(
-        &mut self,
-        nutrition: Fixed,
-        safety: Fixed,
-        social_support: Fixed,
-    ) {
+    pub fn update_environment(&mut self, nutrition: Fixed, safety: Fixed, social_support: Fixed) {
         self.environment_quality = (nutrition * Fixed::from_f64(0.4)
             + safety * Fixed::from_f64(0.3)
             + social_support * Fixed::from_f64(0.3))
-            .clamp_01();
+        .clamp_01();
     }
 
     /// Developmental modifier for trait expression (environment moderates genetics).
@@ -191,9 +186,18 @@ mod tests {
     #[test]
     fn life_stage_from_age() {
         assert_eq!(LifeStage::from_age(Fixed::from_f64(5.0)), LifeStage::Child);
-        assert_eq!(LifeStage::from_age(Fixed::from_f64(15.0)), LifeStage::Adolescent);
-        assert_eq!(LifeStage::from_age(Fixed::from_f64(25.0)), LifeStage::YoungAdult);
-        assert_eq!(LifeStage::from_age(Fixed::from_f64(55.0)), LifeStage::Mature);
+        assert_eq!(
+            LifeStage::from_age(Fixed::from_f64(15.0)),
+            LifeStage::Adolescent
+        );
+        assert_eq!(
+            LifeStage::from_age(Fixed::from_f64(25.0)),
+            LifeStage::YoungAdult
+        );
+        assert_eq!(
+            LifeStage::from_age(Fixed::from_f64(55.0)),
+            LifeStage::Mature
+        );
         assert_eq!(LifeStage::from_age(Fixed::from_f64(70.0)), LifeStage::Elder);
     }
 

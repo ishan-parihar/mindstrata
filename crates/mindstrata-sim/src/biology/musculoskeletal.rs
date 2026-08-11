@@ -71,15 +71,15 @@ impl MuscularState {
         }
 
         // Strength derived from conditioning, minus fatigue, minus atrophy
-        self.strength = (self.conditioning * Fixed::from_f64(0.7)
-            + Fixed::from_f64(0.3)
+        self.strength = (self.conditioning * Fixed::from_f64(0.7) + Fixed::from_f64(0.3)
             - self.fatigue * Fixed::from_f64(0.2)
             - self.atrophy * Fixed::from_f64(0.3)
             - self.injury * Fixed::from_f64(0.2))
-            .clamp_01();
+        .clamp_01();
 
         // Endurance from conditioning
-        self.endurance = (self.conditioning * Fixed::from_f64(0.6) + Fixed::from_f64(0.3)).clamp_01();
+        self.endurance =
+            (self.conditioning * Fixed::from_f64(0.6) + Fixed::from_f64(0.3)).clamp_01();
 
         // Atrophy from disuse or poor nutrition
         if activity_level < Fixed::from_f64(0.1) || nutrition_quality < Fixed::from_f64(0.2) {

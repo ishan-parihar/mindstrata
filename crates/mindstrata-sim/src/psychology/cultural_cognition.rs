@@ -59,8 +59,7 @@ impl CulturalCategory {
             self.rigidity = (self.rigidity - Fixed::from_f64(0.01)).max(Fixed::from_f64(0.1));
         } else {
             // Negative encounters increase outgroup disgust
-            self.outgroup_disgust =
-                (self.outgroup_disgust + Fixed::from_f64(0.02)).clamp_01();
+            self.outgroup_disgust = (self.outgroup_disgust + Fixed::from_f64(0.02)).clamp_01();
         }
     }
 }
@@ -99,8 +98,7 @@ impl Taboo {
         } else {
             Fixed::ZERO
         };
-        let social_boost =
-            Fixed::from_f64(self.social_reinforcement as f64 * 0.02);
+        let social_boost = Fixed::from_f64(self.social_reinforcement as f64 * 0.02);
         (self.strength + sacred_boost + social_boost).clamp_01()
     }
 
@@ -257,10 +255,7 @@ impl Default for CulturalCognition {
 
 impl CulturalCognition {
     /// Create from personality traits.
-    pub fn from_personality(
-        conservatism_base: Fixed,
-        openness_base: Fixed,
-    ) -> Self {
+    pub fn from_personality(conservatism_base: Fixed, openness_base: Fixed) -> Self {
         Self {
             conservatism: conservatism_base,
             syncretism_openness: openness_base,
@@ -271,7 +266,10 @@ impl CulturalCognition {
     /// Add a taboo and reinforce existing ones that overlap.
     pub fn add_taboo(&mut self, taboo: Taboo) {
         // Check for overlapping taboos
-        let existing = self.taboos.iter_mut().find(|t| t.description == taboo.description);
+        let existing = self
+            .taboos
+            .iter_mut()
+            .find(|t| t.description == taboo.description);
         if let Some(existing) = existing {
             existing.reinforce();
         } else {
@@ -281,25 +279,36 @@ impl CulturalCognition {
 
     /// Compute the agent's resistance to cultural change.
     pub fn change_resistance(&self) -> Fixed {
-        let taboo_strength: Fixed = self.taboos.iter()
+        let taboo_strength: Fixed = self
+            .taboos
+            .iter()
             .map(Taboo::violation_cost)
             .fold(Fixed::ZERO, |acc, t| acc + t);
         let category_rigidity: Fixed = if self.categories.is_empty() {
             Fixed::ZERO
         } else {
-            let total: Fixed = self.categories.iter().map(|c| c.rigidity).fold(Fixed::ZERO, |acc, r| acc + r);
+            let total: Fixed = self
+                .categories
+                .iter()
+                .map(|c| c.rigidity)
+                .fold(Fixed::ZERO, |acc, r| acc + r);
             total / Fixed::from_int(self.categories.len() as i64)
         };
         (self.conservatism * Fixed::from_f64(0.3)
             + category_rigidity * Fixed::from_f64(0.3)
             + taboo_strength.min(Fixed::ONE) * Fixed::from_f64(0.4))
-            .clamp_01()
+        .clamp_01()
     }
 
     /// Check if a proposed cultural change would violate taboos.
     pub fn tabo_violated_by(&self, change_description: &str) -> Vec<&Taboo> {
-        self.taboos.iter()
-            .filter(|t| change_description.to_lowercase().contains(&t.description.to_lowercase()))
+        self.taboos
+            .iter()
+            .filter(|t| {
+                change_description
+                    .to_lowercase()
+                    .contains(&t.description.to_lowercase())
+            })
             .collect()
     }
 
@@ -307,7 +316,8 @@ impl CulturalCognition {
     /// Returns the outgroup_disgust of the category matching the target name,
     /// or zero if no matching category exists.
     pub fn outgroup_disgust_for(&self, target_category: &str) -> Fixed {
-        self.categories.iter()
+        self.categories
+            .iter()
             .find(|c| c.name == target_category)
             .map_or(Fixed::ZERO, |c| c.outgroup_disgust)
     }
@@ -317,13 +327,11 @@ impl CulturalCognition {
     pub fn tick_update(&mut self, positive_exposure: Fixed, negative_exposure: Fixed) {
         // Positive cultural exposure slightly reduces conservatism
         self.conservatism = (self.conservatism
-            - positive_exposure * Fixed::from_f64(0.001)
-            * (Fixed::ONE - self.conservatism))
+            - positive_exposure * Fixed::from_f64(0.001) * (Fixed::ONE - self.conservatism))
             .max(Fixed::ZERO);
         // Negative exposure (threat, trauma) increases conservatism
         self.conservatism = (self.conservatism
-            + negative_exposure * Fixed::from_f64(0.0015)
-            * (Fixed::ONE - self.conservatism))
+            + negative_exposure * Fixed::from_f64(0.0015) * (Fixed::ONE - self.conservatism))
             .clamp_01();
         // Taboo strength decays slowly for non-sacred taboos
         for taboo in &mut self.taboos {
@@ -432,10 +440,7 @@ mod tests {
 
     #[test]
     fn from_personality_sets_base_values() {
-        let cc = CulturalCognition::from_personality(
-            Fixed::from_f64(0.8),
-            Fixed::from_f64(0.2),
-        );
+        let cc = CulturalCognition::from_personality(Fixed::from_f64(0.8), Fixed::from_f64(0.2));
         assert_eq!(cc.conservatism, Fixed::from_f64(0.8));
         assert_eq!(cc.syncretism_openness, Fixed::from_f64(0.2));
     }

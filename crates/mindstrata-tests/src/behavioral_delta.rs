@@ -252,7 +252,9 @@ fn scenario_delta_is_live_and_contexts_differ() {
         "vanilla baseline ({:.0} events) must differ from drought baseline \
          ({:.0} events) — gap {:.0} — the drought scenario structurally \
          changes the world",
-        vanilla.baseline, drought.baseline, baseline_gap
+        vanilla.baseline,
+        drought.baseline,
+        baseline_gap
     );
 
     // The drought delta is direction-blind smaller (survival-mode damping).
@@ -262,7 +264,8 @@ fn scenario_delta_is_live_and_contexts_differ() {
         vanilla.delta > 0.0 && drought.delta > 0.0,
         "both contexts must show positive deltas (more escalation = more events): \
          vanilla={:.0} drought={:.0}",
-        vanilla.delta, drought.delta
+        vanilla.delta,
+        drought.delta
     );
 }
 
@@ -284,13 +287,16 @@ fn calm_scenario_baseline_differs_from_drought() {
         gap > 50.0,
         "calm baseline ({:.0} events) must differ from drought \
          baseline ({:.0} events) — gap {:.0}",
-        calm.baseline, drought.baseline, gap
+        calm.baseline,
+        drought.baseline,
+        gap
     );
 
     // Both deltas are positive (more escalation = more events).
     assert!(
         calm.delta > 0.0 && drought.delta > 0.0,
         "both contexts must show positive deltas: calm delta={:.0} drought delta={:.0}",
-        calm.delta, drought.delta
+        calm.delta,
+        drought.delta
     );
 }

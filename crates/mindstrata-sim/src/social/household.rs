@@ -161,9 +161,15 @@ impl Household {
                 HouseholdRole::Head
             } else if self.head.is_some() && partners.get(member) == Some(&self.head) {
                 HouseholdRole::Partner
-            } else if ages.get(member).is_some_and(|age| *age < Fixed::from_f64(14.0)) {
+            } else if ages
+                .get(member)
+                .is_some_and(|age| *age < Fixed::from_f64(14.0))
+            {
                 HouseholdRole::Child
-            } else if ages.get(member).is_some_and(|age| *age > Fixed::from_f64(55.0)) {
+            } else if ages
+                .get(member)
+                .is_some_and(|age| *age > Fixed::from_f64(55.0))
+            {
                 HouseholdRole::Elder
             } else {
                 HouseholdRole::Adult
@@ -364,7 +370,11 @@ mod tests {
         h.add_member(1);
         let practices = vec![vec![3u64, 1], vec![2], vec![]];
         h.collect_traditions(&practices);
-        assert_eq!(h.traditions, vec![1, 2, 3], "sorted union of member practices");
+        assert_eq!(
+            h.traditions,
+            vec![1, 2, 3],
+            "sorted union of member practices"
+        );
     }
 
     #[test]
@@ -375,6 +385,10 @@ mod tests {
         assert_eq!(h.traditions, vec![1, 2]);
         h.remove_member(1);
         h.collect_traditions(&[vec![1u64], vec![2]]);
-        assert_eq!(h.traditions, vec![1], "traditions recompute from remaining members");
+        assert_eq!(
+            h.traditions,
+            vec![1],
+            "traditions recompute from remaining members"
+        );
     }
 }

@@ -40,7 +40,6 @@ pub enum RegulationStrategy {
     Caregiving,
 }
 
-
 /// Agent's emotion regulation profile and current state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmotionRegulationState {
@@ -120,14 +119,16 @@ impl EmotionRegulationState {
                 let skill = self.reappraisal_skill;
                 let valence_boost = current_valence.abs() * skill * Fixed::from_f64(0.1);
                 let arousal_reduce = current_arousal * skill * Fixed::from_f64(0.15);
-                self.reappraisal_skill = (self.reappraisal_skill + Fixed::from_f64(0.001)).clamp_01();
+                self.reappraisal_skill =
+                    (self.reappraisal_skill + Fixed::from_f64(0.001)).clamp_01();
                 (valence_boost, -arousal_reduce)
             }
             RegulationStrategy::Suppression => {
                 // Suppression reduces expressed arousal but not valence
                 let skill = self.suppression_skill;
                 let arousal_reduce = current_arousal * skill * Fixed::from_f64(0.2);
-                self.suppression_skill = (self.suppression_skill + Fixed::from_f64(0.001)).clamp_01();
+                self.suppression_skill =
+                    (self.suppression_skill + Fixed::from_f64(0.001)).clamp_01();
                 (Fixed::ZERO, -arousal_reduce)
             }
             RegulationStrategy::Rumination => {
@@ -152,7 +153,10 @@ impl EmotionRegulationState {
             }
             RegulationStrategy::Aggression => {
                 // Aggression discharges arousal but may worsen valence
-                (-Fixed::from_f64(0.02), -current_arousal * Fixed::from_f64(0.15))
+                (
+                    -Fixed::from_f64(0.02),
+                    -current_arousal * Fixed::from_f64(0.15),
+                )
             }
             RegulationStrategy::Humor => {
                 // Humor improves valence and reduces arousal
@@ -160,11 +164,17 @@ impl EmotionRegulationState {
             }
             RegulationStrategy::Dissociation => {
                 // Dissociation reduces all emotional experience
-                (-Fixed::from_f64(0.1), -current_arousal * Fixed::from_f64(0.3))
+                (
+                    -Fixed::from_f64(0.1),
+                    -current_arousal * Fixed::from_f64(0.3),
+                )
             }
             RegulationStrategy::SubstanceUse => {
                 // Intoxicants blunt both poles but carry dependency risk
-                (-Fixed::from_f64(0.04), -current_arousal * Fixed::from_f64(0.25))
+                (
+                    -Fixed::from_f64(0.04),
+                    -current_arousal * Fixed::from_f64(0.25),
+                )
             }
             RegulationStrategy::Work => {
                 // Work provides distraction and sense of purpose
@@ -180,11 +190,10 @@ impl EmotionRegulationState {
     /// Update regulation capacity based on stress, fatigue, and social support.
     pub fn update_capacity(&mut self, stress: Fixed, fatigue: Fixed, social_support: Fixed) {
         // Capacity is reduced by stress and fatigue, boosted by social support
-        self.capacity = (Fixed::from_f64(0.5)
-            + social_support * Fixed::from_f64(0.2)
+        self.capacity = (Fixed::from_f64(0.5) + social_support * Fixed::from_f64(0.2)
             - stress * Fixed::from_f64(0.3)
             - fatigue * Fixed::from_f64(0.2))
-            .clamp_01();
+        .clamp_01();
         // Effort decays each tick
         self.current_effort = (self.current_effort - Fixed::from_f64(0.05)).max(Fixed::ZERO);
     }

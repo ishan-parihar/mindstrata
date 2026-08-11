@@ -95,12 +95,16 @@ fn read_optional_ron<T: for<'de> Deserialize<'de>>(
     if !path.exists() {
         return Ok(None);
     }
-    let content = std::fs::read_to_string(&path)
-        .map_err(|e| ModError::ReadFailed { path: path.display().to_string(), reason: e.to_string() })?;
-    ron::from_str(&content).map(Some).map_err(|e| ModError::ParseFailed {
+    let content = std::fs::read_to_string(&path).map_err(|e| ModError::ReadFailed {
         path: path.display().to_string(),
         reason: e.to_string(),
-    })
+    })?;
+    ron::from_str(&content)
+        .map(Some)
+        .map_err(|e| ModError::ParseFailed {
+            path: path.display().to_string(),
+            reason: e.to_string(),
+        })
 }
 
 impl ContentPack {
@@ -112,19 +116,27 @@ impl ContentPack {
     pub fn load(dir: impl AsRef<Path>) -> Result<Self, ModError> {
         let dir = dir.as_ref();
         let manifest_path = dir.join("manifest.ron");
-        let manifest_content = std::fs::read_to_string(&manifest_path).map_err(|_| ModError::MissingFile {
-            path: manifest_path.display().to_string(),
-        })?;
-        let manifest: ModManifest = ron::from_str(&manifest_content).map_err(|e| ModError::ParseFailed {
-            path: manifest_path.display().to_string(),
-            reason: e.to_string(),
-        })?;
+        let manifest_content =
+            std::fs::read_to_string(&manifest_path).map_err(|_| ModError::MissingFile {
+                path: manifest_path.display().to_string(),
+            })?;
+        let manifest: ModManifest =
+            ron::from_str(&manifest_content).map_err(|e| ModError::ParseFailed {
+                path: manifest_path.display().to_string(),
+                reason: e.to_string(),
+            })?;
 
         let scenario: Option<Scenario> = read_optional_ron(dir, "scenario.ron")?;
-        let knowledge: Vec<Knowledge> = read_optional_ron(dir, "knowledge.ron")?.unwrap_or_default();
+        let knowledge: Vec<Knowledge> =
+            read_optional_ron(dir, "knowledge.ron")?.unwrap_or_default();
         let norms: Vec<Norm> = read_optional_ron(dir, "norms.ron")?.unwrap_or_default();
 
-        let pack = Self { manifest, scenario, knowledge, norms };
+        let pack = Self {
+            manifest,
+            scenario,
+            knowledge,
+            norms,
+        };
         pack.validate()?;
         Ok(pack)
     }
@@ -135,7 +147,9 @@ impl ContentPack {
     /// - all probability-like fields within `0.0..=1.0`.
     pub fn validate(&self) -> Result<(), ModError> {
         if self.manifest.name.trim().is_empty() {
-            return Err(ModError::Validation("manifest.name must not be empty".into()));
+            return Err(ModError::Validation(
+                "manifest.name must not be empty".into(),
+            ));
         }
 
         let in_01 = |v: Fixed| v >= Fixed::ZERO && v <= Fixed::ONE;
@@ -234,7 +248,8 @@ impl crate::sim::Simulation {
                 )));
             }
         }
-        let existing_knowledge_ids: HashSet<u64> = self.knowledge_store.iter().map(|k| k.id).collect();
+        let existing_knowledge_ids: HashSet<u64> =
+            self.knowledge_store.iter().map(|k| k.id).collect();
         for knowledge in &pack.knowledge {
             if existing_knowledge_ids.contains(&knowledge.id) {
                 return Err(ModError::Validation(format!(
@@ -425,8 +440,15 @@ mod tests {
         assert_eq!(applied.knowledge_added, 1);
         assert_eq!(sim.norms.norms().len(), norms_before + 1);
         assert_eq!(sim.knowledge_store.len(), knowledge_before + 1);
-        assert!(sim.norms.norms().iter().any(|n| n.id == 100 && n.name == "Honor River Trade"));
-        assert!(sim.knowledge_store.iter().any(|k| k.id == 100 && k.name == "River Ferry"));
+        assert!(sim
+            .norms
+            .norms()
+            .iter()
+            .any(|n| n.id == 100 && n.name == "Honor River Trade"));
+        assert!(sim
+            .knowledge_store
+            .iter()
+            .any(|k| k.id == 100 && k.name == "River Ferry"));
 
         // The new norm participates in pressure computation without panicking.
         sim.tick();
@@ -464,7 +486,11 @@ mod tests {
         );
         // Nothing was partially applied.
         assert_eq!(
-            sim.norms.norms().iter().filter(|n| n.name == "No Theft Clash").count(),
+            sim.norms
+                .norms()
+                .iter()
+                .filter(|n| n.name == "No Theft Clash")
+                .count(),
             0
         );
         let _ = std::fs::remove_dir_all(&dir);

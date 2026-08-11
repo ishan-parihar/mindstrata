@@ -85,8 +85,9 @@ pub struct EmbodiedState {
     pub cardiovascular: CardiovascularState,
     /// Respiratory system — exertion, disease vulnerability.
     pub respiratory: RespiratoryState,
-/// Immune system — disease resistance, inflammation.
-pub immune: ImmuneState,    /// Musculoskeletal system — strength, fatigue, conditioning.
+    /// Immune system — disease resistance, inflammation.
+    pub immune: ImmuneState,
+    /// Musculoskeletal system — strength, fatigue, conditioning.
     pub muscular: MuscularState,
     /// Skeletal system (§7.2.3) — frame, bone density, integrity, fracture risk,
     /// chronic pain. Exactly neutral at baseline (identity multipliers); only
@@ -102,8 +103,8 @@ pub immune: ImmuneState,    /// Musculoskeletal system — strength, fatigue, co
     /// still deserialize (deterministic-replay mandate for old saves).
     #[serde(default)]
     pub digestive: DigestiveState,
-/// Reproductive system — fertility, puberty, pregnancy.
-pub reproductive: ReproductiveState,
+    /// Reproductive system — fertility, puberty, pregnancy.
+    pub reproductive: ReproductiveState,
     /// Circadian system — sleep/wake cycle, alertness.
     pub circadian: CircadianState,
     /// Thermoregulation (§7.3.3) — body temperature, cold/heat stress.
@@ -194,7 +195,11 @@ impl EmbodiedState {
         let sickness_penalty = self.immune.sickness_level() * Fixed::from_f64(0.15);
         let shock_penalty = self.cardiovascular.shock_risk * Fixed::from_f64(0.1);
         let skeletal_factor = self.skeletal.health_factor();
-        ((base * immune_modifier - stress_penalty - pain_penalty - sickness_penalty - shock_penalty)
+        ((base * immune_modifier
+            - stress_penalty
+            - pain_penalty
+            - sickness_penalty
+            - shock_penalty)
             * skeletal_factor)
             .clamp_01()
     }
@@ -262,27 +267,39 @@ impl EmbodiedState {
         self.circadian.tick_update(144, is_sleeping); // 144 ticks per day
 
         // 2. Nervous — arousal, pain, trauma
-        self.nervous.update(threat_level, social_safety, self.injury, is_sleeping,
+        self.nervous.update(
+            threat_level,
+            social_safety,
+            self.injury,
+            is_sleeping,
             nervous::NervousUpdateParams {
                 sympathetic_recovery_rate: params.nervous_sympathetic_recovery,
                 parasympathetic_buildup_rate: params.nervous_parasympathetic_buildup,
                 trauma_accumulation_rate: params.nervous_trauma_accumulation,
                 trauma_decay_rate: params.nervous_trauma_decay,
-            });
+            },
+        );
 
         // 3. Endocrine — hormonal axes
         let parasympathetic = self.nervous.parasympathetic_tone;
         let acute_stress = self.nervous.pain.effective_pain()
             + self.hunger * Fixed::from_f64(0.3)
             + self.thirst * Fixed::from_f64(0.2);
-        self.endocrine.stress.update(acute_stress, parasympathetic,
-            params.endocrine_stress_recovery, params.endocrine_stress_chronic_rate,
-            params.endocrine_stress_chronic_recovery);
+        self.endocrine.stress.update(
+            acute_stress,
+            parasympathetic,
+            params.endocrine_stress_recovery,
+            params.endocrine_stress_chronic_rate,
+            params.endocrine_stress_chronic_recovery,
+        );
         self.endocrine.metabolic.energy = self.energy;
         self.endocrine.metabolic.appetite = self.hunger;
         self.endocrine.metabolic.satiety = Fixed::ONE - self.hunger;
-        self.endocrine.arousal.update(self.endocrine.stress.level,
-            params.endocrine_arousal_rise, params.endocrine_arousal_decay);
+        self.endocrine.arousal.update(
+            self.endocrine.stress.level,
+            params.endocrine_arousal_rise,
+            params.endocrine_arousal_decay,
+        );
 
         // 4. Metabolic — energy, hunger (thermoregulation now in ThermalState)
         self.metabolic.tick_update(activity_level);
@@ -290,7 +307,8 @@ impl EmbodiedState {
         // 4b. Thermal — body temperature homeostasis, cold/heat stress.
         // Runs immediately after metabolic with the post-update energy
         // reserves (identical to the pre-Iter-45 inlined block).
-        self.thermal.tick_update(ambient_temperature, self.metabolic.energy_reserves);
+        self.thermal
+            .tick_update(ambient_temperature, self.metabolic.energy_reserves);
 
         // 5. Cardiovascular — fitness, shock
         let age_modifier = self.development.physical_modifier();
@@ -331,7 +349,11 @@ impl EmbodiedState {
         self.muscular.tick_update(
             activity_level,
             Fixed::from_f64(0.6), // nutrition quality placeholder
-            if is_sleeping { Fixed::ONE } else { Fixed::from_f64(0.2) },
+            if is_sleeping {
+                Fixed::ONE
+            } else {
+                Fixed::from_f64(0.2)
+            },
             age_modifier,
         );
 
@@ -371,8 +393,8 @@ impl EmbodiedState {
 
         // Sleep pressure management
         if is_sleeping {
-            self.nervous.sleep_pressure = (self.nervous.sleep_pressure - Fixed::from_f64(0.05))
-                .max(Fixed::ZERO);
+            self.nervous.sleep_pressure =
+                (self.nervous.sleep_pressure - Fixed::from_f64(0.05)).max(Fixed::ZERO);
         }
 
         // Sync derived fields back to legacy fields.
@@ -386,11 +408,10 @@ impl EmbodiedState {
         // transiently through derived_health().
         let chronic_damage = (self.injury * Fixed::from_f64(0.5)
             + self.immune.sickness_level() * Fixed::from_f64(0.3))
-            .clamp_01();
+        .clamp_01();
         let health_target = (Fixed::ONE - chronic_damage).clamp_01();
         let recovery_rate = Fixed::from_f64(0.002); // slow recovery per tick
-        self.health =
-            (self.health + (health_target - self.health) * recovery_rate).clamp_01();
+        self.health = (self.health + (health_target - self.health) * recovery_rate).clamp_01();
         self.energy = self.derived_energy();
         self.fatigue = self.derived_fatigue();
         self.sickness = self.immune.sickness_level();

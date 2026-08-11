@@ -112,19 +112,17 @@ impl Default for MoralCognition {
 
 impl MoralCognition {
     /// Compute moral outrage from a witnessed norm violation.
-    pub fn compute_outrage(
-        &self,
-        violation_severity: Fixed,
-        violator_is_in_group: bool,
-    ) -> Fixed {
+    pub fn compute_outrage(&self, violation_severity: Fixed, violator_is_in_group: bool) -> Fixed {
         let care_outrage = self.foundations.care * violation_severity * Fixed::from_f64(0.3);
-        let fairness_outrage = self.foundations.fairness * violation_severity * Fixed::from_f64(0.25);
+        let fairness_outrage =
+            self.foundations.fairness * violation_severity * Fixed::from_f64(0.25);
         let loyalty_outrage = if violator_is_in_group {
             self.foundations.loyalty * violation_severity * Fixed::from_f64(0.2)
         } else {
             Fixed::ZERO
         };
-        let authority_outrage = self.foundations.authority * violation_severity * Fixed::from_f64(0.15);
+        let authority_outrage =
+            self.foundations.authority * violation_severity * Fixed::from_f64(0.15);
         let purity_outrage = self.purity_sensitivity * violation_severity * Fixed::from_f64(0.1);
 
         (care_outrage + fairness_outrage + loyalty_outrage + authority_outrage + purity_outrage)
@@ -147,8 +145,7 @@ impl MoralCognition {
             // stays untouched so the field keeps its documented meaning
             // ("times the agent has witnessed enforcement") for any future
             // consumer such as a violation audit.
-            norm.identity_linked =
-                norm.identity_linked || norm.strength > Fixed::from_f64(0.7);
+            norm.identity_linked = norm.identity_linked || norm.strength > Fixed::from_f64(0.7);
         } else {
             self.internalize_norm(description.to_string(), amount);
         }
@@ -157,7 +154,11 @@ impl MoralCognition {
     /// Internalize a new norm through repeated exposure and enforcement.
     pub fn internalize_norm(&mut self, description: String, strength: Fixed) {
         // Check if already internalized
-        if self.internalized_norms.iter().any(|n| n.description == description) {
+        if self
+            .internalized_norms
+            .iter()
+            .any(|n| n.description == description)
+        {
             return;
         }
         self.internalized_norms.push(InternalizedNorm {
@@ -179,15 +180,15 @@ impl MoralCognition {
         // Outrage builds from witnessed violations
         self.moral_emotions.outrage = (self.moral_emotions.outrage
             + witnessed_violations * self.foundations.fairness * Fixed::from_f64(0.05))
-            .clamp_01();
+        .clamp_01();
         // Shame from personal violations
         self.moral_emotions.shame = (self.moral_emotions.shame
             + personal_violations * self.moral_identity * Fixed::from_f64(0.05))
-            .clamp_01();
+        .clamp_01();
         // Pride from moral achievements
         self.moral_emotions.pride = (self.moral_emotions.pride
             + moral_achievements * self.moral_identity * Fixed::from_f64(0.03))
-            .clamp_01();
+        .clamp_01();
 
         // Decay all moral emotions
         let decay = Fixed::from_f64(0.003);
@@ -250,8 +251,8 @@ impl MoralCognition {
         if count == 0 {
             return Fixed::ZERO;
         }
-        let exposure = (count.min(HYPOCRISY_ENFORCEMENT_CAP) as f64)
-            / (HYPOCRISY_ENFORCEMENT_CAP as f64);
+        let exposure =
+            (count.min(HYPOCRISY_ENFORCEMENT_CAP) as f64) / (HYPOCRISY_ENFORCEMENT_CAP as f64);
         // Clamped: `hypocrisy_sensitivity` is a pub field that a scenario
         // config could deserialize out of range — without the clamp an
         // over-1.0 factor would drive the theft gate's (1 − hypocrisy)

@@ -57,7 +57,9 @@ pub fn leadership_score(
 ) -> Fixed {
     // §11.3: Competence, charisma, network centrality, moral reputation
     let competence = conscientiousness * Fixed::from_f64(0.2);
-    let charisma = ambition * Fixed::from_f64(0.15) + dominance * Fixed::from_f64(0.1) + extraversion * Fixed::from_f64(0.1);
+    let charisma = ambition * Fixed::from_f64(0.15)
+        + dominance * Fixed::from_f64(0.1)
+        + extraversion * Fixed::from_f64(0.1);
     let network = network_centrality * Fixed::from_f64(0.15);
     let moral = moral_reputation * Fixed::from_f64(0.15);
     // §11.3: Age provides wisdom but trauma reduces effectiveness
@@ -90,7 +92,8 @@ pub fn should_challenge(
 
     // §11.3: Low legitimacy enables challenges
     let legitimacy_pressure = (CHALLENGE_LEGITIMACY_THRESHOLD - institution.legitimacy)
-        .max(Fixed::ZERO) * Fixed::from_f64(2.0);
+        .max(Fixed::ZERO)
+        * Fixed::from_f64(2.0);
 
     // §11.3: High corruption enables challenges
     let corruption_pressure = if institution.corruption > COUP_CORRUPTION_THRESHOLD {
@@ -134,7 +137,8 @@ pub fn attempt_challenge(
             }
         } else {
             // Failed coup — legitimacy damage
-            institution.legitimacy = (institution.legitimacy - Fixed::from_f64(0.1)).max(Fixed::ZERO);
+            institution.legitimacy =
+                (institution.legitimacy - Fixed::from_f64(0.1)).max(Fixed::ZERO);
             ChallengeResult::None
         }
     } else {
@@ -163,12 +167,18 @@ fn transfer_leadership(institution: &mut Institution, old_leader: AgentId, new_l
     institution.legitimacy = (institution.legitimacy + Fixed::from_f64(0.05)).clamp_01();
 
     // Record the transfer
-    institution.records.push(crate::institutions::InstitutionalRecord {
-        tick: 0, // caller should set the tick
-        action: format!("Leadership transferred from {} to {}", old_leader.as_u64(), new_leader.as_u64()),
-        affected: vec![old_leader, new_leader],
-        success: true,
-    });
+    institution
+        .records
+        .push(crate::institutions::InstitutionalRecord {
+            tick: 0, // caller should set the tick
+            action: format!(
+                "Leadership transferred from {} to {}",
+                old_leader.as_u64(),
+                new_leader.as_u64()
+            ),
+            affected: vec![old_leader, new_leader],
+            success: true,
+        });
 }
 
 /// Compute hierarchy destabilization pressure.
@@ -183,9 +193,11 @@ pub fn destabilization_pressure(
     fear: Fixed,
     treasury: Fixed,
 ) -> Fixed {
-    let legitimacy_pressure = (Fixed::from_f64(0.5) - legitimacy).max(Fixed::ZERO) * Fixed::from_f64(0.3);
+    let legitimacy_pressure =
+        (Fixed::from_f64(0.5) - legitimacy).max(Fixed::ZERO) * Fixed::from_f64(0.3);
     let corruption_pressure = corruption * Fixed::from_f64(0.25);
-    let cohesion_pressure = (Fixed::from_f64(0.5) - cohesion).max(Fixed::ZERO) * Fixed::from_f64(0.15);
+    let cohesion_pressure =
+        (Fixed::from_f64(0.5) - cohesion).max(Fixed::ZERO) * Fixed::from_f64(0.15);
     let morale_pressure = (Fixed::from_f64(0.3) - morale).max(Fixed::ZERO) * Fixed::from_f64(0.1);
     let fear_pressure = fear * Fixed::from_f64(0.1);
     let treasury_pressure = if treasury < Fixed::from_f64(0.1) {
@@ -194,7 +206,13 @@ pub fn destabilization_pressure(
         Fixed::ZERO
     };
 
-    (legitimacy_pressure + corruption_pressure + cohesion_pressure + morale_pressure + fear_pressure + treasury_pressure).clamp_01()
+    (legitimacy_pressure
+        + corruption_pressure
+        + cohesion_pressure
+        + morale_pressure
+        + fear_pressure
+        + treasury_pressure)
+        .clamp_01()
 }
 
 /// Stabilize hierarchy through ritual and legitimacy building.
@@ -208,13 +226,17 @@ pub fn stabilize_hierarchy(
     narrative_strength: Fixed,
 ) {
     // §11.3: Ritual participation builds legitimacy
-    institution.legitimacy = (institution.legitimacy + ritual_participation * Fixed::from_f64(0.02)).clamp_01();
+    institution.legitimacy =
+        (institution.legitimacy + ritual_participation * Fixed::from_f64(0.02)).clamp_01();
 
     // §11: Punishment effectiveness reduces corruption
-    institution.corruption = (institution.corruption - punishment_effectiveness * Fixed::from_f64(0.01)).max(Fixed::ZERO);
+    institution.corruption = (institution.corruption
+        - punishment_effectiveness * Fixed::from_f64(0.01))
+    .max(Fixed::ZERO);
 
     // §11.3: Narrative strength builds cohesion
-    institution.cohesion = (institution.cohesion + narrative_strength * Fixed::from_f64(0.01)).clamp_01();
+    institution.cohesion =
+        (institution.cohesion + narrative_strength * Fixed::from_f64(0.01)).clamp_01();
 }
 
 #[cfg(test)]
@@ -225,52 +247,101 @@ mod tests {
     #[test]
     fn leadership_score_increases_with_charisma() {
         let score_low = leadership_score(
-            Fixed::from_f64(0.2), Fixed::from_f64(0.2), Fixed::from_f64(0.2),
-            Fixed::from_f64(0.5), Fixed::from_f64(30.0), Fixed::from_f64(0.3),
-            Fixed::from_f64(0.3), Fixed::from_f64(0.5), Fixed::ZERO,
+            Fixed::from_f64(0.2),
+            Fixed::from_f64(0.2),
+            Fixed::from_f64(0.2),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(30.0),
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.5),
+            Fixed::ZERO,
         );
         let score_high = leadership_score(
-            Fixed::from_f64(0.8), Fixed::from_f64(0.8), Fixed::from_f64(0.8),
-            Fixed::from_f64(0.5), Fixed::from_f64(30.0), Fixed::from_f64(0.3),
-            Fixed::from_f64(0.3), Fixed::from_f64(0.5), Fixed::ZERO,
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(30.0),
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.5),
+            Fixed::ZERO,
         );
-        assert!(score_high > score_low, "High charisma should produce higher leadership score");
+        assert!(
+            score_high > score_low,
+            "High charisma should produce higher leadership score"
+        );
     }
 
     #[test]
     fn leadership_score_reduces_with_trauma() {
         let score_no_trauma = leadership_score(
-            Fixed::from_f64(0.5), Fixed::from_f64(0.5), Fixed::from_f64(0.5),
-            Fixed::from_f64(0.5), Fixed::from_f64(30.0), Fixed::from_f64(0.3),
-            Fixed::from_f64(0.3), Fixed::from_f64(0.5), Fixed::ZERO,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(30.0),
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.5),
+            Fixed::ZERO,
         );
         let score_high_trauma = leadership_score(
-            Fixed::from_f64(0.5), Fixed::from_f64(0.5), Fixed::from_f64(0.5),
-            Fixed::from_f64(0.5), Fixed::from_f64(30.0), Fixed::from_f64(0.3),
-            Fixed::from_f64(0.3), Fixed::from_f64(0.5), Fixed::from_f64(0.8),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(30.0),
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.8),
         );
-        assert!(score_no_trauma > score_high_trauma, "Trauma should reduce leadership score");
+        assert!(
+            score_no_trauma > score_high_trauma,
+            "Trauma should reduce leadership score"
+        );
     }
 
     #[test]
     fn destabilization_pressure_increases_with_corruption() {
         let pressure_low = destabilization_pressure(
-            Fixed::from_f64(0.7), Fixed::from_f64(0.1), Fixed::from_f64(0.7),
-            Fixed::from_f64(0.6), Fixed::ZERO, Fixed::from_f64(0.5),
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.1),
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.6),
+            Fixed::ZERO,
+            Fixed::from_f64(0.5),
         );
         let pressure_high = destabilization_pressure(
-            Fixed::from_f64(0.7), Fixed::from_f64(0.8), Fixed::from_f64(0.7),
-            Fixed::from_f64(0.6), Fixed::ZERO, Fixed::from_f64(0.5),
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.6),
+            Fixed::ZERO,
+            Fixed::from_f64(0.5),
         );
-        assert!(pressure_high > pressure_low, "High corruption should increase destabilization pressure");
+        assert!(
+            pressure_high > pressure_low,
+            "High corruption should increase destabilization pressure"
+        );
     }
 
     #[test]
     fn stabilize_hierarchy_builds_legitimacy() {
         let mut inst = Institution::new(0, InstitutionKind::Council, "Test".into());
         let old_legitimacy = inst.legitimacy;
-        stabilize_hierarchy(&mut inst, Fixed::from_f64(0.5), Fixed::from_f64(0.3), Fixed::from_f64(0.4));
-        assert!(inst.legitimacy > old_legitimacy, "Stabilization should increase legitimacy");
+        stabilize_hierarchy(
+            &mut inst,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.4),
+        );
+        assert!(
+            inst.legitimacy > old_legitimacy,
+            "Stabilization should increase legitimacy"
+        );
     }
 
     #[test]
@@ -280,8 +351,17 @@ mod tests {
         let challenger = Fixed::from_f64(0.8);
         let leader = Fixed::from_f64(0.3);
 
-        assert!(should_challenge(&inst, challenger, leader, 600, 0), "Should challenge at tick 600 (> cooldown of 500)");
-        assert!(!should_challenge(&inst, challenger, leader, 800, 600), "Should NOT challenge during cooldown");
-        assert!(should_challenge(&inst, challenger, leader, 1200, 600), "Should challenge after cooldown");
+        assert!(
+            should_challenge(&inst, challenger, leader, 600, 0),
+            "Should challenge at tick 600 (> cooldown of 500)"
+        );
+        assert!(
+            !should_challenge(&inst, challenger, leader, 800, 600),
+            "Should NOT challenge during cooldown"
+        );
+        assert!(
+            should_challenge(&inst, challenger, leader, 1200, 600),
+            "Should challenge after cooldown"
+        );
     }
 }

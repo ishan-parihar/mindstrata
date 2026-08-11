@@ -110,12 +110,16 @@ impl InteroceptiveState {
         safety: Fixed,
     ) -> Fixed {
         let raw = (hunger + thirst + fatigue + safety) * Fixed::from_f64(0.25);
-        let felt = (self.felt_hunger(hunger) + self.felt_thirst(thirst)
-            + self.felt_fatigue(fatigue) + safety)
+        let felt = (self.felt_hunger(hunger)
+            + self.felt_thirst(thirst)
+            + self.felt_fatigue(fatigue)
+            + safety)
             * Fixed::from_f64(0.25);
         let baseline = Self::default();
-        let baseline_felt = (baseline.felt_hunger(hunger) + baseline.felt_thirst(thirst)
-            + baseline.felt_fatigue(fatigue) + safety)
+        let baseline_felt = (baseline.felt_hunger(hunger)
+            + baseline.felt_thirst(thirst)
+            + baseline.felt_fatigue(fatigue)
+            + safety)
             * Fixed::from_f64(0.25);
         // Amplify the deviation-from-default distortion so it is behaviorally
         // visible while remaining exactly zero at the baseline configuration.
@@ -152,11 +156,9 @@ impl InteroceptiveState {
         self.negative_bias = (neuroticism * Fixed::from_f64(0.4)
             + trauma_load * Fixed::from_f64(0.3)
             + Fixed::from_f64(0.1))
-            .clamp_01();
+        .clamp_01();
         // Openness increases sensitivity
-        self.sensitivity = (openness * Fixed::from_f64(0.3)
-            + Fixed::from_f64(0.3))
-            .clamp_01();
+        self.sensitivity = (openness * Fixed::from_f64(0.3) + Fixed::from_f64(0.3)).clamp_01();
     }
 }
 
@@ -219,7 +221,11 @@ mod tests {
     fn regulation_scale_is_identity_at_default_sensitivity() {
         let state = InteroceptiveState::default();
         let scale = state.regulation_scale(Fixed::from_f64(0.4), Fixed::from_f64(0.6));
-        assert_eq!(scale, Fixed::ONE, "default sensitivity must not change regulation");
+        assert_eq!(
+            scale,
+            Fixed::ONE,
+            "default sensitivity must not change regulation"
+        );
     }
 
     #[test]
@@ -257,17 +263,16 @@ mod tests {
         };
         let felt_low = state_low_bias.felt_pain(Fixed::from_f64(0.5));
         let felt_high = state_high_bias.felt_pain(Fixed::from_f64(0.5));
-        assert!(felt_high > felt_low, "high negative bias should produce more felt pain");
+        assert!(
+            felt_high > felt_low,
+            "high negative bias should produce more felt pain"
+        );
     }
 
     #[test]
     fn neuroticism_increases_negative_bias() {
         let mut state = InteroceptiveState::default();
-        state.initialize_from_personality(
-            Fixed::from_f64(0.8),
-            Fixed::from_f64(0.5),
-            Fixed::ZERO,
-        );
+        state.initialize_from_personality(Fixed::from_f64(0.8), Fixed::from_f64(0.5), Fixed::ZERO);
         assert!(state.negative_bias > Fixed::from_f64(0.3));
     }
 }

@@ -189,19 +189,34 @@ mod tests {
     fn seeded_religion_wakes_the_registry() {
         let mut reg = TheologyRegistry::new();
         reg.religion = Some(Religion::seeded(
-            "The Shepherd", Temperament::Benevolent,
-            "The Way", vec!["Tend the flock".into()], "The Flock",
+            "The Shepherd",
+            Temperament::Benevolent,
+            "The Way",
+            vec!["Tend the flock".into()],
+            "The Flock",
         ));
         assert!(!reg.is_dormant());
-        assert_eq!(reg.religion.as_ref().unwrap().deity.temperament, Temperament::Benevolent);
-        assert_eq!(reg.religion.as_ref().unwrap().doctrine.sacred_value, "The Flock");
+        assert_eq!(
+            reg.religion.as_ref().unwrap().deity.temperament,
+            Temperament::Benevolent
+        );
+        assert_eq!(
+            reg.religion.as_ref().unwrap().doctrine.sacred_value,
+            "The Flock"
+        );
     }
 
     #[test]
     fn conversion_rule_is_elder_or_contact() {
         assert!(should_convert(true, false), "elders convert freely");
-        assert!(should_convert(false, true), "contact with a believer converts");
-        assert!(!should_convert(false, false), "isolated young stay unconverted");
+        assert!(
+            should_convert(false, true),
+            "contact with a believer converts"
+        );
+        assert!(
+            !should_convert(false, false),
+            "isolated young stay unconverted"
+        );
     }
 
     #[test]

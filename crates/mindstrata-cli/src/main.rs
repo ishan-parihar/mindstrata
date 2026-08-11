@@ -1,8 +1,8 @@
 //! Mindstrata CLI — run headless simulations.
 
 use clap::{Parser, Subcommand};
-use mindstrata_sim::{Simulation, sim::SimConfig};
 use mindstrata_sim::scenario::Scenario;
+use mindstrata_sim::{sim::SimConfig, Simulation};
 
 /// Mindstrata: a deterministic, emergent human-society simulation.
 #[derive(Parser)]
@@ -237,16 +237,24 @@ fn main() {
 
             if map {
                 println!();
-                let markers: Vec<mindstrata_tui::AgentMarker> = sim.agents.iter().enumerate().map(|(i, a)| {
-                    let name_char = a.name.chars().next().unwrap_or('?');
-                    mindstrata_tui::AgentMarker {
-                        index: i,
-                        x: a.position.x,
-                        y: a.position.y,
-                        name: name_char,
-                    }
-                }).collect();
-                println!("{}", mindstrata_tui::render_world_map(sim.world(), &markers));
+                let markers: Vec<mindstrata_tui::AgentMarker> = sim
+                    .agents
+                    .iter()
+                    .enumerate()
+                    .map(|(i, a)| {
+                        let name_char = a.name.chars().next().unwrap_or('?');
+                        mindstrata_tui::AgentMarker {
+                            index: i,
+                            x: a.position.x,
+                            y: a.position.y,
+                            name: name_char,
+                        }
+                    })
+                    .collect();
+                println!(
+                    "{}",
+                    mindstrata_tui::render_world_map(sim.world(), &markers)
+                );
             }
 
             // §5 (Iteration 157): Visual rendering — pixel map export.
@@ -257,7 +265,9 @@ fn main() {
                     .agents
                     .iter()
                     .enumerate()
-                    .map(|(i, a)| mindstrata_render::RenderAgent::new(a.position.x, a.position.y, i as u8))
+                    .map(|(i, a)| {
+                        mindstrata_render::RenderAgent::new(a.position.x, a.position.y, i as u8)
+                    })
                     .collect();
                 let w = sim.world().width * mindstrata_render::DEFAULT_CELL_PIXELS;
                 let h = sim.world().height * mindstrata_render::DEFAULT_CELL_PIXELS;
@@ -279,7 +289,10 @@ fn main() {
                 let summaries = sim.agent_summaries();
                 if let Some(summary) = summaries.iter().find(|s| s.index == id) {
                     println!();
-                    println!("{}", mindstrata_tui::render_agent_inspector(summary, sim.relationships()));
+                    println!(
+                        "{}",
+                        mindstrata_tui::render_agent_inspector(summary, sim.relationships())
+                    );
                 } else {
                     eprintln!("Agent {id} not found.");
                 }
@@ -289,15 +302,20 @@ fn main() {
             if let Some(ref spec) = show_relationships {
                 let parts: Vec<&str> = spec.split(',').collect();
                 if parts.len() == 2 {
-                    if let (Ok(from), Ok(to)) = (parts[0].parse::<usize>(), parts[1].parse::<usize>()) {
+                    if let (Ok(from), Ok(to)) =
+                        (parts[0].parse::<usize>(), parts[1].parse::<usize>())
+                    {
                         let summaries = sim.agent_summaries();
                         println!();
-                        println!("{}", mindstrata_tui::render_relationship_view(
-                            mindstrata_core::id::AgentId::new(from as u64),
-                            mindstrata_core::id::AgentId::new(to as u64),
-                            sim.relationships(),
-                            &summaries,
-                        ));
+                        println!(
+                            "{}",
+                            mindstrata_tui::render_relationship_view(
+                                mindstrata_core::id::AgentId::new(from as u64),
+                                mindstrata_core::id::AgentId::new(to as u64),
+                                sim.relationships(),
+                                &summaries,
+                            )
+                        );
                     } else {
                         eprintln!("Invalid format. Use: --show-relationships from,to");
                     }
@@ -317,10 +335,14 @@ fn main() {
                 let summaries = sim.agent_summaries();
                 if let Some(summary) = summaries.iter().find(|s| s.index == id) {
                     println!();
-                    println!("{}", mindstrata_tui::render_belief_inspector(
-                        &summary.name, summary.index,
-                        &sim.agents[id].beliefs,
-                    ));
+                    println!(
+                        "{}",
+                        mindstrata_tui::render_belief_inspector(
+                            &summary.name,
+                            summary.index,
+                            &sim.agents[id].beliefs,
+                        )
+                    );
                 } else {
                     eprintln!("Agent {id} not found.");
                 }
@@ -329,28 +351,46 @@ fn main() {
             // §17.1: Institution/faction dashboard
             if factions {
                 println!();
-                println!("{}", mindstrata_tui::render_faction_dashboard(&sim.institutions));
+                println!(
+                    "{}",
+                    mindstrata_tui::render_faction_dashboard(&sim.institutions)
+                );
             }
 
             // §10.8: Clan dashboard
             if clans {
                 println!();
-                println!("{}", mindstrata_tui::render_clan_dashboard(&sim.clan_registry));
+                println!(
+                    "{}",
+                    mindstrata_tui::render_clan_dashboard(&sim.clan_registry)
+                );
             }
 
             // §10.9: Patronage dashboard
             if patronage {
                 println!();
-                println!("{}", mindstrata_tui::render_patronage_dashboard(&sim.patronage_registry));
+                println!(
+                    "{}",
+                    mindstrata_tui::render_patronage_dashboard(&sim.patronage_registry)
+                );
             }
 
             // §19.5.J: Institutional records
             if records {
-                if let Some(council) = sim.institutions.iter().find(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Council) {
+                if let Some(council) = sim
+                    .institutions
+                    .iter()
+                    .find(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Council)
+                {
                     println!();
-                    println!("{}", mindstrata_tui::render_institutional_records(
-                        &council.name, &council.records, 20,
-                    ));
+                    println!(
+                        "{}",
+                        mindstrata_tui::render_institutional_records(
+                            &council.name,
+                            &council.records,
+                            20,
+                        )
+                    );
                 } else {
                     eprintln!("No Council institution found.");
                 }
@@ -359,22 +399,28 @@ fn main() {
             // §19.5.J: Decision traces
             if let Some(id) = decisions {
                 println!();
-                println!("{}", mindstrata_tui::render_decision_traces(
-                    sim.provenance(),
-                    mindstrata_core::id::AgentId::new(id as u64),
-                    20,
-                ));
+                println!(
+                    "{}",
+                    mindstrata_tui::render_decision_traces(
+                        sim.provenance(),
+                        mindstrata_core::id::AgentId::new(id as u64),
+                        20,
+                    )
+                );
             }
 
             // §22: Full psychology pipeline inspector
             if let Some(id) = psychology {
                 if id < sim.agents.len() {
                     println!();
-                    println!("{}", mindstrata_tui::render_psychology_inspector(
-                        id,
-                        &sim.agents[id].name,
-                        &sim.agents[id],
-                    ));
+                    println!(
+                        "{}",
+                        mindstrata_tui::render_psychology_inspector(
+                            id,
+                            &sim.agents[id].name,
+                            &sim.agents[id],
+                        )
+                    );
                 } else {
                     eprintln!("Agent {id} not found.");
                 }
@@ -410,7 +456,9 @@ fn main() {
                         csv.push('\n');
                     }
                     match std::fs::write(path, &csv) {
-                        Ok(()) => println!("\n  Metrics exported to: {path} ({} rows)", metrics.len()),
+                        Ok(()) => {
+                            println!("\n  Metrics exported to: {path} ({} rows)", metrics.len());
+                        }
                         Err(e) => eprintln!("\n  Failed to export metrics: {e}"),
                     }
                 }
@@ -469,16 +517,24 @@ fn main() {
 
             if map {
                 println!();
-                let markers: Vec<mindstrata_tui::AgentMarker> = sim.agents.iter().enumerate().map(|(i, a)| {
-                    let name_char = a.name.chars().next().unwrap_or('?');
-                    mindstrata_tui::AgentMarker {
-                        index: i,
-                        x: a.position.x,
-                        y: a.position.y,
-                        name: name_char,
-                    }
-                }).collect();
-                println!("{}", mindstrata_tui::render_world_map(sim.world(), &markers));
+                let markers: Vec<mindstrata_tui::AgentMarker> = sim
+                    .agents
+                    .iter()
+                    .enumerate()
+                    .map(|(i, a)| {
+                        let name_char = a.name.chars().next().unwrap_or('?');
+                        mindstrata_tui::AgentMarker {
+                            index: i,
+                            x: a.position.x,
+                            y: a.position.y,
+                            name: name_char,
+                        }
+                    })
+                    .collect();
+                println!(
+                    "{}",
+                    mindstrata_tui::render_world_map(sim.world(), &markers)
+                );
             }
         }
     }
@@ -492,8 +548,7 @@ fn init_logging(verbose: bool) {
     };
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| filter.into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| filter.into()),
         )
         .try_init();
 }
@@ -525,22 +580,32 @@ fn print_results(sim: &Simulation, elapsed: std::time::Duration) {
     println!("  Total Water:   {:.1}", metrics.total_water);
     println!();
 
-    println!("{}", mindstrata_tui::render_agent_list(&sim.agent_summaries()));
+    println!(
+        "{}",
+        mindstrata_tui::render_agent_list(&sim.agent_summaries())
+    );
 
     println!();
-    println!("{}", mindstrata_tui::render_dashboard(
-        &sim.agent_summaries(),
-        sim.event_count(),
-        sim.current_tick().as_u64(),
-        &mindstrata_tui::DashboardConfig {
-            season: sim.season.current.name().to_string(),
-            year: sim.season.year,
-            grain: sim.total_grain().to_f64(),
-            water: sim.total_water().to_f64(),
-            institution_count: sim.institutions.len(),
-            faction_count: sim.institutions.iter().filter(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Faction).count(),
-        },
-    ));
+    println!(
+        "{}",
+        mindstrata_tui::render_dashboard(
+            &sim.agent_summaries(),
+            sim.event_count(),
+            sim.current_tick().as_u64(),
+            &mindstrata_tui::DashboardConfig {
+                season: sim.season.current.name().to_string(),
+                year: sim.season.year,
+                grain: sim.total_grain().to_f64(),
+                water: sim.total_water().to_f64(),
+                institution_count: sim.institutions.len(),
+                faction_count: sim
+                    .institutions
+                    .iter()
+                    .filter(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Faction)
+                    .count(),
+            },
+        )
+    );
 
     // Show last 10 events
     let events = sim.recent_events(10);

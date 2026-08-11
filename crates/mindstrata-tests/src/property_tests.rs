@@ -6,7 +6,7 @@
 //! - Relationships decay without interaction
 //! - Deterministic seed produces same output
 
-use mindstrata_sim::{Simulation, sim::SimConfig};
+use mindstrata_sim::{sim::SimConfig, Simulation};
 
 /// Helper: run a simulation with given seed and return metrics.
 fn run_sim(seed: u64, ticks: u64) -> mindstrata_sim::sim::MetricsSnapshot {
@@ -42,10 +42,14 @@ fn resources_never_negative_across_seeds() {
             sim.tick();
             let grain = sim.total_grain().to_f64();
             let water = sim.total_water().to_f64();
-            assert!(grain >= 0.0,
-                "Seed {seed}, tick {tick}: grain={grain} is negative");
-            assert!(water >= 0.0,
-                "Seed {seed}, tick {tick}: water={water} is negative");
+            assert!(
+                grain >= 0.0,
+                "Seed {seed}, tick {tick}: grain={grain} is negative"
+            );
+            assert!(
+                water >= 0.0,
+                "Seed {seed}, tick {tick}: water={water} is negative"
+            );
         }
     }
 }
@@ -68,11 +72,15 @@ fn belief_confidence_bounded_across_seeds() {
         for (i, agent) in sim.agents.iter().enumerate() {
             for (j, belief) in agent.beliefs.iter().enumerate() {
                 let conf = belief.confidence.to_f64();
-                assert!((0.0..=1.0).contains(&conf),
-                    "Seed {seed}, agent {i}, belief {j}: confidence={conf} out of [0,1]");
+                assert!(
+                    (0.0..=1.0).contains(&conf),
+                    "Seed {seed}, agent {i}, belief {j}: confidence={conf} out of [0,1]"
+                );
                 let ec = belief.emotional_charge.to_f64();
-                assert!((-1.0..=1.0).contains(&ec),
-                    "Seed {seed}, agent {i}, belief {j}: emotional_charge={ec} out of [-1,1]");
+                assert!(
+                    (-1.0..=1.0).contains(&ec),
+                    "Seed {seed}, agent {i}, belief {j}: emotional_charge={ec} out of [-1,1]"
+                );
             }
         }
     }
@@ -95,11 +103,15 @@ fn agent_health_never_exceeds_one() {
 
         for (i, agent) in sim.agents.iter().enumerate() {
             let health = agent.body.health.to_f64();
-            assert!((0.0..=1.0).contains(&health),
-                "Seed {seed}, agent {i}: health={health} out of [0,1]");
+            assert!(
+                (0.0..=1.0).contains(&health),
+                "Seed {seed}, agent {i}: health={health} out of [0,1]"
+            );
             let energy = agent.body.energy.to_f64();
-            assert!((0.0..=1.0).contains(&energy),
-                "Seed {seed}, agent {i}: energy={energy} out of [0,1]");
+            assert!(
+                (0.0..=1.0).contains(&energy),
+                "Seed {seed}, agent {i}: energy={energy} out of [0,1]"
+            );
         }
     }
 }
@@ -121,11 +133,15 @@ fn relationship_trust_bounded() {
 
         for (i, rel) in sim.relationships.iter().enumerate() {
             let trust = rel.trust.to_f64();
-            assert!((0.0..=1.0).contains(&trust),
-                "Seed {seed}, rel {i}: trust={trust} out of [0,1]");
+            assert!(
+                (0.0..=1.0).contains(&trust),
+                "Seed {seed}, rel {i}: trust={trust} out of [0,1]"
+            );
             let affection = rel.affection.to_f64();
-            assert!((0.0..=1.0).contains(&affection),
-                "Seed {seed}, rel {i}: affection={affection} out of [0,1]");
+            assert!(
+                (0.0..=1.0).contains(&affection),
+                "Seed {seed}, rel {i}: affection={affection} out of [0,1]"
+            );
         }
     }
 }
@@ -158,8 +174,10 @@ fn emotions_bounded_across_seeds() {
             ];
             for (name, val) in &emotions {
                 let v = val.to_f64();
-                assert!((0.0..=1.0).contains(&v),
-                    "Seed {seed}, agent {i}: {name}={v} out of [0,1]");
+                assert!(
+                    (0.0..=1.0).contains(&v),
+                    "Seed {seed}, agent {i}: {name}={v} out of [0,1]"
+                );
             }
         }
     }
@@ -171,20 +189,34 @@ fn deterministic_replay_across_seeds() {
         let m1 = run_sim(seed, 200);
         let m2 = run_sim(seed, 200);
 
-        assert_eq!(m1.avg_hunger, m2.avg_hunger,
-            "Seed {seed}: hunger determinism failed");
-        assert_eq!(m1.avg_thirst, m2.avg_thirst,
-            "Seed {seed}: thirst determinism failed");
-        assert_eq!(m1.avg_fatigue, m2.avg_fatigue,
-            "Seed {seed}: fatigue determinism failed");
-        assert_eq!(m1.total_grain, m2.total_grain,
-            "Seed {seed}: grain determinism failed");
-        assert_eq!(m1.total_water, m2.total_water,
-            "Seed {seed}: water determinism failed");
-        assert_eq!(m1.event_count, m2.event_count,
-            "Seed {seed}: event count determinism failed");
-        assert_eq!(m1.agent_count, m2.agent_count,
-            "Seed {seed}: agent count determinism failed");
+        assert_eq!(
+            m1.avg_hunger, m2.avg_hunger,
+            "Seed {seed}: hunger determinism failed"
+        );
+        assert_eq!(
+            m1.avg_thirst, m2.avg_thirst,
+            "Seed {seed}: thirst determinism failed"
+        );
+        assert_eq!(
+            m1.avg_fatigue, m2.avg_fatigue,
+            "Seed {seed}: fatigue determinism failed"
+        );
+        assert_eq!(
+            m1.total_grain, m2.total_grain,
+            "Seed {seed}: grain determinism failed"
+        );
+        assert_eq!(
+            m1.total_water, m2.total_water,
+            "Seed {seed}: water determinism failed"
+        );
+        assert_eq!(
+            m1.event_count, m2.event_count,
+            "Seed {seed}: event count determinism failed"
+        );
+        assert_eq!(
+            m1.agent_count, m2.agent_count,
+            "Seed {seed}: agent count determinism failed"
+        );
     }
 }
 
@@ -207,8 +239,7 @@ fn agent_age_never_negative() {
 
         for (i, agent) in sim.agents.iter().enumerate() {
             let age = agent.age.to_f64();
-            assert!(age >= 0.0,
-                "Seed {seed}, agent {i}: age={age} is negative");
+            assert!(age >= 0.0, "Seed {seed}, agent {i}: age={age} is negative");
         }
     }
 }
@@ -231,8 +262,10 @@ fn fertility_non_negative() {
         for (i, agent) in sim.agents.iter().enumerate() {
             if let Some(fertility) = agent.body.fertility {
                 let f = fertility.to_f64();
-                assert!((0.0..=1.0).contains(&f),
-                    "Seed {seed}, agent {i}: fertility={f} out of [0,1]");
+                assert!(
+                    (0.0..=1.0).contains(&f),
+                    "Seed {seed}, agent {i}: fertility={f} out of [0,1]"
+                );
             }
         }
     }
@@ -258,8 +291,12 @@ fn agent_ages_monotonically_non_decreasing() {
     // (new agents may have been born with lower age, so we can't check all)
     let n_initial = prev_ages.len();
     for (i, agent) in sim.agents.iter().take(n_initial).enumerate() {
-        assert!(agent.age.to_f64() >= prev_ages[i] - 0.01,
-            "Agent {i}: age went from {} to {}", prev_ages[i], agent.age.to_f64());
+        assert!(
+            agent.age.to_f64() >= prev_ages[i] - 0.01,
+            "Agent {i}: age went from {} to {}",
+            prev_ages[i],
+            agent.age.to_f64()
+        );
     }
 }
 
@@ -277,13 +314,17 @@ fn stress_increases_heuristic_bias() {
     stressed.update(Fixed::from_f64(0.9), Fixed::from_f64(0.8));
     let stressed_bias = stressed.heuristic_bias;
 
-    assert!(stressed_bias > calm_bias,
-        "Stress should increase heuristic bias: calm={calm_bias}, stressed={stressed_bias}");
+    assert!(
+        stressed_bias > calm_bias,
+        "Stress should increase heuristic bias: calm={calm_bias}, stressed={stressed_bias}"
+    );
 }
 
 // ── §17.2 + §18: Budget gating property tests ──────────────────
 
-use mindstrata_sim::agent_tier::{AgentTier, AgentTierState, CognitiveBudget, CognitiveBudgetTracker};
+use mindstrata_sim::agent_tier::{
+    AgentTier, AgentTierState, CognitiveBudget, CognitiveBudgetTracker,
+};
 
 /// §17.2: Budget tracker respects tier limits — focal agents get higher
 /// budgets than secondary, which get higher than background.
@@ -320,7 +361,10 @@ fn budget_exhaustion_stops_operations() {
 
     // Exhaust appraisals
     for _ in 0..budget.max_appraisals {
-        assert!(tracker.consume_appraisal(), "should succeed before exhaustion");
+        assert!(
+            tracker.consume_appraisal(),
+            "should succeed before exhaustion"
+        );
     }
     assert!(!tracker.can_appraise(), "should be exhausted");
     assert!(!tracker.consume_appraisal(), "should fail after exhaustion");
@@ -378,8 +422,13 @@ fn tier_reclassification_always_valid() {
         for (i, agent) in sim.agents.iter().enumerate() {
             let tier = &agent.agent_tier.tier;
             // Tier must be one of the three valid variants
-            assert!(matches!(tier, AgentTier::Focal | AgentTier::Secondary | AgentTier::Background),
-                "Seed {seed}, agent {i}: invalid tier {tier:?}");
+            assert!(
+                matches!(
+                    tier,
+                    AgentTier::Focal | AgentTier::Secondary | AgentTier::Background
+                ),
+                "Seed {seed}, agent {i}: invalid tier {tier:?}"
+            );
         }
     }
 }
@@ -424,9 +473,12 @@ fn budget_not_stale_after_tick() {
         }
 
         // Tracker should not exceed budget limits
-        assert!(tracker.remaining_appraisals() <= budget.max_appraisals,
+        assert!(
+            tracker.remaining_appraisals() <= budget.max_appraisals,
             "Seed 42, agent {i}: remaining appraisals {} exceeds max {}",
-            tracker.remaining_appraisals(), budget.max_appraisals);
+            tracker.remaining_appraisals(),
+            budget.max_appraisals
+        );
     }
 }
 
@@ -448,10 +500,14 @@ fn background_agents_never_prospect() {
 
         for (i, agent) in sim.agents.iter().enumerate() {
             if matches!(agent.agent_tier.tier, AgentTier::Background) {
-                assert_eq!(agent.agent_tier.budget.max_prospections, 0,
-                    "Seed {seed}, agent {i}: background agent has prospection budget");
-                assert_eq!(agent.agent_tier.budget.max_social_inferences, 0,
-                    "Seed {seed}, agent {i}: background agent has social inference budget");
+                assert_eq!(
+                    agent.agent_tier.budget.max_prospections, 0,
+                    "Seed {seed}, agent {i}: background agent has prospection budget"
+                );
+                assert_eq!(
+                    agent.agent_tier.budget.max_social_inferences, 0,
+                    "Seed {seed}, agent {i}: background agent has social inference budget"
+                );
             }
         }
     }
@@ -475,8 +531,10 @@ fn narrative_importance_bounded() {
 
         for (i, agent) in sim.agents.iter().enumerate() {
             let ni = agent.agent_tier.narrative_importance.to_f64();
-            assert!((0.0..=1.0).contains(&ni),
-                "Seed {seed}, agent {i}: narrative_importance={ni} out of [0,1]");
+            assert!(
+                (0.0..=1.0).contains(&ni),
+                "Seed {seed}, agent {i}: narrative_importance={ni} out of [0,1]"
+            );
         }
     }
 }
@@ -504,8 +562,10 @@ fn norm_strength_bounded_across_seeds() {
         for (i, agent) in sim.agents.iter().enumerate() {
             for (j, norm) in agent.moral_cognition.internalized_norms.iter().enumerate() {
                 let s = norm.strength.to_f64();
-                assert!((0.0..=1.0).contains(&s),
-                    "Seed {seed}, agent {i}, norm {j}: strength={s} out of [0,1]");
+                assert!(
+                    (0.0..=1.0).contains(&s),
+                    "Seed {seed}, agent {i}, norm {j}: strength={s} out of [0,1]"
+                );
             }
         }
     }
@@ -531,12 +591,18 @@ fn attachment_dimensions_bounded_across_seeds() {
             let sec = agent.attachment.security.to_f64();
             let anx = agent.attachment.anxiety.to_f64();
             let avo = agent.attachment.avoidance.to_f64();
-            assert!((0.0..=1.0).contains(&sec),
-                "Seed {seed}, agent {i}: attachment.security={sec} out of [0,1]");
-            assert!((0.0..=1.0).contains(&anx),
-                "Seed {seed}, agent {i}: attachment.anxiety={anx} out of [0,1]");
-            assert!((0.0..=1.0).contains(&avo),
-                "Seed {seed}, agent {i}: attachment.avoidance={avo} out of [0,1]");
+            assert!(
+                (0.0..=1.0).contains(&sec),
+                "Seed {seed}, agent {i}: attachment.security={sec} out of [0,1]"
+            );
+            assert!(
+                (0.0..=1.0).contains(&anx),
+                "Seed {seed}, agent {i}: attachment.anxiety={anx} out of [0,1]"
+            );
+            assert!(
+                (0.0..=1.0).contains(&avo),
+                "Seed {seed}, agent {i}: attachment.avoidance={avo} out of [0,1]"
+            );
         }
     }
 }
@@ -569,8 +635,10 @@ fn moral_emotions_bounded_across_seeds() {
             ];
             for (name, val) in &pairs {
                 let v = val.to_f64();
-                assert!((0.0..=1.0).contains(&v),
-                    "Seed {seed}, agent {i}: moral_emotions.{name}={v} out of [0,1]");
+                assert!(
+                    (0.0..=1.0).contains(&v),
+                    "Seed {seed}, agent {i}: moral_emotions.{name}={v} out of [0,1]"
+                );
             }
         }
     }
@@ -594,8 +662,10 @@ fn institution_legitimacy_bounded_across_seeds() {
 
         for (j, inst) in sim.institutions.iter().enumerate() {
             let leg = inst.legitimacy.to_f64();
-            assert!((0.0..=1.0).contains(&leg),
-                "Seed {seed}, institution {j}: legitimacy={leg} out of [0,1]");
+            assert!(
+                (0.0..=1.0).contains(&leg),
+                "Seed {seed}, institution {j}: legitimacy={leg} out of [0,1]"
+            );
         }
     }
 }

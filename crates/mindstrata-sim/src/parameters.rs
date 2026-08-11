@@ -329,10 +329,10 @@ impl Default for SimParameters {
         Self {
             // Biological — base decay_rate = 0.001, matching original system_need_decay
             hunger_decay_rate: Fixed::from_f64(0.001),
-            thirst_decay_rate: Fixed::from_f64(0.002),   // decay_rate * 2
-            fatigue_decay_rate: Fixed::from_f64(0.0005),  // decay_rate * 0.5
-            safety_decay_rate: Fixed::from_f64(0.0003),   // decay_rate * 0.3
-            social_decay_rate: Fixed::from_f64(0.0002),   // decay_rate * 0.2
+            thirst_decay_rate: Fixed::from_f64(0.002), // decay_rate * 2
+            fatigue_decay_rate: Fixed::from_f64(0.0005), // decay_rate * 0.5
+            safety_decay_rate: Fixed::from_f64(0.0003), // decay_rate * 0.3
+            social_decay_rate: Fixed::from_f64(0.0002), // decay_rate * 0.2
             meaning_decay_rate: Fixed::from_f64(0.00015), // decay_rate * 0.15
             attachment_decay_rate: Fixed::from_f64(0.05),
 
@@ -346,9 +346,9 @@ impl Default for SimParameters {
             meme_novelty_decay: Fixed::from_f64(0.002),
             rumor_prevalence_decay: Fixed::from_f64(0.01),
             belief_resistance_decay: Fixed::from_f64(0.001), // matches original BELIEF_RESISTANCE_DECAY
-            mental_state_smoothing: Fixed::from_f64(0.995), // matches original
+            mental_state_smoothing: Fixed::from_f64(0.995),  // matches original
             mental_state_accumulation: Fixed::from_f64(0.005), // matches original
-            gossip_base_fidelity: Fixed::from_f64(0.7), // matches original
+            gossip_base_fidelity: Fixed::from_f64(0.7),      // matches original
             gossip_emotional_distortion: Fixed::from_f64(0.15), // matches original
             gossip_acceptance_threshold: Fixed::from_f64(0.15), // matches original
             appraisal_goal_relevance_threshold: Fixed::from_f64(0.3),
@@ -378,8 +378,8 @@ impl Default for SimParameters {
             alliance_trust_threshold: Fixed::from_f64(0.7),
             relationship_dormant_decay: Fixed::from_f64(0.001),
             emotional_event_weight: Fixed::from_f64(0.3),
-            bonding_rate: Fixed::ONE,   // identity: preserves original hardcoded deltas
-            conflict_escalation_rate: Fixed::ONE,   // identity: preserves original hardcoded deltas
+            bonding_rate: Fixed::ONE, // identity: preserves original hardcoded deltas
+            conflict_escalation_rate: Fixed::ONE, // identity: preserves original hardcoded deltas
 
             // Belief Update
             belief_trust_blend_factor: Fixed::from_f64(0.5),

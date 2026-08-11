@@ -17,7 +17,15 @@ fn cli_save_then_load_round_trips_a_snapshot() {
 
     // Save: run 300 ticks and write a snapshot.
     let save = Command::new(bin())
-        .args(["sim", "--seed", "42", "--ticks", "300", "--save-snapshot", path_str])
+        .args([
+            "sim",
+            "--seed",
+            "42",
+            "--ticks",
+            "300",
+            "--save-snapshot",
+            path_str,
+        ])
         .output()
         .expect("the save run executes");
     assert!(save.status.success(), "the save run must exit 0");
@@ -30,7 +38,15 @@ fn cli_save_then_load_round_trips_a_snapshot() {
 
     // Load: resume from the saved snapshot for 100 more ticks.
     let load = Command::new(bin())
-        .args(["sim", "--seed", "42", "--ticks", "100", "--load-snapshot", path_str])
+        .args([
+            "sim",
+            "--seed",
+            "42",
+            "--ticks",
+            "100",
+            "--load-snapshot",
+            path_str,
+        ])
         .output()
         .expect("the load run executes");
     assert!(load.status.success(), "the load run must exit 0");

@@ -152,7 +152,11 @@ pub struct Genome {
 impl Genome {
     /// Generate a random genome.
     pub fn random(rng: &mut impl Rng) -> Self {
-        let sex = if rng.random_bool(0.5) { Sex::Male } else { Sex::Female };
+        let sex = if rng.random_bool(0.5) {
+            Sex::Male
+        } else {
+            Sex::Female
+        };
         Self {
             sex,
             trait_predispositions: TraitPredispositions {

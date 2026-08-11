@@ -119,10 +119,17 @@ impl Proposition {
     pub fn base_identity_linkage(&self) -> Fixed {
         match self {
             Proposition::MarketIsFair => Fixed::from_f64(0.3),
-            Proposition::RulerIsLegitimate | Proposition::TempleIsCorrupt | Proposition::ViolenceNecessary | Proposition::CommunityStrong => Fixed::from_f64(0.5),
-            Proposition::NeighborTrustworthy { .. } | Proposition::GrainPricesTooHigh | Proposition::StrangersHonest => Fixed::from_f64(0.2),
+            Proposition::RulerIsLegitimate
+            | Proposition::TempleIsCorrupt
+            | Proposition::ViolenceNecessary
+            | Proposition::CommunityStrong => Fixed::from_f64(0.5),
+            Proposition::NeighborTrustworthy { .. }
+            | Proposition::GrainPricesTooHigh
+            | Proposition::StrangersHonest => Fixed::from_f64(0.2),
             Proposition::ForeignersDangerous => Fixed::from_f64(0.6),
-            Proposition::HardWorkLeadsToWealth | Proposition::CouncilProtectsUs | Proposition::SharingIsDuty => Fixed::from_f64(0.4),
+            Proposition::HardWorkLeadsToWealth
+            | Proposition::CouncilProtectsUs
+            | Proposition::SharingIsDuty => Fixed::from_f64(0.4),
             Proposition::HarvestWillFail | Proposition::WellWaterSafe => Fixed::from_f64(0.1),
             Proposition::GuardsUnjust => Fixed::from_f64(0.3),
         }
@@ -132,10 +139,19 @@ impl Proposition {
     #[must_use]
     pub fn base_resistance(&self) -> Fixed {
         match self {
-            Proposition::MarketIsFair | Proposition::HardWorkLeadsToWealth | Proposition::CouncilProtectsUs | Proposition::SharingIsDuty => Fixed::from_f64(0.5),
-            Proposition::RulerIsLegitimate | Proposition::TempleIsCorrupt | Proposition::CommunityStrong => Fixed::from_f64(0.6),
-            Proposition::NeighborTrustworthy { .. } | Proposition::GrainPricesTooHigh | Proposition::StrangersHonest => Fixed::from_f64(0.3),
-            Proposition::ForeignersDangerous | Proposition::ViolenceNecessary => Fixed::from_f64(0.7),
+            Proposition::MarketIsFair
+            | Proposition::HardWorkLeadsToWealth
+            | Proposition::CouncilProtectsUs
+            | Proposition::SharingIsDuty => Fixed::from_f64(0.5),
+            Proposition::RulerIsLegitimate
+            | Proposition::TempleIsCorrupt
+            | Proposition::CommunityStrong => Fixed::from_f64(0.6),
+            Proposition::NeighborTrustworthy { .. }
+            | Proposition::GrainPricesTooHigh
+            | Proposition::StrangersHonest => Fixed::from_f64(0.3),
+            Proposition::ForeignersDangerous | Proposition::ViolenceNecessary => {
+                Fixed::from_f64(0.7)
+            }
             Proposition::HarvestWillFail | Proposition::WellWaterSafe => Fixed::from_f64(0.2),
             Proposition::GuardsUnjust => Fixed::from_f64(0.4),
         }
@@ -224,13 +240,23 @@ mod tests {
         let mut ids: Vec<u64> = props.iter().map(Proposition::id).collect();
         ids.sort_unstable();
         ids.dedup();
-        assert_eq!(ids.len(), props.len(), "All proposition IDs should be unique");
+        assert_eq!(
+            ids.len(),
+            props.len(),
+            "All proposition IDs should be unique"
+        );
     }
 
     #[test]
     fn proposition_display() {
-        assert_eq!(format!("{}", Proposition::MarketIsFair), "The market is fair");
-        assert_eq!(format!("{}", Proposition::ForeignersDangerous), "Foreigners are dangerous");
+        assert_eq!(
+            format!("{}", Proposition::MarketIsFair),
+            "The market is fair"
+        );
+        assert_eq!(
+            format!("{}", Proposition::ForeignersDangerous),
+            "Foreigners are dangerous"
+        );
     }
 
     #[test]
@@ -243,10 +269,8 @@ mod tests {
 
     #[test]
     fn belief_with_confidence() {
-        let belief = PropositionBelief::with_confidence(
-            Proposition::HarvestWillFail,
-            Fixed::from_f64(0.8),
-        );
+        let belief =
+            PropositionBelief::with_confidence(Proposition::HarvestWillFail, Fixed::from_f64(0.8));
         assert_eq!(belief.confidence, Fixed::from_f64(0.8));
     }
 
@@ -254,7 +278,9 @@ mod tests {
     fn high_identity_linkage_beliefs_resist_change() {
         let foreign = PropositionBelief::new(Proposition::ForeignersDangerous);
         let water = PropositionBelief::new(Proposition::WellWaterSafe);
-        assert!(foreign.identity_linkage > water.identity_linkage,
-            "ForeignersDangerous should have higher identity linkage than WellWaterSafe");
+        assert!(
+            foreign.identity_linkage > water.identity_linkage,
+            "ForeignersDangerous should have higher identity linkage than WellWaterSafe"
+        );
     }
 }

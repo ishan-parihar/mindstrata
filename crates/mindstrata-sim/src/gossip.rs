@@ -71,7 +71,11 @@ impl Rumor {
         // Telephone game: each hop reduces accuracy significantly
         let age_penalty = Fixed::from_f64(0.85).powi(self.hops);
         let emotional_boost = self.emotional_charge * Fixed::from_f64(0.3);
-        let novelty = if self.hops == 0 { Fixed::from_f64(0.2) } else { Fixed::ZERO };
+        let novelty = if self.hops == 0 {
+            Fixed::from_f64(0.2)
+        } else {
+            Fixed::ZERO
+        };
         (age_penalty + emotional_boost + novelty).clamp_01()
     }
 }
@@ -135,7 +139,7 @@ pub fn mutate_rumor(
     let new_charge = (rumor.emotional_charge
         + spreader_emotions.anger * Fixed::from_f64(0.1)
         + spreader_emotions.fear * Fixed::from_f64(0.1))
-        .clamp_01();
+    .clamp_01();
 
     (mutated.clamp_01(), new_charge)
 }
@@ -173,7 +177,8 @@ pub fn process_gossip(
     let belief_delta = if let Some(existing) = existing {
         // Weight by resistance: high-resistance beliefs barely change
         let weight = Fixed::ONE - existing.resistance;
-        let new_conf = (existing.confidence * existing.resistance + mutated_confidence * weight).clamp_01();
+        let new_conf =
+            (existing.confidence * existing.resistance + mutated_confidence * weight).clamp_01();
         new_conf - existing.confidence
     } else {
         // New belief — the full mutated confidence
@@ -194,11 +199,7 @@ pub fn process_gossip(
 }
 
 /// Apply a gossip result to a listener's beliefs.
-pub fn apply_gossip(
-    listener_beliefs: &mut Vec<Belief>,
-    result: &GossipResult,
-    tick: u64,
-) {
+pub fn apply_gossip(listener_beliefs: &mut Vec<Belief>, result: &GossipResult, tick: u64) {
     if !result.accepted {
         return;
     }
@@ -261,14 +262,13 @@ pub struct MoralPanicResult {
 /// it can trigger a sudden collapse in trust — a moral panic.
 /// This implements §7.2: "Gossip about institutions spreads through the
 /// social graph. Distorted rumors can create moral panics."
-pub fn detect_moral_panic(
-    beliefs: &[&Vec<Belief>],
-    proposition_id: u64,
-) -> MoralPanicResult {
+pub fn detect_moral_panic(beliefs: &[&Vec<Belief>], proposition_id: u64) -> MoralPanicResult {
     // Collect emotional charges from all agents' beliefs about this proposition
-    let charges: Vec<Fixed> = beliefs.iter()
+    let charges: Vec<Fixed> = beliefs
+        .iter()
         .filter_map(|agent_beliefs| {
-            agent_beliefs.iter()
+            agent_beliefs
+                .iter()
                 .find(|b| b.proposition_id == proposition_id)
                 .map(|b| b.emotional_charge)
         })
@@ -284,16 +284,20 @@ pub fn detect_moral_panic(
         };
     }
 
-    let avg_charge = charges.iter().fold(Fixed::ZERO, |a, b| a + *b)
-        / Fixed::from_int(charges.len() as i64);
+    let avg_charge =
+        charges.iter().fold(Fixed::ZERO, |a, b| a + *b) / Fixed::from_int(charges.len() as i64);
 
     // Also check: how many agents have HIGH emotional charge (> 0.4)?
-    let high_charge_count = charges.iter().filter(|c| **c > Fixed::from_f64(0.4)).count();
-    let panic_ratio = Fixed::from_int(high_charge_count as i64) / Fixed::from_int(charges.len() as i64);
+    let high_charge_count = charges
+        .iter()
+        .filter(|c| **c > Fixed::from_f64(0.4))
+        .count();
+    let panic_ratio =
+        Fixed::from_int(high_charge_count as i64) / Fixed::from_int(charges.len() as i64);
 
     // Moral panic requires: high average charge AND widespread fear (many agents affected)
-    let triggered = avg_charge >= MORAL_PANIC_CHARGE_THRESHOLD
-        && panic_ratio >= Fixed::from_f64(0.3); // at least 30% of agents are emotionally charged
+    let triggered =
+        avg_charge >= MORAL_PANIC_CHARGE_THRESHOLD && panic_ratio >= Fixed::from_f64(0.3); // at least 30% of agents are emotionally charged
 
     let legitimacy_damage = if triggered {
         // Damage scales with how intense the panic is
@@ -317,8 +321,6 @@ pub fn detect_moral_panic(
         grievance_boost,
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -411,7 +413,10 @@ mod tests {
         old_rumor.hops = 5;
         let salience_old = old_rumor.salience(100);
 
-        assert!(salience_new > salience_old, "New rumors should be more salient than old ones");
+        assert!(
+            salience_new > salience_old,
+            "New rumors should be more salient than old ones"
+        );
     }
 
     #[test]
@@ -435,16 +440,29 @@ mod tests {
         let personality = make_personality();
 
         let (mutated_angry, _) = mutate_rumor(
-            &rumor, Fixed::from_f64(0.7), &angry_emotions, &personality, &personality,
-            Fixed::from_f64(0.7), Fixed::from_f64(0.15),
+            &rumor,
+            Fixed::from_f64(0.7),
+            &angry_emotions,
+            &personality,
+            &personality,
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.15),
         );
         let (mutated_calm, _) = mutate_rumor(
-            &rumor, Fixed::from_f64(0.7), &calm_emotions, &personality, &personality,
-            Fixed::from_f64(0.7), Fixed::from_f64(0.15),
+            &rumor,
+            Fixed::from_f64(0.7),
+            &calm_emotions,
+            &personality,
+            &personality,
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.15),
         );
 
         // Angry spreaders should distort confidence differently
-        assert_ne!(mutated_angry, mutated_calm, "Emotional state should affect mutation");
+        assert_ne!(
+            mutated_angry, mutated_calm,
+            "Emotional state should affect mutation"
+        );
     }
 
     #[test]
@@ -460,7 +478,9 @@ mod tests {
             &make_personality(),
             &listener_beliefs,
             100,
-            Fixed::from_f64(0.7), Fixed::from_f64(0.15), Fixed::from_f64(0.15),
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.15),
+            Fixed::from_f64(0.15),
         );
 
         assert!(result.accepted, "Gossip should be accepted");
@@ -480,7 +500,9 @@ mod tests {
             &make_personality(),
             &listener_beliefs,
             100,
-            Fixed::from_f64(0.7), Fixed::from_f64(0.15), Fixed::from_f64(0.15),
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.15),
+            Fixed::from_f64(0.15),
         );
 
         assert!(result.accepted);
@@ -500,7 +522,10 @@ mod tests {
 
         apply_gossip(&mut beliefs, &result, 200);
 
-        assert!(beliefs[0].confidence > Fixed::from_f64(0.5), "Confidence should increase");
+        assert!(
+            beliefs[0].confidence > Fixed::from_f64(0.5),
+            "Confidence should increase"
+        );
         assert_eq!(beliefs[0].last_reinforced_tick, 200);
     }
 
@@ -534,7 +559,11 @@ mod tests {
 
         apply_gossip(&mut beliefs, &result, 200);
 
-        assert_eq!(beliefs[0].confidence, Fixed::from_f64(0.5), "Rejected gossip should not change belief");
+        assert_eq!(
+            beliefs[0].confidence,
+            Fixed::from_f64(0.5),
+            "Rejected gossip should not change belief"
+        );
     }
 
     #[test]
@@ -560,12 +589,17 @@ mod tests {
             &make_personality(),
             &[high_resistance_belief],
             100,
-            Fixed::from_f64(0.7), Fixed::from_f64(0.15), Fixed::from_f64(0.15),
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.15),
+            Fixed::from_f64(0.15),
         );
 
         // High resistance should make the belief barely change
-        assert!(result.belief_delta.abs() < Fixed::from_f64(0.1),
-            "High resistance belief should barely change from gossip, delta={}", result.belief_delta.to_f64());
+        assert!(
+            result.belief_delta.abs() < Fixed::from_f64(0.1),
+            "High resistance belief should barely change from gossip, delta={}",
+            result.belief_delta.to_f64()
+        );
     }
 
     #[test]
@@ -589,7 +623,10 @@ mod tests {
         let beliefs: Vec<&Vec<Belief>> = vec![&b1, &b2, &b3];
 
         let result = detect_moral_panic(&beliefs, 1);
-        assert!(result.triggered, "Moral panic should trigger with high emotional charge");
+        assert!(
+            result.triggered,
+            "Moral panic should trigger with high emotional charge"
+        );
         assert!(result.legitimacy_damage > Fixed::ZERO);
         assert!(result.grievance_boost > Fixed::ZERO);
     }
@@ -604,7 +641,10 @@ mod tests {
         let beliefs: Vec<&Vec<Belief>> = vec![&b1];
 
         let result = detect_moral_panic(&beliefs, 1);
-        assert!(!result.triggered, "Moral panic should not trigger with low emotional charge");
+        assert!(
+            !result.triggered,
+            "Moral panic should not trigger with low emotional charge"
+        );
         assert_eq!(result.legitimacy_damage, Fixed::ZERO);
         assert_eq!(result.grievance_boost, Fixed::ZERO);
     }
@@ -633,6 +673,9 @@ mod tests {
 
         let result = detect_moral_panic(&beliefs, 1);
         // avg_charge = (0.7 + 0.3 + 0.3 + 0.3 + 0.3) / 5 = 0.38 — below 0.55 threshold
-        assert!(!result.triggered, "Should NOT trigger when avg charge is below threshold even with one high agent");
+        assert!(
+            !result.triggered,
+            "Should NOT trigger when avg charge is below threshold even with one high agent"
+        );
     }
 }

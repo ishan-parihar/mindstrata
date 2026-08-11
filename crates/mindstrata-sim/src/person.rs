@@ -137,7 +137,7 @@ pub struct Temperament {
 }
 
 /// §8.1.6: Per-tick state-trait dynamics signals consumed by
-    /// `Temperament::plastic_update`. Every field is a deterministic function of
+/// `Temperament::plastic_update`. Every field is a deterministic function of
 /// existing agent state — no RNG, no writes to decision-read state — so the
 /// plasticity pass cannot disturb calibrated runs.
 #[derive(Debug, Clone, Copy, Default)]
@@ -175,8 +175,7 @@ impl Temperament {
             persistence: (Fixed::from_f64(0.6) * t.conscientiousness
                 + Fixed::from_f64(0.4) * t.ambition)
                 .clamp_01(),
-            sensitivity: (Fixed::from_f64(0.5) * t.openness
-                + Fixed::from_f64(0.5) * t.neuroticism)
+            sensitivity: (Fixed::from_f64(0.5) * t.openness + Fixed::from_f64(0.5) * t.neuroticism)
                 .clamp_01(),
             regularity: (Fixed::from_f64(0.5) * t.conscientiousness
                 + Fixed::from_f64(0.5) * t.traditionalism)
@@ -221,16 +220,14 @@ impl Temperament {
     /// calibration.
     pub fn plastic_update(&mut self, baseline: &Temperament, s: &PlasticitySignals) {
         // Developmental plasticity decays with age — full at birth, zero at 70.
-        let developmental = (Fixed::ONE
-            - (s.age_years / Fixed::from_f64(70.0)).clamp_01())
-            .clamp_01();
+        let developmental =
+            (Fixed::ONE - (s.age_years / Fixed::from_f64(70.0)).clamp_01()).clamp_01();
         let integration = s.identity_integration.clamp_01();
         if developmental <= Fixed::ZERO || integration <= Fixed::ZERO {
             return;
         }
         // Social reinforcement amplifies the absorption of experience.
-        let reinforcement =
-            Fixed::ONE + Fixed::HALF * s.social_engagement.clamp_01();
+        let reinforcement = Fixed::ONE + Fixed::HALF * s.social_engagement.clamp_01();
         let rate = developmental * integration * reinforcement * Fixed::from_f64(0.0005);
         if rate <= Fixed::ZERO {
             return;
@@ -240,27 +237,30 @@ impl Temperament {
         let social = s.social_engagement.clamp_01();
         let striving = s.goal_striving.clamp_01();
         // Push from repeated state expression; pull toward the baseline.
-        self.reactivity = (self.reactivity + stress * rate
-            + (baseline.reactivity - self.reactivity) * rate)
-            .clamp_01();
-        self.soothability = (self.soothability + recovery * rate
+        self.reactivity =
+            (self.reactivity + stress * rate + (baseline.reactivity - self.reactivity) * rate)
+                .clamp_01();
+        self.soothability = (self.soothability
+            + recovery * rate
             + (baseline.soothability - self.soothability) * rate)
             .clamp_01();
-        self.sociability = (self.sociability + social * rate
-            + (baseline.sociability - self.sociability) * rate)
-            .clamp_01();
-        self.persistence = (self.persistence + striving * rate
-            + (baseline.persistence - self.persistence) * rate)
-            .clamp_01();
+        self.sociability =
+            (self.sociability + social * rate + (baseline.sociability - self.sociability) * rate)
+                .clamp_01();
+        self.persistence =
+            (self.persistence + striving * rate + (baseline.persistence - self.persistence) * rate)
+                .clamp_01();
         // Sensitivity is driven by total arousal exposure (stress + recovery).
-        self.sensitivity = (self.sensitivity + (stress + recovery) * rate
+        self.sensitivity = (self.sensitivity
+            + (stress + recovery) * rate
             + (baseline.sensitivity - self.sensitivity) * rate)
             .clamp_01();
         // Routinized striving builds regularity; social engagement builds approach.
-        self.regularity = (self.regularity + striving * rate
-            + (baseline.regularity - self.regularity) * rate)
-            .clamp_01();
-        self.approach_withdrawal = (self.approach_withdrawal + social * rate
+        self.regularity =
+            (self.regularity + striving * rate + (baseline.regularity - self.regularity) * rate)
+                .clamp_01();
+        self.approach_withdrawal = (self.approach_withdrawal
+            + social * rate
             + (baseline.approach_withdrawal - self.approach_withdrawal) * rate)
             .clamp_01();
     }
@@ -429,8 +429,6 @@ pub enum IdentityKind {
     Believer,
 }
 
-
-
 /// An agent's identity with its strength (0.0–1.0).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentIdentity {
@@ -553,8 +551,10 @@ impl CognitiveState {
     /// Update cognitive state based on current emotions and needs.
     /// §22.1: Stress reduces planning horizon and increases heuristic bias.
     pub fn update(&mut self, stress: Fixed, fatigue: Fixed) {
-        self.stress = (self.stress * Fixed::from_f64(0.9) + stress * Fixed::from_f64(0.1)).clamp_01();
-        self.fatigue = (self.fatigue * Fixed::from_f64(0.95) + fatigue * Fixed::from_f64(0.05)).clamp_01();
+        self.stress =
+            (self.stress * Fixed::from_f64(0.9) + stress * Fixed::from_f64(0.1)).clamp_01();
+        self.fatigue =
+            (self.fatigue * Fixed::from_f64(0.95) + fatigue * Fixed::from_f64(0.05)).clamp_01();
 
         // Stress reduces effective planning horizon
         let stress_factor = Fixed::ONE - self.stress;
@@ -562,7 +562,10 @@ impl CognitiveState {
         self.planning_horizon = (20.0 * stress_factor.to_f64() * fatigue_factor.to_f64()) as u32;
 
         // Stress increases heuristic reliance
-        self.heuristic_bias = (self.stress * Fixed::from_f64(0.6) + self.fatigue * Fixed::from_f64(0.2) + Fixed::from_f64(0.2)).clamp_01();
+        self.heuristic_bias = (self.stress * Fixed::from_f64(0.6)
+            + self.fatigue * Fixed::from_f64(0.2)
+            + Fixed::from_f64(0.2))
+        .clamp_01();
     }
 }
 
@@ -635,13 +638,18 @@ impl DerivedMentalState {
         let autonomy_factor = (Fixed::ONE - input.autonomy) * Fixed::from_f64(0.2);
         let depression_delta = deficit_factor + meaning_factor + autonomy_factor;
         // §5.1: Configurable accumulation
-        self.depression_risk = (self.depression_risk * smoothing + depression_delta * accumulation).clamp_01();
+        self.depression_risk =
+            (self.depression_risk * smoothing + depression_delta * accumulation).clamp_01();
 
         // Ambition: from success and energy
-        self.ambition = (input.success_rate * Fixed::from_f64(0.4) + Fixed::from_f64(0.3)).clamp_01();
+        self.ambition =
+            (input.success_rate * Fixed::from_f64(0.4) + Fixed::from_f64(0.3)).clamp_01();
 
         // Resilience: from social support and coping
-        self.resilience = (input.social_support * Fixed::from_f64(0.3) + input.coping_potential * Fixed::from_f64(0.3) + Fixed::from_f64(0.2)).clamp_01();
+        self.resilience = (input.social_support * Fixed::from_f64(0.3)
+            + input.coping_potential * Fixed::from_f64(0.3)
+            + Fixed::from_f64(0.2))
+        .clamp_01();
 
         // Resentment: from perceived injustice
         let injustice = (Fixed::ONE - input.justice_perception) * Fixed::from_f64(0.4);
@@ -675,9 +683,14 @@ pub struct Intention {
 
 impl Intention {
     /// Create a new intention for a goal.
-    pub fn new(goal_kind: GoalKind, formed_tick: u64, personality_conscientiousness: Fixed) -> Self {
+    pub fn new(
+        goal_kind: GoalKind,
+        formed_tick: u64,
+        personality_conscientiousness: Fixed,
+    ) -> Self {
         // Conscientious agents form stronger commitments
-        let base_commitment = Fixed::from_f64(0.5) + personality_conscientiousness * Fixed::from_f64(0.3);
+        let base_commitment =
+            Fixed::from_f64(0.5) + personality_conscientiousness * Fixed::from_f64(0.3);
         Self {
             goal_kind,
             commitment: base_commitment,
@@ -690,12 +703,7 @@ impl Intention {
 
     /// Should this intention be abandoned?
     /// Returns true if the agent should give up and select a new action.
-    pub fn should_abandon(
-        &self,
-        current_tick: u64,
-        stress: Fixed,
-        emotional_shock: bool,
-    ) -> bool {
+    pub fn should_abandon(&self, current_tick: u64, stress: Fixed, emotional_shock: bool) -> bool {
         // Never abandon completed intentions
         if self.completed {
             return false;
@@ -794,7 +802,8 @@ impl StatusState {
     pub fn recompute(&mut self) {
         self.effective = (self.wealth_status * Fixed::from_f64(0.4)
             + self.role_status * Fixed::from_f64(0.35)
-            + self.social_status * Fixed::from_f64(0.25)).clamp_01();
+            + self.social_status * Fixed::from_f64(0.25))
+        .clamp_01();
     }
 }
 
@@ -961,8 +970,14 @@ mod temperament_tests {
         // Positive deviation amplifies; negative damps — monotone.
         let up = Temperament::reactivity_amplifier(Fixed::from_f64(0.2));
         let down = Temperament::reactivity_amplifier(Fixed::from_f64(-0.2));
-        assert!(up > Fixed::ONE, "stressed reactivity must amplify the response");
-        assert!(down < Fixed::ONE, "below-baseline reactivity must damp the response");
+        assert!(
+            up > Fixed::ONE,
+            "stressed reactivity must amplify the response"
+        );
+        assert!(
+            down < Fixed::ONE,
+            "below-baseline reactivity must damp the response"
+        );
         assert!(up > down, "the amplifier must be monotone in the deviation");
         // Bounded: a 0.5 deviation saturates at 1.5×; −1.0 at 0.5×.
         assert_eq!(

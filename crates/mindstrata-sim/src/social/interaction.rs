@@ -8,7 +8,7 @@ use mindstrata_core::clock::Tick;
 use mindstrata_core::event::{InteractionKind, SimEvent};
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::id::AgentId;
-use mindstrata_core::rng::{RngStreams, RngStream};
+use mindstrata_core::rng::{RngStream, RngStreams};
 use rand::Rng;
 
 /// A social interaction between two agents.
@@ -30,8 +30,8 @@ pub fn process_interaction(
     relationships: &mut [Relationship],
     events: &mut Vec<SimEvent>,
     tick: Tick,
-    same_faction: bool, // §5.4: in-group bias modifier
-    bonding_rate: Fixed,          // §5.1: from SimParameters
+    same_faction: bool,              // §5.4: in-group bias modifier
+    bonding_rate: Fixed,             // §5.1: from SimParameters
     conflict_escalation_rate: Fixed, // §5.1: from SimParameters
     params: &crate::parameters::SimParameters,
 ) {
@@ -77,7 +77,11 @@ pub fn process_interaction(
     // In-group: positive interactions get a trust bonus
     // Out-group: negative interactions are penalized (positive interactions are neutral)
     let trust_delta = if same_faction {
-        if trust_delta > Fixed::ZERO { trust_delta + INGROUP_TRUST_BONUS } else { trust_delta }
+        if trust_delta > Fixed::ZERO {
+            trust_delta + INGROUP_TRUST_BONUS
+        } else {
+            trust_delta
+        }
     } else if trust_delta < Fixed::ZERO {
         trust_delta - OUTGROUP_TRUST_PENALTY // out-group: negative interactions are worse
     } else {
@@ -113,7 +117,8 @@ pub fn process_interaction(
         .find(|r| r.from == interaction.to && r.to == interaction.from)
     {
         rel.trust = (rel.trust + trust_delta * params.social_reciprocal_factor).clamp_01();
-        rel.affection = (rel.affection + affection_delta * params.social_reciprocal_factor).clamp_01();
+        rel.affection =
+            (rel.affection + affection_delta * params.social_reciprocal_factor).clamp_01();
         rel.last_interaction_tick = tick_u64;
         rel.interaction_count += 1;
         if is_positive {
@@ -201,12 +206,12 @@ pub fn choose_interaction(
     personality_openness: Fixed,
     personality_agreeableness: Fixed,
     anger: Fixed,
-    no_violence_resistance: Fixed, // §8.1.10 (Iteration 85)
+    no_violence_resistance: Fixed,    // §8.1.10 (Iteration 85)
     help_neighbors_propensity: Fixed, // §8.1.10 (Iteration 89)
     respect_elders_propensity: Fixed, // §8.1.10 (Iteration 91)
-    target_is_elder: bool,          // §8.1.10 (Iteration 91)
-    obey_ruler_propensity: Fixed,   // §8.1.10 (Iteration 93)
-    target_is_authority: bool,      // §8.1.10 (Iteration 93)
+    target_is_elder: bool,            // §8.1.10 (Iteration 91)
+    obey_ruler_propensity: Fixed,     // §8.1.10 (Iteration 93)
+    target_is_authority: bool,        // §8.1.10 (Iteration 93)
     rng: &mut RngStreams,
     params: &crate::parameters::SimParameters,
 ) -> InteractionKind {
@@ -342,8 +347,8 @@ pub fn update_witnesses(
     relationships: &mut [Relationship],
     num_agents: usize,
     tick: Tick,
-    bonding_rate: Fixed,              // §5.1
-    conflict_escalation_rate: Fixed,  // §5.1
+    bonding_rate: Fixed,             // §5.1
+    conflict_escalation_rate: Fixed, // §5.1
 ) {
     for w in 0..num_agents {
         let witness = AgentId::new(w as u64);
@@ -354,7 +359,10 @@ pub fn update_witnesses(
         match interaction.kind {
             // Negative interactions: witnesses reduce trust in perpetrator
             InteractionKind::Threaten | InteractionKind::Insult => {
-                if let Some(rel) = relationships.iter_mut().find(|r| r.from == witness && r.to == interaction.from) {
+                if let Some(rel) = relationships
+                    .iter_mut()
+                    .find(|r| r.from == witness && r.to == interaction.from)
+                {
                     let delta = Fixed::from_f64(-0.03) * conflict_escalation_rate;
                     rel.trust = (rel.trust + delta).max(Fixed::ZERO);
                     rel.last_interaction_tick = tick.as_u64();
@@ -362,7 +370,10 @@ pub fn update_witnesses(
             }
             // Positive interactions: witnesses increase trust in helper
             InteractionKind::Help | InteractionKind::Comfort => {
-                if let Some(rel) = relationships.iter_mut().find(|r| r.from == witness && r.to == interaction.from) {
+                if let Some(rel) = relationships
+                    .iter_mut()
+                    .find(|r| r.from == witness && r.to == interaction.from)
+                {
                     let delta = Fixed::from_f64(0.02) * bonding_rate;
                     rel.trust = (rel.trust + delta).clamp_01();
                     rel.last_interaction_tick = tick.as_u64();
@@ -393,7 +404,9 @@ fn evolve_relationship_kind(rel: &mut Relationship, params: &crate::parameters::
 
     // Upgrade from Neighbor to Friend or Rival based on trust/affection
     if rel.kind == RelationshipKind::Neighbor {
-        if trust > params.social_friend_trust_threshold && affection > params.social_friend_affection_threshold {
+        if trust > params.social_friend_trust_threshold
+            && affection > params.social_friend_affection_threshold
+        {
             rel.kind = RelationshipKind::Friend;
         } else if trust < params.social_rival_trust_threshold {
             rel.kind = RelationshipKind::Rival;
@@ -439,14 +452,14 @@ pub fn system_social_interactions(
         bool,
         Fixed,
     )],
-    agent_positions: &[(i32, i32)],            // §2.4: agent (x, y) positions
-    same_faction_matrix: &[Vec<bool>],         // §5.4: same_faction_matrix[i][j] = true if agents i,j share a faction
+    agent_positions: &[(i32, i32)],    // §2.4: agent (x, y) positions
+    same_faction_matrix: &[Vec<bool>], // §5.4: same_faction_matrix[i][j] = true if agents i,j share a faction
     relationships: &mut [Relationship],
     events: &mut Vec<SimEvent>,
     tick: Tick,
     rng: &mut RngStreams,
-    bonding_rate: Fixed,              // §5.1: from SimParameters
-    conflict_escalation_rate: Fixed,  // §5.1: from SimParameters
+    bonding_rate: Fixed,             // §5.1: from SimParameters
+    conflict_escalation_rate: Fixed, // §5.1: from SimParameters
     params: &crate::parameters::SimParameters,
 ) {
     let num_agents = agents.len();
@@ -454,7 +467,24 @@ pub fn system_social_interactions(
     // The source agent's own elder/authority flags are unused here — the
     // gates read the *target's* status (`agents[target_idx].8` for elder,
     // `agents[target_idx].10` for authority) when the interaction is chosen.
-    for (i, (agent_id, openness, agreeableness, extraversion, anger, no_violence_resistance, help_neighbors_propensity, respect_elders_propensity, _is_elder, obey_ruler_propensity, _is_authority, loneliness)) in agents.iter().enumerate() {
+    for (
+        i,
+        (
+            agent_id,
+            openness,
+            agreeableness,
+            extraversion,
+            anger,
+            no_violence_resistance,
+            help_neighbors_propensity,
+            respect_elders_propensity,
+            _is_elder,
+            obey_ruler_propensity,
+            _is_authority,
+            loneliness,
+        ),
+    ) in agents.iter().enumerate()
+    {
         // §8.1.4 (Iteration 98): a lonely agent seeks social contact more —
         // loneliness adds to the interaction-chance gate (previously the
         // family was computed by appraisal every tick and never read).
@@ -472,7 +502,13 @@ pub fn system_social_interactions(
         }
 
         // §2.4: Select target within perception radius
-        if let Some(target_idx) = select_interaction_target(i, num_agents, agent_positions, DEFAULT_PERCEPTION_RADIUS, rng) {
+        if let Some(target_idx) = select_interaction_target(
+            i,
+            num_agents,
+            agent_positions,
+            DEFAULT_PERCEPTION_RADIUS,
+            rng,
+        ) {
             let target_id = agents[target_idx].0;
 
             // Find existing relationship or create default
@@ -497,7 +533,7 @@ pub fn system_social_interactions(
                 *no_violence_resistance,
                 *help_neighbors_propensity,
                 *respect_elders_propensity,
-                agents[target_idx].8,  // the target's is_elder flag
+                agents[target_idx].8, // the target's is_elder flag
                 *obey_ruler_propensity,
                 agents[target_idx].10, // the target's is_authority flag
                 rng,
@@ -511,9 +547,25 @@ pub fn system_social_interactions(
             };
 
             // Update witnesses before processing the interaction
-            update_witnesses(&interaction, relationships, num_agents, tick, bonding_rate, conflict_escalation_rate);
+            update_witnesses(
+                &interaction,
+                relationships,
+                num_agents,
+                tick,
+                bonding_rate,
+                conflict_escalation_rate,
+            );
 
-            process_interaction(&interaction, relationships, events, tick, same_faction, bonding_rate, conflict_escalation_rate, params);
+            process_interaction(
+                &interaction,
+                relationships,
+                events,
+                tick,
+                same_faction,
+                bonding_rate,
+                conflict_escalation_rate,
+                params,
+            );
         }
     }
 }
@@ -546,7 +598,16 @@ mod tests {
             kind: InteractionKind::Help,
         };
 
-        process_interaction(&interaction, &mut relationships, &mut events, Tick::new(1), false, Fixed::from_f64(0.05), Fixed::from_f64(0.08), &crate::parameters::SimParameters::default());
+        process_interaction(
+            &interaction,
+            &mut relationships,
+            &mut events,
+            Tick::new(1),
+            false,
+            Fixed::from_f64(0.05),
+            Fixed::from_f64(0.08),
+            &crate::parameters::SimParameters::default(),
+        );
 
         assert!(relationships[0].trust > Fixed::from_f64(0.5));
         assert!(!events.is_empty());
@@ -576,7 +637,16 @@ mod tests {
             kind: InteractionKind::Threaten,
         };
 
-        process_interaction(&interaction, &mut relationships, &mut events, Tick::new(1), false, Fixed::from_f64(0.05), Fixed::from_f64(0.08), &crate::parameters::SimParameters::default());
+        process_interaction(
+            &interaction,
+            &mut relationships,
+            &mut events,
+            Tick::new(1),
+            false,
+            Fixed::from_f64(0.05),
+            Fixed::from_f64(0.08),
+            &crate::parameters::SimParameters::default(),
+        );
 
         assert!(relationships[0].trust < Fixed::from_f64(0.5));
     }
@@ -611,11 +681,11 @@ mod tests {
                     agreeableness,
                     anger,
                     resistance,
-                    Fixed::ZERO,  // no Help Neighbors norm in this setup
-                    Fixed::ZERO,  // no Respect Elders norm in this setup
-                    false,        // no designated-elder target
-                    Fixed::ZERO,  // no Obey Ruler norm in this setup
-                    false,        // no authority target in this setup
+                    Fixed::ZERO, // no Help Neighbors norm in this setup
+                    Fixed::ZERO, // no Respect Elders norm in this setup
+                    false,       // no designated-elder target
+                    Fixed::ZERO, // no Obey Ruler norm in this setup
+                    false,       // no authority target in this setup
                     &mut rng,
                     &params,
                 ) == InteractionKind::Threaten
@@ -628,7 +698,10 @@ mod tests {
         let baseline = count_threats(Fixed::ZERO);
         let suppressed = count_threats(Fixed::ONE);
         let partial = count_threats(Fixed::from_f64(0.7));
-        assert!(baseline > 0, "low-trust threats must occur without the norm");
+        assert!(
+            baseline > 0,
+            "low-trust threats must occur without the norm"
+        );
         assert_eq!(
             suppressed, 0,
             "full no-violence internalization must eliminate threats"
@@ -676,8 +749,8 @@ mod tests {
                     propensity,
                     Fixed::ZERO,
                     false,
-                    Fixed::ZERO,  // no Obey Ruler norm in this setup
-                    false,        // no authority target in this setup
+                    Fixed::ZERO, // no Obey Ruler norm in this setup
+                    false,       // no authority target in this setup
                     &mut rng,
                     &params,
                 ) {
@@ -745,8 +818,8 @@ mod tests {
                     Fixed::ZERO,
                     propensity,
                     target_is_elder,
-                    Fixed::ZERO,  // no Obey Ruler norm in this setup
-                    false,        // no authority target in this setup
+                    Fixed::ZERO, // no Obey Ruler norm in this setup
+                    false,       // no authority target in this setup
                     &mut rng,
                     &params,
                 ) == InteractionKind::Threaten
@@ -760,7 +833,10 @@ mod tests {
         let elder_no_norm = count_threats(Fixed::ZERO, true);
         let elder_full = count_threats(Fixed::ONE, true);
         let elder_partial = count_threats(Fixed::from_f64(0.7), true);
-        assert!(baseline > 0, "low-trust threats must occur without the norm");
+        assert!(
+            baseline > 0,
+            "low-trust threats must occur without the norm"
+        );
         assert_eq!(
             elder_no_norm, baseline,
             "the elder designation alone must be inert (zero-at-zero)"
@@ -822,7 +898,10 @@ mod tests {
         let authority_no_norm = count_threats(Fixed::ZERO, true);
         let authority_full = count_threats(Fixed::ONE, true);
         let authority_partial = count_threats(Fixed::from_f64(0.7), true);
-        assert!(baseline > 0, "low-trust threats must occur without the norm");
+        assert!(
+            baseline > 0,
+            "low-trust threats must occur without the norm"
+        );
         assert_eq!(
             authority_no_norm, baseline,
             "the authority designation alone must be inert (zero-at-zero)"
@@ -983,7 +1062,10 @@ mod tests {
                 + loneliness * params.social_loneliness_multiplier)
                 .to_f64()
         };
-        assert_eq!(chance(Fixed::ZERO), params.social_interaction_base_chance.to_f64());
+        assert_eq!(
+            chance(Fixed::ZERO),
+            params.social_interaction_base_chance.to_f64()
+        );
         assert!(chance(Fixed::from_f64(0.5)) > chance(Fixed::ZERO));
         assert!(chance(Fixed::ONE) >= chance(Fixed::from_f64(0.5)));
     }

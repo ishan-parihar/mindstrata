@@ -19,7 +19,17 @@ fn cli_render_map_writes_a_valid_png() {
     let path_str = path.to_str().expect("temp path is utf-8");
 
     let out = Command::new(bin())
-        .args(["sim", "--seed", "42", "--ticks", "200", "--agents", "12", "--render-map", path_str])
+        .args([
+            "sim",
+            "--seed",
+            "42",
+            "--ticks",
+            "200",
+            "--agents",
+            "12",
+            "--render-map",
+            path_str,
+        ])
         .output()
         .expect("the render run executes");
     assert!(out.status.success(), "the render run must exit 0");
@@ -56,7 +66,17 @@ fn cli_render_map_reports_missing_parent_directory() {
     let missing_str = missing.to_str().expect("temp path is utf-8");
 
     let out = Command::new(bin())
-        .args(["sim", "--seed", "42", "--ticks", "20", "--agents", "6", "--render-map", missing_str])
+        .args([
+            "sim",
+            "--seed",
+            "42",
+            "--ticks",
+            "20",
+            "--agents",
+            "6",
+            "--render-map",
+            missing_str,
+        ])
         .output()
         .expect("the render run executes");
     assert!(out.status.success(), "a write failure must still exit 0");

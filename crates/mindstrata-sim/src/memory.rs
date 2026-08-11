@@ -175,7 +175,8 @@ impl MemoryTrace {
     /// angry agent reconsolidates every tick, so an unbounded history would
     /// balloon in long runs; matches the `speech_log` 64-cap pattern).
     fn record_distortion(&mut self, tick: u64, cause: DistortionCause, delta: Fixed) {
-        self.distortion_history.push(DistortionEvent { tick, cause, delta });
+        self.distortion_history
+            .push(DistortionEvent { tick, cause, delta });
         if self.distortion_history.len() > MAX_DISTORTION_EVENTS {
             self.distortion_history.remove(0);
         }
@@ -206,8 +207,7 @@ pub struct RetrievedMemory {
 /// and identity relevance (trauma/identity-linked traces intrude more). No
 /// RNG, so retrieval order is reproducible across runs.
 fn retrieval_score(m: &MemoryTrace) -> Fixed {
-    m.strength + m.emotional_charge * Fixed::HALF
-        + m.identity_relevance * Fixed::from_f64(0.25)
+    m.strength + m.emotional_charge * Fixed::HALF + m.identity_relevance * Fixed::from_f64(0.25)
 }
 
 /// §8.1.3 (Iteration 104): deterministic identity-relevance derivation at
@@ -366,7 +366,11 @@ impl MemoryStore {
             accuracy: Fixed::ONE,
             valence,
             identity_relevance,
-            social_sharedness: if other_agent.is_some() { Fixed::ONE } else { Fixed::ZERO },
+            social_sharedness: if other_agent.is_some() {
+                Fixed::ONE
+            } else {
+                Fixed::ZERO
+            },
             last_rehearsed: tick,
             distortion_history: Vec::new(),
             rehearsal_count: 0,
@@ -400,7 +404,8 @@ impl MemoryStore {
         }
 
         // Remove memories below threshold
-        self.episodes.retain(|m| m.strength >= self.eviction_threshold);
+        self.episodes
+            .retain(|m| m.strength >= self.eviction_threshold);
     }
 
     /// Recall a random memory for rehearsal (strengthens it).
@@ -466,7 +471,11 @@ impl MemoryStore {
                 mem.emotional_charge = (mem.emotional_charge + amplifier).clamp_01();
                 mem.strength = (mem.strength + amplifier * Fixed::from_f64(0.5)).clamp_01();
                 mem.accuracy = (mem.accuracy - amplifier).clamp(Fixed::from_f64(0.01), Fixed::ONE);
-                mem.record_distortion(current_tick, DistortionCause::EmotionalReconsolidation, -amplifier);
+                mem.record_distortion(
+                    current_tick,
+                    DistortionCause::EmotionalReconsolidation,
+                    -amplifier,
+                );
             }
         }
     }
@@ -493,7 +502,11 @@ impl MemoryStore {
                 let congruent = (m.valence > Fixed::ZERO && valence_bias > Fixed::ZERO)
                     || (m.valence < Fixed::ZERO && valence_bias < Fixed::ZERO)
                     || valence_bias == Fixed::ZERO;
-                let congruence_boost = if congruent { Fixed::from_f64(0.1) } else { Fixed::ZERO };
+                let congruence_boost = if congruent {
+                    Fixed::from_f64(0.1)
+                } else {
+                    Fixed::ZERO
+                };
                 RetrievedMemory {
                     id: m.id,
                     kind: m.kind,
@@ -505,14 +518,15 @@ impl MemoryStore {
                         + m.emotional_charge * Fixed::from_f64(0.2)
                         + congruence_boost
                         + arousal * Fixed::from_f64(0.05))
-                        .clamp_01(),
+                    .clamp_01(),
                     reconstructed_accuracy: (m.accuracy
                         * (Fixed::ONE - arousal * Fixed::from_f64(0.02)))
-                        .clamp(Fixed::from_f64(0.01), Fixed::ONE),
+                    .clamp(Fixed::from_f64(0.01), Fixed::ONE),
                 }
             })
             .collect()
-    }    /// §8.1.3: Intrusive retrieval + reconsolidation — the single most
+    }
+    /// §8.1.3: Intrusive retrieval + reconsolidation — the single most
     /// accessible trace (salience argmax, deterministic, ties → earliest) is
     /// recalled and re-encoded under the current emotional state. Purely
     /// observational memory state, no RNG — calibrated runs stay
@@ -548,12 +562,8 @@ impl MemoryStore {
         // Reconstruction error follows the fit between the current emotion
         // and the trace's valence (mismatch distorts, match leaves accuracy).
         let distortion = match () {
-            () if mem.valence < Fixed::ZERO => {
-                anger.clamp_01() * Fixed::from_f64(0.002)
-            }
-            () if mem.valence > Fixed::ZERO => {
-                joy.clamp_01() * Fixed::from_f64(0.001)
-            }
+            () if mem.valence < Fixed::ZERO => anger.clamp_01() * Fixed::from_f64(0.002),
+            () if mem.valence > Fixed::ZERO => joy.clamp_01() * Fixed::from_f64(0.001),
             () => Fixed::ZERO,
         };
         if distortion > Fixed::ZERO {
@@ -573,7 +583,11 @@ impl MemoryStore {
             .episodes
             .iter()
             .enumerate()
-            .min_by(|a, b| a.1.strength.partial_cmp(&b.1.strength).unwrap_or(std::cmp::Ordering::Equal))
+            .min_by(|a, b| {
+                a.1.strength
+                    .partial_cmp(&b.1.strength)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .map(|(i, _)| i)
         {
             self.episodes.swap_remove(min_idx);
@@ -588,7 +602,14 @@ mod tests {
     #[test]
     fn encode_and_decay() {
         let mut store = MemoryStore::new(100);
-        store.encode(MemoryKind::Emotional, 10, Fixed::from_f64(0.8), Fixed::from_f64(0.6), None, MemoryTag::HelpedBy);
+        store.encode(
+            MemoryKind::Emotional,
+            10,
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.6),
+            None,
+            MemoryTag::HelpedBy,
+        );
 
         assert_eq!(store.count(), 1);
 
@@ -606,20 +627,42 @@ mod tests {
         // After removing the internal threshold, encode() stores any salience.
         // Low-salience memories are stored but will be evicted quickly by decay.
         let mut store = MemoryStore::new(100);
-        store.encode(MemoryKind::Social, 10, Fixed::from_f64(0.05), Fixed::ZERO, None, MemoryTag::TalkedTo);
-        assert_eq!(store.count(), 1, "Low-salience memory should be stored (threshold moved to attention system)");
+        store.encode(
+            MemoryKind::Social,
+            10,
+            Fixed::from_f64(0.05),
+            Fixed::ZERO,
+            None,
+            MemoryTag::TalkedTo,
+        );
+        assert_eq!(
+            store.count(),
+            1,
+            "Low-salience memory should be stored (threshold moved to attention system)"
+        );
         // After heavy decay, it should be evicted
         for _ in 0..5000 {
             store.decay(1000);
         }
-        assert_eq!(store.count(), 0, "Low-salience memory should be evicted after decay");
+        assert_eq!(
+            store.count(),
+            0,
+            "Low-salience memory should be evicted after decay"
+        );
     }
 
     #[test]
     fn capacity_eviction() {
         let mut store = MemoryStore::new(5);
         for i in 0..10 {
-            store.encode(MemoryKind::Social, i, Fixed::from_f64(0.5), Fixed::ZERO, None, MemoryTag::TalkedTo);
+            store.encode(
+                MemoryKind::Social,
+                i,
+                Fixed::from_f64(0.5),
+                Fixed::ZERO,
+                None,
+                MemoryTag::TalkedTo,
+            );
         }
         assert!(store.count() <= 5);
     }
@@ -628,7 +671,14 @@ mod tests {
     fn rehearsal_strengthens_memory() {
         use rand::SeedableRng;
         let mut store = MemoryStore::new(100);
-        store.encode(MemoryKind::Emotional, 0, Fixed::from_f64(0.9), Fixed::from_f64(0.8), None, MemoryTag::HelpedBy);
+        store.encode(
+            MemoryKind::Emotional,
+            0,
+            Fixed::from_f64(0.9),
+            Fixed::from_f64(0.8),
+            None,
+            MemoryTag::HelpedBy,
+        );
         let before = store.episodes[0].strength;
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
         store.rehearse_random(5, &mut rng);
@@ -641,8 +691,22 @@ mod tests {
     #[test]
     fn trace_ids_are_monotonic() {
         let mut store = MemoryStore::new(100);
-        store.encode(MemoryKind::Somatic, 0, Fixed::from_f64(0.5), Fixed::ZERO, None, MemoryTag::AteFood);
-        store.encode(MemoryKind::Somatic, 1, Fixed::from_f64(0.5), Fixed::ZERO, None, MemoryTag::DrankWater);
+        store.encode(
+            MemoryKind::Somatic,
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::ZERO,
+            None,
+            MemoryTag::AteFood,
+        );
+        store.encode(
+            MemoryKind::Somatic,
+            1,
+            Fixed::from_f64(0.5),
+            Fixed::ZERO,
+            None,
+            MemoryTag::DrankWater,
+        );
         assert_eq!(store.episodes[0].id, 0);
         assert_eq!(store.episodes[1].id, 1);
     }
@@ -651,12 +715,27 @@ mod tests {
     fn encode_derives_trace_properties() {
         let mut store = MemoryStore::new(100);
         // Social trace with another agent involved.
-        store.encode(MemoryKind::Social, 3, Fixed::from_f64(0.6), Fixed::from_f64(0.4), Some(7), MemoryTag::TalkedTo);
+        store.encode(
+            MemoryKind::Social,
+            3,
+            Fixed::from_f64(0.6),
+            Fixed::from_f64(0.4),
+            Some(7),
+            MemoryTag::TalkedTo,
+        );
         let trace = &store.episodes[0];
 
         assert_eq!(trace.accuracy, Fixed::ONE, "accuracy starts at 1.0");
-        assert_eq!(trace.valence, Fixed::ZERO, "social traces are valence-neutral");
-        assert_eq!(trace.social_sharedness, Fixed::ONE, "shared when another agent is involved");
+        assert_eq!(
+            trace.valence,
+            Fixed::ZERO,
+            "social traces are valence-neutral"
+        );
+        assert_eq!(
+            trace.social_sharedness,
+            Fixed::ONE,
+            "shared when another agent is involved"
+        );
         // §8.1.3 (Iteration 104): a Social TalkedTo trace at charge 0.4
         // derives identity_relevance = 0.3 (social class) + 0.04 (charge
         // amplification) = 0.34 — the identity-protection recall bias is
@@ -666,9 +745,18 @@ mod tests {
             "social traces carry identity relevance, got {}",
             trace.identity_relevance
         );
-        assert_eq!(trace.last_rehearsed, 3, "freshly encoded traces were last rehearsed at encode tick");
-        assert!(trace.sensory_richness > Fixed::ZERO, "salient+emotional traces are vivid");
-        assert!(trace.distortion_history.is_empty(), "fresh traces have no distortion history");
+        assert_eq!(
+            trace.last_rehearsed, 3,
+            "freshly encoded traces were last rehearsed at encode tick"
+        );
+        assert!(
+            trace.sensory_richness > Fixed::ZERO,
+            "salient+emotional traces are vivid"
+        );
+        assert!(
+            trace.distortion_history.is_empty(),
+            "fresh traces have no distortion history"
+        );
         assert_eq!(trace.rehearsal_count, 0);
     }
 
@@ -676,18 +764,39 @@ mod tests {
     fn derive_identity_relevance_ranks_classes_and_is_deterministic() {
         // Self-threat dominates; social/emotional implicate the social self;
         // bodily maintenance is identity-neutral at zero charge.
-        let traumatic =
-            derive_identity_relevance(MemoryKind::Traumatic, false, MemoryTag::ThreatenedBy, Fixed::ZERO);
-        let emotional =
-            derive_identity_relevance(MemoryKind::Emotional, false, MemoryTag::HelpedBy, Fixed::ZERO);
+        let traumatic = derive_identity_relevance(
+            MemoryKind::Traumatic,
+            false,
+            MemoryTag::ThreatenedBy,
+            Fixed::ZERO,
+        );
+        let emotional = derive_identity_relevance(
+            MemoryKind::Emotional,
+            false,
+            MemoryTag::HelpedBy,
+            Fixed::ZERO,
+        );
         let social =
             derive_identity_relevance(MemoryKind::Social, false, MemoryTag::TalkedTo, Fixed::ZERO);
         let somatic =
             derive_identity_relevance(MemoryKind::Somatic, false, MemoryTag::AteFood, Fixed::ZERO);
-        assert!(traumatic > emotional, "trauma is the strongest identity trigger");
-        assert!(emotional > somatic, "emotional events implicate the social self");
-        assert_eq!(social, emotional, "social and emotional share the same class base");
-        assert_eq!(somatic, Fixed::ZERO, "a flat bodily event has no identity implication");
+        assert!(
+            traumatic > emotional,
+            "trauma is the strongest identity trigger"
+        );
+        assert!(
+            emotional > somatic,
+            "emotional events implicate the social self"
+        );
+        assert_eq!(
+            social, emotional,
+            "social and emotional share the same class base"
+        );
+        assert_eq!(
+            somatic,
+            Fixed::ZERO,
+            "a flat bodily event has no identity implication"
+        );
 
         // The flashbulb upgrade adds a vividness bonus on top of the base
         // class (a traumatic flashbulb stays more salient than an emotional
@@ -722,8 +831,10 @@ mod tests {
             MemoryTag::LifeEvent,
             Fixed::ZERO,
         );
-        assert!(mastered > Fixed::ZERO && learned > Fixed::ZERO && chapter > Fixed::ZERO,
-            "milestone traces anchor identity");
+        assert!(
+            mastered > Fixed::ZERO && learned > Fixed::ZERO && chapter > Fixed::ZERO,
+            "milestone traces anchor identity"
+        );
 
         // Emotional charge amplifies identity implication, deterministically.
         let charged = derive_identity_relevance(
@@ -753,12 +864,32 @@ mod tests {
         // the identity-relevant trace must outrank the neutral one — the
         // identity-protection recall bias is genuinely live in retrieval.
         let mut store = MemoryStore::new(100);
-        store.encode(MemoryKind::Traumatic, 0, Fixed::from_f64(0.5), Fixed::ZERO, None, MemoryTag::ThreatenedBy);
-        store.encode(MemoryKind::Somatic, 1, Fixed::from_f64(0.5), Fixed::ZERO, None, MemoryTag::AteFood);
+        store.encode(
+            MemoryKind::Traumatic,
+            0,
+            Fixed::from_f64(0.5),
+            Fixed::ZERO,
+            None,
+            MemoryTag::ThreatenedBy,
+        );
+        store.encode(
+            MemoryKind::Somatic,
+            1,
+            Fixed::from_f64(0.5),
+            Fixed::ZERO,
+            None,
+            MemoryTag::AteFood,
+        );
         let traumatic = &store.episodes[0];
         let somatic = &store.episodes[1];
-        assert_eq!(traumatic.strength, somatic.strength, "strengths are matched");
-        assert_eq!(traumatic.emotional_charge, somatic.emotional_charge, "charges are matched");
+        assert_eq!(
+            traumatic.strength, somatic.strength,
+            "strengths are matched"
+        );
+        assert_eq!(
+            traumatic.emotional_charge, somatic.emotional_charge,
+            "charges are matched"
+        );
         assert!(traumatic.identity_relevance > somatic.identity_relevance);
         assert!(
             retrieval_score(traumatic) > retrieval_score(somatic),
@@ -771,15 +902,40 @@ mod tests {
         let mut store = MemoryStore::new(100);
         // Traumatic flashbulb: highest identity relevance (0.6 base + 0.15
         // vivid + charge).
-        store.encode(MemoryKind::Traumatic, 0, Fixed::from_f64(0.45), Fixed::from_f64(0.7), None, MemoryTag::ThreatenedBy);
+        store.encode(
+            MemoryKind::Traumatic,
+            0,
+            Fixed::from_f64(0.45),
+            Fixed::from_f64(0.7),
+            None,
+            MemoryTag::ThreatenedBy,
+        );
         // Emotional helped: social-self class.
-        store.encode(MemoryKind::Emotional, 1, Fixed::from_f64(0.5), Fixed::from_f64(0.3), Some(3), MemoryTag::HelpedBy);
+        store.encode(
+            MemoryKind::Emotional,
+            1,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.3),
+            Some(3),
+            MemoryTag::HelpedBy,
+        );
         // Somatic rest: identity-neutral base.
-        store.encode(MemoryKind::Somatic, 2, Fixed::from_f64(0.5), Fixed::ZERO, None, MemoryTag::Rested);
+        store.encode(
+            MemoryKind::Somatic,
+            2,
+            Fixed::from_f64(0.5),
+            Fixed::ZERO,
+            None,
+            MemoryTag::Rested,
+        );
         let flash = &store.episodes[0];
         let emotional = &store.episodes[1];
         let somatic = &store.episodes[2];
-        assert_eq!(flash.kind, MemoryKind::Flashbulb, "salience 0.45 + charge 0.7 upgrades");
+        assert_eq!(
+            flash.kind,
+            MemoryKind::Flashbulb,
+            "salience 0.45 + charge 0.7 upgrades"
+        );
         assert!(
             flash.identity_relevance > emotional.identity_relevance,
             "traumatic flashbulbs are maximally identity-salient"
@@ -798,45 +954,116 @@ mod tests {
     fn valence_sign_follows_kind() {
         let mut store = MemoryStore::new(100);
         // Charge 0.5 < 0.6 so the flashbulb upgrade does not hijack the kind.
-        store.encode(MemoryKind::Traumatic, 0, Fixed::from_f64(0.9), Fixed::from_f64(0.5), None, MemoryTag::ThreatenedBy);
-        assert!(store.episodes[0].valence < Fixed::ZERO, "traumatic traces are negatively valenced");
-        store.encode(MemoryKind::Emotional, 1, Fixed::from_f64(0.9), Fixed::from_f64(0.5), None, MemoryTag::HelpedBy);
-        assert!(store.episodes[1].valence > Fixed::ZERO, "emotional traces are positively valenced");
+        store.encode(
+            MemoryKind::Traumatic,
+            0,
+            Fixed::from_f64(0.9),
+            Fixed::from_f64(0.5),
+            None,
+            MemoryTag::ThreatenedBy,
+        );
+        assert!(
+            store.episodes[0].valence < Fixed::ZERO,
+            "traumatic traces are negatively valenced"
+        );
+        store.encode(
+            MemoryKind::Emotional,
+            1,
+            Fixed::from_f64(0.9),
+            Fixed::from_f64(0.5),
+            None,
+            MemoryTag::HelpedBy,
+        );
+        assert!(
+            store.episodes[1].valence > Fixed::ZERO,
+            "emotional traces are positively valenced"
+        );
         // A flashbulb derived from a traumatic event KEEPS the base kind's
         // negative valence ("traumatic events flash back" — not "become
         // pleasant").
-        store.encode(MemoryKind::Traumatic, 2, Fixed::from_f64(0.45), Fixed::from_f64(0.7), None, MemoryTag::ThreatenedBy);
+        store.encode(
+            MemoryKind::Traumatic,
+            2,
+            Fixed::from_f64(0.45),
+            Fixed::from_f64(0.7),
+            None,
+            MemoryTag::ThreatenedBy,
+        );
         assert_eq!(store.episodes[2].kind, MemoryKind::Flashbulb);
-        assert!(store.episodes[2].valence < Fixed::ZERO, "traumatic flashbulbs stay negatively valenced");
+        assert!(
+            store.episodes[2].valence < Fixed::ZERO,
+            "traumatic flashbulbs stay negatively valenced"
+        );
         // A flashbulb derived from an emotional event is positively valenced.
-        store.encode(MemoryKind::Emotional, 3, Fixed::from_f64(0.45), Fixed::from_f64(0.7), None, MemoryTag::HelpedBy);
+        store.encode(
+            MemoryKind::Emotional,
+            3,
+            Fixed::from_f64(0.45),
+            Fixed::from_f64(0.7),
+            None,
+            MemoryTag::HelpedBy,
+        );
         assert_eq!(store.episodes[3].kind, MemoryKind::Flashbulb);
-        assert!(store.episodes[3].valence > Fixed::ZERO, "emotional flashbulbs stay positively valenced");
+        assert!(
+            store.episodes[3].valence > Fixed::ZERO,
+            "emotional flashbulbs stay positively valenced"
+        );
     }
 
     #[test]
     fn flashbulb_upgrade_on_vivid_encoding() {
         let mut store = MemoryStore::new(100);
         // Salience ≥ 0.4 AND charge ≥ 0.6 → Flashbulb.
-        store.encode(MemoryKind::Traumatic, 0, Fixed::from_f64(0.45), Fixed::from_f64(0.8), None, MemoryTag::ThreatenedBy);
+        store.encode(
+            MemoryKind::Traumatic,
+            0,
+            Fixed::from_f64(0.45),
+            Fixed::from_f64(0.8),
+            None,
+            MemoryTag::ThreatenedBy,
+        );
         assert_eq!(store.episodes[0].kind, MemoryKind::Flashbulb);
         // Below the salience bar stays its base kind.
-        store.encode(MemoryKind::Traumatic, 1, Fixed::from_f64(0.3), Fixed::from_f64(0.8), None, MemoryTag::ThreatenedBy);
+        store.encode(
+            MemoryKind::Traumatic,
+            1,
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.8),
+            None,
+            MemoryTag::ThreatenedBy,
+        );
         assert_eq!(store.episodes[1].kind, MemoryKind::Traumatic);
         // Below the charge bar stays its base kind.
-        store.encode(MemoryKind::Traumatic, 2, Fixed::from_f64(0.45), Fixed::from_f64(0.5), None, MemoryTag::ThreatenedBy);
+        store.encode(
+            MemoryKind::Traumatic,
+            2,
+            Fixed::from_f64(0.45),
+            Fixed::from_f64(0.5),
+            None,
+            MemoryTag::ThreatenedBy,
+        );
         assert_eq!(store.episodes[2].kind, MemoryKind::Traumatic);
     }
 
     #[test]
     fn reconsolidation_records_distortion_and_erodes_accuracy() {
         let mut store = MemoryStore::new(100);
-        store.encode(MemoryKind::Traumatic, 0, Fixed::from_f64(0.9), Fixed::from_f64(0.5), None, MemoryTag::ThreatenedBy);
+        store.encode(
+            MemoryKind::Traumatic,
+            0,
+            Fixed::from_f64(0.9),
+            Fixed::from_f64(0.5),
+            None,
+            MemoryTag::ThreatenedBy,
+        );
         store.reconsolidate(50, Fixed::from_f64(0.8), Fixed::ZERO);
         let trace = &store.episodes[0];
         assert_eq!(trace.distortion_history.len(), 1);
         assert_eq!(trace.distortion_history[0].tick, 50);
-        assert_eq!(trace.distortion_history[0].cause, DistortionCause::EmotionalReconsolidation);
+        assert_eq!(
+            trace.distortion_history[0].cause,
+            DistortionCause::EmotionalReconsolidation
+        );
         assert!(trace.accuracy < Fixed::ONE, "distortion erodes accuracy");
         // The amplified memory got more negative.
         assert!(trace.valence <= Fixed::ZERO);
@@ -848,7 +1075,14 @@ mod tests {
         // so anger reconsolidation must still amplify it (valence-keyed, not
         // kind-keyed).
         let mut store = MemoryStore::new(100);
-        store.encode(MemoryKind::Traumatic, 0, Fixed::from_f64(0.45), Fixed::from_f64(0.7), None, MemoryTag::ThreatenedBy);
+        store.encode(
+            MemoryKind::Traumatic,
+            0,
+            Fixed::from_f64(0.45),
+            Fixed::from_f64(0.7),
+            None,
+            MemoryTag::ThreatenedBy,
+        );
         assert_eq!(store.episodes[0].kind, MemoryKind::Flashbulb);
         let charge_before = store.episodes[0].emotional_charge;
         store.reconsolidate(10, Fixed::from_f64(0.9), Fixed::ZERO);
@@ -862,7 +1096,14 @@ mod tests {
     #[test]
     fn distortion_history_is_bounded() {
         let mut store = MemoryStore::new(100);
-        store.encode(MemoryKind::Traumatic, 0, Fixed::from_f64(0.9), Fixed::from_f64(0.5), None, MemoryTag::ThreatenedBy);
+        store.encode(
+            MemoryKind::Traumatic,
+            0,
+            Fixed::from_f64(0.9),
+            Fixed::from_f64(0.5),
+            None,
+            MemoryTag::ThreatenedBy,
+        );
         for tick in 0..100u64 {
             store.reconsolidate(tick, Fixed::ONE, Fixed::ZERO);
         }
@@ -882,14 +1123,30 @@ mod tests {
     fn rehearsal_records_event_and_updates_last_rehearsed() {
         use rand::SeedableRng;
         let mut store = MemoryStore::new(100);
-        store.encode(MemoryKind::Social, 0, Fixed::from_f64(0.9), Fixed::ZERO, None, MemoryTag::TalkedTo);
+        store.encode(
+            MemoryKind::Social,
+            0,
+            Fixed::from_f64(0.9),
+            Fixed::ZERO,
+            None,
+            MemoryTag::TalkedTo,
+        );
         let mut rng = rand::rngs::StdRng::seed_from_u64(7);
         store.rehearse_random(123, &mut rng);
         let trace = &store.episodes[0];
-        assert_eq!(trace.last_rehearsed, 123, "rehearsal updates last_rehearsed");
+        assert_eq!(
+            trace.last_rehearsed, 123,
+            "rehearsal updates last_rehearsed"
+        );
         assert_eq!(trace.distortion_history.len(), 1);
-        assert_eq!(trace.distortion_history[0].cause, DistortionCause::Rehearsal);
-        assert!(trace.accuracy < Fixed::ONE, "retrieval reconstructs — slight accuracy erosion");
+        assert_eq!(
+            trace.distortion_history[0].cause,
+            DistortionCause::Rehearsal
+        );
+        assert!(
+            trace.accuracy < Fixed::ONE,
+            "retrieval reconstructs — slight accuracy erosion"
+        );
     }
 
     #[test]
@@ -974,11 +1231,21 @@ mod tests {
         let before = store.episodes[0].clone();
         store.retrieve_and_reconsolidate(123, Fixed::from_f64(0.9), Fixed::ZERO);
         let after = &store.episodes[0];
-        assert_eq!(after.rehearsal_count, before.rehearsal_count + 1, "retrieval rehearses");
+        assert_eq!(
+            after.rehearsal_count,
+            before.rehearsal_count + 1,
+            "retrieval rehearses"
+        );
         assert_eq!(after.last_rehearsed, 123);
         assert!(after.strength > before.strength, "rehearsal strengthens");
-        assert!(after.emotional_charge > before.emotional_charge, "retrieval recharges");
-        assert!(after.accuracy < before.accuracy, "angry reconstruction erodes accuracy");
+        assert!(
+            after.emotional_charge > before.emotional_charge,
+            "retrieval recharges"
+        );
+        assert!(
+            after.accuracy < before.accuracy,
+            "angry reconstruction erodes accuracy"
+        );
         assert!(
             after
                 .distortion_history
@@ -1004,10 +1271,17 @@ mod tests {
         let before = store.episodes[0].clone();
         store.retrieve_and_reconsolidate(123, Fixed::ONE, Fixed::ONE);
         let after = &store.episodes[0];
-        assert_eq!(after.rehearsal_count, before.rehearsal_count + 1, "retrieval rehearses neutral traces");
+        assert_eq!(
+            after.rehearsal_count,
+            before.rehearsal_count + 1,
+            "retrieval rehearses neutral traces"
+        );
         assert_eq!(after.last_rehearsed, 123);
         assert!(after.strength > before.strength, "rehearsal strengthens");
-        assert_eq!(after.accuracy, before.accuracy, "neutral reconstruction leaves accuracy intact");
+        assert_eq!(
+            after.accuracy, before.accuracy,
+            "neutral reconstruction leaves accuracy intact"
+        );
         assert!(
             !after
                 .distortion_history
