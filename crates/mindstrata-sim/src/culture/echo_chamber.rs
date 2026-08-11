@@ -137,6 +137,15 @@ pub struct EchoChamberState {
     pub echo_chamber_strength: Fixed,
     /// Total cross-cutting ties across all clusters.
     pub total_cross_cutting_ties: u32,
+    /// §13.6 (AP2): Cross-cutting tie RATIO — the plan's `BeliefEcology`
+    /// field. Stored as a `Fixed` 0–1 ratio (higher ties = less polarized),
+    /// computed by `compute_polarization` as
+    /// `Σ cluster cross-cutting ties / max possible ties` (each cross-cluster
+    /// high-trust pair counted 2×). Persisted here so the plan-declared field
+    /// is observable state rather than a discarded local. Observational only
+    /// (no decision consumer) — zero-blast by construction.
+    #[serde(default)]
+    pub cross_cutting_ties: Fixed,
     /// §13.6 (AP2): Narrative dominance — how strongly each meme narrative
     /// dominates the pool (meme id → dominance 0–1). A `BTreeMap` (not the
     /// plan's `HashMap`) keeps serialization and iteration deterministic.
@@ -154,6 +163,7 @@ impl Default for EchoChamberState {
             polarization_index: Fixed::ZERO,
             echo_chamber_strength: Fixed::ZERO,
             total_cross_cutting_ties: 0,
+            cross_cutting_ties: Fixed::ZERO,
             narrative_dominance: BTreeMap::new(),
             next_id: 0,
         }
@@ -266,6 +276,10 @@ impl EchoChamberState {
         } else {
             Fixed::ZERO
         };
+        // §13.6 (Iteration 163): persist the ratio as the plan-declared
+        // `cross_cutting_ties` state field (observational — the ratio was
+        // previously a discarded local; storing it changes no computation).
+        self.cross_cutting_ties = tie_ratio;
 
         // Additive blend: emotional_charge + fusion + echo chamber contribute,
         // while cross-cutting ties reduce polarization (per §13.6: polarization =
@@ -502,5 +516,39 @@ mod tests {
         let old = r#"{"clusters":[],"polarization_index":0,"echo_chamber_strength":0,"total_cross_cutting_ties":0,"next_id":0}"#;
         let restored: EchoChamberState = serde_json::from_str(old).unwrap();
         assert!(restored.narrative_dominance.is_empty());
+    }
+
+    /// §13.6 (Iteration 163): `compute_polarization` persists the
+    /// cross-cutting tie RATIO into the plan-declared `cross_cutting_ties`
+    /// Fixed field (previously a discarded local). With two singleton
+    /// clusters and one cross-cluster high-trust pair, the max-possible
+    /// denominator is 2 (each pair counted 2×) and the count is 2, so the
+    /// ratio pins at exactly 1.0; with no ties it pins at 0.0.
+    #[test]
+    fn compute_polarization_persists_cross_cutting_tie_ratio() {
+        let mut state = EchoChamberState::new();
+        let a = state.create_cluster("A".into());
+        let b = state.create_cluster("B".into());
+        state.clusters[a].add_member(1);
+        state.clusters[b].add_member(2);
+
+        // Zero ties → ratio 0.
+        state.compute_polarization();
+        assert_eq!(state.cross_cutting_ties, Fixed::ZERO);
+        assert_eq!(state.total_cross_cutting_ties, 0);
+
+        // One high-trust cross-cluster pair → both clusters count it (2×),
+        // max possible is also 2 → ratio exactly 1.0.
+        state.clusters[a].cross_cutting_ties = 1;
+        state.clusters[b].cross_cutting_ties = 1;
+        state.compute_polarization();
+        assert_eq!(state.cross_cutting_ties, Fixed::ONE);
+        assert_eq!(state.total_cross_cutting_ties, 2);
+
+        // The ratio stays in [0, 1] under an oversized count (clamped).
+        state.clusters[a].cross_cutting_ties = 9;
+        state.clusters[b].cross_cutting_ties = 9;
+        state.compute_polarization();
+        assert!(state.cross_cutting_ties <= Fixed::ONE);
     }
 }
