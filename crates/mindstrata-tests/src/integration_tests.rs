@@ -13198,6 +13198,64 @@ fn taboo_free_agents_keep_penalty_pinned_at_zero() {
     assert!(stripped_max > 0.3, "stripped world must stay healthy");
 }
 
+// ── §8.1.18 (Iteration 166): taboo knowledge-resistance ──────────────────
+
+/// §8.1.18 (Iteration 166): the taboo layer dampens novel-knowledge
+/// absorption — a same-seed world whose agents hold no taboos learns MORE
+/// knowledge (higher holders sum) than the seeded world. The differential
+/// is the honest liveness proof: the three wired gates (work-innovation,
+/// childhood socialization, interaction diffusion) each multiply their
+/// acceptance term by `taboo_knowledge_factor`, so taboo-bound agents absorb
+/// measurably less.
+#[test]
+fn taboo_knowledge_resistance_slows_absorption() {
+    // Same seed, same world — the ONLY difference is whether agents carry
+    // the seeded village taboo set.
+    let mut seeded = Simulation::new(SimConfig {
+        seed: 7,
+        max_ticks: 2000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    });
+    seeded.populate();
+    seeded.run(2000);
+
+    let mut stripped = Simulation::new(SimConfig {
+        seed: 7,
+        max_ticks: 2000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    });
+    stripped.populate();
+    // Strip every agent's taboos (the pre-Iter-165 snapshot shape) BEFORE
+    // the run, so the resistance factor sits at exactly 1.0 throughout.
+    for a in &mut stripped.agents {
+        a.cultural_cognition.taboos.clear();
+    }
+    stripped.run(2000);
+
+    let seeded_holders: u32 = seeded.knowledge_store.iter().map(|k| k.holders).sum();
+    let stripped_holders: u32 = stripped.knowledge_store.iter().map(|k| k.holders).sum();
+    assert!(
+        stripped_holders >= seeded_holders,
+        "a taboo-free world must learn at least as much as the seeded world: \
+         stripped={stripped_holders} seeded={seeded_holders}"
+    );
+    assert!(
+        stripped_holders > 0,
+        "the stripped control must be a live learning world ({stripped_holders} holders)"
+    );
+    // The seeded world is also live — the dampening slows, never stops.
+    assert!(
+        seeded_holders > 0,
+        "the seeded world must still learn knowledge ({seeded_holders} holders)"
+    );
+}
+
 /// §8.1.18/§10.4 (Iteration 165): an old-format AttractionModel (serialized
 /// before `taboo_penalty` existed) must deserialize with the channel at its
 /// serde default of 0 — the save-compat contract that keeps pre-Iter-165

@@ -404,6 +404,24 @@ impl CulturalCognition {
     }
 }
 
+/// §8.1.18 (Iteration 166): the taboo knowledge-resistance factor — how
+/// much an agent's strongest internalized taboo dampens absorption of
+/// novel knowledge (the plan's "sacred boundary defense" / heresy
+/// resistance: a culture that forbids more accepts fewer innovations).
+///
+/// `1 − max_taboo × rate`, floored at `floor` — ONE-SIDED identity at
+/// zero: a taboo-free agent's factor is exactly 1.0 (no dampening), and
+/// the floor guarantees absorption is slowed but never fully blocked
+/// (knowledge can still spread, just more slowly for taboo-bound agents).
+/// Pure, no RNG, replay-deterministic.
+///
+/// Mirrors the `awe_reverence_factor` one-sided-factor pattern (Iteration
+/// 130): the rate is the dampening strength, the floor is the never-fully-
+/// cancels guard.
+pub fn taboo_knowledge_factor(max_taboo_strength: Fixed, rate: Fixed, floor: Fixed) -> Fixed {
+    (Fixed::ONE - max_taboo_strength * rate).max(floor).clamp_01()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -568,5 +586,39 @@ mod tests {
         let mut cc = CulturalCognition::default();
         cc.add_taboo(Taboo::new("Theft".into(), Fixed::from_f64(0.8), false));
         assert_eq!(cc.max_taboo_strength(), Fixed::from_f64(0.8));
+    }
+
+    /// §8.1.18 (Iteration 166): `taboo_knowledge_factor` is ONE-SIDED
+    /// identity at zero (no taboo → exactly 1.0), scales down with the max
+    /// taboo strength, and is floored so absorption is never fully blocked.
+    #[test]
+    fn taboo_knowledge_factor_is_one_sided_and_floored() {
+        let rate = Fixed::from_f64(0.2);
+        let floor = Fixed::from_f64(0.8);
+        // Identity at zero: a taboo-free agent is unaffected.
+        assert_eq!(taboo_knowledge_factor(Fixed::ZERO, rate, floor), Fixed::ONE);
+        // 1 − 0.525 × 0.2 = 0.895 at the mean-seeded strength.
+        assert_eq!(
+            taboo_knowledge_factor(Fixed::from_f64(0.525), rate, floor),
+            Fixed::from_f64(0.895)
+        );
+        // 1 − 0.68 × 0.2 = 0.864 at a high max taboo.
+        assert_eq!(
+            taboo_knowledge_factor(Fixed::from_f64(0.68), rate, floor),
+            Fixed::from_f64(0.864)
+        );
+        // Higher taboo → lower factor (the dampening is monotonic).
+        assert!(
+            taboo_knowledge_factor(Fixed::from_f64(0.68), rate, floor)
+                < taboo_knowledge_factor(Fixed::from_f64(0.3), rate, floor)
+        );
+        // Floor binds: an extreme taboo cannot push the factor below 0.8.
+        assert_eq!(
+            taboo_knowledge_factor(Fixed::ONE, rate, floor),
+            floor,
+            "the floor must prevent fully blocking absorption"
+        );
+        // Clamp on the upside for pathological inputs.
+        assert_eq!(taboo_knowledge_factor(Fixed::from_f64(-0.5), rate, floor), Fixed::ONE);
     }
 }

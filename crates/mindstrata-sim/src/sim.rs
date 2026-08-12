@@ -157,6 +157,18 @@ const DEMOGRAPHY_TICK_INTERVAL: u64 = 10;
 /// Minimum mutual trust required to initiate a courtship (0.3).
 const COURTSHIP_TRUST_THRESHOLD: Fixed = Fixed::from_raw(3000); // 0.3
 
+// ── §8.1.18 knowledge-resistance constants (Iteration 166) ─────────
+/// Taboo knowledge-resistance dampening rate: max_taboo × this is removed
+/// from the knowledge-absorption chance, capped by the floor below. Sized
+/// modest (0.2 → up to ~0.14 removal at max taboo ~0.68, ~0.11 at the
+/// mean 0.53) so taboo-bound agents absorb novel knowledge measurably
+/// slower without ever freezing transmission.
+const KNOWLEDGE_TABOO_RATE: Fixed = Fixed::from_raw(2000); // 0.2
+/// Taboo knowledge-resistance floor — absorption is slowed but never fully
+/// blocked (a taboo-bound agent can still be taught; sacred values stay
+/// defensible, not hermetically sealed).
+const KNOWLEDGE_TABOO_FLOOR: Fixed = Fixed::from_raw(8000); // 0.8
+
 // ── Patronage creation constants (§22b) ────────────────────────────
 /// Maximum clients a single patron may acquire per duodeca cycle.
 const PATRONAGE_MAX_CLIENTS_PER_PATRON: usize = 3;
@@ -5137,10 +5149,24 @@ impl Simulation {
                                 .technology
                                 .can_learn(&self.agents[i].cultural.knowledge, knowledge_id)
                         {
+                            // §8.1.18 (Iteration 166): the child's own taboo
+                            // layer dampens absorption of the parent's
+                            // knowledge — a child whose culture forbids more
+                            // is more resistant to novel practices (sacred
+                            // boundary defense). ONE-SIDED factor, identity
+                            // at zero; acceptance still needs to clear the
+                            // 0.3 floor.
+                            let resistance =
+                                crate::psychology::cultural_cognition::taboo_knowledge_factor(
+                                    self.agents[i].cultural_cognition.max_taboo_strength(),
+                                    KNOWLEDGE_TABOO_RATE,
+                                    KNOWLEDGE_TABOO_FLOOR,
+                                );
                             let acceptance = (self.agents[i].cultural.openness
                                 * Fixed::from_f64(0.6)
                                 + Fixed::from_f64(0.4))
-                            .clamp_01();
+                            .clamp_01()
+                                * resistance;
                             if acceptance > Fixed::from_f64(0.3) {
                                 socialization_updates.push((i, knowledge_id));
                             }
@@ -5178,11 +5204,25 @@ impl Simulation {
             let mut innovations: Vec<(usize, u64, String)> = Vec::new();
             for idx in work_agents {
                 // Discovery chance based on openness and conscientiousness
-                let discovery_chance = (self.agents[idx].personality.openness
+                let mut discovery_chance = (self.agents[idx].personality.openness
                     * Fixed::from_f64(0.3)
                     + self.agents[idx].personality.conscientiousness * Fixed::from_f64(0.2)
                     + Fixed::from_f64(0.01))
                 .clamp_01();
+                // §8.1.18 (Iteration 166): the taboo knowledge-resistance
+                // factor dampens innovation for taboo-bound agents — a
+                // culture that forbids more accepts fewer novel practices
+                // (sacred boundary defense). ONE-SIDED: a taboo-free agent's
+                // factor is exactly 1.0 (zero drift at the pre-Iter-165
+                // snapshot shape). The RNG draw below is UNCONDITIONAL, so
+                // replay determinism holds — the factor only scales the
+                // chance, never the stream.
+                let resistance = crate::psychology::cultural_cognition::taboo_knowledge_factor(
+                    self.agents[idx].cultural_cognition.max_taboo_strength(),
+                    KNOWLEDGE_TABOO_RATE,
+                    KNOWLEDGE_TABOO_FLOOR,
+                );
+                discovery_chance = discovery_chance * resistance;
                 let roll = Fixed::from_f64(self.rng.get_mut(RngStream::Social).random::<f64>());
                 if roll < discovery_chance {
                     // Try to discover a knowledge item not yet known by this agent
@@ -5643,9 +5683,21 @@ impl Simulation {
                         .get_mut(RngStream::Social)
                         .random_range(0..self.agents[fi].cultural.knowledge.len());
                     let kid = self.agents[fi].cultural.knowledge[pick];
+                    // §8.1.18 (Iteration 166): the recipient's taboo layer
+                    // dampens absorption of knowledge spread through social
+                    // contact — a taboo-bound agent resists novel practices
+                    // from peers (sacred boundary defense). ONE-SIDED
+                    // factor, identity at zero; the recipient's acceptance
+                    // must still clear the 0.5 floor.
+                    let resistance = crate::psychology::cultural_cognition::taboo_knowledge_factor(
+                        self.agents[ti].cultural_cognition.max_taboo_strength(),
+                        KNOWLEDGE_TABOO_RATE,
+                        KNOWLEDGE_TABOO_FLOOR,
+                    );
                     let acceptance = (source_trust * Fixed::from_f64(0.5)
                         + self.agents[ti].cultural.openness * Fixed::from_f64(0.5))
-                    .clamp_01();
+                    .clamp_01()
+                        * resistance;
                     if !self.agents[ti].cultural.knowledge.contains(&kid)
                         && acceptance > Fixed::from_f64(0.5)
                         // §5 (Iteration 148): interaction diffusion is gated
