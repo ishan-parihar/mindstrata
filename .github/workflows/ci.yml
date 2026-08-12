@@ -46,3 +46,13 @@ jobs:
       # for slow shared runners).
       - name: Release-mode throughput regression gate (§18.5)
         run: cargo run -p mindstrata-benches --example regression_gate --release
+
+      # Iteration 170 (§18.5, RWR row-67): per-subsystem regression gate.
+      # The aggregate gates above can hide a slowdown confined to ONE
+      # subsystem (a 10x memory-encode regression moves the 48-agent tick
+      # by only ~2%). This isolates the hottest subsystem entry points
+      # (memory-encode fresh + near-capacity, gossip single-hop) and
+      # enforces hard ns/op ceilings in the shipped release profile — the
+      # per-system regression thresholds the row-67 queue demanded.
+      - name: Per-subsystem regression gate (§18.5)
+        run: cargo run -p mindstrata-benches --example subsystem_gate --release
