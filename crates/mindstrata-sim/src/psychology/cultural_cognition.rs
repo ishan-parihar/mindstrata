@@ -348,6 +348,26 @@ impl CulturalCognition {
             .map_or(Fixed::ZERO, Taboo::violation_cost)
     }
 
+    /// Total violation cost across EVERY taboo a described change violates.
+    ///
+    /// The first production consumer of `tabo_violated_by` (the §8.1.18
+    /// taboo-resolution helper, previously consumer-free): where
+    /// `taboo_violation_cost_for` reads the single strongest matching
+    /// prohibition, this sums the full weight of every taboo the change
+    /// violates — the total cultural gravity of the transgression. Consumed
+    /// by the §19.5.H failed-threat escalation aversion (Iteration 169): an
+    /// agent whose culture forbids violence hesitates before escalating a
+    /// failed threat.
+    ///
+    /// ZERO when no taboo matches — the identity-at-zero contract. Pure,
+    /// no RNG.
+    pub fn taboo_violation_cost_sum(&self, change_description: &str) -> Fixed {
+        self.tabo_violated_by(change_description)
+            .iter()
+            .map(|t| t.violation_cost())
+            .fold(Fixed::ZERO, |acc, c| acc + c)
+    }
+
     /// Add a taboo and reinforce existing ones that overlap.
     pub fn add_taboo(&mut self, taboo: Taboo) {
         // Check for overlapping taboos
@@ -681,5 +701,31 @@ mod tests {
                 > seeded.taboo_violation_cost_for("violence"),
             "higher traditionalism must raise the sacred-severity term"
         );
+    }
+
+    #[test]
+    fn taboo_violation_cost_sum_sums_every_matching_taboo() {
+        // §8.1.18 (Iteration 169): the summed-cost aggregation over
+        // `tabo_violated_by` — the total cultural gravity of a change,
+        // not just the single strongest prohibition.
+        let cc = CulturalCognition::default();
+        assert_eq!(cc.taboo_violation_cost_sum("violence"), Fixed::ZERO);
+
+        let mut seeded = CulturalCognition::default();
+        seeded.seed_village_taboos(Fixed::from_f64(0.5));
+        // Single match → exactly that taboo's cost (Violence 0.45 × 0.75
+        // = 0.3375, secular — no sacred boost).
+        assert_eq!(
+            seeded.taboo_violation_cost_sum("violence"),
+            Fixed::from_f64(0.3375)
+        );
+        // Multi-match → the SUM across the whole forbidden set (Violence
+        // 0.3375 + Theft 0.5 × 0.75 = 0.375 → 0.7125).
+        assert_eq!(
+            seeded.taboo_violation_cost_sum("violence and theft"),
+            Fixed::from_f64(0.7125)
+        );
+        // Non-match → zero (ONE-SIDED identity).
+        assert_eq!(seeded.taboo_violation_cost_sum("farming"), Fixed::ZERO);
     }
 }

@@ -188,6 +188,22 @@ const BELIEF_CULTURAL_RATE: Fixed = Fixed::from_raw(3000); // 0.3
 /// Belief-update cultural dampening floor — evidence is damped but never
 /// fully silenced (a maximally conservative agent still updates, slowly).
 const BELIEF_CULTURAL_FLOOR: Fixed = Fixed::from_raw(8000); // 0.8
+/// §8.1.18 (Iteration 169): violence-taboo escalation aversion rate — the
+/// summed `violation_cost` of every taboo the "violence" description
+/// violates (exactly the seeded Violence taboo, non-sacred, mean cost
+/// ~0.34 at the traditionalism midpoint) scales the §19.5.H failed-threat
+/// escalation chance as (1 − cost × this). The mean cost → factor ~0.966
+/// with the shipped rate: a ~3% standing decision suppression that probe-
+/// pins to a ~15% violence reduction at the hub (feedback-amplified) while
+/// keeping the escalation-knob liveness delta POSITIVE (the Iter-128
+/// lesson: the chain's violence→stress feedback multiplies beyond face
+/// value — the 0.3 probe flipped the knob delta −543, so 0.1 is the
+/// calibrated sweet spot).
+const VIOLENCE_TABOO_AVERSION_RATE: Fixed = Fixed::from_raw(1000); // 0.1
+/// Violence-taboo aversion floor — the cultural brake never fully erases
+/// the escalation chance (a maximally taboo-bound agent still escalates,
+/// rarely).
+const VIOLENCE_TABOO_AVERSION_FLOOR: Fixed = Fixed::from_raw(5000); // 0.5
 
 // ── Patronage creation constants (§22b) ────────────────────────────
 /// Maximum clients a single patron may acquire per duodeca cycle.
@@ -1846,6 +1862,27 @@ impl Simulation {
                 .hypocrisy_factor(name)
                 .to_f64()
         });
+        // §8.1.18 (Iteration 169): the Violence taboo is a PRE-COMMITMENT
+        // cultural brake — an agent whose culture forbids violence hesitates
+        // before escalating a failed threat ("my people forbid this"). The
+        // taboo-resolution helper `tabo_violated_by("violence")` finds the
+        // forbidden set (case-insensitive substring on description); the
+        // summed violation_cost scales the chance via the ONE-SIDED
+        // aversion factor (1 − cost × rate, floored). This is the
+        // behavioral counterpoint to the Iter-167 shame boost on the same
+        // decision family: Iter-167 amplifies the shame AFTER a violent act,
+        // this dampens the willingness BEFORE it. Deterministic, zero new
+        // RNG — the draw below stays unconditional (same stream position),
+        // so replay determinism holds at every aversion value — only the
+        // comparison threshold changes. Identity at zero: taboo-free agents
+        // (pre-Iter-165 snapshot restores) keep the legacy chance exactly.
+        let violence_taboo_cost = self.agents[from_idx]
+            .cultural_cognition
+            .taboo_violation_cost_sum("violence");
+        let taboo_aversion = (Fixed::ONE
+            - violence_taboo_cost * VIOLENCE_TABOO_AVERSION_RATE)
+            .max(VIOLENCE_TABOO_AVERSION_FLOOR)
+            .clamp_01();
         // §10.2 (Iteration 102): Relational dominance feeds the escalation
         // decision. `power_balance` (directed, from→to) was updated on the
         // daily boundary (tick % 144) but had zero consumers — a write-only
@@ -2037,6 +2074,7 @@ impl Simulation {
         let chance = self.escalation_chance(from_idx, to_idx)
             * (1.0 - resistance)
             * (1.0 - hypocrisy)
+            * taboo_aversion.to_f64()
             * dominance_scale
             * trust_factor.to_f64()
             * obligation_factor.to_f64()
