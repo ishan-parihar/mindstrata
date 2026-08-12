@@ -12,6 +12,23 @@ use mindstrata_core::fixed::Fixed;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
+/// Basal parasympathetic floor for stress recovery (Iteration 172, Phase 5
+/// "balance hormonal effects").
+///
+/// Recovery = `recovery_rate × tone`; the nervous `parasympathetic_tone`
+/// input drains toward 0 under sustained threat (safety = 1 − fear − anger
+/// ≈ 0 in calibrated windows), which zeroed recovery at ANY rate and pinned
+/// the stress axis at 1.0 for the majority of agents (probe-pinned: 8/12
+/// agents at 1.0 with chronic_load 0.75–1.0 across every seed × horizon).
+/// The floor guarantees a basal recovery even at full sympathetic
+/// activation — a floor of 0.3 with the 0.10 recovery rate restores a
+/// producer-driven equilibrium (stress mean 0.42–0.58 with real per-agent
+/// spread, stable to 10K ticks).
+pub const STRESS_RECOVERY_TONE_FLOOR: f64 = 0.3;
+/// [`STRESS_RECOVERY_TONE_FLOOR`] pre-converted to [`Fixed`] (hoisted out of
+/// the per-tick per-agent `update` hot path; 0.3 × 10_000 = 3_000).
+pub const STRESS_RECOVERY_TONE_FLOOR_FIXED: Fixed = Fixed::from_raw(3_000);
+
 /// Stress axis (cortisol-like).
 /// Raised by: threat, pain, hunger, sleep debt, humiliation, uncertainty.
 /// Effects: increases fear/anger, reduces planning, increases heuristic bias.
@@ -45,9 +62,32 @@ impl StressAxis {
         chronic_rate: Fixed,
         chronic_recovery: Fixed,
     ) {
-        let recovery = recovery_rate * parasympathetic_tone;
+        // Iteration 172 (Phase 5 "balance hormonal effects"): the recovery
+        // term is `rate × tone`, and under sustained threat the nervous
+        // parasympathetic tone drains toward 0 (safety = 1 − fear − anger is
+        // near 0 in calibrated windows). A zero tone zeroes recovery at ANY
+        // rate, so the stress axis pinned at 1.0 for the majority of agents
+        // (probe: 8/12 pinned with chronic_load 0.75–1.0, every window) — a
+        // system dominating unnaturally, exactly what the Phase 5 acceptance
+        // criteria forbid. The floor guarantees a basal recovery floor even
+        // at full sympathetic activation, restoring producer-driven
+        // equilibrium (calibrated 0.3 floor + 0.10 recovery: stress mean
+        // 0.42–0.58 with real per-agent spread, stable to 10K ticks).
+        let tone = parasympathetic_tone.max(STRESS_RECOVERY_TONE_FLOOR_FIXED);
+        let recovery = recovery_rate * tone;
         let acute_delta = acute_input * self.reactivity;
         let chronic_delta = self.chronic_load * Fixed::from_f64(0.1);
+        if std::env::var("MS_TRACE_STRESS").is_ok() {
+            eprintln!(
+                "STRESS level={} +acute={} +chronic={} -recov={} (rate={} tone={})",
+                self.level.to_f64(),
+                acute_delta.to_f64(),
+                chronic_delta.to_f64(),
+                recovery.to_f64(),
+                recovery_rate.to_f64(),
+                parasympathetic_tone.to_f64()
+            );
+        }
         self.level = (self.level + acute_delta + chronic_delta - recovery).clamp_01();
         // Chronic load accumulates slowly from high acute stress
         if self.level > Fixed::from_f64(0.6) {
@@ -282,6 +322,47 @@ mod tests {
             Fixed::from_f64(0.0005),
         );
         assert!(axis.level > Fixed::from_f64(0.2));
+    }
+
+    #[test]
+    fn stress_recovers_even_when_tone_is_zero_via_floor() {
+        // Iteration 172 regression: before the tone floor, a zero tone
+        // zeroed recovery at ANY rate — recovery = rate × 0 = 0 — so a
+        // saturated stress axis was permanently pinned at 1.0 (the nervous
+        // tone drains to 0 under sustained threat in calibrated windows).
+        // With the floor, even a zero tone yields a basal recovery of
+        // `rate × STRESS_RECOVERY_TONE_FLOOR`, so a clean axis (no chronic
+        // load) converges to a stable equilibrium BELOW 1.0 instead of
+        // saturating. (The saturated sub-population — chronic_load ~1.0 —
+        // stays pinned until its chronic load decays; chronic_recovery
+        // 0.0005/tick is the pacing bottleneck there, and the residual
+        // bimodality is documented in the integration test and changelog.)
+        //
+        // Equilibrium with chronic_load = 0: level' = level + 0.02×0.5 −
+        // 0.10×0.3 = level − 0.01/tick → drains to 0. Without the floor it
+        // is +0.01/tick → climbs to 1.0 and pins.
+        let mut axis = StressAxis {
+            level: Fixed::from_f64(0.5),
+            reactivity: Fixed::from_f64(0.5),
+            chronic_load: Fixed::ZERO,
+        };
+        let acute = Fixed::from_f64(0.02);
+        let zero_tone = Fixed::ZERO;
+        let recovery_rate = Fixed::from_f64(0.10);
+        for _ in 0..60 {
+            axis.update(
+                acute,
+                zero_tone,
+                recovery_rate,
+                Fixed::from_f64(0.001),
+                Fixed::from_f64(0.0005),
+            );
+        }
+        let after = axis.level.to_f64();
+        assert!(
+            after < 0.2,
+            "the tone floor must provide basal recovery at zero tone (got {after})"
+        );
     }
 
     #[test]

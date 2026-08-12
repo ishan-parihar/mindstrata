@@ -9597,7 +9597,20 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         // [28790, 40750, 63990, 73530], 4 live children, 4 marriage
         // records, children_born 4, population 16 — every birth through
         // the pregnancy path, so the record chain holds exactly).
-        vec![28790, 40750, 63990, 73530],
+        // Iteration 172 recalibration (Phase 5 "balance hormonal effects"):
+        // the STRESS_RECOVERY_TONE_FLOOR fix (0.3 floor + recovery 0.10)
+        // breaks the stress-axis saturation (probe-pinned 8/12 agents at
+        // 1.0 → 0.42–0.58 mean). The cascade flows through every stress
+        // consumer — courtship/marriage pacing (via derived health/energy,
+        // arousal, psychopathology) — and re-paces the seed-46 trajectory
+        // DOWN to TWO births in the 100K window (probe-pinned [28290,
+        // 63990], 2 live children, 2 marriage records, children_born 2,
+        // stress_mean@100K 0.71; a 6-seed sweep pinned seeds 1/7/42/50/99
+        // at 0–1 births, so seed 46 remains the strongest liveness seed).
+        // The pipeline's end-to-end contract — pregnancy-path birth →
+        // ChildBorn event → parentage → marriage record → children_born —
+        // holds intact on the 2-chain.
+        vec![28290, 63990],
         "seed-46 100K world must deliver exactly the probed births"
     );
     for t in &birth_ticks {
@@ -9608,8 +9621,8 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
     }
     assert_eq!(
         late.agents.iter().filter(|a| a.parent_a.is_some()).count(),
-        4,
-        "all 4 live children must carry parentage at 100K"
+        2,
+        "all 2 live children must carry parentage at 100K"
     );
     let marriage_children: usize = late
         .marriage_registry
@@ -9618,16 +9631,16 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         .map(|m| m.children.len())
         .sum();
     assert_eq!(
-        marriage_children, 4,
-        "all 4 births must be recorded in the mothers' active marriages"
+        marriage_children, 2,
+        "all 2 births must be recorded in the mothers' active marriages"
     );
     assert_eq!(
         late.agents
             .iter()
             .map(|a| a.embodied.reproductive.children_born)
             .sum::<u32>(),
-        4,
-        "all 4 pregnancy-path deliveries must increment children_born"
+        2,
+        "all 2 pregnancy-path deliveries must increment children_born"
     );
     assert_eq!(
         late.agents
@@ -13562,4 +13575,46 @@ fn violence_taboo_aversion_suppresses_escalation_differentially() {
         boosted_violence < base_violence,
         "the maxed Violence taboo must suppress escalation: boosted {boosted_violence} < base {base_violence}"
     );
+}
+
+#[test]
+fn endocrine_stress_axis_no_longer_saturates_in_calibrated_windows() {
+    // Iteration 172 (Phase 5 "balance hormonal effects"): before the
+    // STRESS_RECOVERY_TONE_FLOOR fix, the stress axis pinned at 1.0 for the
+    // majority of agents in EVERY calibrated window (probe: 8/12 agents at
+    // 1.0 with chronic_load 0.75–1.0 across seeds 42/1/7/99 × 2000–10000
+    // ticks) because the nervous parasympathetic tone — the recovery
+    // multiplier's input — drained to 0 under threat, zeroing recovery at
+    // any rate. The floor (0.3) + recovery 0.10 restores a producer-driven
+    // equilibrium. This test pins the FIX's observable contract: the mean
+    // stress is well below saturation AND the population differentiates
+    // (not every agent pinned at 1.0).
+    for seed in [42u64, 1u64, 7u64, 99u64] {
+        let sim = crate::test_helpers::run_sim(seed, 2000);
+        let n = sim.agents.len();
+        let mut sum = 0.0f64;
+        let mut at_cap = 0usize;
+        let mut max_s = 0.0f64;
+        for a in &sim.agents {
+            let s = a.embodied.endocrine.stress.level.to_f64();
+            sum += s;
+            max_s = max_s.max(s);
+            if s >= 0.999 {
+                at_cap += 1;
+            }
+        }
+        let mean = sum / n as f64;
+        assert!(
+            mean < 0.75,
+            "stress mean must not saturate (seed {seed}: mean {mean})"
+        );
+        assert!(
+            at_cap < n,
+            "the population must differentiate (seed {seed}: {at_cap}/{n} pinned at 1.0)"
+        );
+        assert!(
+            max_s > 0.5,
+            "stress must still be live (seed {seed}: max {max_s})"
+        );
+    }
 }

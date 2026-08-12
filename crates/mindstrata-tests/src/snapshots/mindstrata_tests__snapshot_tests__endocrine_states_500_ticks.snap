@@ -5,22 +5,22 @@ expression: endocrine_states
 [
     EndocrineSnapshot {
         name: "Anna",
-        stress: 1.0,
+        stress: 0.0,
         bonding: 0.3537,
         dominance: 0.2827,
-        fertility: 0.4093,
+        fertility: 0.7653,
         metabolic_energy: 1.0,
-        arousal: 1.0,
+        arousal: 0.3831,
         growth_capacity: 0.6,
     },
     EndocrineSnapshot {
         name: "Bran",
-        stress: 1.0,
+        stress: 0.0,
         bonding: 0.489,
         dominance: 0.5202,
-        fertility: 0.4859,
+        fertility: 0.8942,
         metabolic_energy: 1.0,
-        arousal: 1.0,
+        arousal: 0.3707,
         growth_capacity: 0.6,
     },
     EndocrineSnapshot {

@@ -442,8 +442,11 @@ impl Default for SimParameters {
             market_initial_grain_price: Fixed::from_f64(5.0),
             market_initial_water_price: Fixed::from_f64(2.0),
             market_default_price: Fixed::from_f64(10.0),
-            // Endocrine (Phase 5 tuning)
-            endocrine_stress_recovery: Fixed::from_f64(0.05),
+            // Endocrine (Phase 5 tuning). 0.10 pairs with the Iter-172
+            // STRESS_RECOVERY_TONE_FLOOR (0.3): recovery = 0.10 × max(tone,
+            // 0.3) keeps the stress axis in a differentiated equilibrium
+            // (0.42–0.58 mean) instead of pinning at 1.0.
+            endocrine_stress_recovery: Fixed::from_f64(0.10),
             endocrine_stress_chronic_rate: Fixed::from_f64(0.001),
             endocrine_stress_chronic_recovery: Fixed::from_f64(0.0005),
             endocrine_bonding_recovery: Fixed::from_f64(0.02),
