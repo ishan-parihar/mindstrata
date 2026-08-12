@@ -13038,3 +13038,193 @@ fn content_pack_validation_rejects_duplicate_ids_before_apply() {
         "duplicate norm ids must be rejected: {err}"
     );
 }
+
+// ── §8.1.18 / §10.4 (Iteration 165): taboo system — seeding + taboo_penalty ──
+
+/// §8.1.18 (Iteration 165): every agent is born with the shared village
+/// taboo set (previously write-only dead code — empty vecs), scaled by
+/// traditionalism, deterministically (same seed → identical profiles).
+#[test]
+fn taboo_set_seeded_at_populate_and_is_deterministic() {
+    let mut sim = Simulation::new(SimConfig {
+        seed: 42,
+        max_ticks: 1,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    });
+    sim.populate();
+    assert!(
+        sim.agents.iter().all(|a| !a.cultural_cognition.taboos.is_empty()),
+        "every agent must hold the seeded village taboo set"
+    );
+    assert!(
+        sim.agents
+            .iter()
+            .all(|a| a.cultural_cognition.taboos.len() >= 7),
+        "the shared set carries at least the 7 seeded taboos"
+    );
+    // Determinism: identical seed → identical taboo profiles.
+    let mut sim2 = Simulation::new(SimConfig {
+        seed: 42,
+        max_ticks: 1,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    });
+    sim2.populate();
+    for (a, b) in sim.agents.iter().zip(sim2.agents.iter()) {
+        assert_eq!(a.cultural_cognition.taboos.len(), b.cultural_cognition.taboos.len());
+        for (ta, tb) in a
+            .cultural_cognition
+            .taboos
+            .iter()
+            .zip(b.cultural_cognition.taboos.iter())
+        {
+            assert_eq!(ta.description, tb.description);
+            assert_eq!(ta.strength, tb.strength);
+            assert_eq!(ta.sacred, tb.sacred);
+        }
+    }
+    // Traditional agents hold strictly stronger taboos than open agents.
+    let trad = sim
+        .agents
+        .iter()
+        .max_by_key(|a| a.personality.traditionalism.to_raw())
+        .expect("agents exist");
+    let open = sim
+        .agents
+        .iter()
+        .min_by_key(|a| a.personality.traditionalism.to_raw())
+        .expect("agents exist");
+    assert!(
+        trad.cultural_cognition.max_taboo_strength()
+            > open.cultural_cognition.max_taboo_strength(),
+        "traditionalism must scale taboo strength"
+    );
+}
+
+/// §8.1.18/§10.4 (Iteration 165): the daily fold mirrors each agent's
+/// strongest taboo into `AttractionModel.taboo_penalty` (the RWR row-#11
+/// consumer), and the channel differentiates by traditionalism.
+#[test]
+fn taboo_penalty_folded_daily_and_differentiates_by_traditionalism() {
+    let mut sim = Simulation::new(SimConfig {
+        seed: 42,
+        max_ticks: 400,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    });
+    sim.populate();
+    sim.run(400); // well past the daily cadence (144) — the fold must have fired
+    let n = sim.agents.len();
+    assert!(n >= 4, "population must be large enough to differentiate");
+    let mut pairs: Vec<(f64, f64)> = sim
+        .agents
+        .iter()
+        .map(|a| {
+            let trad = a.personality.traditionalism.to_f64();
+            let max_taboo = a.cultural_cognition.max_taboo_strength().to_f64();
+            let penalty = a.attraction.taboo_penalty.to_f64();
+            (trad, penalty, max_taboo)
+        })
+        .map(|(trad, penalty, max_taboo)| {
+            // The fold mirrors the max taboo strength exactly (clamped).
+            assert!(
+                (penalty - max_taboo).abs() < 0.0001,
+                "taboo_penalty must mirror max_taboo_strength: penalty={penalty:.4} max={max_taboo:.4}"
+            );
+            (trad, penalty)
+        })
+        .collect();
+    pairs.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    // Monotonic link: the most traditional agent carries the largest penalty.
+    let most_trad = pairs.last().unwrap();
+    let least_trad = pairs.first().unwrap();
+    assert!(
+        most_trad.1 > least_trad.1,
+        "traditional agents must carry a larger taboo penalty: trad={:.3} p={:.4} vs trad={:.3} p={:.4}",
+        most_trad.0,
+        most_trad.1,
+        least_trad.0,
+        least_trad.1
+    );
+    assert!(
+        most_trad.1 > 0.55,
+        "the most traditional agent's taboo strength must be live (> 0.55): {:.4}",
+        most_trad.1
+    );
+}
+
+/// §8.1.18/§10.4 (Iteration 165): the identity-at-zero restore contract — an
+/// agent whose taboo vec is empty (the pre-Iter-165 snapshot shape, where
+/// `taboo_penalty` deserializes to its serde default of 0) keeps the channel
+/// pinned at exactly 0 through the daily fold, so `total_attraction()` is
+/// byte-identical to the pre-Iter-165 surface for such agents.
+#[test]
+fn taboo_free_agents_keep_penalty_pinned_at_zero() {
+    let mut sim = Simulation::new(SimConfig {
+        seed: 7,
+        max_ticks: 1440,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    });
+    sim.populate();
+    // Strip every agent's taboos (simulating a pre-Iter-165 snapshot) and
+    // record the attraction surface over a full daily cycle.
+    for a in &mut sim.agents {
+        a.cultural_cognition.taboos.clear();
+        a.attraction.taboo_penalty = mindstrata_core::fixed::Fixed::ZERO;
+    }
+    sim.run(1440);
+    let stripped_max: f64 = sim
+        .agents
+        .iter()
+        .map(|a| a.attraction.total_attraction().to_f64())
+        .fold(0.0f64, f64::max);
+    assert!(
+        sim.agents
+            .iter()
+            .all(|a| a.attraction.taboo_penalty.to_f64() == 0.0),
+        "an agent with no taboos must keep taboo_penalty at exactly 0"
+    );
+    // Sanity: a healthy world still produces attraction.
+    assert!(stripped_max > 0.3, "stripped world must stay healthy");
+}
+
+/// §8.1.18/§10.4 (Iteration 165): an old-format AttractionModel (serialized
+/// before `taboo_penalty` existed) must deserialize with the channel at its
+/// serde default of 0 — the save-compat contract that keeps pre-Iter-165
+/// snapshots byte-neutral on `total_attraction()`.
+#[test]
+fn old_attraction_model_without_taboo_penalty_restores_default() {
+    // Fixed serializes as raw scaled i64 (SCALE = 10_000). This JSON is the
+    // exact pre-Iter-165 shape — no `taboo_penalty` key.
+    let old_json = r#"{
+        "physical_attraction": 5000,
+        "personality_attraction": 5000,
+        "status_attraction": 0,
+        "moral_attraction": 5000,
+        "familiarity": 0,
+        "reciprocity": 0,
+        "social_approval": 5000,
+        "kinship_penalty": 0,
+        "moral_disgust": 0,
+        "social_cost": 0,
+        "envy_cost": 0,
+        "attachment_resonance": 5000
+    }"#;
+    let restored: mindstrata_sim::social::attraction::AttractionModel =
+        serde_json::from_str(old_json).expect("old saves must deserialize");
+    assert_eq!(
+        restored.taboo_penalty.to_f64(),
+        0.0,
+        "missing taboo_penalty must restore to the serde default of 0"
+    );
+}

@@ -1209,6 +1209,26 @@ impl Simulation {
             }
         }
 
+        // §8.1.18 (Iteration 165): Seed the shared village taboo set into
+        // every agent's cultural cognition, scaled by traditionalism. This is
+        // the taboo layer's first production writer — before Iteration 165
+        // every agent held an empty `taboos` vec and the §8.1.18 taboo
+        // machinery (Taboo, violation_cost, tabo_violated_by,
+        // change_resistance) was write-only dead code with zero consumers.
+        // The set is deterministic (a pure function of traditionalism, no
+        // RNG), so identical seeds produce identical taboo profiles. The
+        // daily pass below then folds the strongest taboo
+        // (`max_taboo_strength`) into `AttractionModel.taboo_penalty` (the
+        // RWR row-#11 consumer). Honest scope: only `max_taboo_strength`
+        // gained a production consumer; `violation_cost`/`tabo_violated_by`/
+        // `change_resistance` remain consumer-free (unit-tested only) —
+        // seeded data now exists for a future behavioral wiring.
+        for agent in &mut self.agents {
+            agent
+                .cultural_cognition
+                .seed_village_taboos(agent.personality.traditionalism);
+        }
+
         // §12: Assign agents to institutional roles based on personality traits
         // Elder: high conscientiousness + high agreeableness
         // Priest: high traditionalism + high agreeableness
@@ -3422,6 +3442,24 @@ impl Simulation {
                 // zero-blast).
                 let envy = emotions[i].envy;
                 agent.attraction.update_envy_cost(envy);
+                // §8.1.18/§10.4 (Iteration 165): the taboo-restraint channel —
+                // the strongest internalized taboo in the agent's cultural
+                // cognition (`CulturalCognition::max_taboo_strength`) becomes
+                // a standing cost on courtship pursuit (the RWR row-#11
+                // `taboo_penalty` consumer, and the §8.1.18 taboo layer's
+                // first production read). Traditional agents hold stronger
+                // seeded taboos (populate scales strength by traditionalism),
+                // so the channel differentiates: the most taboo-bound agents
+                // court less readily. Deterministic, no RNG; identity at zero
+                // for taboo-free agents (pre-Iter-165 snapshot restores).
+                // Daily cadence: taboo strength only changes on the daily
+                // cultural-cognition tick_update decay, so a daily fold is
+                // the honest cadence (mirrors the kinship_penalty fold's
+                // daily pattern below).
+                if phases.is_daily {
+                    let max_taboo = agent.cultural_cognition.max_taboo_strength();
+                    agent.attraction.update_taboo_penalty(max_taboo);
+                }
                 // §10.4 (Iteration 79): the last unwired attraction channel —
                 // kinship_penalty, the soft taboo against courting within the
                 // local pool. Derived as the max transitive genetic

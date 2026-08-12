@@ -263,6 +263,68 @@ impl CulturalCognition {
         }
     }
 
+    /// §8.1.18 (Iteration 165): Seed the shared village taboo set into this
+    /// agent's cultural cognition, with each taboo's strength scaled by the
+    /// agent's traditionalism — traditional agents internalize prohibitions
+    /// more strongly.
+    ///
+    /// The set mirrors the `specs/culture/taboos_v2.ron` categories (Theft,
+    /// Violence, Disrespect, Incest, Sacrilege, Heresy, Adultery, Lying,
+    /// BrokenOath) — a compact, culturally grounded subset. Deterministic:
+    /// no RNG, a pure function of `traditionalism`, so every run of a given
+    /// seed produces an identical taboo profile (replay-safe). This is the
+    /// system's first production writer: before Iteration 165, agents were
+    /// born with empty `taboos` vecs and the §8.1.18 taboo layer
+    /// (`Taboo`, `violation_cost`, `tabo_violated_by`, `change_resistance`)
+    /// was write-only dead code — no seeding, no consumers. Honest scope:
+    /// `max_taboo_strength` is the only production READ today (the §10.4
+    /// `taboo_penalty` channel); the other taboo helpers remain
+    /// consumer-free (unit-tested only), now with real seeded data.
+    pub fn seed_village_taboos(&mut self, traditionalism: Fixed) {
+        // (description, base strength, sacred) — base strengths chosen so
+        // the traditionalism-scaled profile lands in a live-but-modest band:
+        // the strongest prohibition (Incest, sacred) sits at ~0.35–0.70 for
+        // the traditionalism range [0, 1], a real but non-destructive
+        // restraint on `total_attraction()`.
+        const VILLAGE_TABOOS: &[(&str, f64, bool)] = &[
+            ("Incest", 0.7, true),
+            ("Adultery", 0.6, true),
+            ("Sacrilege", 0.55, true),
+            ("Theft", 0.5, false),
+            ("Violence", 0.45, false),
+            ("Lying", 0.4, false),
+            ("Disrespect", 0.35, false),
+        ];
+        for (description, base, sacred) in VILLAGE_TABOOS {
+            // Strength = base × (0.5 + 0.5 × traditionalism) → [0.5×base, base].
+            let scale = Fixed::from_f64(0.5) + Fixed::from_f64(0.5) * traditionalism;
+            let strength = (Fixed::from_f64(*base) * scale).clamp_01();
+            // `add_taboo` deduplicates by description (reinforcing instead of
+            // duplicating): re-seeding never grows the vec — but note the
+            // dedupe path calls `reinforce()` (+0.005 strength, +1 social
+            // reinforcement), so re-seeding is len-stable, NOT
+            // strength-idempotent. Production seeds exactly once per agent at
+            // populate, so the seeded strengths above are exact in every run.
+            self.add_taboo(Taboo::new((*description).to_string(), strength, *sacred));
+        }
+    }
+
+    /// §8.1.18 (Iteration 165): The strongest taboo the agent holds — the
+    /// raw prohibition strength (deliberately excluding the `violation_cost`
+    /// sacred boost, which is a violation-*reaction* term, not a standing
+    /// restraint). Consumed by the §10.4 `taboo_penalty` courtship channel:
+    /// an agent whose culture forbids more, courts more hesitantly.
+    ///
+    /// Zero when the agent holds no taboos — the identity-at-zero contract
+    /// that keeps pre-Iteration-165 snapshots (empty taboo vecs) byte-neutral
+    /// on `total_attraction()`. Pure, no RNG.
+    pub fn max_taboo_strength(&self) -> Fixed {
+        self.taboos
+            .iter()
+            .map(|t| t.strength)
+            .fold(Fixed::ZERO, Fixed::max)
+    }
+
     /// Add a taboo and reinforce existing ones that overlap.
     pub fn add_taboo(&mut self, taboo: Taboo) {
         // Check for overlapping taboos
@@ -443,5 +505,68 @@ mod tests {
         let cc = CulturalCognition::from_personality(Fixed::from_f64(0.8), Fixed::from_f64(0.2));
         assert_eq!(cc.conservatism, Fixed::from_f64(0.8));
         assert_eq!(cc.syncretism_openness, Fixed::from_f64(0.2));
+    }
+
+    /// §8.1.18 (Iteration 165): seeding a shared village taboo set fills the
+    /// previously-empty taboos vec, scales strength by traditionalism, and is
+    /// deterministic (pure function of traditionalism — replay-safe).
+    #[test]
+    fn seed_village_taboos_populates_scales_and_is_deterministic() {
+        let mut cc = CulturalCognition::default();
+        assert!(cc.taboos.is_empty(), "pre-Iter-165 agents hold no taboos");
+        cc.seed_village_taboos(Fixed::from_f64(0.5));
+        assert_eq!(cc.taboos.len(), 7, "the shared village set has 7 taboos");
+        // Sacred Incest is the strongest: 0.7 × (0.5 + 0.5×0.5) = 0.525.
+        let incest = cc
+            .taboos
+            .iter()
+            .find(|t| t.description == "Incest")
+            .expect("Incest is part of the village set");
+        assert!(incest.sacred);
+        assert_eq!(incest.strength, Fixed::from_f64(0.525));
+        // Determinism: identical traditionalism → identical profile.
+        let mut cc2 = CulturalCognition::default();
+        cc2.seed_village_taboos(Fixed::from_f64(0.5));
+        assert_eq!(cc.taboos.len(), cc2.taboos.len());
+        for (a, b) in cc.taboos.iter().zip(cc2.taboos.iter()) {
+            assert_eq!(a.description, b.description);
+            assert_eq!(a.strength, b.strength);
+            assert_eq!(a.sacred, b.sacred);
+        }
+        // Traditional agents internalize taboos more strongly.
+        let mut trad = CulturalCognition::default();
+        trad.seed_village_taboos(Fixed::ONE);
+        let mut open = CulturalCognition::default();
+        open.seed_village_taboos(Fixed::ZERO);
+        assert!(
+            trad.max_taboo_strength() > open.max_taboo_strength(),
+            "traditionalism must scale taboo strength"
+        );
+        // Len-stability: re-seeding dedupes by description (never grows the
+        // vec) — though it reinforces strength via `add_taboo`'s dedupe path,
+        // so only the length is stable, not the strengths (production seeds
+        // once per agent, so this is a defensive property).
+        cc.seed_village_taboos(Fixed::from_f64(0.5));
+        assert_eq!(cc.taboos.len(), 7, "re-seed must not duplicate");
+        // The strongest taboo is unchanged by a re-seed in strength ORDER —
+        // Incest (0.7 base) still dominates after reinforce's +0.005.
+        assert_eq!(cc.max_taboo_strength(), Fixed::from_f64(0.53));
+    }
+
+    /// §8.1.18 (Iteration 165): `max_taboo_strength` is the strongest raw
+    /// prohibition — zero for an empty vec (identity-at-zero, the
+    /// pre-Iter-165 snapshot contract).
+    #[test]
+    fn max_taboo_strength_is_zero_for_empty_and_picks_strongest() {
+        let cc = CulturalCognition::default();
+        assert_eq!(cc.max_taboo_strength(), Fixed::ZERO);
+        let mut seeded = CulturalCognition::default();
+        seeded.seed_village_taboos(Fixed::from_f64(0.5));
+        let max = seeded.max_taboo_strength();
+        assert_eq!(max, Fixed::from_f64(0.525), "Incest dominates at trad 0.5");
+        // Strengthening a different taboo moves the max.
+        let mut cc = CulturalCognition::default();
+        cc.add_taboo(Taboo::new("Theft".into(), Fixed::from_f64(0.8), false));
+        assert_eq!(cc.max_taboo_strength(), Fixed::from_f64(0.8));
     }
 }

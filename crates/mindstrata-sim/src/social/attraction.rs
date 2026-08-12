@@ -31,6 +31,22 @@ pub struct AttractionModel {
     /// tier, and the const-style weight is trivially tunable.
     #[serde(default)]
     pub envy_cost: Fixed,
+    /// §8.1.18/§10.4 (Iteration 165): the taboo restraint channel — the
+    /// strongest taboo the agent's cultural cognition holds (`CulturalCognition::max_taboo_strength`).
+    /// An agent whose culture forbids more courts more hesitantly: the
+    /// internalized prohibition raises the cost of romantic pursuit for the
+    /// *pursuer*, independent of any particular target. Weighs 0.1 (negative)
+    /// in `total_attraction()` — the same modest tier as `social_cost` (both
+    /// standing cultural/social costs rather than acute emotions). This is
+    /// the RWR row-#11 `taboo_penalty` consumer: the last unwired §10.4
+    /// attraction channel, and the first production consumer of the §8.1.18
+    /// taboo layer (previously write-only dead code). Deterministic, no RNG,
+    /// clamped; identity-at-zero for agents holding no taboos (pre-Iter-165
+    /// snapshots). Sized small so the D4 courtship gate (0.4) stays
+    /// reachable for low-taboo agents while genuinely differentiated profiles
+    /// feel the restraint.
+    #[serde(default)]
+    pub taboo_penalty: Fixed,
     pub attachment_resonance: Fixed,
 }
 
@@ -48,6 +64,7 @@ impl Default for AttractionModel {
             moral_disgust: Fixed::ZERO,
             social_cost: Fixed::ZERO,
             envy_cost: Fixed::ZERO,
+            taboo_penalty: Fixed::ZERO,
             attachment_resonance: Fixed::from_f64(0.5),
         }
     }
@@ -66,7 +83,8 @@ impl AttractionModel {
         let negative = self.kinship_penalty * Fixed::from_f64(0.3)
             + self.moral_disgust * Fixed::from_f64(0.2)
             + self.social_cost * Fixed::from_f64(0.1)
-            + self.envy_cost * Fixed::from_f64(0.2);
+            + self.envy_cost * Fixed::from_f64(0.2)
+            + self.taboo_penalty * Fixed::from_f64(0.1);
         (positive - negative).clamp_01()
     }
 
@@ -116,6 +134,15 @@ impl AttractionModel {
 
     pub fn update_moral_disgust(&mut self, disgust: Fixed) {
         self.moral_disgust = disgust.clamp_01();
+    }
+
+    /// §8.1.18/§10.4 (Iteration 165): mirror the agent's strongest internalized
+    /// taboo (the §8.1.18 `CulturalCognition` layer) into the courtship-cost
+    /// channel. Deterministic, no RNG, clamped. Identity at zero: an agent
+    /// with no taboos (or a pre-Iter-165 snapshot restore) keeps the channel
+    /// exactly 0, so `total_attraction()` is unchanged for taboo-free agents.
+    pub fn update_taboo_penalty(&mut self, max_taboo_strength: Fixed) {
+        self.taboo_penalty = max_taboo_strength.clamp_01();
     }
 
     /// §8.1.4 (Iteration 123): mirror the live `emotions.envy` into the
@@ -357,5 +384,77 @@ mod tests {
         let base = a.total_attraction();
         a.familiarity = Fixed::from_f64(0.8);
         assert!(a.total_attraction() > base);
+    }
+
+    /// §8.1.18/§10.4 (Iteration 165): `taboo_penalty` — the RWR row-#11
+    /// consumer. A full taboo restraint (1.0) at the 0.1 weight removes
+    /// exactly 0.1 from `total_attraction()` (mirroring the social_cost
+    /// tier); the channel mirrors the seeded strength and clamps.
+    #[test]
+    fn taboo_penalty_reduces_total_attraction() {
+        let mut a = AttractionModel::default();
+        let without = a.total_attraction();
+        a.update_taboo_penalty(Fixed::ONE);
+        assert!(
+            a.total_attraction() < without,
+            "taboo restraint must depress courtship interest"
+        );
+        assert_eq!(
+            without - a.total_attraction(),
+            Fixed::from_f64(0.1),
+            "taboo_penalty 1.0 × weight 0.1 must remove exactly 0.1"
+        );
+    }
+
+    /// §8.1.18/§10.4 (Iteration 165): `update_taboo_penalty` mirrors the
+    /// max taboo strength, clamps out-of-range inputs, and is identity at
+    /// zero (a taboo-free agent's channel stays exactly 0).
+    #[test]
+    fn update_taboo_penalty_mirrors_and_clamps() {
+        let mut a = AttractionModel::default();
+        a.update_taboo_penalty(Fixed::from_f64(0.525));
+        assert_eq!(a.taboo_penalty, Fixed::from_f64(0.525));
+        // Clamp bounds collapse to the unit interval.
+        a.update_taboo_penalty(Fixed::from_f64(1.5));
+        assert_eq!(a.taboo_penalty, Fixed::ONE);
+        a.update_taboo_penalty(Fixed::from_f64(-0.5));
+        assert_eq!(a.taboo_penalty, Fixed::ZERO);
+        // Identity at zero: the default model's channel is inert — a zero
+        // write leaves total_attraction exactly equal to a fresh default.
+        let b = AttractionModel::default();
+        let base = b.total_attraction();
+        let mut c = AttractionModel::default();
+        c.update_taboo_penalty(Fixed::ZERO);
+        assert_eq!(c.taboo_penalty, Fixed::ZERO);
+        assert_eq!(c.total_attraction(), base);
+    }
+
+    /// §8.1.18/§10.4 (Iteration 165): a mid-traditional profile (taboo
+    /// strength 0.525 → 0.0525 removal at the 0.1 weight) EXACTLY mirrors the
+    /// seeded strength's restraint — the channel is mathematically the
+    /// documented weight × strength, so a borderline profile feels the
+    /// restraint while a strong one (high familiarity + status + reciprocity)
+    /// still clears the D4 gate (probe-pinned: max total_attraction crosses
+    /// 0.4 in 6/10 seeds at 5000 ticks with the shipped sizing).
+    #[test]
+    fn taboo_restraint_removes_exact_weighted_strength() {
+        let mut a = AttractionModel::default();
+        // A mid profile: default base 0.30 + familiarity at the 0.8 cap.
+        for _ in 0..1400 {
+            a.update_familiarity(familiarity_quality_for(InteractionKind::Help));
+        }
+        a.update_status_attraction(Fixed::from_f64(0.4));
+        let before = a.total_attraction();
+        assert!(before > Fixed::from_f64(0.4)); // D4 reachable pre-restraint
+        a.update_taboo_penalty(Fixed::from_f64(0.525));
+        // The restraint is exactly weight × strength: 0.1 × 0.525 = 0.0525.
+        assert_eq!(before - a.total_attraction(), Fixed::from_f64(0.0525));
+        // A strong profile (reciprocity + attachment) keeps the gate open.
+        a.reciprocity = Fixed::from_f64(0.6);
+        a.attachment_resonance = Fixed::from_f64(0.8);
+        assert!(
+            a.total_attraction() > Fixed::from_f64(0.4),
+            "a strong profile must clear the D4 gate even under the restraint"
+        );
     }
 }
