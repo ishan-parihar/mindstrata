@@ -275,8 +275,17 @@ pub struct SimParameters {
     pub attachment_security_gain: Fixed,
 
     // ── Reproduction / Marriage (Phase 5 tuning) ───────────────
-    /// Conception probability multiplier per tick (scales base 0.05).
+    /// Conception probability multiplier (scales the per-period birth roll).
+    /// Iteration 175: now LIVE — `should_birth` multiplies its period
+    /// probability by this (identity at 1.0, so the envelope is preserved);
+    /// previously 100%-dead, so the fertility tuning knob was a no-op.
     pub reproduction_conception_multiplier: Fixed,
+    /// Base rate of a pair marrying on any given tick (the scalar in the
+    /// marriage_chance product: attraction * health * trust * rate * clan).
+    /// Iteration 175: now LIVE — the marriage block previously hardcoded
+    /// 0.01, so the marriage half of the "tune marriage/fertility" row was
+    /// untunable. Default 0.01 preserves the calibrated envelope exactly.
+    pub marriage_formation_rate: Fixed,
     /// Gestation rate multiplier (higher = faster pregnancy progression).
     pub reproduction_gestation_rate: Fixed,
     /// Stress suppression of fertility (0 = no effect, 1 = infertile under stress).
@@ -479,6 +488,7 @@ impl Default for SimParameters {
             // Meme / Cultural (Phase 5 tuning)
             // Reproduction / Marriage (Phase 5 tuning)
             reproduction_conception_multiplier: Fixed::from_f64(1.0),
+            marriage_formation_rate: Fixed::from_f64(0.01),
             reproduction_gestation_rate: Fixed::from_f64(1.0),
             reproduction_stress_suppression: Fixed::from_f64(0.3),
             reproduction_age_decline_rate: Fixed::from_f64(0.03),

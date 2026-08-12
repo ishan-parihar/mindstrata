@@ -154,6 +154,11 @@ pub fn can_have_children(age: f64, config: &DemographyConfig) -> bool {
 }
 
 /// Check if a birth should occur this tick.
+///
+/// `conception_multiplier` scales the period probability (identity at 1.0,
+/// so the calibrated envelope is preserved). Scaling only the comparison —
+/// never the RNG draw count — keeps the replay stream identical at the
+/// default multiplier.
 pub fn should_birth(
     partner_exists: bool,
     health: Fixed,
@@ -162,6 +167,7 @@ pub fn should_birth(
     ticks_elapsed: u64,
     config: &DemographyConfig,
     rng_value: Fixed, // 0..1 random value
+    conception_multiplier: f64, // Iteration 175: reproduction_conception_multiplier — identity at 1.0
 ) -> bool {
     if !partner_exists {
         return false;
@@ -184,7 +190,10 @@ pub fn should_birth(
     // ticks of any run (which made demography look frozen at the cap).
     // Computed in f64 to avoid Fixed's 4-decimal underflow on 1/35040.
     let elapsed_years = ticks_elapsed as f64 / config.ticks_per_year as f64;
-    let period_prob = effective_rate.to_f64() * elapsed_years;
+    // Clamp to 1.0: beyond that the roll is guaranteed anyway (rng < 1.0
+    // always holds), so this only makes the semantics explicit at high
+    // multiplier x long-window extremes — behavior-identical to unclamped.
+    let period_prob = (effective_rate.to_f64() * elapsed_years * conception_multiplier).min(1.0);
     rng_value.to_f64() < period_prob
 }
 
@@ -305,6 +314,7 @@ mod tests {
             10,
             &config,
             Fixed::ZERO,
+            1.0,
         ));
     }
 
@@ -326,6 +336,7 @@ mod tests {
             10,
             &config,
             Fixed::from_f64(0.025),
+            1.0,
         );
         let many_kids = should_birth(
             true,
@@ -335,6 +346,7 @@ mod tests {
             10,
             &config,
             Fixed::from_f64(0.025),
+            1.0,
         );
         assert!(no_kids, "0-kid couple should get a birth at 0.025 < 0.03");
         assert!(!many_kids, "5-kid couple should not at 0.025 > 0.02");
@@ -358,6 +370,7 @@ mod tests {
             10,
             &config,
             Fixed::from_f64(0.01),
+            1.0,
         );
         assert!(
             !too_low,
@@ -376,6 +389,42 @@ mod tests {
             10,
             &config,
             Fixed::ZERO,
+            1.0,
         ));
+    }
+
+    #[test]
+    fn conception_multiplier_scales_birth_probability() {
+        // Iteration 175: the previously-dead reproduction_conception_multiplier
+        // must be LIVE. Identity at 1.0 (zero blast by construction) and
+        // monotonic: a 4x multiplier flips a borderline roll.
+        let config = DemographyConfig {
+            ticks_per_year: 100,
+            ..DemographyConfig::default()
+        };
+        // 10 elapsed ticks = 0.1 year → no-kids rate 0.3*0.1 = 0.03.
+        // rng 0.09 sits above 0.03 (no birth at 1.0) but below 0.12 (birth at 4.0).
+        let base = should_birth(
+            true,
+            Fixed::ONE,
+            25.0,
+            0,
+            10,
+            &config,
+            Fixed::from_f64(0.09),
+            1.0,
+        );
+        let boosted = should_birth(
+            true,
+            Fixed::ONE,
+            25.0,
+            0,
+            10,
+            &config,
+            Fixed::from_f64(0.09),
+            4.0,
+        );
+        assert!(!base, "identity multiplier must not fire at rng 0.09 > 0.03");
+        assert!(boosted, "4x multiplier must fire at rng 0.09 < 0.12");
     }
 }

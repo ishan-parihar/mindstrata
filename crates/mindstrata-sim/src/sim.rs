@@ -7229,8 +7229,11 @@ impl Simulation {
                     } else {
                         Fixed::ONE
                     };
-                    let marriage_chance =
-                        attraction_score * health * trust * Fixed::from_f64(0.01) * clan_factor;
+                    let marriage_chance = attraction_score
+                        * health
+                        * trust
+                        * self.params.marriage_formation_rate
+                        * clan_factor;
                     let rng_val =
                         Fixed::from_f64(self.rng.get_mut(RngStream::Social).random::<f64>());
                     if rng_val < marriage_chance {
@@ -7840,6 +7843,7 @@ impl Simulation {
                         DEMOGRAPHY_TICK_INTERVAL,
                         &self.demography_config,
                         rng_val,
+                        self.params.reproduction_conception_multiplier.to_f64(),
                     );
                     if should {
                         // The female partner carries the pregnancy; a couple

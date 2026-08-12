@@ -13770,3 +13770,91 @@ fn meme_virality_scaling_parameter_is_live() {
         "scaling must drive virality: low {low_mean} vs high {high_mean}"
     );
 }
+
+// ── §7.2.6 / AP2 Phase 5: Reproduction multiplier tuning ────────────
+
+/// §7.2.6: the previously-dead `reproduction_conception_multiplier` must now
+/// be LIVE end-to-end — a 2x multiplier delivers strictly more births in the
+/// same 100K-tick seed-46 window. Iteration 175 wired it into
+/// `demography::should_birth` (the period probability is scaled by the
+/// multiplier; identity at 1.0 so the envelope is preserved). The RNG stream
+/// is untouched — the multiplier only changes the probability comparison, so
+/// the birth delta is attributable to the parameter (behavioral-delta
+/// contract). Probe-pinned: mult=1 → 2 births, mult=2 → 6 births.
+#[test]
+fn reproduction_conception_multiplier_parameter_is_live() {
+    let make = |mult: f64| {
+        let config = SimConfig {
+            seed: 46,
+            max_ticks: 100_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.params.reproduction_conception_multiplier = Fixed::from_f64(mult);
+        sim.populate();
+        sim.run(100_000);
+        sim
+    };
+    let count_births = |sim: &Simulation| {
+        sim.recent_events(10_000_000)
+            .iter()
+            .filter(|e| matches!(e, mindstrata_core::event::SimEvent::ChildBorn { .. }))
+            .count()
+    };
+    let baseline = count_births(&make(1.0));
+    let boosted = count_births(&make(2.0));
+    assert!(
+        baseline >= 1,
+        "the calibrated window must deliver baseline births: {baseline}"
+    );
+    assert!(
+        boosted > baseline,
+        "2x multiplier must deliver strictly more births: baseline {baseline} vs boosted {boosted}"
+    );
+}
+
+/// §19.5.F (Iteration 175): the marriage_formation_rate knob must be LIVE.
+/// The marriage block previously hardcoded a 0.01 scalar (untunable). The
+/// assertion is the deterministic first-marriage tick: until the first
+/// marriage the two runs share a byte-identical RNG stream, and a higher
+/// rate can only succeed at a tick <= the lower rate's first success.
+#[test]
+fn marriage_formation_rate_parameter_is_live() {
+    let make = |rate: f64| {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 5_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.params.marriage_formation_rate = Fixed::from_f64(rate);
+        sim.populate();
+        let mut first: Option<u64> = None;
+        for t in 0..5_000 {
+            let before = sim.marriage_registry.marriages.len();
+            sim.tick();
+            if first.is_none() && sim.marriage_registry.marriages.len() > before {
+                first = Some(t);
+            }
+        }
+        (sim.marriage_registry.marriages.len(), first)
+    };
+    let (low_count, low_first) = make(0.001);
+    let (high_count, high_first) = make(0.1);
+    let low_first = low_first.expect("low-rate run must eventually marry");
+    let high_first = high_first.expect("high-rate run must eventually marry");
+    assert!(
+        high_first <= low_first,
+        "high rate must first-marry at or before low rate: low@{low_first} high@{high_first}"
+    );
+    assert!(
+        high_count > low_count,
+        "high rate must produce more marriages in the window: low {low_count} vs high {high_count}"
+    );
+}
