@@ -92,7 +92,7 @@ ratatui = "0.29"
 crossterm = "0.28"
 
 # Rendering (PNG maps)
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png", "gif"] }
 
 # Testing
 insta = "1"

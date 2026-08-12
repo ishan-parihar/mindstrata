@@ -314,6 +314,73 @@ pub fn render_world_png(
     render_world_rgba(world, agents, cell_pixels).to_png()
 }
 
+/// One frame of a replay: the world state plus agent markers at a tick.
+///
+/// Borrows both inputs so the caller (typically the CLI) can sample the
+/// live simulation at a cadence without cloning state.
+#[derive(Debug, Clone, Copy)]
+pub struct ReplayFrame<'a> {
+    /// World state at this tick.
+    pub world: &'a World,
+    /// Agent markers at this tick.
+    pub agents: &'a [RenderAgent],
+}
+
+/// Render a sequence of world states as an animated GIF (AP2 Phase 5 —
+/// "add replay visualizations").
+///
+/// Each [`ReplayFrame`] becomes one GIF frame: terrain + sites + agent
+/// sprites, identical rendering to [`render_world_png`] per frame. The
+/// result is a **deterministic function of its inputs** — the GIF encoder
+/// is stateless per frame and the palette/frame order is fixed, so the
+/// same frame sequence always produces byte-identical output (verified by
+/// the determinism test below). Strictly read-only: no RNG, no wall-clock
+/// data, no tick-loop call site — calibrated windows are untouched.
+///
+/// `frame_delay_ms` is the display time per frame (milliseconds; the GIF
+/// format stores delays in 10ms units, so values are rounded down to the
+/// nearest 10ms). `repeat` controls the loop: `Repeat::Infinite` loops the
+/// animation (the default for replay viewers); pass `Repeat::Finite(0)` for
+/// a single play-through.
+///
+/// Returns the encoded GIF bytes. Fails only if the encoder rejects a
+/// frame (impossible for our internally-consistent buffers).
+pub fn render_replay_gif(
+    frames: &[ReplayFrame<'_>],
+    cell_pixels: u32,
+    frame_delay_ms: u32,
+    repeat: image::codecs::gif::Repeat,
+) -> Result<Vec<u8>, image::ImageError> {
+    use image::codecs::gif::GifEncoder;
+    use image::{Delay, Frame as GifFrame};
+
+    // GIF delays are in 10ms units; clamp to the format's legal range
+    // (1..=65535 centiseconds) so extreme inputs cannot produce an
+    // unencodable frame.
+    let delay_cs = (frame_delay_ms / 10).clamp(1, 65535);
+    let delay = Delay::from_numer_denom_ms(delay_cs * 10, 1);
+
+    let mut out = Vec::new();
+    {
+        let mut encoder = GifEncoder::new(&mut out);
+        encoder.set_repeat(repeat)?;
+        for frame in frames {
+            let img = render_world_rgba(frame.world, frame.agents, cell_pixels);
+            let rgba = RgbaImage::from_fn(img.width, img.height, |col, row| {
+                let i = (row as usize * img.width as usize + col as usize) * 4;
+                Rgba([
+                    img.rgba[i],
+                    img.rgba[i + 1],
+                    img.rgba[i + 2],
+                    img.rgba[i + 3],
+                ])
+            });
+            encoder.encode_frame(GifFrame::from_parts(rgba, 0, 0, delay))?;
+        }
+    }
+    Ok(out)
+}
+
 /// Locate the grid position of a site by its id, scanning site-bearing tiles.
 fn site_position(world: &World, site_id: EntityId) -> Option<(u32, u32)> {
     for y in 0..world.height {
@@ -475,5 +542,104 @@ mod tests {
             assert_eq!([px[0], px[1], px[2]], terrain_color(Terrain::Grassland));
             assert_eq!(px[3], 255, "all pixels must be opaque");
         }
+    }
+
+    /// A 3-frame replay over the same 2×2 fixture world with the agent
+    /// moving diagonally from cell (0,0) to cell (1,1) across frames — the
+    /// canonical replay shape. Both the world and each frame's agent array
+    /// are leaked so the frames borrow for 'static (test-only; the world is
+    /// immutable after construction).
+    fn replay_fixture() -> Vec<ReplayFrame<'static>> {
+        let world: &'static World = Box::leak(Box::new(fixture_world()));
+        // (0,0) → (0,1) → (1,1): every position on-grid in the 2×2 world.
+        let positions = [(0i32, 0i32), (0, 1), (1, 1)];
+        positions
+            .into_iter()
+            .map(|(x, y)| {
+                let agents: &'static [RenderAgent] =
+                    Box::leak(vec![RenderAgent::new(x, y, 0)].into_boxed_slice());
+                ReplayFrame { world, agents }
+            })
+            .collect()
+    }
+
+    /// Decode GIF bytes back into frames via the GifDecoder.
+    fn decode_gif(gif: &[u8]) -> Vec<image::Frame> {
+        use image::AnimationDecoder;
+        let decoder = image::codecs::gif::GifDecoder::new(std::io::Cursor::new(gif))
+            .expect("output must be a decodable GIF");
+        decoder.into_frames().collect_frames().expect("frames decode")
+    }
+
+    #[test]
+    fn replay_gif_is_deterministic_same_frames_same_bytes() {
+        let frames = replay_fixture();
+        let a = render_replay_gif(&frames, DEFAULT_CELL_PIXELS, 200, image::codecs::gif::Repeat::Infinite)
+            .unwrap();
+        let b = render_replay_gif(&frames, DEFAULT_CELL_PIXELS, 200, image::codecs::gif::Repeat::Infinite)
+            .unwrap();
+        assert_eq!(a, b, "identical frame sequences must produce byte-identical GIFs");
+    }
+
+    #[test]
+    fn replay_gif_decodes_to_expected_frame_count_and_dimensions() {
+        let frames = replay_fixture();
+        let gif = render_replay_gif(&frames, DEFAULT_CELL_PIXELS, 200, image::codecs::gif::Repeat::Infinite)
+            .unwrap();
+        let frames_enum = decode_gif(&gif);
+        assert_eq!(frames_enum.len(), 3, "all three replay frames must be encoded");
+        let dims = frames_enum[0].buffer().dimensions();
+        assert_eq!(dims, (24, 24), "2x2 world at 12px/cell");
+    }
+
+    #[test]
+    fn replay_gif_frames_show_agent_movement() {
+        let frames = replay_fixture();
+        let gif = render_replay_gif(&frames, DEFAULT_CELL_PIXELS, 200, image::codecs::gif::Repeat::Infinite)
+            .unwrap();
+        let frames_enum = decode_gif(&gif);
+        // Frame 0: agent at cell (0,0) → center (6,6). Frame 2: agent at
+        // cell (1,1) → center (18,18). The agent palette index 0 is red.
+        let px = |f: &image::Frame, x: u32, y: u32| -> [u8; 3] {
+            let b = f.buffer();
+            let p = b.get_pixel(x, y);
+            [p[0], p[1], p[2]]
+        };
+        assert_eq!(px(&frames_enum[0], 6, 6), AGENT_PALETTE[0]);
+        assert_eq!(px(&frames_enum[2], 18, 18), AGENT_PALETTE[0]);
+        // The agent is NOT at frame 0's destination yet — movement is real.
+        assert_eq!(px(&frames_enum[0], 18, 18), terrain_color(Terrain::Grassland));
+    }
+
+    #[test]
+    fn replay_gif_single_frame_is_valid_and_decodes() {
+        // A GIF needs at least one frame to be decodable; the single-frame
+        // case is the minimum valid replay.
+        let frames = replay_fixture();
+        let single = render_replay_gif(&frames[..1], DEFAULT_CELL_PIXELS, 200, image::codecs::gif::Repeat::Infinite)
+            .unwrap();
+        let frames_enum = decode_gif(&single);
+        assert_eq!(frames_enum.len(), 1, "one frame in, one frame out");
+    }
+
+    #[test]
+    fn replay_gif_empty_frame_sequence_returns_empty() {
+        // The GIF encoder buffers everything until the first frame; an empty
+        // frame list therefore yields empty bytes (no header is emitted).
+        // The render call itself must not fail — the caller's contract is
+        // to supply ≥1 frame for a decodable replay.
+        let gif = render_replay_gif(&[], DEFAULT_CELL_PIXELS, 200, image::codecs::gif::Repeat::Infinite)
+            .expect("encoding must not fail on an empty frame list");
+        assert!(gif.is_empty(), "zero frames in, zero bytes out");
+    }
+
+    #[test]
+    fn replay_gif_finite_repeat_differs_from_infinite() {
+        let frames = replay_fixture();
+        let inf = render_replay_gif(&frames, DEFAULT_CELL_PIXELS, 200, image::codecs::gif::Repeat::Infinite)
+            .unwrap();
+        let once = render_replay_gif(&frames, DEFAULT_CELL_PIXELS, 200, image::codecs::gif::Repeat::Finite(1))
+            .unwrap();
+        assert_ne!(inf, once, "loop metadata must be encoded differently");
     }
 }

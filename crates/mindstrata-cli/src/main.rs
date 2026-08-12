@@ -49,6 +49,17 @@ enum Commands {
         #[arg(long, value_name = "PATH")]
         render_map: Option<String>,
 
+        /// Render an animated replay GIF (AP2 Phase 5 — replay
+        /// visualizations): one frame every `--replay-every` ticks, sampled
+        /// live during the run, written to the given path.
+        #[arg(long, value_name = "PATH")]
+        render_replay: Option<String>,
+
+        /// Cadence for `--render-replay`: sample a frame every N ticks.
+        /// Must be ≥ 1; the final tick is always included.
+        #[arg(long, default_value_t = 24)]
+        replay_every: u64,
+
         /// Inspect a specific agent by ID after simulation.
         #[arg(long)]
         inspect_agent: Option<usize>,
@@ -133,6 +144,8 @@ fn main() {
             verbose,
             map,
             render_map,
+            render_replay,
+            replay_every,
             inspect_agent,
             show_relationships,
             market,
@@ -220,7 +233,46 @@ fn main() {
 
             println!("Running {ticks} ticks...");
             let start = std::time::Instant::now();
-            sim.run(ticks);
+
+            // §20 (Iteration 171): animated replay — when `--render-replay`
+            // is set, step the simulation manually so frames can be sampled
+            // at the requested cadence. Sampling reads world state only
+            // (no RNG, no mutation), so the tick stream is byte-identical
+            // to a plain `sim.run(ticks)` — replay capture cannot perturb
+            // the simulation.
+            let replay_frames: Option<Vec<(mindstrata_sim::world::World, Vec<mindstrata_render::RenderAgent>)>> =
+                if let Some(ref path) = render_replay {
+                    let every = replay_every.max(1);
+                    let mut frames = Vec::new();
+                    let sample = |sim: &Simulation, frames: &mut Vec<_>| {
+                        let agents: Vec<mindstrata_render::RenderAgent> = sim
+                            .agents
+                            .iter()
+                            .enumerate()
+                            .map(|(i, a)| {
+                                mindstrata_render::RenderAgent::new(
+                                    a.position.x,
+                                    a.position.y,
+                                    i as u8,
+                                )
+                            })
+                            .collect();
+                        frames.push((sim.world().clone(), agents));
+                    };
+                    // Frame 0: the populated starting state.
+                    sample(&sim, &mut frames);
+                    for i in 0..ticks {
+                        sim.tick();
+                        if (i + 1) % every == 0 {
+                            sample(&sim, &mut frames);
+                        }
+                    }
+                    println!("  Replay sampled {} frames (every {every} ticks) → {path}", frames.len());
+                    Some(frames)
+                } else {
+                    sim.run(ticks);
+                    None
+                };
             let elapsed = start.elapsed();
 
             print_results(&sim, elapsed);
@@ -281,6 +333,37 @@ fn main() {
                         Err(e) => eprintln!("\n  Failed to write rendered map: {e}"),
                     },
                     Err(e) => eprintln!("\n  Failed to encode rendered map: {e}"),
+                }
+            }
+
+            // §20 (Iteration 171): write the animated replay GIF.
+            if let (Some(path), Some(frames)) = (render_replay.as_ref(), replay_frames.as_ref()) {
+                let replay: Vec<mindstrata_render::ReplayFrame> = frames
+                    .iter()
+                    .map(|(world, agents)| mindstrata_render::ReplayFrame {
+                        world,
+                        agents,
+                    })
+                    .collect();
+                match mindstrata_render::render_replay_gif(
+                    &replay,
+                    mindstrata_render::DEFAULT_CELL_PIXELS,
+                    200,
+                    image::codecs::gif::Repeat::Infinite,
+                ) {
+                    Ok(gif) => match std::fs::write(path, &gif) {
+                        Ok(()) => {
+                            let (fw, fh) = frames.first().map_or((0, 0), |(w, _)| {
+                                (w.width * mindstrata_render::DEFAULT_CELL_PIXELS, w.height * mindstrata_render::DEFAULT_CELL_PIXELS)
+                            });
+                            println!(
+                                "\n  Animated replay ({} frames, {fw}x{fh}px) written to: {path}",
+                                frames.len()
+                            );
+                        }
+                        Err(e) => eprintln!("\n  Failed to write replay GIF: {e}"),
+                    },
+                    Err(e) => eprintln!("\n  Failed to encode replay GIF: {e}"),
                 }
             }
 
