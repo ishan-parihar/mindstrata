@@ -163,6 +163,33 @@ impl EmotionDelta {
 /// calibration.
 pub const SECONDARY_EMOTION_DECAY_RATE: f64 = 0.12;
 
+/// §8.1.4 (Iteration 164): per-tick proportional decay rate for the BASE
+/// emotion families (fear/anger/joy/sadness/shame/pride/guilt). The pre-
+/// Iter-164 base decay was subtractive (0.002/tick, §22.1) — ~40× too weak
+/// against the per-tick appraisal deltas, so fear pinned at 0.83–1.0 in
+/// every calibrated window (probe-pinned at Iter-164: fear climbs to 0.99
+/// by tick 800 in seeds 1/42/99; joy 0.5–0.84; shame slowly to 0.6). A
+/// pinned-at-ceiling base emotion makes every amplification consumer
+/// (`1 + fear×0.4` Safety, `(fear+sadness)×0.1` negative-events narrative
+/// fold, stress input) run at max with zero differentiation. The
+/// proportional per-tick decay cancels production to producer-driven
+/// steady states — the same mechanism Iter-116 used for the expanded
+/// families — restoring headroom so amplification differentiates. CALIBRATED
+/// at 0.06 (probe: calm-world fear production reaches ~0.037/tick at
+/// equilibrium — need-pressure appraisals plus the daily fear-contagion
+/// fold → steady ≈ 0.55–0.75 at the plateau with min 0.03–0.10 / max 1.0
+/// only for genuinely stressed agents, down from 0.99 everywhere; joy
+/// production ~0.006/tick → ≈ 0.15–0.3; shame → ≈ 0.03). CALIBRATED
+/// DOWN from an initial 0.08 whose probe starved the rare-event
+/// conception rolls (the lower fear re-paces the shared Social RNG
+/// stream; at 0.08 only 1/5 seeds delivered a 100K birth; at 0.06 all 5
+/// deliver — probe-pinned seed-1 [68780, 75920], seed-42 [12260, 81320],
+/// seed-46 [42550], seed-51 [33870], seed-99 [36710, 57510, 97120]).
+/// `trust` stays exempt: it is relationship-driven (decays via the
+/// relationship drift pass, not the emotion block) and probes at exactly
+/// 0 in calibrated windows.
+pub const BASE_EMOTION_DECAY_RATE: f64 = 0.06;
+
 /// §8.1.4 (Iteration 116): per-unit humiliation escalation rate — a
 /// humiliated agent escalates a failed threat to violence more readily
 /// (status-defeat → aggression, the amplifier counterpoint to the
@@ -681,6 +708,37 @@ mod tests {
         );
         let low = secondary_emotion_decay(Fixed::from_f64(0.3), 0.12);
         let high = secondary_emotion_decay(Fixed::from_f64(0.9), 0.12);
+        assert!(low < high, "decay must be monotone in the value");
+    }
+
+    #[test]
+    fn base_emotion_decay_rate_is_proportional_and_bounded() {
+        // §8.1.4 (Iteration 164): the BASE emotion families share the same
+        // proportional-decay helper as the expanded families, at a rate in
+        // the meaningful band. The pure math is pinned independent of
+        // calibration: 1.0 → 0.94, 0.5 → 0.47, zero stays zero, monotone
+        // in the value.
+        assert_eq!(
+            secondary_emotion_decay(Fixed::ONE, BASE_EMOTION_DECAY_RATE),
+            Fixed::from_f64(0.94),
+            "1.0 × (1 − 0.06) must be exactly 0.94"
+        );
+        assert_eq!(
+            secondary_emotion_decay(Fixed::from_f64(0.5), BASE_EMOTION_DECAY_RATE),
+            Fixed::from_f64(0.47),
+            "0.5 × (1 − 0.06) must be exactly 0.47"
+        );
+        assert_eq!(
+            secondary_emotion_decay(Fixed::ZERO, BASE_EMOTION_DECAY_RATE),
+            Fixed::ZERO,
+            "zero stays zero"
+        );
+        assert!(
+            (0.02..0.15).contains(&BASE_EMOTION_DECAY_RATE),
+            "per-tick rate must sit in the calibrated band, got {BASE_EMOTION_DECAY_RATE}"
+        );
+        let low = secondary_emotion_decay(Fixed::from_f64(0.3), BASE_EMOTION_DECAY_RATE);
+        let high = secondary_emotion_decay(Fixed::from_f64(0.9), BASE_EMOTION_DECAY_RATE);
         assert!(low < high, "decay must be monotone in the value");
     }
 

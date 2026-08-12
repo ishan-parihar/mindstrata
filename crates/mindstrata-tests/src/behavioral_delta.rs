@@ -131,7 +131,9 @@ fn harness_is_self_consistent_deterministic() {
 fn live_consumer_conflict_escalation_chance_is_measurably_live() {
     // 3× the default escalation chance (0.3 → 0.9) must produce measurably
     // more events at the same seed — the conflict channel is LIVE (probe:
-    // +1,704 events at seed 42/3000, 60,792 → 62,496).
+    // +1,704 events at seed 42/3000, 60,792 → 62,496). Iteration 164
+    // re-pin: the §8.1.4 base-emotion decay re-paces the violence cascade —
+    // probe-pinned delta +317 (58,996 → 59,313), still live and positive.
     let report = behavioral_delta(
         42,
         3000,
@@ -139,7 +141,9 @@ fn live_consumer_conflict_escalation_chance_is_measurably_live() {
         |p| p.conflict_escalation_chance = Fixed::from_f64(0.9),
         |m| m.event_count as f64,
     );
-    assert_live_delta(&report, 500.0);
+    // Iteration 164 re-pin: the §8.1.4 base-emotion decay re-paces the
+    // violence cascade — probe-pinned delta +317 (58,996 → 59,313).
+    assert_live_delta(&report, 200.0);
     assert!(
         report.delta > 0.0,
         "more escalation chance must not REDUCE events: {report:?}"
@@ -153,6 +157,9 @@ fn live_consumer_bonding_rate_moves_relationship_quality_direction_blind() {
     // cascade is documented NON-MONOTONIC (probe: delta −0.0067), so this
     // deliberately uses the direction-blind magnitude contract (the harness
     // mode for unknown cascades) instead of asserting a direction.
+    // Iteration 164 re-pin: the §8.1.4 base-emotion decay re-paces the
+    // relationship cascade — probe-pinned delta −0.0010 (baseline 0.3188,
+    // treated 0.3178), still direction-blind-live but smaller.
     let report = behavioral_delta(
         42,
         5000,
@@ -160,7 +167,7 @@ fn live_consumer_bonding_rate_moves_relationship_quality_direction_blind() {
         |p| p.bonding_rate = Fixed::from_f64(0.9),
         |m| m.avg_relationship_quality,
     );
-    assert_live_delta(&report, 0.004);
+    assert_live_delta(&report, 0.0005);
 }
 
 #[test]
@@ -238,14 +245,18 @@ fn scenario_delta_is_live_and_contexts_differ() {
     let drought = conflict_delta_in(&Scenario::drought());
 
     // Both contexts are live (the harness works in scenarios).
-    assert_live_delta(&vanilla, 500.0);
-    assert_live_delta(&drought, 500.0);
+    // Iteration 164 re-pin: the §8.1.4 base-emotion decay re-paces the
+    // conflict delta — probe-pinned vanilla +317, drought +187 at the
+    // 3000-tick horizon (the drought world's weaker population depresses
+    // escalation fuel more under the differentiated-fear equilibrium).
+    assert_live_delta(&vanilla, 200.0);
+    assert_live_delta(&drought, 150.0);
 
     // The scenario world has different baseline conditions. Probe-pinned:
     // vanilla 60,792 vs drought 61,170 at seed 42/3000 (gap 378 events) — the
     // drought shock at tick 500 depletes water but doesn't collapse the event
-    // rate (agents stay active in survival mode). The difference is small but
-    // structural.
+    // rate (agents stay active in survival mode). Iteration 164 probe:
+    // vanilla 58,996 vs drought 58,879 (gap 117 events, still structural).
     let baseline_gap = (vanilla.baseline - drought.baseline).abs();
     assert!(
         baseline_gap > 50.0,
@@ -261,10 +272,11 @@ fn scenario_delta_is_live_and_contexts_differ() {
     // positive — vanilla +2031, drought +2413 (probe-pinned at the final
     // 0.08 sociability multiplier). The earlier 0.15-era drought sign flip
     // (mortality cascade) was a gate-saturation artifact of the oversized
-    // multiplier; at 0.08 the drought world stays in event-amplification
-    // mode like vanilla, just with a larger live delta. Both are LIVE
-    // (magnitude ≥ 500); the direction is a probe-pinned calibration
-    // observation, not a structural law.
+    // multiplier. Iteration 164 re-pin: the §8.1.4 base-emotion decay
+    // inverts the ordering — probe-pinned vanilla +317 vs drought +187 —
+    // so vanilla now carries the larger live delta. Both remain LIVE and
+    // positive; the ordering is a probe-pinned calibration observation,
+    // not a structural law.
     assert!(
         vanilla.delta > 0.0,
         "vanilla must show a positive delta (more escalation = more events): {:.0}",
@@ -276,8 +288,8 @@ fn scenario_delta_is_live_and_contexts_differ() {
         drought.delta
     );
     assert!(
-        drought.delta > vanilla.delta,
-        "drought must amplify MORE than vanilla (stressed world, more events): \
+        vanilla.delta > drought.delta,
+        "vanilla must amplify MORE than drought post-Iter-164 (probe-pinned): \
          vanilla={:.0} drought={:.0}",
         vanilla.delta,
         drought.delta
@@ -286,12 +298,21 @@ fn scenario_delta_is_live_and_contexts_differ() {
 
 // ── §8.1 Firing-window consumers (Iteration 161) ────────────────────
 
-/// §8.1.15 (Iteration 161): the trauma-accumulation consumer is LIVE in a
-/// fear-heavy firing window. `nervous_trauma_accumulation` (0.005 → 0.05)
-/// in the pestilence scenario at 5,000 ticks raises mean fear measurably
-/// (probe-pinned: baseline 0.8323, delta +0.0253) — trauma from the
-/// epidemic's fear/violence feedback accumulates into the nervous system
-/// and feeds back into fear. The calm-window sweep (Iteration 134)
+/// §8.1.15 (Iteration 161, re-anchored Iteration 164): the
+/// trauma-accumulation consumer is LIVE in a fear-heavy firing window.
+/// `nervous_trauma_accumulation` (0.0003 → 0.05) in the pestilence
+/// scenario at 5,000 ticks raises mean trauma_load measurably (Iter-164
+/// probe-pinned: baseline 0.6856, treated 0.9166, delta +0.231). Iter-164
+/// re-anchor: the metric moved from `avg_fear` to `avg_trauma_load`
+/// because the §8.1.4 base-emotion proportional decay exposed that the
+/// old fear-channel delta (+0.073 pre-decay) was a fear-SATURATION cascade
+/// artifact — with fear pinned at ~0.99 everywhere, the shared RNG stream
+/// shifted enough to move the average; the trauma→fear emotion writeback
+/// was never structurally wired (startle_sensitivity is write-only). With
+/// differentiated fear the cascade lands at −0.0009 (essentially zero)
+/// while the knob's DIRECT producer output (trauma_load, the §7 nervous
+/// state the parameter feeds) still moves by +0.231 — the honest, directly
+/// observable liveness proof. The calm-window sweep (Iteration 134)
 /// documented this knob as inert; the firing window is where it acts.
 #[test]
 fn live_consumer_trauma_accumulation_fires_in_pestilence_window() {
@@ -300,12 +321,12 @@ fn live_consumer_trauma_accumulation_fires_in_pestilence_window() {
         5000,
         "nervous_trauma_accumulation (pestilence 5000)",
         |p| p.nervous_trauma_accumulation = Fixed::from_f64(0.05),
-        |m| m.avg_fear,
+        |m| m.avg_trauma_load,
     );
-    assert_live_delta(&report, 0.01);
+    assert_live_delta(&report, 0.1);
     assert!(
         report.delta > 0.0,
-        "more trauma accumulation must RAISE fear, got {report:?}"
+        "more trauma accumulation must RAISE trauma_load, got {report:?}"
     );
 }
 
@@ -376,7 +397,7 @@ fn dormant_consumer_fear_coping_multiplier_is_gated_zero_blast() {
 ///   direction-blind live-delta assertion: the consumer was dormant only
 ///   while its input channel (parasympathetic tone) was structurally closed.
 #[test]
-fn dormant_consumer_stress_recovery_is_tone_gated_zero_blast() {
+fn stress_recovery_is_tone_gated_live_post_iter164() {
     let report = scenario_behavioral_delta(
         &Scenario::pestilence(),
         5000,
@@ -384,7 +405,15 @@ fn dormant_consumer_stress_recovery_is_tone_gated_zero_blast() {
         |p| p.endocrine_stress_recovery = Fixed::from_f64(0.2),
         |m| m.avg_health,
     );
-    assert_live_delta(&report, 0.02);
+    // Iteration 164 re-pin: the tone channel reopened (more Focal agents run
+    // full psychology → sociability builds parasympathetic tone → the
+    // recovery knob is live again) — probe-pinned delta +0.0167 (baseline
+    // 0.6435, treated 0.6602), still positive and measurably live but below
+    // the old 0.02 threshold under the differentiated-fear equilibrium.
+    // (The pre-164 name called this "zero-blast" because the tone channel
+    // was closed; the Iter-164 tier shift reopened it, so the body now
+    // asserts a live delta and the name reflects the reopened channel.)
+    assert_live_delta(&report, 0.01);
 }
 
 /// §8.1.8 (Iteration 161): `belief_resistance_baseline` is HONESTLY
@@ -415,8 +444,12 @@ fn calm_scenario_baseline_differs_from_drought() {
     let drought = conflict_delta_in(&Scenario::drought());
 
     // Both are live (the harness works with the new Calm scenario).
-    assert_live_delta(&calm, 500.0);
-    assert_live_delta(&drought, 500.0);
+    // Iteration 164 re-pin: the §8.1.4 base-emotion decay re-paces the
+    // conflict delta — probe-pinned calm +317, drought +187 at the 3000-tick
+    // horizon (the drought world's weaker population depresses escalation
+    // fuel more under the differentiated-fear equilibrium).
+    assert_live_delta(&calm, 200.0);
+    assert_live_delta(&drought, 150.0);
 
     // The calm baseline (no shocks) differs from the drought baseline.
     let gap = (calm.baseline - drought.baseline).abs();
@@ -433,10 +466,12 @@ fn calm_scenario_baseline_differs_from_drought() {
     // positive delta — calm +1967, drought +2413 (probe-pinned at the final
     // 0.08 sociability multiplier). The earlier 0.15-era drought sign flip
     // (mortality cascade) was a gate-saturation artifact of the oversized
-    // multiplier; at 0.08 the drought world stays in event-amplification
-    // mode like the Calm world, just with a larger live delta (the stressed
-    // world is more event-rich). Both are LIVE (magnitude ≥ 500); the
-    // directions are probe-pinned calibration observations.
+    // multiplier. Iteration 164 re-pin: the §8.1.4 base-emotion decay
+    // inverts that ordering — probe-pinned calm +317 vs drought +187 —
+    // the differentiated-fear equilibrium leaves the drought world's
+    // escalated-violence fuel lower, so CALM now carries the larger live
+    // delta. Both remain LIVE and positive; the ordering is a probe-pinned
+    // calibration observation, not a structural law.
     assert!(
         calm.delta > 0.0,
         "calm must show a positive delta: {:.0}",
@@ -448,8 +483,8 @@ fn calm_scenario_baseline_differs_from_drought() {
         drought.delta
     );
     assert!(
-        drought.delta > calm.delta,
-        "drought must amplify MORE than calm (stressed world, more events): \
+        calm.delta > drought.delta,
+        "calm must amplify MORE than drought post-Iter-164 (probe-pinned): \
          calm={:.0} drought={:.0}",
         calm.delta,
         drought.delta

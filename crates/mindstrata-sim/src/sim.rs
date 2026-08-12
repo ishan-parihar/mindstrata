@@ -4500,17 +4500,43 @@ impl Simulation {
             }
 
             // ── 7. Emotion decay ──────────────────────────────────────
-            // §22.1: Emotions decay slowly — 0.002/tick ≈ full decay in ~500 ticks.
-            // This allows emotions to accumulate and create meaningful dynamics.
+            // §8.1.4 (Iteration 164): The BASE emotion families now decay
+            // proportionally every tick (BASE_EMOTION_DECAY_RATE, probe-
+            // calibrated at 0.06) — the pre-Iter-164 subtractive decay
+            // (0.002/tick, §22.1) was ~40× too weak against the per-tick
+            // appraisal deltas, so fear pinned at 0.83–1.0 in every
+            // calibrated window (probe-pinned at Iter-164: fear climbed to
+            // 0.99 by tick 800 in seeds 1/42/99) and every amplification
+            // consumer (`1 + fear×0.4` Safety, `(fear+sadness)×0.1`
+            // negative-events narrative fold, stress input) ran at max
+            // with zero differentiation. Proportional decay cancels
+            // production to producer-driven steady states (fear mean
+            // 0.55–0.75 with min 0.03–0.10 / max 1.0 only for genuinely
+            // stressed agents, joy 0–0.92, shame ≈ 0.03) — restoring
+            // headroom so amplification differentiates across agents and
+            // windows. Tuned down from an initial 0.08 whose probe
+            // starved the rare-event conception rolls (the lower fear
+            // re-paces the shared Social RNG stream; at 0.08 only 1/5
+            // seeds delivered a 100K birth, at 0.06 all 5 deliver).
+            // `trust` stays exempt: relationship-driven (decays via the
+            // relationship drift pass, not here) and probes at exactly 0
+            // in calibrated windows. `loneliness`/`tenderness` exemptions
+            // below unchanged (Iter-98/99 consumers calibrated against
+            // the saturated state).
             for emotion in &mut emotions {
-                let decay = Fixed::from_f64(0.002);
-                emotion.fear = (emotion.fear - decay).clamp_01();
-                emotion.anger = (emotion.anger - decay).clamp_01();
-                emotion.joy = (emotion.joy - decay).clamp_01();
-                emotion.sadness = (emotion.sadness - decay).clamp_01();
-                emotion.shame = (emotion.shame - decay).clamp_01();
-                emotion.pride = (emotion.pride - decay).clamp_01();
-                emotion.guilt = (emotion.guilt - decay).clamp_01();
+                let base_rate = crate::appraisal::BASE_EMOTION_DECAY_RATE;
+                emotion.fear = crate::appraisal::secondary_emotion_decay(emotion.fear, base_rate);
+                emotion.anger =
+                    crate::appraisal::secondary_emotion_decay(emotion.anger, base_rate);
+                emotion.joy = crate::appraisal::secondary_emotion_decay(emotion.joy, base_rate);
+                emotion.sadness =
+                    crate::appraisal::secondary_emotion_decay(emotion.sadness, base_rate);
+                emotion.shame =
+                    crate::appraisal::secondary_emotion_decay(emotion.shame, base_rate);
+                emotion.pride =
+                    crate::appraisal::secondary_emotion_decay(emotion.pride, base_rate);
+                emotion.guilt =
+                    crate::appraisal::secondary_emotion_decay(emotion.guilt, base_rate);
                 // §8.1.4 (Iteration 116): The expanded emotion families decay
                 // proportionally EVERY TICK (SECONDARY_EMOTION_DECAY_RATE,
                 // probe-calibrated) — the base-8 linear decay (0.002/tick) is
@@ -5971,6 +5997,7 @@ impl Simulation {
                 attachment_soothing_receptivity: a.attachment.soothing_receptivity,
                 attachment_separation_distress: a.attachment.separation_distress,
                 attachment_caregiving_style: a.attachment.caregiving_style,
+                trauma_load: a.embodied.nervous.trauma_load,
             })
             .collect()
     }
@@ -6117,6 +6144,11 @@ impl Simulation {
             agent_count: self.agent_count() as u64,
             avg_stress,
             avg_health,
+            avg_trauma_load: summaries
+                .iter()
+                .map(|s| s.trauma_load.to_f64())
+                .sum::<f64>()
+                * n_inv,
             avg_relationship_trust,
             avg_relationship_quality,
             active_meme_count,
@@ -12323,6 +12355,9 @@ pub struct MetricsSnapshot {
     pub avg_stress: f64,
     /// Average health from EmbodiedState.
     pub avg_health: f64,
+    /// Average accumulated trauma load across all agents (§7 nervous).
+    #[serde(default)]
+    pub avg_trauma_load: f64,
     /// Average relationship trust across all relationship_v2 edges.
     pub avg_relationship_trust: f64,
     /// Average relationship quality across all relationship_v2 edges.
@@ -12378,19 +12413,19 @@ pub struct MetricsSnapshot {
 impl MetricsSnapshot {
     /// §5.1/§19: CSV header for exporting metrics for analysis.
     pub fn csv_header() -> &'static str {
-        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,gini,avg_wealth,median_wealth,total_trades,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds,clan_count,clan_relation_count,cult_count,noosphere_nodes,noosphere_zeitgeist,collective_memory_count,patronage_relation_count"
+        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_trauma_load,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,gini,avg_wealth,median_wealth,total_trades,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds,clan_count,clan_relation_count,cult_count,noosphere_nodes,noosphere_zeitgeist,collective_memory_count,patronage_relation_count"
     }
 
     /// §5.1/§19: One CSV line for this snapshot.
     pub fn to_csv_line(&self) -> String {
         format!(
-            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             self.tick,
             self.avg_hunger, self.avg_thirst, self.avg_fatigue,
             self.avg_valence, self.avg_joy, self.avg_fear,
             self.total_grain, self.total_water,
             self.event_count, self.journal_len, self.agent_count,
-            self.avg_stress, self.avg_health,
+            self.avg_stress, self.avg_health, self.avg_trauma_load,
             self.avg_relationship_trust, self.avg_relationship_quality,
             self.active_meme_count, self.polarization_index,
             self.gini, self.avg_wealth, self.median_wealth, self.total_trades,
@@ -12438,6 +12473,8 @@ pub struct AgentSummary {
     pub attachment_separation_distress: Fixed,
     /// Architecture-plan-2 §8.1.14: Caregiving style for the live agent view.
     pub attachment_caregiving_style: CaregivingStyle,
+    /// Architecture-plan-2 §7: Accumulated trauma load (§17 observability).
+    pub trauma_load: Fixed,
 }
 
 /// §8.1: Regulation-capacity support contributed by self-esteem (deviation

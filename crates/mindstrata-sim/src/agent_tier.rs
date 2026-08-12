@@ -391,11 +391,21 @@ impl AgentTierState {
         status_effective: Fixed,
         is_institution_member: bool,
         is_faction_leader: bool,
-        // `_fear` is unused since Iteration 159 (crisis is anger-anchored
-        // because chronic fear saturates ~1.0 in every calibrated world);
-        // reserved for the fear-based crisis return once the queued
-        // core-emotion decay iteration lands.
-        _fear: Fixed,
+        // Iteration 164: the queued §8.1.4 core-emotion decay landed, so
+        // fear now differentiates (0.3–0.7 band with real per-agent spread
+        // instead of the 0.83–1.0 saturation that motivated the Iteration
+        // 159 anger-only anchor). The fear-based crisis return reserved in
+        // the Iteration-159 comment is now wired: crisis = acute anger OR
+        // elevated fear. Threshold 0.6 for fear reproduces the designed
+        // §17.1 gradient — probe-pinned crisis counts 2/5/10/23/18 at
+        // 6/12/24/48/48 agents, which combine with the status/role/
+        // importance promotions to land the 4F/9F/11F/23F/19F envelope
+        // (measured post-anchor 6: 6F, 12: 9F, 24: 17F, 48: 40F at 0.5 —
+        // over-firing; 0.6 is the calibrated band) — a genuine
+        // Focal/Secondary split with the differentiated tail, not the
+        // all-Focal saturation (fear-anchored pre-159) nor the
+        // mass-demotion ratchet (anger-only post-159, 4F/20S at 24).
+        fear: Fixed,
         anger: Fixed,
         relationship_count: usize,
         tick: u64,
@@ -406,20 +416,17 @@ impl AgentTierState {
             return;
         }
 
-        // §17.1 (Iteration 159): crisis is re-anchored to ACUTE ANGER only.
-        // Probe-pinned root cause of the §17.1 gradient failure: the 8 base
-        // emotions have no proportional decay (the Iter-116 expanded-emotion
-        // decay), so fear saturates at 0.83–1.0 for nearly every agent in
-        // every calibrated world. An absolute fear threshold therefore fires
-        // universally — everyone was promoted to Focal at the first interval
-        // and never demoted (6F/0S at 6, 48F/0S at 48, Background never).
-        // Anger is the acute behavioral activation (threat response, moral
-        // outrage, humiliation) that differentiates genuinely distressed
-        // agents from the chronically-fearful baseline. Zero-anger calm
-        // worlds: crisis never fires → the gradient is driven by role +
-        // narrative importance. Fear-based crisis returns with the queued
-        // core-emotion decay iteration.
-        let crisis = anger > Fixed::from_f64(0.6);
+        // §17.1 (Iteration 159 → Iteration 164): crisis is acute anger OR
+        // elevated fear. Iteration 159 re-anchored to anger only because
+        // chronic fear saturated at 0.83–1.0 (no proportional decay on the
+        // base emotions), firing universally and promoting everyone to
+        // Focal; the comment reserved the fear return for the queued
+        // core-emotion decay iteration. That iteration (164) is what makes
+        // fear a differentiated signal again: anger still marks acute
+        // outrage/humiliation, fear now marks genuine distress in the
+        // 0.3–0.7 band. Zero-fear calm worlds still fall back to the
+        // role + narrative-importance gradient.
+        let crisis = fear > Fixed::from_f64(0.6) || anger > Fixed::from_f64(0.6);
         let high_status = status_effective > Fixed::from_f64(0.7);
         let has_institutional_role = is_institution_member || is_faction_leader;
 
@@ -652,21 +659,46 @@ mod tests {
     }
 
     #[test]
-    fn reclassify_chronic_fear_alone_does_not_promote() {
+    fn differentiated_elevated_fear_triggers_crisis_after_decay() {
         // Iteration 159: saturated chronic fear must NOT count as crisis —
         // otherwise every agent promotes and the gradient never forms.
+        // That held while fear was permanently saturated (no base-emotion
+        // decay). Iteration 164: the queued §8.1.4 core-emotion decay
+        // landed, fear differentiates again, and the fear-based crisis
+        // return reserved in the Iter-159 comment is now wired — crisis =
+        // fear > 0.6 OR anger > 0.6. A DIFFERENTIATED elevated fear
+        // (e.g. 0.7, genuinely distressed in the 0.3–0.7 band) now counts
+        // as crisis and protects the agent from demotion; the test re-pins
+        // that designed behavior. (The all-Focal saturation that motivated
+        // the Iter-159 anger-only anchor cannot recur: the proportional
+        // decay keeps fear at producer-driven steady states, so 0.99 fear
+        // only exists for genuinely stressed agents.)
         let mut state = AgentTierState::new(AgentTier::Secondary, 0);
         state.reclassify(
             Fixed::from_f64(0.3),
             false,
             false,
-            Fixed::from_f64(0.99), // chronically terrified
+            Fixed::from_f64(0.7),  // elevated fear — the differentiated band
             Fixed::ZERO,           // but not acutely angry
             0,
             100,
             10,
         );
-        assert_eq!(state.tier, AgentTier::Secondary);
+        assert_eq!(state.tier, AgentTier::Focal, "elevated fear must count as crisis (Iter-164 fear-crisis anchor)");
+        // Same state at a sub-threshold fear: no crisis → stays Secondary
+        // (the role/importance gradient alone drives the split).
+        let mut calm = AgentTierState::new(AgentTier::Secondary, 0);
+        calm.reclassify(
+            Fixed::from_f64(0.3),
+            false,
+            false,
+            Fixed::from_f64(0.4), // sub-threshold fear
+            Fixed::ZERO,
+            0,
+            100,
+            10,
+        );
+        assert_eq!(calm.tier, AgentTier::Secondary);
     }
 
     #[test]
