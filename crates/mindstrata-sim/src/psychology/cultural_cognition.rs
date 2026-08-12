@@ -325,6 +325,29 @@ impl CulturalCognition {
             .fold(Fixed::ZERO, Fixed::max)
     }
 
+    /// §8.1.18 (Iteration 167): The `violation_cost` of the taboo matching
+    /// the given keyword (case-insensitive substring on the description), or
+    /// ZERO when the agent holds no matching taboo.
+    ///
+    /// This is the sacred-severity term: when an act violates a taboo the
+    /// agent's culture holds sacred, the transgression carries that taboo's
+    /// full violation cost (strength + sacred boost + social reinforcement).
+    /// Consumed by the §19.5.D norm-enforcement shame channel: an attacker
+    /// whose culture forbids violence more strongly (higher traditionalism →
+    /// stronger taboo) feels more shame per violent act.
+    ///
+    /// ZERO when no taboo matches — the identity-at-zero contract that keeps
+    /// pre-Iteration-165 snapshots (empty taboo vecs) byte-neutral on the
+    /// consumer. ONE-SIDED: a taboo-free agent's shame is unchanged. Pure,
+    /// no RNG.
+    pub fn taboo_violation_cost_for(&self, keyword: &str) -> Fixed {
+        let needle = keyword.to_lowercase();
+        self.taboos
+            .iter()
+            .find(|t| t.description.to_lowercase().contains(&needle))
+            .map_or(Fixed::ZERO, Taboo::violation_cost)
+    }
+
     /// Add a taboo and reinforce existing ones that overlap.
     pub fn add_taboo(&mut self, taboo: Taboo) {
         // Check for overlapping taboos
@@ -620,5 +643,43 @@ mod tests {
         );
         // Clamp on the upside for pathological inputs.
         assert_eq!(taboo_knowledge_factor(Fixed::from_f64(-0.5), rate, floor), Fixed::ONE);
+    }
+
+    /// §8.1.18 (Iteration 167): `taboo_violation_cost_for` returns the
+    /// matching taboo's full violation cost, ZERO for empty/non-matching
+    /// (identity-at-zero), is case-insensitive, and scales with
+    /// traditionalism through the seeded strength.
+    #[test]
+    fn taboo_violation_cost_for_matches_case_insensitively_and_is_zero_at_empty() {
+        // Empty vec → zero (the identity-at-zero contract for legacy saves).
+        let cc = CulturalCognition::default();
+        assert_eq!(cc.taboo_violation_cost_for("violence"), Fixed::ZERO);
+        assert_eq!(cc.taboo_violation_cost_for("theft"), Fixed::ZERO);
+        // Non-matching keyword → zero (ONE-SIDED).
+        let mut seeded = CulturalCognition::default();
+        seeded.seed_village_taboos(Fixed::from_f64(0.5));
+        assert_eq!(seeded.taboo_violation_cost_for("fishing"), Fixed::ZERO);
+        // Matching keyword returns violation_cost = strength + sacred_boost.
+        // Violence (secular, base 0.45) at trad 0.5: 0.45 × 0.75 = 0.3375.
+        let violence_cost = seeded.taboo_violation_cost_for("violence");
+        assert_eq!(violence_cost, Fixed::from_f64(0.3375));
+        // Case-insensitive: uppercase keyword matches.
+        assert_eq!(seeded.taboo_violation_cost_for("VIOLENCE"), violence_cost);
+        // Theft (secular, base 0.5) at trad 0.5: 0.5 × 0.75 = 0.375.
+        assert_eq!(seeded.taboo_violation_cost_for("theft"), Fixed::from_f64(0.375));
+        // Sacred taboo gets the sacred boost: Incest at trad 0.5 has strength
+        // 0.525 and violation_cost = 0.525 + 0.3 = 0.825.
+        assert_eq!(
+            seeded.taboo_violation_cost_for("incest"),
+            Fixed::from_f64(0.825)
+        );
+        // Traditional agents hold stronger taboos → higher violation cost.
+        let mut trad = CulturalCognition::default();
+        trad.seed_village_taboos(Fixed::ONE);
+        assert!(
+            trad.taboo_violation_cost_for("violence")
+                > seeded.taboo_violation_cost_for("violence"),
+            "higher traditionalism must raise the sacred-severity term"
+        );
     }
 }

@@ -13286,3 +13286,70 @@ fn old_attraction_model_without_taboo_penalty_restores_default() {
         "missing taboo_penalty must restore to the serde default of 0"
     );
 }
+
+/// §8.1.18/§19.5.D (Iteration 167): the sacred-severity shame channel is
+/// LIVE and ONE-SIDED — a world whose agents hold no taboos accumulates LESS
+/// shame than the seeded village under the same seed (the no-violence taboo's
+/// violation_cost amplifies the attacker's per-violence shame boost). The
+/// differential pins the wiring's direction, not just its existence.
+#[test]
+fn taboo_shame_amplification_is_live_and_one_sided() {
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::sim::SimConfig;
+    use mindstrata_sim::Simulation;
+
+    let run_world = |strip_taboos: bool| -> (f64, usize) {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 2000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        if strip_taboos {
+            for a in &mut sim.agents {
+                a.cultural_cognition.taboos.clear();
+            }
+        }
+        sim.run(2000);
+        let mut shame_sum = Fixed::ZERO;
+        let mut violence = 0usize;
+        for a in &sim.agents {
+            shame_sum += a.emotions.shame;
+        }
+        for ev in sim.recent_events(10_000) {
+            let s = format!("{ev:?}");
+            if s.contains("ConflictOccurred") && s.contains("Violence") {
+                violence += 1;
+            }
+        }
+        (shame_sum.to_f64(), violence)
+    };
+
+    let (seeded_shame, seeded_violence) = run_world(false);
+    let (stripped_shame, stripped_violence) = run_world(true);
+    // The violence trajectory must be EMPIRICALLY IDENTICAL between the two
+    // runs. Stripping also zeroes `max_taboo_strength` (the Iter-165
+    // `taboo_penalty` courtship channel and the Iter-166
+    // `taboo_knowledge_factor` gates both read it), but those channels sit
+    // below decision granularity in this window (proven in their own
+    // iterations) — so the equality assert below is the load-bearing guard
+    // that the differential is cleanly attributed to the shame channel, not
+    // a gross trajectory divergence. The counts come from `recent_events`
+    // (a ring window, not an exact total) — identical on both sides since
+    // the window is identical.
+    assert_eq!(
+        seeded_violence, stripped_violence,
+        "taboo stripping must not change the violence trajectory"
+    );
+    // Violence must actually fire (the channel is live in the window) and the
+    // taboo-bound world must hold more shame.
+    assert!(seeded_violence > 0, "violence must fire in the window");
+    assert!(
+        seeded_shame > stripped_shame,
+        "taboo-bound attackers must accumulate more shame: seeded {seeded_shame:.4} vs stripped {stripped_shame:.4}"
+    );
+}

@@ -168,6 +168,14 @@ const KNOWLEDGE_TABOO_RATE: Fixed = Fixed::from_raw(2000); // 0.2
 /// blocked (a taboo-bound agent can still be taught; sacred values stay
 /// defensible, not hermetically sealed).
 const KNOWLEDGE_TABOO_FLOOR: Fixed = Fixed::from_raw(8000); // 0.8
+/// §8.1.18 (Iteration 167): sacred-severity shame rate — the violence
+/// taboo's violation_cost scales the attacker's per-violence shame boost
+/// as (1 + violation_cost × this). ONE-SIDED: identity at zero taboo.
+/// At the seeded max violation cost for the Violence keyword (~0.45 at
+/// traditionalism 1.0) the factor reaches ≈1.23 — a ~17% amplification at
+/// the mean cost (~0.33), a live-but-modest sacred-boundary signal that
+/// sits below the golden-window metric granularity (zero-blast proven).
+const VIOLENCE_SHAME_TABOO_RATE: Fixed = Fixed::from_raw(5000); // 0.5
 
 // ── Patronage creation constants (§22b) ────────────────────────────
 /// Maximum clients a single patron may acquire per duodeca cycle.
@@ -11479,9 +11487,30 @@ impl Simulation {
                                     // §19.5.G: Feud tracking is handled in dedicated section 18
 
                                     // Attacker gains shame from violence
+                                    // §8.1.18 (Iteration 167): the attacker's
+                                    // own no-violence taboo amplifies the
+                                    // shame — an agent whose culture forbids
+                                    // violence more strongly (higher
+                                    // traditionalism → stronger taboo →
+                                    // higher violation_cost) feels more
+                                    // shame per violent act (sacred
+                                    // severity). ONE-SIDED factor
+                                    // (1 + violation_cost × 0.5): identity
+                                    // at zero taboo (legacy/empty vecs),
+                                    // bounded above ≈1.23 at the seeded
+                                    // max (Violence base 0.45 ×
+                                    // traditionalism 1.0). Deterministic:
+                                    // pure arithmetic on existing state,
+                                    // zero new RNG — the violence decision
+                                    // was already drawn.
+                                    let taboo_shame_factor = Fixed::ONE
+                                        + self.agents[from_idx]
+                                            .cultural_cognition
+                                            .taboo_violation_cost_for("violence")
+                                            * VIOLENCE_SHAME_TABOO_RATE;
                                     self.agents[from_idx].emotions.shame =
                                         (self.agents[from_idx].emotions.shame
-                                            + Fixed::from_f64(0.15))
+                                            + Fixed::from_f64(0.15) * taboo_shame_factor)
                                         .clamp_01();
 
                                     // §19.5.H: Check if violence was lethal
