@@ -248,7 +248,12 @@ pub struct SimParameters {
     pub endocrine_arousal_decay: Fixed,
 
     // ── Attachment (Phase 5 tuning) ────────────────────────────
-    /// Attachment separation distress rate per tick.
+    /// Attachment separation distress accrual per daily update for a
+    /// partnered agent. Calibrated at 0.02 (Iteration 173): the sweep showed
+    /// rates above 0.03 invert the taboo/kin-support/scenario-delta
+    /// directionality — the §8.1.14 coupling would dominate, violating the
+    /// Phase-5 acceptance — so the envelope is preserved while the knob is
+    /// live (previously hardcoded 0.02, now tunable).
     pub attachment_separation_rate: Fixed,
     /// Secure reunion recovery factor.
     pub attachment_secure_recovery: Fixed,
@@ -455,7 +460,7 @@ impl Default for SimParameters {
             endocrine_arousal_decay: Fixed::from_f64(0.1),
 
             // Attachment (Phase 5 tuning)
-            attachment_separation_rate: Fixed::from_f64(0.3),
+            attachment_separation_rate: Fixed::from_f64(0.02),
             attachment_secure_recovery: Fixed::from_f64(0.3),
             attachment_anxious_recovery: Fixed::from_f64(0.6),
             attachment_avoidant_recovery: Fixed::from_f64(0.4),

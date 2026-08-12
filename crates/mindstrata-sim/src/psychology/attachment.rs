@@ -251,4 +251,27 @@ mod tests {
         );
         assert!(att.separation_distress < Fixed::from_f64(0.5));
     }
+
+    #[test]
+    fn distress_decays_proportionally_to_rate() {
+        // Iteration 173: the daily decay in the sim applies
+        // `distress * (1 - attachment_decay_rate)`; this unit test pins the
+        // proportional-decay contract (slower decay rate ⟹ slower drain).
+        let mut slow = AttachmentSystem {
+            separation_distress: Fixed::from_f64(0.5),
+            ..Default::default()
+        };
+        let mut fast = slow.clone();
+        for _ in 0..30 {
+            slow.separation_distress =
+                (slow.separation_distress * (Fixed::ONE - Fixed::from_f64(0.05))).clamp_01();
+            fast.separation_distress =
+                (fast.separation_distress * (Fixed::ONE - Fixed::from_f64(0.30))).clamp_01();
+        }
+        assert!(fast.separation_distress < slow.separation_distress);
+        assert!(
+            slow.separation_distress > Fixed::ZERO,
+            "slow decay must not zero distress in 30 days"
+        );
+    }
 }

@@ -2935,14 +2935,29 @@ impl Simulation {
                     // figure accumulates separation distress. Previously distress
                     // only ever decayed (and reunions barely happen), so the
                     // attachment → emotion coupling never activated.
+                    // Iteration 173: the separation accumulation and decay now
+                    // read the tunable parameters (attachment_separation_rate,
+                    // attachment_decay_rate) instead of hardcoded 0.02/0.95,
+                    // making the §8.1.14 dynamics calibratable. The defaults
+                    // preserve the probe-verified envelope: a calibration
+                    // sweep showed rates above 0.03 make the coupling dominate
+                    // (inverting taboo suppression, the kin-support buffer and
+                    // scenario deltas — violating the Phase-5 acceptance), so
+                    // the strength is deliberately left at the calibrated
+                    // level while the knobs become live.
                     let is_partnered = self.agents[i].partner.is_some();
                     let att = &mut self.agents[i].attachment;
                     if is_partnered {
                         let closeness = Fixed::from_f64(0.8);
-                        att.on_separation(closeness, Fixed::from_f64(0.02));
+                        att.on_separation(closeness, self.params.attachment_separation_rate);
                     }
+                    // Decay factor is clamped non-negative so an out-of-range
+                    // decay_rate (>= 1.0) degrades to instant drain, never to
+                    // a sign flip on the distress accumulator.
+                    let decay_factor =
+                        (Fixed::ONE - self.params.attachment_decay_rate).max(Fixed::ZERO);
                     att.separation_distress =
-                        (att.separation_distress * Fixed::from_f64(0.95)).max(Fixed::ZERO);
+                        (att.separation_distress * decay_factor).max(Fixed::ZERO);
                 }
 
                 // Architecture-plan-2 §8.1.5: Motivation update.

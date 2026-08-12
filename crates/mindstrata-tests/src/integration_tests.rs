@@ -13618,3 +13618,109 @@ fn endocrine_stress_axis_no_longer_saturates_in_calibrated_windows() {
         );
     }
 }
+
+// ── §8.1.14 / AP2 Phase 5: Attachment dynamics tuning ───────────────
+
+/// §8.1.14: The attachment → emotion coupling must be LIVE after the
+/// Iteration 173 tuning: partnered agents accumulate separation distress
+/// (which feeds `attachment_threat` in appraisal and the style-weighted
+/// fear delta), and the calibrated default keeps distress in a healthy
+/// band — clearly nonzero but far from the 0.95 pin seen at rate 0.3.
+#[test]
+fn attachment_separation_distress_coupling_is_live_after_tuning() {
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 5000,
+        world_width: 24,
+        world_height: 24,
+        num_agents: 48,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.run(5000);
+
+    let partnered: Vec<_> = sim.agents.iter().filter(|a| a.partner.is_some()).collect();
+    assert!(
+        !partnered.is_empty(),
+        "a calibrated window must produce partnerships"
+    );
+    let distress_sum: f64 = partnered
+        .iter()
+        .map(|a| a.attachment.separation_distress.to_f64())
+        .sum();
+    let distress_mean = distress_sum / partnered.len() as f64;
+    let distress_max = partnered
+        .iter()
+        .map(|a| a.attachment.separation_distress.to_f64())
+        .fold(0.0f64, f64::max);
+    // Probe-pinned band at the calibrated default (rate 0.02): mean ~0.049,
+    // max ~0.10. Every partnered agent must carry non-zero distress (the
+    // coupling is live population-wide, not a few outliers) and max must
+    // stay under 0.6 (not the 0.95 pin the old 0.3 default caused).
+    // Iter-173 sweep: rates above 0.03 invert the taboo/kin-support/
+    // scenario-delta directionality — the coupling would dominate, so the
+    // envelope is deliberately preserved while the tuning knobs become live
+    // (the rate-response test proves they now respond).
+    assert!(
+        distress_mean >= 0.04,
+        "coupling must be live: partnered distress mean {distress_mean}"
+    );
+    assert!(
+        partnered.iter().all(|a| a.attachment.separation_distress > Fixed::ZERO),
+        "every partnered agent must carry non-zero separation distress"
+    );
+    assert!(
+        distress_max < 0.6,
+        "coupling must not pin: partnered distress max {distress_max}"
+    );
+}
+
+/// AP2 Phase 5: the previously-dead `attachment_separation_rate` parameter
+/// must now be LIVE — a 5x higher rate yields substantially higher
+/// separation distress on the same seed (same RNG stream, so the delta is
+/// attributable to the parameter, exactly the behavioral-delta contract).
+/// Uses the same 48-agent / 24x24 / 5000-tick window as the liveness test
+/// so the thresholds are consistently calibrated.
+#[test]
+fn attachment_separation_rate_parameter_is_live() {
+    let make = |rate: f64| {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 5000,
+            world_width: 24,
+            world_height: 24,
+            num_agents: 48,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.params.attachment_separation_rate = Fixed::from_f64(rate);
+        sim.params.attachment_decay_rate = Fixed::from_f64(0.05);
+        sim.populate();
+        sim.run(5000);
+        sim
+    };
+    let low = make(0.02);
+    let high = make(0.10);
+    let mean_distress = |sim: &Simulation| {
+        let partnered: Vec<_> = sim.agents.iter().filter(|a| a.partner.is_some()).collect();
+        if partnered.is_empty() {
+            return 0.0f64;
+        }
+        partnered
+            .iter()
+            .map(|a| a.attachment.separation_distress.to_f64())
+            .sum::<f64>()
+            / partnered.len() as f64
+    };
+    let low_mean = mean_distress(&low);
+    let high_mean = mean_distress(&high);
+    assert!(
+        low_mean >= 0.04,
+        "calibrated default must be live: mean {low_mean}"
+    );
+    assert!(
+        high_mean > low_mean * 2.0,
+        "rate must drive distress: low {low_mean} vs high {high_mean}"
+    );
+}
