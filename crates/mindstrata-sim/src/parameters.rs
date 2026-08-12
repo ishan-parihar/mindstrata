@@ -54,7 +54,9 @@ pub struct SimParameters {
     pub heuristic_bias_floor: Fixed,
     /// Trust sync convergence rate (how fast trust aligns with relationships).
     pub trust_sync_rate: Fixed,
-    /// Meme novelty decay rate (daily).
+    /// Meme novelty decay rate (daily). Iteration 174: now the LIVE knob —
+    /// the daily decay applies `novelty × (1 − rate)`; the redundant
+    /// `meme_novelty_decay_factor` complement (0.998) was removed.
     pub meme_novelty_decay: Fixed,
     /// Rumor prevalence decay rate (daily).
     pub rumor_prevalence_decay: Fixed,
@@ -295,10 +297,14 @@ pub struct SimParameters {
     // ── Meme / Cultural (Phase 5 tuning) ──────────────────────
     /// Meme transmission base chance multiplier.
     pub meme_transmission_multiplier: Fixed,
-    /// Meme virality scaling factor (how much emotion+identity boosts virality).
+    /// Meme virality scaling factor (how much emotion+identity boosts
+    /// virality). Calibrated at 0.8 (Iteration 174): the knob was previously
+    /// dead (seed_initial_memes hardcoded 0.8); wiring it preserved the
+    /// probe-verified envelope — all seeded memes active, differentiated
+    /// host spread (23/1/3/13/4 of 48 at 10K ticks), novelty held ~0.87 by
+    /// transmission reinforcement. A 0.3→1.2 sweep was fully rate-invariant
+    /// pre-wiring; the rate-response integration test now proves liveness.
     pub meme_virality_scaling: Fixed,
-    /// Meme novelty decay factor per tick.
-    pub meme_novelty_decay_factor: Fixed,
     /// Meme mutation master multiplier (§13.2) — scales each meme's
     /// per-transmission mutation rate. LIVE by default (0.3: observable
     /// drift — roughly 1-2% of transmissions mutate at seed mutation
@@ -484,8 +490,7 @@ impl Default for SimParameters {
             nervous_parasympathetic_buildup: Fixed::from_f64(0.06),
 
             meme_transmission_multiplier: Fixed::from_f64(1.2),
-            meme_virality_scaling: Fixed::from_f64(0.5),
-            meme_novelty_decay_factor: Fixed::from_f64(0.998),
+            meme_virality_scaling: Fixed::from_f64(0.8),
             meme_mutation_rate_base: Fixed::from_f64(0.3),
             propaganda_effectiveness: Fixed::from_f64(0.35),
             propaganda_resistance_growth: Fixed::from_f64(0.002),

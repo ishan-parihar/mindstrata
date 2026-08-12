@@ -597,7 +597,7 @@ impl Simulation {
         let rng = RngStreams::new(config.seed);
         let world = World::new(config.world_width, config.world_height);
 
-        let mut sim = Self {
+        let sim = Self {
             config,
             params: crate::parameters::SimParameters::default(),
             clock: Clock::new(),
@@ -651,7 +651,9 @@ impl Simulation {
             group_registry: crate::social::group_formation::GroupRegistry::new(),
             exposure_samples: Vec::new(),
         };
-        sim.seed_initial_memes();
+        // Meme seeding moved to `populate()` (Iteration 174): seeding here
+        // would read `params.meme_virality_scaling` before the caller's
+        // pre-populate override lands, making the tuning knob a no-op.
         sim
     }
 
@@ -712,8 +714,12 @@ impl Simulation {
                 *content,
                 Fixed::from_f64(*emotional),
                 Fixed::from_f64(*identity),
-                0,                    // created_tick — deterministic across new()/from_snapshot()
-                Fixed::from_f64(0.8), // virality scaling
+                0,                                  // created_tick — deterministic across new()/from_snapshot()
+                self.params.meme_virality_scaling, // Iteration 174: the §13.1
+                // virality knob is now LIVE — previously hardcoded 0.8, so the
+                // tuning parameter was a no-op. Default preserved at 0.8 (the
+                // probe-verified envelope: all memes active, differentiated
+                // host spread, novelty held by transmission reinforcement).
                 Fixed::from_f64(*mutation),
             ));
         }
@@ -881,6 +887,14 @@ impl Simulation {
 
     /// Populate the world with terrain, sites, and agents.
     pub fn populate(&mut self) {
+        // §13.1 (Iteration 174): Seed the founding memes here — the
+        // behavioral-delta contract applies parameter overrides between
+        // `new()` and `populate()`, so `meme_virality_scaling` (read at
+        // seeding) is only effective at this point. Idempotent: an already-
+        // seeded registry (e.g. post-snapshot re-seed) is left untouched.
+        if self.meme_registry.memes.is_empty() {
+            self.seed_initial_memes();
+        }
         // §31: Clamp requested population to the settlement cap so starting above
         // MAX_POPULATION can never silently disable the birth system (the birth
         // gate `n + new_births < MAX_POPULATION` would otherwise never fire).
@@ -8581,9 +8595,13 @@ impl Simulation {
             // §10.9: Patrons provision destitute clients — patronage as an
             // economic safety net (wealth flows through the social structure).
             self.tick_patronage_provision();
-            // Architecture-plan-2 §13.1: Decay meme novelty daily.
+            // Architecture-plan-2 §13.1: Decay meme novelty daily. Iteration
+            // 174: the novelty-decay RATE (meme_novelty_decay, 0.002) is now
+            // the live knob — the factor is derived (ONE - rate); the old
+            // meme_novelty_decay_factor field was a redundant complement
+            // (0.998 = 1 - 0.002) and is removed.
             self.meme_registry
-                .tick_all(self.params.meme_novelty_decay_factor);
+                .tick_all(Fixed::ONE - self.params.meme_novelty_decay);
             // §13.1 (AP2): Derive institutional_backing deterministically — a
             // meme is backed by the first institution whose domain matches its
             // content type (theological→temple, political/moral→council,

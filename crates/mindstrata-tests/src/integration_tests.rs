@@ -13724,3 +13724,49 @@ fn attachment_separation_rate_parameter_is_live() {
         "rate must drive distress: low {low_mean} vs high {high_mean}"
     );
 }
+
+// ── §13.1 / AP2 Phase 5: Meme virality tuning ───────────────────────
+
+/// §13.1: the previously-dead `meme_virality_scaling` parameter must now be
+/// LIVE — the founding memes' virality (which scales transmission chance)
+/// must respond to the parameter on the same seed. Iteration 174 wired it
+/// into `seed_initial_memes` (it was hardcoded at 0.8, so the tuning knob
+/// was a no-op — probe-verified rate-invariant across 0.3..1.2).
+#[test]
+fn meme_virality_scaling_parameter_is_live() {
+    let make = |scale: f64| {
+        let config = SimConfig {
+            seed: 42,
+            // No ticks: virality is computed at populate time, so the horizon
+            // is irrelevant — 0 keeps the config honest about that.
+            max_ticks: 0,
+            world_width: 24,
+            world_height: 24,
+            num_agents: 48,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.params.meme_virality_scaling = Fixed::from_f64(scale);
+        sim.populate();
+        sim
+    };
+    // Seeded founding memes: virality = (emotional_charge + identity_relevance)
+    // × scaling — captured at populate time (before any tick, so no RNG).
+    let low = make(0.3);
+    let high = make(1.2);
+    let mean_virality = |sim: &Simulation| {
+        let seeded: Vec<_> = sim.meme_registry.memes.iter().collect();
+        assert!(!seeded.is_empty(), "founding memes must be seeded");
+        seeded.iter().map(|m| m.virality.to_f64()).sum::<f64>() / seeded.len() as f64
+    };
+    let low_mean = mean_virality(&low);
+    let high_mean = mean_virality(&high);
+    assert!(
+        low_mean > 0.0,
+        "virality must be non-zero at low scaling: {low_mean}"
+    );
+    assert!(
+        high_mean > low_mean * 2.0,
+        "scaling must drive virality: low {low_mean} vs high {high_mean}"
+    );
+}
