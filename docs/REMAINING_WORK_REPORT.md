@@ -114,4 +114,8 @@ The dominant category. A recurring pattern across the campaign: systems were bui
 
 ---
 
+**Phase 5 closure — replay visualizations (Iteration 171):** the AP2 Phase 5 "add replay visualizations" task is **CLOSED**. The render crate now exposes `ReplayFrame` + `render_replay_gif` (deterministic animated GIF over a world-state frame sequence), and the CLI accepts `--render-replay <path.gif>` + `--replay-every N` (frame 0 + every N ticks, sampled read-only so the RNG/tick stream stays byte-identical to `sim.run()`). 8 new tests (+5 render unit, +3 CLI integration through the real binary); 1,282 workspace tests green, clippy 0 warnings; zero behavioral blast. Remaining AP2 Phase 5 task-list items are tuning/acceptance work (balance hormonal effects, tune attachment/meme/marriage/trauma dynamics, 10K-tick stability — all continuously validated by the live suites).
+
+---
+
 *Report generated from `docs/architecture/AP2.md`, `docs/MINDSTRATA_CURRENT_STATE.md`, and live codebase audits at commit `5c45f44`. All test counts and clippy numbers verified against the workspace at report time (Iteration 133 refresh).*
