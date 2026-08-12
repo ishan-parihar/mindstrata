@@ -176,6 +176,18 @@ const KNOWLEDGE_TABOO_FLOOR: Fixed = Fixed::from_raw(8000); // 0.8
 /// the mean cost (~0.33), a live-but-modest sacred-boundary signal that
 /// sits below the golden-window metric granularity (zero-blast proven).
 const VIOLENCE_SHAME_TABOO_RATE: Fixed = Fixed::from_raw(5000); // 0.5
+/// §8.1.18 (Iteration 168): belief-update cultural dampening rate —
+/// `change_resistance` (conservatism + category rigidity + taboo load, all
+/// near-uniform at ~0.55 in calibrated windows: conservatism defaults 0.5
+/// and the 7-taboo sum saturates min(1.0)) scales the daily belief-update
+/// evidence as (1 − resistance × this). At the uniform 0.55 this is a
+/// ~17% standing dampening — a uniform cultural brake on belief movement,
+/// honestly framed (the differential requires a spread in `change_resistance`
+/// that the current seeding does not produce).
+const BELIEF_CULTURAL_RATE: Fixed = Fixed::from_raw(3000); // 0.3
+/// Belief-update cultural dampening floor — evidence is damped but never
+/// fully silenced (a maximally conservative agent still updates, slowly).
+const BELIEF_CULTURAL_FLOOR: Fixed = Fixed::from_raw(8000); // 0.8
 
 // ── Patronage creation constants (§22b) ────────────────────────────
 /// Maximum clients a single patron may acquire per duodeca cycle.
@@ -911,30 +923,13 @@ impl Simulation {
                 self.world.sites[site_idx].owner = Some(EntityId::new(i as u64));
             }
 
-            let beliefs = vec![
-                Belief {
-                    proposition_id: 0,
-                    confidence: Fixed::from_f64(0.6),
-                    emotional_charge: Fixed::ZERO,
-                    identity_linkage: Fixed::from_f64(0.3),
-                    resistance: Fixed::from_f64(0.5),
-                    last_reinforced_tick: 0,
-                    source: crate::person::EvidenceSource::PersonalExperience,
-                    social_reinforcement: 0,
-                    is_accurate: true,
-                },
-                Belief {
-                    proposition_id: 1,
-                    confidence: Fixed::from_f64(0.5),
-                    emotional_charge: Fixed::ZERO,
-                    identity_linkage: Fixed::from_f64(0.2),
-                    resistance: Fixed::from_f64(0.4),
-                    last_reinforced_tick: 0,
-                    source: crate::person::EvidenceSource::InstitutionalRecord,
-                    social_reinforcement: 0,
-                    is_accurate: true,
-                },
-            ];
+            // Foundational beliefs (props 0–2, including the
+            // NeighborTrustworthy proposition the daily belief-update gate
+            // targets — §8.1.18, Iteration 168 revives that structurally-dead
+            // gate by seeding its target belief). Shared with newborns and
+            // snapshot restores via `foundational_beliefs()` so every agent
+            // participates in belief propagation identically.
+            let beliefs = Self::foundational_beliefs();
 
             // §6: Initialize agent position from home site coordinates.
             let position = if let Some(site_idx) = home_site {
@@ -1239,10 +1234,12 @@ impl Simulation {
         // RNG), so identical seeds produce identical taboo profiles. The
         // daily pass below then folds the strongest taboo
         // (`max_taboo_strength`) into `AttractionModel.taboo_penalty` (the
-        // RWR row-#11 consumer). Honest scope: only `max_taboo_strength`
-        // gained a production consumer; `violation_cost`/`tabo_violated_by`/
-        // `change_resistance` remain consumer-free (unit-tested only) —
-        // seeded data now exists for a future behavioral wiring.
+        // RWR row-#11 consumer). Iteration 167 wired `violation_cost` (via
+        // `taboo_violation_cost_for`) into the violence-block shame boost;
+        // Iteration 168 wired `change_resistance` into the daily
+        // belief-update gate (the §8.1.18 sacred-boundary defense on the
+        // belief layer — see block 13). `tabo_violated_by` remains
+        // consumer-free (unit-tested only).
         for agent in &mut self.agents {
             agent
                 .cultural_cognition
@@ -7367,6 +7364,29 @@ impl Simulation {
                 social_reinforcement: 0,
                 is_accurate: true,
             },
+            // §8.1.18 (Iteration 168): NeighborTrustworthy — the belief the
+            // daily belief-update gate targets (sim.rs block 13 updates
+            // proposition 2 from interaction trust evidence). Pre-Iter-168
+            // agents never held it, so the gate was structurally dead (probed
+            // 0/12 agents across seeds). Seeding it here (shared by populate,
+            // newborns, and snapshot restores) revives the gate: interaction
+            // trust now genuinely updates the belief, and §8.1.18
+            // `change_resistance` dampens the update (a uniform cultural
+            // factor — resistance totals ~0.55 for every agent: 0.15 from
+            // conservatism 0.5 × 0.3 plus 0.4 from the saturated taboo term
+            // min(1.0) × 0.4, category rigidity ~0; honestly framed as a
+            // standing dampening, not a differential).
+            Belief {
+                proposition_id: 2,
+                confidence: Fixed::from_f64(0.5),
+                emotional_charge: Fixed::ZERO,
+                identity_linkage: Fixed::from_f64(0.2),
+                resistance: Fixed::from_f64(0.4),
+                last_reinforced_tick: 0,
+                source: crate::person::EvidenceSource::PersonalExperience,
+                social_reinforcement: 0,
+                is_accurate: true,
+            },
         ]
     }
 
@@ -12022,6 +12042,24 @@ impl Simulation {
                                 crate::social::relational_field::BELIEF_CONFIDENCE_RIGIDITY,
                             ),
                         );
+                    // §8.1.18 (Iteration 168): the agent's cultural
+                    // change-resistance dampens the update evidence — a
+                    // conservative/taboo-bound culture absorbs less
+                    // counter- and confirming evidence (sacred boundary
+                    // defense on the belief layer). ONE-SIDED factor
+                    // (1 − resistance × 0.3) floored at 0.8; near-uniform
+                    // ~0.55 resistance → a ~17% standing dampening in
+                    // calibrated windows (honestly framed as uniform — the
+                    // differential needs a resistance spread the current
+                    // seeding does not produce). Read before the mutable
+                    // `beliefs` borrow; deterministic, zero new RNG.
+                    let cultural_dampening = (Fixed::ONE
+                        - self.agents[from_idx]
+                            .cultural_cognition
+                            .change_resistance()
+                            * BELIEF_CULTURAL_RATE)
+                        .max(BELIEF_CULTURAL_FLOOR)
+                        .clamp_01();
 
                     belief_update::update_beliefs(
                         &mut self.agents[from_idx].beliefs,
@@ -12031,6 +12069,7 @@ impl Simulation {
                         tick_u64,
                         &self.params,
                         rigidity_factor,
+                        cultural_dampening,
                     );
                 }
             }

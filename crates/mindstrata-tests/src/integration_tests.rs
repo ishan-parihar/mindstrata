@@ -9495,7 +9495,8 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
     // with 3 live children, 3 marriage-children records, and mothers'
     // children_born summing to 3 (mother 11 delivered twice). The
     // 120K→80K horizon is a deliberate suite-time win.)
-    let late = run_sim(1, 100000);
+    // Iteration 168: the liveness leg moves to seed 46 (see pin below).
+    let late = run_sim(46, 100000);
     let birth_ticks: Vec<u64> = late
         .recent_events(10_000_000)
         .iter()
@@ -9548,9 +9549,20 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         // delivers ONE birth by 100K, probe-pinned [80490], with the
         // 1-chain intact (1 live child, 1 marriage record, children_born
         // 1; the calibrated 0.06 rate keeps the rare-event rolls alive —
-        // the 0.08 tuning starved them entirely).
-        vec![80490],
-        "seed-1 100K world must deliver exactly the probed births"
+        // the 0.08 tuning starved them entirely). Iteration 168
+        // recalibration: the revived daily belief-update gate (§8.1.18 —
+        // prop 2 seeded at populate, change_resistance dampening wired)
+        // shifts courtship/marriage pacing through the gossip-acceptance →
+        // meme-draw coupling, moving the seed-1 birth OUT of the 100K
+        // window (probe: seed-1 @200K = [] and @300K = [200340, 220750,
+        // 224520, 241040] — re-paced, not dead). The liveness leg moves
+        // to seed 46, the golden-leg seed, which delivers the FULL
+        // 4-chain intact at the SAME 100K horizon (probe-pinned
+        // [28790, 40750, 63990, 73530], 4 live children, 4 marriage
+        // records, children_born 4, population 16 — every birth through
+        // the pregnancy path, so the record chain holds exactly).
+        vec![28790, 40750, 63990, 73530],
+        "seed-46 100K world must deliver exactly the probed births"
     );
     for t in &birth_ticks {
         assert!(
@@ -9560,8 +9572,8 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
     }
     assert_eq!(
         late.agents.iter().filter(|a| a.parent_a.is_some()).count(),
-        1,
-        "all live children must carry parentage at 100K"
+        4,
+        "all 4 live children must carry parentage at 100K"
     );
     let marriage_children: usize = late
         .marriage_registry
@@ -9570,16 +9582,16 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         .map(|m| m.children.len())
         .sum();
     assert_eq!(
-        marriage_children, 1,
-        "all births must be recorded in the mothers' active marriages"
+        marriage_children, 4,
+        "all 4 births must be recorded in the mothers' active marriages"
     );
     assert_eq!(
         late.agents
             .iter()
             .map(|a| a.embodied.reproductive.children_born)
             .sum::<u32>(),
-        1,
-        "all pregnancy-path deliveries must increment children_born"
+        4,
+        "all 4 pregnancy-path deliveries must increment children_born"
     );
     assert_eq!(
         late.agents
@@ -9590,9 +9602,9 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         "every pregnancy must clear after delivery"
     );
 
-    // Determinism: two seed-1 100K runs → identical birth timeline and
+    // Determinism: two seed-46 100K runs → identical birth timeline and
     // population.
-    let again = run_sim(1, 100000);
+    let again = run_sim(46, 100000);
     let ticks2: Vec<u64> = again
         .recent_events(10_000_000)
         .iter()
@@ -9609,6 +9621,68 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         late.agents.len(),
         again.agents.len(),
         "population must be seed-deterministic"
+    );
+}
+
+// §8.1.18 (Iteration 168): the daily belief-update gate is LIVE — the
+// NeighborTrustworthy (prop 2) belief is seeded at populate (pre-168 only
+// props 0–1 were seeded, so the gate could never fire: probe showed 0/12
+// movers) and the gate moves its confidence deterministically.
+#[test]
+fn belief_update_gate_is_live_and_deterministic() {
+    use mindstrata_core::fixed::Fixed;
+
+    let sim = run_sim(42, 2000);
+    // Every agent seeds the gate's target belief at populate.
+    for a in &sim.agents {
+        assert!(
+            a.beliefs.iter().any(|b| b.proposition_id == 2),
+            "every agent must hold the gate's NeighborTrustworthy belief"
+        );
+    }
+    // Gate liveness: the confidence must have moved off the 0.5 seed in a
+    // calibrated window (pre-168 the gate was structurally dead — no agent
+    // ever held prop 2, so the daily pass no-op'd).
+    let moved = sim
+        .agents
+        .iter()
+        .filter(|a| {
+            a.beliefs
+                .iter()
+                .find(|b| b.proposition_id == 2)
+                .is_some_and(|b| (b.confidence - Fixed::from_f64(0.5)).abs() > Fixed::ZERO)
+        })
+        .count();
+    assert!(
+        moved > 0,
+        "the daily gate must move prop-2 confidence (got {moved} movers)"
+    );
+
+    // Determinism: identical seed → identical prop-2 confidence vector.
+    let again = run_sim(42, 2000);
+    let confs: Vec<f64> = sim
+        .agents
+        .iter()
+        .map(|a| {
+            a.beliefs
+                .iter()
+                .find(|b| b.proposition_id == 2)
+                .map_or(0.0, |b| b.confidence.to_f64())
+        })
+        .collect();
+    let confs2: Vec<f64> = again
+        .agents
+        .iter()
+        .map(|a| {
+            a.beliefs
+                .iter()
+                .find(|b| b.proposition_id == 2)
+                .map_or(0.0, |b| b.confidence.to_f64())
+        })
+        .collect();
+    assert_eq!(
+        confs, confs2,
+        "prop-2 confidence must be seed-deterministic"
     );
 }
 
@@ -10903,12 +10977,17 @@ fn noospheric_belief_confidence_sustains_conviction() {
         low_fear, high_fear,
         "the seeded worlds must share an identical evidence stream"
     );
+    // Iteration 168 recalibration: the revived gate perturbs the seeded
+    // ecologies (prop-2 converges toward the same trust equilibrium
+    // regardless of seeded confidence) — probe-pinned 0.4663 vs 0.0962 at
+    // 2000, delta 0.3701. Thresholds recalibrated to the honest post-168
+    // spread; the differential (confident far above weak) still holds.
     assert!(
-        high_mean > low_mean + 0.4,
-        "the confident belief ecology must persist far above the weak one (probe-pinned 0.586 vs 0.066 at 2000, got {high_mean:.4} vs {low_mean:.4})"
+        high_mean > low_mean + 0.3,
+        "the confident belief ecology must persist far above the weak one (probe-pinned 0.4663 vs 0.0962 at 2000, got {high_mean:.4} vs {low_mean:.4})"
     );
     assert!(
-        high_mean > 0.5,
+        high_mean > 0.4,
         "high-confidence beliefs must remain elevated (got {high_mean:.4})"
     );
     assert!(
@@ -11524,8 +11603,11 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
         // legitimacy buildup — probe-pinned panic now at 15,425 (intensity
         // 1.0 at the 20,000 horizon, still active; the differentiated fear
         // equilibrium delays the belief-charge trigger into the mid-window).
-        panic.start_tick >= 15300 && panic.start_tick <= 15600,
-        "the seed-42 panic must fire near the probe-pinned 15,425 horizon, got {}",
+        // Iteration 168 recalibration: the revived gate's prop-2 beliefs
+        // carry emotional charge into the gossip-fed panic detector,
+        // delaying the trigger — probe-pinned panic now at 17,169.
+        panic.start_tick >= 17000 && panic.start_tick <= 17350,
+        "the seed-42 panic must fire near the probe-pinned 17,169 horizon, got {}",
         panic.start_tick
     );
     assert!(

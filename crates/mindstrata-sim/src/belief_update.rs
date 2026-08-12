@@ -87,6 +87,17 @@ pub fn update_belief(
 }
 
 /// Batch update all beliefs for an agent.
+///
+/// `cultural_dampening` (0..=1) scales the EVIDENCE term of every update —
+/// the §8.1.18 sacred-boundary defense: an agent whose culture is more
+/// conservative/taboo-bound absorbs less counter- and confirming evidence,
+/// so its beliefs move less per interaction (the same honest
+/// closed-mindedness direction as the `rigidity_factor` dogmatism term —
+/// evidence dampening, never `resistance` scaling, per the Iteration-109
+/// lesson). At dampening 1.0 (no cultural resistance) the formula is
+/// byte-identical to the pre-Iteration-168 behavior. ONE-SIDED: a dampening
+/// factor is always ≤ 1.0 and can only shrink the evidence magnitude,
+/// never flip its sign.
 pub fn update_beliefs(
     beliefs: &mut [Belief],
     evidence: &[(u64, Fixed, Fixed)], // (proposition_id, evidence_strength, source_trust)
@@ -95,12 +106,13 @@ pub fn update_beliefs(
     current_tick: u64,
     params: &crate::parameters::SimParameters,
     rigidity_factor: Fixed,
+    cultural_dampening: Fixed,
 ) {
     for (prop_id, strength, trust) in evidence {
         if let Some(belief) = beliefs.iter_mut().find(|b| b.proposition_id == *prop_id) {
             update_belief(
                 belief,
-                *strength,
+                *strength * cultural_dampening,
                 *trust,
                 emotional_reinforcement,
                 social_reinforcement,
@@ -250,6 +262,69 @@ mod tests {
         assert!(
             rigid.confidence < loose.confidence,
             "rigidity must dampen the upward movement"
+        );
+    }
+
+    #[test]
+    fn cultural_dampening_scales_evidence_one_sided() {
+        // §8.1.18 (Iteration 168): the cultural change-resistance dampening
+        // scales the EVIDENCE term only — under identical input, a belief
+        // updated with dampening < 1.0 moves strictly less than with
+        // identity (1.0), and the direction never flips (ONE-SIDED: a
+        // dampening factor is always ≤ 1.0, so it can only shrink evidence
+        // magnitude, never flip its sign).
+        let params = crate::parameters::SimParameters::default();
+        let make = || Belief {
+            proposition_id: 2,
+            confidence: Fixed::from_f64(0.5),
+            emotional_charge: Fixed::ZERO,
+            identity_linkage: Fixed::ZERO,
+            resistance: Fixed::from_f64(0.5),
+            last_reinforced_tick: 0,
+            source: crate::person::EvidenceSource::PersonalExperience,
+            social_reinforcement: 0,
+            is_accurate: true,
+        };
+        let evidence = [(2u64, Fixed::from_f64(0.6), Fixed::from_f64(0.8))];
+
+        let mut undamped = vec![make()];
+        update_beliefs(
+            &mut undamped,
+            &evidence,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            100,
+            &params,
+            Fixed::ONE,
+            Fixed::ONE,
+        );
+        let mut damped = vec![make()];
+        update_beliefs(
+            &mut damped,
+            &evidence,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            100,
+            &params,
+            Fixed::ONE,
+            Fixed::from_f64(0.5),
+        );
+
+        assert!(
+            undamped[0].confidence > Fixed::from_f64(0.5),
+            "undamped evidence must move confidence up (got {})",
+            undamped[0].confidence.to_f64()
+        );
+        assert!(
+            damped[0].confidence > Fixed::from_f64(0.5),
+            "dampened evidence must still move in the same direction (got {})",
+            damped[0].confidence.to_f64()
+        );
+        assert!(
+            damped[0].confidence < undamped[0].confidence,
+            "the dampened belief must move strictly less (damped {} vs undamped {})",
+            damped[0].confidence.to_f64(),
+            undamped[0].confidence.to_f64()
         );
     }
 }
