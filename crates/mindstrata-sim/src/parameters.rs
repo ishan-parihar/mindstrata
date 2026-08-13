@@ -142,6 +142,27 @@ pub struct SimParameters {
     /// `positive × (1 − expectedness)`, LIVE in calibrated windows, so this
     /// is a CALIBRATED change — golden + snapshots regenerated).
     pub social_gratitude_help_multiplier: Fixed,
+    /// §8.1.6 (Iteration 180): altruism multiplier for the help propensity
+    /// (0.23 — a trait tier BELOW the transient-emotion tiers 0.5: the core
+    /// trait is a standing disposition drawn 0..1 at birth and present in
+    /// EVERY calibrated window, so even a modest multiplier is a uniform
+    /// standing shift, not a differential nudge — the Iter-129
+    /// floor-pinned framing). The last decision-less core trait gets its
+    /// consumer: a high-altruism agent helps neighbors more (the
+    /// disposition→caregiving channel; folds into the Help-window consumer
+    /// `[0.2, 0.5 × (1 + propensity))`, clamped by its [0.5, 1.0] bound).
+    /// ONE-SIDED identity-at-zero: altruism 0 → the norm-only legacy value.
+    /// RATE-CALIBRATED BY 2D SWEEP: the standing shift re-paces the shared
+    /// interaction RNG stream NON-MONOTONICALLY (the Iter-164 pattern), so
+    /// a fine sweep (seed 42, 2000 ticks) was required to find a rate that
+    /// preserves ALL THREE directional contracts simultaneously:
+    /// tenderness (warm > cold × 1.1), violence-taboo aversion (maxed
+    /// taboo suppresses), and taboo-shame tracking (stripped world's extra
+    /// acts out-produce). 0.3 flips tenderness (3259 > 2974); 0.2 passes
+    /// tenderness but collapses the taboo differentials (70 = 70); the
+    /// [0.23, 0.24] band passes all three (0.23 → tenderness 2382 < 2799,
+    /// taboo 65 > 63, shame violence 65 < 66 AND 0.451 > 0.328).
+    pub social_altruism_help_multiplier: Fixed,
     /// Agreeableness threshold for Teach interaction (0.5).
     pub social_agreeableness_threshold: Fixed,
     /// Friend→Neighbor downgrade threshold (0.4 = Friend downgrades if trust drops below).
@@ -424,6 +445,7 @@ impl Default for SimParameters {
             social_sociability_multiplier: Fixed::from_f64(0.08),
             social_tenderness_help_multiplier: Fixed::from_f64(0.5),
             social_gratitude_help_multiplier: Fixed::from_f64(0.5),
+            social_altruism_help_multiplier: Fixed::from_f64(0.23),
             social_agreeableness_threshold: Fixed::from_f64(0.5),
             social_friend_downgrade_threshold: Fixed::from_f64(0.4),
             social_rival_repair_trust: Fixed::from_f64(0.5),

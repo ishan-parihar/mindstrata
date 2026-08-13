@@ -817,6 +817,85 @@ mod tests {
         );
     }
 
+    /// §8.1.6 (Iteration 180): the core altruism trait — the last
+    /// decision-less core trait — widens the Help window THROUGH the shared
+    /// fold: `help_propensity` (norm + tenderness × 0.5 + gratitude × 0.5 +
+    /// altruism × 0.3) feeds `help_neighbors_propensity`, so a high-
+    /// altruism agent helps strictly more in high-affection pairs than an
+    /// altruism-zero agent under the SAME seed. The RNG draw stays
+    /// unconditional — only the window threshold changes (the Iter-89
+    /// pattern), so the [0, 0.2) Comfort window must stay identical.
+    #[test]
+    fn altruism_widens_help_decision_via_fold() {
+        let params = crate::parameters::SimParameters::default();
+        // High-affection setup isolates the Help branch (mirrors the
+        // Iter-89 test): trust 1.0 and affection 1.0 clear both thresholds,
+        // high agreeableness + zero anger keep the negativity branch off.
+        let trust = Fixed::ONE;
+        let affection = Fixed::ONE;
+        let openness = Fixed::from_f64(0.5);
+        let agreeableness = Fixed::from_f64(0.8);
+        let anger = Fixed::ZERO;
+        let alt_rate = params.social_altruism_help_multiplier.to_f64();
+        let count_help = |altruism: f64| -> (u32, u32) {
+            let mut rng = RngStreams::new(42);
+            let mut help = 0u32;
+            let mut comfort = 0u32;
+            for _ in 0..2000 {
+                // Zero emotions + zero norm isolates the dispositional
+                // channel — the propensity is purely the altruism term.
+                let propensity = crate::appraisal::help_propensity(
+                    Fixed::ZERO,
+                    Fixed::ZERO,
+                    Fixed::ZERO,
+                    Fixed::from_f64(altruism),
+                    0.5,
+                    0.5,
+                    alt_rate,
+                );
+                match choose_interaction(
+                    trust,
+                    affection,
+                    openness,
+                    agreeableness,
+                    anger,
+                    Fixed::ZERO,
+                    propensity,
+                    Fixed::ZERO,
+                    false,
+                    Fixed::ZERO, // no Obey Ruler norm in this setup
+                    false,       // no authority target in this setup
+                    &mut rng,
+                    &params,
+                ) {
+                    InteractionKind::Help => help += 1,
+                    InteractionKind::Comfort => comfort += 1,
+                    _ => {}
+                }
+            }
+            (help, comfort)
+        };
+        let (baseline_help, baseline_comfort) = count_help(0.0);
+        let (full_help, full_comfort) = count_help(1.0);
+        let (half_help, _) = count_help(0.5);
+        assert!(
+            baseline_help > 0,
+            "high-affection rolls in [0.2, 0.5) must produce Help even at zero altruism"
+        );
+        assert!(
+            full_help > baseline_help,
+            "full altruism must strictly amplify Help (rolls in the widened window convert Talk → Help)"
+        );
+        assert!(
+            half_help > baseline_help && half_help < full_help,
+            "half altruism must land strictly between baseline and full"
+        );
+        assert_eq!(
+            baseline_comfort, full_comfort,
+            "the untouched [0, 0.2) Comfort window must be identical — same roll sequence"
+        );
+    }
+
     /// §8.1.10 (Iteration 91): the prescriptive "Respect Elders" norm
     /// suppresses *disrespectful* acts toward the community's designated
     /// elder — `choose_interaction` scales both negative windows (the

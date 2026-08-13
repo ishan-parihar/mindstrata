@@ -4211,8 +4211,15 @@ impl Simulation {
                                 .map_or(Fixed::ZERO, |n| a.moral_cognition.norm_resistance(n)),
                             emotions[i].tenderness,
                             emotions[i].gratitude,
+                            // §8.1.6 (Iteration 180): the core altruism
+                            // trait — the LAST decision-less core trait now
+                            // has its consumer (the disposition→caregiving
+                            // channel, ONE-SIDED identity-at-zero like the
+                            // emotion tiers).
+                            a.personality.altruism,
                             self.params.social_tenderness_help_multiplier.to_f64(),
                             self.params.social_gratitude_help_multiplier.to_f64(),
+                            self.params.social_altruism_help_multiplier.to_f64(),
                         );
                         let respect_propensity = respect_elders_name
                             .map_or(Fixed::ZERO, |n| a.moral_cognition.norm_resistance(n));

@@ -1,10 +1,11 @@
 ---
 source: crates/mindstrata-tests/src/snapshot_tests.rs
+assertion_line: 226
 expression: stage_counts
 ---
 {
     "Acquaintance": 34,
     "Familiar": 32,
-    "PatronClient": 11,
-    "Unnoticed": 55,
+    "PatronClient": 10,
+    "Unnoticed": 56,
 }

@@ -371,27 +371,32 @@ pub fn awe_reverence_factor(awe: Fixed, rate: f64, floor: f64) -> Fixed {
     (Fixed::ONE - awe * Fixed::from_f64(rate)).max(Fixed::from_f64(floor))
 }
 
-/// §8.1.4 (Iteration 127): the help propensity — the combined prosocial
-/// push behind the Help interaction. The caller (the daily social pass)
-/// feeds the internalized "Help Neighbors" norm resistance plus the
-/// tenderness (Iter-99, warmth→caregiving) and gratitude (Iter-127,
-/// reciprocity→caregiving) emotion channels, each weighted by its shipped
-/// multiplier; the result is the tuple element the interaction system
-/// destructures as `help_neighbors_propensity`, widening the Help window
+/// §8.1.4/§8.1.6 (Iteration 127 + 180): the help propensity — the combined
+/// prosocial push behind the Help interaction. The caller (the daily social
+/// pass) feeds the internalized "Help Neighbors" norm resistance plus the
+/// tenderness (Iter-99, warmth→caregiving), gratitude (Iter-127,
+/// reciprocity→caregiving) and altruism (Iter-180, disposition→caregiving)
+/// channels, each weighted by its shipped multiplier; the result is the
+/// tuple element the interaction system destructures as
+/// `help_neighbors_propensity`, widening the Help window
 /// `[0.2, 0.5 × (1 + propensity))` in high-affection pairs. Clamped to
 /// [0, 1] (the Help-window consumer further bounds the decision to
 /// [0.5, 1.0]). Identity at zero emotions: gratitude 0 adds exactly 0
-/// (the norm-only legacy value). Deterministic, no RNG.
+/// (the norm-only legacy value); the altruism term is ONE-SIDED the same
+/// way — altruism 0 adds exactly 0. Deterministic, no RNG.
 pub fn help_propensity(
     norm: Fixed,
     tenderness: Fixed,
     gratitude: Fixed,
+    altruism: Fixed,
     tenderness_multiplier: f64,
     gratitude_multiplier: f64,
+    altruism_multiplier: f64,
 ) -> Fixed {
     (norm
         + tenderness * Fixed::from_f64(tenderness_multiplier)
-        + gratitude * Fixed::from_f64(gratitude_multiplier))
+        + gratitude * Fixed::from_f64(gratitude_multiplier)
+        + altruism * Fixed::from_f64(altruism_multiplier))
     .clamp_01()
 }
 
@@ -792,20 +797,45 @@ mod tests {
     fn help_propensity_is_identity_at_zero_emotions_and_adds_gratitude() {
         // §8.1.4 (Iteration 127): gratitude 0 → the norm-only legacy value
         // (identity), exact +0.25 at half gratitude with the shipped 0.5
-        // multiplier, exact +0.5 at full, clamp at the 1.0 ceiling.
-        // Deterministic, no RNG.
+        // multiplier, exact +0.5 at full, clamp at the 1.0 ceiling. The
+        // Iteration-180 altruism channel is ONE-SIDED the same way: zero
+        // altruism preserves the legacy value. Deterministic, no RNG.
         assert_eq!(
-            help_propensity(Fixed::from_f64(0.5), Fixed::ZERO, Fixed::ZERO, 0.5, 0.5),
+            help_propensity(
+                Fixed::from_f64(0.5),
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                0.5,
+                0.5,
+                0.23
+            ),
             Fixed::from_f64(0.5),
-            "zero emotions must preserve the norm-only value"
+            "zero emotions AND zero altruism must preserve the norm-only value"
         );
         assert_eq!(
-            help_propensity(Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(0.5), 0.5, 0.5),
+            help_propensity(
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::from_f64(0.5),
+                Fixed::ZERO,
+                0.5,
+                0.5,
+                0.23
+            ),
             Fixed::from_f64(0.25),
             "0.5 gratitude × 0.5 must add exactly 0.25"
         );
         assert_eq!(
-            help_propensity(Fixed::ZERO, Fixed::ZERO, Fixed::ONE, 0.5, 0.5),
+            help_propensity(
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ONE,
+                Fixed::ZERO,
+                0.5,
+                0.5,
+                0.23
+            ),
             Fixed::from_f64(0.5),
             "full gratitude adds exactly 0.5"
         );
@@ -814,8 +844,63 @@ mod tests {
                 Fixed::from_f64(0.7),
                 Fixed::from_f64(0.5),
                 Fixed::from_f64(0.5),
+                Fixed::ZERO,
                 0.5,
-                0.5
+                0.5,
+                0.23
+            ),
+            Fixed::ONE,
+            "the sum must clamp to the 1.0 ceiling"
+        );
+    }
+
+    #[test]
+    fn help_propensity_adds_altruism_identity_at_zero() {
+        // §8.1.6 (Iteration 180): the core altruism trait — the last
+        // decision-less core trait — adds a dispositional channel to the
+        // help fold. ONE-SIDED identity-at-zero (altruism 0 → the legacy
+        // value), exact +0.115 at half altruism with the shipped 0.23
+        // multiplier, exact +0.23 at full, clamp at 1.0. Deterministic.
+        assert_eq!(
+            help_propensity(Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, 0.5, 0.5, 0.23),
+            Fixed::ZERO,
+            "zero altruism must add exactly 0"
+        );
+        assert_eq!(
+            help_propensity(
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::from_f64(0.5),
+                0.5,
+                0.5,
+                0.23
+            ),
+            Fixed::from_f64(0.115),
+            "0.5 altruism × 0.23 must add exactly 0.115"
+        );
+        assert_eq!(
+            help_propensity(
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ONE,
+                0.5,
+                0.5,
+                0.23
+            ),
+            Fixed::from_f64(0.23),
+            "full altruism adds exactly 0.23"
+        );
+        assert_eq!(
+            help_propensity(
+                Fixed::from_f64(0.9),
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ONE,
+                0.5,
+                0.5,
+                0.23
             ),
             Fixed::ONE,
             "the sum must clamp to the 1.0 ceiling"
