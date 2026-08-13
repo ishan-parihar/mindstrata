@@ -97,6 +97,23 @@ impl Default for SensoryAcuity {
 }
 
 /// Tunable parameters for nervous system update.
+/// Floor on the parasympathetic tone used for sympathetic recovery.
+/// Iteration 176: without a floor, sustained threat drains `parasympathetic_tone`
+/// toward 0 (drain = arousal × 0.05), which zeroes `recovery = tone × rate`
+/// — a structural deadlock where arousal can never calm down once the tone
+/// is exhausted. Mirror of the Iteration 172 `STRESS_RECOVERY_TONE_FLOOR`
+/// fix on the endocrine stress axis: a floor of 0.3 with the 0.1 recovery
+/// rate guarantees a basal recovery channel even at full activation.
+/// Defensive rather than load-bearing in the probed windows (aggregate
+/// arousal was byte-identical with/without it — the observed trauma ratchet
+/// was fixed by the proportional-decay change below) — but without it the
+/// channel CAN deadlock in threat-then-safety sequences where the tone has
+/// drained to zero, which the targeted unit test pins.
+pub const NERVOUS_TONE_RECOVERY_FLOOR: f64 = 0.3;
+/// [`NERVOUS_TONE_RECOVERY_FLOOR`] pre-converted to [`Fixed`] (hoisted out of
+/// the per-tick per-agent `update` hot path; 0.3 × 10_000 = 3_000).
+pub const NERVOUS_TONE_RECOVERY_FLOOR_FIXED: Fixed = Fixed::from_raw(3_000);
+
 ///
 /// Grouped into a `Copy` struct to avoid transposition-prone positional args
 /// (Apollo Rust best practices Ch. 1: prefer structured data over positional
@@ -110,7 +127,10 @@ pub struct NervousUpdateParams {
     pub parasympathetic_buildup_rate: Fixed,
     /// Trauma accumulation rate from sustained high arousal. Range: 0.0001–0.001, default 0.0003.
     pub trauma_accumulation_rate: Fixed,
-    /// Trauma decay rate per tick (very slow). Range: 0.00001–0.0002, default 0.00005.
+    /// Trauma decay fraction per tick (proportional since Iteration 176).
+    /// Range: 0.0001–0.005, default 0.0005. The pre-fix range (0.00001–
+    /// 0.0002) was entirely below 4-decimal Fixed resolution (0.00001 → raw
+    /// 0) — the knob was a dead subtractive knife-edge.
     pub trauma_decay_rate: Fixed,
 }
 
@@ -120,7 +140,7 @@ impl Default for NervousUpdateParams {
             sympathetic_recovery_rate: Fixed::from_f64(0.1),
             parasympathetic_buildup_rate: Fixed::from_f64(0.06),
             trauma_accumulation_rate: Fixed::from_f64(0.0003),
-            trauma_decay_rate: Fixed::from_f64(0.00005),
+            trauma_decay_rate: Fixed::from_f64(0.0005),
         }
     }
 }
@@ -182,7 +202,13 @@ impl NervousSystemState {
     ) {
         // Sympathetic activation from threat
         let sympathetic_delta = threat_input * Fixed::from_f64(0.2);
-        let sympathetic_recovery = self.parasympathetic_tone * params.sympathetic_recovery_rate;
+        // Iteration 176: floor the parasympathetic tone used for recovery so
+        // sustained threat cannot drain it to 0 and zero the recovery channel
+        // (the pre-fix trauma ratchet — see NERVOUS_TONE_RECOVERY_FLOOR doc).
+        let recovery_tone = self
+            .parasympathetic_tone
+            .max(NERVOUS_TONE_RECOVERY_FLOOR_FIXED);
+        let sympathetic_recovery = recovery_tone * params.sympathetic_recovery_rate;
         self.sympathetic_arousal =
             (self.sympathetic_arousal + sympathetic_delta - sympathetic_recovery).clamp_01();
 
@@ -200,8 +226,24 @@ impl NervousSystemState {
         if self.sympathetic_arousal > Fixed::from_f64(0.7) {
             self.trauma_load = (self.trauma_load + params.trauma_accumulation_rate).clamp_01();
         }
-        // Trauma load decays very slowly
-        self.trauma_load = (self.trauma_load - params.trauma_decay_rate).max(Fixed::ZERO);
+        // Trauma load decays proportionally (Iteration 176). The pre-fix
+        // subtractive decay was a bang-bang knife-edge: any agent hot
+        // (arousal > 0.7) more than ~33% of ticks saturated to the 1.0 cap
+        // while everyone else drained to zero, and the documented range
+        // (0.00001–0.0002) collapsed to 0.0001–0.0002 in 4-decimal Fixed —
+        // the "recovery" knob had no working tuning range at all (probe:
+        // 0.00005 ≡ 0.00010 ≡ default envelope, 0.0003 nukes trauma to 0).
+        // Proportional decay (the Iteration 164 base-emotion pattern)
+        // converges every agent to `hot_fraction × accumulation / rate`,
+        // so the knob continuously tunes the whole envelope and trauma
+        // differentiates instead of saturating.
+        // Computed in f64 for the same reason `should_birth` does (the
+        // 1/35040 precedent): rates in the 0.0001–0.005 range are at the
+        // edge of 4-decimal Fixed resolution, and round-tripping through
+        // Fixed per tick would silently underflow the decay fraction.
+        let load = self.trauma_load.to_f64();
+        let decay = load * params.trauma_decay_rate.to_f64();
+        self.trauma_load = Fixed::from_f64((load - decay).max(0.0));
 
         // Dissociation risk from extreme trauma
         self.dissociation_risk = (self.trauma_load * Fixed::from_f64(0.8)
@@ -313,5 +355,105 @@ mod tests {
             ..NervousSystemState::default()
         };
         assert!(ns_low.social_engagement_capacity() < Fixed::from_f64(0.3));
+    }
+
+    #[test]
+    fn trauma_decays_proportionally_not_subtractively() {
+        // Iteration 176: proportional decay must remove a FRACTION of the
+        // current load, so a small load decays slower in absolute terms than
+        // a large load — the pre-fix subtractive knife-edge (0.0001/tick,
+        // which saturated anyone hot >33% of ticks and could not be tuned in
+        // 4-decimal Fixed) is replaced by a continuously tunable envelope.
+        let mut ns = NervousSystemState {
+            trauma_load: Fixed::from_f64(0.5),
+            ..NervousSystemState::default()
+        };
+        let params = NervousUpdateParams {
+            trauma_decay_rate: Fixed::from_f64(0.001),
+            ..NervousUpdateParams::default()
+        };
+        ns.update(Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, false, params);
+        let after_one = ns.trauma_load;
+        assert!(
+            after_one < Fixed::from_f64(0.5),
+            "proportional decay must lower the load"
+        );
+        assert!(
+            after_one > Fixed::from_f64(0.49),
+            "one tick at 0.1% must remove only ~0.1% (got {after_one})"
+        );
+        // Half-life: 0.5 -> ~0.25 needs ln(2)/ln(1/(1-0.001)) ~ 693 ticks.
+        for _ in 0..700 {
+            ns.update(Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, false, params);
+        }
+        assert!(
+            ns.trauma_load < Fixed::from_f64(0.3),
+            "700 ticks at 0.1% proportional decay must halve the load"
+        );
+    }
+
+    #[test]
+    fn trauma_recovery_rate_is_continuously_tunable() {
+        // Iteration 176: the recovery knob must produce distinct equilibrium
+        // levels across its range — the pre-fix subtractive knob was
+        // byte-identical from 0.00005 to 0.0002 and nuked trauma to zero at
+        // 0.0003 (no working range). Two agents under identical sustained
+        // threat with different decay rates must converge to different loads.
+        let mk = |decay: f64| {
+            let mut ns = NervousSystemState::default();
+            let params = NervousUpdateParams {
+                trauma_decay_rate: Fixed::from_f64(decay),
+                ..NervousUpdateParams::default()
+            };
+            for _ in 0..5000 {
+                ns.update(
+                    Fixed::from_f64(0.9),
+                    Fixed::from_f64(0.1),
+                    Fixed::ZERO,
+                    false,
+                    params,
+                );
+            }
+            ns.trauma_load
+        };
+        let slow = mk(0.0005);
+        let fast = mk(0.002);
+        assert!(
+            slow > fast,
+            "lower decay rate must retain more trauma: slow {slow} vs fast {fast}"
+        );
+        assert!(
+            slow < Fixed::ONE && fast < Fixed::ONE,
+            "neither may saturate: slow {slow} fast {fast}"
+        );
+        assert!(
+            slow > Fixed::from_f64(0.1),
+            "slow decay must retain a meaningful load: {slow}"
+        );
+    }
+
+    #[test]
+    fn tone_recovery_floor_prevents_arousal_pinning() {
+        // Iteration 176: the parasympathetic tone used for sympathetic
+        // recovery is floored, so sustained threat cannot drain the tone to
+        // zero and zero the recovery channel (the pre-fix trauma ratchet).
+        // An agent with zero tone under threat must still see its arousal
+        // fall once threat recedes (recovery = floored_tone x rate).
+        let mut ns = NervousSystemState {
+            parasympathetic_tone: Fixed::ZERO,
+            sympathetic_arousal: Fixed::from_f64(0.9),
+            ..NervousSystemState::default()
+        };
+        let params = NervousUpdateParams::default();
+        // Threat recedes to a low level; safety stays low so the tone itself
+        // cannot rebuild — only the floor can supply recovery.
+        for _ in 0..50 {
+            ns.update(Fixed::from_f64(0.05), Fixed::ZERO, Fixed::ZERO, false, params);
+        }
+        assert!(
+            ns.sympathetic_arousal < Fixed::from_f64(0.9),
+            "floored recovery must pull arousal down from 0.9: {}",
+            ns.sympathetic_arousal
+        );
     }
 }

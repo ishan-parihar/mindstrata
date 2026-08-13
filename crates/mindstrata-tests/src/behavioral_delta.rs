@@ -330,6 +330,34 @@ fn live_consumer_trauma_accumulation_fires_in_pestilence_window() {
     );
 }
 
+/// §7 (Iteration 176): the trauma RECOVERY knob is live after the
+/// proportional-decay fix. Pre-fix the subtractive decay was a dead
+/// knife-edge — 0.00005 ≡ 0.00010 ≡ default envelope (below 4-decimal Fixed
+/// resolution) and 0.0003 nuked trauma to zero, so "tune trauma/recovery"
+/// had no working range. Probe-pinned at 5K ticks across all three windows:
+/// 4× recovery (0.0005 → 0.002) cuts avg_trauma_load by 0.255–0.281.
+#[test]
+fn live_consumer_trauma_decay_fires_across_windows() {
+    for scenario in [
+        Scenario::pestilence(),
+        Scenario::drought(),
+        Scenario::calm(),
+    ] {
+        let report = scenario_behavioral_delta(
+            &scenario,
+            5000,
+            "nervous_trauma_decay (window 5000)",
+            |p| p.nervous_trauma_decay = Fixed::from_f64(0.002), // 4x default 0.0005
+            |m| m.avg_trauma_load,
+        );
+        assert_live_delta(&report, 0.1);
+        assert!(
+            report.delta < 0.0,
+            "more trauma decay must LOWER trauma_load, got {report:?}"
+        );
+    }
+}
+
 /// §8.1.4 (Iteration 161): the loneliness→social-seeking consumer is LIVE
 /// in a vanilla window. `social_loneliness_multiplier` (0.5 → 0.1) at seed
 /// 42 / 4,000 ticks measurably changes the interaction rate (probe-pinned:

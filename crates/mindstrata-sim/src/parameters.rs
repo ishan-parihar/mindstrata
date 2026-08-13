@@ -296,7 +296,10 @@ pub struct SimParameters {
     // ── Trauma / Recovery (Phase 5 tuning) ─────────────────────
     /// Trauma accumulation rate from sustained high arousal.
     pub nervous_trauma_accumulation: Fixed,
-    /// Trauma decay rate per tick (very slow recovery).
+    /// Trauma decay FRACTION per tick (proportional since Iteration 176 —
+    /// converges to `hot_fraction × accumulation / rate`, so the knob
+    /// continuously tunes the recovery envelope; the pre-fix subtractive
+    /// decay was a dead knife-edge with no representable range).
     pub nervous_trauma_decay: Fixed,
     /// Sympathetic arousal recovery rate in safety.
     pub nervous_sympathetic_recovery: Fixed,
@@ -495,7 +498,7 @@ impl Default for SimParameters {
 
             // Trauma / Recovery (Phase 5 tuning)
             nervous_trauma_accumulation: Fixed::from_f64(0.0003),
-            nervous_trauma_decay: Fixed::from_f64(0.00005),
+            nervous_trauma_decay: Fixed::from_f64(0.0005),
             nervous_sympathetic_recovery: Fixed::from_f64(0.1),
             nervous_parasympathetic_buildup: Fixed::from_f64(0.06),
 

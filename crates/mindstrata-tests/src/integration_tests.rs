@@ -9610,7 +9610,18 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         // The pipeline's end-to-end contract — pregnancy-path birth →
         // ChildBorn event → parentage → marriage record → children_born —
         // holds intact on the 2-chain.
-        vec![28290, 63990],
+        // Iteration 176 recalibration (Phase 5 "tune trauma/recovery"):
+        // the nervous trauma decay is now PROPORTIONAL (0.0005 fraction,
+        // replacing the subtractive 0.00005 knife-edge that saturated
+        // trauma at ~0.79) — the differentiated trauma envelope re-paces
+        // courtship through the same stress/arousal cascade and the
+        // seed-46 trajectory settles to ONE birth in the 100K window
+        // (probe-pinned [51000], 1 live child, 1 marriage record,
+        // children_born 1, population 13, stress_mean@100K 0.69,
+        // trauma_mean@100K 0.45 — the 1-chain holds intact end-to-end;
+        // the golden window at 1000 ticks is untouched, so this is a
+        // pure long-horizon re-pace).
+        vec![51000],
         "seed-46 100K world must deliver exactly the probed births"
     );
     for t in &birth_ticks {
@@ -9621,8 +9632,8 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
     }
     assert_eq!(
         late.agents.iter().filter(|a| a.parent_a.is_some()).count(),
-        2,
-        "all 2 live children must carry parentage at 100K"
+        1,
+        "all 1 live children must carry parentage at 100K"
     );
     let marriage_children: usize = late
         .marriage_registry
@@ -9631,16 +9642,16 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         .map(|m| m.children.len())
         .sum();
     assert_eq!(
-        marriage_children, 2,
-        "all 2 births must be recorded in the mothers' active marriages"
+        marriage_children, 1,
+        "all 1 births must be recorded in the mothers' active marriages"
     );
     assert_eq!(
         late.agents
             .iter()
             .map(|a| a.embodied.reproductive.children_born)
             .sum::<u32>(),
-        2,
-        "all 2 pregnancy-path deliveries must increment children_born"
+        1,
+        "all 1 pregnancy-path deliveries must increment children_born"
     );
     assert_eq!(
         late.agents
@@ -11657,9 +11668,16 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
         // buildup earlier — probe-pinned panic now at 10,913, and the
         // fatigue-resolve threshold (0.7 after 35 days) is crossed by
         // ~18,000 so the panic DRAINS before the 20,000 horizon (the
-        // end-to-end drain the test name promises).
-        panic.start_tick >= 10000 && panic.start_tick <= 11500,
-        "the seed-42 panic must fire near the probe-pinned 10,913 horizon, got {}",
+        // end-to-end drain the test name promises). Iteration 176
+        // recalibration (Phase 5 "tune trauma/recovery"): the
+        // proportional trauma decay (0.0005 fraction) differentiates the
+        // trauma envelope (mean 0.79 saturated → ~0.45), re-pacing the
+        // startle/neuroplasticity-driven fear feed — probe-pinned panic
+        // now at 9,331 (intensity 0.45 at the 16,000 sample, active;
+        // fully drained to 0.000 by the 20,000 horizon — the
+        // register→escalate→drain lifecycle still completes in-window).
+        panic.start_tick >= 8500 && panic.start_tick <= 10000,
+        "the seed-42 panic must fire near the probe-pinned 9,331 horizon, got {}",
         panic.start_tick
     );
     assert!(
@@ -12471,9 +12489,13 @@ fn motivation_emotional_context_is_live() {
     // (still strongly positive) and joy 0.287 (was 0.637 at the Iter-159
     // saturation; the differentiated equilibrium is lower but genuinely
     // live). The pins drop to > 0.45 / > 0.25 with the same liveness
-    // meaning: the amplification has real, non-zero input.
+    // meaning: the amplification has real, non-zero input. Iteration 176
+    // re-pin (Phase 5 "tune trauma/recovery"): the proportional trauma
+    // decay differentiates the trauma envelope, lowering the
+    // startle-fear feed — probe-pinned mean 0.400 (joy 0.320) — so the
+    // fear pin relaxes to > 0.35 with the same liveness meaning.
     assert!(
-        fear_mean > 0.45,
+        fear_mean > 0.35,
         "motivation fear context must be live, mean {fear_mean:.3}"
     );
     assert!(
