@@ -104,6 +104,12 @@ enum Commands {
         #[arg(long)]
         timeline: Option<usize>,
 
+        /// Show the noosphere/culture inspector — legitimacy field, meme
+        /// pool, moral panics, propaganda campaigns, echo-chamber
+        /// polarization, rumors, and the symbolic noospheric field.
+        #[arg(long)]
+        noosphere: bool,
+
         /// Save a snapshot to disk after simulation (path to .snapshot file).
         #[arg(long)]
         save_snapshot: Option<String>,
@@ -157,6 +163,7 @@ fn main() {
             decisions,
             psychology,
             timeline,
+            noosphere,
             save_snapshot,
             load_snapshot,
             export_metrics,
@@ -523,6 +530,28 @@ fn main() {
                         println!("No events recorded.");
                     }
                 }
+            }
+
+            // §13 (Iteration 178): Noosphere/culture inspector
+            if noosphere {
+                let legitimacy_fields: Vec<_> = sim
+                    .agents
+                    .iter()
+                    .map(|a| &a.legitimacy_field)
+                    .collect();
+                println!();
+                println!(
+                    "{}",
+                    mindstrata_tui::render_noosphere_inspector(
+                        &sim.meme_registry,
+                        &sim.moral_panic_registry,
+                        &sim.propaganda_registry,
+                        &legitimacy_fields,
+                        &sim.echo_chamber,
+                        &sim.rumor_registry,
+                        &sim.noospheric_field,
+                    )
+                );
             }
 
             // §6.5 + §17: Export metric history to CSV using MetricsSnapshot methods

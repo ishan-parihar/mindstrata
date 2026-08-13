@@ -8,9 +8,11 @@ use crossterm::event::KeyCode;
 use mindstrata_core::event::SimEvent;
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::id::AgentId;
+use mindstrata_sim::culture::{EchoChamberState, MemeRegistry, PropagandaRegistry, RumorRegistry};
 use mindstrata_sim::institutions::{Institution, InstitutionalRecord};
 use mindstrata_sim::market::MarketState;
 use mindstrata_sim::military::MilitaryRegistry;
+use mindstrata_sim::noosphere::{LegitimacyField, MoralPanicRegistry, NoosphericField};
 use mindstrata_sim::person::{Belief, GoalKind, Relationship};
 use mindstrata_sim::provenance::CausalProvenance;
 use mindstrata_sim::psychology::attachment::{AttachmentStyle, CaregivingStyle};
@@ -1446,9 +1448,209 @@ pub fn render_military_dashboard(registry: &MilitaryRegistry) -> String {
     out
 }
 
+// ── §13 (Iteration 178): Noosphere/culture inspector ───────────────
+
+/// Render the noosphere/culture inspector — the collective-mind layer that
+/// the other dashboards do not surface: the legitimacy field, the meme
+/// pool, moral panics, propaganda campaigns, echo-chamber polarization,
+/// the rumor pool, and the symbolic noospheric field.
+///
+/// Pure and read-only: renders whatever state the registries hold. The
+/// caller decides what to pass; empty registries render their dormant
+/// state explicitly so the output is self-explanatory at any horizon.
+pub fn render_noosphere_inspector(
+    memes: &MemeRegistry,
+    panics: &MoralPanicRegistry,
+    propaganda: &PropagandaRegistry,
+    legitimacy: &[&LegitimacyField],
+    echo: &EchoChamberState,
+    rumors: &RumorRegistry,
+    noosphere: &NoosphericField,
+) -> String {
+    let mut out = String::new();
+    out.push_str("╔══════════════════════════════════════════╗\n");
+    out.push_str("║  Noosphere / Culture Inspector          ║\n");
+    out.push_str("╚══════════════════════════════════════════╝\n\n");
+
+    // ── Legitimacy field (per-agent perception of institutional
+    // legitimacy — §11.1) ─────────────────────────────────────────
+    out.push_str("  ── Legitimacy (per-agent) ────────────────────\n");
+    let mean_legitimacy = if legitimacy.is_empty() {
+        0.0
+    } else {
+        legitimacy
+            .iter()
+            .map(|l| l.overall.to_f64())
+            .sum::<f64>()
+            / legitimacy.len() as f64
+    };
+    out.push_str(&format!(
+        "  Agents: {}   Mean overall: {:.3}\n",
+        legitimacy.len(),
+        mean_legitimacy,
+    ));
+    for (i, field) in legitimacy.iter().take(10).enumerate() {
+        let source_word = if field.sources.len() == 1 {
+            "source"
+        } else {
+            "sources"
+        };
+        out.push_str(&format!(
+            "    Agent {i}: overall {:.3} ({} {source_word}, decay {:.4})\n",
+            field.overall.to_f64(),
+            field.sources.len(),
+            field.base_decay_rate.to_f64(),
+        ));
+    }
+    if legitimacy.len() > 10 {
+        out.push_str(&format!(
+            "    ... and {} more agents\n",
+            legitimacy.len() - 10
+        ));
+    }
+
+    // ── Meme pool ─────────────────────────────────────────────────
+    out.push_str("  ── Meme Pool ───────────────────────────────\n");
+    let active_meme_count = memes.memes.iter().filter(|m| m.active).count();
+    out.push_str(&format!(
+        "  Memes: {} total, {} active\n",
+        memes.memes.len(),
+        active_meme_count,
+    ));
+    if memes.memes.is_empty() {
+        out.push_str("  (no memes seeded)\n");
+    }
+    for meme in &memes.memes {
+        out.push_str(&format!(
+            "    #{} [{:?}] hosts={} virality={:.2} novelty={:.2} sacred={:.2}{}\n",
+            meme.id,
+            meme.content_type,
+            meme.host_count,
+            meme.virality.to_f64(),
+            meme.novelty.to_f64(),
+            meme.sacredness.to_f64(),
+            if meme.active { "" } else { " [inactive]" },
+        ));
+        out.push_str(&format!("      \"{}\"\n", meme.description));
+    }
+
+    // ── Moral panics ──────────────────────────────────────────────
+    out.push_str("  ── Moral Panics ─────────────────────────────\n");
+    if panics.panics.is_empty() {
+        out.push_str("  (no moral panics recorded)\n");
+    }
+    for panic in &panics.panics {
+        out.push_str(&format!(
+            "    {:?} @tick {} intensity {:.3} fear {:.3} participants {}{}\n",
+            panic.trigger,
+            panic.start_tick,
+            panic.intensity.to_f64(),
+            panic.fear_level.to_f64(),
+            panic.participants,
+            if panic.active { " [ACTIVE]" } else { " [resolved]" },
+        ));
+    }
+
+    // ── Propaganda campaigns ──────────────────────────────────────
+    out.push_str("  ── Propaganda Campaigns ──────────────────────\n");
+    let active_campaign_count = propaganda.campaigns.iter().filter(|c| c.active).count();
+    out.push_str(&format!(
+        "  Campaigns: {} total, {} active\n",
+        propaganda.campaigns.len(),
+        active_campaign_count,
+    ));
+    if propaganda.campaigns.is_empty() {
+        out.push_str("  (no campaigns)\n");
+    }
+    for campaign in &propaganda.campaigns {
+        let channels: Vec<String> = campaign
+            .channels
+            .iter()
+            .map(|c| format!("{c:?}"))
+            .collect();
+        out.push_str(&format!(
+            "    #{} sponsor={} intensity={:.2} credibility={:.2} remaining={}/{}{}\n",
+            campaign.id,
+            campaign.sponsor,
+            campaign.intensity.to_f64(),
+            campaign.credibility.to_f64(),
+            campaign.remaining,
+            campaign.duration,
+            if campaign.active { "" } else { " [ended]" },
+        ));
+        out.push_str(&format!("      \"{}\" via {}\n", campaign.narrative, channels.join("+")));
+    }
+
+    // ── Echo chambers ─────────────────────────────────────────────
+    out.push_str("  ── Echo Chambers ─────────────────────────────\n");
+    out.push_str(&format!(
+        "  Polarization: {:.3}   Strength: {:.3}   Cross-cutting ties: {} ({:.3})\n",
+        echo.polarization_index.to_f64(),
+        echo.echo_chamber_strength.to_f64(),
+        echo.total_cross_cutting_ties,
+        echo.cross_cutting_ties.to_f64(),
+    ));
+    if echo.narrative_dominance.is_empty() {
+        out.push_str("  (no narrative dominance data)\n");
+    }
+    for (meme_id, dominance) in &echo.narrative_dominance {
+        out.push_str(&format!(
+            "    meme #{meme_id}: dominance {:.3}\n",
+            dominance.to_f64()
+        ));
+    }
+
+    // ── Rumors ───────────────────────────────────────────────────
+    out.push_str("  ── Rumors ────────────────────────────────────\n");
+    if rumors.rumors.is_empty() {
+        out.push_str("  (no rumors)\n");
+    }
+    for rumor in &rumors.rumors {
+        let target_desc = match (rumor.target, rumor.institution_target) {
+            (Some(agent), _) => format!("agent {agent}"),
+            (None, Some(inst)) => format!("inst {inst}"),
+            (None, None) => "general".to_string(),
+        };
+        out.push_str(&format!(
+            "    #{} [{target_desc}] prevalence {:.2} evidence {:.2} panic-potential {:.2}\n",
+            rumor.id,
+            rumor.prevalence.to_f64(),
+            rumor.evidence_quality.to_f64(),
+            rumor.moral_panic_potential.to_f64(),
+        ));
+        out.push_str(&format!("      \"{}\"\n", rumor.description));
+    }
+
+    // ── Noospheric field ──────────────────────────────────────────
+    out.push_str("  ── Noospheric Field ──────────────────────────\n");
+    out.push_str(&format!(
+        "  Symbolic nodes: {}   Edges: {}\n",
+        noosphere.nodes.len(),
+        noosphere.edges.len(),
+    ));
+    if noosphere.nodes.is_empty() {
+        out.push_str("  (field empty)\n");
+    }
+    for node in noosphere.nodes.iter().take(6) {
+        out.push_str(&format!(
+            "    node #{} activation {:.3}\n",
+            node.id,
+            node.activation.to_f64(),
+        ));
+    }
+    if noosphere.nodes.len() > 6 {
+        out.push_str(&format!(
+            "    ... and {} more nodes\n",
+            noosphere.nodes.len() - 6
+        ));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mindstrata_sim::culture::{Meme, MemeContent};
     use mindstrata_sim::military::MilitiaMember;
     use mindstrata_sim::theology::{Religion, Temperament, TheologicalBelief};
 
@@ -1609,5 +1811,108 @@ mod tests {
             out.contains("Agent 0: since 4320, dominance 0.700"),
             "{out}"
         );
+    }
+
+    #[test]
+    fn noosphere_inspector_shows_empty_registries_as_dormant() {
+        let memes = MemeRegistry::default();
+        let panics = MoralPanicRegistry::new();
+        let propaganda = PropagandaRegistry::default();
+        let legitimacy = LegitimacyField::new(f(0.5));
+        let legitimacy_refs = [&legitimacy];
+        let echo = EchoChamberState::default();
+        let rumors = RumorRegistry::default();
+        let noosphere = NoosphericField::new();
+        let out = render_noosphere_inspector(
+            &memes, &panics, &propaganda, &legitimacy_refs, &echo, &rumors, &noosphere,
+        );
+        assert!(out.contains("Noosphere / Culture Inspector"), "{out}");
+        assert!(out.contains("Agents: 1   Mean overall: 0.500"), "{out}");
+        assert!(out.contains("no memes seeded"), "{out}");
+        assert!(out.contains("no moral panics recorded"), "{out}");
+        assert!(out.contains("no campaigns"), "{out}");
+        assert!(out.contains("no rumors"), "{out}");
+        assert!(out.contains("field empty"), "{out}");
+    }
+
+    #[test]
+    fn noosphere_inspector_shows_live_state_across_all_sections() {
+        let mut memes = MemeRegistry::default();
+        memes.register(Meme::new(
+            0,
+            "The temple hoards grain".to_string(),
+            MemeContent::Rumor,
+            f(0.8),
+            f(0.6),
+            100,
+            f(0.8),
+            f(0.05),
+        ));
+
+        let mut panics = MoralPanicRegistry::new();
+        let mut panic = mindstrata_sim::noosphere::MoralPanic::new(
+            mindstrata_sim::noosphere::PanicTrigger::InstitutionalCorruption,
+            Some(3),
+            900,
+        );
+        panic.participants = 12;
+        panic.active = false;
+        panics.register(panic);
+
+        let mut propaganda = PropagandaRegistry::default();
+        propaganda.register(mindstrata_sim::culture::PropagandaCampaign::new(
+            0,
+            0,
+            vec![0, 1, 2, 3],
+            "Order preserves survival".to_string(),
+            f(0.7),
+            vec![mindstrata_sim::culture::PropagandaChannel::Edict],
+            2000,
+            500,
+        ));
+
+        let mut legitimacy = LegitimacyField::new(f(0.6));
+        legitimacy.sources.push(mindstrata_sim::noosphere::LegitimacySource {
+            name: "divine mandate".to_string(),
+            strength: f(0.4),
+            decay_rate: f(0.001),
+            requires_ritual: true,
+        });
+        let legitimacy_refs = [&legitimacy];
+
+        let mut echo = EchoChamberState::default();
+        echo.polarization_index = f(0.35);
+        echo.echo_chamber_strength = f(0.42);
+        echo.narrative_dominance.insert(0, f(0.61));
+
+        let mut rumors = RumorRegistry::default();
+        rumors.register(mindstrata_sim::culture::RumorV2::new(
+            0,
+            "The well is poisoned".to_string(),
+            Some(5),
+            f(0.6),
+            f(0.4),
+            f(0.7),
+            700,
+        ));
+
+        let mut noosphere = NoosphericField::new();
+        noosphere.nodes.push(mindstrata_sim::noosphere::SymbolicNode::new(0, Default::default()));
+
+        let out = render_noosphere_inspector(
+            &memes, &panics, &propaganda, &legitimacy_refs, &echo, &rumors, &noosphere,
+        );
+        assert!(out.contains("Memes: 1 total, 1 active"), "{out}");
+        assert!(out.contains("\"The temple hoards grain\""), "{out}");
+        assert!(out.contains("InstitutionalCorruption"), "{out}");
+        assert!(out.contains("participants 12 [resolved]"), "{out}");
+        assert!(out.contains("\"Order preserves survival\" via Edict"), "{out}");
+        assert!(out.contains("Agent 0: overall 0.600 (1 source, decay 0.0001)"), "{out}");
+        assert!(out.contains("Polarization: 0.350"), "{out}");
+        assert!(out.contains("meme #0: dominance 0.610"), "{out}");
+        assert!(out.contains("#0 [agent 5]"), "{out}");
+        assert!(out.contains("\"The well is poisoned\""), "{out}");
+        assert!(out.contains("Symbolic nodes: 1   Edges: 0"), "{out}");
+        assert!(out.contains("node #0 activation 0.300"), "{out}");
     }
 }
