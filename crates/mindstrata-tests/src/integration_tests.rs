@@ -9621,7 +9621,19 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         // trauma_mean@100K 0.45 — the 1-chain holds intact end-to-end;
         // the golden window at 1000 ticks is untouched, so this is a
         // pure long-horizon re-pace).
-        vec![51000],
+        // Iteration 179 recalibration (AP2 §8.1.6 "core-trait movement"):
+        // the 12 decision-read core traits now drift ONCE PER YEAR
+        // (YearlyPhase 51840 — the plan's "traits slowly change" formula,
+        // deliberately gated so short-horizon calibrated windows stay
+        // byte-identical: the first birth is PROOF, still pinned at
+        // exactly 51000, pre-gate). The single post-gate nudge at tick
+        // 51840 re-paces courtship through the shared decision traits
+        // (risk_tolerance/conformity feed attraction; neuroticism feeds
+        // stress appraisal) and the seed-46 trajectory delivers THREE
+        // births in the 100K window (probe-pinned [51000, 69330, 88160],
+        // 3 live children, 3 marriage records, children_born 3 — the
+        // 3-chain holds intact end-to-end).
+        vec![51000, 69330, 88160],
         "seed-46 100K world must deliver exactly the probed births"
     );
     for t in &birth_ticks {
@@ -9632,8 +9644,8 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
     }
     assert_eq!(
         late.agents.iter().filter(|a| a.parent_a.is_some()).count(),
-        1,
-        "all 1 live children must carry parentage at 100K"
+        3,
+        "all 3 live children must carry parentage at 100K"
     );
     let marriage_children: usize = late
         .marriage_registry
@@ -9642,16 +9654,16 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         .map(|m| m.children.len())
         .sum();
     assert_eq!(
-        marriage_children, 1,
-        "all 1 births must be recorded in the mothers' active marriages"
+        marriage_children, 3,
+        "all 3 births must be recorded in the mothers' active marriages"
     );
     assert_eq!(
         late.agents
             .iter()
             .map(|a| a.embodied.reproductive.children_born)
             .sum::<u32>(),
-        1,
-        "all 1 pregnancy-path deliveries must increment children_born"
+        3,
+        "all 3 pregnancy-path deliveries must increment children_born"
     );
     assert_eq!(
         late.agents

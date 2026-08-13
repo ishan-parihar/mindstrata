@@ -4826,6 +4826,51 @@ impl Simulation {
                     .personality
                     .temperament
                     .plastic_update(&baseline, &signals);
+                // §8.1.6 (Iteration 179): the 12 decision-read core traits
+                // also move — the plan's "traits slowly change through
+                // repeated behavior, trauma, success, failure..." formula
+                // applied to the traits themselves (not just the
+                // observational temperament layer). Each trait is pushed
+                // toward its repeatedly-expressed state and pulled back
+                // toward the birth constitution, both at the same rate
+                // (identity-integration × developmental-plasticity ×
+                // social-reinforcement × CORE_TRAIT_PLASTICITY_RATE).
+                // Deterministic, zero RNG, clamped to 0..1.
+                //
+                // YEARLY GATE (the critical calibration decision): core
+                // traits feed decisions directly, so per-tick drift at the
+                // Fixed-4-decimal floor would pin them to constitution +
+                // saturated-signal (social/valence ~0.9-1.0 in calm windows)
+                // within a few thousand ticks — a qualitative behavioral
+                // rewrite (Iter-179 probe: births delayed 51K→93K ticks;
+                // and the baseline recompute chases the drifting traits,
+                // collapsing the deviation the Iter-105 reactivity
+                // amplifier reads). Gated to the scheduler's YearlyPhase
+                // (51,840 ticks) so every short-horizon calibrated window
+                // is byte-identical while still allowing genuine multi-year
+                // personality drift — the plan's "slowly".
+                //
+                // Why YearlyPhase and not the age system's 35,040-tick year
+                // (DemographyConfig.ticks_per_year)? Two reasons, both
+                // probed: (1) the scheduler's yearly cadence is the
+                // codebase's canonical "year" for the other slow systems
+                // (climate, culture drift, technology), so trait plasticity
+                // fires on the same clock as its sibling yearly passes;
+                // (2) at 35,040 the first fire lands at tick 35,040 —
+                // BEFORE the seed-46 first birth (51,000) — and that
+                // pre-birth nudge re-paces courtship enough to push every
+                // birth out of the 100K liveness window (probe: left []).
+                // At 51,840 the first fire lands AFTER the first birth, so
+                // the pinned 51,000 birth stays byte-identical and only
+                // subsequent courtship shifts (probe: [51000, 69330,
+                // 88160] — the documented 3-chain). The age-vs-gate year
+                // mismatch (an agent ages ~1.48 years between fires) is a
+                // pre-existing dual-year-definition inconsistency in the
+                // codebase (clock 96 ticks/day vs scheduler 144 ticks/day),
+                // not introduced by this iteration.
+                if phases.is_yearly {
+                    agent.personality.plastic_update_traits(&signals);
+                }
             }
 
             // ── Write back (std::mem::take avoids cloning) ────────────

@@ -162,6 +162,7 @@ mod tests {
             traditionalism: Fixed::from_f64(0.5),
             dominance: Fixed::from_f64(0.5),
             impulsivity: Fixed::from_f64(0.5),
+            constitution: None,
             temperament: crate::person::Temperament::default(),
         }
     }

@@ -63,8 +63,70 @@ impl Default for NeedState {
     }
 }
 
+/// §8.1.6 (Iteration 179): per-tick rate for the observational Temperament
+/// layer's plasticity (see `Temperament::plastic_update`).
+pub const TEMPERAMENT_PLASTICITY_RATE: f64 = 0.0005;
+
+/// §8.1.6 (Iteration 179): per-tick rate for the 12 core traits' plasticity
+/// (see `Personality::plastic_update_traits`). Set EQUAL to the temperament
+/// rate because the 4-decimal Fixed resolution floors anything smaller to
+/// inertness: at 0.0002 the compound rate (development × integration ×
+/// reinforcement ≈ 0.43–0.82 at typical signals) truncates to 1 raw, and
+/// then `stress × rate` (0.8 × 0.0001) truncates to zero — the stress
+/// pathway never moves. At 0.0005 the compound lands at 2–4 raw and the
+/// stress/product terms stay representable (same proven floor as the
+/// temperament layer). Effective core-trait movement is STILL slower than
+/// the observational layer in practice because the constitution pull term
+/// re-anchors each trait to its birth value, damping net drift.
+pub const CORE_TRAIT_PLASTICITY_RATE: f64 = 0.0005;
+
+/// §8.1.6 (Iteration 179): The agent's birth-trait constitution — the stable
+/// anchor for core-trait plasticity. Captured at construction (`random()`)
+/// before any life experience, so `plastic_update_traits` can push each trait
+/// toward its repeatedly-expressed state and pull it back toward this
+/// constitution when the signal fades (the plan's "traits slowly change
+/// through repeated behavior, trauma, success, failure..." formula applied to
+/// the 12 decision-read traits). `#[serde(default)]` on the `Personality`
+/// field keeps old snapshots valid — a restored snapshot lazily anchors to
+/// its current traits on the first plasticity tick.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct TraitConstitution {
+    pub openness: Fixed,
+    pub conscientiousness: Fixed,
+    pub extraversion: Fixed,
+    pub agreeableness: Fixed,
+    pub neuroticism: Fixed,
+    pub risk_tolerance: Fixed,
+    pub conformity: Fixed,
+    pub ambition: Fixed,
+    pub altruism: Fixed,
+    pub traditionalism: Fixed,
+    pub dominance: Fixed,
+    pub impulsivity: Fixed,
+}
+
+impl TraitConstitution {
+    /// Capture the current trait values as the birth constitution.
+    pub fn from_personality(p: &Personality) -> Self {
+        Self {
+            openness: p.openness,
+            conscientiousness: p.conscientiousness,
+            extraversion: p.extraversion,
+            agreeableness: p.agreeableness,
+            neuroticism: p.neuroticism,
+            risk_tolerance: p.risk_tolerance,
+            conformity: p.conformity,
+            ambition: p.ambition,
+            altruism: p.altruism,
+            traditionalism: p.traditionalism,
+            dominance: p.dominance,
+            impulsivity: p.impulsivity,
+        }
+    }
+}
+
 /// Personality trait model (Big Five + extensions).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Personality {
     pub openness: Fixed,
     pub conscientiousness: Fixed,
@@ -84,6 +146,12 @@ pub struct Personality {
     /// consumer reads it yet, so calibrated runs stay byte-identical.
     #[serde(default)]
     pub temperament: Temperament,
+    /// §8.1.6 (Iteration 179): The birth-trait constitution — anchor for
+    /// core-trait plasticity (`plastic_update_traits`). `None` only for
+    /// snapshots saved before this field existed; lazily anchored on the
+    /// first plasticity tick.
+    #[serde(default)]
+    pub constitution: Option<TraitConstitution>,
 }
 
 impl Personality {
@@ -105,8 +173,14 @@ impl Personality {
             // §8.1.6: Temperament is derived deterministically from the 12
             // drawn traits — zero extra RNG draws keeps seeded runs byte-identical.
             temperament: Temperament::default(),
+            // §8.1.6 (Iteration 179): capture the birth constitution BEFORE
+            // any life experience reshapes the traits.
+            constitution: None,
         };
         p.temperament = Temperament::from_traits(&p);
+        // Capture the constitution after `from_traits` (zero extra RNG draws
+        // — the constitution is a pure snapshot of the drawn traits).
+        p.constitution = Some(TraitConstitution::from_personality(&p));
         p
     }
 }
@@ -154,6 +228,29 @@ pub struct PlasticitySignals {
     pub identity_integration: Fixed,
     /// Agent age in years — drives developmental plasticity (younger = more plastic).
     pub age_years: Fixed,
+}
+
+/// §8.1.6 (Iteration 179): Shared plasticity-rate computation for both the
+/// observational temperament layer (`Temperament::plastic_update`) and the
+/// 12 decision-read core traits (`Personality::plastic_update_traits`) — the
+/// plan's formula `repeated_state_expression × identity_integration ×
+/// social_reinforcement × developmental_plasticity` folded into a single
+/// per-tick rate. Returns `Fixed::ZERO` (inert) when either developmental
+/// plasticity (full age) or identity integration is zero, so callers can
+/// early-return. The arithmetic order (developmental × integration ×
+/// reinforcement × rate_const, left-associative Fixed multiplies) is shared
+/// verbatim by both callers to preserve byte-identical drift.
+fn plasticity_rate(s: &PlasticitySignals, rate_const: f64) -> Fixed {
+    // Developmental plasticity decays with age — full at birth, zero at 70.
+    let developmental =
+        (Fixed::ONE - (s.age_years / Fixed::from_f64(70.0)).clamp_01()).clamp_01();
+    let integration = s.identity_integration.clamp_01();
+    if developmental <= Fixed::ZERO || integration <= Fixed::ZERO {
+        return Fixed::ZERO;
+    }
+    // Social reinforcement amplifies the absorption of experience.
+    let reinforcement = Fixed::ONE + Fixed::HALF * s.social_engagement.clamp_01();
+    developmental * integration * reinforcement * Fixed::from_f64(rate_const)
 }
 
 impl Temperament {
@@ -219,16 +316,7 @@ impl Temperament {
     /// iteration) before core traits can move without breaking byte-identical
     /// calibration.
     pub fn plastic_update(&mut self, baseline: &Temperament, s: &PlasticitySignals) {
-        // Developmental plasticity decays with age — full at birth, zero at 70.
-        let developmental =
-            (Fixed::ONE - (s.age_years / Fixed::from_f64(70.0)).clamp_01()).clamp_01();
-        let integration = s.identity_integration.clamp_01();
-        if developmental <= Fixed::ZERO || integration <= Fixed::ZERO {
-            return;
-        }
-        // Social reinforcement amplifies the absorption of experience.
-        let reinforcement = Fixed::ONE + Fixed::HALF * s.social_engagement.clamp_01();
-        let rate = developmental * integration * reinforcement * Fixed::from_f64(0.0005);
+        let rate = plasticity_rate(s, TEMPERAMENT_PLASTICITY_RATE);
         if rate <= Fixed::ZERO {
             return;
         }
@@ -262,6 +350,123 @@ impl Temperament {
         self.approach_withdrawal = (self.approach_withdrawal
             + social * rate
             + (baseline.approach_withdrawal - self.approach_withdrawal) * rate)
+            .clamp_01();
+    }
+}
+
+impl Personality {
+    /// §8.1.6 (Iteration 179): Core-trait plasticity — the plan's "traits
+    /// slowly change through repeated behavior, trauma, success, failure..."
+    /// formula applied to the 12 decision-read core traits.
+    ///
+    /// Each trait is pushed toward its repeatedly-expressed state signal and
+    /// pulled back toward the birth constitution (the stable anchor), both at
+    /// the same `rate` derived from `repeated_state_expression ×
+    /// identity_integration × social_reinforcement × developmental_plasticity`
+    /// — the exact plan formula. The push term moves a trait toward the
+    /// *live* expressed state (so a persistently stressed agent's neuroticism
+    /// drifts up while the signal is present); the pull term returns it to
+    /// the constitution when the signal fades (so a recovered agent's
+    /// neuroticism settles back). Deterministic (no RNG), clamped to 0..1.
+    ///
+    /// Lazy anchor: with `constitution == None` (old snapshots) the method
+    /// anchors to the current traits on the first tick, so the PULL term
+    /// starts at zero (no anchor-induced jump); the PUSH terms still apply
+    /// normally from the first tick (stress raises neuroticism immediately).
+    /// With zero identity integration or full age the rate is zero and
+    /// nothing moves.
+    ///
+    /// Rate constant: `CORE_TRAIT_PLASTICITY_RATE` 0.0005 — equal to the
+    /// temperament rate because the 4-decimal Fixed resolution floors
+    /// anything smaller to inertness; the constitution pull term still
+    /// damps net drift below the observational layer's.
+    pub fn plastic_update_traits(&mut self, s: &PlasticitySignals) {
+        // Lazy anchor: old snapshots restore with `constitution: None` —
+        // capture the current traits as the anchor so the PULL term starts
+        // at zero (no anchor-induced jump). `TraitConstitution` is `Copy`,
+        // so this avoids any borrow-holding reference.
+        if self.constitution.is_none() {
+            self.constitution = Some(TraitConstitution::from_personality(self));
+        }
+        // `TraitConstitution` is `Copy`; `is_none()` was just checked above,
+        // so this read cannot fail (avoids a borrow-held reference).
+        let constitution = self.constitution.unwrap_or_else(|| {
+            TraitConstitution::from_personality(self)
+        });
+        let rate = plasticity_rate(s, CORE_TRAIT_PLASTICITY_RATE);
+        if rate <= Fixed::ZERO {
+            return;
+        }
+        // Identity integration drives the conformity/traditionalism push
+        // terms below (the shared helper consumed it for the rate).
+        let integration = s.identity_integration.clamp_01();
+        let stress = s.repeated_stress.clamp_01();
+        let recovery = s.recovery.clamp_01();
+        let social = s.social_engagement.clamp_01();
+        let striving = s.goal_striving.clamp_01();
+        // Neuroticism: pushed by repeated stress (trauma/anxiety pathway),
+        // pulled back toward the constitution in calm.
+        self.neuroticism = (self.neuroticism
+            + stress * rate
+            + (constitution.neuroticism - self.neuroticism) * rate)
+            .clamp_01();
+        // Impulsivity: pushed by stress (impulse-control erosion under load).
+        self.impulsivity = (self.impulsivity
+            + stress * rate
+            + (constitution.impulsivity - self.impulsivity) * rate)
+            .clamp_01();
+        // Openness: pushed by recovery (novel positive engagement opens minds).
+        self.openness = (self.openness
+            + recovery * rate
+            + (constitution.openness - self.openness) * rate)
+            .clamp_01();
+        // Extraversion: pushed by social engagement.
+        self.extraversion = (self.extraversion
+            + social * rate
+            + (constitution.extraversion - self.extraversion) * rate)
+            .clamp_01();
+        // Conscientiousness: pushed by goal striving (discipline through
+        // repeated commitment).
+        self.conscientiousness = (self.conscientiousness
+            + striving * rate
+            + (constitution.conscientiousness - self.conscientiousness) * rate)
+            .clamp_01();
+        // Agreeableness: pushed by recovery (positive interactions build
+        // warmth) and social engagement.
+        self.agreeableness = (self.agreeableness
+            + (recovery + social) * rate
+            + (constitution.agreeableness - self.agreeableness) * rate)
+            .clamp_01();
+        // Risk tolerance: pushed by recovery (successful outcomes build
+        // risk appetite) and pulled back by repeated stress.
+        self.risk_tolerance = (self.risk_tolerance
+            + (recovery - stress) * rate
+            + (constitution.risk_tolerance - self.risk_tolerance) * rate)
+            .clamp_01();
+        // Conformity: pushed by identity integration (internalized norms).
+        self.conformity = (self.conformity
+            + integration * rate
+            + (constitution.conformity - self.conformity) * rate)
+            .clamp_01();
+        // Ambition: pushed by goal striving.
+        self.ambition = (self.ambition
+            + striving * rate
+            + (constitution.ambition - self.ambition) * rate)
+            .clamp_01();
+        // Altruism: pushed by social engagement (prosocial practice).
+        self.altruism = (self.altruism
+            + social * rate
+            + (constitution.altruism - self.altruism) * rate)
+            .clamp_01();
+        // Traditionalism: pushed by identity integration (stability-seeking).
+        self.traditionalism = (self.traditionalism
+            + integration * rate
+            + (constitution.traditionalism - self.traditionalism) * rate)
+            .clamp_01();
+        // Dominance: pushed by goal striving (assertion through striving).
+        self.dominance = (self.dominance
+            + striving * rate
+            + (constitution.dominance - self.dominance) * rate)
             .clamp_01();
     }
 }
@@ -833,7 +1038,7 @@ mod temperament_tests {
     use super::*;
 
     fn base_personality() -> Personality {
-        Personality {
+        let mut p = Personality {
             openness: Fixed::from_f64(0.5),
             conscientiousness: Fixed::from_f64(0.5),
             extraversion: Fixed::from_f64(0.5),
@@ -847,7 +1052,10 @@ mod temperament_tests {
             dominance: Fixed::from_f64(0.5),
             impulsivity: Fixed::from_f64(0.5),
             temperament: Temperament::default(),
-        }
+            constitution: None,
+        };
+        p.constitution = Some(TraitConstitution::from_personality(&p));
+        p
     }
 
     fn signals(identity_integration: Fixed, age_years: Fixed) -> PlasticitySignals {
@@ -996,5 +1204,138 @@ mod temperament_tests {
             up,
             "the amplifier must be deterministic"
         );
+    }
+
+    #[test]
+    fn trait_plasticity_pushes_stressed_traits_up_and_returns_to_constitution() {
+        // §8.1.6 (Iteration 179): under sustained stress the decision-read
+        // core traits move — neuroticism/impulsivity rise (stress pathway);
+        // when the stress fades they settle back toward the constitution.
+        let mut p = base_personality();
+        let constitution = p.constitution.unwrap();
+        let n0 = p.neuroticism;
+        let i0 = p.impulsivity;
+        let stressed = PlasticitySignals {
+            repeated_stress: Fixed::from_f64(0.8),
+            recovery: Fixed::from_f64(0.1),
+            social_engagement: Fixed::from_f64(0.3),
+            goal_striving: Fixed::from_f64(0.3),
+            identity_integration: Fixed::ONE,
+            age_years: Fixed::from_f64(20.0),
+        };
+        for _ in 0..3000 {
+            p.plastic_update_traits(&stressed);
+        }
+        assert!(
+            p.neuroticism > n0,
+            "repeated stress must raise neuroticism (was {n0}, now {})",
+            p.neuroticism.to_f64()
+        );
+        assert!(
+            p.impulsivity > i0,
+            "repeated stress must raise impulsivity (was {i0}, now {})",
+            p.impulsivity.to_f64()
+        );
+        // Stress also suppresses risk tolerance (recovery − stress < 0).
+        assert!(
+            p.risk_tolerance < constitution.risk_tolerance,
+            "stress must suppress risk tolerance (constitution {}, now {})",
+            constitution.risk_tolerance.to_f64(),
+            p.risk_tolerance.to_f64()
+        );
+        // Now the stress fades: calm recovery returns the traits toward the
+        // constitution (not instantly — the pull term is proportional).
+        let calm = PlasticitySignals {
+            repeated_stress: Fixed::ZERO,
+            recovery: Fixed::from_f64(0.8),
+            social_engagement: Fixed::from_f64(0.3),
+            goal_striving: Fixed::from_f64(0.3),
+            identity_integration: Fixed::ONE,
+            age_years: Fixed::from_f64(20.0),
+        };
+        let raised = p.neuroticism;
+        for _ in 0..3000 {
+            p.plastic_update_traits(&calm);
+        }
+        assert!(
+            p.neuroticism < raised,
+            "calm must pull neuroticism back down (was {raised}, now {})",
+            p.neuroticism.to_f64()
+        );
+    }
+
+    #[test]
+    fn trait_plasticity_stress_product_survives_fixed_resolution() {
+        // §8.1.6 (Iteration 179): the rate must be sized so the compound
+        // (development × integration × reinforcement × rate) lands above the
+        // Fixed 4-decimal floor — otherwise `stress × rate` truncates to zero
+        // and the stress pathway is inert (the 0.0002 probe: 0.8 × 0.0001 → 0).
+        let mut p = base_personality();
+        let stressed = PlasticitySignals {
+            repeated_stress: Fixed::from_f64(0.8),
+            recovery: Fixed::from_f64(0.1),
+            social_engagement: Fixed::from_f64(0.3),
+            goal_striving: Fixed::from_f64(0.3),
+            identity_integration: Fixed::ONE,
+            age_years: Fixed::from_f64(20.0),
+        };
+        let n0 = p.neuroticism;
+        // A SINGLE tick must move the trait at the Fixed scale (≥ 1 raw).
+        p.plastic_update_traits(&stressed);
+        assert!(
+            p.neuroticism != n0,
+            "one stress tick must move neuroticism (0.8 stress × compound rate must survive Fixed truncation)"
+        );
+    }
+
+    #[test]
+    fn trait_plasticity_is_inert_without_identity_integration_or_in_old_age() {
+        // Zero identity integration → zero rate, no matter the stress.
+        let mut p = base_personality();
+        let snapshot = p.clone();
+        let quiet = signals(Fixed::ZERO, Fixed::from_f64(20.0));
+        for _ in 0..100 {
+            p.plastic_update_traits(&quiet);
+        }
+        assert_eq!(p, snapshot, "no identity integration → no trait plasticity");
+        // Maximum age → developmental plasticity = 0.
+        let old = signals(Fixed::ONE, Fixed::from_f64(70.0));
+        for _ in 0..100 {
+            p.plastic_update_traits(&old);
+        }
+        assert_eq!(p, snapshot, "old age → no trait plasticity");
+    }
+
+    #[test]
+    fn trait_plasticity_lazily_anchors_constitution_when_missing() {
+        // Old snapshots restore with `constitution: None` — the first
+        // plasticity tick must anchor to the current traits. The PULL term
+        // starts at zero on the anchor tick (no anchor-induced jump); the
+        // PUSH terms still apply normally from tick 1.
+        let mut p = base_personality();
+        p.constitution = None;
+        let pre_tick_traits = p.clone();
+        let stressed = PlasticitySignals {
+            repeated_stress: Fixed::from_f64(0.8),
+            recovery: Fixed::from_f64(0.1),
+            social_engagement: Fixed::from_f64(0.3),
+            goal_striving: Fixed::from_f64(0.3),
+            identity_integration: Fixed::ONE,
+            age_years: Fixed::from_f64(20.0),
+        };
+        p.plastic_update_traits(&stressed);
+        // The anchor must be the pre-tick traits (captured before any push).
+        let anchored = p.constitution.expect("lazy anchor must set the constitution");
+        let expected = TraitConstitution::from_personality(&pre_tick_traits);
+        assert_eq!(
+            anchored, expected,
+            "lazy anchor must capture the pre-tick traits exactly (no jump)"
+        );
+        // Subsequent ticks drift normally (stress pushes neuroticism up).
+        let n0 = p.neuroticism;
+        for _ in 0..2000 {
+            p.plastic_update_traits(&stressed);
+        }
+        assert!(p.neuroticism > n0, "anchored traits must then drift");
     }
 }

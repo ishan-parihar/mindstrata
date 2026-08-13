@@ -968,6 +968,7 @@ mod smoke {
             traditionalism: Fixed::from_f64(0.5),
             dominance: Fixed::from_f64(0.5),
             impulsivity: Fixed::from_f64(0.5),
+            constitution: None,
             temperament: mindstrata_sim::person::Temperament::default(),
         };
         assert!(
