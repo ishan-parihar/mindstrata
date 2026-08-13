@@ -13880,3 +13880,44 @@ fn marriage_formation_rate_parameter_is_live() {
         "high rate must produce more marriages in the window: low {low_count} vs high {high_count}"
     );
 }
+
+/// §13.4 (Iteration 177): the propaganda_effectiveness knob must be LIVE.
+/// Pre-fix it was 100%-dead (zero references outside parameters.rs;
+/// probe-pinned rate-invariant across 0.35–2.0). Same-seed sims at
+/// multiplier 1.0 vs 2.0 must produce strictly higher mean campaign
+/// effectiveness at 2.0, and the identity 1.0 must preserve the calibrated
+/// envelope (asserted by the byte-identical golden at default).
+#[test]
+fn propaganda_effectiveness_parameter_is_live() {
+    let run = |mult: f64| {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 3000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.params.propaganda_effectiveness = Fixed::from_f64(mult);
+        sim.populate();
+        sim.run(3000);
+        let campaigns = &sim.propaganda_registry.campaigns;
+        let mean = campaigns
+            .iter()
+            .fold(Fixed::ZERO, |acc, c| acc + c.effectiveness)
+            / Fixed::from_int(campaigns.len() as i64);
+        let active = campaigns.iter().filter(|c| c.active).count();
+        (mean, active, campaigns.len())
+    };
+    let (base_mean, base_active, base_total) = run(1.0);
+    let (boosted_mean, _, _) = run(2.0);
+    assert!(
+        base_total >= 1 && base_active >= 1,
+        "the calibrated window must seed active campaigns: {base_total} total, {base_active} active"
+    );
+    assert!(
+        boosted_mean > base_mean,
+        "2x multiplier must raise mean campaign effectiveness: base {base_mean} vs boosted {boosted_mean}"
+    );
+}

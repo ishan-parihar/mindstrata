@@ -112,13 +112,23 @@ impl PropagandaCampaign {
     }
 
     /// Compute campaign effectiveness based on institutional legitimacy,
-    /// audience fear, and accumulated resistance.
+    /// audience fear, accumulated resistance, and the global effectiveness
+    /// multiplier (Iteration 177: `propaganda_effectiveness`, the §13.4
+    /// tuning knob — identity 1.0, so the calibrated envelope is preserved;
+    /// the old default 0.35 would have dropped mean effectiveness below the
+    /// 0.1 push gate, functionally killing the system).
     ///
     /// ```text
     /// effectiveness = legitimacy × intensity × channel_bonus
     ///               × (1 - resistance) × (1 - coercion_penalty)
+    ///               × (1 + fear_boost) × credibility × multiplier
     /// ```
-    pub fn compute_effectiveness(&mut self, institutional_legitimacy: Fixed, audience_fear: Fixed) {
+    pub fn compute_effectiveness(
+        &mut self,
+        institutional_legitimacy: Fixed,
+        audience_fear: Fixed,
+        effectiveness_multiplier: Fixed,
+    ) {
         let channel_bonus = Fixed::from_f64(0.1) * Fixed::from_int(self.channels.len() as i64);
         let coercion_penalty = self.coercion * Fixed::from_f64(0.3);
         let fear_boost = audience_fear * Fixed::from_f64(0.2);
@@ -129,7 +139,8 @@ impl PropagandaCampaign {
             * (Fixed::ONE - self.resistance)
             * (Fixed::ONE - coercion_penalty)
             * (Fixed::ONE + fear_boost)
-            * self.credibility)
+            * self.credibility
+            * effectiveness_multiplier)
             .clamp_01();
     }
 
@@ -229,11 +240,45 @@ mod tests {
             100,
             0,
         );
-        c.compute_effectiveness(Fixed::from_f64(0.9), Fixed::ZERO);
+        c.compute_effectiveness(Fixed::from_f64(0.9), Fixed::ZERO, Fixed::ONE);
         let high_legit = c.effectiveness;
-        c.compute_effectiveness(Fixed::from_f64(0.2), Fixed::ZERO);
+        c.compute_effectiveness(Fixed::from_f64(0.2), Fixed::ZERO, Fixed::ONE);
         let low_legit = c.effectiveness;
         assert!(high_legit > low_legit);
+    }
+
+    #[test]
+    fn effectiveness_scales_with_multiplier_knob() {
+        // Iteration 177: the §13.4 propaganda_effectiveness knob must be
+        // LIVE — the pre-fix multiplier was 100%-dead (zero references
+        // outside parameters.rs; probe-pinned rate-invariant across
+        // 0.35–2.0). Higher multiplier -> higher effectiveness, and the
+        // identity 1.0 preserves the calibrated envelope.
+        let mk = |mult: f64| {
+            let mut c = PropagandaCampaign::new(
+                0,
+                0,
+                vec![],
+                "test".into(),
+                Fixed::from_f64(0.5),
+                vec![PropagandaChannel::Sermon],
+                100,
+                0,
+            );
+            c.compute_effectiveness(Fixed::from_f64(0.9), Fixed::ZERO, Fixed::from_f64(mult));
+            c.effectiveness
+        };
+        let base = mk(1.0);
+        let boosted = mk(2.0);
+        let dampened = mk(0.5);
+        assert!(
+            boosted > base,
+            "2x multiplier must raise effectiveness: base {base} boosted {boosted}"
+        );
+        assert!(
+            dampened < base,
+            "0.5x multiplier must lower effectiveness: base {base} dampened {dampened}"
+        );
     }
 
     #[test]

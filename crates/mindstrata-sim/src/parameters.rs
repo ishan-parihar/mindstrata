@@ -327,7 +327,12 @@ pub struct SimParameters {
     /// identity factor (no decision roll ever drawn → byte-identical
     /// baseline).
     pub meme_mutation_rate_base: Fixed,
-    /// Propaganda effectiveness multiplier.
+    /// Propaganda effectiveness multiplier (§13.4). Iteration 177: now
+    /// LIVE — applied to the full effectiveness product in
+    /// `compute_effectiveness`. Default recalibrated 0.35 -> 1.0 (identity):
+    /// the calibrated envelope was implicitly 1.0 (the knob was dead), and
+    /// 0.35 would push mean effectiveness below the 0.1 apply gate,
+    /// functionally disabling propaganda.
     pub propaganda_effectiveness: Fixed,
     /// Propaganda resistance growth rate per tick (audience fatigue).
     pub propaganda_resistance_growth: Fixed,
@@ -505,7 +510,7 @@ impl Default for SimParameters {
             meme_transmission_multiplier: Fixed::from_f64(1.2),
             meme_virality_scaling: Fixed::from_f64(0.8),
             meme_mutation_rate_base: Fixed::from_f64(0.3),
-            propaganda_effectiveness: Fixed::from_f64(0.35),
+            propaganda_effectiveness: Fixed::from_f64(1.0),
             propaganda_resistance_growth: Fixed::from_f64(0.002),
             ritual_cohesion_boost: Fixed::from_f64(0.12),
             echo_chamber_emotional_threshold: Fixed::from_f64(0.55),

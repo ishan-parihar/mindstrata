@@ -8817,9 +8817,15 @@ impl Simulation {
                 } else {
                     Fixed::ZERO
                 };
-                // Compute effectiveness (mutates the campaign)
+                // Compute effectiveness (mutates the campaign). The global
+                // §13.4 effectiveness multiplier is applied here so the knob
+                // scales the whole product (identity 1.0 at default).
                 if let Some(campaign) = self.propaganda_registry.campaigns.get_mut(campaign_id) {
-                    campaign.compute_effectiveness(legitimacy, audience_fear);
+                    campaign.compute_effectiveness(
+                        legitimacy,
+                        audience_fear,
+                        self.params.propaganda_effectiveness,
+                    );
                 }
                 // Apply propaganda effect to each target agent
                 let effectiveness = self.propaganda_registry.campaigns[campaign_id].effectiveness;
