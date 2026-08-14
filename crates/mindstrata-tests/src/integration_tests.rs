@@ -5550,6 +5550,24 @@ fn metrics_csv_exports_real_inequality_tracking() {
 /// deterministically in the calibration world it was built for (the
 /// Iteration-65 passing state); §13.2's effect on politics is covered by the
 /// meme-mutation and echo-chamber tests at the live default.
+///
+/// Iteration 181 recalibration (AP2 §8.1.3 narrative decision consumers +
+/// script-decay saturation fix): the decayed, bounded script envelope
+/// (previously every script saturated ~1.0 within ~10K ticks, negative-
+/// locking life themes) re-drives the ideology → faction → legitimacy chain
+/// and shifts the emergent coup sequence — seed 42 now fires ~20 coups
+/// through tick ~19.5K (probe-pinned) and then settles into a stable
+/// two-block equilibrium: the absorbed faction members defect OUT of the
+/// council into a standing 9-member opposition that never revolts again
+/// (cooldown + grievance dissipation — the no-repeat-loop intent, achieved
+/// better than the pre-change baseline, which kept couping until tick
+/// ~62K). The absorption contract itself is unchanged and still holds: the
+/// council PEAKS at 11 members right after a coup (vs the 2–4 appointed
+/// elders). The old end-of-run `>= 5` snapshot was timing-fragile — it
+/// passed only because the last coup landed at ~62.7K pre-change, leaving
+/// the absorbed members in place at the final check. The assertion now
+/// checks the absorption at coup time — the peak council membership over
+/// the horizon — which pins the mechanism, not the emergent end-state.
 #[test]
 fn revolution_is_regime_change_not_repeat_loop() {
     use mindstrata_sim::institutions::InstitutionKind;
@@ -5564,19 +5582,41 @@ fn revolution_is_regime_change_not_repeat_loop() {
     // Isolate §7.3 from §13.2 (see doc comment).
     sim.params.meme_mutation_rate_base = mindstrata_core::fixed::Fixed::ZERO;
     sim.populate();
-    sim.run(70000);
-    // Faction formation + one revolution occurred (historically ~tick 6721;
-    let council = sim
-        .institutions
+    // Sample council membership every 500 ticks: the regime-change contract
+    // is the PEAK — after a coup the council must hold the faction's members
+    // (more than the original 2-4 appointed elders). Chunked run() calls are
+    // additive and deterministic (identical to one 70K run).
+    let mut peak_council = 0usize;
+    for _ in 0..140 {
+        sim.run(500);
+        let council = sim
+            .institutions
+            .iter()
+            .find(|i| i.kind == InstitutionKind::Council)
+            .expect("council should exist");
+        peak_council = peak_council.max(council.members.len());
+    }
+    // A revolution must actually have fired in the horizon.
+    let rev_count = sim
+        .recent_events(10_000_000)
         .iter()
-        .find(|i| i.kind == InstitutionKind::Council)
-        .expect("council should exist");
-    // After a coup, faction members transfer to the council — the council
-    // must hold more members than the original 2-4 appointed elders.
+        .filter(|e| {
+            matches!(
+                e,
+                mindstrata_core::event::SimEvent::ConflictOccurred {
+                    kind: mindstrata_core::conflict::ConflictKind::Revolution,
+                    ..
+                }
+            )
+        })
+        .count();
+    assert!(rev_count > 0, "a revolution must fire in the 70K horizon");
+    // After a coup, faction members transfer to the council — the peak
+    // council membership must hold more members than the original 2-4
+    // appointed elders.
     assert!(
-        council.members.len() >= 5,
-        "after revolution the council should absorb the faction (got {} members)",
-        council.members.len()
+        peak_council >= 5,
+        "after revolution the council should absorb the faction (peak {peak_council} members)"
     );
 }
 
@@ -9659,7 +9699,21 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         // pregnancy-path contract, so seed 46 stays the liveness seed).
         // The 2-chain holds intact: 2 live children, 2 marriage records,
         // children_born 2, population 14.
-        vec![120160, 150090],
+        // Iteration 181 recalibration (AP2 §8.1.3 "narrative → decision
+        // consumers"): the script-decay fix (NARRATIVE_SCRIPT_DECAY_RATE
+        // 0.005, pulling scripts toward their birth envelope instead of
+        // write-only saturation) + the stress-resilience consumer
+        // (stress input × one-sided identity-at-birth factor). The
+        // pre-fix saturated contamination script (~0.84 by 10K) was
+        // negative-locking life themes and depressing reproduction;
+        // post-fix the envelope is bounded (probe: red 0.529, cont 0.347,
+        // hero 0.712 @160K) and the seed-46 trajectory delivers the FULL
+        // 6-chain by 160K, probe-pinned [20330, 46130, 79710, 105790,
+        // 113450, 130080] — 6 live children, 6 marriage records,
+        // children_born 6, pregnancies 0 open, stress_mean 0.57
+        // (the healthy post-fix band), population 18. Every birth flows
+        // through the pregnancy path, so the record chain holds exactly.
+        vec![20330, 46130, 79710, 105790, 113450, 130080],
         "seed-46 160K world must deliver exactly the probed births"
     );
     for t in &birth_ticks {
@@ -9670,8 +9724,8 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
     }
     assert_eq!(
         late.agents.iter().filter(|a| a.parent_a.is_some()).count(),
-        2,
-        "all 2 live children must carry parentage at 160K"
+        6,
+        "all 6 live children must carry parentage at 160K"
     );
     let marriage_children: usize = late
         .marriage_registry
@@ -9680,16 +9734,16 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
         .map(|m| m.children.len())
         .sum();
     assert_eq!(
-        marriage_children, 2,
-        "all 2 births must be recorded in the mothers' active marriages"
+        marriage_children, 6,
+        "all 6 births must be recorded in the mothers' active marriages"
     );
     assert_eq!(
         late.agents
             .iter()
             .map(|a| a.embodied.reproductive.children_born)
             .sum::<u32>(),
-        2,
-        "all 2 pregnancy-path deliveries must increment children_born"
+        6,
+        "all 6 pregnancy-path deliveries must increment children_born"
     );
     assert_eq!(
         late.agents

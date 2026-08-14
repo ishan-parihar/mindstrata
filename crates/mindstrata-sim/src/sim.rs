@@ -2913,13 +2913,30 @@ impl Simulation {
             // fear + anger) is NOT changed by the buffer.
             let kin_rate = Fixed::from_f64(crate::social::relational_field::KIN_STRESS_RATE);
             let kin_cap = Fixed::from_f64(crate::social::relational_field::KIN_STRESS_CAP);
+            let narr_rate =
+                Fixed::from_f64(crate::psychology::NARRATIVE_STRESS_RESILIENCE_RATE);
             for i in 0..self.agents.len() {
+                // §8.1.3 (Iteration 181): the narrative scripts' first decision
+                // consumer — the plan's "narrative feeds ... resilience". A
+                // redemptive story (redemption/heroism/coherence up,
+                // contamination/victimhood/shame down) buffers the perceived
+                // stress input; a contaminated story amplifies it. One-sided
+                // identity-at-birth (the Iter-99/127 pattern): factor is ~1.0
+                // at the birth envelope (coherence drift alone moves it
+                // ~±1–4%, probe-pinned — never decision-granularity), so
+                // default-envelope agents are effectively untouched — and only
+                // focal agents ever move their scripts (runs_narrative), so
+                // the tiered blast is contained to focal agents. Same channel
+                // as the kin buffer: lowers cognitive.stress →
+                // planning_horizon / heuristic_bias (§22.1); the metrics'
+                // avg_stress (mean of fear + anger) is NOT changed.
                 let stress = (emotions[i].fear + emotions[i].anger)
                     * crate::social::relational_field::RelationalFields::kin_stress_factor(
                         self.agents[i].relational_fields.kin_count,
                         kin_rate,
                         kin_cap,
-                    );
+                    )
+                    * self.agents[i].narrative.stress_resilience_factor(narr_rate);
                 let need_fatigue = needs[i].fatigue.max(needs[i].hunger).max(needs[i].thirst);
                 self.agents[i].cognitive.update(stress, need_fatigue);
 
@@ -3272,6 +3289,18 @@ impl Simulation {
                 if self.agents[i].agent_tier.tier.runs_narrative()
                     && self.agents[i].agent_tier.budget_tracker.can_appraise()
                 {
+                    // §8.1.3 (Iteration 181): the per-event ratchets are
+                    // write-only — without decay every script saturated at
+                    // ~1.0 within ~10K ticks (probe-pinned), flattening the
+                    // identity. Pull each script back toward its birth-narrative
+                    // value every tick so movement is event-driven but bounded
+                    // (the Iter-179 pull pattern). Runs before interpretation
+                    // so today's events act on today's re-anchored envelope.
+                    self.agents[i]
+                        .narrative
+                        .decay_scripts(Fixed::from_f64(
+                            crate::psychology::NARRATIVE_SCRIPT_DECAY_RATE,
+                        ));
                     let positive_event_magnitude = if emotions[i].joy > Fixed::from_f64(0.3) {
                         emotions[i].joy * Fixed::from_f64(0.1)
                     } else {

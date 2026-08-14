@@ -58,7 +58,9 @@ pub use imagination::ProspectionState;
 pub use interoception::InteroceptiveState;
 pub use moral_cognition::MoralCognition;
 pub use motivation::{MotivationState, MotiveCategory};
-pub use narrative::NarrativeIdentity;
+pub use narrative::{
+    NarrativeIdentity, NARRATIVE_SCRIPT_DECAY_RATE, NARRATIVE_STRESS_RESILIENCE_RATE,
+};
 pub use neural_like::NeuralLikeState;
 pub use psychopathology::PsychopathologyState;
 pub use self_model::SelfModel;

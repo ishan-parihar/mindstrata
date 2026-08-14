@@ -9,9 +9,64 @@
 //! - survival as destiny.
 //!
 //! This feeds religion, ideology, and resilience.
+//!
+//! Iteration 181 (AP2 §8.1.3): the six scripts were write-only ratchets —
+//! per-tick event increments with NO decay, so every script saturated at ~1.0
+//! within ~10K ticks (probe-pinned: redemption 0.5→0.99, contamination
+//! 0.2→0.84, heroism 0.5→1.00), flattening the identity and rendering
+//! `coherence`/`life_theme` uninformative. `decay_scripts` pulls each script
+//! back toward its birth-narrative value (the Iter-179 pull pattern) and
+//! `stress_resilience_factor` gives the scripts their first decision
+//! consumer — the plan's "feeds ... resilience" — by scaling the per-tick
+//! stress input (identity-at-birth, so default-envelope agents are
+//! effectively untouched — probe-pinned factor band ±1–4%).
 
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
+
+// ── Birth-narrative envelope (Iteration 181) ────────────────────────────────
+// `NarrativeIdentity::default()` values, hoisted to consts so the hot
+// per-tick paths (`decay_scripts`, `stress_resilience_factor`) never rebuild
+// the default struct per agent per tick (the rust-best-practices performance
+// mindset). `birth_envelope_consts_match_default` keeps these in lockstep
+// with `Default`. Values are `Fixed::from_raw` (SCALE = 10000).
+
+/// Birth redemption script (0.5).
+const BIRTH_REDEMPTION: Fixed = Fixed::from_raw(5000);
+/// Birth contamination script (0.2).
+const BIRTH_CONTAMINATION: Fixed = Fixed::from_raw(2000);
+/// Birth victimhood script (0.2).
+const BIRTH_VICTIMHOOD: Fixed = Fixed::from_raw(2000);
+/// Birth heroism script (0.5).
+const BIRTH_HEROISM: Fixed = Fixed::from_raw(5000);
+/// Birth chosenness script (0.1).
+const BIRTH_CHOSENNESS: Fixed = Fixed::from_raw(1000);
+/// Birth shame script (0.1).
+const BIRTH_SHAME: Fixed = Fixed::from_raw(1000);
+/// Birth balance: (0.5+0.5+0.6) − (0.2+0.2+0.1) = 1.1 — the signed
+/// script-balance at which `stress_resilience_factor` is neutral (the 0.6
+/// term is the birth coherence, which the factor reads live via
+/// `self.coherence`).
+const BIRTH_BALANCE: Fixed = Fixed::from_raw(11000);
+
+/// Iteration 181: per-tick proportional script decay toward the birth-narrative
+/// envelope. Calibrated at 0.005 by sweep: the write-only ratchets fire on
+/// most ticks (emotions cross their 0.3 thresholds frequently), so 0.001 was
+/// too weak — heroism still saturated to 1.00 and contamination climbed to
+/// 0.74 by 10K ticks. At 0.005 each script settles in a bounded band above
+/// its birth value — equilibrium ≈ birth + ratchet_rate/decay, and the
+/// overshoot varies per script because the ratchet rates differ
+/// (probe-pinned seed42/10K: redemption 0.539, contamination 0.312,
+/// heroism 0.812, victimhood 0.200 — vs the pre-fix 0.99/0.84/1.00/0.20)
+/// while event-driven differentiation between seeds/agents is preserved.
+pub const NARRATIVE_SCRIPT_DECAY_RATE: f64 = 0.005;
+
+/// Iteration 181: stress-resilience consumer rate. Calibrated at 0.15: a
+/// maximally-redemptive script balance (delta +1.0) buffers stress to 0.85×,
+/// a maximally-contaminated balance (delta −1.0) amplifies to 1.15× — bounded
+/// ±15%, keeping the channel live but below decision-granularity inversion
+/// (the Phase-5 acceptance lesson).
+pub const NARRATIVE_STRESS_RESILIENCE_RATE: f64 = 0.15;
 
 /// Life narrative theme — the dominant story the agent tells about their life.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -131,6 +186,51 @@ impl NarrativeIdentity {
         self.events_integrated += 1;
     }
 
+    /// Iteration 181: proportional script decay toward the birth-narrative
+    /// envelope (the Iter-179 pull pattern). The per-event ratchets in
+    /// `interpret_negative_event`/`interpret_positive_event` are write-only —
+    /// with no decay every script saturates at ~1.0 within ~10K ticks,
+    /// flattening the identity (probe-pinned). Pull each script toward its
+    /// `Default` value at `rate` per call so event-driven movement is
+    /// preserved but bounded: a stable, decisional narrative envelope
+    /// instead of a runaway ceiling. Deterministic; no RNG; observational
+    /// cadence (runs with the narrative block).
+    pub fn decay_scripts(&mut self, rate: Fixed) {
+        let pull = |current: Fixed, target: Fixed| -> Fixed {
+            (current + (target - current) * rate).clamp_01()
+        };
+        self.redemption_script = pull(self.redemption_script, BIRTH_REDEMPTION);
+        self.contamination_script = pull(self.contamination_script, BIRTH_CONTAMINATION);
+        self.victimhood_script = pull(self.victimhood_script, BIRTH_VICTIMHOOD);
+        self.heroism_script = pull(self.heroism_script, BIRTH_HEROISM);
+        self.chosenness_script = pull(self.chosenness_script, BIRTH_CHOSENNESS);
+        self.shame_script = pull(self.shame_script, BIRTH_SHAME);
+    }
+
+    /// Iteration 181: the narrative scripts' first decision consumer — the
+    /// plan's "narrative feeds ... resilience".
+    ///
+    /// Returns a stress multiplier for the per-tick stress input: ~1.0 when
+    /// the script balance AND coherence sit at the birth envelope
+    /// (identity-at-birth, one-sided — the Iter-99/127 pattern; coherence is
+    /// part of the narrative state, so it drifts with events — the honest
+    /// probe-pinned factor band is ±1–4% at 10K, never decision-granularity),
+    /// <1.0 when the story has drifted redemptive
+    /// (redemption/heroism/coherence outweigh contamination/victimhood/
+    /// shame), >1.0 when the story has drifted contaminated/victimized. The
+    /// delta is the signed script-balance deviation from the birth envelope,
+    /// clamped to ±1.0; `rate` scales it to a bounded ±15% modulation.
+    /// Non-focal agents never run the narrative block, so their scripts stay
+    /// at the birth envelope → factor ≈1.0 → near-zero blast below the
+    /// focal tier.
+    pub fn stress_resilience_factor(&self, rate: Fixed) -> Fixed {
+        let positive = self.redemption_script + self.heroism_script + self.coherence;
+        let negative = self.contamination_script + self.victimhood_script + self.shame_script;
+        let delta = (positive - negative - BIRTH_BALANCE).clamp(-Fixed::ONE, Fixed::ONE);
+        (Fixed::ONE - delta * rate)
+            .clamp(Fixed::from_f64(0.8), Fixed::from_f64(1.2))
+    }
+
     /// Update the dominant life theme based on current script balance.
     pub fn update_theme(&mut self) {
         let positive_balance =
@@ -198,5 +298,138 @@ mod tests {
         };
         n.update_theme();
         assert_eq!(n.life_theme, LifeTheme::Mission);
+    }
+
+    #[test]
+    fn decay_pulls_saturated_scripts_back_toward_birth_envelope() {
+        // Iteration 181: the write-only ratchets saturate every script at ~1.0;
+        // decay must pull a saturated identity back toward the birth envelope.
+        let mut n = NarrativeIdentity {
+            redemption_script: Fixed::ONE,
+            contamination_script: Fixed::ONE,
+            victimhood_script: Fixed::ONE,
+            heroism_script: Fixed::ONE,
+            chosenness_script: Fixed::ONE,
+            shame_script: Fixed::ONE,
+            ..Default::default()
+        };
+        let d = NarrativeIdentity::default();
+        n.decay_scripts(Fixed::from_f64(0.02));
+        assert!(n.redemption_script < Fixed::ONE);
+        assert!(n.contamination_script < Fixed::ONE);
+        // Pulled toward the birth values (redemption 0.5, contamination 0.2).
+        assert!(n.redemption_script > d.redemption_script);
+        assert!(n.contamination_script > d.contamination_script);
+        // Repeated pulls converge: the identity no longer saturates.
+        for _ in 0..400 {
+            n.decay_scripts(Fixed::from_f64(0.02));
+        }
+        assert!((n.redemption_script - d.redemption_script).abs() < Fixed::from_f64(0.01));
+        assert!(
+            (n.contamination_script - d.contamination_script).abs() < Fixed::from_f64(0.01)
+        );
+    }
+
+    #[test]
+    fn birth_envelope_consts_match_default() {
+        // Iteration 181: the hoisted consts must stay in lockstep with
+        // `Default`, or decay/resilience would silently re-anchor elsewhere.
+        let d = NarrativeIdentity::default();
+        assert_eq!(BIRTH_REDEMPTION, d.redemption_script);
+        assert_eq!(BIRTH_CONTAMINATION, d.contamination_script);
+        assert_eq!(BIRTH_VICTIMHOOD, d.victimhood_script);
+        assert_eq!(BIRTH_HEROISM, d.heroism_script);
+        assert_eq!(BIRTH_CHOSENNESS, d.chosenness_script);
+        assert_eq!(BIRTH_SHAME, d.shame_script);
+        // Coherence's birth value participates in the factor via BIRTH_BALANCE
+        // (the 0.6 term); the factor reads live `self.coherence`.
+        assert_eq!(
+            BIRTH_BALANCE,
+            (d.redemption_script + d.heroism_script + d.coherence)
+                - (d.contamination_script + d.victimhood_script + d.shame_script)
+        );
+    }
+
+    #[test]
+    fn stress_resilience_factor_is_one_at_birth_envelope() {
+        // Identity-at-birth: a default-envelope agent is untouched.
+        let n = NarrativeIdentity::default();
+        assert_eq!(n.stress_resilience_factor(Fixed::from_f64(0.15)), Fixed::ONE);
+    }
+
+    #[test]
+    fn coherence_drift_alone_moves_factor_only_slightly() {
+        // Reviewer finding: coherence is narrative state and drifts with
+        // events, so "1.0 at birth" holds exactly only when coherence is at
+        // birth too. Document the honest band: coherence 0.6→0.9 with scripts
+        // pinned at birth moves the factor by ≤ ~1.5% — never
+        // decision-granularity.
+        let n = NarrativeIdentity {
+            coherence: Fixed::from_f64(0.9),
+            ..Default::default()
+        };
+        let factor = n.stress_resilience_factor(Fixed::from_f64(0.15));
+        let drift = (factor - Fixed::ONE).abs();
+        assert!(
+            drift <= Fixed::from_f64(0.05),
+            "coherence-only drift must stay in a bounded band"
+        );
+    }
+
+    #[test]
+    fn decay_returns_saturated_identity_to_neutral_resilience() {
+        // Iteration 181: after decay re-anchors a saturated identity, the
+        // stress factor returns toward 1.0 — the write-only ceiling no longer
+        // pins the consumer at its ±15% extreme.
+        let mut n = NarrativeIdentity {
+            redemption_script: Fixed::ONE,
+            contamination_script: Fixed::ONE,
+            victimhood_script: Fixed::ONE,
+            heroism_script: Fixed::ONE,
+            chosenness_script: Fixed::ONE,
+            shame_script: Fixed::ONE,
+            ..Default::default()
+        };
+        for _ in 0..1000 {
+            n.decay_scripts(Fixed::from_f64(0.005));
+        }
+        let factor = n.stress_resilience_factor(Fixed::from_f64(0.15));
+        let drift = (factor - Fixed::ONE).abs();
+        assert!(
+            drift < Fixed::from_f64(0.1),
+            "decay must return the factor toward neutral"
+        );
+    }
+
+    #[test]
+    fn redemptive_narrative_buffers_stress() {
+        let n = NarrativeIdentity {
+            redemption_script: Fixed::from_f64(0.9),
+            heroism_script: Fixed::from_f64(0.9),
+            coherence: Fixed::from_f64(0.9),
+            contamination_script: Fixed::from_f64(0.1),
+            victimhood_script: Fixed::from_f64(0.1),
+            shame_script: Fixed::from_f64(0.1),
+            ..Default::default()
+        };
+        let factor = n.stress_resilience_factor(Fixed::from_f64(0.15));
+        assert!(factor < Fixed::ONE, "redemptive story must buffer stress");
+        assert!(factor >= Fixed::from_f64(0.8));
+    }
+
+    #[test]
+    fn contaminated_narrative_amplifies_stress() {
+        let n = NarrativeIdentity {
+            redemption_script: Fixed::from_f64(0.1),
+            heroism_script: Fixed::from_f64(0.1),
+            coherence: Fixed::from_f64(0.1),
+            contamination_script: Fixed::from_f64(0.9),
+            victimhood_script: Fixed::from_f64(0.9),
+            shame_script: Fixed::from_f64(0.9),
+            ..Default::default()
+        };
+        let factor = n.stress_resilience_factor(Fixed::from_f64(0.15));
+        assert!(factor > Fixed::ONE, "contaminated story must amplify stress");
+        assert!(factor <= Fixed::from_f64(1.2));
     }
 }
