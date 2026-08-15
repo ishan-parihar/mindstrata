@@ -7,10 +7,35 @@
 
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+// §8.1.19 (P3-1): a `BTreeMap` (not the plan's HashMap) keeps key-sorted
+// serialization — the snapshot's `deterministic_hash` hashes postcard bytes,
+// and a non-empty HashMap iterates in per-instance random order, breaking
+// byte-determinism across a save/load round trip (probe-caught: the skills
+// map sat EMPTY before P3-1 wired practice, hiding the issue). Same
+// convention as the noosphere's narrative_dominance (echo_chamber.rs:150).
+use std::collections::BTreeMap;
 
 /// Skill identifier.
 pub type SkillId = u32;
+
+/// §8.1.19 (P3-1, August 14, 2026): canonical skill ids for the action
+/// wiring. Previously the psychology SkillState had ZERO production call
+/// sites for `practice`/`form_habit`/`execute_habit`, so the skills and
+/// habits maps stayed permanently empty (probe: skill_count/habit_count
+/// 0.000 for 12/12 agents in every window). These ids anchor the
+/// ActionKind → skill mapping in the sim's practice pass.
+pub const SKILL_FARMING: SkillId = 0;
+pub const SKILL_COOKING: SkillId = 1;
+pub const SKILL_HEALING: SkillId = 2;
+pub const SKILL_TRADING: SkillId = 3;
+pub const SKILL_FIGHTING: SkillId = 4;
+pub const SKILL_SPEAKING: SkillId = 5;
+pub const SKILL_LEADERSHIP: SkillId = 6;
+pub const SKILL_RITUAL: SkillId = 7;
+pub const SKILL_CRAFTING: SkillId = 8;
+pub const SKILL_PARENTING: SkillId = 9;
+pub const SKILL_DECEPTION: SkillId = 10;
+pub const SKILL_DIPLOMACY: SkillId = 11;
 
 /// Skill level with metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,7 +86,7 @@ pub struct Habit {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillState {
     /// All skills with their levels.
-    pub skills: HashMap<SkillId, SkillLevel>,
+    pub skills: BTreeMap<SkillId, SkillLevel>,
     /// Formed habits.
     pub habits: Vec<Habit>,
     /// Overall automaticity — how much behavior is habitual vs deliberate.
@@ -73,7 +98,7 @@ pub struct SkillState {
 impl Default for SkillState {
     fn default() -> Self {
         Self {
-            skills: HashMap::new(),
+            skills: BTreeMap::new(),
             habits: Vec::new(),
             automaticity: Fixed::from_f64(0.3),
             neuroplasticity: Fixed::from_f64(0.6),
@@ -123,6 +148,28 @@ impl SkillState {
             last_performed: tick,
             trigger,
         });
+    }
+
+    /// §8.1.19 (P3-1 completion, re-audit August 14, 2026): refresh a
+    /// matching habit when the agent practices the same action. The
+    /// original P3-1 wiring only refreshed `last_performed` via
+    /// `execute_habit` — but that gate requires `automaticity > 0.5`,
+    /// which the calibrated formula never reaches (probe: max 0.413), so
+    /// a formed habit's `last_performed` stayed frozen and the centum
+    /// `decay_habits` pass ground every habit to zero by ~10K ticks
+    /// (probe: habit_count 1.17 @2K → 0.000 @10K in calm/famine).
+    /// Practicing the action IS exercising the habit: each practice tick
+    /// refreshes the habit's recency and adds a small reinforcement, so
+    /// habits persist exactly as long as the agent keeps doing the
+    /// action ("use it or lose it") and only decay when the action is
+    /// abandoned. Deterministic, no RNG; habits feed no golden-hashed
+    /// metric, so calibrated runs stay byte-identical.
+    pub fn refresh_habit(&mut self, trigger: &str, tick: u64) {
+        for habit in self.habits.iter_mut().filter(|h| h.trigger == trigger) {
+            habit.last_performed = tick;
+            habit.repetition_count += 1;
+            habit.strength = (habit.strength + Fixed::from_f64(0.005)).clamp_01();
+        }
     }
 
     /// Execute a habit (returns true if a habit was performed).
@@ -216,6 +263,30 @@ mod tests {
         s.form_habit("eat_grain".into(), "hunger".into(), Fixed::from_f64(0.5), 0);
         let result = s.execute_habit("hunger", 1);
         assert!(result.is_some());
+    }
+
+    /// §8.1.19 (P3-1 completion): practice refreshes habit recency, so a
+    /// habit the agent keeps performing survives the decay pass while an
+    /// abandoned habit decays out. The pre-fix lifecycle (form → frozen
+    /// last_performed → centum decay → death) is the re-audit residual.
+    #[test]
+    fn practice_refreshes_matching_habit_recency() {
+        let mut s = SkillState::default();
+        s.form_habit("Work".into(), "hunger".into(), Fixed::from_f64(0.3), 0);
+        // Practice the matching action many ticks later.
+        s.refresh_habit("hunger", 5000);
+        assert_eq!(
+            s.habits[0].last_performed, 5000,
+            "practice must refresh the matching habit's recency"
+        );
+        // The decay pass then leaves it untouched (recency within range).
+        s.decay_habits(5100);
+        assert_eq!(s.habits.len(), 1, "an actively-practiced habit must persist");
+        // An abandoned habit (no refresh) decays out.
+        let mut s2 = SkillState::default();
+        s2.form_habit("Work".into(), "hunger".into(), Fixed::from_f64(0.3), 0);
+        s2.decay_habits(100_000);
+        assert_eq!(s2.habits.len(), 0, "an abandoned habit must decay to zero");
     }
 
     #[test]

@@ -9,6 +9,20 @@
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 
+/// §8.1.10 (P3-11): minimum first-exposure reinforcement to internalize a NEW
+/// norm. The norm count was uniform (5.000 for 12/12 agents at 10K — zero
+/// spread) because `internalize_norm` accepted any positive amount, so every
+/// ritual participant internalized every community norm at the identical
+/// rate; conformity had no seat at the ritual. Ritual reinforcement now
+/// scales by per-agent conformity (sim-side, 0.5–1.0×), and this floor gates
+/// first internalization: a weakly-reinforced exposure (low conformity ×
+/// weakly-internalized community norm) never cements a norm. Sized at 0.05 —
+/// below the seasonal-ritual base reinforcement for every default norm
+/// (0.4×0.23 = 0.092 at minimum), so no default norm becomes unreachable,
+/// but above the scaled floor of a low-conformity agent on a weakly-
+/// internalized norm, so per-agent counts differentiate.
+pub const NORM_FIRST_EXPOSURE_FLOOR: Fixed = Fixed::from_raw(500); // 0.05
+
 /// Moral Foundations Theory — six moral dimensions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MoralFoundations {
@@ -133,6 +147,11 @@ impl MoralCognition {
     /// (AP2 §12.5: rituals \"reinforce norms\"). Strengthens an existing
     /// norm on repeated exposure, or internalizes it on first exposure.
     /// Deterministic — no RNG, pure function of input state.
+    ///
+    /// §8.1.10 (P3-11): first exposure is gated by `NORM_FIRST_EXPOSURE_FLOOR`
+    /// — a ritual exposure weaker than the floor never cements a new norm, so
+    /// per-agent conformity scaling at the call site differentiates the
+    /// internalized-norm COUNT, not just the strengths.
     pub fn reinforce_norm(&mut self, description: &str, amount: Fixed) {
         if let Some(norm) = self
             .internalized_norms
@@ -146,7 +165,7 @@ impl MoralCognition {
             // ("times the agent has witnessed enforcement") for any future
             // consumer such as a violation audit.
             norm.identity_linked = norm.identity_linked || norm.strength > Fixed::from_f64(0.7);
-        } else {
+        } else if amount >= NORM_FIRST_EXPOSURE_FLOOR {
             self.internalize_norm(description.to_string(), amount);
         }
     }

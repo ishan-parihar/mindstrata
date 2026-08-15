@@ -221,6 +221,53 @@ impl SelfModel {
         let target = (Fixed::from_f64(0.5) + balance * Fixed::from_f64(0.125)).clamp_01();
         self.self_esteem = self.self_esteem + (target - self.self_esteem) * Fixed::from_f64(0.05);
     }
+
+    /// §8.1.7 (P3-2, August 14, 2026): identity coherence producer.
+    /// Previously `coherence` was WRITE-ONLY dead state — no production
+    /// writer existed, so it sat at the 0.6 birth value for every agent in
+    /// every window (probe: 12/12 identical) while the plan's "consistency
+    /// of the self-concept" was only ever *read* (yearly plasticity
+    /// identity_integration). Coherence now tracks the narrative's
+    /// consistency: a redemption/heroism-heavy life story integrates the
+    /// self (target → high), contamination/victimhood fragments it (target
+    /// → low), slowly mean-reverting like reconcile_self_esteem. The only
+    /// production consumer (yearly plasticity) sits beyond every
+    /// short-horizon calibrated window, so runs stay byte-identical.
+    /// Deterministic, no RNG.
+    pub fn update_coherence(&mut self) {
+        let positive_balance = self.narrative.redemption_script + self.narrative.heroism_script;
+        let negative_balance =
+            self.narrative.contamination_script + self.narrative.victimhood_script;
+        let balance = positive_balance - negative_balance; // range ≈ −2..2
+        let target = (Fixed::from_f64(0.6) + balance * Fixed::from_f64(0.1)).clamp_01();
+        self.coherence = self.coherence + (target - self.coherence) * Fixed::from_f64(0.05);
+    }
+
+    /// §8.1.7 (P3-2, August 14, 2026): identity security producer.
+    /// Previously `security` was write-only dead state — `threaten_identity`
+    /// had zero production callers AND required non-empty identity claims
+    /// (which are never populated), so security sat at the 0.5 birth value
+    /// for every agent forever (probe: 12/12 identical). Security now
+    /// responds to the lived experience: unsupported suffering threatens
+    /// the identity (negative events × isolation erode it), positive events
+    /// and social support restore it. Observational — no production
+    /// consumer reads security — so calibrated runs stay byte-identical.
+    /// Deterministic, no RNG.
+    pub fn update_security(
+        &mut self,
+        negative_events: Fixed,
+        positive_events: Fixed,
+        social_support: Fixed,
+    ) {
+        // Unsupported suffering is what threatens identity; supported
+        // suffering is carried within the narrative instead.
+        let threat = negative_events * (Fixed::ONE - social_support);
+        self.security = (self.security - threat * Fixed::from_f64(0.1)).max(Fixed::ZERO);
+        // Positive events and support rebuild security (saturating).
+        let recovery =
+            positive_events * Fixed::from_f64(0.2) + social_support * Fixed::from_f64(0.02);
+        self.security = (self.security + recovery * (Fixed::ONE - self.security)).clamp_01();
+    }
 }
 
 #[cfg(test)]
@@ -255,6 +302,59 @@ mod tests {
             sm2.reconcile_self_esteem();
         }
         assert!(sm2.self_esteem > Fixed::from_f64(0.5));
+    }
+
+    /// §8.1.7 (P3-2): coherence must move off the 0.6 birth value in
+    /// response to the narrative balance (was write-only dead state).
+    #[test]
+    fn coherence_tracks_narrative_balance() {
+        // A contamination/victimhood-heavy narrative fragments the self.
+        let mut sm = SelfModel::default();
+        sm.narrative.contamination_script = Fixed::from_f64(0.9);
+        sm.narrative.victimhood_script = Fixed::from_f64(0.8);
+        sm.narrative.redemption_script = Fixed::from_f64(0.1);
+        sm.narrative.heroism_script = Fixed::from_f64(0.1);
+        for _ in 0..60 {
+            sm.update_coherence();
+        }
+        assert!(sm.coherence < Fixed::from_f64(0.6), "fragmented narrative lowers coherence");
+        // A redemption/heroism-heavy narrative integrates the self.
+        let mut sm2 = SelfModel::default();
+        sm2.narrative.redemption_script = Fixed::from_f64(1.0);
+        sm2.narrative.heroism_script = Fixed::from_f64(1.0);
+        sm2.narrative.contamination_script = Fixed::ZERO;
+        sm2.narrative.victimhood_script = Fixed::ZERO;
+        for _ in 0..60 {
+            sm2.update_coherence();
+        }
+        assert!(sm2.coherence > Fixed::from_f64(0.6), "redemptive narrative raises coherence");
+    }
+
+    /// §8.1.7 (P3-2): security must respond to unsupported suffering and
+    /// recover with support (was write-only dead state pinned at 0.5).
+    #[test]
+    fn security_erodes_without_support_and_recovers_with_it() {
+        let mut sm = SelfModel::default();
+        let start = sm.security;
+        // Unsupported suffering erodes security.
+        for _ in 0..60 {
+            sm.update_security(
+                Fixed::from_f64(0.08),
+                Fixed::ZERO,
+                Fixed::from_f64(0.2),
+            );
+        }
+        assert!(sm.security < start, "unsupported suffering lowers security");
+        // Positive events + support restore it.
+        for _ in 0..60 {
+            sm.update_security(
+                Fixed::ZERO,
+                Fixed::from_f64(0.05),
+                Fixed::from_f64(0.9),
+            );
+        }
+        assert!(sm.security > start, "support + positive events restore security");
+        assert!(sm.security <= Fixed::ONE);
     }
 
     #[test]

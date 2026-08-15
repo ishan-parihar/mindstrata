@@ -64,10 +64,36 @@ impl MuscularState {
         // Soreness decays with rest
         self.soreness = (self.soreness - rest_quality * Fixed::from_f64(0.008)).max(Fixed::ZERO);
 
-        // Conditioning improves with moderate consistent activity
-        if activity_level > Fixed::from_f64(0.3) && activity_level < Fixed::from_f64(0.7) {
-            let gain = activity_level * nutrition_quality * Fixed::from_f64(0.0003);
-            self.conditioning = (self.conditioning + gain).clamp_01();
+        // Conditioning improves with moderate-to-heavy consistent activity.
+        // §7.2.4 (S2-2-3 fix): the gain band was `> 0.3 && < 0.7` — it
+        // EXCLUDED Work (activity 0.8, the sim's primary action), so
+        // conditioning sat frozen at its birth value 0.4 in every scenario
+        // (probe-pinned). The band now includes Work (`<= 0.8`), the gain is
+        // saturating (`× (1 − conditioning)`) to bound the axis below 1.0,
+        // and a slow excess-proportional detrain decay keeps it
+        // differentiated (hard workers converge to ≈0.60, idlers drift back
+        // to the 0.4 floor).
+        //
+        // Computed in f64 for the Iteration-176 reason (same as the
+        // cardiovascular fitness): the Fixed-only gain `0.8 × 0.6 × 0.0003 ×
+        // 0.6 = 0.0000864` truncates to raw 0 at the 4-decimal scale, so a
+        // Fixed-only implementation silently froze conditioning at 0.4001
+        // (the probe-pinned trap). f64 arithmetic is deterministic and the
+        // value is re-quantized to Fixed once per tick.
+        let c = self.conditioning.to_f64();
+        let activity = activity_level.to_f64();
+        let nutrition = nutrition_quality.to_f64();
+        if activity > 0.3 && activity <= 0.8 {
+            let gain = activity * nutrition * 0.001 * (1.0 - c);
+            self.conditioning = Fixed::from_f64((c + gain).clamp(0.0, 1.0));
+        }
+        // Detrain (excess-proportional, floor 0.4): zero at the birth floor
+        // (idlers return to baseline, never below) and growing with the
+        // surplus — prevents the ratchet to 1.0.
+        let excess = (self.conditioning.to_f64() - 0.4).max(0.0);
+        if excess > 0.0 {
+            let detrain = excess * 0.001;
+            self.conditioning = Fixed::from_f64((self.conditioning.to_f64() - detrain).max(0.4));
         }
 
         // Strength derived from conditioning, minus fatigue, minus atrophy
@@ -121,6 +147,67 @@ mod tests {
             );
         }
         assert!(m.conditioning > initial);
+    }
+
+    #[test]
+    fn work_activity_builds_conditioning() {
+        // S2-2-3 regression: Work maps to activity 0.8, which the old strict
+        // `activity < 0.7` band EXCLUDED — the primary labor action never
+        // built conditioning (frozen at 0.4 in every scenario). The widened
+        // band (`<= 0.8`) plus saturating gain must move conditioning for a
+        // working agent.
+        let mut m = MuscularState::default();
+        let initial = m.conditioning;
+        for _ in 0..800 {
+            m.tick_update(
+                Fixed::from_f64(0.8), // Work
+                Fixed::from_f64(0.8),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.3),
+            );
+        }
+        assert!(m.conditioning > initial, "Work must build conditioning");
+        assert!(m.conditioning < Fixed::from_f64(0.95), "must not saturate");
+    }
+
+    #[test]
+    fn conditioning_detrains_without_exertion() {
+        // S2-2-3: the detrain term prevents conditioning from ratcheting to
+        // 1.0 under sustained Work — an idling agent must drift back down
+        // toward the 0.4 floor.
+        let mut m = MuscularState {
+            conditioning: Fixed::from_f64(0.8),
+            ..Default::default()
+        };
+        for _ in 0..3000 {
+            m.tick_update(
+                Fixed::from_f64(0.1), // idle
+                Fixed::from_f64(0.8),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.3),
+            );
+        }
+        assert!(m.conditioning < Fixed::from_f64(0.8), "conditioning must decay when idle");
+        assert!(m.conditioning >= Fixed::from_f64(0.4), "detrain floor holds");
+    }
+
+    #[test]
+    fn conditioning_work_equilibrium_is_below_one() {
+        // S2-2-3: sustained Work must push conditioning UP but the saturating
+        // gain plus excess-proportional detrain must hold it at a stable
+        // equilibrium well below 1.0 (no ratchet).
+        let mut m = MuscularState::default();
+        for _ in 0..20000 {
+            m.tick_update(
+                Fixed::from_f64(0.8), // Work
+                Fixed::from_f64(0.6),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.3),
+            );
+        }
+        let after = m.conditioning.to_f64();
+        assert!(after > 0.5, "sustained Work must lift conditioning (got {after})");
+        assert!(after < 0.95, "equilibrium must stay below 1.0 (got {after})");
     }
 
     #[test]

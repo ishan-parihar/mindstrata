@@ -231,12 +231,20 @@ impl EmbodiedState {
     }
 
     /// Derived fatigue from sleep pressure, muscular fatigue, and energy.
+    ///
+    /// §7 (S2-2-5 fix): the facade mean-reverts toward the driver-weighted
+    /// target instead of accumulating. The old form (`base + positive terms`,
+    /// zero decay) was re-assigned every tick and ratcheted the facade to 1.0
+    /// for every agent within ~5K ticks (probe: 12/12 pinned, all scenarios)
+    /// while the real `muscular.fatigue` track stayed healthy (0.49–0.60). The
+    /// blend bounds the facade at the driver equilibrium (≈0.35–0.5 in
+    /// calibrated worlds) while retaining short-term inertia from the base.
     pub fn derived_fatigue(&self) -> Fixed {
-        let base = self.fatigue;
         let sleep_factor = self.nervous.sleep_pressure * Fixed::from_f64(0.4);
         let energy_factor = (Fixed::ONE - self.energy) * Fixed::from_f64(0.3);
         let muscular_factor = self.muscular.fatigue * Fixed::from_f64(0.2);
-        (base + sleep_factor + energy_factor + muscular_factor).clamp_01()
+        let target = (sleep_factor + energy_factor + muscular_factor).clamp_01();
+        (self.fatigue * Fixed::from_f64(0.95) + target * Fixed::from_f64(0.05)).clamp_01()
     }
 
     /// Update all biological systems each tick.
@@ -300,6 +308,15 @@ impl EmbodiedState {
             params.endocrine_arousal_rise,
             params.endocrine_arousal_decay,
         );
+        // §7.2.2 (S2-2-2 fix): the growth axis was write-once — it had no
+        // update method, so capacity sat frozen at the birth value 0.6 for
+        // every agent in every scenario (probe-pinned). Mean-revert it toward
+        // the life-stage growth target (child high → elder low) on the same
+        // per-tick cadence as the other axes. Deterministic, no RNG; capacity
+        // feeds no decision consumer, so calibrated runs stay byte-identical
+        // and the golden baseline is untouched.
+        let growth_target = self.development.life_stage.growth_modifier();
+        self.endocrine.growth.update(growth_target, params.endocrine_growth_recovery);
 
         // 4. Metabolic — energy, hunger (thermoregulation now in ThermalState)
         self.metabolic.tick_update(activity_level);
@@ -447,6 +464,36 @@ mod tests {
         assert_eq!(body.hunger, embodied.hunger);
         assert_eq!(body.thirst, embodied.thirst);
         assert_eq!(body.injury, embodied.injury);
+    }
+
+    #[test]
+    fn derived_fatigue_de_saturates_instead_of_ratcheting() {
+        // S2-2-5: the facade was a write-only ratchet (base + positive terms,
+        // zero decay) that pinned at 1.0 within ~5K ticks. The mean-reverting
+        // blend must keep the facade bounded near the driver equilibrium.
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let mut embodied = EmbodiedState::random(Fixed::from_f64(25.0), &mut rng);
+        embodied.fatigue = Fixed::ZERO; // rested baseline
+        embodied.nervous.sleep_pressure = Fixed::from_f64(0.4);
+        embodied.energy = Fixed::from_f64(0.6);
+        embodied.muscular.fatigue = Fixed::from_f64(0.5);
+        // Target = 0.4×0.4 + 0.4×0.3 + 0.5×0.2 = 0.16+0.12+0.10 = 0.38.
+        // Iterate the same re-assignment the tick loop performs; the facade
+        // must converge toward ~0.38 — NOT ratchet toward 1.0.
+        let mut peak = Fixed::ZERO;
+        for _ in 0..10_000 {
+            embodied.fatigue = embodied.derived_fatigue();
+            peak = peak.max(embodied.fatigue);
+        }
+        let equilibrium = embodied.fatigue;
+        assert!(
+            equilibrium > Fixed::from_f64(0.30) && equilibrium < Fixed::from_f64(0.45),
+            "facade must converge to the driver equilibrium ~0.38, got {equilibrium}"
+        );
+        assert!(
+            peak < Fixed::from_f64(0.5),
+            "facade must never ratchet past the equilibrium (peak {peak})"
+        );
     }
 
     #[test]

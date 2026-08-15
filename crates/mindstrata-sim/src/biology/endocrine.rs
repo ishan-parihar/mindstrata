@@ -119,8 +119,24 @@ impl Default for BondingAxis {
 }
 
 impl BondingAxis {
+    /// §7.2.2 (S2-2-2 fix): update the axis with *saturating* (logistic)
+    /// gain. The old linear form (`level + input×receptivity − recovery`)
+    /// was a step-function accumulator when called from the ritual loop
+    /// (fires only at monthly intervals, no decay between fires): every
+    /// fire added a fixed positive delta, so the axis ratcheted to 1.0 at
+    /// some horizon regardless of recovery — probe-pinned at ~30K ticks
+    /// for max-receptivity seasonal participants. The (1 − level) factor
+    /// makes gain vanish as the axis approaches 1.0, giving a stable
+    /// equilibrium `L* = 1 − recovery/(input×receptivity)` (≈ 0.78 for
+    /// the seasonal ritual at max receptivity) that the axis approaches
+    /// monotonically but never exceeds — bounded by construction, the
+    /// same class of fix as the Iter-172 tone floor. Zero change before
+    /// the first ritual (all inputs are zero), so calibrated golden and
+    /// snapshot horizons (≤2000 ticks, no ritual until 4320) stay
+    /// byte-identical.
     pub fn update(&mut self, social_input: Fixed, recovery_rate: Fixed) {
-        let delta = social_input * self.receptivity;
+        // Saturating gain: proximity to the ceiling damps further growth.
+        let delta = social_input * self.receptivity * (Fixed::ONE - self.level);
         self.level = (self.level + delta - recovery_rate).clamp_01();
     }
 }
@@ -142,10 +158,19 @@ impl Default for DominanceAxis {
 }
 
 impl DominanceAxis {
-    pub fn update(&mut self, status_change: Fixed, response_rate: Fixed) {
-        // Rises with status gains, falls with status losses
-        self.level =
-            (self.level + status_change * response_rate - Fixed::from_f64(0.01)).clamp_01();
+    /// §7.2.2 (S2-2-2 fix): mean-revert the axis toward a status-derived
+    /// target (the §11.1 `effective_status` composite). Rises with status
+    /// gains, falls with status losses — the plan's "status victory raises
+    /// dominance" channel, wired daily from the status pass.
+    ///
+    /// The old implementation (`level + change·rate − 0.01`) had zero call
+    /// sites (the axis was write-once at birth) and its hardcoded per-call
+    /// decay would drain the axis to 0 when called on the daily cadence.
+    /// Mean-reversion to the agent's actual standing cannot saturate: the
+    /// axis converges to whatever status the world actually grants.
+    pub fn update(&mut self, status_target: Fixed, response_rate: Fixed) {
+        let delta = (status_target - self.level) * response_rate;
+        self.level = (self.level + delta).clamp_01();
     }
 }
 
@@ -189,9 +214,20 @@ impl Default for ArousalAxis {
 }
 
 impl ArousalAxis {
+    /// §7.2.2 (S2-2-4b fix): update the axis with *saturating* (logistic)
+    /// rise. The old linear form (`acute × rise`) vs decay
+    /// `(level − baseline) × decay` was net-positive at every calibrated
+    /// stress level: famine/pestilence stress 0.667 × rise 0.3 = +0.2/tick
+    /// vs decay ≈0.07 at level 1.0, so 8–9/12 agents pinned at 1.0 in
+    /// every stress window (probe-pinned) — the same saturation family as
+    /// the S2-2-1/2-2-2/2-2-3 fixes. The (1 − level) factor bounds the
+    /// equilibrium at `L* = (s·r + b·d)/(s·r + d)` — ≈0.61 calm (stress
+    /// 0.26), ≈0.77 famine (stress 0.667) with baseline 0.3 — elevated
+    /// under chronic stress but never pinned, and the axis still decays
+    /// to baseline when inputs fade.
     pub fn update(&mut self, acute_input: Fixed, rise_factor: Fixed, decay_factor: Fixed) {
-        // Rapid rise, slower decay back to baseline
-        let rise = acute_input * rise_factor;
+        // Saturating rise: proximity to the ceiling damps further activation.
+        let rise = acute_input * rise_factor * (Fixed::ONE - self.level);
         let decay = (self.level - self.baseline) * decay_factor;
         self.level = (self.level + rise - decay).clamp_01();
     }
@@ -212,6 +248,20 @@ impl Default for GrowthAxis {
             capacity: Fixed::from_f64(0.6),
             developmental_modifier: Fixed::from_f64(1.0),
         }
+    }
+}
+
+impl GrowthAxis {
+    /// §7.2.2 (S2-2-2 fix): mean-revert `capacity` toward the life-stage
+    /// growth target (child=high, adult=moderate, elder=low — see
+    /// [`crate::biology::development::LifeStage::growth_modifier`]) and
+    /// mirror the target into `developmental_modifier` (the "Growth →
+    /// Developmental Stage → Trait Expression" arrow). Previously the axis
+    /// had no update method at all — both fields were write-once at birth.
+    pub fn update(&mut self, growth_target: Fixed, recovery_rate: Fixed) {
+        self.developmental_modifier = growth_target;
+        let delta = (growth_target - self.capacity) * recovery_rate;
+        self.capacity = (self.capacity + delta).clamp_01();
     }
 }
 
@@ -393,11 +443,146 @@ mod tests {
     }
 
     #[test]
+    fn arousal_saturating_gain_cannot_pin_at_one() {
+        // S2-2-4b regression: the linear rise form pinned 8–9/12 agents at
+        // 1.0 in famine/pestilence (probe: arousal mean 0.78–0.81 with the
+        // majority at exactly 1.0). The logistic (1 − level) factor bounds
+        // the equilibrium at L* = (s·r + b·d)/(s·r + d): ≈0.77 at famine
+        // stress 0.667, ≈0.61 at calm stress 0.26 — elevated but never 1.0.
+        let mut famine = ArousalAxis {
+            level: Fixed::from_f64(0.3),
+            baseline: Fixed::from_f64(0.3),
+        };
+        // 20K ticks of sustained famine-scale stress (rise 0.3, decay 0.1).
+        for _ in 0..20_000 {
+            famine.update(Fixed::from_f64(0.667), Fixed::from_f64(0.3), Fixed::from_f64(0.1));
+        }
+        let famine_level = famine.level.to_f64();
+        assert!(
+            famine_level < 0.95,
+            "saturating gain must keep arousal below 1.0 at famine stress (got {famine_level})"
+        );
+        assert!(
+            famine_level > 0.7,
+            "famine stress must still elevate arousal above baseline (got {famine_level})"
+        );
+        // Calm-scale stress settles strictly lower — directionally distinct.
+        let mut calm = ArousalAxis {
+            level: Fixed::from_f64(0.3),
+            baseline: Fixed::from_f64(0.3),
+        };
+        for _ in 0..20_000 {
+            calm.update(Fixed::from_f64(0.26), Fixed::from_f64(0.3), Fixed::from_f64(0.1));
+        }
+        let calm_level = calm.level.to_f64();
+        assert!(
+            calm_level < famine_level,
+            "calm arousal must sit below famine arousal ({calm_level} vs {famine_level})"
+        );
+        assert!(calm_level > 0.4, "calm arousal should stay mildly elevated (got {calm_level})");
+    }
+
+    #[test]
     fn endocrine_state_deterministic() {
         let mut rng1 = rand::rngs::StdRng::seed_from_u64(42);
         let mut rng2 = rand::rngs::StdRng::seed_from_u64(42);
         let e1 = EndocrineState::random(&mut rng1);
         let e2 = EndocrineState::random(&mut rng2);
         assert_eq!(e1.stress.reactivity.to_raw(), e2.stress.reactivity.to_raw());
+    }
+
+    // ── §7.2.2 axis-liveness tests (S2-2-2 fix) ────────────────────
+    // The bonding/dominance/growth axes were write-once (their update
+    // methods had zero call sites); these pin the update contracts the sim
+    // wiring now exercises.
+
+    #[test]
+    fn bonding_axis_rises_with_social_input_and_recovers() {
+        let mut axis = BondingAxis {
+            level: Fixed::from_f64(0.4),
+            receptivity: Fixed::from_f64(0.5),
+        };
+        // Ritual-scale input (bonding_effect ~0.1-0.225) with the shipped
+        // recovery 0.02: net positive, far from saturation.
+        for _ in 0..5 {
+            axis.update(Fixed::from_f64(0.2), Fixed::from_f64(0.02));
+        }
+        assert!(axis.level > Fixed::from_f64(0.4), "bonding must rise with ritual input");
+        assert!(axis.level < Fixed::from_f64(0.9), "bonding must not saturate");
+        // No input: recovery drains the axis back down.
+        let before = axis.level;
+        for _ in 0..3 {
+            axis.update(Fixed::ZERO, Fixed::from_f64(0.02));
+        }
+        assert!(axis.level < before, "bonding must recover when input stops");
+    }
+
+    #[test]
+    fn bonding_axis_saturating_gain_cannot_pin_at_one() {
+        // S2-2-2 regression (reviewer-caught): the linear gain form ratcheted
+        // to 1.0 at ~30K ticks of monthly ritual fires for max-receptivity
+        // agents (step-function accumulation with no decay between fires).
+        // The logistic (1 − level) factor bounds the axis at a stable
+        // equilibrium below 1.0 no matter how many fires accumulate.
+        let mut axis = BondingAxis {
+            level: Fixed::from_f64(0.6), // max birth value
+            receptivity: Fixed::from_f64(0.8), // max receptivity
+        };
+        // 11 monthly fires ≈ the 50K-tick long-horizon window.
+        for _ in 0..11 {
+            axis.update(Fixed::from_f64(0.1125), Fixed::from_f64(0.02));
+        }
+        let after = axis.level.to_f64();
+        assert!(
+            after < 0.95,
+            "saturating gain must keep the axis below 1.0 at the 50K horizon (got {after})"
+        );
+        // And the equilibrium is monotone-increasing from below: more fires
+        // keep approaching it without overshooting.
+        let before = axis.level;
+        axis.update(Fixed::from_f64(0.1125), Fixed::from_f64(0.02));
+        assert!(axis.level > before);
+        assert!(axis.level < Fixed::from_f64(0.95));
+    }
+
+    #[test]
+    fn dominance_axis_tracks_status_target() {
+        let mut axis = DominanceAxis {
+            level: Fixed::from_f64(0.4),
+        };
+        // High-status agent (elite, effective_status ~0.8) converges up.
+        for _ in 0..30 {
+            axis.update(Fixed::from_f64(0.8), Fixed::from_f64(0.1));
+        }
+        assert!(axis.level > Fixed::from_f64(0.6), "dominance must rise toward high status");
+        // Low-status agent (effective_status ~0.2) converges down.
+        let mut low = DominanceAxis {
+            level: Fixed::from_f64(0.4),
+        };
+        for _ in 0..30 {
+            low.update(Fixed::from_f64(0.2), Fixed::from_f64(0.1));
+        }
+        assert!(low.level < Fixed::from_f64(0.3), "dominance must fall with low status");
+    }
+
+    #[test]
+    fn growth_axis_converges_to_life_stage_target() {
+        use crate::biology::development::LifeStage;
+        let mut axis = GrowthAxis::default(); // capacity 0.6
+        // Adolescent target 1.0: capacity rises.
+        axis.update(LifeStage::Adolescent.growth_modifier(), Fixed::from_f64(0.01));
+        assert!(axis.capacity > Fixed::from_f64(0.6));
+        assert_eq!(
+            axis.developmental_modifier,
+            LifeStage::Adolescent.growth_modifier()
+        );
+        // Elder target 0.2: capacity falls and developmental_modifier mirrors it.
+        let mut elder = GrowthAxis {
+            capacity: Fixed::from_f64(0.6),
+            developmental_modifier: Fixed::ONE,
+        };
+        elder.update(LifeStage::Elder.growth_modifier(), Fixed::from_f64(0.01));
+        assert!(elder.capacity < Fixed::from_f64(0.6));
+        assert_eq!(elder.developmental_modifier, LifeStage::Elder.growth_modifier());
     }
 }

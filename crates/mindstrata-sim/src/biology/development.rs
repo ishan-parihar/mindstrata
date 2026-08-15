@@ -53,6 +53,25 @@ impl LifeStage {
         }
     }
 
+    /// §7.2.2 (S2-2-2 fix): growth-capacity target by life stage.
+    /// Growth/repair capacity is the inverse of aging: highest during the
+    /// adolescent growth spurt, moderate through adulthood, lowest in
+    /// elders. The endocrine `GrowthAxis::update` mean-reverts capacity
+    /// toward this target, so the axis differentiates across the age
+    /// distribution (previously write-once — capacity frozen at the birth
+    /// value 0.6 for every agent).
+    pub fn growth_modifier(&self) -> Fixed {
+        match self {
+            Self::Infant => Fixed::from_f64(0.3),
+            Self::Child => Fixed::from_f64(0.9),
+            Self::Adolescent => Fixed::ONE,
+            Self::YoungAdult => Fixed::from_f64(0.8),
+            Self::Adult => Fixed::from_f64(0.6),
+            Self::Mature => Fixed::from_f64(0.4),
+            Self::Elder => Fixed::from_f64(0.2),
+        }
+    }
+
     /// Cognitive modifier (children learn fast, elders have wisdom but slower processing).
     pub fn cognitive_modifier(&self) -> Fixed {
         match self {

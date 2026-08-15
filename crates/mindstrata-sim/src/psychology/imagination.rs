@@ -176,6 +176,28 @@ impl ProspectionState {
                 Fixed::from_f64(0.6),
                 tick,
             );
+            // §8.1.16 (P3-3, August 14, 2026): the D2 gate (`fear > 0.4`)
+            // fired for the majority at the calibrated ambient fear
+            // (0.65+), structurally starving the positive scenarios —
+            // probe-pinned: `prospection.hope` 0.000 for 12/12 agents in
+            // every window while dread stayed live (~0.39). Even under
+            // chronic ambient fear, a tolerable present keeps a hopeful
+            // future in view: generate the D6 hopeful default alongside
+            // the threat scenario so hope has a producer. Deterministic,
+            // observational (hope has no behavioral consumer; prospection
+            // is absent from the golden projection) — calibrated runs stay
+            // byte-identical.
+            self.generate_scenario(
+                ScenarioKind::D6Hopeful,
+                "If the rains come, the village thrives.".into(),
+                Fixed::from_f64(0.6),
+                Fixed::from_f64(0.4),
+                Fixed::from_f64(0.2),
+                Fixed::from_f64(0.3),
+                Fixed::from_f64(0.1),
+                Fixed::from_f64(0.4),
+                tick,
+            );
             return;
         }
         // D3 — Injustice: a grievance seeks redress.
@@ -189,6 +211,19 @@ impl ProspectionState {
                 Fixed::from_f64(0.2),
                 Fixed::from_f64(0.5),
                 Fixed::from_f64(0.5),
+                tick,
+            );
+            // §8.1.16 (P3-3): same hopeful alongside the grievance — a
+            // just world the agent still believes in.
+            self.generate_scenario(
+                ScenarioKind::D6Hopeful,
+                "If the rains come, the village thrives.".into(),
+                Fixed::from_f64(0.6),
+                Fixed::from_f64(0.4),
+                Fixed::from_f64(0.2),
+                Fixed::from_f64(0.3),
+                Fixed::from_f64(0.1),
+                Fixed::from_f64(0.4),
                 tick,
             );
             return;
@@ -455,12 +490,12 @@ mod tests {
                 can_plan_long_term: true,
             },
         );
+        // P3-3: the D2 branch now also emits the D6 hopeful alongside, so
+        // the threat scenario is present (not necessarily last).
         assert!(pro
             .scenarios
-            .last()
-            .unwrap()
-            .description
-            .contains("come to harm"));
+            .iter()
+            .any(|s| s.description.contains("come to harm")));
     }
 
     #[test]
@@ -482,12 +517,12 @@ mod tests {
                 can_plan_long_term: true,
             },
         );
+        // P3-3: the D3 branch now also emits the D6 hopeful alongside, so
+        // the complaint scenario is present (not necessarily last).
         assert!(pro
             .scenarios
-            .last()
-            .unwrap()
-            .description
-            .contains("council may punish"));
+            .iter()
+            .any(|s| s.description.contains("council may punish")));
     }
 
     #[test]
@@ -688,6 +723,44 @@ mod tests {
         );
     }
 
+    /// §8.1.16 (P3-3): a fearful agent (D2 gate) previously generated ONLY
+    /// the threat scenario — the D6 hopeful default was unreachable at the
+    /// calibrated ambient fear, starving `hope` (probe: 0.000 in every
+    /// window). The D2 branch must now also generate the hopeful scenario.
+    #[test]
+    fn fearful_agent_generates_hopeful_alongside_threat() {
+        let mut pro = ProspectionState::default();
+        pro.generate_daily_scenario(
+            100,
+            ScenarioInputs {
+                hunger: Fixed::ZERO,
+                thirst: Fixed::ZERO,
+                safety: Fixed::ZERO,
+                fear: Fixed::from_f64(0.7),
+                anger: Fixed::ZERO,
+                ambition: Fixed::ZERO,
+                food_scarcity: Fixed::ZERO,
+                water_scarcity: Fixed::ZERO,
+                has_partner: false,
+                total_attraction: Fixed::ZERO,
+                can_plan_long_term: true,
+            },
+        );
+        let has_threat = pro
+            .scenarios
+            .iter()
+            .any(|s| s.kind == ScenarioKind::D2Threat);
+        let has_hopeful = pro
+            .scenarios
+            .iter()
+            .any(|s| s.kind == ScenarioKind::D6Hopeful);
+        assert!(has_threat, "fearful agent generates the threat scenario");
+        assert!(has_hopeful, "fearful agent ALSO generates the hopeful default");
+        // And the hopeful scenario feeds `hope` after evaluation.
+        pro.evaluate_scenarios();
+        assert!(pro.hope > Fixed::ZERO, "hope is no longer structurally starved");
+    }
+
     #[test]
     fn daily_generation_respects_capacity() {
         let mut pro = ProspectionState {
@@ -805,7 +878,7 @@ mod tests {
                 true,
             ),
         );
-        assert_eq!(pro.scenarios.last().unwrap().kind, ScenarioKind::D2Threat);
+        assert!(pro.scenarios.iter().any(|s| s.kind == ScenarioKind::D2Threat));
 
         // D3 injustice (anger 0.6, everything else calm).
         pro.generate_daily_scenario(
@@ -820,10 +893,10 @@ mod tests {
                 true,
             ),
         );
-        assert_eq!(
-            pro.scenarios.last().unwrap().kind,
-            ScenarioKind::D3Injustice
-        );
+        assert!(pro
+            .scenarios
+            .iter()
+            .any(|s| s.kind == ScenarioKind::D3Injustice));
 
         // D4 courtship (unattached with attraction 0.6, else calm).
         pro.generate_daily_scenario(

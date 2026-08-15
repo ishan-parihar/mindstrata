@@ -154,6 +154,16 @@ fn command_goal_action(goals: &[Goal], needs: &NeedState) -> Option<(ActionKind,
 
 /// Demography runs once per this many ticks (matches `phases.is_deca`).
 const DEMOGRAPHY_TICK_INTERVAL: u64 = 10;
+/// §8.1.4 (P3-6): length of the famine production-suppression window opened by
+/// a Famine shock (~3 weeks at 96 ticks/day — long enough that the destroyed
+/// grain cannot be refilled while the failure lasts, short enough that a
+/// village genuinely recovers afterward).
+const FAMINE_WINDOW_TICKS: u64 = 2000;
+/// §8.1.4 (P3-6): per-tick proportional drain on stored grain while a famine
+/// window is open — the granary is genuinely consumed. Sized so the ~45
+/// surviving grain after a 0.7 shock reaches zero mid-window (the ~2.1
+/// plateau showed production alone still matched consumption).
+const FAMINE_GRAIN_DRAIN: Fixed = Fixed::from_raw(50); // 0.005/tick
 /// Minimum mutual trust required to initiate a courtship (0.3).
 const COURTSHIP_TRUST_THRESHOLD: Fixed = Fixed::from_raw(3000); // 0.3
 
@@ -511,6 +521,16 @@ pub struct Simulation {
     /// §7.2: Tick when the last moral panic fired — enforces a cooldown so a
     /// saturated belief-charge loop cannot hammer legitimacy every tick.
     last_moral_panic_tick: u64,
+    /// §8.1.4 (P3-6): Famine production-suppression window — the tick (exclusive)
+    /// until which a Famine shock suppresses grain output. A famine is a crop
+    /// failure, not a one-shot store drain: without this, Work production
+    /// refilled the grain the shock destroyed within ~1.5K ticks and body hunger
+    /// never rose (probe: needs.hunger 0.006–0.041 in EVERY scenario, famine ≈
+    /// calm — the goal-incongruence branch was unreachable). 0 = no famine.
+    famine_until: u64,
+    /// §8.1.4 (P3-6): Grain-output multiplier while `famine_until` is active —
+    /// `1 − magnitude` of the triggering shock (0.3 for the standard 0.7 famine).
+    famine_production_factor: Fixed,
     /// §12.4: Tick when the last cult formed — enforces a formation cooldown.
     last_cult_formation_tick: u64,
     /// §4.4: Black market state — activates under scarcity with weak enforcement.
@@ -630,6 +650,8 @@ impl Simulation {
             last_revolution_tick: 0,
             last_moral_panic_tick: 0,
             last_cult_formation_tick: 0,
+            famine_until: 0,
+            famine_production_factor: Fixed::ONE,
             black_market: crate::black_market::BlackMarketState::default(),
             kinship_graph: crate::social::kinship::KinshipGraph::default(),
             households: Vec::new(),
@@ -798,6 +820,8 @@ impl Simulation {
             last_revolution_tick: snapshot.last_revolution_tick,
             last_moral_panic_tick: snapshot.last_moral_panic_tick,
             last_cult_formation_tick: snapshot.last_cult_formation_tick,
+            famine_until: 0,
+            famine_production_factor: Fixed::ONE,
             black_market: snapshot.black_market,
             // §10.6: Serialized since v10 — restore the exact marriage/birth-
             // forged edges; pre-v10 snapshots deserialize an empty graph (the
@@ -1044,7 +1068,16 @@ impl Simulation {
                     );
                     att
                 },
-                emotion_regulation: crate::psychology::EmotionRegulationState::default(),
+                emotion_regulation: {
+                    let mut reg = crate::psychology::EmotionRegulationState::default();
+                    // §8.1.8 (P3-4): personality-driven strategy preference
+                    // — previously never assigned, so every agent was
+                    // permanently Reappraisal (probe-pinned 12/12). Uses the
+                    // clone (personality itself is moved into the bundle
+                    // below).
+                    reg.initialize_from_personality(&personality_clone);
+                    reg
+                },
                 moral_cognition: crate::psychology::MoralCognition::default(),
                 prospection: crate::psychology::ProspectionState::default(),
                 narrative: crate::psychology::NarrativeIdentity::default(),
@@ -2638,6 +2671,28 @@ impl Simulation {
                                 }
                             }
                         }
+                        // §8.1.4 (P3-6): a famine is a CROP FAILURE, not a
+                        // one-shot store drain. Without production suppression,
+                        // Work refilled the destroyed grain within ~1.5K ticks
+                        // and body hunger never rose (probe: needs.hunger
+                        // 0.006–0.041 in every scenario, famine ≈ calm — the
+                        // goal-incongruence branch was unreachable). Open a
+                        // production-suppression window (FAMINE_WINDOW_TICKS)
+                        // during which Work grain output is scaled by
+                        // `1 − magnitude` (0.3 for the standard 0.7 famine):
+                        // stored grain genuinely depletes, Eat fails, and
+                        // hunger accumulates toward the 0.5 goal-congruence
+                        // gate.
+                        self.famine_until = tick_u64 + FAMINE_WINDOW_TICKS;
+                        // Near-total crop failure: production collapses to
+                        // 0.05 × magnitude (3.5% for the standard 0.7 famine).
+                        // `1 − magnitude` = 0.3 was NOT enough — the surviving
+                        // trickle still yielded ~2 full portions/day and the
+                        // village scraped by (probe: top hunger 0.488, never
+                        // crossing the 0.5 gate). A famine starves.
+                        self.famine_production_factor = shock.magnitude
+                            * Fixed::from_f64(0.05)
+                            .max(Fixed::from_f64(0.01));
                     }
                     ShockKind::Pestilence => {
                         // A pestilence strikes in two composed waves, both routed
@@ -2851,7 +2906,24 @@ impl Simulation {
                     ActionKind::Socialize | ActionKind::Worship => Fixed::from_f64(0.2),
                     _ => Fixed::from_f64(0.1),
                 };
-                let ambient_temperature = Fixed::from_f64(0.5); // temperate default
+                // §5 (S3-2-1 fix): the biology pass used a HARDCODED
+                // "temperate default" 0.5 here, which froze the thermal
+                // system at thermoneutral in every scenario (probe: body_temp
+                // 0.500, cold/heat stress 0, no spread — the weather layer
+                // was live but never reached the body). The WeatherTracker
+                // temperature (0..1; seasonal baselines Spring 0.6 / Summer
+                // 0.9 / Autumn 0.5 / Winter 0.2, mean-reverting + seeded
+                // noise) is now the ambient input, so body temperature tracks
+                // the seasons — mild heat in Spring, real cold in Winter —
+                // the plan's "winter hardship" (§7.3.3) becomes live.
+                // NB: this block (biology pass) runs before weather.advance
+                // in the same tick, so it reads the PREVIOUS tick's weather
+                // state — the same one-tick lag the weather site documents
+                // for season boundaries; deterministic, seeded, RNG-free
+                // here. Golden-safe: nothing golden-hashed reads thermal;
+                // the respiratory consumer receives cold_stress (≈0 in
+                // Spring/Summer/Autumn) via irritation.
+                let ambient_temperature = self.weather.temperature;
                 let crowding = Fixed::from_f64(0.3); // village-level crowding
                 let hygiene = Fixed::from_f64(0.6); // moderate hygiene
                 self.agents[i].embodied.tick_update(
@@ -3063,7 +3135,23 @@ impl Simulation {
                 self.agents[i].motivation.hunger.deficit = needs[i].hunger;
                 self.agents[i].motivation.thirst.deficit = needs[i].thirst;
                 self.agents[i].motivation.sleep.deficit = needs[i].fatigue;
-                self.agents[i].motivation.safety.deficit = needs[i].safety;
+                // §8.1.5 (P2/P3 re-audit — safety-need ratchet): the legacy
+                // `needs.safety` accumulator has ZERO consumers anywhere in
+                // the sim (no action relieves it; SeekSafety has no aligned
+                // action), so it grew +0.0003/tick from birth and saturated
+                // at 1.0 for every agent by ~10K ticks (probe: 0.702 at 2K →
+                // 1.000 at 10K, 12/12 identical, no spread) — monopolizing
+                // `dominant_need` (Safety:7 at 10K) and hiding the real
+                // thirst/fatigue drives. The §8.1.5 safety deficit now
+                // tracks the agent's LIVE felt danger (fear + anger) instead
+                // of the unbounded clock: a calm agent is safe (deficit low),
+                // a threatened agent is unsafe (deficit high). Mean-zero
+                // anchor: the fear/anger blend replaces the accumulator, so
+                // the axis differentiates and dominant_need reflects actual
+                // drives. Deterministic, no RNG.
+                let safety_deficit =
+                    (emotions[i].fear + emotions[i].anger) * Fixed::from_f64(0.5);
+                self.agents[i].motivation.safety.deficit = safety_deficit.clamp_01();
                 self.agents[i].motivation.update();
 
                 // Architecture-plan-2 §8.1.4: Emotion regulation
@@ -3355,6 +3443,18 @@ impl Simulation {
                         social_support,
                     );
                     self.agents[i].self_model.reconcile_self_esteem();
+                    // §8.1.7 (P3-2): coherence and security now have
+                    // producers — the two write-only dead fields (probe:
+                    // 0.600/0.500, 12/12 identical in every window). Both
+                    // are observational (only the yearly plasticity reads
+                    // coherence; security has no consumer), so short-horizon
+                    // calibrated runs stay byte-identical.
+                    self.agents[i].self_model.update_coherence();
+                    self.agents[i].self_model.update_security(
+                        negative_events,
+                        positive_event_magnitude,
+                        social_support,
+                    );
                     // §8.1.17: The same life events reshape the meaning-making
                     // frames themselves — suffering crystallizes punitive frames
                     // and erodes just-world optimism, success does the reverse.
@@ -3509,6 +3609,27 @@ impl Simulation {
                 // (behavioral), so role-holder status now genuinely matters.
                 let eff_status = agent.status_v2.effective_status();
                 agent.attraction.update_status_attraction(eff_status);
+                // §7.2.2 (S2-2-2 fix): the endocrine dominance axis now
+                // tracks the agent's standing — the plan's "status victory
+                // raises dominance" channel. Previously write-once:
+                // `dominance.update` had zero call sites (the axis sat frozen
+                // at birth values). Mean-reverts toward `effective_status`
+                // (the §11.1 composite, refreshed just above): elites hold
+                // higher dominance, low-status agents drain toward their
+                // standing — rises with status gains, falls with losses, and
+                // cannot saturate (the target is the agent's real status).
+                // Daily cadence: status fields refresh on the daily
+                // decay/sync pattern in this same loop (taboo_penalty,
+                // kinship_penalty below use the same `phases.is_daily`
+                // fold). Deterministic, no RNG; dominance feeds no decision
+                // consumer yet (the accessors are unwired), so the golden
+                // baseline stays byte-identical.
+                if phases.is_daily {
+                    agent.embodied.endocrine.dominance.update(
+                        eff_status,
+                        self.params.endocrine_dominance_response,
+                    );
+                }
                 // §10.4 (Iteration 78): the two per-agent aversion channels.
                 // social_cost mirrors the agent's criminal notoriety from the
                 // live norm-enforcement crime records (offenders are socially
@@ -3947,7 +4068,7 @@ impl Simulation {
                             Fixed::from_f64(0.5) // normal agents need stronger routine signal
                         };
 
-                    let action = if let Some((cmd_action, cmd_kind)) =
+                    let mut action = if let Some((cmd_action, cmd_kind)) =
                         command_goal_action(&goals[i], &needs[i])
                     {
                         // §5 (Iteration 155): an external directive takes
@@ -4030,6 +4151,44 @@ impl Simulation {
                             ctx.rng,
                         )
                     };
+                    // §8.1.19 (P3-1, August 14, 2026): habitual fallback
+                    // under stress — an agent whose automaticity is high
+                    // (habits formed through ~100 practice ticks at the
+                    // 0.1-proficiency milestone) and who is stressed
+                    // substitutes its strongest habit for the deliberated
+                    // action ("under stress, agents fall back on habits").
+                    // Zero-blast in calibrated windows: automaticity stays
+                    // < 0.5 until habits actually form (base strength 0.3 →
+                    // ≈0.29 at golden stress levels), so the golden/snapshot
+                    // horizons are untouched and only long-horizon runs where
+                    // practice has accumulated see the fallback. Deterministic,
+                    // no RNG.
+                    if stress > Fixed::from_f64(0.5)
+                        && self.agents[i].psych_skills.automaticity > Fixed::from_f64(0.5)
+                    {
+                        let trigger = match self.agents[i].motivation.dominant_need {
+                            crate::psychology::motivation::MotiveCategory::Hunger => "hunger",
+                            crate::psychology::motivation::MotiveCategory::Thirst => "thirst",
+                            crate::psychology::motivation::MotiveCategory::Sleep => "fatigue",
+                            crate::psychology::motivation::MotiveCategory::Belonging
+                            | crate::psychology::motivation::MotiveCategory::Attachment
+                            | crate::psychology::motivation::MotiveCategory::Romance => "social",
+                            crate::psychology::motivation::MotiveCategory::Meaning => "meaning",
+                            _ => "",
+                        };
+                        if let Some(habit) =
+                            self.agents[i].psych_skills.execute_habit(trigger, tick_u64)
+                        {
+                            action = match habit.as_str() {
+                                "Work" => ActionKind::Work,
+                                "Trade" => ActionKind::Trade,
+                                "Socialize" => ActionKind::Socialize,
+                                "Worship" => ActionKind::Worship,
+                                "Eat" => ActionKind::Eat,
+                                _ => action,
+                            };
+                        }
+                    }
                     self.agents[i].current_action = action;
                     self.agents[i].action_progress = action.definition().duration_ticks;
                     action_starts.push((i, action));
@@ -4513,6 +4672,25 @@ impl Simulation {
                 let threat = threat_exposure[i];
                 let unfairness = witnessed_unfairness[i];
                 let need_pressure = needs[i].hunger.max(needs[i].thirst);
+                // §8.1.4 (P2/P3 audit closure): the agent's own aggression is
+                // the self-caused-failure signal that makes guilt reachable.
+                // Anger is NOT it — appraisal never writes it (the conflict
+                // events push after this block reads, so the unfairness/threat
+                // exposure is always zero; anger maxes at 0.063 in calibrated
+                // windows). An active feud IS: it is live and transient in
+                // conflict worlds (7/12 at 2K, 3/12 at 10K), self-caused by
+                // the agent's own escalation, and absent in calm worlds (zero
+                // blast on the golden baseline). The feud is also goal-
+                // RELEVANT: without it, `goal_relevance` (needs/threat only)
+                // stays below the 0.3 branch threshold for feuding agents and
+                // the incongruent branch never fires — guilt stays 0 even
+                // with Self_ attribution.
+                let in_feud = !self.agents[i].feuds.is_empty();
+                let feud_pressure = if in_feud {
+                    Fixed::from_f64(0.5)
+                } else {
+                    Fixed::ZERO
+                };
                 // §8.1.4: Deepened appraisal dimensions — derived from live
                 // agent state (sacredness, attachment, status, narrative).
                 let max_sacredness = self.agents[i]
@@ -4523,13 +4701,53 @@ impl Simulation {
                 let separation_distress = self.agents[i].attachment.separation_distress;
                 let status_hold = self.agents[i].status_v2.authority;
                 let coherence = self.agents[i].narrative.coherence;
+                // §8.1.4 (P2/P3 re-audit — P3-8 root cause): `social_visibility`
+                // was HARDCODED to zero, so the loneliness producer
+                // (attachment_threat × (1 − social_visibility)) fired at full
+                // strength every tick for partnered agents (daily separation
+                // distress) and, being decay-exempt, ratcheted loneliness to
+                // 1.0 for 10/12 agents in calm windows (probe: mean 0.833,
+                // 10/12 pinned) while bereaved agents in pestilence (no
+                // partner → no separation) sat at 0.000 — the P3-8 inversion.
+                // Both inputs now derive from live state: visibility rises
+                // with partner presence and relationship count (an embedded
+                // agent's daily separation barely registers; an isolate has
+                // no damping), and attachment threat adds an isolation term
+                // so the socially-absent agent is chronically lonely.
+                // Deterministic (pure relationship-state arithmetic, no RNG).
+                let rel_count = self.agents[i].relationship_v2s.len() as f64;
+                let social_visibility = if self.agents[i].partner.is_some() {
+                    Fixed::from_f64(0.5) + Fixed::from_f64(rel_count.min(4.0) * 0.1)
+                } else {
+                    Fixed::from_f64(rel_count.min(4.0) * 0.1)
+                };
+                let social_visibility = social_visibility.clamp_01();
+                let isolation_threat =
+                    (Fixed::ONE - social_visibility) * Fixed::from_f64(0.08);
+                let attachment_threat = (separation_distress + isolation_threat).clamp_01();
                 let appraisal = Appraisal {
-                    goal_relevance: need_pressure.max(threat),
+                    goal_relevance: need_pressure.max(threat).max(feud_pressure),
                     goal_congruence: if threat > Fixed::from_f64(0.2) {
                         // Under direct threat: strongly goal-incongruent.
                         -Fixed::from_f64(0.6)
+                    } else if in_feud {
+                        // Self-caused conflict state: a feud the agent
+                        // escalated is a goal-incongruent situation even when
+                        // its own needs are met — the morally incongruent
+                        // self-attributed failure that produces guilt.
+                        -Fixed::from_f64(0.3)
                     } else if needs[i].hunger < Fixed::from_f64(0.5) {
-                        Fixed::from_f64(0.3)
+                        // §8.1.4 (P3-5): congruence now scales with how well
+                        // needs are met instead of the constant +0.3 — the
+                        // constant made `positive` a per-agent constant, so
+                        // the positive secondary family (gratitude/tenderness/
+                        // relief/nostalgia) pinned at IDENTICAL saturation
+                        // for all agents in every window (probe: gratitude
+                        // 0.880, tenderness 1.000, 12/12 identical). With
+                        // (1 − need_pressure) the family differentiates and a
+                        // genuinely thirsty agent (high pressure) is no longer
+                        // joyful by construction.
+                        Fixed::from_f64(0.3) * (Fixed::ONE - need_pressure)
                     } else {
                         Fixed::from_f64(-0.3)
                     },
@@ -4540,11 +4758,59 @@ impl Simulation {
                     } else {
                         Fixed::from_f64(0.5)
                     },
-                    agency: Agency::Circumstance,
-                    social_visibility: Fixed::ZERO,
+                    // §8.1.4 (P2/P3 audit closure): the agency dimension was
+                    // hardcoded `Agency::Circumstance`, so the Self_/Other
+                    // attribution branches in appraise() — pride (Self_ on
+                    // goal-congruent), trust (Other on goal-congruent), guilt
+                    // (Self_ on goal-incongruent), other-directed anger (Other
+                    // on goal-incongruent) — were structurally unreachable
+                    // (probe: pride/guilt/trust 0.000, 12/12, every window).
+                    // Derive attribution from live state so the moral
+                    // emotions are reachable and directionally honest:
+                    //   - earned success (conscientious work / held authority)
+                    //     → Self_ → pride
+                    //   - community support (low attachment distress) → Other
+                    //     → trust
+                    //   - witnessed injustice (conflict/norm-violation
+                    //     exposure) → Other → anger at the wrongdoer (the
+                    //     victim's path; the aggressor gets no unfairness,
+                    //     only threat)
+                    //   - own aggression (an active feud the agent escalated)
+                    //     → Self_ → guilt (the aggressor's path — the honest
+                    //     self-caused-failure signal; anger was tried first
+                    //     but appraisal never writes it, so it stayed 0)
+                    //   - impersonal scarcity (famine/pestilence with no
+                    //     social cause) → Circumstance → sadness/fear
+                    //     (unchanged).
+                    agency: if threat <= Fixed::from_f64(0.2)
+                        && needs[i].hunger < Fixed::from_f64(0.5)
+                    {
+                        // Goal-congruent: who gets credit?
+                        if personalities[i].conscientiousness > Fixed::from_f64(0.5)
+                            || status_hold > Fixed::from_f64(0.5)
+                        {
+                            // Earned by own effort/standing → pride.
+                            Agency::Self_
+                        } else if separation_distress < Fixed::from_f64(0.3) {
+                            // Carried by community support → trust.
+                            Agency::Other(AgentId::new(i as u64))
+                        } else {
+                            Agency::Circumstance
+                        }
+                    } else if in_feud {
+                        // Own aggression escalated the feud → self-attributed
+                        // failure → guilt.
+                        Agency::Self_
+                    } else if unfairness > Fixed::from_f64(0.05) {
+                        // Someone else's wrongdoing caused the failure → anger.
+                        Agency::Other(AgentId::new(i as u64))
+                    } else {
+                        Agency::Circumstance
+                    },
+                    social_visibility,
                     identity_relevance: Fixed::from_f64(0.2),
                     sacredness_violation: (unfairness * max_sacredness).clamp_01(),
-                    attachment_threat: separation_distress,
+                    attachment_threat,
                     status_threat: (threat * (Fixed::ONE - status_hold)).clamp_01(),
                     purity_violation: (unfairness * (Fixed::ONE - emotions[i].trust)).clamp_01(),
                     // Felt control erodes under threat — distinct from the raw
@@ -4603,13 +4869,17 @@ impl Simulation {
                 emotions[i].pride = (emotions[i].pride + delta.pride).clamp_01();
                 emotions[i].guilt = (emotions[i].guilt + delta.guilt).clamp_01();
                 // §8.1.4: Expanded emotion families. Observational state in
-                // calm windows — loneliness (Iter-98) and tenderness (Iter-99)
-                // are consumed for decisions, humiliation (Iter-116) amplifies
-                // failed-threat escalation, and the rest are kept at
-                // producer-driven steady states by the Iter-116 daily decay
-                // below. No gate serializes them (golden agent_hash and the
-                // snapshots read only base emotions/valence), so calibrated
-                // runs stay byte-identical.
+                // calm windows — loneliness (Iter-98) is consumed for
+                // decisions and stays exempt from decay (its producer is
+                // zero in most ticks), tenderness (Iter-99) feeds the Help
+                // decision and is decayed since Iter-183 (P3-5 — it
+                // ratcheted to 1.0 while exempt), humiliation (Iter-116)
+                // amplifies failed-threat escalation, and the rest are
+                // kept at producer-driven steady states by the Iter-116
+                // daily decay below. No gate serializes them (golden
+                // agent_hash and the snapshots read only base
+                // emotions/valence), so calibrated runs stay
+                // byte-identical.
                 emotions[i].disgust = (emotions[i].disgust + delta.disgust).clamp_01();
                 emotions[i].contempt = (emotions[i].contempt + delta.contempt).clamp_01();
                 emotions[i].awe = (emotions[i].awe + delta.awe).clamp_01();
@@ -4676,11 +4946,14 @@ impl Simulation {
             // starved the rare-event conception rolls (the lower fear
             // re-paces the shared Social RNG stream; at 0.08 only 1/5
             // seeds delivered a 100K birth, at 0.06 all 5 deliver).
-            // `trust` stays exempt: relationship-driven (decays via the
-            // relationship drift pass, not here) and probes at exactly 0
-            // in calibrated windows. `loneliness`/`tenderness` exemptions
-            // below unchanged (Iter-98/99 consumers calibrated against
-            // the saturated state).
+            // `tenderness` exemption below removed (Iter-183, P3-5) and
+            // `loneliness` joined the secondary decay below (P2/P3 re-
+            // audit, P3-8) once their producers became live — each was
+            // the same write-only-ratchet class. `trust` JOINED the base
+            // decay above (P2/P3 audit closure): appraisal now produces
+            // it via Other-attributed goal congruence, so the old
+            // exemption (justified only while it probed at exactly 0)
+            // would ratchet it to 1.0.
             for emotion in &mut emotions {
                 let base_rate = crate::appraisal::BASE_EMOTION_DECAY_RATE;
                 emotion.fear = crate::appraisal::secondary_emotion_decay(emotion.fear, base_rate);
@@ -4695,6 +4968,15 @@ impl Simulation {
                     crate::appraisal::secondary_emotion_decay(emotion.pride, base_rate);
                 emotion.guilt =
                     crate::appraisal::secondary_emotion_decay(emotion.guilt, base_rate);
+                // §8.1.4 (P2/P3 audit closure): `trust` was decay-exempt with
+                // the justification "probes at exactly 0 in calibrated
+                // windows" — but the appraisal block now produces it
+                // (Other-attributed goal congruence), so the exemption would
+                // become a write-only ratchet to 1.0 (the same class as the
+                // Iter-183 tenderness fix). Joined the base decay so it sits
+                // at a producer-driven steady state.
+                emotion.trust =
+                    crate::appraisal::secondary_emotion_decay(emotion.trust, base_rate);
                 // §8.1.4 (Iteration 116): The expanded emotion families decay
                 // proportionally EVERY TICK (SECONDARY_EMOTION_DECAY_RATE,
                 // probe-calibrated) — the base-8 linear decay (0.002/tick) is
@@ -4705,10 +4987,15 @@ impl Simulation {
                 // pinned at 1.0 in every calibrated run. The proportional
                 // per-tick decay cancels the per-tick production to keep them
                 // at meaningful producer-driven levels. `loneliness` (Iter-98
-                // social-seeking) and `tenderness` (Iter-99 helping) are
-                // exempt — their consumers were calibrated against the
-                // saturated state, so decaying them is a separate, larger
-                // calibration (the Iter-115 birth-pipeline lesson).
+                // social-seeking) remains exempt — its producer is zero in
+                // most ticks, so it does not ratchet; `tenderness` was
+                // exempted at Iter-99 but JOINED the decay at Iter-183
+                // (P3-5): with a live per-agent producer it ratcheted to
+                // 1.0 for every agent, exactly the write-only saturation
+                // class the P3 audit targets. The Iter-115 birth-pipeline
+                // lesson applies — the help-window re-pace is absorbed by
+                // the standard re-pin workflow (golden + snapshots
+                // regenerated, integration pins re-anchored).
                 let rate = crate::appraisal::SECONDARY_EMOTION_DECAY_RATE;
                 emotion.disgust = crate::appraisal::secondary_emotion_decay(emotion.disgust, rate);
                 emotion.contempt =
@@ -4728,6 +5015,39 @@ impl Simulation {
                     crate::appraisal::secondary_emotion_decay(emotion.nostalgia, rate);
                 emotion.moral_outrage =
                     crate::appraisal::secondary_emotion_decay(emotion.moral_outrage, rate);
+                // §8.1.4 (P2/P3 re-audit — P3-8 completion): loneliness JOINS
+                // the secondary decay. It was exempted at Iter-98 with the
+                // justification "its producer is zero in most ticks, so it
+                // does not ratchet" — that premise is stale: the appraisal
+                // block now produces it every tick (attachment_threat ×
+                // (1 − social_visibility), with separation distress for
+                // partnered agents), so the exemption ratcheted it to 1.0
+                // for 10/12 agents in calm (probe: mean 0.833) — the exact
+                // write-only saturation class the trust/tenderness fixes
+                // eliminated. With the decay it sits at a producer-driven
+                // steady state: partnered-embedded agents low, isolates
+                // high, bereaved agents (pestilence) mid — the honest
+                // direction.
+                emotion.loneliness =
+                    crate::appraisal::secondary_emotion_decay(emotion.loneliness, rate);
+                // §8.1.4 (Iteration 183 — AP2 P3-5 completion): tenderness
+                // JOINS the secondary decay. It was exempted at Iter-99
+                // ("consumers calibrated against the saturated state") and
+                // ratcheted to 1.0 for 13/13 agents in every calibrated
+                // window — the write-only saturation class P3-5 exists to
+                // eliminate. The P3-5 goal-congruence differentiation gave
+                // gratitude a 0.207–0.880 spread but could not move
+                // tenderness, which never decayed. Now its producer
+                // (positive × (1 − status_threat), same family as
+                // gratitude) drives the same delta/rate equilibrium, so
+                // the help propensity's tenderness tier (× 0.5)
+                // differentiates across agents instead of adding a
+                // constant +0.5 to everyone. `loneliness` keeps its
+                // exemption — its producer (attachment_threat × (1 −
+                // social_visibility)) is zero in most ticks, so it does
+                // not ratchet (probe: live at 0.04–0.42).
+                emotion.tenderness =
+                    crate::appraisal::secondary_emotion_decay(emotion.tenderness, rate);
             }
 
             // ── 7b. §10.1.1 fear contagion (Iteration 107) ────────────
@@ -5056,6 +5376,29 @@ impl Simulation {
                 }
             }
             ecology::WeatherRegime::Normal => {}
+        }
+        // §8.1.4 (P3-6): famine grain drain — while a Famine shock's
+        // production-suppression window is open, stored grain additionally
+        // decays per tick (a famine consumes the granary: eating outpaces the
+        // failed harvest). Mirrors the drought regime's per-tick water drain
+        // above. With only the one-shot 70% store drain + production
+        // suppression, grain plateaued at ~2.1 (production at 0.3× still
+        // matched consumption) and body hunger never rose; the drain drives
+        // stored grain to zero mid-window so Eat fails, hunger accumulates
+        // toward the 0.5 goal-congruence gate, and the goal-incongruence
+        // branch (sadness → despair → depression-from-deprivation) becomes
+        // reachable. Outside an open window the factor is 1.0 — calibrated
+        // windows (riverford/calm/pestilence/golden) are untouched.
+        if tick_u64 < self.famine_until {
+            let drain = FAMINE_GRAIN_DRAIN;
+            for site in &mut self.world.sites {
+                for stock in &mut site.inventory {
+                    if stock.resource_id == GRAIN_RESOURCE_ID && stock.quantity > Fixed::ZERO {
+                        stock.quantity =
+                            (stock.quantity * (Fixed::ONE - drain)).max(Fixed::ZERO);
+                    }
+                }
+            }
         }
 
         // ── 4b. Resource operations (extracted) ──
@@ -7568,7 +7911,9 @@ impl Simulation {
         AgentBundle {
             body: BodyState::from(&child_embodied),
             needs: NeedState::default(),
-            personality: child_personality,
+            // Clone: the original is reused below to seed the newborn's
+            // emotion-regulation strategy from personality (P3-4 completion).
+            personality: child_personality.clone(),
             goals: Vec::new(),
             beliefs: Self::foundational_beliefs(),
             affect: Affect::default(),
@@ -7620,7 +7965,21 @@ impl Simulation {
                 );
                 att
             },
-            emotion_regulation: crate::psychology::EmotionRegulationState::default(),
+            emotion_regulation: {
+                // §8.1.8 (P2/P3 re-audit — P3-4 completion): newborns must get
+                // the same personality-driven strategy preference as the
+                // initial population. Previously they took
+                // `EmotionRegulationState::default()` (permanently Reappraisal),
+                // so in death-heavy worlds (pestilence) the population refilled
+                // with default-Reappraisal newborns and the probe showed the
+                // strategy mix collapsing to Reappraisal:12 at 10K — the exact
+                // single-strategy uniformity P3-4 exists to eliminate. The
+                // personality traits are already in scope (child_personality
+                // was moved into the bundle above), so seed from them.
+                let mut reg = crate::psychology::EmotionRegulationState::default();
+                reg.initialize_from_personality(&child_personality);
+                reg
+            },
             moral_cognition: crate::psychology::MoralCognition::default(),
             prospection: crate::psychology::ProspectionState::default(),
             narrative: crate::psychology::NarrativeIdentity::default(),
@@ -9654,6 +10013,27 @@ impl Simulation {
                             self.agents[p]
                                 .legitimacy_field
                                 .ritual_boost(ritual_legitimacy);
+                            // §7.2.2 (S2-2-2 fix): ritual participation feeds
+                            // the endocrine bonding axis — the plan's "ritual
+                            // increases bonding" channel. Previously
+                            // write-once: `bonding.update` had zero call sites
+                            // (the axis sat frozen at birth values in every
+                            // probe window). Input scaled by 0.5 (mirroring
+                            // the trust channel's `bonding × 0.3` in this
+                            // loop): the seasonal effect 0.225 × 0.5 ×
+                            // receptivity (mean ~0.5) with the 0.02 recovery
+                            // moves the axis ≈ +0.04/fire — differentiated
+                            // across pro/anti congregations. Saturation is
+                            // bounded by the axis's own logistic (1 − level)
+                            // gain (equilibrium ≈ 0.78 at max receptivity,
+                            // probe-verified across 5K/20K/50K horizons).
+                            // Rituals fire only at monthly intervals (4320),
+                            // beyond every golden (1000) / snapshot (≤2000)
+                            // horizon, so calibrated runs stay byte-identical.
+                            self.agents[p].embodied.endocrine.bonding.update(
+                                bonding * Fixed::from_f64(0.5),
+                                self.params.endocrine_bonding_recovery,
+                            );
                             // §8.1.3: Cultural memory — shared ritual
                             // participation is the canonical cultural episode
                             // (sparse: rituals fire on their interval; salience
@@ -9703,15 +10083,33 @@ impl Simulation {
                                 .map_or_else(std::collections::BTreeSet::new, |inst| {
                                     inst.norm_ids.iter().copied().collect()
                                 });
+                            // §8.1.10 (P3-11): per-agent internalization
+                            // scaling. The norm count was UNIFORM (5.000 for
+                            // 12/12 at 10K, zero spread) because every
+                            // participant internalized every community norm at
+                            // the identical rate — conformity had no seat at
+                            // the ritual. Scale the reinforcement by the
+                            // agent's conformity (0.5 + conformity × 0.5, so
+                            // a maximally conformist agent internalizes at
+                            // full strength and a maximally independent one at
+                            // half): the collective ritual still internalizes
+                            // norms, but per-agent strength (and the
+                            // 0.1-strength first-exposure threshold in
+                            // `reinforce_norm`'s internalize path) now
+                            // differentiates the population.
+                            let conformity = self.agents[p].personality.conformity;
+                            let internalize_scale = Fixed::from_f64(0.5)
+                                + conformity * Fixed::from_f64(0.5);
                             for norm in self.norms.norms() {
                                 let reinforcement = ritual.norm_reinforcement_for_institutional(
                                     norm.internalization,
                                     sponsor_norms.contains(&norm.id),
                                 );
-                                if reinforcement > Fixed::ZERO {
+                                let scaled = (reinforcement * internalize_scale).clamp_01();
+                                if scaled > Fixed::ZERO {
                                     self.agents[p]
                                         .moral_cognition
-                                        .reinforce_norm(&norm.name, reinforcement);
+                                        .reinforce_norm(&norm.name, scaled);
                                 }
                             }
                         }
@@ -10775,9 +11173,30 @@ impl Simulation {
                 ActionKind::Eat => {
                     let amount = Fixed::from_f64(0.1);
                     // §19.5.E: Use access-checking method to enforce resource access rights.
+                    // §8.1.4 (P3-6): a FAILED Eat must not relieve hunger — the
+                    // per-tick relief in `apply_action_tick` is unconditional, so
+                    // an agent whose Eat finds no grain anywhere still "ate" and
+                    // hunger never accumulated in famine/pestilence (probe:
+                    // needs.hunger 0.006–0.041 in EVERY scenario, famine ≈ calm
+                    // — the goal-incongruence branch was unreachable). The
+                    // failure paths below revert the relief applied this tick and
+                    // cancel the action so its remaining duration ticks don't
+                    // relieve either: no food consumed, no satiation.
+                    //
+                    // A portion is a full meal: `accessible_farm_with_grain`
+                    // matches ANY nonzero stock, and `consume_resource` takes
+                    // `min(amount, stock)` — so with 0.015 grain left, an Eat
+                    // "succeeded" and fully relieved hunger (crumbs counted as
+                    // meals, keeping hunger pinned near 0 through the famine
+                    // window). Success now requires the FULL portion; a farm
+                    // holding less than a meal's worth fails the Eat.
                     if let Some(farm_idx) = self
                         .world
-                        .accessible_farm_with_grain(agent_id, &self.institutions)
+                        .accessible_farm_with_grain_amount(
+                            agent_id,
+                            &self.institutions,
+                            amount,
+                        )
                     {
                         let taken =
                             self.world
@@ -10816,10 +11235,17 @@ impl Simulation {
                         }
                         taken > Fixed::ZERO
                     } else {
-                        // §19.5.D: Theft detection — no accessible farm, but inaccessible farms with grain exist?
+                        // §19.5.D: Theft detection — no accessible farm with a
+                        // full portion, but inaccessible farms holding one exist?
+                        // (P3-6: amount-gated like the accessible path — a crumb
+                        // is not worth stealing and must not feed the thief.)
                         if let Some(thief_idx) = self
                             .world
-                            .inaccessible_farm_with_grain(agent_id, &self.institutions)
+                            .inaccessible_farm_with_grain_amount(
+                                agent_id,
+                                &self.institutions,
+                                amount,
+                            )
                         {
                             self.enforce_theft(
                                 *agent_idx,
@@ -10911,8 +11337,23 @@ impl Simulation {
                     // growth factor is ≈ identity in normal weather (mild
                     // calibrated drift) and ≈0.6 during an emergent drought
                     // (genuine famine pressure).
-                    let productivity =
-                        base * sickness_factor * mobility_factor * self.weather.growth_factor();
+                    // §8.1.4 (P3-6): an active famine window additionally
+                    // suppresses grain output to `1 − magnitude` of the shock
+                    // (a crop failure — Work keeps laboring but the fields
+                    // yield little). The factor is exactly 1.0 outside a
+                    // famine, so calibrated windows (riverford/calm/pestilence
+                    // and the golden) are untouched; only the Famine and
+                    // Collapse scenarios ever open a window.
+                    let famine_factor = if tick_u64 < self.famine_until {
+                        self.famine_production_factor
+                    } else {
+                        Fixed::ONE
+                    };
+                    let productivity = base
+                        * sickness_factor
+                        * mobility_factor
+                        * self.weather.growth_factor()
+                        * famine_factor;
                     if let Some(farm_idx) = self.world.best_farm_for_work() {
                         self.world
                             .produce_resource(farm_idx, GRAIN_RESOURCE_ID, productivity);
@@ -10964,12 +11405,21 @@ impl Simulation {
                                     <= 12
                         })
                         .map(|(j, _)| j);
-                    // Grain source: an accessible farm with grain (prefer the
-                    // buyer's own accessible farm; fall back to any farm).
+                    // Grain source: an accessible farm with a full portion
+                    // (prefer the buyer's own accessible farm; fall back to any
+                    // farm). §8.1.4 (P3-6): amount-gated like the Eat path — a
+                    // trade must move a full portion; crumbs are not marketable
+                    // grain and must not feed the buyer through Trade's hunger
+                    // relief.
+                    let quantity = Fixed::from_f64(0.1);
                     let farm_idx = self
                         .world
-                        .accessible_farm_with_grain(agent_id, &self.institutions)
-                        .or_else(|| self.world.farm_with_grain());
+                        .accessible_farm_with_grain_amount(
+                            agent_id,
+                            &self.institutions,
+                            quantity,
+                        )
+                        .or_else(|| self.world.farm_with_grain_amount(quantity));
                     if let (Some(seller), Some(farm_idx)) = (seller_info, farm_idx) {
                         let trust = self
                             .relationships
@@ -10979,7 +11429,6 @@ impl Simulation {
                                     && r.to == AgentId::new(seller as u64)
                             })
                             .map_or(Fixed::from_f64(0.5), |r| r.trust);
-                        let quantity = Fixed::from_f64(0.1);
                         // §13.3: Execute trade — buyer pays coin, seller's farm provides grain
                         let base_price = self.market.price(GRAIN_RESOURCE_ID);
                         // Trust discount: high trust → lower price
@@ -11059,6 +11508,23 @@ impl Simulation {
                 }
                 _ => false,
             };
+
+            // §8.1.4 (P3-6): a FAILED Eat must not relieve hunger. The
+            // per-tick relief in `apply_action_tick` is unconditional, so
+            // without this revert an agent whose Eat found no grain anywhere
+            // still "ate" — hunger never accumulated in famine/pestilence
+            // (probe: needs.hunger 0.006–0.041 in EVERY scenario, famine ≈
+            // calm; the goal-incongruence branch was unreachable). Revert
+            // the single tick of relief already applied and cancel the
+            // action so its remaining duration ticks don't relieve either:
+            // no food consumed, no satiation.
+            if *action == ActionKind::Eat && !action_succeeded {
+                let fx = ActionKind::Eat.per_tick_effects();
+                let agent = &mut self.agents[*agent_idx];
+                agent.needs.hunger = (agent.needs.hunger + fx.hunger_relief).clamp_01();
+                agent.action_progress = 0;
+                agent.current_action = ActionKind::Idle;
+            }
 
             // Record intention success/failure based on actual resource outcome
             if let Some(ref mut intention) = self.agents[*agent_idx].intention {
@@ -11397,6 +11863,77 @@ impl Simulation {
                 }
                 _ => None,
             };
+            // §8.1.19 (P3-1, August 14, 2026): the psychology SkillState was
+            // structurally unwired — `practice`/`form_habit`/`execute_habit`
+            // had ZERO production call sites, so the skills and habits maps
+            // stayed permanently empty (probe-pinned: skill_count/habit_count
+            // 0.000 for 12/12 agents in every window). The same action
+            // practice now feeds BOTH the §4.2 person-level proficiency above
+            // AND the psychology skill system below: repeated practice grows
+            // proficiency, and crossing the 0.1-proficiency milestone forms
+            // (or reinforces) the corresponding habit.
+            let psych_skill = match agent.current_action {
+                crate::actions::ActionKind::Work => Some((
+                    crate::psychology::skill::SKILL_FARMING,
+                    "Work",
+                    "hunger",
+                )),
+                crate::actions::ActionKind::Trade => Some((
+                    crate::psychology::skill::SKILL_TRADING,
+                    "Trade",
+                    "thirst",
+                )),
+                crate::actions::ActionKind::Socialize => Some((
+                    crate::psychology::skill::SKILL_SPEAKING,
+                    "Socialize",
+                    "social",
+                )),
+                crate::actions::ActionKind::Worship => Some((
+                    crate::psychology::skill::SKILL_RITUAL,
+                    "Worship",
+                    "meaning",
+                )),
+                crate::actions::ActionKind::Eat => Some((
+                    crate::psychology::skill::SKILL_COOKING,
+                    "Eat",
+                    "hunger",
+                )),
+                _ => None,
+            };
+            if let Some((skill_id, action_name, trigger)) = psych_skill {
+                if practiced.is_some() {
+                    // §8.1.19: practice grows proficiency (difficulty-scaled,
+                    // clamped); neuroplasticity is the agent's own trait.
+                    agent
+                        .psych_skills
+                        .practice(skill_id, tick_u64, agent.psych_skills.neuroplasticity);
+                    // §8.1.19: habit formation at the 0.1-proficiency
+                    // milestone — the same gate the procedural-memory encode
+                    // uses, so habits arrive with genuine mastery (~100
+                    // practice ticks). Deterministic, no RNG.
+                    let prof = agent.psych_skills.proficiency(skill_id);
+                    let crossed = prof >= Fixed::from_f64(0.1)
+                        && prof - skill_gain < Fixed::from_f64(0.1);
+                    if crossed {
+                        agent.psych_skills.form_habit(
+                            action_name.to_string(),
+                            trigger.to_string(),
+                            Fixed::from_f64(0.3),
+                            tick_u64,
+                        );
+                    } else {
+                        // §8.1.19 (P3-1 completion, re-audit): practicing
+                        // the action exercises any matching habit — refresh
+                        // recency so the centum decay pass cannot grind
+                        // formed habits to zero while the agent keeps
+                        // performing the action (the pre-fix habit_count
+                        // collapsed 1.17 @2K → 0.000 @10K because
+                        // `execute_habit`'s automaticity > 0.5 gate was
+                        // unreachable and `last_performed` never refreshed).
+                        agent.psych_skills.refresh_habit(trigger, tick_u64);
+                    }
+                }
+            }
             if let Some(skill) = practiced {
                 let before = *skill;
                 *skill = (before + skill_gain).clamp_01();
@@ -13212,24 +13749,29 @@ mod tests {
             "the daily pass must apply a live-nostalgia preservation factor < 1 \
              (decayed {decayed:.6} vs un-scaled {unscaled:.6} over 2 days)"
         );
-        // The daily pass reads the emotion field at a point where nostalgia
-        // saturates at 1.0 in this world — the factor pins at EXACTLY the
-        // floor 0.7 (strongest legal preservation: decayed == floor-scaled
-        // to Fixed precision; the f64 conversion of the two Fixed quantities
-        // can differ in the last ulp, hence the tight 0.0002 band — 7% of
-        // the 0.0028 measurement, far tighter than the 18% band a factor
-        // drift to 0.85 would need). The invariant pins the production
-        // factor AT the floor: if the fold ever weakens (factor → 0.85,
-        // decayed → 0.0034) or strengthens beyond the floor, this fails.
-        // No confounds in the window: the first ritual is at 4320 and the
-        // next at 8640, `record_famine_memory` is episode-guarded (calm
-        // world), and `refresh_derived_views` (sim.rs:8167, daily) only
-        // READS memory salience into derived traumas — it never writes
-        // salience (verified against the source).
+        // The daily pass scales the fade by `1 − mean_nostalgia × rate`,
+        // floored at 0.7 — the honest invariant is that the factor lives in
+        // [floor, 1.0): decayed is strictly less than the un-scaled amount
+        // (a live preservation factor < 1, asserted above) and never
+        // STRONGER than the floor (preservation never fully freezes the
+        // fade). The pre-iteration-184 tight pin (factor == floor exactly,
+        // calibrated on nostalgia saturating at 1.0) was already stale — the
+        // NOST_DEBUG probe shows the pass reading mean nostalgia 0.80–0.83
+        // (factor 0.75–0.76) at the daily boundaries, and the audit-closure
+        // feud-guilt path (goal-incongruent feuding agents no longer
+        // produce the positive congruence that feeds nostalgia) lowers it
+        // to ~0.28–0.35 at the pass point (factor 0.90–0.92) — still a
+        // live, legal preservation factor, just not floor-pinned. The
+        // robust band asserts the factor is a genuine differential in
+        // (0.7, 1.0): decayed ∈ (floor_scaled + 0.0002, unscaled − 0.0002)
+        // (a 0.9× factor on count=2 yields ~0.0036, comfortably inside;
+        // a fold deletion yields decayed == unscaled and fails the upper
+        // bound; a factor strengthened to the floor 0.7 yields decayed ==
+        // floor_scaled and fails the lower bound).
         assert!(
-            (decayed - floor_scaled).abs() <= 0.0002,
-            "the production factor must pin at the floor \
-             (decayed {decayed:.6} vs floor-scaled {floor_scaled:.6})"
+            decayed > floor_scaled + 0.0002 && decayed < unscaled - 0.0002,
+            "the preservation factor must be a live differential in (0.7, 1.0) \
+             (decayed {decayed:.6}, floor-scaled {floor_scaled:.6}, un-scaled {unscaled:.6})"
         );
         // Determinism: identical seed → byte-identical decay delta.
         let mut again = Simulation::new(config);

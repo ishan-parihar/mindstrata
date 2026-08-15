@@ -265,6 +265,9 @@ pub struct SimParameters {
     pub endocrine_bonding_recovery: Fixed,
     /// Dominance axis response to status change.
     pub endocrine_dominance_response: Fixed,
+    /// Growth axis recovery rate per tick (mean-reversion toward the
+    /// life-stage growth target).
+    pub endocrine_growth_recovery: Fixed,
     /// Arousal axis rise factor.
     pub endocrine_arousal_rise: Fixed,
     /// Arousal axis decay factor.
@@ -501,6 +504,7 @@ impl Default for SimParameters {
             endocrine_stress_chronic_recovery: Fixed::from_f64(0.0005),
             endocrine_bonding_recovery: Fixed::from_f64(0.02),
             endocrine_dominance_response: Fixed::from_f64(0.1),
+            endocrine_growth_recovery: Fixed::from_f64(0.001), // slow per-tick drift
             endocrine_arousal_rise: Fixed::from_f64(0.3),
             endocrine_arousal_decay: Fixed::from_f64(0.1),
 

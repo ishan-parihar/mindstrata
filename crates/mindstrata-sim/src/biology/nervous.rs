@@ -113,6 +113,21 @@ pub const NERVOUS_TONE_RECOVERY_FLOOR: f64 = 0.3;
 /// [`NERVOUS_TONE_RECOVERY_FLOOR`] pre-converted to [`Fixed`] (hoisted out of
 /// the per-tick per-agent `update` hot path; 0.3 × 10_000 = 3_000).
 pub const NERVOUS_TONE_RECOVERY_FLOOR_FIXED: Fixed = Fixed::from_raw(3_000);
+/// Ceiling on the parasympathetic tone used for sympathetic recovery
+/// (S2-2-1 completion). The symmetric counterpart of
+/// [`NERVOUS_TONE_RECOVERY_FLOOR`]: with the logistic tone drain
+/// (`drain = coeff × tone`, below) the tone→recovery→arousal→drain coupling
+/// is a POSITIVE feedback — tone↑ raises recovery, which lowers arousal,
+/// which shrinks the drain coefficient, which lets tone climb further — so
+/// an unbounded recovery term ratchets tone to 1.0 and drains arousal to 0
+/// (the mirror-image pin; unit-pinned). Capping the recovery tone at 0.6
+/// bounds recovery to [0.03, 0.06], giving the axis a stable interior
+/// equilibrium: sustained threat 0.5/safety 0.5 converges tone ≈0.67 and
+/// arousal ≈0.40 (neither pinned), famine sits low ≈0.08, and true safety
+/// still builds tone toward 1.0 (rest/digest).
+pub const NERVOUS_TONE_RECOVERY_CEILING: f64 = 0.6;
+/// [`NERVOUS_TONE_RECOVERY_CEILING`] pre-converted to [`Fixed`].
+pub const NERVOUS_TONE_RECOVERY_CEILING_FIXED: Fixed = Fixed::from_raw(6_000);
 
 ///
 /// Grouped into a `Copy` struct to avoid transposition-prone positional args
@@ -200,21 +215,62 @@ impl NervousSystemState {
         sleep_tick: bool,
         params: NervousUpdateParams,
     ) {
-        // Sympathetic activation from threat
-        let sympathetic_delta = threat_input * Fixed::from_f64(0.2);
+        // Sympathetic activation from threat.
+        // §7.2.5 (S2-2-1 fix): the rise term was `threat × 0.2` against a
+        // floored recovery of `tone(≥0.3) × 0.1 = 0.03`. At the calibrated
+        // fear equilibrium (~0.3-0.5 in every scenario, including calm), the
+        // net was +0.03..+0.07 per tick — the sympathetic channel ratcheted
+        // to 1.0 for 9-11/12 agents in every probe window (probe-pinned), and
+        // the parasympathetic tone drained to 0 in lockstep. A linear
+        // floor/rate calibration cannot bound the axis below 1.0 (rise scales
+        // with threat while floored recovery is constant), so the rise is now
+        // SATURATING — `threat × 0.2 × (1 − arousal)` — the same logistic
+        // pattern as the Iteration-176 trauma decay, the S2-2-2 bonding fix,
+        // and the S2-2-3 fitness/conditioning fix. The axis now converges to
+        // a stable equilibrium below 1.0 (≈0.63 at threat 0.5 with the 0.1
+        // recovery rate), leaving headroom for genuine threat spikes while
+        // never pinning. Zero change at zero threat; deterministic, no RNG.
+        let sympathetic_delta =
+            threat_input * Fixed::from_f64(0.2) * (Fixed::ONE - self.sympathetic_arousal);
         // Iteration 176: floor the parasympathetic tone used for recovery so
         // sustained threat cannot drain it to 0 and zero the recovery channel
         // (the pre-fix trauma ratchet — see NERVOUS_TONE_RECOVERY_FLOOR doc).
+        // S2-2-1 completion: also CEIL it (NERVOUS_TONE_RECOVERY_CEILING) —
+        // see that constant's doc for the positive-feedback argument.
         let recovery_tone = self
             .parasympathetic_tone
-            .max(NERVOUS_TONE_RECOVERY_FLOOR_FIXED);
+            .max(NERVOUS_TONE_RECOVERY_FLOOR_FIXED)
+            .min(NERVOUS_TONE_RECOVERY_CEILING_FIXED);
         let sympathetic_recovery = recovery_tone * params.sympathetic_recovery_rate;
         self.sympathetic_arousal =
             (self.sympathetic_arousal + sympathetic_delta - sympathetic_recovery).clamp_01();
 
         // Parasympathetic recovery from safety
         let parasympathetic_buildup = safety_input * params.parasympathetic_buildup_rate;
-        let parasympathetic_drain = self.sympathetic_arousal * Fixed::from_f64(0.05);
+        // §7.2.5 (S2-2-1 fix): the tone drain was `arousal × 0.05` ONLY. With
+        // the saturating sympathetic rise (below), sustained threat no longer
+        // pins arousal at 1.0 — so the arousal-coupled drain collapsed and the
+        // tone ratcheted UP to 1.0 under threat, which over-recovered the
+        // sympathetic axis and drained it toward 0 (the mirror-image pin).
+        // Threat now drains the tone directly (`threat × 0.05`, same magnitude
+        // as the arousal term at the old pinned level), restoring the
+        // fight-or-flight premise: sustained threat keeps the parasympathetic
+        // tone low (the Iteration-176 floor then supplies basal recovery),
+        // and genuine safety builds it. Deterministic, no RNG.
+        //
+        // (S2-2-1 completion — the drain is now ALSO proportional to the tone
+        // itself: `drain_coeff × tone`, the same logistic/saturating pattern
+        // as the sympathetic rise. The pre-fix form was a pure accumulator —
+        // both buildup and drain exogenous, no tone feedback — so the axis
+        // banged to 0 or 1 with no stable middle (probe: 8-11/12 agents at
+        // tone 0.0 in EVERY window including calm). With the proportional
+        // drain the axis converges to the interior equilibrium
+        // `tone* = buildup / drain_coeff`: calm (low threat) settles in
+        // rest/digest dominance, famine in fight/flight, with no majority
+        // pinning at either extreme.)
+        let drain_coeff = self.sympathetic_arousal * Fixed::from_f64(0.05)
+            + threat_input * Fixed::from_f64(0.05);
+        let parasympathetic_drain = drain_coeff * self.parasympathetic_tone;
         self.parasympathetic_tone = (self.parasympathetic_tone + parasympathetic_buildup
             - parasympathetic_drain)
             .clamp_01();
@@ -429,6 +485,86 @@ mod tests {
         assert!(
             slow > Fixed::from_f64(0.1),
             "slow decay must retain a meaningful load: {slow}"
+        );
+    }
+
+    #[test]
+    fn sympathetic_arousal_does_not_pin_under_sustained_threat() {
+        // S2-2-1 regression: the old linear rise (`threat × 0.2`) against
+        // the floored recovery (0.03) ratcheted sympathetic arousal to 1.0
+        // for the majority in every scenario — probe: 9-11/12 agents pinned
+        // in calm runs too. The saturating rise converges to a stable
+        // equilibrium well below 1.0 under a sustained threat level.
+        let mut ns = NervousSystemState::default();
+        let params = NervousUpdateParams::default();
+        // Sustained moderate threat (the calibrated fear mean ~0.5).
+        for _ in 0..5000 {
+            ns.update(
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
+                Fixed::ZERO,
+                false,
+                params,
+            );
+        }
+        let after = ns.sympathetic_arousal.to_f64();
+        assert!(
+            after < 0.95,
+            "saturating rise must keep sympathetic arousal below 1.0 (got {after})"
+        );
+        assert!(
+            after > 0.2,
+            "sustained threat must still register meaningfully (got {after})"
+        );
+        // And it is stable: a further block does not creep higher.
+        let before = ns.sympathetic_arousal;
+        for _ in 0..1000 {
+            ns.update(
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
+                Fixed::ZERO,
+                false,
+                params,
+            );
+        }
+        assert!(ns.sympathetic_arousal <= before + Fixed::from_f64(0.01));
+    }
+
+    #[test]
+    fn parasympathetic_tone_drains_under_threat() {
+        // S2-2-1 regression (mirror-image): with the saturating sympathetic
+        // rise, a threat-only drain on tone (the old arousal-only drain)
+        // collapsed to nothing and the tone ratcheted to 1.0 under sustained
+        // threat — over-recovering the sympathetic axis. The threat-coupled
+        // drain keeps tone low while danger persists (the Iteration-176 floor
+        // then supplies basal recovery).
+        let mut ns = NervousSystemState::default();
+        let params = NervousUpdateParams::default();
+        // Sustained threat with genuine (not maximal) safety: tone must NOT
+        // climb to 1.0 — it should hover low (floor-sustained) instead.
+        for _ in 0..5000 {
+            ns.update(
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
+                Fixed::ZERO,
+                false,
+                params,
+            );
+        }
+        let after = ns.parasympathetic_tone.to_f64();
+        assert!(
+            after < 0.8,
+            "sustained threat must keep parasympathetic tone from pinning (got {after})"
+        );
+        // True safety (no threat) still builds the tone toward engagement.
+        let mut safe = NervousSystemState::default();
+        for _ in 0..5000 {
+            safe.update(Fixed::ZERO, Fixed::ONE, Fixed::ZERO, false, params);
+        }
+        assert!(
+            safe.parasympathetic_tone > Fixed::from_f64(0.5),
+            "safety must build parasympathetic tone: {}",
+            safe.parasympathetic_tone
         );
     }
 

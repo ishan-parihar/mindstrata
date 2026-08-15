@@ -77,6 +77,26 @@ impl Default for EmotionRegulationState {
 }
 
 impl EmotionRegulationState {
+    /// §8.1.8 (P3-4, August 14, 2026): personality-driven strategy
+    /// preference at birth. Previously `preferred` was NEVER assigned
+    /// after construction, so every agent was permanently Reappraisal
+    /// (probe-pinned 12/12 in every window) — the plan's "strategy
+    /// selection from personality" was unwired. Seeds the preference
+    /// from the big-five profile; the dynamic `select_strategy` state
+    /// branches still override when genuine overwhelm hits.
+    /// Deterministic, no RNG.
+    pub fn initialize_from_personality(&mut self, p: &crate::person::Personality) {
+        self.preferred = if p.extraversion > Fixed::from_f64(0.6) {
+            RegulationStrategy::Humor
+        } else if p.agreeableness > Fixed::from_f64(0.6) {
+            RegulationStrategy::SeekingSupport
+        } else if p.neuroticism > Fixed::from_f64(0.55) {
+            RegulationStrategy::Suppression
+        } else {
+            RegulationStrategy::Reappraisal
+        };
+    }
+
     /// Select the best regulation strategy given current conditions.
     pub fn select_strategy(
         &self,
@@ -92,13 +112,16 @@ impl EmotionRegulationState {
         if stress > Fixed::from_f64(0.6) && self.rumination_tendency > Fixed::from_f64(0.6) {
             return RegulationStrategy::Rumination;
         }
+        // §8.1.8 (P3-4): extraverts reach for humor at moderate stress —
+        // this branch was UNREACHABLE behind the reappraisal branch below
+        // (every agent with stress > 0.3 and reappraisal_skill > 0.4 — i.e.
+        // everyone after one applied strategy — locked into Reappraisal).
+        if extraversion > Fixed::from_f64(0.65) {
+            return RegulationStrategy::Humor;
+        }
         // Moderate stress + good reappraisal skill → Reappraisal (adaptive)
         if stress > Fixed::from_f64(0.3) && self.reappraisal_skill > Fixed::from_f64(0.4) {
             return RegulationStrategy::Reappraisal;
-        }
-        // High extraversion → Humor or Social
-        if extraversion > Fixed::from_f64(0.7) {
-            return RegulationStrategy::Humor;
         }
         // Default to preferred strategy
         self.preferred
@@ -112,7 +135,14 @@ impl EmotionRegulationState {
         current_valence: Fixed,
         current_arousal: Fixed,
     ) -> (Fixed, Fixed) {
-        self.current_effort = Fixed::from_f64(0.3);
+        // §8.1.8 (P3-4): effort scales with the emotion load being
+        // regulated — the fixed 0.3 was write-only constant state
+        // (identical for every agent, every tick). The load is the
+        // stronger of |valence| and arousal: calm agents exert light
+        // effort, agitated agents exert heavy effort. Observational (no
+        // consumer reads current_effort), deterministic, no RNG.
+        let load = current_valence.abs().max(current_arousal);
+        self.current_effort = (Fixed::from_f64(0.2) + load * Fixed::from_f64(0.4)).clamp_01();
         match strategy {
             RegulationStrategy::Reappraisal => {
                 // Reappraisal reduces negative valence and arousal
@@ -240,5 +270,79 @@ mod tests {
             Fixed::from_f64(0.5),
         );
         assert_eq!(strategy, RegulationStrategy::SeekingSupport);
+    }
+
+    #[test]
+    fn extraversion_branch_reachable_before_reappraisal() {
+        // P3-4 regression: the extravert branch sat behind the reappraisal
+        // branch (everyone with stress > 0.3 && skill > 0.4 locked into
+        // Reappraisal, probe-pinned 12/12). A high-extraversion agent with
+        // moderate stress and a grown reappraisal skill must still choose
+        // Humor.
+        let reg = EmotionRegulationState {
+            reappraisal_skill: Fixed::from_f64(0.9),
+            ..EmotionRegulationState::default()
+        };
+        let strategy = reg.select_strategy(
+            Fixed::from_f64(0.4),
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.8),
+        );
+        assert_eq!(strategy, RegulationStrategy::Humor);
+    }
+
+    #[test]
+    fn preferred_seeded_from_personality() {
+        // P3-4 regression: `preferred` was never assigned, so every agent
+        // was permanently Reappraisal. Personality seeding must diversify.
+        fn personality(extraversion: f64, agreeableness: f64, neuroticism: f64) -> crate::person::Personality {
+            crate::person::Personality {
+                openness: Fixed::from_f64(0.5),
+                conscientiousness: Fixed::from_f64(0.5),
+                extraversion: Fixed::from_f64(extraversion),
+                agreeableness: Fixed::from_f64(agreeableness),
+                neuroticism: Fixed::from_f64(neuroticism),
+                risk_tolerance: Fixed::from_f64(0.5),
+                conformity: Fixed::from_f64(0.5),
+                ambition: Fixed::from_f64(0.5),
+                altruism: Fixed::from_f64(0.5),
+                traditionalism: Fixed::from_f64(0.5),
+                dominance: Fixed::from_f64(0.5),
+                impulsivity: Fixed::from_f64(0.5),
+                temperament: crate::person::Temperament::default(),
+                constitution: None,
+            }
+        }
+        let mut extravert = EmotionRegulationState::default();
+        extravert.initialize_from_personality(&personality(0.8, 0.5, 0.5));
+        assert_eq!(extravert.preferred, RegulationStrategy::Humor);
+
+        let mut agreeable = EmotionRegulationState::default();
+        agreeable.initialize_from_personality(&personality(0.5, 0.8, 0.5));
+        assert_eq!(agreeable.preferred, RegulationStrategy::SeekingSupport);
+
+        let mut neurotic = EmotionRegulationState::default();
+        neurotic.initialize_from_personality(&personality(0.5, 0.5, 0.7));
+        assert_eq!(neurotic.preferred, RegulationStrategy::Suppression);
+    }
+
+    #[test]
+    fn effort_scales_with_emotion_load() {
+        // P3-4 regression: current_effort was a fixed 0.3 write-only
+        // constant; it must now scale with the regulated load.
+        let mut reg = EmotionRegulationState::default();
+        let (_, _) = reg.apply_strategy(
+            RegulationStrategy::Reappraisal,
+            Fixed::from_f64(-0.1),
+            Fixed::from_f64(0.1),
+        );
+        let calm_effort = reg.current_effort;
+        let (_, _) = reg.apply_strategy(
+            RegulationStrategy::Reappraisal,
+            Fixed::from_f64(-0.9),
+            Fixed::from_f64(0.9),
+        );
+        assert!(reg.current_effort > calm_effort);
+        assert!(reg.current_effort > Fixed::ZERO && reg.current_effort <= Fixed::ONE);
     }
 }

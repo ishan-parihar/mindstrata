@@ -1,5 +1,6 @@
 ---
 source: crates/mindstrata-tests/src/snapshot_tests.rs
+assertion_line: 254
 expression: endocrine_states
 ---
 [
@@ -7,7 +8,7 @@ expression: endocrine_states
         name: "Anna",
         stress: 0.0,
         bonding: 0.3537,
-        dominance: 0.2827,
+        dominance: 0.3199,
         fertility: 0.7653,
         metabolic_energy: 1.0,
         arousal: 0.3831,
@@ -17,17 +18,17 @@ expression: endocrine_states
         name: "Bran",
         stress: 0.0,
         bonding: 0.489,
-        dominance: 0.5202,
+        dominance: 0.4396,
         fertility: 0.8942,
         metabolic_energy: 1.0,
         arousal: 0.3707,
-        growth_capacity: 0.6,
+        growth_capacity: 0.6501,
     },
     EndocrineSnapshot {
         name: "Cara",
         stress: 0.0,
         bonding: 0.4827,
-        dominance: 0.5906,
+        dominance: 0.4987,
         fertility: 0.7473,
         metabolic_energy: 1.0,
         arousal: 0.3422,

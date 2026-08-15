@@ -355,6 +355,23 @@ impl World {
             .map(|(i, _)| i)
     }
 
+    /// §8.1.4 (P3-6): Find a farm holding at least `amount` of grain — the
+    /// Trade-path counterpart of `accessible_farm_with_grain_amount`. A trade
+    /// must move a full portion; crumbs are not marketable grain and must not
+    /// feed a buyer through the Trade action's hunger relief.
+    pub fn farm_with_grain_amount(&self, amount: Fixed) -> Option<usize> {
+        self.sites
+            .iter()
+            .enumerate()
+            .find(|(_, s)| {
+                s.kind == SiteKind::Farm
+                    && s.inventory.iter().any(|r| {
+                        r.resource_id == GRAIN_RESOURCE_ID && r.quantity >= amount
+                    })
+            })
+            .map(|(i, _)| i)
+    }
+
     /// Find a well site with available water.
     pub fn well_with_water(&self) -> Option<usize> {
         self.sites
@@ -437,6 +454,33 @@ impl World {
             .map(|(i, _)| i)
     }
 
+    /// §8.1.4 (P3-6): Find an accessible farm holding AT LEAST `amount` of
+    /// grain — a full meal's worth. `accessible_farm_with_grain` matches any
+    /// nonzero stock, and `consume_resource` takes `min(amount, stock)`, so a
+    /// 0.015-grain crumb "fed" an agent and fully relieved hunger through a
+    /// famine (hunger stayed pinned near 0 while the granary bottomed out).
+    /// The Eat path now requires a full portion: a farm holding less than a
+    /// meal's worth fails the Eat, hunger accumulates, and the famine actually
+    /// starves its victims.
+    pub fn accessible_farm_with_grain_amount(
+        &self,
+        agent_id: EntityId,
+        institutions: &[Institution],
+        amount: Fixed,
+    ) -> Option<usize> {
+        self.sites
+            .iter()
+            .enumerate()
+            .find(|(i, s)| {
+                s.kind == SiteKind::Farm
+                    && s.inventory.iter().any(|r| {
+                        r.resource_id == GRAIN_RESOURCE_ID && r.quantity >= amount
+                    })
+                    && self.can_access_resource(*i, GRAIN_RESOURCE_ID, agent_id, institutions)
+            })
+            .map(|(i, _)| i)
+    }
+
     /// §19.5.E: Find a site with accessible water for an agent.
     pub fn accessible_well_with_water(
         &self,
@@ -475,6 +519,29 @@ impl World {
             .map(|(i, _)| i)
     }
 
+    /// §8.1.4 (P3-6): Find an INACCESSIBLE farm holding at least `amount` of
+    /// grain (the theft-path counterpart of
+    /// `accessible_farm_with_grain_amount` — crumbs are not worth stealing
+    /// and must not feed a thief).
+    pub fn inaccessible_farm_with_grain_amount(
+        &self,
+        agent_id: EntityId,
+        institutions: &[Institution],
+        amount: Fixed,
+    ) -> Option<usize> {
+        self.sites
+            .iter()
+            .enumerate()
+            .find(|(i, s)| {
+                s.kind == SiteKind::Farm
+                    && s.inventory.iter().any(|r| {
+                        r.resource_id == GRAIN_RESOURCE_ID && r.quantity >= amount
+                    })
+                    && !self.can_access_resource(*i, GRAIN_RESOURCE_ID, agent_id, institutions)
+            })
+            .map(|(i, _)| i)
+    }
+
     /// §19.5.D: Find a site with water that an agent cannot access (for theft tracking).
     pub fn inaccessible_well_with_water(
         &self,
@@ -492,5 +559,101 @@ impl World {
                     && !self.can_access_resource(*i, WATER_RESOURCE_ID, agent_id, institutions)
             })
             .map(|(i, _)| i)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn farm_world(quantities: &[f64]) -> World {
+        let mut w = World::new(4, 4);
+        w.sites.clear();
+        for (i, q) in quantities.iter().enumerate() {
+            let s = Site {
+                id: EntityId::new(i as u64),
+                kind: SiteKind::Farm,
+                name: format!("farm-{i}"),
+                owner: None,
+                capacity: 100,
+                storage_capacity: Fixed::from_f64(100.0),
+                inventory: if *q > 0.0 {
+                    vec![ResourceStock {
+                        resource_id: GRAIN_RESOURCE_ID,
+                        quantity: Fixed::from_f64(*q),
+                        quality: Fixed::from_f64(0.8),
+                        access: AccessRight::Public,
+                    }]
+                } else {
+                    Vec::new()
+                },
+            };
+            w.sites.push(s);
+        }
+        w
+    }
+
+    #[test]
+    fn accessible_farm_with_grain_amount_requires_full_portion() {
+        // P3-6: a farm holding a crumb (0.05 < 0.1 portion) must NOT qualify;
+        // the un-gated helper still matches it (the bug that fed agents
+        // through a famine).
+        let w = farm_world(&[0.05, 0.2]);
+        let agent = EntityId::new(0);
+        let inst = &[];
+        assert_eq!(w.accessible_farm_with_grain(agent, inst), Some(0));
+        assert_eq!(
+            w.accessible_farm_with_grain_amount(agent, inst, Fixed::from_f64(0.1)),
+            Some(1),
+            "only the full-portion farm qualifies"
+        );
+        assert_eq!(
+            w.accessible_farm_with_grain_amount(agent, inst, Fixed::from_f64(0.5)),
+            None,
+            "no farm holds a 0.5 portion"
+        );
+    }
+
+    #[test]
+    fn inaccessible_farm_with_grain_amount_requires_full_portion() {
+        // Build a farm that is NOT accessible to the agent (restricted access)
+        // holding only a crumb, plus one holding a full portion.
+        let mut w = World::new(4, 4);
+        w.sites.clear();
+        let mut crumb = Site {
+            id: EntityId::new(0),
+            kind: SiteKind::Farm,
+            name: "crumb".into(),
+            owner: Some(EntityId::new(99)),
+            capacity: 100,
+            storage_capacity: Fixed::from_f64(100.0),
+            inventory: vec![ResourceStock {
+                resource_id: GRAIN_RESOURCE_ID,
+                quantity: Fixed::from_f64(0.05),
+                quality: Fixed::from_f64(0.8),
+                access: AccessRight::OwnerOnly,
+            }],
+        };
+        crumb.owner = Some(EntityId::new(99));
+        w.sites.push(crumb);
+        let agent = EntityId::new(0);
+        let inst = &[];
+        assert_eq!(w.inaccessible_farm_with_grain(agent, inst), Some(0));
+        assert_eq!(
+            w.inaccessible_farm_with_grain_amount(agent, inst, Fixed::from_f64(0.1)),
+            None,
+            "the crumb must not qualify as a full portion"
+        );
+    }
+
+    #[test]
+    fn farm_with_grain_amount_requires_full_portion() {
+        let w = farm_world(&[0.05, 0.2]);
+        assert_eq!(w.farm_with_grain(), Some(0));
+        assert_eq!(
+            w.farm_with_grain_amount(Fixed::from_f64(0.1)),
+            Some(1),
+            "only the full-portion farm qualifies"
+        );
     }
 }

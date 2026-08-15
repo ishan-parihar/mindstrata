@@ -139,8 +139,15 @@ impl NarrativeIdentity {
         self.contamination_script =
             (self.contamination_script + severity * Fixed::from_f64(0.01)).clamp_01();
 
-        // Victimhood strengthens without support
-        if social_support < Fixed::from_f64(0.3) {
+        // Victimhood strengthens without support. §8.1.17 (P3-9): the gate was
+        // `social_support < 0.3` — but the no-relationship baseline in the sim
+        // is EXACTLY 0.3, so an isolated agent (the most victimhood-prone) sat
+        // AT the gate and never qualified; victimhood stayed frozen at birth
+        // 0.200 in every window. The gate now includes the baseline
+        // (`<= 0.3`), so genuinely unsupported agents (pestilence orphans with
+        // zero relationships, whose support sits at the 0.3 floor) develop
+        // victimhood while well-supported villagers (support ≈ 1.0) do not.
+        if social_support <= Fixed::from_f64(0.3) {
             self.victimhood_script =
                 (self.victimhood_script + severity * Fixed::from_f64(0.008)).clamp_01();
         }
@@ -156,8 +163,14 @@ impl NarrativeIdentity {
             self.redemption_script = (self.redemption_script + Fixed::from_f64(0.003)).clamp_01();
         }
 
-        // Shame script strengthens from personal failure without external blame
-        if !has_blame_target && social_support < Fixed::from_f64(0.2) {
+        // Shame script strengthens from personal failure without external blame.
+        // §8.1.17 (P3-9): the gate was `social_support < 0.2` — stricter than
+        // the no-relationship baseline (0.3), so shame NEVER fired (frozen at
+        // birth 0.100 in every window). Aligned with the victimhood gate
+        // (`<= 0.3`): an isolated agent failing without a blame target feels
+        // shame; the distinction from victimhood is the blame target, not a
+        // second support threshold.
+        if !has_blame_target && social_support <= Fixed::from_f64(0.3) {
             self.shame_script = (self.shame_script + severity * Fixed::from_f64(0.005)).clamp_01();
         }
 
@@ -174,8 +187,15 @@ impl NarrativeIdentity {
         self.heroism_script =
             (self.heroism_script + social_recognition * Fixed::from_f64(0.003)).clamp_01();
 
-        // Chosenness strengthens with exceptional success
-        if magnitude > Fixed::from_f64(0.7) && social_recognition > Fixed::from_f64(0.6) {
+        // Chosenness strengthens with exceptional success.
+        // §8.1.17 (P3-9): the gate was `magnitude > 0.7`, but the sim feeds
+        // `positive_event_magnitude = joy × 0.1` (≤ 0.1) — the gate was
+        // SEVEN times the maximum possible input, so chosenness was
+        // structurally unreachable (frozen at birth 0.100 in every window).
+        // Re-scaled to the actual event-magnitude domain: `> 0.07` means
+        // joy > 0.7 (a genuinely exceptional joyful event) WITH strong social
+        // recognition — rare but reachable.
+        if magnitude > Fixed::from_f64(0.07) && social_recognition > Fixed::from_f64(0.6) {
             self.chosenness_script = (self.chosenness_script + Fixed::from_f64(0.002)).clamp_01();
         }
 
