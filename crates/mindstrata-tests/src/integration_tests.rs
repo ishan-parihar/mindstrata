@@ -6569,6 +6569,126 @@ fn neural_like_runtime_is_live_deterministic_and_bounded() {
     );
 }
 
+/// §9.2 (Iteration 183d): the predictive-error fold consumers are LIVE —
+/// large prediction error increases attention (novelty_bias above the
+/// agent's own openness-anchored baseline), spikes emotional intensity
+/// (arousal), and amplifies belief reinforcement (scarcity worlds, which
+/// produce more surprises, end with higher mean belief confidence than
+/// abundant worlds). The attention fold is continuous (PE × 0.2); the
+/// arousal and belief folds are gated at PE > 0.3 — exactly zero in calm
+/// windows, so the golden baseline stays byte-identical (covered by
+/// `secondary_emotions_fold_is_zero_blast_in_golden_window`).
+#[test]
+fn neural_like_prediction_error_folds_are_live_and_directional() {
+    // ── Fold reachability + attention lift (seed 42 @10000) ──────────
+    let sim = run_sim(42, 10_000);
+
+    // The 0.3 gate is reachable: at least one agent holds a large surprise.
+    let surprised = sim
+        .agents
+        .iter()
+        .filter(|a| a.neural_like.expectation.last_prediction_error > Fixed::from_f64(0.3))
+        .count();
+    assert!(surprised > 0, "the 0.3 prediction-error gate must fire, got {surprised}");
+
+    // Attention fold: a surprised agent's novelty_bias exceeds its own
+    // PE=0 baseline (0.5 + (openness − 0.5) × 0.3) — provable per-agent,
+    // immune to personality confounds. At PE 0.3+ the continuous 0.2 gain
+    // adds ≥ 0.06; the probe pins surprised agents at +0.066..+0.140.
+    let mut max_lift = 0.0f64;
+    for a in sim
+        .agents
+        .iter()
+        .filter(|a| a.neural_like.expectation.last_prediction_error > Fixed::from_f64(0.3))
+    {
+        let openness = a.personality.openness.to_f64();
+        let baseline = (0.5 + (openness - 0.5) * 0.3).clamp(0.3, 0.7);
+        let lift = a.attention.novelty_bias.to_f64() - baseline;
+        max_lift = max_lift.max(lift);
+    }
+    assert!(
+        max_lift > 0.05,
+        "surprise must lift novelty_bias above the openness baseline, got {max_lift:.3}"
+    );
+
+    // Attention fold zero-blast: agents with no surprise sit exactly at
+    // their openness baseline (no accidental bias drift).
+    let mut max_quiet_lift = 0.0f64;
+    for a in sim
+        .agents
+        .iter()
+        .filter(|a| a.neural_like.expectation.last_prediction_error < Fixed::from_f64(0.01))
+    {
+        let openness = a.personality.openness.to_f64();
+        let baseline = (0.5 + (openness - 0.5) * 0.3).clamp(0.3, 0.7);
+        let lift = a.attention.novelty_bias.to_f64() - baseline;
+        max_quiet_lift = max_quiet_lift.max(lift);
+    }
+    assert!(
+        max_quiet_lift < 0.005,
+        "quiet agents must keep the openness baseline, got {max_quiet_lift:.4}"
+    );
+
+    // ── Belief fold differential (abundant vs scarcity @5000) ────────
+    // Scarcity → more failed attempts → bigger surprises → more emotional
+    // reinforcement on belief updates → higher mean confidence.
+    let mut abundant = Simulation::new(SimConfig {
+        seed: 42,
+        max_ticks: 5000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    });
+    abundant.populate();
+    for site in &mut abundant.world.sites {
+        for stock in &mut site.inventory {
+            if stock.resource_id == 1 {
+                stock.quantity = Fixed::from_f64(500.0);
+            }
+        }
+    }
+    abundant.run(5000);
+    let abundant_conf: f64 = abundant
+        .agents
+        .iter()
+        .filter(|a| !a.beliefs.is_empty())
+        .map(|a| a.beliefs.iter().map(|b| b.confidence.to_f64()).sum::<f64>() / a.beliefs.len() as f64)
+        .sum::<f64>()
+        / abundant.agents.iter().filter(|a| !a.beliefs.is_empty()).count().max(1) as f64;
+
+    let mut scarcity = Simulation::new(SimConfig {
+        seed: 42,
+        max_ticks: 5000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    });
+    scarcity.populate();
+    for site in &mut scarcity.world.sites {
+        for stock in &mut site.inventory {
+            if stock.resource_id == 1 {
+                stock.quantity = Fixed::ZERO;
+            }
+        }
+    }
+    scarcity.run(5000);
+    let scarcity_conf: f64 = scarcity
+        .agents
+        .iter()
+        .filter(|a| !a.beliefs.is_empty())
+        .map(|a| a.beliefs.iter().map(|b| b.confidence.to_f64()).sum::<f64>() / a.beliefs.len() as f64)
+        .sum::<f64>()
+        / scarcity.agents.iter().filter(|a| !a.beliefs.is_empty()).count().max(1) as f64;
+
+    assert!(
+        scarcity_conf > abundant_conf + 0.02,
+        "scarcity belief confidence must exceed abundant (fold differential), \
+         abundant={abundant_conf:.3} scarcity={scarcity_conf:.3}"
+    );
+}
+
 /// §10.2: RelationshipV2 identity metadata + structural links + betrayal
 /// history populate across a real run, and the §10.2 end-state is
 /// seed-deterministic (labels, role expectations, links are pure functions

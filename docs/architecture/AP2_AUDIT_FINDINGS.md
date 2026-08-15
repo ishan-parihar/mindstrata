@@ -207,3 +207,29 @@ Full re-run of the Phases 1–3 acceptance criteria as the gate before Phase 4. 
 **Phase 1–3 gate verdict: CLEARED for Phase 4.**
 
 ---
+
+### Phase 4 — Cognitive Runtime & Neural-Like Mind (§9) (August 15, 2026)
+
+Read every §9 module end-to-end, mapped each mechanism's decisional consumers, then ran the `learned_values_probe` (seeds × horizons + abundant-vs-scarcity differential) and per-agent fold probes. Result: **one genuine §9.2 gap found and closed; everything else verified live.**
+
+**§9.1/§9.2 static audit — all machinery present:** context assembly (percept pipeline, memory, goals, relationships, body, culture), ConceptVector (11 dims), AssociationNetwork (12×12 seeded symmetric weights, spreading activation with 0.9 retention), PredictiveExpectation (EMA 0.05, |observed − expected|), RL action values (need_relief/social_reward/cost/risk, `learned_delta` consumed in the action-value fold, actions.rs:531), BehaviorScript grammar (courtship replay), self-model/other-models. Consumer map: `learned_delta` LIVE (utility fold), `spread` LIVE (daily pass), `observe` LIVE (success-rate outcome), `courtship_script` LIVE (partnered replay).
+
+**FOUND — `last_prediction_error` was WRITE-ONLY (the audit's predicted gap).** The sim.rs neural-pass comment admitted "no decision system reads them yet". AP2.md §9.2 mandates: *"Large prediction error: increases attention, updates beliefs, creates emotional intensity"* — none of the three folds existed. **CLOSED (Iteration 183d)**, all three folds wired, deterministic, zero new RNG:
+
+1. **Attention** — `AttentionState::recompute_biases` gains a `prediction_error` input; novelty_bias += PE × 0.2 (continuous; the caller passes the prior tick's surprise, so "yesterday's surprise raises today's novelty-seeking attention"). Per-agent provable: a surprised agent's novelty_bias exceeds its OWN openness-anchored baseline (immune to personality confounds).
+2. **Beliefs** — at the daily evidence-update site, PE > 0.3 adds emotional_reinforcement = PE × 0.3 to `update_beliefs` (a violated world model moves beliefs more per interaction).
+3. **Emotional intensity** — in the neural pass, PE > 0.3 spikes arousal += PE × 0.1 (clamped) — surprise amplifies the intensity axis that feeds ~7 emotional-weight decision seams.
+
+The arousal/belief folds are gated at 0.3; the attention fold is continuous but exactly zero in calm windows. **Golden zero-blast verified**: riverford seed 42 @1000 max prediction error = 0.0000, so the byte-identical baseline (golden 8/8 incl. the `secondary_emotions_fold_is_zero_blast_in_golden_window` contract) is untouched.
+
+**Probe evidence (`learned_values_probe`):** learned_delta mean 0.28–0.35, nonzero for 48/48 agent×profile combos (RL loop live); prediction-error > 0.3 fires 0–3 agents/window; per-agent fold probe (seed 42 @10000): agents with PE 0.31/0.70/0.91 show novelty_bias +0.066/+0.140/+0.118 above baseline, PE≈0 agents sit at baseline ± 0.000; differential (abundant vs scarcity @5000): scarcity belief confidence 0.380 vs abundant 0.317 (|Δ| 0.063 — more surprises → more reinforcement), arousal |Δ| 0.047, novelty_bias |Δ| 0.010.
+
+**Test added:** `neural_like_prediction_error_folds_are_live_and_directional` — gate reachable @10000, surprised agents' novelty_bias lift > 0.05 above their own baseline, quiet agents < 0.005 (zero-blast), scarcity belief-confidence > abundant + 0.02.
+
+**Blast + re-pin:** the folds fire only at 2000+ horizons, so exactly ONE artifact shifted — the `long_horizon_surface_10000_ticks` snapshot (regenerated). All 302 other tests-crate tests passed unchanged, including golden 8/8, behavioral_delta 12/12, and every integration test.
+
+**§9.3 confirmed (documented-optional):** AP2.md §9.3 frames the literal LLM as *optional auxiliary* (event summaries, scenario authoring, debug traces; "LLM is interpreter, not oracle") — the deterministic LLM-like architecture above IS the implementation; no external LLM integration is mandated. No gap.
+
+**Phase 4 verdict: §9 CLOSED — zero remaining gaps.** Full workspace **1341 tests / 0 failures** (983 sim units + 304 tests crate + CLI), clippy clean (sim + tests), golden byte-identical, `learned_values_probe`/`p4_err_probe` retained as audit artifacts.
+
+---

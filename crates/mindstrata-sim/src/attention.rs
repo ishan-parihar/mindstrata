@@ -398,6 +398,7 @@ impl AttentionState {
         extraversion: Fixed,
         openness: Fixed,
         attachment_security: Fixed,
+        prediction_error: Fixed,
     ) {
         let threat_input = fear + anger + trauma_risk;
         self.threat_bias = (Fixed::from_raw(5000)
@@ -407,8 +408,16 @@ impl AttentionState {
             + (extraversion - Fixed::from_f64(0.5)) * Fixed::from_f64(0.3)
             + (attachment_security - Fixed::from_f64(0.5)) * Fixed::from_f64(0.2))
         .clamp(Fixed::from_f64(0.3), Fixed::from_f64(0.7));
+        // §9.2 (Iteration 183d): large prediction error increases attention —
+        // surprise raises novelty-seeking bias (a violated world model
+        // reorients the agent toward novel percepts). The caller passes
+        // `last_prediction_error` (the prior tick's surprise), which is 0.0
+        // in calm windows, so calibrated trajectories are byte-identical. At
+        // 0.2 gain a 0.3 surprise lifts the bias by 0.06, inside the
+        // [0.3, 0.7] clamp.
         self.novelty_bias = (Fixed::from_raw(5000)
-            + (openness - Fixed::from_f64(0.5)) * Fixed::from_f64(0.3))
+            + (openness - Fixed::from_f64(0.5)) * Fixed::from_f64(0.3)
+            + prediction_error * Fixed::from_f64(0.2))
         .clamp(Fixed::from_f64(0.3), Fixed::from_f64(0.7));
     }
 
@@ -612,6 +621,7 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.5),
+            Fixed::ZERO,
         );
         assert!(attention.threat_bias > Fixed::from_f64(0.5));
         assert!(attention.threat_bias <= Fixed::from_f64(0.7));
@@ -623,6 +633,7 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.5),
+            Fixed::ZERO,
         );
         assert!(attention.threat_bias < Fixed::from_f64(0.5));
     }
@@ -637,6 +648,7 @@ mod tests {
             Fixed::from_f64(0.9), // extraversion
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.9), // attachment security
+            Fixed::ZERO,
         );
         assert!(attention.social_bias > Fixed::from_f64(0.5));
         assert!(attention.social_bias <= Fixed::from_f64(0.7));
@@ -652,9 +664,37 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.9), // openness
             Fixed::from_f64(0.5),
+            Fixed::ZERO,
         );
         assert!(attention.novelty_bias > Fixed::from_f64(0.5));
         assert!(attention.novelty_bias <= Fixed::from_f64(0.7));
+    }
+
+    #[test]
+    fn novelty_bias_rises_with_prediction_error() {
+        let mut attention = AttentionState::default();
+        attention.recompute_biases(
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5), // prediction_error
+        );
+        assert!(attention.novelty_bias > Fixed::from_f64(0.5));
+        assert!(attention.novelty_bias <= Fixed::from_f64(0.7));
+        // Zero prediction error leaves the openness-anchored baseline.
+        attention.recompute_biases(
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::ZERO,
+        );
+        assert_eq!(attention.novelty_bias, Fixed::from_f64(0.5));
     }
 
     #[test]

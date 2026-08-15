@@ -11756,6 +11756,11 @@ impl Simulation {
                 agent.personality.extraversion,
                 agent.personality.openness,
                 agent.attachment.security,
+                // §9.2: yesterday's surprise raises today's novelty-seeking
+                // attention (the neural pass below updates
+                // `last_prediction_error`; the value seen here is the prior
+                // tick's). Zero in calm windows → byte-identical.
+                agent.neural_like.expectation.last_prediction_error,
             );
 
             // §19.5.G: Update status from current wealth and social connections
@@ -11799,11 +11804,17 @@ impl Simulation {
                 agent.emotions.joy,
             );
 
-            // §9.2: Deterministic neural-like runtime (observational state —
-            // activations, prediction errors, and learned values accumulate
-            // but no decision system reads them yet, so calibrated runs stay
-            // byte-identical). The concept vector is derived deterministically
-            // from the agent's live state (no RNG).
+            // §9.2: Deterministic neural-like runtime. The concept vector is
+            // derived deterministically from the agent's live state (no RNG)
+            // and spread through the association network. Since Iteration
+            // 183d the prediction error feeds three live consumers —
+            // attention (novelty_bias, continuous PE × 0.2 via
+            // recompute_biases), belief reinforcement, and emotional
+            // intensity (arousal, both gated at 0.3). All are exactly zero
+            // in calm windows (zero prediction error), so calibrated
+            // trajectories stay byte-identical; the learned RL values
+            // remain observational (consumed only via `learned_delta` in the
+            // action-value fold, actions.rs).
             let concepts = crate::psychology::neural_like::ConceptVector {
                 safety: Fixed::ONE - agent.emotions.fear,
                 sacredness: if agent.cultural.ideology.is_some() {
@@ -11837,6 +11848,18 @@ impl Simulation {
                 let success_rate = Fixed::from_int(agent.recent_successes as i64)
                     / Fixed::from_int(attempts as i64);
                 agent.neural_like.expectation.observe(success_rate);
+            }
+            // §9.2 (Iteration 183d): LARGE prediction error creates emotional
+            // intensity — a violated world model spikes arousal (the
+            // intensity axis), amplifying the emotional weight of subsequent
+            // decisions. Gated at 0.3 (calm windows carry zero prediction
+            // error, so the golden baseline stays byte-identical); at 0.1
+            // gain a 0.3 surprise adds 0.03 arousal — a modest, honest
+            // intensity bump.
+            let surprise = agent.neural_like.expectation.last_prediction_error;
+            if surprise > Fixed::from_f64(0.3) {
+                agent.affect.arousal =
+                    (agent.affect.arousal + surprise * Fixed::from_f64(0.1)).clamp_01();
             }
             // §9.2 script grammar: partnered agents replay the courtship script
             // as an observational narrative track (no behavioral effect).
@@ -12760,10 +12783,26 @@ impl Simulation {
                         .max(BELIEF_CULTURAL_FLOOR)
                         .clamp_01();
 
+                    // §9.2 (Iteration 183d): LARGE prediction error updates
+                    // beliefs — surprise amplifies the emotional
+                    // reinforcement of the evidence (an agent whose world
+                    // model is strongly violated moves its beliefs more per
+                    // interaction). Gated at 0.3 (zero prediction error in
+                    // calm windows → byte-identical); at 0.3 gain a 0.3
+                    // surprise adds 0.09 reinforcement — a modest honest
+                    // nudge on top of the evidence term.
+                    let from_surprise =
+                        self.agents[from_idx].neural_like.expectation.last_prediction_error;
+                    let emotional_reinforcement = if from_surprise > Fixed::from_f64(0.3) {
+                        from_surprise * Fixed::from_f64(0.3)
+                    } else {
+                        Fixed::ZERO
+                    };
+
                     belief_update::update_beliefs(
                         &mut self.agents[from_idx].beliefs,
                         &[(2, evidence_strength, source_trust)],
-                        Fixed::ZERO,
+                        emotional_reinforcement,
                         Fixed::ZERO,
                         tick_u64,
                         &self.params,
