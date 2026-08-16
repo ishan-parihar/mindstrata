@@ -3407,7 +3407,25 @@ impl Simulation {
                             .narrative
                             .interpret_positive_event(positive_event_magnitude, social_support);
                     }
-                    self.agents[i].narrative.update_theme();
+                    // Iteration 186: feed the agent's temperament into the
+                    // theme mapping so a thriving calm village does not
+                    // collapse every agent onto Mission (the script-balance-
+                    // only mapping saturated positive scripts uniformly).
+                    // Agency = ambition/extraversion/conscientiousness
+                    // blend; neuroticism discounts the positive balance.
+                    let (neuro, agency) = {
+                        let p = &self.agents[i].personality;
+                        let agency = p.ambition * Fixed::from_f64(0.4)
+                            + p.extraversion * Fixed::from_f64(0.3)
+                            + p.conscientiousness * Fixed::from_f64(0.3);
+                        (p.neuroticism, agency)
+                    };
+                    self.agents[i].narrative.update_theme(
+                        crate::psychology::narrative::ThemeTemperament {
+                            neuroticism: neuro,
+                            agency,
+                        },
+                    );
                     // §8.1.3: Episodic memory — every chapter boundary of
                     // integrated life events closes a chapter worth remembering
                     // (sparse by design; salience scales with the current
@@ -6900,14 +6918,48 @@ impl Simulation {
                 // grievance above 0.5 in most villages, so the council's
                 // equilibrium legitimacy sits below 0.5 and factions form in
                 // unequal settlements — which is the intended emergent signal.
-                let suppression = if institution.kind == institutions::InstitutionKind::Council {
-                    (Fixed::ONE - avg_grievance * Fixed::from_f64(0.6)).clamp_01()
+                let mut target = if institution.kind == institutions::InstitutionKind::Council {
+                    // §29.2 (Iteration 186): the council's legitimacy equilibrium
+                    // must sit ABOVE the faction-formation gate (< 0.5) in
+                    // ordinary villages. The old formula —
+                    // `morale.max(0.3) × (1 − grievance×0.6)` — was tuned when
+                    // grievance ran 0.82–0.88 (pre coin-sink-fix, poverty-
+                    // ratcheted); once the Iteration-186 dividend closed the
+                    // sink, calm/famine grievance settled at 0.55–0.64 and the
+                    // SAME scale suppressed the target to ~0.27–0.46 —
+                    // permanently below the gate — so the faction trigger was
+                    // always armed and the post-revolution honeymoon became a
+                    // fixed ~3,500-tick coup clock (probe: calm-42 = 28
+                    // revolutions/100K at 3,515-tick gaps; calm-7, a genuinely
+                    // happy village, churned 5 by 20K). The floor now maxes
+                    // with 0.6 (an ordinary functioning council keeps a healthy
+                    // mandate — a fresh mandate cannot read "barely tolerated")
+                    // and the suppression scale drops to 0.25, so grievance
+                    // must genuinely exceed ~0.67 (pestilence / collapse / a
+                    // famine peak) to drag the equilibrium under 0.5.
+                    // Revolutions become crisis-driven, not clock-driven.
+                    (institution.collective.morale.max(Fixed::from_f64(0.6))
+                        * (Fixed::ONE - avg_grievance * Fixed::from_f64(0.25)))
+                        .clamp_01()
                 } else {
-                    Fixed::ONE
+                    (institution.collective.morale.max(Fixed::from_f64(0.3))).clamp_01()
                 };
-                let target = (institution.collective.morale.max(Fixed::from_f64(0.3))
-                    * suppression)
-                    .clamp_01();
+                // §7.3 (Iteration 186): post-revolution honeymoon — a fresh
+                // regime that just seized power has a popular mandate: floor
+                // its legitimacy target at 0.5 for a window so the faction
+                // trigger (`legitimacy < 0.5`) stays disarmed while the new
+                // regime governs. Pre-fix the 0.5 reset immediately decayed
+                // back under 0.5 (~500 ticks, grievance still pinned high),
+                // a new faction formed, and calm villages churned 42–129
+                // revolutions per 100K. The honeymoon lets a regime actually
+                // govern (and, with the Iteration-186 coin-sink fix, let
+                // grievance genuinely decay) before the next crisis can arm.
+                if institution.kind == institutions::InstitutionKind::Council
+                    && tick_u64.saturating_sub(self.last_revolution_tick)
+                        < crate::factions::REVOLUTION_HONEYMOON_TICKS
+                {
+                    target = target.max(Fixed::from_f64(0.5));
+                }
                 // §26: Converge symmetrically toward the target. The old code
                 // rose at 0.002×gap but decayed at a fixed 0.0001/tick, so
                 // legitimacy ratcheted to 1.0 early (before grievance builds)
@@ -7048,6 +7100,56 @@ impl Simulation {
 
             // §19.5.C: All institutions pay role holders wages periodically
             if phases.is_quincent && tick_u64 > 0 {
+                // Iteration 186: the Market is the village's trading commons —
+                // recirculate its treasury surplus back to the village as a
+                // dividend. Pre-fix the treasury was a coin SINK: consumption
+                // payments accumulated thousands of coins (probe: 2138–4999 by
+                // 10K) while agents sank below the 3-coin poverty line, the
+                // poverty channel ratcheted fear/resentment, grievance hit
+                // 0.82–0.88, council legitimacy was suppressed below the 0.5
+                // faction-formation gate, and calm villages churned 42–129
+                // revolutions per 100K (famine ACCIDENTALLY suppressed the
+                // sink — fewer purchases, so agents kept coin and read calmer
+                // than calm — inverting the intended scenario stress). Keep a
+                // small operating reserve and pay the surplus out equally so
+                // coin circulates and a thriving village stays solvent.
+                if institution.kind == institutions::InstitutionKind::Market
+                    && !self.agents.is_empty()
+                {
+                    let reserve = Fixed::from_f64(50.0);
+                    let surplus = (institution.treasury - reserve).max(Fixed::ZERO);
+                    if surplus > Fixed::ZERO {
+                        let dividend = surplus * Fixed::from_f64(0.5);
+                        // Iteration 186: PROGRESSIVE dividend. The first pass
+                        // paid the surplus out equally, which PRESERVED the
+                        // wealth ratio (everyone gets the same absolute amount,
+                        // so the rich stay relatively rich — Gini barely moved:
+                        // 0.89 → 0.75) and the inequality→grievance channel
+                        // stayed pinned. Weight each share inversely to current
+                        // wealth (w = 1/(1+coin)) so the surplus flows to the
+                        // poorest: the wealth gap shrinks, Gini drops, and the
+                        // `wealth_inequality` term in `compute_grievance`
+                        // weakens. Deterministic: weights are a pure function
+                        // of agent state in fixed order (no RNG, no
+                        // order-dependent accumulation beyond the fixed
+                        // iteration order).
+                        let dividend_f = dividend.to_f64();
+                        let weights: Vec<f64> = self
+                            .agents
+                            .iter()
+                            .map(|a| 1.0 / (1.0 + a.wealth.coin.to_f64()))
+                            .collect();
+                        let total_w: f64 = weights.iter().sum();
+                        if total_w > 0.0 {
+                            for (agent, w) in self.agents.iter_mut().zip(weights) {
+                                let share = Fixed::from_f64(dividend_f * w / total_w);
+                                agent.wealth.coin += share;
+                            }
+                            institution.treasury =
+                                (institution.treasury - dividend).max(Fixed::ZERO);
+                        }
+                    }
+                }
                 let wage = Fixed::from_f64(institutions::BASE_WAGE);
                 let role_holder_count = institution
                     .roles
@@ -15415,7 +15517,10 @@ mod tests {
         // chance 0.3 → 0.12 fix delays seed 42's first violence from ~tick
         // 2 to ~tick 1,000 (probe: 0 events @500, 1 @1000, 3 @2000), so
         // the window extends 500 → 2000 to stay past the first event.
-        sim.run(2000);
+        // Iteration 186: the coin-dividend recirculation re-paces seed 42's
+        // threat stream — first violence now ~tick 2,010 (probe: 0 @2000,
+        // 2 @3000, 4 @5000), so the window extends 2000 → 3000.
+        sim.run(3000);
         let events = sim
             .recent_events(10_000_000)
             .iter()
@@ -15431,7 +15536,7 @@ mod tests {
             .count();
         assert!(
             events >= 1,
-            "seed-42 baseline must produce violence within 2000 ticks (got {events})"
+            "seed-42 baseline must produce violence within 3000 ticks (got {events})"
         );
         for idx in [0usize, 1usize] {
             let norm = sim.agents[idx]

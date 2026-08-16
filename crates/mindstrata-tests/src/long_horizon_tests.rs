@@ -67,12 +67,16 @@ fn assert_seed99_emergence_and_invariants(sim: &mindstrata_sim::Simulation) {
         m.event_count
     );
     assert!(m.active_meme_count >= 1, "no active memes after 50K ticks");
-    let factions = sim
-        .institutions
-        .iter()
-        .filter(|i| i.kind == InstitutionKind::Faction)
-        .count();
-    assert!(factions >= 1, "no faction formed by 50K ticks (seed 99)");
+    // Iteration 186: the legitimacy-equilibrium fix pulls the calm world's
+    // council equilibrium ABOVE the faction-formation gate, so factions no
+    // longer persist at the 50K snapshot (v1 count 0). They still FORM and
+    // dissolve transiently on genuine grievance spikes — the v2 registry
+    // retains every formation (probe: calm seed 99 @50K = 1 revolution, v2
+    // history 1 — a crisis-driven coup, exactly the new design) — so the
+    // emergence signal reads the registry history instead of the live v1
+    // count.
+    let factions_formed = !sim.faction_v2_registry.factions.is_empty();
+    assert!(factions_formed, "no faction formed by 50K ticks (seed 99)");
     assert!(
         !sim.moral_panic_registry.panics.is_empty(),
         "no moral panic fired by 50K ticks (seed 99)"

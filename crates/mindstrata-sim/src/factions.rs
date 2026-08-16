@@ -46,6 +46,20 @@ pub const ENFORCEMENT_LEGITIMACY_GAIN: Fixed = Fixed::from_raw(150); // 0.015
 /// §7.3: Minimum tick interval between revolutions from the same faction.
 pub const REVOLUTION_COOLDOWN: u64 = 200;
 
+/// §7.3 (Iteration 186): post-revolution legitimacy honeymoon window. A
+/// fresh regime that just seized power has a popular mandate — its council
+/// legitimacy target is floored at 0.5 for this many ticks so the faction
+/// trigger (`legitimacy < 0.5`) stays disarmed while the new regime
+/// governs. Pre-fix the 0.5 reset decayed back under 0.5 within ~500 ticks
+/// (grievance stayed pinned high by the market coin sink), a new faction
+/// formed, and calm villages churned 42–129 revolutions per 100K — a
+/// revolution every ~800–2400 ticks (≈ 2–7 years of sim time), an absurd
+/// regime-change cadence. The honeymoon (≈ 1 sim-month) plus the
+/// Iteration-186 coin-sink recirculation let a regime actually govern and
+/// grievance genuinely decay before the next crisis can re-arm the
+/// trigger.
+pub const REVOLUTION_HONEYMOON_TICKS: u64 = 3504;
+
 /// §7.3: Revolution score threshold — when exceeded, faction seizes control.
 pub const REVOLUTION_SCORE_THRESHOLD: Fixed = Fixed::from_raw(6000); // 0.6
 

@@ -212,24 +212,31 @@ mod tests {
     /// every seed produces the same number of factions, the formation system
     /// is degenerate (non-deterministic emergence is the expected contract).
     ///
-    /// Runtime note: 20 seeds × 2000 ticks ≈ 26s (acceptable for the gate;
-    /// ~1.3s per seed).
+    /// Iteration 186: re-anchored from the base world to the grievance-crisis
+    /// scenario (pestilence). The council-legitimacy equilibrium fix (floor
+    /// 0.6, suppression scale 0.25) sits the BASE world's equilibrium above
+    /// the 0.5 formation gate — calm/riverford villages no longer radicalize
+    /// (the calm-world coup clock is closed; probe: calm 0 coups @100K), so
+    /// the formation system's cross-seed variance is now exercised where the
+    /// trigger is actually armed: the epidemic's grievance surge (probe:
+    /// pestilence seeds form their first factions at 1–4K and the per-seed
+    /// faction counts vary 1–17 over 30K). Horizon raised to 3000 so the
+    /// early-forming seeds clear formation.
+    ///
+    /// Runtime note: 20 seeds × 3000 pestilence ticks ≈ 60–90s (the epidemic
+    /// machinery is heavier; acceptable for the gate).
     #[test]
     fn faction_counts_vary_across_worlds() {
         use mindstrata_sim::institutions::InstitutionKind;
+        use mindstrata_sim::scenario::Scenario;
         let mut counts = std::collections::BTreeSet::new();
         for seed in 0..20u64 {
-            let config = SimConfig {
-                seed,
-                max_ticks: 2000,
-                world_width: 16,
-                world_height: 16,
-                num_agents: 12,
-                snapshot_interval: None,
-            };
-            let mut sim = Simulation::new(config);
+            let mut sc = Scenario::pestilence();
+            sc.seed = seed;
+            sc.ticks = 3000;
+            let mut sim = Simulation::from_scenario(sc);
             sim.populate();
-            sim.run(2000);
+            sim.run(3000);
             let faction_count = sim
                 .institutions
                 .iter()

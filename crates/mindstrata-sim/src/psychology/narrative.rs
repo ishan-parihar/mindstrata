@@ -68,6 +68,36 @@ pub const NARRATIVE_SCRIPT_DECAY_RATE: f64 = 0.005;
 /// (the Phase-5 acceptance lesson).
 pub const NARRATIVE_STRESS_RESILIENCE_RATE: f64 = 0.15;
 
+/// Temperament inputs to the life-theme mapping (Iteration 186).
+///
+/// The pre-Iteration-186 mapping was a pure script-balance function with
+/// NO temperament input, so in a thriving calm village every agent
+/// saturated positive scripts (heroism 0.60–1.00 > redemption 0.52–0.58)
+/// and collapsed onto Mission (probe: calm 13/13 Mission at 10K+ across
+/// seeds) while famine/pestilence kept whatever variety the scripts
+/// produced. Personality is fixed at birth, so tempering the mapping with
+/// it keeps determinism while differentiating agents in the SAME world:
+///   - neuroticism discounts the good: anxious agents need a larger
+///     positive margin before life reads as positive-dominant,
+///   - Mission is an AGENTIC story — a passive agent in a good world
+///     experiences Growth, not a heroic calling.
+#[derive(Debug, Clone, Copy)]
+pub struct ThemeTemperament {
+    /// Neuroticism (0..1) — discounts the positive balance.
+    pub neuroticism: Fixed,
+    /// Agency (0..1) — ambition/extraversion/conscientiousness blend.
+    pub agency: Fixed,
+}
+
+impl Default for ThemeTemperament {
+    fn default() -> Self {
+        Self {
+            neuroticism: Fixed::ZERO,
+            agency: Fixed::ONE,
+        }
+    }
+}
+
 /// Life narrative theme — the dominant story the agent tells about their life.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum LifeTheme {
@@ -251,20 +281,35 @@ impl NarrativeIdentity {
             .clamp(Fixed::from_f64(0.8), Fixed::from_f64(1.2))
     }
 
-    /// Update the dominant life theme based on current script balance.
-    pub fn update_theme(&mut self) {
+    /// Update the dominant life theme based on current script balance and
+    /// temperament (Iteration 186).
+    ///
+    /// The temperament bias breaks the calm-world all-Mission collapse: the
+    /// old mapping was script-balance-only, so every thriving agent saturated
+    /// the same positive scripts and landed on Mission. Now:
+    ///   - neuroticism discounts the positive balance (anxious agents read
+    ///     even a good life as precarious → Test/Growth rather than Mission),
+    ///   - Mission additionally requires agency — a passive agent in a good
+    ///     world has a Growth story, not a heroic calling.
+    pub fn update_theme(&mut self, temperament: ThemeTemperament) {
         let positive_balance =
             self.redemption_script + self.heroism_script + self.chosenness_script;
         let negative_balance =
             self.contamination_script + self.victimhood_script + self.shame_script;
 
-        self.life_theme = if positive_balance > negative_balance * Fixed::from_f64(1.5) {
-            if self.heroism_script > self.redemption_script {
+        // Neuroticism discounts the good: an anxious agent needs a larger
+        // positive margin before life reads as positive-dominant.
+        let effective_positive = positive_balance - temperament.neuroticism * Fixed::from_f64(0.2);
+
+        self.life_theme = if effective_positive > negative_balance * Fixed::from_f64(1.5) {
+            if self.heroism_script > self.redemption_script
+                && temperament.agency > Fixed::from_f64(0.5)
+            {
                 LifeTheme::Mission
             } else {
                 LifeTheme::Growth
             }
-        } else if negative_balance > positive_balance * Fixed::from_f64(1.5) {
+        } else if negative_balance > effective_positive * Fixed::from_f64(1.5) {
             if self.victimhood_script > self.shame_script {
                 LifeTheme::Struggle
             } else if self.shame_script > Fixed::from_f64(0.6) {
@@ -316,8 +361,70 @@ mod tests {
             victimhood_script: Fixed::from_f64(0.1),
             ..Default::default()
         };
-        n.update_theme();
+        n.update_theme(ThemeTemperament {
+            neuroticism: Fixed::ZERO,
+            agency: Fixed::ONE,
+        });
         assert_eq!(n.life_theme, LifeTheme::Mission);
+    }
+
+    #[test]
+    fn temperament_differentiates_positive_worlds() {
+        // Iteration 186: the theme mapping must NOT be a pure script-balance
+        // function — a thriving calm village saturated every agent's positive
+        // scripts and collapsed all of them onto Mission (probe: calm 13/13
+        // Mission at 10K+). Tempering the mapping by fixed-at-birth
+        // personality restores variety deterministically:
+        //   - a passive (low-agency) agent in the same good world lands on
+        //     Growth, not Mission,
+        //   - an anxious (high-neuroticism) agent needs a larger positive
+        //     margin before life reads as positive-dominant (lands on Test).
+        // High agency + low neuroticism → Mission.
+        let mut mission = NarrativeIdentity {
+            heroism_script: Fixed::from_f64(0.9),
+            redemption_script: Fixed::from_f64(0.7),
+            contamination_script: Fixed::from_f64(0.1),
+            victimhood_script: Fixed::from_f64(0.1),
+            ..Default::default()
+        };
+        mission.update_theme(ThemeTemperament {
+            neuroticism: Fixed::from_f64(0.2),
+            agency: Fixed::from_f64(0.9),
+        });
+        assert_eq!(mission.life_theme, LifeTheme::Mission);
+
+        // Same scripts, low agency → Growth (a passive agent in a good world
+        // has a growth story, not a heroic calling).
+        let mut growth = NarrativeIdentity {
+            heroism_script: Fixed::from_f64(0.9),
+            redemption_script: Fixed::from_f64(0.7),
+            contamination_script: Fixed::from_f64(0.1),
+            victimhood_script: Fixed::from_f64(0.1),
+            ..Default::default()
+        };
+        growth.update_theme(ThemeTemperament {
+            neuroticism: Fixed::from_f64(0.2),
+            agency: Fixed::from_f64(0.3),
+        });
+        assert_eq!(growth.life_theme, LifeTheme::Growth);
+
+        // A balanced script mix under extreme neuroticism: the discount
+        // (0.2 × neuro) pushes the effective positive margin below the 1.5×
+        // dominance band on BOTH sides → Test (life is a test). Positive
+        // 0.9, negative 0.7 → effective 0.71: not positive-dominant
+        // (0.71 ≤ 1.05), not negative-dominant (0.7 ≤ 1.065).
+        let mut test = NarrativeIdentity {
+            heroism_script: Fixed::from_f64(0.5),
+            redemption_script: Fixed::from_f64(0.4),
+            contamination_script: Fixed::from_f64(0.4),
+            victimhood_script: Fixed::from_f64(0.3),
+            ..Default::default()
+        };
+        test.update_theme(ThemeTemperament {
+            neuroticism: Fixed::from_f64(0.95),
+            agency: Fixed::from_f64(0.9),
+        });
+        assert_eq!(test.life_theme, LifeTheme::Test);
     }
 
     #[test]

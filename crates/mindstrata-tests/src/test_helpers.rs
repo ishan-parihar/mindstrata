@@ -58,6 +58,17 @@ pub fn run_sim_with_params(
 /// stream), and runs with the scenario's shocks firing at their `at_tick`
 /// times. Use this to probe consumer liveness in non-calm contexts (drought,
 /// famine) where calm-window-inert consumers actually fire.
+pub fn run_scenario(scenario: &Scenario, seed: u64, ticks: u64) -> Simulation {
+    let mut sc = scenario.clone();
+    sc.seed = seed;
+    sc.ticks = ticks;
+    let mut sim = Simulation::from_scenario(sc);
+    sim.populate();
+    sim.run(ticks);
+    sim
+}
+
+/// Run a simulation from a scenario with mutated parameters, returning it.
 pub fn run_scenario_with_params(
     scenario: &Scenario,
     ticks: u64,

@@ -373,6 +373,18 @@ fn scenario_delta_is_live_and_contexts_differ() {
     // stream and silences seed 13; seed 42 is the 7-seed sweep's only
     // positive-ordered anchor — drought still depresses the delta, the
     // weaker population has less escalation fuel).
+    // Iteration 186 re-pin: probe-pinned vanilla +971, drought +1,420 at
+    // seed 42/3000 (the coin-dividend + legitimacy-equilibrium re-pacing
+    // inverts the ordering — the 8-seed sweep's ONLY positive anchor is
+    // seed 42, and drought now carries the LARGER delta: its grievance-
+    // armed baseline (legitimacy still below the faction gate during the
+    // water shock) amplifies the escalated-violence event cascade more
+    // than the now-stabilized calm world, which the equilibrium fix
+    // pulled above the formation gate (0 coups @100K). No revolution
+    // events fire in any 3000-tick leg (probe), so the spread is the
+    // pure escalation→violence→events cascade. Both deltas stay live;
+    // the ordering is a probe-pinned calibration observation, not a
+    // structural law).
     assert_live_delta(&vanilla, 200.0);
     assert_live_delta(&drought, 150.0);
 
@@ -414,11 +426,11 @@ fn scenario_delta_is_live_and_contexts_differ() {
         drought.delta
     );
     assert!(
-        vanilla.delta > drought.delta,
-        "vanilla must amplify MORE than drought post-Iter-164 (probe-pinned): \
-         vanilla={:.0} drought={:.0}",
-        vanilla.delta,
-        drought.delta
+        drought.delta > vanilla.delta,
+        "drought must amplify MORE than vanilla post-Iter-186 (probe-pinned): \
+         drought={:.0} vanilla={:.0}",
+        drought.delta,
+        vanilla.delta
     );
 }
 
@@ -679,6 +691,15 @@ fn calm_scenario_baseline_differs_from_drought() {
     // +1,217 at seed 42/3000 (the calm-lethality recalibration re-paces
     // the stream and silences seed 13; seed 42 is the sweep's only
     // positive-ordered anchor).
+    // Iteration 186 re-pin: probe-pinned calm +971, drought +1,420 at
+    // seed 42/3000 (the coin-dividend + legitimacy-equilibrium re-pacing
+    // inverts the ordering — seed 42 remains the 8-seed sweep's ONLY
+    // anchor with both deltas positive, and drought now amplifies MORE:
+    // its water-shock grievance keeps legitimacy below the faction gate
+    // while the equilibrium fix pulled calm ABOVE it (0 coups @100K), so
+    // the escalated-violence cascade runs hotter in drought. No
+    // revolutions fire in any leg (probe); the ordering is a probe-pinned
+    // calibration observation, not a structural law).
     assert_live_delta(&calm, 200.0);
     assert_live_delta(&drought, 150.0);
 
@@ -714,10 +735,10 @@ fn calm_scenario_baseline_differs_from_drought() {
         drought.delta
     );
     assert!(
-        calm.delta > drought.delta,
-        "calm must amplify MORE than drought post-Iter-164 (probe-pinned): \
-         calm={:.0} drought={:.0}",
-        calm.delta,
-        drought.delta
+        drought.delta > calm.delta,
+        "drought must amplify MORE than calm post-Iter-186 (probe-pinned): \
+         drought={:.0} calm={:.0}",
+        drought.delta,
+        calm.delta
     );
 }
