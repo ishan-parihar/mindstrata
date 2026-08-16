@@ -225,7 +225,25 @@ pub struct SimParameters {
     pub conflict_escalation_fear_threshold: Fixed,
     /// Violence escalation aggression threshold — aggressor must exceed (1.2).
     pub conflict_escalation_aggression_threshold: Fixed,
-    /// Violence escalation chance when thresholds met (0.3).
+    /// Violence escalation chance when thresholds met (0.12).
+    /// Iteration 185 (P5 emergent re-audit): recalibrated 0.3 → 0.12
+    /// (first pass 0.05). At 0.3, ~30% of failed threats escalated to
+    /// Violence, and with the pre-fix threat stream (2372 threats / 2000
+    /// calm ticks) that meant dozens of beatings per day → every calm
+    /// seed's population collapsed (5/6 seeds ≤4/12 alive @20K, 100% of
+    /// deaths = Violence, first death on day 1). 0.05 overcorrected: a
+    /// failed threat escalated essentially never (probe: 0 violence
+    /// events in seed 42's first 2000 ticks, ~1–8 per 5000-tick window),
+    /// which starved the violence-response systems (dominance/trust/taboo
+    /// escalation differentials) of observable fuel. 0.12 is the
+    /// probe-pinned middle ground: violence reachable (seed 42: 3 events
+    /// @2K, 9 @9K; 17 across the 3-seed dominance sweep @5K) while a
+    /// 5-seed × 20K calm sweep still yields ZERO deaths (injury 0.12 + the
+    /// 0.001/tick recovery keeps repeated aggression non-lethal; enemy
+    /// clans still double the chance to 0.24 via `escalation_chance`).
+    /// Conflict — threats, insults, feuds, trauma, fear — stays the
+    /// reachable drama channel while murder remains a rare, legible story
+    /// event.
     pub conflict_escalation_chance: Fixed,
 
     // ── Market / Economic ────────────────────────────────────
@@ -482,7 +500,7 @@ impl Default for SimParameters {
             conflict_lethal_rng_threshold: Fixed::from_f64(0.3),
             conflict_escalation_fear_threshold: Fixed::from_f64(0.3),
             conflict_escalation_aggression_threshold: Fixed::from_f64(1.2),
-            conflict_escalation_chance: Fixed::from_f64(0.3),
+            conflict_escalation_chance: Fixed::from_f64(0.12),
             // Market / Economic
             market_price_smoothing: Fixed::from_f64(0.1),
             market_no_supply_ratio: Fixed::from_f64(2.0),

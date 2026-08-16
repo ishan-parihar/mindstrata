@@ -8,6 +8,12 @@
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 
+/// Hard cap on concurrent diseases per agent (Iteration 185): correct
+/// operation holds at most one disease per kind × 5 kinds = 5; the cap is a
+/// pathological-state guard against any unbounded infection path re-opening
+/// (see `system_health`).
+pub const MAX_CONCURRENT_DISEASES: usize = 8;
+
 /// Types of health conditions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum DiseaseKind {
@@ -198,6 +204,19 @@ pub fn system_health(
         }
         !resolved
     });
+
+    // Iteration 185 (P5 100K audit): hard cap on concurrent diseases per
+    // agent. Correct operation (one per kind × 5 kinds) never exceeds 5,
+    // so this is a pathological-state guard: if any regression re-opens an
+    // unbounded infection path (the 17b same-kind dedup is the primary
+    // fix), an agent can never accumulate an O(t)-sized vec that drags
+    // every per-tick disease pass (system_health, contagion,
+    // work_impairment) into quadratic time. Keep the NEWEST entries (they
+    // are the active infections; the oldest have run their course).
+    if diseases.len() > MAX_CONCURRENT_DISEASES {
+        let keep = diseases.len() - MAX_CONCURRENT_DISEASES;
+        diseases.drain(..keep);
+    }
 }
 
 /// Productivity multiplier for an agent carrying `diseases`.

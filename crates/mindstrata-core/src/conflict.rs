@@ -31,7 +31,16 @@ impl ConflictKind {
         match self {
             Self::Threat | Self::MoralPanic | Self::Revolution => Fixed::ZERO,
             Self::Intimidation => Fixed::from_f64(0.05),
-            Self::Violence => Fixed::from_f64(0.3),
+            // Iteration 185 (P5 emergent re-audit): 0.3 → 0.12. At 0.3 a
+            // single violence hit did ~1/3 of a healthy agent's health and
+            // ~3 hits killed — with the pre-fix escalation rate that made
+            // beatings routinely lethal and every calm seed's population
+            // collapse (5/6 seeds ≤4/12 alive @20K, 100% of deaths =
+            // Violence). 0.12 makes a fight hurt (~7 hits to kill) while
+            // the 0.001/tick resting recovery (≈0.1/day) lets most injuries
+            // heal between conflicts — violence is now trauma/drama, with
+            // death reserved for sustained, repeated aggression.
+            Self::Violence => Fixed::from_f64(0.12),
             Self::Combat => Fixed::from_f64(0.5),
             Self::Feud => Fixed::from_f64(0.2),
         }

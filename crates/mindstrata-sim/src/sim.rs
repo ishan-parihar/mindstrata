@@ -5544,6 +5544,23 @@ impl Simulation {
         // ── 17b. §7.5: Epidemic disease spread — proximity-based contagion ──
         // Contagious diseases (Cold, Fever, Epidemic) spread to nearby agents.
         // Uses Manhattan distance ≤ 2 as "close contact" radius.
+        //
+        // Iteration 185 (P5 100K audit): same-kind dedup. The old code
+        // checked `already_infected` only against the PRE-TICK disease vecs;
+        // `new_infections` is applied after the whole scan, so within ONE
+        // tick every source's every disease could push the same (j, kind)
+        // repeatedly — a freshly-recovered agent absorbed pushes from all
+        // sources' all diseases at once, and the nested per-disease loops
+        // multiplied the pile (probe: 100K pestilence seed 42 carried
+        // 809,303 concurrent Epidemic entries across 12 agents — 8,396 on
+        // one agent alone — and per-tick cost grew with the pile, blowing
+        // up the run). Dedup against the pending infections caps each
+        // agent at ONE new infection per kind per tick; combined with the
+        // already_infected cross-tick guard that caps concurrent
+        // same-kind diseases at 1, so the vecs stay bounded and the
+        // contagion cost linear. Deterministic (Vec preserves push order;
+        // the dedup check runs before the RNG draw, so the draw sequence
+        // is a deterministic function of the new state).
         {
             let n = self.agents.len();
             let mut new_infections: Vec<(usize, health::DiseaseKind)> = Vec::new();
@@ -5567,11 +5584,17 @@ impl Simulation {
                         if dist > 2 {
                             continue; // too far
                         }
-                        // Already infected with this kind?
+                        // Already infected with this kind (pre-tick state)?
                         let already_infected = self.agent_diseases[j]
                             .iter()
                             .any(|d| d.kind == disease.kind);
                         if already_infected {
+                            continue;
+                        }
+                        // Iteration 185: also skip if a same-kind infection is
+                        // already pending for j THIS tick (see the block
+                        // comment above).
+                        if new_infections.iter().any(|(aj, ak)| *aj == j && *ak == disease.kind) {
                             continue;
                         }
                         // Probability check — reduced by distance and target health
@@ -9820,21 +9843,44 @@ impl Simulation {
                         }
                         let current = self.agents[i].relationship_v2s[rv2_idx].stage;
                         // Direct kinship link: assign (or confirm) its kin stage.
+                        // Iteration 185 (emergent-quality audit — blood-over-
+                        // marital precedence): a marital InLaw edge must NOT
+                        // shadow a genuine blood chain. A pair can carry both
+                        // (a grandparent who married into the family is a
+                        // 2-hop blood ancestor AND an in-law via the marriage);
+                        // the direct-link branch used to assign InLaw from
+                        // whichever edge inserted first, mislabeling blood
+                        // kin. Non-marital links (ParentChild, Sibling,
+                        // Adoptive, Godparent, OathSibling) commit
+                        // immediately; an InLaw link is remembered and only
+                        // assigned after the 2-hop ancestry and cousin scans
+                        // below find no blood chain. Deterministic, no RNG —
+                        // and default golden windows (no kin edges) are
+                        // untouched.
+                        let mut marital_inlaw = false;
                         if let Some(link) = self.kinship_graph.link_between(i, j) {
                             if let Some(stage) =
                                 crate::social::relationship_stages::kin_stage_for_link(link)
                             {
-                                if current != stage {
-                                    let rv2 = &mut self.agents[i].relationship_v2s[rv2_idx];
-                                    rv2.stage = stage;
-                                    rv2.update_identity_metadata();
+                                if link
+                                    == crate::social::kinship::KinshipLink::InLaw
+                                {
+                                    marital_inlaw = true;
+                                } else {
+                                    if current != stage {
+                                        let rv2 =
+                                            &mut self.agents[i].relationship_v2s[rv2_idx];
+                                        rv2.stage = stage;
+                                        rv2.update_identity_metadata();
+                                    }
+                                    // Direct blood/ritual link: commit and move
+                                    // on (never falls into the orphaned reset).
+                                    continue;
                                 }
-                                continue;
                             }
                         }
-                        // No direct link: 2-hop ancestry — j is a grandparent of
-                        // i (or i of j) when a parent of i is a child of j (or
-                        // vice versa).
+                        // 2-hop ancestry — j is a grandparent of i (or i of j)
+                        // when a parent of i is a child of j (or vice versa).
                         let parents_of = |x: usize| -> Vec<usize> {
                             self.kinship_graph
                                 .edges
@@ -9872,6 +9918,19 @@ impl Simulation {
                             let rv2 = &mut self.agents[i].relationship_v2s[rv2_idx];
                             rv2.stage = crate::social::relationship_v2::RelationshipStage::Cousin;
                             rv2.update_identity_metadata();
+                            continue;
+                        }
+                        // No blood chain: only now does a marital InLaw edge
+                        // (or a direct InLaw stage) apply.
+                        if marital_inlaw {
+                            if current
+                                != crate::social::relationship_v2::RelationshipStage::InLaw
+                            {
+                                let rv2 = &mut self.agents[i].relationship_v2s[rv2_idx];
+                                rv2.stage = crate::social::relationship_v2::RelationshipStage::
+                                    InLaw;
+                                rv2.update_identity_metadata();
+                            }
                             continue;
                         }
                         // Orphaned kin stage: the link was removed (death clears
@@ -15351,8 +15410,12 @@ mod tests {
                 .moral_cognition
                 .internalize_norm("No Violence".into(), Fixed::ZERO);
         }
-        // Run past the first violence event (fires early on seed 42).
-        sim.run(500);
+        // Run past the first violence event. Iteration 185 (emergent-
+        // quality audit — calm lethality recalibration): the escalation-
+        // chance 0.3 → 0.12 fix delays seed 42's first violence from ~tick
+        // 2 to ~tick 1,000 (probe: 0 events @500, 1 @1000, 3 @2000), so
+        // the window extends 500 → 2000 to stay past the first event.
+        sim.run(2000);
         let events = sim
             .recent_events(10_000_000)
             .iter()
@@ -15368,7 +15431,7 @@ mod tests {
             .count();
         assert!(
             events >= 1,
-            "seed-42 baseline must produce violence within 500 ticks"
+            "seed-42 baseline must produce violence within 2000 ticks (got {events})"
         );
         for idx in [0usize, 1usize] {
             let norm = sim.agents[idx]
@@ -16096,7 +16159,13 @@ mod tests {
         reverent.populate();
         let mut plain = Simulation::new(config);
         plain.populate();
-        for _ in 0..200 {
+        // Iteration 185 (emergent-quality audit — calm lethality
+        // recalibration): the violence fix calms scandal pressure, so the
+        // reverence differential builds slower — probe-pinned diff 0.0000
+        // @200, 0.0001 @400, 0.0005 @800, 0.0018 @1500 (reverent > plain
+        // throughout the growing phase). The horizon extends 200 → 1500 to
+        // land mid-erosion with a measurable gap.
+        for _ in 0..1500 {
             for a in &mut reverent.agents {
                 a.emotions.awe = Fixed::ONE;
             }

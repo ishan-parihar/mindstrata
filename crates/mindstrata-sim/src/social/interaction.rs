@@ -277,10 +277,21 @@ pub fn choose_interaction(
     // ratcheted to 1.0 for every pair and the witness-reputation system had
     // nothing to witness. Gating on anger keeps conflict correlated with
     // stress, preserving the stress → conflict coupling the system models.
+    // Iteration 185 (P5 emergent re-audit) recalibration: the previous
+    // 0.10/0.12 rates, multiplied by the daily interaction volume (~57
+    // interactions/agent/day), produced ~2372 threats in 2000 calm ticks
+    // (19% of ALL interactions — ~9.5 threats/agent/day) and a
+    // threat→violence→low-trust→more-threats death spiral that collapsed
+    // 5/6 seeds to ≤4/12 alive by 20K (every death cause = Violence).
+    // Calm-baseline hostility is now rare-but-present: low agreeableness
+    // alone yields 2.5% (a genuinely aggressive disposition), elevated
+    // anger 5% (stress-coupled, the drama channel). Conflict remains
+    // reachable (probe: ~250 insults / ~200 threats per 2000 ticks), but
+    // the village no longer massacres itself.
     let negativity_prob = if personality_agreeableness < Fixed::from_f64(0.35) {
-        0.10
+        0.025
     } else if anger > Fixed::from_f64(0.5) {
-        0.12
+        0.05
     } else {
         0.0
     };
@@ -297,7 +308,13 @@ pub fn choose_interaction(
         // converts the threat into cautious talk; toward the designated
         // elder a Respect Elders norm does the same, and toward the Guard
         // Captain an Obey Ruler norm suppresses the defiance)
-        if roll < 0.3 * threat_scale * elder_scale * obey_scale {
+        // Iteration 185 recalibration: 0.3 → 0.12. The 0.3 threaten rate on
+        // the low-trust branch compounded the negativity branch's threat
+        // stream (violence destroys trust, pushing pairs below the 0.2
+        // threshold, which fired more threats → more violence). 0.12 keeps
+        // low-trust pairs hostile-but-cautious (mostly avoidant talk) while
+        // breaking the death spiral.
+        if roll < 0.12 * threat_scale * elder_scale * obey_scale {
             InteractionKind::Threaten
         } else {
             InteractionKind::Talk // cautious talk
