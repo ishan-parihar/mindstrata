@@ -340,7 +340,16 @@ impl RelationshipV2 {
             interaction_count: 0,
             last_positive_tick: 0,
             last_negative_tick: 0,
-            decay_rate: Fixed::from_f64(0.0005),
+            // P5 audit (Iteration 184): recalibrated from 0.0005. The
+            // per-tick dirty-window decay (0.0005 × ~72-tick average window
+            // ≈ 0.036/day) previously exceeded the now-live interaction
+            // gains (9.5 interactions/pair/day × 0.003 ≈ 0.028/day), so
+            // every actively-interacting pair collapsed toward Nemesis.
+            // At 0.0002 the window decay (~0.014/day) sits below the
+            // measured gain — pairs interacting ~10×/day grow, sparse-
+            // contact pairs still drift down. Dormant-boundary decay
+            // (0.0002/day) remains a slow erosion.
+            decay_rate: Fixed::from_f64(0.0002),
             volatility: Fixed::from_f64(0.5),
             last_update_tick: 0,
             dirty: false,
@@ -401,6 +410,14 @@ impl RelationshipV2 {
         self.affection = (self.affection + magnitude * vol * Fixed::from_f64(0.015)).clamp_01();
         self.gratitude = (self.gratitude + magnitude * Fixed::from_f64(0.01)).clamp_01();
         self.resentment = (self.resentment - magnitude * Fixed::from_f64(0.005)).max(Fixed::ZERO);
+        // §10.2 (P5 audit, Iteration 184): intimacy and commitment were
+        // declared but NEVER produced — record_positive had zero production
+        // call sites and the probe pinned intimacy at 0.000 in every window.
+        // Positive interactions now build closeness (intimacy) and
+        // persistence (commitment) at a slower rate than trust.
+        self.intimacy = (self.intimacy + magnitude * vol * Fixed::from_f64(0.01)).clamp_01();
+        self.commitment =
+            (self.commitment + magnitude * vol * Fixed::from_f64(0.008)).clamp_01();
         // §10.2: positive history accumulates into the memory weight.
         self.positive_memory_weight =
             (self.positive_memory_weight + magnitude * Fixed::from_f64(0.01)).clamp_01();
@@ -417,6 +434,11 @@ impl RelationshipV2 {
             (self.affection - magnitude * vol * Fixed::from_f64(0.02)).max(Fixed::ZERO);
         self.resentment = (self.resentment + magnitude * Fixed::from_f64(0.02)).clamp_01();
         self.fear = (self.fear + magnitude * Fixed::from_f64(0.01)).clamp_01();
+        // §10.2 (P5 audit, Iteration 184): hostility erodes closeness and
+        // persistence — mirrors the positive-side intimacy/commitment gains.
+        self.intimacy = (self.intimacy - magnitude * vol * Fixed::from_f64(0.015)).max(Fixed::ZERO);
+        self.commitment =
+            (self.commitment - magnitude * vol * Fixed::from_f64(0.012)).max(Fixed::ZERO);
         // §10.2: negative history accumulates into the memory weight.
         self.negative_memory_weight =
             (self.negative_memory_weight + magnitude * Fixed::from_f64(0.01)).clamp_01();

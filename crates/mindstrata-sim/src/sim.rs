@@ -4619,13 +4619,51 @@ impl Simulation {
                         // status in the speaker's eyes (comfort raises it;
                         // insult/threaten demeans — feeds `quality()`).
                         if ti < n {
+                            // §10.2 (P5 audit, Iteration 184): the V2 deep
+                            // dimensions were structurally disconnected —
+                            // `record_positive`/`record_negative` had ZERO
+                            // production call sites, so intimacy (and until
+                            // now commitment) stayed 0.000 in every probed
+                            // window. The interaction's signed magnitude now
+                            // flows through the designed channels: positive
+                            // interactions build trust/affection/intimacy/
+                            // commitment/gratitude + memory weights, hostile
+                            // ones erode them. These deltas are on the V2
+                            // array — independent of the legacy
+                            // `relationships` per-kind deltas, so nothing is
+                            // double-counted. Zero-RNG, deterministic.
+                            let magnitude = match kind {
+                                mindstrata_core::event::InteractionKind::Help
+                                | mindstrata_core::event::InteractionKind::Comfort => {
+                                    Fixed::from_f64(0.6)
+                                }
+                                mindstrata_core::event::InteractionKind::Threaten
+                                | mindstrata_core::event::InteractionKind::Insult => {
+                                    Fixed::from_f64(0.5)
+                                }
+                                mindstrata_core::event::InteractionKind::Gossip
+                                | mindstrata_core::event::InteractionKind::Talk => {
+                                    Fixed::from_f64(0.3)
+                                }
+                                _ => Fixed::from_f64(0.2),
+                            };
                             let l_pos = Self::relationship_v2_pos(ti, fi);
                             let rv2 = &mut self.agents[ti].relationship_v2s[l_pos];
                             rv2.obligation = (rv2.obligation + effect.obligation_delta).clamp_01();
                             rv2.admiration = (rv2.admiration + effect.reputation_delta).clamp_01();
+                            if kind_is_hostile {
+                                rv2.record_negative(tick_u64, magnitude);
+                            } else {
+                                rv2.record_positive(tick_u64, magnitude);
+                            }
                             let s_pos = Self::relationship_v2_pos(fi, ti);
                             let rv2s = &mut self.agents[fi].relationship_v2s[s_pos];
                             rv2s.respect = (rv2s.respect + effect.status_delta).clamp_01();
+                            if kind_is_hostile {
+                                rv2s.record_negative(tick_u64, magnitude);
+                            } else {
+                                rv2s.record_positive(tick_u64, magnitude);
+                            }
                         }
                     }
                 }
@@ -7570,9 +7608,24 @@ impl Simulation {
     /// Section 19: Marriage formation.
     fn tick_marriage_formation(&mut self, tick_u64: u64, tick: Tick) {
         // ── 19. §19.5.F Marriage formation — compatible age + high affection ──
+        // §10.5 (P5 audit, Iteration 184): same-pass bigamy guard. The
+        // formation loop previously collected `new_marriages` and applied
+        // them only AFTER the full scan, so two agents (i and i') could both
+        // claim the same unpartnered j in one pass — agent j's `partner`
+        // field is still None mid-scan, and the last write won, leaving j
+        // in TWO active marriages with TWO pair bonds (a §10.5 monogamy
+        // violation). Probe-caught on seed 46 (marriages 1↔6 AND 4↔6 both
+        // formed tick 191; the bigamous same-sex couple then fired the
+        // conception lottery, converting the pregnancy-path birth into a
+        // legacy immediate birth). The fix marks both ends of every newly
+        // claimed pair as taken for the REST of this pass, so each agent
+        // can appear in at most one new marriage per tick.
         {
             let n = self.agents.len();
             let mut new_marriages: Vec<(usize, usize)> = Vec::new();
+            // Both ends of every pair claimed this pass — consulted mid-scan
+            // because `partner` is only written in the apply phase below.
+            let mut claimed: Vec<bool> = vec![false; n];
 
             for i in 0..n {
                 if self.agents[i].partner.is_some() {
@@ -7581,11 +7634,17 @@ impl Simulation {
                 if self.agents[i].age < Fixed::from_f64(18.0) {
                     continue; // too young
                 }
+                if claimed[i] {
+                    continue; // claimed by an earlier agent this pass
+                }
 
                 // Find candidate: compatible age, high affection, no partner
                 for j in (i + 1)..n {
                     if self.agents[j].partner.is_some() {
                         continue;
+                    }
+                    if claimed[j] {
+                        continue; // claimed by an earlier agent this pass
                     }
                     if self.agents[j].age < Fixed::from_f64(18.0) {
                         continue;
@@ -7662,6 +7721,8 @@ impl Simulation {
                         Fixed::from_f64(self.rng.get_mut(RngStream::Social).random::<f64>());
                     if rng_val < marriage_chance {
                         new_marriages.push((i, j));
+                        claimed[i] = true;
+                        claimed[j] = true;
                         break; // only one marriage per agent per tick
                     }
                 }
@@ -7688,6 +7749,13 @@ impl Simulation {
                 }
                 self.agents[a].partner = Some(b);
                 self.agents[b].partner = Some(a);
+                // §10.7 (P5 audit, Iteration 184): co-residence — the newly
+                // married spouses merge their (populate-time singleton)
+                // households into one joint household. The populate-time
+                // household pass runs before any marriage exists, so runtime
+                // marriages never co-resided and `tick_household_food_pooling`
+                // (multi-member only) never fired. Deterministic, no RNG.
+                let merged_household = self.merge_spouse_households(a, b);
                 // §10.8: Marriage forges a clan alliance between the spouses' clans.
                 self.forge_clan_alliance(a, b, tick_u64);
                 self.events.push(SimEvent::MarriageFormed {
@@ -7735,6 +7803,7 @@ impl Simulation {
                     self.agents[a].wealth.coin,
                     self.agents[b].wealth.coin,
                 );
+                marriage.household_id = merged_household;
                 self.marriage_registry.marriages.push(marriage);
                 // §10.4 (AP2): Instantiate the romantic pair bond the marriage
                 // institutionalizes. The bond was previously NEVER created in
@@ -8898,6 +8967,10 @@ impl Simulation {
                 }) {
                     m.dissolve(&crate::social::marriage::DissolutionCause::Separation);
                 }
+                // §10.7 (P5 audit, Iteration 184): separation ends
+                // co-residence — the joint household splits back into
+                // singletons (children stay with the first spouse).
+                self.split_spouse_household(*a, *b);
             }
             self.marriage_registry.pair_bonds.retain(|pb| {
                 let pair = (
@@ -8906,6 +8979,52 @@ impl Simulation {
                 );
                 !dissolving.contains(&pair)
             });
+        }
+    }
+
+    /// §10.7 (P5 audit, Iteration 184): co-residence — merge the two
+    /// spouses' households into one joint household at marriage formation.
+    /// The merge is in-place (B's members fold into A, B's vec entry is
+    /// emptied as a tombstone) so Vec indices never shift and the O(1)
+    /// household lookups elsewhere stay valid. Deterministic, no RNG.
+    /// Returns the merged household index (None if either spouse has none).
+    fn merge_spouse_households(&mut self, a: usize, b: usize) -> Option<usize> {
+        let hh_a = self.households.iter().position(|h| h.members.contains(&a));
+        let hh_b = self.households.iter().position(|h| h.members.contains(&b));
+        if let (Some(ia), Some(ib)) = (hh_a, hh_b) {
+            if ia != ib {
+                let members_b: Vec<usize> = self.households[ib].members.clone();
+                for m in members_b {
+                    if m != b {
+                        self.households[ia].add_member(m);
+                    }
+                }
+                self.households[ia].add_member(b);
+                self.households[ia].head = Some(a);
+                self.households[ib].members.clear();
+                self.households[ib].roles.clear();
+            }
+            return Some(ia);
+        }
+        None
+    }
+
+    /// §10.7 (P5 audit, Iteration 184): separation ends co-residence —
+    /// remove spouse B from the joint household (children stay with A); if
+    /// the household empties it stays as a tombstone. Deterministic, no RNG.
+    fn split_spouse_household(&mut self, a: usize, b: usize) {
+        for hh in &mut self.households {
+            if hh.members.contains(&a) && hh.members.contains(&b) {
+                if let Some(pos) = hh.members.iter().position(|m| *m == b) {
+                    hh.members.remove(pos);
+                    if pos < hh.roles.len() {
+                        hh.roles.remove(pos);
+                    }
+                }
+                if hh.head == Some(b) {
+                    hh.head = hh.members.first().copied();
+                }
+            }
         }
     }
 
@@ -9817,6 +9936,13 @@ impl Simulation {
                         affection,
                     ) {
                         self.agents[i].relationship_v2s[rv2_idx].stage = new_stage;
+                        // P5 audit (Iteration 184): stages now move daily
+                        // (V2 trust/affection are interaction-live), so the
+                        // identity metadata must refresh in the same pass —
+                        // otherwise public/private labels lag a full day
+                        // behind the stage and end-state snapshots catch
+                        // the desync. Deterministic, no RNG.
+                        self.agents[i].relationship_v2s[rv2_idx].update_identity_metadata();
                     } else if let Some(new_stage) =
                         crate::social::relationship_stages::try_regress_stage(
                             current_stage,
@@ -9825,6 +9951,7 @@ impl Simulation {
                         )
                     {
                         self.agents[i].relationship_v2s[rv2_idx].stage = new_stage;
+                        self.agents[i].relationship_v2s[rv2_idx].update_identity_metadata();
                     }
                 }
             }
