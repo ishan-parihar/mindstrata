@@ -1025,6 +1025,20 @@ impl Simulation {
             let epistemic_state =
                 crate::social::epistemic::EpistemicState::from_personality(&personality);
             let personality_clone = personality.clone();
+            // The populate-RNG draws for identity strengths, moral values,
+            // wealth, and the developmental (caregiver/trauma) pair are hoisted
+            // HERE — before the literal, in their exact current stream order —
+            // so the shared `trauma_history` can feed BOTH the interoception's
+            // documented `trauma_load` input (§8.1, previously hardcoded ZERO
+            // — deadening the ×0.3 trauma term in `negative_bias`) and the
+            // attachment system, with the populate stream byte-identical.
+            let identity_farmer = Fixed::from_f64(populate_rng.random_range(0.3..0.8));
+            let identity_parent = Fixed::from_f64(populate_rng.random_range(0.0..0.5));
+            let identity_believer = Fixed::from_f64(populate_rng.random_range(0.2..0.7));
+            let moral_values = MoralValues::random(&mut populate_rng);
+            let wealth_coin = Fixed::from_f64(populate_rng.random_range(5.0..20.0));
+            let caregiver_security = Fixed::from_f64(populate_rng.random_range(0.3..0.8));
+            let trauma_history = Fixed::from_f64(populate_rng.random_range(0.0..0.3));
             self.agents.push(AgentBundle {
                 body: BodyState::from(&embodied),
                 needs,
@@ -1043,31 +1057,29 @@ impl Simulation {
                     identities: vec![
                         crate::person::AgentIdentity {
                             kind: IdentityKind::Farmer,
-                            strength: Fixed::from_f64(populate_rng.random_range(0.3..0.8)),
+                            strength: identity_farmer,
                         },
                         crate::person::AgentIdentity {
                             kind: IdentityKind::Parent,
-                            strength: Fixed::from_f64(populate_rng.random_range(0.0..0.5)),
+                            strength: identity_parent,
                         },
                         crate::person::AgentIdentity {
                             kind: IdentityKind::Believer,
-                            strength: Fixed::from_f64(populate_rng.random_range(0.2..0.7)),
+                            strength: identity_believer,
                         },
                     ],
                 },
                 attention: AttentionState::default(),
                 intention: None,
                 routine: DailyRoutine::village_routine(),
-                moral_values: MoralValues::random(&mut populate_rng),
+                moral_values,
                 cognitive: CognitiveState::default(),
                 derived: DerivedMentalState::default(),
                 relational_fields: Default::default(),
                 recent_successes: 0,
                 recent_attempts: 0,
                 age: agent_age,
-                wealth: WealthState {
-                    coin: Fixed::from_f64(populate_rng.random_range(5.0..20.0)),
-                },
+                wealth: WealthState { coin: wealth_coin },
                 conflict: ConflictState::default(),
                 cultural: CulturalState::default(),
                 partner: None,
@@ -1082,15 +1094,15 @@ impl Simulation {
                 embodied,
                 interoception: {
                     let mut inter = crate::psychology::InteroceptiveState::default();
-                    inter.initialize_from_personality(neuroticism, openness, Fixed::ZERO);
+                    inter.initialize_from_personality(neuroticism, openness, trauma_history);
                     inter
                 },
                 self_model: crate::psychology::SelfModel::default(),
                 attachment: {
                     let mut att = crate::psychology::AttachmentSystem::default();
                     att.initialize(
-                        Fixed::from_f64(populate_rng.random_range(0.3..0.8)), // caregiver security
-                        Fixed::from_f64(populate_rng.random_range(0.0..0.3)), // trauma history
+                        caregiver_security,
+                        trauma_history,
                         attachment_vulnerability,
                     );
                     att

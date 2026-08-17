@@ -385,3 +385,11 @@ Retracted during vetting: `rumor_v2` (fully live — create/register/tick_all/tr
 **Also closed:** remaining clippy debt across the retained probe examples (named-arg format strings, dead `body_hunger/thirst` accumulators, an unreachable `InteractionKind` wildcard, doc-list indentation) — **clippy fully clean, 0 warnings workspace-wide.**
 
 **Final gate: sim 993/0 (992 + 1 new), full tests-crate 304/0, clippy clean, golden byte-identical (zero-blast wiring).**
+
+## Iteration 194 — interoception trauma_load wired (the last ZERO-input init gap)
+
+**Finding 17 — `initialize_from_personality`'s documented `trauma_load` was hardcoded ZERO (FIXED).** The §8.1 interoception init signature takes `(neuroticism, openness, trauma_load)` and its doc-comment says "Initialize interoceptive state from personality traits and trauma history" — but the populate call site passed `Fixed::ZERO`, deadening the `trauma_load × 0.3` term in `negative_bias`. Meanwhile the attachment block immediately below drew a `trauma_history` 0.0–0.3 for the same agent. The wiring was purely missing: a trauma-loaded agent's `negative_bias` should rise, amplifying felt hunger/thirst/pain and feeding higher depression risk downstream (`felt_need_deficit`, sim.rs §17 derived-state pass).
+
+**Zero-stream-diff wiring:** the identity×3 + moral_values + wealth + caregiver/trauma populate-RNG draws are hoisted into `let`s immediately before the `AgentBundle` literal **in their exact current stream order**, so the shared `trauma_history` now feeds BOTH the interoception (`trauma_load`) and the attachment system with the populate stream byte-identical. Probe-verified: `intero.negative_bias` mean 0.386 (min 0.268, max 0.496) across scenarios — the trauma term is live. New unit test `trauma_load_amplifies_negative_bias` (trauma 0.3 adds 0.09 ± 0.01 to negative_bias, control at trauma 0).
+
+**Zero re-pin wave:** the golden baseline, all snapshots, and all 304 calibration tests pass unchanged — the negative_bias delta (≤0.09) stays below every decision threshold in the default Secondary-tier population (the felt_need_deficit consumer is Focal-gated), so behavior is byte-identical in production windows. **Final gate: sim 994/0 (993 + 1 new), full tests-crate 304/0, golden byte-identical, clippy clean.**

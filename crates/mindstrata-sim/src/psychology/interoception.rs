@@ -275,4 +275,19 @@ mod tests {
         state.initialize_from_personality(Fixed::from_f64(0.8), Fixed::from_f64(0.5), Fixed::ZERO);
         assert!(state.negative_bias > Fixed::from_f64(0.3));
     }
+
+    #[test]
+    fn trauma_load_amplifies_negative_bias() {
+        let mut low = InteroceptiveState::default();
+        low.initialize_from_personality(Fixed::from_f64(0.5), Fixed::from_f64(0.5), Fixed::ZERO);
+        let mut high = InteroceptiveState::default();
+        high.initialize_from_personality(
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.3),
+        );
+        let delta = high.negative_bias - low.negative_bias;
+        assert!(delta > Fixed::from_f64(0.08));
+        assert!(delta < Fixed::from_f64(0.10));
+    }
 }
