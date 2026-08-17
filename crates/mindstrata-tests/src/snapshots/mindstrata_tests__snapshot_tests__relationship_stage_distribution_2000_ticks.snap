@@ -5,9 +5,9 @@ expression: stage_counts
 ---
 {
     "Acquaintance": 8,
-    "Ally": 75,
+    "Ally": 77,
     "CloseFriend": 2,
-    "Confidant": 4,
+    "Confidant": 2,
     "ElderJunior": 5,
     "Familiar": 12,
     "Friend": 4,

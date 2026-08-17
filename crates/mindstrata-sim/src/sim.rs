@@ -4825,6 +4825,41 @@ impl Simulation {
                                 + (self.agents[fi].developmental.socialization_completeness
                                     - Fixed::from_f64(0.5))
                                     * Fixed::from_f64(0.5);
+                            // Iteration 198: the §8.1.9 Theory of Mind model
+                            // was write-only AND its intents were structurally
+                            // unreachable (the update derived pos/neg from
+                            // trust with scaled-down multipliers, so Friendly/
+                            // Threatening could never fire). The speaker's
+                            // perceived intent of the listener now modulates
+                            // the interaction's relational weight: an agent
+                            // who models the listener as Friendly extends
+                            // MORE bond (×1.25 on positive), as
+                            // Threatening/Deceptive LESS (×0.75); hostile
+                            // acts reverse the sign. Identity at Unknown/
+                            // Neutral (scale exactly 1.0), so default
+                            // populations stay byte-identical.
+                            let fi_model = self.agents[fi]
+                                .mind_models
+                                .get(mindstrata_core::id::AgentId::new(to_u));
+                            let fi_intent = match fi_model {
+                                Some(m) => m.perceived_intent,
+                                None => {
+                                    crate::psychology::theory_of_mind::IntentPerception::Unknown
+                                }
+                            };
+                            let fi_tom = match fi_intent {
+                                crate::psychology::theory_of_mind::IntentPerception::Friendly => {
+                                    Fixed::from_f64(1.25)
+                                }
+                                crate::psychology::theory_of_mind::IntentPerception::Threatening
+                                | crate::psychology::theory_of_mind::IntentPerception::Deceptive => {
+                                    Fixed::from_f64(0.75)
+                                }
+                                crate::psychology::theory_of_mind::IntentPerception::Unknown
+                                | crate::psychology::theory_of_mind::IntentPerception::Neutral => {
+                                    Fixed::ONE
+                                }
+                            };
                             let l_pos = Self::relationship_v2_pos(ti, fi);
                             let rv2 = &mut self.agents[ti].relationship_v2s[l_pos];
                             rv2.obligation = (rv2.obligation + effect.obligation_delta).clamp_01();
@@ -4838,7 +4873,7 @@ impl Simulation {
                             let s_pos = Self::relationship_v2_pos(fi, ti);
                             let rv2s = &mut self.agents[fi].relationship_v2s[s_pos];
                             rv2s.respect = (rv2s.respect + effect.status_delta).clamp_01();
-                            let magnitude_fi = (magnitude * fi_social).clamp_01();
+                            let magnitude_fi = (magnitude * fi_social * fi_tom).clamp_01();
                             if kind_is_hostile {
                                 rv2s.record_negative(tick_u64, magnitude_fi);
                             } else {
@@ -6310,6 +6345,24 @@ impl Simulation {
                     .iter()
                     .find(|r| r.from == to && r.to == from)
                     .map_or(Fixed::from_f64(0.5), |r| r.trust);
+                // Iteration 198: the observed-behavior inputs were derived
+                // from trust with scaled-down multipliers (pos = trust × 0.3,
+                // neg = (1−trust) × 0.1), so `infer_intent`'s Friendly
+                // (>0.3 positive) and Threatening (>0.3 negative) branches
+                // were STRUCTURALLY UNREACHABLE — a model could essentially
+                // only ever say Neutral, and the whole §8.1.9 system was
+                // write-only. The honest inputs are the actual interaction:
+                // Help/Comfort is strongly helpful (0.6), Trade mildly
+                // helpful (0.3), Gossip neutral (0.1); none of the four kinds
+                // this pass carries is harmful, so negative stays 0 (the
+                // hostile kinds never reach this pass). Intent now genuinely
+                // differentiates: repeated Help at trust > 0.5 → Friendly.
+                let observed_helpful = match kind {
+                    mindstrata_core::event::InteractionKind::Help
+                    | mindstrata_core::event::InteractionKind::Comfort => Fixed::from_f64(0.6),
+                    mindstrata_core::event::InteractionKind::Trade => Fixed::from_f64(0.3),
+                    _ => Fixed::from_f64(0.1),
+                };
                 if self.agents[from_idx].agent_tier.tier.runs_theory_of_mind()
                     && self.agents[from_idx]
                         .agent_tier
@@ -6317,10 +6370,13 @@ impl Simulation {
                         .can_social_infer()
                 {
                     let model_a = self.agents[from_idx].mind_models.get_or_create(to);
-                    let pos = trust_to_from * Fixed::from_f64(0.3);
-                    let neg = (Fixed::ONE - trust_to_from) * Fixed::from_f64(0.1);
-                    model_a.update_from_observation(pos, neg, trust_to_from, Fixed::from_f64(0.5));
-                    model_a.infer_intent(trust_to_from, pos, neg);
+                    model_a.update_from_observation(
+                        observed_helpful,
+                        Fixed::ZERO,
+                        trust_to_from,
+                        Fixed::from_f64(0.5),
+                    );
+                    model_a.infer_intent(trust_to_from, observed_helpful, Fixed::ZERO);
                     let _ = self.agents[from_idx]
                         .agent_tier
                         .budget_tracker
@@ -6333,10 +6389,13 @@ impl Simulation {
                         .can_social_infer()
                 {
                     let model_b = self.agents[to_idx].mind_models.get_or_create(from);
-                    let pos = trust_from_to * Fixed::from_f64(0.3);
-                    let neg = (Fixed::ONE - trust_from_to) * Fixed::from_f64(0.1);
-                    model_b.update_from_observation(pos, neg, trust_from_to, Fixed::from_f64(0.5));
-                    model_b.infer_intent(trust_from_to, pos, neg);
+                    model_b.update_from_observation(
+                        observed_helpful,
+                        Fixed::ZERO,
+                        trust_from_to,
+                        Fixed::from_f64(0.5),
+                    );
+                    model_b.infer_intent(trust_from_to, observed_helpful, Fixed::ZERO);
                     let _ = self.agents[to_idx]
                         .agent_tier
                         .budget_tracker

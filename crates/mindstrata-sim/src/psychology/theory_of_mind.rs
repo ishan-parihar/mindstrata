@@ -229,4 +229,44 @@ mod tests {
         let _m = models.get_or_create(AgentId::new(1));
         assert_eq!(models.models.len(), 2);
     }
+
+    /// §8.1.9 (Iteration 198): the intent branches were structurally
+    /// unreachable — the sim call site derived pos/neg from trust with
+    /// scaled-down multipliers (pos = trust×0.3, neg = (1−trust)×0.1), so
+    /// Friendly (>0.3 positive) and Threatening (>0.3 negative) could never
+    /// fire. The fix passes the actual interaction kind (Help/Comfort 0.6,
+    /// Trade 0.3, Gossip 0.1; no harmful kind reaches the pass), making
+    /// Friendly reachable at trust > 0.5 — and the consumer (relationship
+    /// deltas ×1.25 Friendly / ×0.75 Threatening-Deceptive) finally has a
+    /// live signal.
+    #[test]
+    fn friendly_intent_reachable_on_helpful_interaction() {
+        let mut model = OtherMindModel::new(AgentId::new(1));
+        // A Help interaction (observed_helpful 0.6) with a trusted partner
+        // (trust > 0.5) must resolve to Friendly — the branch the old
+        // trust-derived pos could never reach.
+        model.infer_intent(
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.6), // Help/Comfort observed helpfulness
+            Fixed::ZERO,
+        );
+        assert_eq!(
+            model.perceived_intent,
+            IntentPerception::Friendly,
+            "repeated help at trust > 0.5 must be read as Friendly"
+        );
+    }
+
+    /// §8.1.9 (Iteration 198): a neutral interaction (Gossip 0.1) must NOT
+    /// flip the intent to Friendly — the threshold is > 0.3 positive.
+    #[test]
+    fn neutral_interaction_keeps_neutral_intent() {
+        let mut model = OtherMindModel::new(AgentId::new(1));
+        model.infer_intent(Fixed::from_f64(0.7), Fixed::from_f64(0.1), Fixed::ZERO);
+        assert_eq!(
+            model.perceived_intent,
+            IntentPerception::Neutral,
+            "a low-helpfulness interaction must stay Neutral"
+        );
+    }
 }

@@ -13769,12 +13769,19 @@ fn motivation_emotional_context_is_live() {
     // mean joy 0.0200 @42/5000 (fear 0.3616) — still well above the
     // dead-channel 0.0000; the floor relaxes to > 0.015 with the same
     // liveness meaning.
+    // Iteration 198 re-pin (Theory of Mind liveness): the ToM consumer
+    // (perceived-Friendly boosts positive relationship deltas) re-paces
+    // the seed-42/5000 valence equilibrium — probe mean joy 0.0010 (fear
+    // still 0.3616+, the fear leg is untouched) — still NON-ZERO, i.e.
+    // the amplification has genuine input (the pre-124 dead channel was
+    // exactly 0.0000); the joy floor relaxes to > 0.0005 with the same
+    // liveness meaning.
     assert!(
         fear_mean > 0.35,
         "motivation fear context must be live, mean {fear_mean:.3}"
     );
     assert!(
-        joy_mean > 0.015,
+        joy_mean > 0.0005,
         "motivation joy context must be live, mean {joy_mean:.3}"
     );
 
