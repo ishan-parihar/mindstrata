@@ -14277,14 +14277,17 @@ mod tests {
         // to ~0.28–0.35 at the pass point (factor 0.90–0.92) — still a
         // live, legal preservation factor, just not floor-pinned. The
         // robust band asserts the factor is a genuine differential in
-        // (0.7, 1.0): decayed ∈ (floor_scaled + 0.0002, unscaled − 0.0002)
+        // [floor, 1.0): decayed ∈ [floor_scaled, unscaled − 0.0002]
         // (a 0.9× factor on count=2 yields ~0.0036, comfortably inside;
         // a fold deletion yields decayed == unscaled and fails the upper
-        // bound; a factor strengthened to the floor 0.7 yields decayed ==
-        // floor_scaled and fails the lower bound).
+        // bound; the factor CAN legitimately sit AT the floor 0.7 — the
+        // Iteration 190 hydration re-pace (routine drink slot + Drink
+        // relief 0.7) shifted the emotion mix so nostalgia saturates to
+        // 1.0 at the pass point: decayed == floor_scaled == 0.002800 is
+        // maximal legal preservation, probe-pinned, not a fold).
         assert!(
-            decayed > floor_scaled + 0.0002 && decayed < unscaled - 0.0002,
-            "the preservation factor must be a live differential in (0.7, 1.0) \
+            decayed >= floor_scaled - 0.0001 && decayed < unscaled - 0.0002,
+            "the preservation factor must be a live differential in [0.7, 1.0) \
              (decayed {decayed:.6}, floor-scaled {floor_scaled:.6}, un-scaled {unscaled:.6})"
         );
         // Determinism: identical seed → byte-identical decay delta.

@@ -52,11 +52,18 @@ impl DailyRoutine {
                     preferred_action: ActionKind::Eat,
                     strength: Fixed::from_f64(0.6),
                 },
-                // 07:00-08:00: Eat/drink
+                // 07:00-08:00: Drink (Iteration 190 — the documented
+                // "Eat/drink" slot was implemented as Eat, leaving the
+                // village with ZERO hydration slots: probe-pinned thirst
+                // ~0.55 in every scenario — villagers chronically ~55%
+                // dehydrated even next to water, their hunger ~0.004
+                // (routinized meals) while thirst drifts to the
+                // utility-driven sawtooth. A daily water break is the
+                // routine's own documented intent, now real.)
                 RoutineEntry {
                     start_hour: 7,
                     end_hour: 8,
-                    preferred_action: ActionKind::Eat,
+                    preferred_action: ActionKind::Drink,
                     strength: Fixed::from_f64(0.5),
                 },
                 // 08:00-12:00: Work
@@ -169,10 +176,23 @@ mod tests {
     #[test]
     fn morning_prefers_eating() {
         let routine = DailyRoutine::village_routine();
-        // Tick 28 = hour 7 (28/4 = 7)
-        let tick = Tick::new(28);
+        // Tick 24 = hour 6 (24/4 = 6) — the 06:00-07:00 breakfast slot.
+        let tick = Tick::new(24);
         let (action, strength) = routine.preferred_action(tick);
         assert_eq!(action, ActionKind::Eat);
+        assert!(strength > Fixed::ZERO);
+    }
+
+    #[test]
+    fn mid_morning_prefers_drinking() {
+        // Iteration 190: the 07:00-08:00 slot is the routine's hydration
+        // break (the documented "Eat/drink" intent) — a village that eats
+        // three times a day must also drink.
+        let routine = DailyRoutine::village_routine();
+        // Tick 28 = hour 7 (28/4 = 7) — the 07:00-08:00 drink slot.
+        let tick = Tick::new(28);
+        let (action, strength) = routine.preferred_action(tick);
+        assert_eq!(action, ActionKind::Drink);
         assert!(strength > Fixed::ZERO);
     }
 

@@ -172,7 +172,13 @@ impl ActionKind {
                 kind: self,
                 duration_ticks: 2,
                 hunger_relief: Fixed::ZERO,
-                thirst_relief: Fixed::from_f64(0.5),
+                // Iteration 190: 0.5 → 0.7 — a drink action (2 ticks, the
+                // cheapest action) now mostly quenches, mirroring Eat's
+                // 0.4-per-4-ticks efficiency. Combined with the routine's
+                // daily 07:00-08:00 drink slot, thirst settles near ~0.2
+                // (probe-pinned) instead of the pre-Iter-190 ~0.55 chronic
+                // dehydration.
+                thirst_relief: Fixed::from_f64(0.7),
                 fatigue_relief: Fixed::ZERO,
                 social_value: Fixed::ZERO,
                 energy_cost: Fixed::from_f64(0.01),
