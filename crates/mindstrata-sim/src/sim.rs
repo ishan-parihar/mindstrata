@@ -2949,6 +2949,13 @@ impl Simulation {
                 let ambient_temperature = self.weather.temperature;
                 let crowding = Fixed::from_f64(0.3); // village-level crowding
                 let hygiene = Fixed::from_f64(0.6); // moderate hygiene
+                // §7.2.2 (Iteration 188 — the S2-2-2 hunger/thirst channel):
+                // the endocrine acute-stress term now reads the LIVE needs
+                // (the same values the Eat/Drink decisions use) instead of
+                // the frozen embodied facade fields — famine starvation and
+                // chronic dehydration genuinely elevate cortisol.
+                let live_hunger = self.agents[i].needs.hunger;
+                let live_thirst = self.agents[i].needs.thirst;
                 self.agents[i].embodied.tick_update(
                     threat_level,
                     social_safety,
@@ -2957,6 +2964,8 @@ impl Simulation {
                     ambient_temperature,
                     crowding,
                     hygiene,
+                    live_hunger,
+                    live_thirst,
                     &self.params,
                 );
                 // Sync derived body fields from EmbodiedState back to legacy BodyState.

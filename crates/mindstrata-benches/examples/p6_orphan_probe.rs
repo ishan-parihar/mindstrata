@@ -58,6 +58,8 @@ fn main() {
         let (mut endo_stress, mut endo_bonding, mut endo_dominance) = (0.0f64, 0.0f64, 0.0f64);
         let (mut sleep_pressure, mut sleep_debt) = (0.0f64, 0.0f64);
         let mut threat_bias = 0.0f64;
+        let (mut needs_hunger, mut needs_thirst) = (0.0f64, 0.0f64);
+        let (mut body_hunger, mut body_thirst) = (0.0f64, 0.0f64);
         let mut kinds: BTreeSet<String> = BTreeSet::new();
         let mut total_diseases = 0usize;
         for (i, a) in sim.agents.iter().enumerate() {
@@ -69,6 +71,10 @@ fn main() {
             sleep_pressure += a.embodied.circadian.sleep_pressure.to_f64();
             sleep_debt += a.embodied.circadian.sleep_debt.to_f64();
             threat_bias += a.attention.threat_bias.to_f64();
+            needs_hunger += a.needs.hunger.to_f64();
+            needs_thirst += a.needs.thirst.to_f64();
+            body_hunger += a.body.hunger.to_f64();
+            body_thirst += a.body.thirst.to_f64();
             total_diseases += sim.agent_diseases[i].len();
             for d in &sim.agent_diseases[i] {
                 kinds.insert(format!("{d:?}"));
@@ -78,7 +84,8 @@ fn main() {
         println!(
             "[{scen_name} @{horizon}] n={n:.0} | endo_arousal={:.3} affect_arousal={:.3} \
              | threat_bias={:.3} | endo_stress={:.3} endo_bonding={:.3} endo_dominance={:.3} \
-             | sleep_pressure={:.3} sleep_debt={:.3} | diseases={total_diseases} kinds={kinds:?}",
+             | sleep_pressure={:.3} sleep_debt={:.3} | needs_hunger={:.3} needs_thirst={:.3} \
+             | body_hunger={:.3} body_thirst={:.3} | diseases={total_diseases} kinds={kinds:?}",
             endo_arousal / n,
             affect_arousal / n,
             threat_bias / n,
@@ -87,6 +94,10 @@ fn main() {
             endo_dominance / n,
             sleep_pressure / n,
             sleep_debt / n,
+            needs_hunger / n,
+            needs_thirst / n,
+            body_hunger / n,
+            body_thirst / n,
         );
     }
 }

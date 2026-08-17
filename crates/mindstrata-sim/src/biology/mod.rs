@@ -269,6 +269,8 @@ impl EmbodiedState {
         ambient_temperature: Fixed,
         crowding: Fixed,
         hygiene: Fixed,
+        hunger: Fixed,
+        thirst: Fixed,
         params: &crate::parameters::SimParameters,
     ) {
         // 1. Circadian — advances time of day
@@ -290,9 +292,20 @@ impl EmbodiedState {
 
         // 3. Endocrine — hormonal axes
         let parasympathetic = self.nervous.parasympathetic_tone;
+        // §7.2.2 (Iteration 188 — the S2-2-2 hunger/thirst channel): the
+        // legacy `self.hunger`/`self.thirst` facade fields are frozen at
+        // birth (0.2/0.1) — the acute-stress term `hunger×0.3 + thirst×0.2`
+        // was a constant ~0.08 in EVERY scenario, so famine starvation
+        // never elevated cortisol (probe: famine stress == calm stress ==
+        // 0.333 @50K — the axis only moved under pain). The axis now reads
+        // the LIVE needs track (the same values the Eat/Drink decisions
+        // use) passed in as params, exactly like crowding/hygiene:
+        // dehydration (thirst ≈ 0.55–0.62 in every calibrated world) is a
+        // real cortisol driver and a starving agent's hunger feeds the
+        // axis during a famine window. Deterministic, no RNG.
         let acute_stress = self.nervous.pain.effective_pain()
-            + self.hunger * Fixed::from_f64(0.3)
-            + self.thirst * Fixed::from_f64(0.2);
+            + hunger * Fixed::from_f64(0.3)
+            + thirst * Fixed::from_f64(0.2);
         self.endocrine.stress.update(
             acute_stress,
             parasympathetic,
@@ -518,6 +531,8 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.3),
             Fixed::from_f64(0.7),
+            Fixed::from_f64(0.4),
+            Fixed::from_f64(0.4),
             &crate::parameters::SimParameters::default(),
         );
         // Should not panic and values should remain in range
@@ -537,9 +552,54 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::ZERO,
             Fixed::ONE,
+            Fixed::ZERO,
+            Fixed::ZERO,
             &crate::parameters::SimParameters::default(),
         );
         assert!(embodied.nervous.sleep_pressure < Fixed::from_f64(0.8));
+    }
+
+    #[test]
+    fn stress_axis_rises_with_live_hunger_and_thirst() {
+        // §7.2.2 (Iteration 188 — the S2-2-2 hunger/thirst channel): the
+        // acute-stress term is `pain + hunger×0.3 + thirst×0.2`. A starving
+        // + dehydrated agent (0.9/0.9) must accumulate a higher cortisol
+        // level than a fed one (0.1/0.1) at identical pain/threat — the
+        // channel the frozen facade fields previously made a constant.
+        let run = |hunger: Fixed, thirst: Fixed| {
+            let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+            let mut embodied = EmbodiedState::random(Fixed::from_f64(25.0), &mut rng);
+            // Pin identical starting stress (default 0.2) and zero pain/threat.
+            embodied.endocrine.stress.level = Fixed::from_f64(0.2);
+            embodied.nervous.pain.acute = Fixed::ZERO;
+            embodied.nervous.pain.chronic = Fixed::ZERO;
+            for _ in 0..200 {
+                embodied.tick_update(
+                    Fixed::ZERO, // threat
+                    Fixed::ONE,   // social safety
+                    false,
+                    Fixed::from_f64(0.1), // activity
+                    Fixed::from_f64(0.5), // ambient
+                    Fixed::from_f64(0.3), // crowding
+                    Fixed::from_f64(0.6), // hygiene
+                    hunger,
+                    thirst,
+                    &crate::parameters::SimParameters::default(),
+                );
+            }
+            embodied.endocrine.stress.level
+        };
+        let fed = run(Fixed::from_f64(0.1), Fixed::from_f64(0.1));
+        let starved = run(Fixed::from_f64(0.9), Fixed::from_f64(0.9));
+        assert!(
+            starved > fed,
+            "a starving+dehydrated agent must accumulate more cortisol than a fed one \
+             (starved {starved:.4} vs fed {fed:.4})"
+        );
+        // The fed agent's acute term (0.1×0.3 + 0.1×0.2 = 0.05) keeps it in
+        // the calm band; the starved term (0.45) must push past it.
+        assert!(fed < Fixed::from_f64(0.4), "fed agent stays calm (got {fed:.4})");
+        assert!(starved > Fixed::from_f64(0.4), "starved agent rises (got {starved:.4})");
     }
 
     fn derived_health_in_range(e: &EmbodiedState) -> bool {
