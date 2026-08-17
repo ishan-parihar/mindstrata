@@ -3334,10 +3334,25 @@ impl Simulation {
                     let moral_achievements = (emotions[i].pride * Fixed::from_f64(0.3)
                         + emotions[i].trust * Fixed::from_f64(0.2))
                     .clamp_01();
+                    // Iteration 195: the §17 developmental psychology
+                    // state was 100% write-only (computed every centum
+                    // for Focal agents, consumed by NOTHING — the whole
+                    // subsystem was a dead ratchet). `moral_development`
+                    // (Kohlberg stage) is the natural modulator of the
+                    // internalized shame/pride response in the moral
+                    // cognition update that runs on the SAME Focal gate,
+                    // so the developmental pipeline finally feeds
+                    // behavior. Zero-blast: moral emotions are
+                    // probe-confirmed 0.000 in calm/famine/pestilence
+                    // windows, and this consumer is Focal-gated like the
+                    // producer.
+                    let moral_development =
+                        self.agents[i].developmental.moral_development;
                     self.agents[i].moral_cognition.update_moral_emotions(
                         witnessed_violations,
                         personal_violations,
                         moral_achievements,
+                        moral_development,
                     );
                 }
 

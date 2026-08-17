@@ -190,23 +190,40 @@ impl MoralCognition {
     }
 
     /// Update moral emotions based on recent events.
+    ///
+    /// `moral_development` (Kohlberg stage 0 = preconventional, 1 =
+    /// postconventional) scales the internalized shame/pride response: a
+    /// more-developed agent feels its own violations and achievements more
+    /// sharply. Baseline-corrected against the default stage (0.4) so the
+    /// default is an EXACT no-op (scale 1.0) and only evolved development
+    /// modulates — the interoception `felt_need_deficit` pattern, keeping
+    /// populate-default populations byte-identical while the §17
+    /// developmental pipeline genuinely feeds behavior as it advances.
     pub fn update_moral_emotions(
         &mut self,
         witnessed_violations: Fixed,
         personal_violations: Fixed,
         moral_achievements: Fixed,
+        moral_development: Fixed,
     ) {
+        // 1.0 at the default stage 0.4 → ±~1.5 at the extremes (0.0/1.0),
+        // clamped to [0.5, 2.0] defensively.
+        let development_scale = (Fixed::ONE
+            + (moral_development - Fixed::from_f64(0.4)) * Fixed::from_f64(1.5))
+        .clamp(Fixed::from_f64(0.5), Fixed::from_f64(2.0));
         // Outrage builds from witnessed violations
         self.moral_emotions.outrage = (self.moral_emotions.outrage
             + witnessed_violations * self.foundations.fairness * Fixed::from_f64(0.05))
         .clamp_01();
         // Shame from personal violations
         self.moral_emotions.shame = (self.moral_emotions.shame
-            + personal_violations * self.moral_identity * Fixed::from_f64(0.05))
+            + personal_violations * self.moral_identity * development_scale
+                * Fixed::from_f64(0.05))
         .clamp_01();
         // Pride from moral achievements
         self.moral_emotions.pride = (self.moral_emotions.pride
-            + moral_achievements * self.moral_identity * Fixed::from_f64(0.03))
+            + moral_achievements * self.moral_identity * development_scale
+                * Fixed::from_f64(0.03))
         .clamp_01();
 
         // Decay all moral emotions
@@ -421,5 +438,44 @@ mod tests {
         low.internalize_norm("no_theft".into(), Fixed::from_f64(0.3));
         low.record_witnessed_enforcement("no_theft");
         assert_eq!(low.hypocrisy_factor("no_theft"), Fixed::ZERO);
+    }
+
+    /// §17 (Iteration 195): `moral_development` (Kohlberg stage) modulates
+    /// the internalized shame/pride response — a more-developed agent feels
+    /// its own violations and achievements more sharply. The scale is
+    /// 0.5 + development×0.5: 0.7 at the default 0.4, 1.0 at full
+    /// postconventional development.
+    #[test]
+    fn moral_development_amplifies_shame_and_pride() {
+        let mut low = MoralCognition::default();
+        let mut high = MoralCognition::default();
+        low.update_moral_emotions(
+            Fixed::ZERO,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.4), // default developmental stage
+        );
+        high.update_moral_emotions(
+            Fixed::ZERO,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::ONE, // fully postconventional
+        );
+        assert!(
+            high.moral_emotions.shame > low.moral_emotions.shame,
+            "higher moral development must amplify shame ({} vs {})",
+            high.moral_emotions.shame,
+            low.moral_emotions.shame
+        );
+        assert!(
+            high.moral_emotions.pride > low.moral_emotions.pride,
+            "higher moral development must amplify pride ({} vs {})",
+            high.moral_emotions.pride,
+            low.moral_emotions.pride
+        );
+        // Outrage is witnessed-side (fairness foundation only) — development
+        // must NOT touch it (both zero here).
+        assert_eq!(low.moral_emotions.outrage, Fixed::ZERO);
+        assert_eq!(high.moral_emotions.outrage, Fixed::ZERO);
     }
 }
