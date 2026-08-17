@@ -29,6 +29,22 @@ pub const STRESS_RECOVERY_TONE_FLOOR: f64 = 0.3;
 /// the per-tick per-agent `update` hot path; 0.3 × 10_000 = 3_000).
 pub const STRESS_RECOVERY_TONE_FLOOR_FIXED: Fixed = Fixed::from_raw(3_000);
 
+/// §7.2.2 (Iteration 189 — the graded stress equilibrium): the chronic-
+/// stress feedback into the level. The pre-Iter-189 value 0.1 was a
+/// self-accelerating ratchet: `chronic_delta = chronic_load × 0.1` reached
+/// up to 0.1/tick — exactly the maximum recovery (0.10 × tone 1.0) — so
+/// any agent whose level crossed 0.6 for ~200+ consecutive ticks
+/// accumulated chronic_load until the delta overpowered recovery
+/// permanently: the axis pinned at 1.0 (MS_TRACE_STRESS over 2000 ticks ×
+/// 3 scenarios: 49,219 ticks at level 0.0, 21,383 at level 1.0, nothing
+/// graded between — the Iter-172 "chronic_recovery 0.0005/tick" escape was
+/// mechanically unreachable, since the level can never drop ≤ 0.6 while
+/// delta > recovery). At 0.02 the memory term is bounded (max 0.02/tick)
+/// BELOW the tone-floor recovery (0.03), so a high-chronic agent whose
+/// acute subsides ALWAYS decays — chronic load modulates the level, it can
+/// no longer pin it.
+const CHRONIC_FEEDBACK: Fixed = Fixed::from_raw(200); // 0.02
+
 /// Stress axis (cortisol-like).
 /// Raised by: threat, pain, hunger, sleep debt, humiliation, uncertainty.
 /// Effects: increases fear/anger, reduces planning, increases heuristic bias.
@@ -73,10 +89,36 @@ impl StressAxis {
         // at full sympathetic activation, restoring producer-driven
         // equilibrium (calibrated 0.3 floor + 0.10 recovery: stress mean
         // 0.42–0.58 with real per-agent spread, stable to 10K ticks).
+        //
+        // Iteration 189 (the graded equilibrium — FINDING 10): the axis was
+        // BINARY, not graded — the linear update `level += acute×reactivity −
+        // recovery` has no interior fixed point, so the level only stopped at
+        // the clamps: 0 (recovery dominates) or 1.0 (acute dominates, then
+        // pinned permanently by the old `chronic_load × 0.1` ratchet — the
+        // pre-Iter-189 escape, chronic_recovery 0.0005/tick, was unreachable
+        // because the level can never drop ≤ 0.6 while delta > recovery).
+        // MS_TRACE_STRESS over 2000 ticks × 3 scenarios: 49,219 ticks at
+        // level 0.0, 21,383 at 1.0, nothing graded between. Three changes
+        // make the axis GRADED (the repo's standard saturating-logistic
+        // pattern, as on bonding/arousal/immune):
+        //   (1) the ACUTE gain is saturating — `acute × reactivity ×
+        //       (1 − level)` — giving an interior equilibrium `level* =
+        //       1 − recovery/(acute×reactivity)`: calm (acute ≈ 0.11 from
+        //       the live thirst channel) sits ~0.1–0.45 by tone, famine
+        //       (acute ≈ 0.13) ~0.2–0.5, pain-heavy agents ~0.7–0.94;
+        //       the level can only APPROACH 1.0 asymptotically, never
+        //       clamp-pin;
+        //   (2) the chronic feedback is 5× weaker (`CHRONIC_FEEDBACK` 0.02,
+        //       max delta 0.02 < the 0.03 tone-floor recovery — a
+        //       high-chronic agent whose acute subsides always decays);
+        //   (3) the chronic load accumulates/decays with the saturating
+        //       form — `chronic_rate × (1 − chronic_load)` stressed,
+        //       `−= chronic_recovery × chronic_load` calm — bounded by
+        //       construction instead of the linear accumulator.
         let tone = parasympathetic_tone.max(STRESS_RECOVERY_TONE_FLOOR_FIXED);
         let recovery = recovery_rate * tone;
-        let acute_delta = acute_input * self.reactivity;
-        let chronic_delta = self.chronic_load * Fixed::from_f64(0.1);
+        let acute_delta = acute_input * self.reactivity * (Fixed::ONE - self.level);
+        let chronic_delta = self.chronic_load * CHRONIC_FEEDBACK;
         if std::env::var("MS_TRACE_STRESS").is_ok() {
             eprintln!(
                 "STRESS level={} +acute={} +chronic={} -recov={} (rate={} tone={})",
@@ -89,12 +131,16 @@ impl StressAxis {
             );
         }
         self.level = (self.level + acute_delta + chronic_delta - recovery).clamp_01();
-        // Chronic load accumulates slowly from high acute stress
+        // Chronic load accumulates slowly from high acute stress, saturating
+        // (logistic) so it can never exceed 1.0 or ratchet linearly.
         if self.level > Fixed::from_f64(0.6) {
-            self.chronic_load = (self.chronic_load + chronic_rate).clamp_01();
+            self.chronic_load = (self.chronic_load
+                + chronic_rate * (Fixed::ONE - self.chronic_load))
+                .clamp_01();
         } else {
-            // Chronic load recovers very slowly
-            self.chronic_load = (self.chronic_load - chronic_recovery).max(Fixed::ZERO);
+            // Chronic load recovers very slowly, proportionally.
+            self.chronic_load =
+                (self.chronic_load - chronic_recovery * self.chronic_load).max(Fixed::ZERO);
         }
     }
 }
@@ -412,6 +458,76 @@ mod tests {
         assert!(
             after < 0.2,
             "the tone floor must provide basal recovery at zero tone (got {after})"
+        );
+    }
+
+    #[test]
+    fn high_chronic_agent_recovers_when_acute_subsides() {
+        // Iteration 189 (FINDING 10 — ratchet escape): before the
+        // CHRONIC_FEEDBACK 0.02 fix, a saturated agent (chronic_load ~1.0 →
+        // delta 0.1/tick) could NEVER drop below 0.6 because the chronic
+        // delta exactly matched/exceeded the max recovery — the level stayed
+        // pinned at 1.0 even after the acute stressor ended (the Iter-172
+        // "chronic_recovery 0.0005/tick" escape was unreachable). With the
+        // 0.02 feedback (max delta 0.02 < tone-floor recovery 0.03), the
+        // same agent whose acute subsides must decay back below the 0.6
+        // threshold, after which chronic_load itself begins to unwind.
+        let mut axis = StressAxis {
+            level: Fixed::from_f64(1.0),
+            reactivity: Fixed::from_f64(0.5),
+            chronic_load: Fixed::from_f64(1.0),
+        };
+        // Calm conditions: near-zero acute, full parasympathetic tone.
+        for _ in 0..400 {
+            axis.update(
+                Fixed::from_f64(0.02), // residual acute only
+                Fixed::ONE,            // full parasympathetic tone
+                Fixed::from_f64(0.10), // recovery rate
+                Fixed::from_f64(0.001),
+                Fixed::from_f64(0.0005),
+            );
+        }
+        assert!(
+            axis.level < Fixed::from_f64(0.6),
+            "a saturated agent must escape the pin when acute subsides (level {:.3})",
+            axis.level.to_f64()
+        );
+        assert!(
+            axis.chronic_load < Fixed::from_f64(0.9),
+            "chronic load must begin unwinding after escape (chronic {:.3})",
+            axis.chronic_load.to_f64()
+        );
+    }
+
+    #[test]
+    fn chronic_load_saturates_logistically_not_linearly() {
+        // Iteration 189: the chronic accumulator is now saturating
+        // (logistic) — `rate × (1 − chronic)` — so it approaches 1.0
+        // asymptotically and can never be driven past it, unlike the old
+        // linear `+ rate` accumulator.
+        let mut axis = StressAxis {
+            level: Fixed::from_f64(0.8), // above the 0.6 accumulation gate
+            chronic_load: Fixed::ZERO,
+            ..StressAxis::default()
+        };
+        for _ in 0..1_000_000 {
+            axis.update(
+                Fixed::from_f64(0.4), // sustained acute keeps level high
+                Fixed::ZERO,          // zero tone (floor recovery only)
+                Fixed::from_f64(0.10),
+                Fixed::from_f64(0.001),
+                Fixed::from_f64(0.0005),
+            );
+        }
+        assert!(
+            axis.chronic_load <= Fixed::ONE,
+            "chronic_load must stay bounded (got {})",
+            axis.chronic_load
+        );
+        assert!(
+            axis.chronic_load > Fixed::from_f64(0.5),
+            "sustained stress must accumulate meaningful chronic load (got {:.3})",
+            axis.chronic_load.to_f64()
         );
     }
 

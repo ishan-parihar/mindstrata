@@ -8,7 +8,7 @@ LongHorizonSurface10000 {
     agent_count: 12,
     event_count: 150393,
     avg_stress: 0.4377249999999999,
-    avg_health: 0.7641833333333332,
+    avg_health: 0.8370666666666666,
     avg_relationship_trust: 0.8669325757575752,
     avg_relationship_quality: 0.8041469696969701,
     polarization_index: 0.0237,

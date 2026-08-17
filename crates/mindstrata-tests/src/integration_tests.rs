@@ -15120,9 +15120,20 @@ fn endocrine_stress_axis_no_longer_saturates_in_calibrated_windows() {
             at_cap < n,
             "the population must differentiate (seed {seed}: {at_cap}/{n} pinned at 1.0)"
         );
+        // Iteration 189 re-pin (the graded equilibrium — FINDING 10): the
+        // axis is no longer binary (pre-Iter-189: pinned agents sat at 1.0,
+        // so `max > 0.5` was the old liveness bar). Post-fix the levels are
+        // graded — probe-pinned per seed @2000: max 0.5208/0.3981/0.5106/
+        // 0.4907 — so "live" now means some agent carries real cortisol
+        // (max > 0.2) AND the population differentiates (max clearly above
+        // the mean — no uniform band).
         assert!(
-            max_s > 0.5,
+            max_s > 0.2,
             "stress must still be live (seed {seed}: max {max_s})"
+        );
+        assert!(
+            max_s > mean + 0.1,
+            "the graded population must differentiate (seed {seed}: max {max_s} vs mean {mean})"
         );
     }
 }
