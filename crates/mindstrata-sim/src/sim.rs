@@ -3579,10 +3579,18 @@ impl Simulation {
                 // §17: Only focal agents run developmental psychology
                 if phases.is_centum && self.agents[i].agent_tier.tier.runs_full_psychology() {
                     let agent_age = self.agents[i].age;
+                    // Iteration 196: education quality is the agent's own
+                    // learning aptitude (how well education benefits THIS
+                    // agent — the same capacity `effective_learning` weights
+                    // at 0.3 in the apprenticeship pass) instead of the
+                    // hardcoded 0.5 placeholder, so identity formation
+                    // genuinely scales with the education pipeline.
+                    let education_quality =
+                        self.agents[i].education.learning_aptitude;
                     self.agents[i].developmental.tick_update(
                         agent_age,
                         social_support,
-                        Fixed::from_f64(0.5), // education quality placeholder
+                        education_quality,
                     );
                 }
 
@@ -5014,7 +5022,19 @@ impl Simulation {
                         Agency::Circumstance
                     },
                     social_visibility,
-                    identity_relevance: Fixed::from_f64(0.2),
+                    // Iteration 196: identity relevance now scales with the
+                    // §17 developmental identity-formation state (previously
+                    // a hardcoded 0.2 constant while `identity_formation` was
+                    // write-only). Baseline-corrected: exactly 0.2 at the
+                    // default formation 0.5, rising toward 0.3 at full
+                    // formation and falling toward 0.1 at identity-less 0 —
+                    // a formed identity makes events more personally
+                    // relevant (pride/shame/humiliation/awe all scale with
+                    // it). Exact no-op at populate defaults.
+                    identity_relevance: Fixed::from_f64(0.2)
+                        + (self.agents[i].developmental.identity_formation
+                            - Fixed::from_f64(0.5))
+                            * Fixed::from_f64(0.2),
                     sacredness_violation: (unfairness * max_sacredness).clamp_01(),
                     attachment_threat,
                     status_threat: (threat * (Fixed::ONE - status_hold)).clamp_01(),

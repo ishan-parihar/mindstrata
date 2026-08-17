@@ -197,4 +197,29 @@ mod tests {
         dev.negative_socialization(Fixed::from_f64(0.8));
         assert!(dev.history.trauma_history > Fixed::ZERO);
     }
+
+    /// Iteration 196: education quality (the agent's learning aptitude) must
+    /// scale identity-formation progress — higher-quality education forms
+    /// identity faster during the 12–30 window.
+    #[test]
+    fn education_quality_scales_identity_formation() {
+        let mut low = DevelopmentalPsychState {
+            identity_formation: Fixed::from_f64(0.3),
+            ..Default::default()
+        };
+        let mut high = DevelopmentalPsychState {
+            identity_formation: Fixed::from_f64(0.3),
+            ..Default::default()
+        };
+        for _ in 0..10 {
+            low.tick_update(Fixed::from_f64(16.0), Fixed::from_f64(0.7), Fixed::from_f64(0.2));
+            high.tick_update(Fixed::from_f64(16.0), Fixed::from_f64(0.7), Fixed::from_f64(0.9));
+        }
+        assert!(
+            high.identity_formation > low.identity_formation,
+            "higher education quality must form identity faster ({} vs {})",
+            high.identity_formation,
+            low.identity_formation
+        );
+    }
 }
