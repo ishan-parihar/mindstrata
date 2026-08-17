@@ -133,10 +133,6 @@ impl CardiovascularState {
         .clamp_01()
     }
 
-    /// Whether the agent is at risk of collapse.
-    pub fn collapse_risk(&self) -> bool {
-        self.shock_risk > Fixed::from_f64(0.7) || self.blood_volume < Fixed::from_f64(0.4)
-    }
 }
 
 #[cfg(test)]

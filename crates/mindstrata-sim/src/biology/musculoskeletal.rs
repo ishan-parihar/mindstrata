@@ -119,15 +119,6 @@ impl MuscularState {
         self.strength = (self.strength - age_modifier * Fixed::from_f64(0.0001)).max(Fixed::ZERO);
     }
 
-    /// Effective strength for tasks (accounting for fatigue and injury).
-    pub fn effective_strength(&self) -> Fixed {
-        self.strength
-    }
-
-    /// Whether the agent is too exhausted for physical labor.
-    pub fn exhausted(&self) -> bool {
-        self.fatigue > Fixed::from_f64(0.85)
-    }
 }
 
 #[cfg(test)]

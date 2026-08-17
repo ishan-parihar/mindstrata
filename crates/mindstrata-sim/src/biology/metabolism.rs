@@ -79,17 +79,6 @@ impl MetabolicState {
         self.fat_reserves = (self.fat_reserves + fat_gain).clamp_01();
     }
 
-    /// Process water intake.
-    pub fn consume_water(&mut self, amount: Fixed) {
-        self.hydration = (self.hydration + amount).clamp_01();
-    }
-
-    /// Energy available for physical activity (0–1).
-    pub fn available_energy(&self) -> Fixed {
-        (self.energy_reserves * Fixed::from_f64(0.7) + self.fat_reserves * Fixed::from_f64(0.3))
-            .clamp_01()
-    }
-
     /// Whether the agent is in metabolic crisis (starving or dehydrated).
     pub fn in_crisis(&self) -> bool {
         self.energy_reserves < Fixed::from_f64(0.15) || self.hydration < Fixed::from_f64(0.15)

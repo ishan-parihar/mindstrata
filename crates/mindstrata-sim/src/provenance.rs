@@ -253,22 +253,6 @@ impl CausalProvenance {
         self.decisions.iter().filter(|d| d.agent == agent).collect()
     }
 
-    /// Get all decisions made in a specific tick range.
-    pub fn decisions_in_range(&self, start_tick: u64, end_tick: u64) -> Vec<&DecisionTrace> {
-        self.decisions
-            .iter()
-            .filter(|d| d.tick >= start_tick && d.tick < end_tick)
-            .collect()
-    }
-
-    /// Get all events in a specific tick range.
-    pub fn events_in_range(&self, start_tick: u64, end_tick: u64) -> Vec<&EventProvenance> {
-        self.events
-            .iter()
-            .filter(|e| e.tick >= start_tick && e.tick < end_tick)
-            .collect()
-    }
-
     /// Get the last N decisions.
     pub fn recent_decisions(&self, n: usize) -> &[DecisionTrace] {
         let start = self.decisions.len().saturating_sub(n);

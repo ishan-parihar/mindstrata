@@ -118,13 +118,6 @@ impl KinshipGraph {
             .map(|e| e.link)
     }
 
-    pub fn kin_of(&self, agent: usize) -> Vec<&KinshipEdge> {
-        self.edges
-            .iter()
-            .filter(|e| e.active && e.from == agent)
-            .collect()
-    }
-
     /// Compute the kinship coefficient between two agents (highest along any path).
     /// Checks both directions to handle unidirectional parent→child edges.
     pub fn coefficient_between(&self, a: usize, b: usize) -> Fixed {

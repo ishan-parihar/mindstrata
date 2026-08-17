@@ -363,18 +363,9 @@ impl EndocrineState {
         .clamp_01()
     }
 
-    /// Stress modifier for cognitive function.
-    /// High stress = more heuristic bias, less planning.
-    pub fn stress_cognitive_modifier(&self) -> Fixed {
-        self.stress.level
-    }
-
-    /// Bonding modifier for trust formation.
-    pub fn bonding_trust_modifier(&self) -> Fixed {
-        self.bonding.level
-    }
-
-    /// Dominance modifier for aggression.
+    /// Dominance modifier for aggression (Iteration 191: now live — the
+    /// escalation decision at the violence site folds this into
+    /// `aggressor_aggression`, closing the S2-2-2 write-only axis).
     pub fn dominance_aggression_modifier(&self) -> Fixed {
         self.dominance.level
     }
@@ -679,6 +670,39 @@ mod tests {
             low.update(Fixed::from_f64(0.2), Fixed::from_f64(0.1));
         }
         assert!(low.level < Fixed::from_f64(0.3), "dominance must fall with low status");
+    }
+
+    #[test]
+    fn dominance_aggression_modifier_exposes_live_level() {
+        // Iteration 191: `dominance_aggression_modifier` is now wired at the
+        // escalation decision (the S2-2-2 write-only axis finally feeds the
+        // violence gate). The accessor must track the live axis level so the
+        // escalation fold is a real status signal, not a constant.
+        let mut elite = EndocrineState {
+            dominance: DominanceAxis {
+                level: Fixed::from_f64(0.4),
+            },
+            ..EndocrineState::default()
+        };
+        for _ in 0..30 {
+            elite.dominance.update(Fixed::from_f64(0.9), Fixed::from_f64(0.1));
+        }
+        let mut drained = EndocrineState {
+            dominance: DominanceAxis {
+                level: Fixed::from_f64(0.4),
+            },
+            ..EndocrineState::default()
+        };
+        for _ in 0..30 {
+            drained.dominance.update(Fixed::from_f64(0.1), Fixed::from_f64(0.1));
+        }
+        assert!(
+            elite.dominance_aggression_modifier()
+                > drained.dominance_aggression_modifier(),
+            "the aggression modifier must differentiate status: {} vs {}",
+            elite.dominance_aggression_modifier().to_f64(),
+            drained.dominance_aggression_modifier().to_f64()
+        );
     }
 
     #[test]

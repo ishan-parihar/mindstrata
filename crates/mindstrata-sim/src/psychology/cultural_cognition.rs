@@ -417,16 +417,6 @@ impl CulturalCognition {
             .collect()
     }
 
-    /// Compute outgroup disgust for a target based on cultural categories.
-    /// Returns the outgroup_disgust of the category matching the target name,
-    /// or zero if no matching category exists.
-    pub fn outgroup_disgust_for(&self, target_category: &str) -> Fixed {
-        self.categories
-            .iter()
-            .find(|c| c.name == target_category)
-            .map_or(Fixed::ZERO, |c| c.outgroup_disgust)
-    }
-
     /// Tick update — conservatism shifts based on exposure.
     /// Positive exposure reduces conservatism; negative exposure increases it.
     pub fn tick_update(&mut self, positive_exposure: Fixed, negative_exposure: Fixed) {

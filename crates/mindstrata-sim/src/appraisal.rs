@@ -109,36 +109,6 @@ pub struct EmotionDelta {
     pub moral_outrage: Fixed,
 }
 
-impl EmotionDelta {
-    /// Combine two deltas additively.
-    #[must_use]
-    pub fn combine(self, other: &EmotionDelta) -> Self {
-        Self {
-            fear: (self.fear + other.fear).clamp_01(),
-            anger: (self.anger + other.anger).clamp_01(),
-            joy: (self.joy + other.joy).clamp_01(),
-            sadness: (self.sadness + other.sadness).clamp_01(),
-            trust: (self.trust + other.trust).clamp_01(),
-            shame: (self.shame + other.shame).clamp_01(),
-            pride: (self.pride + other.pride).clamp_01(),
-            guilt: (self.guilt + other.guilt).clamp_01(),
-            disgust: (self.disgust + other.disgust).clamp_01(),
-            contempt: (self.contempt + other.contempt).clamp_01(),
-            awe: (self.awe + other.awe).clamp_01(),
-            gratitude: (self.gratitude + other.gratitude).clamp_01(),
-            jealousy: (self.jealousy + other.jealousy).clamp_01(),
-            envy: (self.envy + other.envy).clamp_01(),
-            loneliness: (self.loneliness + other.loneliness).clamp_01(),
-            tenderness: (self.tenderness + other.tenderness).clamp_01(),
-            humiliation: (self.humiliation + other.humiliation).clamp_01(),
-            relief: (self.relief + other.relief).clamp_01(),
-            hope: (self.hope + other.hope).clamp_01(),
-            despair: (self.despair + other.despair).clamp_01(),
-            nostalgia: (self.nostalgia + other.nostalgia).clamp_01(),
-            moral_outrage: (self.moral_outrage + other.moral_outrage).clamp_01(),
-        }
-    }
-}
 
 /// Derive emotional response from an appraisal.
 ///

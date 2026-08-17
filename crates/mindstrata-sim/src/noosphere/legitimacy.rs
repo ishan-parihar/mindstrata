@@ -86,11 +86,6 @@ impl LegitimacyField {
         self.overall < self.challenge_threshold
     }
 
-    /// Check if the entity is stable (legitimacy above threshold).
-    pub fn is_stable(&self) -> bool {
-        self.overall >= self.stability_threshold
-    }
-
     /// Daily update — decay all sources, recompute.
     pub fn daily_update(&mut self) {
         let mut needs_ritual_decay = false;

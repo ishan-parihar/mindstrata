@@ -83,15 +83,6 @@ impl RespiratoryState {
         .clamp_01();
     }
 
-    /// Effective respiratory capacity for physical tasks.
-    pub fn effective_capacity(&self) -> Fixed {
-        self.endurance_modifier
-    }
-
-    /// Whether the agent has a respiratory illness.
-    pub fn is_ill(&self) -> bool {
-        self.disease_load > Fixed::from_f64(0.3)
-    }
 }
 
 #[cfg(test)]

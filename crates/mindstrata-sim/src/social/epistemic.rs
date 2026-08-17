@@ -383,14 +383,6 @@ impl EpistemicState {
             (self.information_overload - Fixed::from_f64(0.05)).max(Fixed::ZERO);
     }
 
-    /// Add information overload from processing too much.
-    pub fn add_overload(&mut self, amount: Fixed) {
-        self.information_overload = (self.information_overload + amount).clamp_01();
-        // Overload reduces processing capacity using Fixed arithmetic for determinism
-        let capacity_fixed =
-            Fixed::from_f64(10.0) * (Fixed::ONE - self.information_overload * Fixed::from_f64(0.5));
-        self.processing_capacity = capacity_fixed.to_raw() as u32 / 1000; // Fixed has 1000 scaling
-    }
 }
 
 #[cfg(test)]

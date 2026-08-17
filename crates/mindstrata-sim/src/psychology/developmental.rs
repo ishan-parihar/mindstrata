@@ -150,13 +150,6 @@ impl DevelopmentalPsychState {
         };
     }
 
-    /// Record a positive socialization event.
-    pub fn positive_socialization(&mut self, quality: Fixed) {
-        self.history.positive_socialization += 1;
-        self.socialization_completeness =
-            (self.socialization_completeness + quality * Fixed::from_f64(0.01)).clamp_01();
-    }
-
     /// Record a negative socialization event (trauma, abuse, neglect).
     pub fn negative_socialization(&mut self, severity: Fixed) {
         self.history.negative_socialization += 1;
@@ -164,14 +157,6 @@ impl DevelopmentalPsychState {
             (self.history.trauma_history + severity * Fixed::from_f64(0.02)).clamp_01();
     }
 
-    /// Record an educational event.
-    pub fn record_education(&mut self, skill: String, quality: Fixed, tick: u64) {
-        self.history.education_events.push(EducationEvent {
-            skill,
-            quality,
-            tick,
-        });
-    }
 }
 
 #[cfg(test)]

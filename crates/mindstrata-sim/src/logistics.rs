@@ -85,10 +85,6 @@ impl CarryingCapacity {
         added
     }
 
-    /// Remove from the agent's load.
-    pub fn remove_load(&mut self, amount: Fixed) {
-        self.current_load = (self.current_load - amount).max(Fixed::ZERO);
-    }
 }
 
 /// Local scarcity pricing modifier.

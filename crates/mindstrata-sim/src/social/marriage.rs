@@ -493,15 +493,6 @@ impl MarriageRegistry {
         })
     }
 
-    /// Find an active marriage between two agents.
-    pub fn find_marriage(&self, a: usize, b: usize) -> Option<&Marriage> {
-        self.marriages.iter().find(|m| {
-            m.active
-                && ((m.partner_a == a && m.partner_b == b)
-                    || (m.partner_a == b && m.partner_b == a))
-        })
-    }
-
     /// Daily update for all bonds and marriages.
     pub fn daily_update(&mut self) {
         for bond in &mut self.pair_bonds {

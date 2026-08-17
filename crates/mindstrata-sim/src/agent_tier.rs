@@ -44,11 +44,6 @@ impl AgentTier {
         matches!(self, Self::Focal)
     }
 
-    /// Does this tier run simplified biology (just decay/satiation)?
-    pub fn runs_simplified_biology(&self) -> bool {
-        matches!(self, Self::Focal | Self::Secondary)
-    }
-
     /// Does this tier run the full psychological pipeline (appraisal, emotion regulation,
     /// theory of mind, prospection, narrative)?
     pub fn runs_full_psychology(&self) -> bool {
@@ -93,16 +88,6 @@ impl AgentTier {
     /// Does this tier participate in social interactions?
     pub fn runs_social_interactions(&self) -> bool {
         matches!(self, Self::Focal | Self::Secondary)
-    }
-
-    /// Does this tier run meme propagation?
-    pub fn runs_meme_propagation(&self) -> bool {
-        matches!(self, Self::Focal | Self::Secondary)
-    }
-
-    /// Does this tier run institutional psychology?
-    pub fn runs_institutional_psychology(&self) -> bool {
-        matches!(self, Self::Focal)
     }
 
     /// Does this tier run action selection (utility AI)?

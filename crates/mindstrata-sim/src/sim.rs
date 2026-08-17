@@ -289,6 +289,10 @@ const GROUP_SUPPRESSION_SCALE: Fixed = Fixed::from_raw(4000); // 0.4
 const HORMONAL_TRACE_THRESHOLD: Fixed = Fixed::from_raw(6000); // 0.6
 /// Social support below which we record Attachment provenance (0.3).
 const ATTACHMENT_LOW_SUPPORT_THRESHOLD: Fixed = Fixed::from_raw(3000); // 0.3
+/// Iteration 191: the active-comfort reduction is damped to ~1–2 days of
+/// separation per comfort event (see the Comfort-interaction wiring) so the
+/// coupling stays visible while supported partners sit genuinely lower.
+const ATTACHMENT_COMFORT_DAMPING: f64 = 0.0005;
 
 /// Configuration for a simulation run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -6089,6 +6093,7 @@ impl Simulation {
                     kind,
                     mindstrata_core::event::InteractionKind::Gossip
                         | mindstrata_core::event::InteractionKind::Help
+                        | mindstrata_core::event::InteractionKind::Comfort
                         | mindstrata_core::event::InteractionKind::Trade
                 ) {
                     continue;
@@ -6112,6 +6117,54 @@ impl Simulation {
                         self.params.attachment_anxious_recovery,
                         self.params.attachment_avoidant_recovery,
                         self.params.attachment_disorganized_recovery,
+                    );
+                }
+
+                // §8.1.14 (Iteration 191 — the active soothing path): a
+                // Comfort interaction (the high-affection context's softest
+                // signal) now calls `receive_comfort` on the RECIPIENT —
+                // pre-Iter-191 the method had ZERO call sites, so separation
+                // distress only ever decayed passively (the daily
+                // `× decay_factor` fold) and the designed comfort mechanics
+                // (style-matched distress relief scaled by the agent's
+                // soothing_receptivity × the interaction's quality, plus a
+                // security gain for the secure style) never fired. Comfort
+                // quality scales with the existing relationship trust
+                // between the pair (a trusted figure soothes better; a
+                // stranger's comfort barely registers). Deterministic, no
+                // RNG — the draw stream is untouched (only state deltas on
+                // the recipient's attachment).
+                if matches!(kind, mindstrata_core::event::InteractionKind::Comfort) {
+                    let rel_trust = self
+                        .relationships
+                        .iter()
+                        .find(|r| r.from == from && r.to == to)
+                        .map_or(Fixed::from_f64(0.5), |r| r.trust);
+                    // Iteration 191 calibration: the raw recovery rates
+                    // (0.3/0.6/0.4/0.5) made a SINGLE comfort event reduce
+                    // distress by up to ~0.24 (effectiveness = receptivity ×
+                    // quality up to 0.8, × the 0.3 secure rate) while the
+                    // daily separation gain is ~0.008 — the active path
+                    // erased the coupling entirely (probe: mean 0.000, 0/46
+                    // partnered agents nonzero, at EVERY seed × rate, and the
+                    // rate-response ratio collapsed to NaN). The comfort
+                    // reduction is damped by
+                    // `ATTACHMENT_COMFORT_DAMPING` (0.05) so a comfort event
+                    // soothes ~1–2 days of accumulated separation (reduction
+                    // ~0.01–0.02) — the coupling stays live population-wide
+                    // and the separation-rate parameter still drives
+                    // distress, but a supported partner's distress genuinely
+                    // sits lower than an unsupported one's.
+                    let comfort_quality =
+                        (Fixed::from_f64(0.4) + rel_trust * Fixed::from_f64(0.6)).clamp_01();
+                    let damp = Fixed::from_f64(ATTACHMENT_COMFORT_DAMPING);
+                    self.agents[to_idx].attachment.receive_comfort(
+                        comfort_quality,
+                        self.params.attachment_secure_recovery * damp,
+                        self.params.attachment_anxious_recovery * damp,
+                        self.params.attachment_avoidant_recovery * damp,
+                        self.params.attachment_disorganized_recovery * damp,
+                        Fixed::from_f64(0.05),
                     );
                 }
 
@@ -12490,8 +12543,48 @@ impl Simulation {
                             let target_fear_after = self.agents[to_idx].emotions.fear;
                             let threat_failed =
                                 target_fear_after < self.params.conflict_escalation_fear_threshold;
+                            // §7.2.2 (Iteration 191 — the documented deferral
+                            // closed): the endocrine dominance axis (mean-
+                            // reverting toward the §11.1 effective-status
+                            // composite, wired daily) now feeds the escalation
+                            // decision. Pre-Iter-191 the axis was write-only —
+                            // the S2-2-2 fix ran `dominance.update` but its
+                            // accessor `dominance_aggression_modifier` had ZERO
+                            // consumers, so a status-risen elite and a
+                            // status-drained subordinate pressed failed threats
+                            // identically. The fold uses the same
+                            // `conflict_dominance_weight` (0.3) the injury
+                            // calc applies to personality dominance: a hormonally
+                            // dominant aggressor escalates a failed threat more
+                            // readily ("I can win this"), a drained one backs
+                            // down. Deterministic, no RNG — the draw stream is
+                            // untouched (only the gate threshold moves).
+                            let endo_dominance = self.agents[from_idx]
+                                .embodied
+                                .endocrine
+                                .dominance_aggression_modifier();
+                            // §8.1.10 (Iteration 191 — impulse control wired):
+                            // `can_inhibit` was dead code whose underlying
+                            // `effective_inhibition` (computed every tick from
+                            // inhibition × (1 − stress_load)) had NO other
+                            // reader — a write-only field. The escalation
+                            // decision is its designed consumer: an agent that
+                            // cannot inhibit impulses presses a failed threat to
+                            // violence more readily; a high-inhibition agent
+                            // holds back (the stress-degraded inhibition
+                            // channel is now behaviorally live).
+                            let inhibition_hold = if self.agents[from_idx]
+                                .cognitive_runtime
+                                .can_inhibit()
+                            {
+                                Fixed::from_f64(0.0)
+                            } else {
+                                Fixed::from_f64(0.15)
+                            };
                             let aggressor_aggression = self.agents[from_idx].personality.dominance
-                                + self.agents[from_idx].personality.risk_tolerance;
+                                + self.agents[from_idx].personality.risk_tolerance
+                                + endo_dominance * self.params.conflict_dominance_weight
+                                + inhibition_hold;
                             // §10.8: Enemy clans escalate failed threats at twice
                             // the base rate (should_escalate / escalation_chance).
                             let escalate = self.should_escalate(

@@ -192,13 +192,6 @@ impl AttachmentSystem {
         }
     }
 
-    /// Compute attachment activation level (how much attachment concerns are salient).
-    pub fn activation_level(&self) -> Fixed {
-        (self.anxiety
-            + self.separation_distress
-            + (Fixed::ONE - self.security) * Fixed::from_f64(0.3))
-        .clamp_01()
-    }
 }
 
 #[cfg(test)]
@@ -250,6 +243,50 @@ mod tests {
             Fixed::from_f64(0.5),
         );
         assert!(att.separation_distress < Fixed::from_f64(0.5));
+    }
+
+    #[test]
+    fn comfort_reduces_distress_scaled_by_receptivity() {
+        // Iteration 191: `receive_comfort` is now wired at the Comfort-
+        // interaction pass (the active soothing path — pre-Iter-191 it had
+        // zero call sites and separation distress only decayed passively).
+        // The effectiveness is `soothing_receptivity × comfort_quality`, so
+        // a high-receptivity agent soothes more than a low-receptivity one.
+        // `soothing_receptivity` is computed in `initialize` (= security × 0.8),
+        // so the two agents are built through that path to get honest,
+        // differentiated receptivity rather than a struct-literal default.
+        let mut open = AttachmentSystem::default();
+        open.initialize(Fixed::from_f64(0.8), Fixed::ZERO, Fixed::from_f64(0.3));
+        open.separation_distress = Fixed::from_f64(0.6);
+        let mut guarded = AttachmentSystem::default();
+        guarded.initialize(Fixed::from_f64(0.2), Fixed::from_f64(0.7), Fixed::from_f64(0.8));
+        guarded.separation_distress = Fixed::from_f64(0.6);
+        open.receive_comfort(
+            Fixed::from_f64(0.9),
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.6),
+            Fixed::from_f64(0.4),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.05),
+        );
+        guarded.receive_comfort(
+            Fixed::from_f64(0.9),
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.6),
+            Fixed::from_f64(0.4),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.05),
+        );
+        assert!(
+            open.separation_distress < guarded.separation_distress,
+            "a higher-receptivity agent must soothe more: {} vs {}",
+            open.separation_distress.to_f64(),
+            guarded.separation_distress.to_f64()
+        );
+        assert!(
+            open.security > Fixed::from_f64(0.8),
+            "the secure style gains security from comfort"
+        );
     }
 
     #[test]

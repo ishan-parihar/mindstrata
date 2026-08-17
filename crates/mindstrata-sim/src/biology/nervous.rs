@@ -324,21 +324,9 @@ impl NervousSystemState {
         .clamp_01();
     }
 
-    /// Effective arousal for cognitive modulation.
-    /// High arousal narrows attention, increases threat bias.
-    pub fn effective_arousal(&self) -> Fixed {
-        self.sympathetic_arousal
-    }
-
     /// Social engagement capacity — requires parasympathetic dominance.
     pub fn social_engagement_capacity(&self) -> Fixed {
         self.parasympathetic_tone
-    }
-
-    /// Attention narrowing factor from arousal.
-    /// Returns 0–1 where 1 = fully narrowed (tunnel vision).
-    pub fn attention_narrowing(&self) -> Fixed {
-        (self.sympathetic_arousal * Fixed::from_f64(0.8)).clamp_01()
     }
 }
 

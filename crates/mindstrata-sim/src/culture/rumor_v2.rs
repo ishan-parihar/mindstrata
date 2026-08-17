@@ -233,14 +233,6 @@ impl RumorRegistry {
             .collect()
     }
 
-    /// Get all active rumors about an institution.
-    pub fn rumors_about_institution(&self, inst_id: usize) -> Vec<&RumorV2> {
-        self.rumors
-            .iter()
-            .filter(|r| r.active && r.institution_target == Some(inst_id))
-            .collect()
-    }
-
     /// Tick decay on all active rumors.
     pub fn tick_all(&mut self, tick: u64) {
         for rumor in &mut self.rumors {
@@ -359,14 +351,6 @@ impl RumorRegistry {
         self.rumors.iter().filter(|r| r.active).count()
     }
 
-    /// Sum the panic pressure from all active rumors.
-    pub fn total_panic_pressure(&self, population: u32) -> Fixed {
-        self.rumors
-            .iter()
-            .filter(|r| r.active)
-            .map(|r| r.panic_pressure(population))
-            .fold(Fixed::ZERO, |acc, p| (acc + p).clamp_01())
-    }
 }
 
 #[cfg(test)]

@@ -66,29 +66,6 @@ impl Ideology {
         }
     }
 
-    /// Drift one axis toward a target position under social pressure.
-    pub fn drift_toward(&mut self, axis_idx: usize, target: Fixed, pressure: Fixed) {
-        if let Some(axis) = self.axes.get_mut(axis_idx) {
-            // Dogmatism resists change
-            let resistance = self.dogmatism * axis.conviction;
-            let effective_pressure = pressure * (Fixed::ONE - resistance);
-            axis.position =
-                (axis.position + (target - axis.position) * effective_pressure).clamp_01();
-        }
-    }
-
-    /// Push toward extremes under polarization pressure.
-    pub fn polarize(&mut self, direction: Fixed) {
-        for axis in &mut self.axes {
-            let extreme_pull = if axis.position > Fixed::from_f64(0.5) {
-                Fixed::ONE - axis.position
-            } else {
-                axis.position
-            };
-            let pull = extreme_pull * self.polarization_tendency * direction;
-            axis.position = (axis.position + pull).clamp_01();
-        }
-    }
 }
 
 /// Network-level belief ecology — tracks polarization across the population.

@@ -223,13 +223,6 @@ impl EmbodiedState {
     }
 
     /// Derived hunger from metabolic predispositions.
-    pub fn derived_hunger(&self) -> Fixed {
-        let base = self.hunger;
-        let sensitivity = self.genome.metabolic_predispositions.hunger_sensitivity;
-        let satiety_reduce = self.metabolic.satiety * Fixed::from_f64(0.3);
-        ((base * sensitivity - satiety_reduce).max(Fixed::ZERO)).clamp_01()
-    }
-
     /// Derived fatigue from sleep pressure, muscular fatigue, and energy.
     ///
     /// §7 (S2-2-5 fix): the facade mean-reverts toward the driver-weighted

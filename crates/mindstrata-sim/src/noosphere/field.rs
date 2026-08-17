@@ -247,13 +247,6 @@ impl NoosphericField {
         }
     }
 
-    /// Find nodes similar to a given concept vector.
-    pub fn similar_nodes(&self, concept: &ConceptVector, threshold: Fixed) -> Vec<&SymbolicNode> {
-        self.nodes
-            .iter()
-            .filter(|n| n.concept.similarity(concept) > threshold)
-            .collect()
-    }
 }
 
 #[cfg(test)]

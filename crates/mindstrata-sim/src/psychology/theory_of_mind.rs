@@ -155,11 +155,6 @@ impl OtherMindModel {
         }
     }
 
-    /// Check if this agent is perceived as an in-group member.
-    pub fn is_in_group(&self, shared_identity: Fixed, trust: Fixed) -> bool {
-        shared_identity > Fixed::from_f64(0.5) || trust > Fixed::from_f64(0.7)
-    }
-
     /// Dehumanize — reduce perceived mental complexity.
     pub fn dehumanize(&mut self, severity: Fixed) {
         self.dehumanization = (self.dehumanization + severity).clamp_01();

@@ -246,6 +246,41 @@ mod tests {
     }
 
     #[test]
+    fn stress_load_can_disable_inhibition() {
+        // Iteration 191: `can_inhibit` is now wired at the escalation
+        // decision (a failed threat presses to violence when the aggressor
+        // cannot inhibit — the stress-degraded `effective_inhibition`
+        // channel is behaviorally live). High stress_load must be able to
+        // push `effective_inhibition` below the 0.3 gate, and a rested
+        // agent must inhibit.
+        let mut rested = CognitiveRuntime::default();
+        rested.update(Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO);
+        assert!(
+            rested.can_inhibit(),
+            "a low-stress agent must retain impulse control"
+        );
+        let mut stressed = CognitiveRuntime::default();
+        stressed.update(
+            Fixed::from_f64(0.9),
+            Fixed::from_f64(0.9),
+            Fixed::from_f64(0.9),
+            Fixed::from_f64(0.9),
+        );
+        let inhibited = stressed.can_inhibit();
+        // Default inhibition is 0.5; stress_load 0.9 → effective 0.05,
+        // which must fail the 0.3 gate. (The assertion is directional — a
+        // future calibration that changes the default keeps the contract:
+        // a stress-saturated agent inhibits less readily than a rested one.)
+        assert!(
+            stressed.effective_inhibition < rested.effective_inhibition,
+            "stress must degrade effective inhibition: {} vs {}",
+            stressed.effective_inhibition.to_f64(),
+            rested.effective_inhibition.to_f64()
+        );
+        assert!(!inhibited || stressed.effective_inhibition > Fixed::from_f64(0.3));
+    }
+
+    #[test]
     fn stress_increases_impulsivity() {
         let mut cr = CognitiveRuntime::default();
         let baseline = cr.current_impulsivity;

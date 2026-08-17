@@ -149,14 +149,6 @@ impl PsychopathologyState {
         (Fixed::ONE - self.overall_health * Fixed::from_f64(0.3)).clamp_01()
     }
 
-    /// Compute modifier for social behavior from mental health state.
-    pub fn social_modifier(&self) -> Fixed {
-        // Depression and anxiety reduce social engagement
-        let social_impact = self.depression_risk * Fixed::from_f64(0.3)
-            + self.anxiety_risk * Fixed::from_f64(0.2)
-            + self.paranoia_risk * Fixed::from_f64(0.2);
-        (Fixed::ONE - social_impact).clamp_01()
-    }
 }
 
 #[cfg(test)]

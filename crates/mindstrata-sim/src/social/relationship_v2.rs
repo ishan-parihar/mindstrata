@@ -108,20 +108,6 @@ impl RelationshipStage {
     }
 }
 
-/// Threshold for progressing from one stage to the next.
-pub fn stage_progression_threshold(stage: RelationshipStage) -> Fixed {
-    match stage {
-        RelationshipStage::Unnoticed => Fixed::from_f64(0.3),
-        RelationshipStage::Noticed => Fixed::from_f64(0.4),
-        RelationshipStage::Acquaintance => Fixed::from_f64(0.5),
-        RelationshipStage::Familiar => Fixed::from_f64(0.6),
-        RelationshipStage::Neighbor => Fixed::from_f64(0.7),
-        RelationshipStage::Friend => Fixed::from_f64(0.8),
-        RelationshipStage::CloseFriend => Fixed::from_f64(0.85),
-        RelationshipStage::Confidant => Fixed::from_f64(0.9),
-        _ => Fixed::ONE,
-    }
-}
 
 /// §10.2 (AP2): Public relationship label — the §10.3 taxonomy.
 ///

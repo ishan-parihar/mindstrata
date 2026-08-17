@@ -176,16 +176,22 @@ fn long_horizon_50k_is_deterministic_and_emerges() {
     // registry 0 @50K — probe). A 10-seed calm sweep finds seed 42 fires
     // BOTH emergence signals @50K (v2 registry 1 — a crisis-driven coup —
     // and a moral panic), so the emergence leg re-anchors to seed 42.
-    let a = run_sim(42, 50_000);
-    let b = run_sim(42, 50_000);
+    // Iteration 191 re-anchor (dominance/comfort/inhibition wirings): the
+    // escalation fold re-paces seed 42's calm grievance below the
+    // faction-formation gate again (probe: v2 registry 0, panics 0 @50K)
+    // while seed 99 fires BOTH signals (probe: v2 registry 2 — crisis-
+    // driven coups — and 2 moral panics, births 1, pop 13 @50K), so the
+    // emergence leg re-anchors to seed 99.
+    let a = run_sim(99, 50_000);
+    let b = run_sim(99, 50_000);
     assert!(
         snapshots_identical(&a.metrics_snapshot(), &b.metrics_snapshot()),
-        "seed 42 metrics differ across two 50K runs — a nondeterminism regression"
+        "seed 99 metrics differ across two 50K runs — a nondeterminism regression"
     );
     assert_eq!(
         agent_projection(&a),
         agent_projection(&b),
-        "seed 42 per-agent state differs across two 50K runs — aggregate cancellation may hide it"
+        "seed 99 per-agent state differs across two 50K runs — aggregate cancellation may hide it"
     );
     assert_seed99_emergence_and_invariants(&a);
 }

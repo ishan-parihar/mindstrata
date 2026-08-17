@@ -73,23 +73,6 @@ pub fn system_need_decay_with_params(
     }
 }
 
-/// Decay needs each tick: deficits grow over time.
-pub fn system_need_decay(_ctx: &mut SystemContext, _bodies: &[BodyState], needs: &mut [NeedState]) {
-    let decay_rate = Fixed::from_f64(0.001); // per-tick deficit growth
-
-    for need in needs.iter_mut() {
-        need.hunger = (need.hunger + decay_rate).clamp_01();
-        need.thirst = (need.thirst + decay_rate * Fixed::from_int(2)).clamp_01();
-        need.fatigue = (need.fatigue + decay_rate * Fixed::from_f64(0.5)).clamp_01();
-        // §9.1: Higher-order needs grow slowly — safety, social, meaning
-        need.safety = (need.safety + decay_rate * Fixed::from_f64(0.3)).clamp_01();
-        need.social = (need.social + decay_rate * Fixed::from_f64(0.2)).clamp_01();
-        need.meaning = (need.meaning + decay_rate * Fixed::from_f64(0.15)).clamp_01();
-        need.esteem = (need.esteem + decay_rate * Fixed::from_f64(0.1)).clamp_01();
-        need.autonomy = (need.autonomy + decay_rate * Fixed::from_f64(0.1)).clamp_01();
-    }
-}
-
 // ── Body state system ────────────────────────────────────────────────────
 
 /// Update body state based on needs.

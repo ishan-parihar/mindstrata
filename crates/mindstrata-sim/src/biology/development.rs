@@ -85,18 +85,6 @@ impl LifeStage {
         }
     }
 
-    /// Social influence susceptibility (adolescents most susceptible).
-    pub fn social_susceptibility(&self) -> Fixed {
-        match self {
-            Self::Infant => Fixed::from_f64(0.1),
-            Self::Child => Fixed::from_f64(0.8),
-            Self::Adolescent => Fixed::from_f64(0.95),
-            Self::YoungAdult => Fixed::from_f64(0.7),
-            Self::Adult => Fixed::from_f64(0.5),
-            Self::Mature => Fixed::from_f64(0.4),
-            Self::Elder => Fixed::from_f64(0.3),
-        }
-    }
 }
 
 /// Developmental history — accumulated experiences that shape the agent.
@@ -180,11 +168,6 @@ impl DevelopmentalState {
             + safety * Fixed::from_f64(0.3)
             + social_support * Fixed::from_f64(0.3))
         .clamp_01();
-    }
-
-    /// Developmental modifier for trait expression (environment moderates genetics).
-    pub fn trait_expression_modifier(&self) -> Fixed {
-        self.environment_quality
     }
 
     /// Physical development modifier based on life stage.

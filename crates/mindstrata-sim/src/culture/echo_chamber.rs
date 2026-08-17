@@ -320,10 +320,6 @@ impl EchoChamberState {
         self.compute_polarization();
     }
 
-    /// Number of clusters.
-    pub fn cluster_count(&self) -> usize {
-        self.clusters.len()
-    }
 }
 
 #[cfg(test)]

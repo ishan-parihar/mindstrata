@@ -108,19 +108,6 @@ impl SacredValues {
         (total / Fixed::from_int(self.values.len() as i64)).clamp_01()
     }
 
-    /// Average update resistance across all sacred values.
-    pub fn average_resistance(&self) -> Fixed {
-        if self.values.is_empty() {
-            return Fixed::ZERO;
-        }
-        let total: Fixed = self
-            .values
-            .iter()
-            .map(SacredValue::update_resistance)
-            .fold(Fixed::ZERO, |acc, r| acc + r);
-        (total / Fixed::from_int(self.values.len() as i64)).clamp_01()
-    }
-
     /// Find a sacred value by name.
     pub fn find(&self, name: &str) -> Option<&SacredValue> {
         self.values.iter().find(|v| v.name == name)

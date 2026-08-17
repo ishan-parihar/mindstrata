@@ -70,12 +70,6 @@ impl StatusDimensions {
         self.honor = (self.honor + magnitude * Fixed::from_f64(0.01)).clamp_01();
     }
 
-    pub fn record_defeat(&mut self, magnitude: Fixed) {
-        self.dominance = (self.dominance - magnitude * Fixed::from_f64(0.03)).max(Fixed::ZERO);
-        self.shame = (self.shame + magnitude * Fixed::from_f64(0.02)).clamp_01();
-        self.honor = (self.honor - magnitude * Fixed::from_f64(0.01)).max(Fixed::ZERO);
-    }
-
     pub fn decay(&mut self) {
         self.shame = (self.shame - Fixed::from_f64(0.001)).max(Fixed::ZERO);
         self.honor = (self.honor - Fixed::from_f64(0.0005)).max(Fixed::ZERO);

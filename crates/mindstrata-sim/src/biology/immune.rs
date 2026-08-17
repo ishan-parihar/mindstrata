@@ -144,11 +144,6 @@ impl ImmuneState {
         .clamp_01();
     }
 
-    /// Whether the agent is currently sick.
-    pub fn is_sick(&self) -> bool {
-        self.infection_load > Fixed::from_f64(0.2) || self.inflammation > Fixed::from_f64(0.4)
-    }
-
     /// Sickness severity for derived body state (0–1).
     pub fn sickness_level(&self) -> Fixed {
         (self.infection_load * Fixed::from_f64(0.6) + self.inflammation * Fixed::from_f64(0.4))
