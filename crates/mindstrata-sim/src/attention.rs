@@ -390,6 +390,15 @@ impl AttentionState {
     /// around the 0.5 neutral anchor. threat_bias rises with fear, anger,
     /// and trauma risk (trauma-triggered hypervigilance); social_bias with
     /// extraversion and attachment security; novelty_bias with openness.
+    ///
+    /// §7.2.2 (Iteration 187 — the S2-2-2 arousal consumer): the biological
+    /// endocrine arousal axis (`endocrine.arousal.level`, adrenaline-like)
+    /// also feeds threat bias — acute physiological stress is hypervigilance.
+    /// Mean-zero at the 0.5 anchor: `(arousal − 0.5) × 0.5` adds at most
+    /// ±0.25 to `threat_input` at the extremes, so a baseline-aroused agent
+    /// is byte-identical to the pre-Iter-187 gate and the fold is
+    /// ONE-SIDED (arousal can only push threat bias up or down, never
+    /// through a sign flip of the input).
     pub fn recompute_biases(
         &mut self,
         fear: Fixed,
@@ -399,8 +408,9 @@ impl AttentionState {
         openness: Fixed,
         attachment_security: Fixed,
         prediction_error: Fixed,
+        arousal: Fixed,
     ) {
-        let threat_input = fear + anger + trauma_risk;
+        let threat_input = fear + anger + trauma_risk + (arousal - Fixed::from_f64(0.5)) * Fixed::from_f64(0.5);
         self.threat_bias = (Fixed::from_raw(5000)
             + (threat_input - Fixed::ONE) * Fixed::from_f64(0.2))
         .clamp(Fixed::from_f64(0.3), Fixed::from_f64(0.7));
@@ -622,6 +632,7 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.5),
             Fixed::ZERO,
+            Fixed::from_f64(0.5), // arousal at the mean-zero anchor
         );
         assert!(attention.threat_bias > Fixed::from_f64(0.5));
         assert!(attention.threat_bias <= Fixed::from_f64(0.7));
@@ -634,8 +645,55 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.5),
             Fixed::ZERO,
+            Fixed::from_f64(0.5),
         );
         assert!(attention.threat_bias < Fixed::from_f64(0.5));
+    }
+
+    #[test]
+    fn threat_bias_rises_with_endocrine_arousal() {
+        // §7.2.2 (Iteration 187): the biological arousal axis (adrenaline)
+        // feeds hypervigilance — a physiologically aroused agent perceives
+        // more threat at identical fear/anger/trauma inputs.
+        let mut low = AttentionState::default();
+        let mut high = AttentionState::default();
+        low.recompute_biases(
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::ZERO,
+            Fixed::from_f64(0.3), // low arousal
+        );
+        high.recompute_biases(
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::ZERO,
+            Fixed::from_f64(0.9), // high arousal
+        );
+        assert!(high.threat_bias > low.threat_bias);
+        // The anchor is identity: at arousal 0.5 the fold term is exactly 0,
+        // so the bias equals the legacy formula 0.5 + (0 − 1)×0.2 = 0.3
+        // (clamped) — byte-identical to the pre-Iter-187 value.
+        let mut anchor = AttentionState::default();
+        anchor.recompute_biases(
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::ZERO,
+            Fixed::from_f64(0.5),
+        );
+        assert_eq!(anchor.threat_bias, Fixed::from_f64(0.3));
+        assert!(high.threat_bias <= Fixed::from_f64(0.7), "stays in the clamp");
     }
 
     #[test]
@@ -649,6 +707,7 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.9), // attachment security
             Fixed::ZERO,
+            Fixed::from_f64(0.5),
         );
         assert!(attention.social_bias > Fixed::from_f64(0.5));
         assert!(attention.social_bias <= Fixed::from_f64(0.7));
@@ -665,6 +724,7 @@ mod tests {
             Fixed::from_f64(0.9), // openness
             Fixed::from_f64(0.5),
             Fixed::ZERO,
+            Fixed::from_f64(0.5),
         );
         assert!(attention.novelty_bias > Fixed::from_f64(0.5));
         assert!(attention.novelty_bias <= Fixed::from_f64(0.7));
@@ -681,6 +741,7 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.5), // prediction_error
+            Fixed::from_f64(0.5),
         );
         assert!(attention.novelty_bias > Fixed::from_f64(0.5));
         assert!(attention.novelty_bias <= Fixed::from_f64(0.7));
@@ -693,6 +754,7 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.5),
             Fixed::ZERO,
+            Fixed::from_f64(0.5),
         );
         assert_eq!(attention.novelty_bias, Fixed::from_f64(0.5));
     }

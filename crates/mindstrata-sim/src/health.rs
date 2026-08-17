@@ -135,33 +135,6 @@ impl Default for HealthConfig {
     }
 }
 
-/// Check if an agent should contract a disease from an infected neighbor.
-pub fn should_contract(
-    disease: DiseaseKind,
-    agent_health: Fixed,
-    agent_immunity: Fixed, // derived from past infections
-    proximity_ticks: u32,  // how long they've been in contact
-    config: &HealthConfig,
-    rng_value: Fixed,
-) -> bool {
-    let base_rate = disease.transmission_rate() * config.transmission_multiplier;
-    if base_rate == Fixed::ZERO {
-        return false;
-    }
-
-    // Healthy agents resist better
-    let health_resistance = (agent_health - config.immunity_threshold).max(Fixed::ZERO);
-    let immunity_bonus = agent_immunity * Fixed::from_f64(0.3);
-
-    // Prolonged contact increases risk
-    let contact_factor = Fixed::from_int(proximity_ticks as i64) * Fixed::from_f64(0.01);
-
-    let effective_rate =
-        (base_rate + contact_factor - health_resistance - immunity_bonus).clamp_01();
-
-    rng_value < effective_rate
-}
-
 /// Compute health effects for one tick on an agent.
 pub fn system_health(
     health: &mut Fixed,
@@ -237,20 +210,31 @@ pub fn work_impairment(diseases: &[ActiveDisease]) -> Fixed {
 }
 
 /// Apply injury from a conflict interaction.
+///
+/// §32 (Iteration 187): `rng_value` is now an EXPLICIT parameter — the
+/// previous hardcoded `0.3` made the wound-infection roll a deterministic
+/// no-op against the default `injury_chance` 0.1 (never infected) and left
+/// the function unusable for callers with a real RNG. The caller draws from
+/// its seeded stream; the function stays pure and unit-testable. Also
+/// dedup-guarded: an agent never holds two WoundInfections, and the
+/// pathological [`MAX_CONCURRENT_DISEASES`] cap is respected.
 pub fn apply_injury(
     health: &mut Fixed,
     energy: &mut Fixed,
     diseases: &mut Vec<ActiveDisease>,
     severity: Fixed,
     config: &HealthConfig,
+    rng_value: Fixed,
 ) {
     let damage = severity * Fixed::from_f64(0.1);
     *health = (*health - damage).max(Fixed::ZERO);
     *energy = (*energy - damage * Fixed::from_f64(0.5)).max(Fixed::ZERO);
 
-    // Chance of wound infection from injury
-    let rng_value = Fixed::from_f64(0.3); // simplified; in real sim use RNG
-    if rng_value < config.injury_chance {
+    // Chance of wound infection from injury — the caller's seeded RNG draw.
+    if rng_value < config.injury_chance
+        && diseases.len() < MAX_CONCURRENT_DISEASES
+        && !diseases.iter().any(|d| d.kind == DiseaseKind::WoundInfection)
+    {
         diseases.push(ActiveDisease::new(DiseaseKind::WoundInfection));
     }
 }

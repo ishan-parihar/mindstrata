@@ -170,11 +170,6 @@ impl NormRegistry {
         &self.violations
     }
 
-    /// Get a reference to the crime records.
-    pub fn crime_records(&self) -> &[(AgentId, CrimeRecord)] {
-        &self.crime_records
-    }
-
     /// Ensure a crime record exists for an agent, returning its index.
     fn ensure_record_index(&mut self, agent: AgentId) -> usize {
         if let Some((idx, _)) = self
@@ -195,22 +190,6 @@ impl NormRegistry {
             .iter()
             .find(|(a, _)| *a == agent)
             .map(|(_, r)| r)
-    }
-
-    /// Record a violation with known punishment amount.
-    pub fn record_violation_with_punishment(
-        &mut self,
-        norm_id: u64,
-        violator: AgentId,
-        tick: u64,
-        punishment_applied: Fixed,
-    ) {
-        self.violations.push(NormViolation {
-            norm_id,
-            violator,
-            tick,
-            punishment_applied,
-        });
     }
 
     /// Compute the norm pressure on an agent for a given action.

@@ -359,10 +359,6 @@ impl SeasonTracker {
         }
     }
 
-    /// Get current day within the season (0-based).
-    pub fn day_of_season(&self) -> u64 {
-        self.tick_in_season / 96 // 96 ticks = 1 day
-    }
 }
 
 /// Apply ecology systems for one tick.

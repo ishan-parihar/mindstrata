@@ -37,9 +37,6 @@ pub const PROTEST_COOLDOWN: u64 = 50;
 /// Grievance that triggers a protest event.
 pub const PROTEST_GRIEVANCE_THRESHOLD: Fixed = Fixed::from_raw(6500); // 0.65
 
-/// How much a protest reduces institutional legitimacy.
-pub const PROTEST_LEGITIMACY_DAMAGE: Fixed = Fixed::from_raw(300); // 0.03
-
 /// How much a successful enforcement response restores legitimacy.
 pub const ENFORCEMENT_LEGITIMACY_GAIN: Fixed = Fixed::from_raw(150); // 0.015
 
@@ -203,17 +200,6 @@ pub fn should_protest(grievance: Fixed, cohesion: Fixed, tick: u64) -> bool {
     let cohesion_factor = cohesion * Fixed::from_f64(0.3);
     let combined = grievance + cohesion_factor;
     combined >= PROTEST_GRIEVANCE_THRESHOLD && tick.is_multiple_of(PROTEST_COOLDOWN)
-}
-
-/// Compute the effect of a protest on institutional legitimacy.
-pub fn protest_legitimacy_effect(protest_size: usize, total_population: usize) -> Fixed {
-    if total_population == 0 {
-        return Fixed::ZERO;
-    }
-    // Larger protests cause more legitimacy damage
-    let size_ratio =
-        Fixed::from_int(protest_size as i64) / Fixed::from_int(total_population as i64);
-    (PROTEST_LEGITIMACY_DAMAGE * size_ratio * Fixed::from_f64(2.0)).clamp_01()
 }
 
 /// Compute how the council responds to a protest.
@@ -381,13 +367,6 @@ mod tests {
             Fixed::from_f64(0.6),
             101,
         ));
-    }
-
-    #[test]
-    fn protest_legitimacy_damage_scales_with_size() {
-        let small = protest_legitimacy_effect(2, 12);
-        let large = protest_legitimacy_effect(8, 12);
-        assert!(large > small);
     }
 
     #[test]

@@ -20,7 +20,7 @@ expression: agent_states
         redemption_script: 0.5199,
         depression_risk: 0.0,
         authority: 0.6,
-        wealth_rank: 0.679,
+        wealth_rank: 0.6791,
     },
     AgentSnapshot {
         name: "Bran",
@@ -56,6 +56,6 @@ expression: agent_states
         redemption_script: 0.5,
         depression_risk: 0.0,
         authority: 0.0,
-        wealth_rank: 0.5076,
+        wealth_rank: 0.5077,
     },
 ]

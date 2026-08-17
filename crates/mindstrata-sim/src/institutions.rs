@@ -404,15 +404,6 @@ impl Institution {
         self.legitimacy = (self.legitimacy + amount).clamp_01();
     }
 
-    /// Increase corruption.
-    pub fn increase_corruption(&mut self, amount: Fixed) {
-        self.corruption = (self.corruption + amount).clamp_01();
-    }
-
-    /// Decrease corruption.
-    pub fn decrease_corruption(&mut self, amount: Fixed) {
-        self.corruption = (self.corruption - amount).max(Fixed::ZERO);
-    }
 }
 
 /// Create default institutions for a settlement.

@@ -18,7 +18,6 @@
 //!   non-negative wealth/resources) with emergent activity (events, memes).
 
 use mindstrata_core::fixed::Fixed;
-use mindstrata_sim::institutions::InstitutionKind;
 
 use crate::behavioral_delta::snapshots_identical;
 use crate::test_helpers::run_sim;

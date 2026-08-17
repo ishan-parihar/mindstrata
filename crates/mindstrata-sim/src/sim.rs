@@ -164,6 +164,29 @@ const FAMINE_WINDOW_TICKS: u64 = 2000;
 /// surviving grain after a 0.7 shock reaches zero mid-window (the ~2.1
 /// plateau showed production alone still matched consumption).
 const FAMINE_GRAIN_DRAIN: Fixed = Fixed::from_raw(50); // 0.005/tick
+/// §32 (Iteration 187): seasonal Cold/Fever vector knobs. Cold contracts
+/// when `temperature < COLD_SEASON_TEMP` (the Winter band); the per-day
+/// rate is `COLD_SEASON_RATE × (COLD_SEASON_TEMP − temperature)`, so at
+/// Winter 0.2 that is ~0.2%/day/agent (~17%/agent/season) — a mild,
+/// honest seasonal burden, not an epidemic. A Cold escalates to Fever at
+/// `FEVER_ESCALATION_RATE` per day (~17%/season) — untreated colds
+/// occasionally worsen.
+const COLD_SEASON_TEMP: f64 = 0.4;
+/// Per-day Cold contraction rate at the seasonal temperature floor.
+const COLD_SEASON_RATE: Fixed = Fixed::from_raw(100); // 0.01
+/// Per-day Cold→Fever escalation rate.
+const FEVER_ESCALATION_RATE: Fixed = Fixed::from_raw(20); // 0.002
+/// §29 (Iteration 187): market price-trend consumption — a buyer facing a
+/// FALLING price holds out for a better deal (bids lower) and a buyer
+/// facing a RISING price pays up (scarcity urgency). Modifier = 1 + trend ×
+/// this, clamped to [0.9, 1.1] — a ±10% band at ±0.2 trend, honest and
+/// modest (the calibrated trade price floor at 1.0 still applies).
+const TREND_BUY_RATE: Fixed = Fixed::from_raw(5000); // 0.5
+/// §19.5.E (Iteration 187): logistics local-scarcity dampening — the
+/// module's raw modifier spans [0.5, 3.0]; applied to trade price as
+/// `1 + (modifier − 1) × this` → [0.95, 1.2], a ±20% local scarcity
+/// premium/discount without exploding the price band.
+const LOGISTICS_PRICE_DAMP: Fixed = Fixed::from_raw(1000); // 0.1
 /// Minimum mutual trust required to initiate a courtship (0.3).
 const COURTSHIP_TRUST_THRESHOLD: Fixed = Fixed::from_raw(3000); // 0.3
 
@@ -3134,7 +3157,26 @@ impl Simulation {
                 }
                 self.agents[i].motivation.hunger.deficit = needs[i].hunger;
                 self.agents[i].motivation.thirst.deficit = needs[i].thirst;
-                self.agents[i].motivation.sleep.deficit = needs[i].fatigue;
+                // §7.3.1 (Iteration 187 — the circadian behavioral consumer):
+                // the body's sleep-pressure clock now drives the sleep drive
+                // instead of running underneath it. `should_sleep()` fires at
+                // night with pressure > 0.4; `sleep_deprived()` at debt > 0.3.
+                // When either fires, the fatigue need is floored so the Rest
+                // action's utility (keyed on `needs.fatigue` via the
+                // DecisionContext) and the §8.1.5 sleep motive both respond —
+                // the agent actually lies down when its circadian clock says
+                // so. Deterministic, no RNG; identity-at-zero (a rested,
+                // daytime agent keeps its raw fatigue).
+                let circadian = &self.agents[i].embodied.circadian;
+                let sleep_deficit = if circadian.sleep_deprived() {
+                    Fixed::from_f64(0.8)
+                } else if circadian.should_sleep() {
+                    Fixed::from_f64(0.6)
+                } else {
+                    needs[i].fatigue
+                };
+                needs[i].fatigue = needs[i].fatigue.max(sleep_deficit);
+                self.agents[i].motivation.sleep.deficit = sleep_deficit;
                 // §8.1.5 (P2/P3 re-audit — safety-need ratchet): the legacy
                 // `needs.safety` accumulator has ZERO consumers anywhere in
                 // the sim (no action relieves it; SeekSafety has no aligned
@@ -3355,6 +3397,18 @@ impl Simulation {
                     // consistent with update() — both skip together on
                     // budget exhaustion.
                     let ef_depth = self.agents[i].cognitive_runtime.effective_planning_depth();
+                    // §8.1.16 (Iteration 187 — the psychopathology cognitive
+                    // consumer): a mental-health collapse halves the
+                    // executive fold that feeds planning confidence — the
+                    // `cognitive_modifier()` interface is live, gated on the
+                    // same `is_impaired()` crisis threshold as the social
+                    // gate above. ONE-SIDED: healthy agents keep the exact
+                    // pre-Iter-187 value.
+                    let ef_depth = if self.agents[i].psychopathology.is_impaired() {
+                        ef_depth * Fixed::from_f64(0.5)
+                    } else {
+                        ef_depth
+                    };
                     self.agents[i].prospection.planning_confidence =
                         (self.agents[i].prospection.planning_confidence + ef_depth)
                             * Fixed::from_f64(0.5);
@@ -4461,7 +4515,17 @@ impl Simulation {
                             // Zero-blast by construction — no agent is ever
                             // Background in any calibrated window (Iter-145
                             // probe: 0B at every size/seed).
-                            a.agent_tier.tier.runs_social_interactions(),
+                            // §8.1.16 (Iteration 187 — the psychopathology
+                            // consumer): a mental-health collapse
+                            // (`is_impaired()`: overall_health < 0.5 — the
+                            // sustained stress/trauma crisis band, not daily
+                            // mood) also withdraws the agent from the social
+                            // pass — depression and paranoia isolate. The
+                            // `social_modifier()` interface is thereby live
+                            // (its gate semantics: participation is cut once
+                            // the impairment threshold is crossed).
+                            a.agent_tier.tier.runs_social_interactions()
+                                && !a.psychopathology.is_impaired(),
                         )
                     })
                     .collect();
@@ -5639,6 +5703,56 @@ impl Simulation {
                         disease = ?kind,
                         "Epidemic: disease transmitted"
                     );
+                }
+            }
+        }
+
+        // ── 17b-2. §32 seasonal Cold/Fever vector (Iteration 187) ──
+        // The disease system's Cold/Fever kinds were unreachable in real
+        // runs (defined + unit-tested, never seeded — audit FINDING 3). This
+        // daily pass makes them seasonal: when the weather is cold
+        // (temperature < 0.4, the Winter band), each susceptible agent rolls
+        // a small chance to catch a Cold, and a Cold can escalate into a
+        // Fever (an untreated cold's secondary infection). Deterministic
+        // (the seeded Social stream), sparse (daily gate + tiny rates: at
+        // Winter temperature 0.2, ~0.2%/day per agent → ~17%/agent/season),
+        // and same-kind dedup-guarded like the epidemic pass. Cold/Fever
+        // resolve through the normal `system_health` duration path, so the
+        // per-kind cap (one of each kind) holds.
+        if phases.is_daily {
+            let n = self.agents.len();
+            let cold_season =
+                (Fixed::from_f64(COLD_SEASON_TEMP) - self.weather.temperature).clamp_01();
+            if cold_season > Fixed::ZERO {
+                for i in 0..n {
+                    if self.agent_diseases[i].len() >= health::MAX_CONCURRENT_DISEASES {
+                        continue;
+                    }
+                    let has_cold = self.agent_diseases[i]
+                        .iter()
+                        .any(|d| d.kind == health::DiseaseKind::Cold);
+                    let has_fever = self.agent_diseases[i]
+                        .iter()
+                        .any(|d| d.kind == health::DiseaseKind::Fever);
+                    if !has_cold {
+                        let cold_roll = Fixed::from_f64(
+                            self.rng.get_mut(RngStream::Social).random::<f64>(),
+                        );
+                        if cold_roll < COLD_SEASON_RATE * cold_season {
+                            self.agent_diseases[i]
+                                .push(health::ActiveDisease::new(health::DiseaseKind::Cold));
+                            tracing::debug!(agent = i, "Seasonal cold contracted");
+                        }
+                    } else if !has_fever {
+                        let fever_roll = Fixed::from_f64(
+                            self.rng.get_mut(RngStream::Social).random::<f64>(),
+                        );
+                        if fever_roll < FEVER_ESCALATION_RATE {
+                            self.agent_diseases[i]
+                                .push(health::ActiveDisease::new(health::DiseaseKind::Fever));
+                            tracing::debug!(agent = i, "Cold escalated into fever");
+                        }
+                    }
                 }
             }
         }
@@ -11722,7 +11836,33 @@ impl Simulation {
                         // Trust discount: high trust → lower price
                         let trust_modifier = Fixed::from_f64(1.0) - trust * Fixed::from_f64(0.2)
                             + (Fixed::ONE - trust) * Fixed::from_f64(0.1);
-                        let price = (base_price * trust_modifier).max(Fixed::from_f64(1.0));
+                        // §29 (Iteration 187 — the price-trend consumer): the
+                        // market's 5-sample price trend was write-only (audit
+                        // FINDING 4). A falling price lets the buyer haggle
+                        // down; a rising price has them pay up (scarcity
+                        // urgency). Mean-zero: trend 0 → modifier exactly
+                        // 1.0, byte-identical to the pre-Iter-187 price.
+                        let trend = self.market.price_trend(GRAIN_RESOURCE_ID);
+                        let trend_modifier = (Fixed::ONE + trend * TREND_BUY_RATE)
+                            .clamp(Fixed::from_f64(0.9), Fixed::from_f64(1.1));
+                        // §19.5.E (Iteration 187 — the logistics consumer):
+                        // the module's `local_scarcity_modifier` was fully
+                        // orphaned (audit FINDING 6). The site's own grain
+                        // stock now prices its grain — a scarce farm
+                        // commands a premium, an overflowing one discounts.
+                        // Damped from the raw [0.5, 3.0] band to [0.95, 1.2].
+                        let local_modifier = crate::logistics::local_scarcity_modifier(
+                            &self.world.sites[farm_idx].inventory,
+                            GRAIN_RESOURCE_ID,
+                            Fixed::from_f64(1.0),
+                        );
+                        let local_price_mod =
+                            (local_modifier - Fixed::ONE) * LOGISTICS_PRICE_DAMP + Fixed::ONE;
+                        let price = (base_price
+                            * trust_modifier
+                            * trend_modifier
+                            * local_price_mod)
+                            .max(Fixed::from_f64(1.0));
                         let cost = price * quantity;
                         if buyer_coin >= cost {
                             let taken =
@@ -12049,6 +12189,11 @@ impl Simulation {
                 // `last_prediction_error`; the value seen here is the prior
                 // tick's). Zero in calm windows → byte-identical.
                 agent.neural_like.expectation.last_prediction_error,
+                // §7.2.2 (Iteration 187 — the S2-2-2 arousal consumer): the
+                // biological endocrine arousal level now feeds the threat
+                // bias — a physiologically aroused agent is hypervigilant.
+                // Mean-zero at the 0.5 anchor inside `recompute_biases`.
+                agent.embodied.endocrine.arousal.level,
             );
 
             // §19.5.G: Update status from current wealth and social connections
@@ -12365,10 +12510,43 @@ impl Simulation {
                                         (self.agents[to_idx].emotions.fear
                                             + violence_result.fear_induced)
                                             .clamp_01();
-                                    // Apply injury to target's health
-                                    self.agents[to_idx].body.health =
-                                        (self.agents[to_idx].body.health - violence_result.injury)
-                                            .max(Fixed::ZERO);
+                                    // Apply injury to target's health.
+                                    // §32 (Iteration 187 — the apply_injury
+                                    // wiring): the lone WoundInfection source
+                                    // (`apply_injury`) was dead code with a
+                                    // hardcoded RNG; it now runs here with a
+                                    // real seeded draw. Severity is passed as
+                                    // `injury × 10` so `apply_injury`'s
+                                    // `severity × 0.1` damage reproduces the
+                                    // legacy inline `health -= injury` EXACTLY
+                                    // (the pre-Iter-187 damage path is
+                                    // unchanged); the new energy drain
+                                    // (`injury × 0.5`) is the honest addition
+                                    // — injuries sap strength. The wound-
+                                    // infection roll uses the agent's live
+                                    // `injury_chance` config.
+                                    let injury = violence_result.injury;
+                                    if injury > Fixed::ZERO {
+                                        let wound_roll = Fixed::from_f64(
+                                            self.rng
+                                                .get_mut(RngStream::Behavior)
+                                                .random::<f64>(),
+                                        );
+                                        // Destructure the body borrow so the
+                                        // two disjoint fields (health, energy)
+                                        // can be passed alongside the separate
+                                        // `agent_diseases` vec.
+                                        let body = &mut self.agents[to_idx].body;
+                                        let diseases = &mut self.agent_diseases[to_idx];
+                                        health::apply_injury(
+                                            &mut body.health,
+                                            &mut body.energy,
+                                            diseases,
+                                            injury * Fixed::from_f64(10.0),
+                                            &self.health_config,
+                                            wound_roll,
+                                        );
+                                    }
                                     // Record injury
                                     self.agents[to_idx].conflict.record_injury();
                                     // Attacker accumulates trauma too
