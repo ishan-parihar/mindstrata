@@ -1187,6 +1187,47 @@ pub fn render_psychology_inspector(
         out.push('\n');
     }
 
+    // ── Goal History (Iteration 199) ──
+    // §3.2: the rejected/completed lists feed goal-generation learning
+    // (recent rejections suppress re-forming a kind, completions reinforce);
+    // surface the last few of each so the learning is observable in play.
+    out.push_str("── §3.2: Goal History (learning) ──\n\n");
+    if agent.rejected_goals.is_empty() && agent.completed_goals.is_empty() {
+        out.push_str("  (no goal history yet)\n\n");
+    } else {
+        if !agent.rejected_goals.is_empty() {
+            out.push_str(&format!(
+                "  rejected ({}): ",
+                agent.rejected_goals.len()
+            ));
+            let kinds: Vec<String> = agent
+                .rejected_goals
+                .iter()
+                .rev()
+                .take(6)
+                .map(|g| format!("{:?}", g.kind))
+                .collect();
+            out.push_str(&kinds.join(", "));
+            out.push_str("  ← suppresses re-forming\n");
+        }
+        if !agent.completed_goals.is_empty() {
+            out.push_str(&format!(
+                "  completed ({}): ",
+                agent.completed_goals.len()
+            ));
+            let kinds: Vec<String> = agent
+                .completed_goals
+                .iter()
+                .rev()
+                .take(6)
+                .map(|g| format!("{:?}", g.kind))
+                .collect();
+            out.push_str(&kinds.join(", "));
+            out.push_str("  → reinforces\n");
+        }
+        out.push('\n');
+    }
+
     // ── Conflict State ──
     out.push_str("── §19.5.H: Conflict State ──\n\n");
     out.push_str(&format!(
@@ -1744,6 +1785,55 @@ mod tests {
         assert_eq!(ui.view, View::Map);
         ui.cycle_view();
         assert_eq!(ui.view, View::Dashboard);
+    }
+
+    #[test]
+    fn psychology_inspector_shows_goal_history_learning_section() {
+        // Iteration 199: the rejected/completed goal lists were write-only
+        // in the sim; the psychology inspector now surfaces them as the
+        // observable "goal history (learning)" record. Run a short sim so
+        // the lists are populated (completions accrue from the first
+        // completed action), then render and assert the section exists.
+        let config = mindstrata_sim::sim::SimConfig {
+            seed: 42,
+            max_ticks: 500,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = mindstrata_sim::Simulation::new(config);
+        sim.populate();
+        sim.run(500);
+        let agent = &sim.agents[0];
+        let out = render_psychology_inspector(0, "anna", agent);
+        assert!(out.contains("Goal History (learning)"), "{out}");
+        assert!(out.contains("completed ("), "{out}");
+        // The completion list must have entries after 500 ticks (the
+        // golden-window probe shows ~600 completions/12 agents/1000 ticks).
+        assert!(
+            !agent.completed_goals.is_empty(),
+            "completed_goals should be populated after 500 ticks"
+        );
+    }
+
+    #[test]
+    fn psychology_inspector_goal_history_handles_empty_lists() {
+        // A freshly populated agent (no ticks run) has empty lists — the
+        // section must degrade to the "no goal history yet" placeholder.
+        let config = mindstrata_sim::sim::SimConfig {
+            seed: 42,
+            max_ticks: 0,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = mindstrata_sim::Simulation::new(config);
+        sim.populate();
+        let agent = &sim.agents[0];
+        let out = render_psychology_inspector(0, "anna", agent);
+        assert!(out.contains("(no goal history yet)"), "{out}");
     }
 
     #[test]
