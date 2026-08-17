@@ -296,4 +296,23 @@ mod tests {
         s.update_automaticity(Fixed::from_f64(0.8), Fixed::ZERO);
         assert!(s.automaticity > Fixed::ZERO);
     }
+
+    /// §17 (Iteration 197): higher neuroplasticity (fed by the
+    /// cognitive-development modulation at the practice call site) must
+    /// grow proficiency faster — the life-stage learning channel.
+    #[test]
+    fn higher_neuroplasticity_learns_faster() {
+        let mut low = SkillState::default();
+        let mut high = SkillState::default();
+        for _ in 0..100 {
+            low.practice(0, 0, Fixed::from_f64(0.4));
+            high.practice(0, 0, Fixed::from_f64(0.9));
+        }
+        assert!(
+            high.proficiency(0) > low.proficiency(0),
+            "higher neuroplasticity must learn faster ({} vs {})",
+            high.proficiency(0),
+            low.proficiency(0)
+        );
+    }
 }

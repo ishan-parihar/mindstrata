@@ -4808,22 +4808,41 @@ impl Simulation {
                                 }
                                 _ => Fixed::from_f64(0.2),
                             };
+                            // Iteration 197: a fully-socialized agent (the §17
+                            // developmental state — grows through childhood)
+                            // registers interactions more strongly, so its
+                            // bonds advance faster. Baseline-corrected: scale
+                            // is exactly 1.0 at the default 0.5 (all adult
+                            // populations are byte-identical), rising to 1.25
+                            // at full socialization, falling to 0.75 at
+                            // unsocialized 0 — only agents whose socialization
+                            // actually developed diverge.
+                            let ti_social = Fixed::ONE
+                                + (self.agents[ti].developmental.socialization_completeness
+                                    - Fixed::from_f64(0.5))
+                                    * Fixed::from_f64(0.5);
+                            let fi_social = Fixed::ONE
+                                + (self.agents[fi].developmental.socialization_completeness
+                                    - Fixed::from_f64(0.5))
+                                    * Fixed::from_f64(0.5);
                             let l_pos = Self::relationship_v2_pos(ti, fi);
                             let rv2 = &mut self.agents[ti].relationship_v2s[l_pos];
                             rv2.obligation = (rv2.obligation + effect.obligation_delta).clamp_01();
                             rv2.admiration = (rv2.admiration + effect.reputation_delta).clamp_01();
+                            let magnitude_ti = (magnitude * ti_social).clamp_01();
                             if kind_is_hostile {
-                                rv2.record_negative(tick_u64, magnitude);
+                                rv2.record_negative(tick_u64, magnitude_ti);
                             } else {
-                                rv2.record_positive(tick_u64, magnitude);
+                                rv2.record_positive(tick_u64, magnitude_ti);
                             }
                             let s_pos = Self::relationship_v2_pos(fi, ti);
                             let rv2s = &mut self.agents[fi].relationship_v2s[s_pos];
                             rv2s.respect = (rv2s.respect + effect.status_delta).clamp_01();
+                            let magnitude_fi = (magnitude * fi_social).clamp_01();
                             if kind_is_hostile {
-                                rv2s.record_negative(tick_u64, magnitude);
+                                rv2s.record_negative(tick_u64, magnitude_fi);
                             } else {
-                                rv2s.record_positive(tick_u64, magnitude);
+                                rv2s.record_positive(tick_u64, magnitude_fi);
                             }
                         }
                     }
@@ -12533,9 +12552,24 @@ impl Simulation {
                 if practiced.is_some() {
                     // §8.1.19: practice grows proficiency (difficulty-scaled,
                     // clamped); neuroplasticity is the agent's own trait.
-                    agent
-                        .psych_skills
-                        .practice(skill_id, tick_u64, agent.psych_skills.neuroplasticity);
+                    // Iteration 197: cognitive_development (the §17
+                    // life-stage state — 0.1 infant → 1.0 adult → decline
+                    // past 50) modulates how easily the agent learns.
+                    // Baseline-corrected: exactly 1.0 at the default 0.7,
+                    // rising to 1.3 at full adult cognition, falling to 0.85
+                    // at infant 0.1 — populate-default agents are exact
+                    // no-ops (the developmental pass only rewrites
+                    // cognitive_development for Focal agents), and only
+                    // agents whose cognition actually developed diverge.
+                    let cognitive_scale = Fixed::ONE
+                        + (agent.developmental.cognitive_development
+                            - Fixed::from_f64(0.7))
+                            * Fixed::from_f64(0.5);
+                    agent.psych_skills.practice(
+                        skill_id,
+                        tick_u64,
+                        (agent.psych_skills.neuroplasticity * cognitive_scale).clamp_01(),
+                    );
                     // §8.1.19: habit formation at the 0.1-proficiency
                     // milestone — the same gate the procedural-memory encode
                     // uses, so habits arrive with genuine mastery (~100

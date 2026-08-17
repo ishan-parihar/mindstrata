@@ -682,6 +682,27 @@ mod tests {
         assert_eq!(r.last_update_tick, 20);
     }
 
+    /// §17 (Iteration 197): the socialization-completeness scale at the
+    /// sim call site modulates interaction magnitude — a fully-socialized
+    /// agent's bonds advance faster. The underlying contract: a stronger
+    /// positive interaction must build more trust than a weaker one (this
+    /// is the lever the baseline-corrected socialization scale pulls).
+    #[test]
+    fn stronger_positive_interaction_builds_more_trust() {
+        let mut weak = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        let mut strong = RelationshipV2::new(AgentId::new(0), AgentId::new(1));
+        weak.record_positive(10, Fixed::from_f64(0.2));
+        strong.record_positive(10, Fixed::from_f64(0.6));
+        assert!(
+            strong.trust > weak.trust,
+            "stronger positive interactions must build more trust ({} vs {})",
+            strong.trust,
+            weak.trust
+        );
+        assert!(strong.affection > weak.affection);
+        assert!(strong.intimacy > weak.intimacy);
+    }
+
     #[test]
     fn dormant_relationship_skips_decay() {
         // §17.3: A non-dirty relationship at a non-daily-boundary tick
