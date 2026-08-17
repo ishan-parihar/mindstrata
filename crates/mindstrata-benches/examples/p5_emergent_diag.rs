@@ -7,8 +7,8 @@
 //!
 //! For each (scenario, seed): prints per-sample-horizon snapshots of
 //!   - council legitimacy / faction count / avg grievance / population /
-//!     revolution ticks so far / life-theme histogram
-//! and a final per-agent theme + script-balance dump for the theme flag.
+//!     revolution ticks so far / life-theme histogram, plus a final
+//!     per-agent theme + script-balance dump for the theme flag.
 
 use mindstrata_core::fixed::Fixed;
 use mindstrata_sim::institutions::InstitutionKind;
@@ -114,7 +114,7 @@ fn main() {
             sim.run(sample.min(horizon - ticks_run));
             ticks_run += sample.min(horizon - ticks_run);
             let revs = revolution_count(&sim);
-            if ticks_run % 10000 == 0 || ticks_run == horizon {
+            if ticks_run.is_multiple_of(10000) || ticks_run == horizon {
                 println!(
                     "  t={ticks_run:>6} pop={:<3} legit={:.3} factions={} grievance={:.3} revs={} (+{}) themes={:?}",
                     sim.agents.len(),

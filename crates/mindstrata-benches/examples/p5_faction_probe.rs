@@ -58,7 +58,7 @@ fn main() {
         if first_faction.is_none() && (v1 > 0 || v2_active > 0) {
             first_faction = Some(t);
         }
-        if t % 5000 == 0 {
+        if t.is_multiple_of(5000) {
             let legit = sim
                 .institutions
                 .iter()

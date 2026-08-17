@@ -74,7 +74,7 @@ impl BioStats {
 fn stats(label: &str, values: impl IntoIterator<Item = Fixed>) -> BioStats {
     BioStats {
         label: label.to_string(),
-        values: values.into_iter().map(|v| v.to_f64()).collect(),
+        values: values.into_iter().map(mindstrata_core::Fixed::to_f64).collect(),
     }
 }
 
@@ -194,8 +194,8 @@ fn main() {
             sim
         }),
         ("famine-20K", |_s: u64| {
-            let mut sim = scenario_sim(Scenario::famine(), 20_000);
-            sim
+            
+            scenario_sim(Scenario::famine(), 20_000)
         }),
     ];
     for (name, make) in makers {

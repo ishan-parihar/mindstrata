@@ -71,7 +71,7 @@ fn main() {
             .iter()
             .filter(|d| !d.is_empty())
             .count();
-        let total_entries: usize = sim.agent_diseases.iter().map(|d| d.len()).sum();
+        let total_entries: usize = sim.agent_diseases.iter().map(std::vec::Vec::len).sum();
         println!(
             "  t={t:>7}: chunk={seg:5.2}s events={} sick={sick}/{} entries={total_entries}",
             sim.event_count(),

@@ -97,12 +97,11 @@ fn main() {
     );
 
     let mut all_ok = true;
-    let mut t = 0u64;
     // Phase 1: run to the injection tick (1000 — right after the
     // Epidemic shock at tick 500 has established) so the secondary
     // vectors enter alongside an active epidemic.
     sim.run(INJECT_TICK);
-    t = INJECT_TICK;
+    let mut t = INJECT_TICK;
     inject(&mut sim, DiseaseKind::Cold, t);
     inject(&mut sim, DiseaseKind::Fever, t);
     inject(&mut sim, DiseaseKind::WoundInfection, t);

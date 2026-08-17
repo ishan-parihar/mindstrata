@@ -45,7 +45,7 @@ fn main() {
             let mut max_depression = 0.0f64;
             let mut max_sadness = 0.0f64;
             let mut despair_over_gate = 0usize;
-            for (i, a) in sim.agents.iter().enumerate() {
+            for a in &sim.agents {
                 hunger += a.needs.hunger.to_f64();
                 thirst += a.needs.thirst.to_f64();
                 stress += a.embodied.endocrine.stress.level.to_f64();
@@ -74,8 +74,8 @@ fn main() {
                 }
             }
             println!(
-                "[{name} @{horizon:>6}] n={n:.0} hunger={:.3} thirst={:.3} stress={:.3} \
-                 arousal={:.3} valence={valence:.3} grain={grain:.2} maxH={max_hunger:.3} \
+                "[{name} @{horizon:>6}] n={n:.0} hunger={hunger:.3} thirst={thirst:.3} stress={stress:.3} \
+                 arousal={arousal:.3} valence={valence:.3} grain={grain:.2} maxH={max_hunger:.3} \
                  gate={over_gate} despair={despair:.3} maxD={max_despair:.3} dOverG={despair_over_gate} \
                  sadness={sadness:.3} maxSad={max_sadness:.3} depress={depression:.4} \
                  maxDep={max_depression:.4} chronic={chronic:.3}",

@@ -248,6 +248,95 @@ mod tests {
         );
     }
 
+    /// Iteration 193: humiliation and moral injury are now dedicated causal
+    /// inputs into paranoia and resentment — the two risk channels that were
+    /// structurally dead at the sim call site (both hardcoded ZERO). A
+    /// humiliated agent must accumulate paranoia + resentment; a morally
+    /// injured agent (witnessing sacred violations) must accumulate
+    /// resentment; control agents with neither stay at zero.
+    #[test]
+    fn humiliation_and_moral_injury_feed_paranoia_and_resentment() {
+        let mut humiliated = PsychopathologyState::default();
+        let mut injured = PsychopathologyState::default();
+        let mut control = PsychopathologyState::default();
+        for _ in 0..500 {
+            humiliated.tick_update(
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::from_f64(0.5), // humiliation_recent
+                Fixed::ZERO,
+                Fixed::ZERO, // moral_injury
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+            );
+            injured.tick_update(
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::from_f64(0.5), // moral_injury
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+            );
+            control.tick_update(
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+            );
+        }
+        assert!(
+            humiliated.paranoia_risk > Fixed::from_f64(0.01),
+            "humiliation must feed paranoia, got {}",
+            humiliated.paranoia_risk
+        );
+        assert!(
+            humiliated.resentment_risk > Fixed::ZERO,
+            "humiliation must feed resentment, got {}",
+            humiliated.resentment_risk
+        );
+        assert!(
+            injured.resentment_risk > Fixed::from_f64(0.01),
+            "moral injury must feed resentment, got {}",
+            injured.resentment_risk
+        );
+        assert_eq!(
+            control.paranoia_risk,
+            Fixed::ZERO,
+            "control must stay at zero paranoia"
+        );
+        assert_eq!(
+            control.resentment_risk,
+            Fixed::ZERO,
+            "control must stay at zero resentment"
+        );
+        // Both are secondary drivers: humiliation must not dominate the
+        // paranoia channel beyond the documented weight.
+        assert!(
+            humiliated.paranoia_risk < Fixed::from_f64(0.5),
+            "humiliation must not dominate paranoia, got {}",
+            humiliated.paranoia_risk
+        );
+    }
+
     #[test]
     fn social_support_reduces_depression() {
         let mut p = PsychopathologyState::default();

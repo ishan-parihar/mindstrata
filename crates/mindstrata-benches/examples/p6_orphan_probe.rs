@@ -59,7 +59,6 @@ fn main() {
         let (mut sleep_pressure, mut sleep_debt) = (0.0f64, 0.0f64);
         let mut threat_bias = 0.0f64;
         let (mut needs_hunger, mut needs_thirst) = (0.0f64, 0.0f64);
-        let (mut body_hunger, mut body_thirst) = (0.0f64, 0.0f64);
         let mut kinds: BTreeSet<String> = BTreeSet::new();
         let mut total_diseases = 0usize;
         // §7.2.2 (Iteration 189 — graded-stress distribution): count agents
@@ -79,8 +78,6 @@ fn main() {
             threat_bias += a.attention.threat_bias.to_f64();
             needs_hunger += a.needs.hunger.to_f64();
             needs_thirst += a.needs.thirst.to_f64();
-            body_hunger += a.body.hunger.to_f64();
-            body_thirst += a.body.thirst.to_f64();
             total_diseases += sim.agent_diseases[i].len();
             stress_max = stress_max.max(s);
             if s >= 0.999 {

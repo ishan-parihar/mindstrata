@@ -3580,9 +3580,33 @@ impl Simulation {
                         chronic_stress,
                         trauma_load,
                         social_isolation,
-                        Fixed::ZERO, // humiliation_recent
+                        // Iteration 193: humiliation_recent was hardcoded
+                        // ZERO — the paranoia channel's humiliation leg
+                        // (×0.25) and resentment's humiliation leg (×0.2)
+                        // were structurally dead. The live emotion
+                        // `emotions[i].humiliation` (status_threat ×
+                        // identity_relevance in appraisal, already consumed
+                        // by the escalation fold) is the natural producer:
+                        // public status loss is exactly the humiliation the
+                        // risk model expects. Zero-at-zero in calm/famine/
+                        // pestilence windows (probe: 0.000 — status_threat
+                        // needs a threat event), so calibrated runs stay
+                        // byte-identical.
+                        emotions[i].humiliation,
                         negative_events,
-                        Fixed::ZERO, // moral_injury
+                        // Iteration 193: moral_injury was hardcoded ZERO —
+                        // resentment's moral-injury leg (×0.25) was
+                        // structurally dead (only chronic_stress×0.1
+                        // remained). The live emotion
+                        // `emotions[i].moral_outrage` (sacredness_violation ×
+                        // goal_relevance in appraisal — the agent's emotional
+                        // response to witnessing its sacred order violated) is
+                        // the natural producer: the morally-outraged agent IS
+                        // morally injured. Zero-at-zero in calibrated windows
+                        // (probe: 0.000 — sacredness_violation needs an
+                        // unfairness event), so calibrated runs stay
+                        // byte-identical.
+                        emotions[i].moral_outrage,
                         chronic_pain,
                         sleep_debt,
                         depression_vuln,

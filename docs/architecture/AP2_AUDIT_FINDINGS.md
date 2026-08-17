@@ -377,3 +377,11 @@ Retracted during vetting: `rumor_v2` (fully live — create/register/tick_all/tr
 
 **Probe-verified result (p12_famine_probe, retained):** famine @1500 — gate=3, sadness 0.235, **despair max 0.157** (was 0.000, 1 over-gate agent now despairs), depression risk starts moving; famine @2000 — gate=2, despair 0.052. Calm byte-identical at every horizon (despair 0.000, maxD 0.000, maxDep 0.0000). **No re-pin wave**: the bleak term is hunger-gated below every calm/pestilence window and the famine integration tests assert grain depletion, not emotions. **Final gate: sim 992/0 (991 + 1 new), full tests-crate 304/0, clippy clean.**
 
+
+## Iteration 193 — humiliation/moral-injury risk channels wired (paranoia + resentment un-deadened)
+
+**Finding 16 — the psychopathology call site hardcoded `humiliation_recent` and `moral_injury` to ZERO (FIXED).** The §9.4 paranoia channel's humiliation leg (×0.25) and resentment's BOTH legs (moral_injury×0.25 + humiliation×0.2) were structurally dead: the inputs arrived as `Fixed::ZERO` at `tick_update`, so resentment_risk could only move via chronic_stress×0.1. Both emotions have live producers already consumed elsewhere — `emotions.humiliation` from status_threat events (also feeding the escalation fold) and `emotions.moral_outrage` from sacredness_violation — so the wiring was purely missing. Probe-verified both emotions sit at 0.000 in calm/famine/pestilence windows (they need status-threat/sacredness events, rare in the default scenarios), so the wiring is zero-blast in production scenarios: golden determinism intact, no re-pin wave. The channels now fire whenever an agent actually suffers status loss or sacred violation — the documented causal inputs finally reach their risk endpoints. New unit test `humiliation_and_moral_injury_feed_resentment` (0.3 humiliation + 0.4 moral_injury → resentment > 0.01 with control 0.000; paranoia moves on humiliation alone).
+
+**Also closed:** remaining clippy debt across the retained probe examples (named-arg format strings, dead `body_hunger/thirst` accumulators, an unreachable `InteractionKind` wildcard, doc-list indentation) — **clippy fully clean, 0 warnings workspace-wide.**
+
+**Final gate: sim 993/0 (992 + 1 new), full tests-crate 304/0, clippy clean, golden byte-identical (zero-blast wiring).**

@@ -1,5 +1,4 @@
 //! Verify golden-window prediction errors stay under the 0.3 fold gate.
-use mindstrata_core::fixed::Fixed;
 use mindstrata_sim::scenario::Scenario;
 use mindstrata_sim::sim::{SimConfig, Simulation};
 fn main() {

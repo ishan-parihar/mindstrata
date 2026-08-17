@@ -5,7 +5,7 @@
 //! conditions). This probe samples the population/food trajectory and
 //! breaks down deaths by cause + agent age to find the collapse driver.
 
-use mindstrata_core::event::{DeathCause, SimEvent};
+use mindstrata_core::event::SimEvent;
 use mindstrata_sim::sim::SimConfig;
 use mindstrata_sim::Simulation;
 

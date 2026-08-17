@@ -89,7 +89,7 @@ fn main() {
 
         // Growth diagnostics (P5_HORIZON < 40000 only)
         if std::env::var("P5_DIAG").is_ok() {
-            let n_diseases: usize = sim.agent_diseases.iter().map(|d| d.len()).sum();
+            let n_diseases: usize = sim.agent_diseases.iter().map(std::vec::Vec::len).sum();
             let n_events = sim.recent_events(10_000_000).len();
             let per_agent: Vec<String> = sim
                 .agent_diseases
@@ -119,7 +119,7 @@ fn main() {
         for e in sim.recent_events(10_000_000) {
             match e {
                 SimEvent::AgentDied { cause, .. } => {
-                    *causes.entry(format!("{cause:?}")).or_insert(0) += 1
+                    *causes.entry(format!("{cause:?}")).or_insert(0) += 1;
                 }
                 SimEvent::ChildBorn { .. } => births += 1,
                 SimEvent::ConflictOccurred {

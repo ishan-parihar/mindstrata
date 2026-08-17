@@ -64,7 +64,6 @@ fn event_kind(e: &SimEvent) -> &'static str {
             InteractionKind::Teach => "teach",
             InteractionKind::Gossip => "gossip",
             InteractionKind::Trade => "trade",
-            _ => "interaction",
         },
         _ => "other",
     }
@@ -78,7 +77,7 @@ fn main() {
 
     for &seed in &seeds {
         let sim = run(seed, ticks);
-        let n = sim.agents.len() as f64;
+        let _n = sim.agents.len() as f64;
 
         // ── Marriage pair sets (active marriages, sorted pair) ─────────
         let mut pairs: Vec<(usize, usize)> = sim
@@ -174,7 +173,7 @@ fn main() {
         let f_mean = if focal.is_empty() { 0.0 } else { focal_scripts / focal.len() as f64 };
         let f_theme_frac = if focal.is_empty() { 0.0 } else { focal_themes / focal.len() as f64 };
 
-        let top = kinds.iter().max_by_key(|(_, v)| **v).map(|(k, _)| *k).unwrap_or("none");
+        let top = kinds.iter().max_by_key(|(_, v)| **v).map_or("none", |(k, _)| *k);
         println!(
             "seed {seed:>2} @{ticks}: deaths={deaths:>2} themes={themes:?} | events={total_events} ({diverse_kinds} kinds, top={top}) | \
              stages={stages:?} nemesis_share={nemesis_share:.2} | joy={joy:.2} anger={anger:.2} fear={fear:.2} att={att_styles:?} | \
