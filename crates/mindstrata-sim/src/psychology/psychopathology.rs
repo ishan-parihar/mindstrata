@@ -63,12 +63,25 @@ impl PsychopathologyState {
         genetic_depression_vulnerability: Fixed,
         genetic_addiction_risk: Fixed,
         social_support: Fixed,
+        // Iteration 192 (famine-chain closure): the documented "sadness ->
+        // despair -> depression-from-deprivation" chain (famine-grain-drain
+        // comment in sim.rs) ended at despair with NO consumer into
+        // depression_risk — the endpoint read only chronic_stress and loss
+        // magnitude, so even a despairing starving agent's depression risk
+        // never moved. Despair is now a dedicated causal input (the
+        // emotional hopelessness of an unmet, uncontrollable situation),
+        // weighted below chronic stress/loss so it modulates rather than
+        // dominates the risk. Zero-at-zero: an agent with no despair adds
+        // nothing, so calm windows are untouched.
+        despair: Fixed,
     ) {
         // Depression: chronic stress + loss + isolation + genetic vulnerability
+        // + emotional despair (Iter-192: the deprivation chain endpoint).
         let depression_input = chronic_stress * Fixed::from_f64(0.2)
             + loss_magnitude * Fixed::from_f64(0.3)
             + social_isolation * Fixed::from_f64(0.2)
             + genetic_depression_vulnerability * Fixed::from_f64(0.15)
+            + despair * Fixed::from_f64(0.2)
             - social_support * Fixed::from_f64(0.1);
         self.depression_risk = (self.depression_risk * Fixed::from_f64(0.995)
             + depression_input * Fixed::from_f64(0.005))
@@ -170,8 +183,69 @@ mod tests {
             Fixed::from_f64(0.5), // genetic depression
             Fixed::ZERO,
             Fixed::from_f64(0.2), // low support
+            Fixed::ZERO,          // despair
         );
         assert!(p.depression_risk > Fixed::ZERO);
+    }
+
+    /// Iteration 192 (famine-chain closure): despair is now a dedicated
+    /// causal input into depression_risk — the documented
+    /// "sadness -> despair -> depression-from-deprivation" chain's last
+    /// link, which previously had NO consumer. A despairing agent (all
+    /// other inputs zero) must accumulate depression risk; the same agent
+    /// with zero despair stays at zero.
+    #[test]
+    fn despair_feeds_depression_risk() {
+        let mut despairing = PsychopathologyState::default();
+        let mut control = PsychopathologyState::default();
+        // 500 calls at the same 0.005 accumulation rate the sim uses.
+        for _ in 0..500 {
+            despairing.tick_update(
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::from_f64(0.5), // despair
+            );
+            control.tick_update(
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO, // no despair
+            );
+        }
+        assert!(
+            despairing.depression_risk > Fixed::from_f64(0.01),
+            "despair must accumulate depression risk, got {}",
+            despairing.depression_risk
+        );
+        assert_eq!(
+            control.depression_risk,
+            Fixed::ZERO,
+            "zero despair must leave depression risk at zero"
+        );
+        // The hopelessness of an unmet need is a real but secondary driver:
+        // below chronic stress/loss weights so it modulates, never dominates.
+        assert!(
+            despairing.depression_risk < Fixed::from_f64(0.5),
+            "despair must not dominate depression risk, got {}",
+            despairing.depression_risk
+        );
     }
 
     #[test]
@@ -189,6 +263,7 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::ZERO,
             Fixed::from_f64(0.9), // high support
+            Fixed::ZERO,          // despair
         );
         // With high support, depression should be low
         assert!(p.depression_risk < Fixed::from_f64(0.1));
@@ -212,6 +287,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ONE,
+            Fixed::ZERO, // despair
         );
         assert!(p.overall_health < Fixed::from_f64(0.5));
     }

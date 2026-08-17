@@ -3588,6 +3588,13 @@ impl Simulation {
                         depression_vuln,
                         addiction_risk,
                         social_support,
+                        // Iteration 192: despair is the emotional hopelessness
+                        // of an unmet need — the documented
+                        // "sadness -> despair -> depression-from-deprivation"
+                        // chain's last link, which previously had no consumer
+                        // into depression_risk. Zero-at-zero: calm agents
+                        // (despair 0.000) contribute nothing.
+                        emotions[i].despair,
                     );
                 }
 
@@ -4858,6 +4865,21 @@ impl Simulation {
                 let isolation_threat =
                     (Fixed::ONE - social_visibility) * Fixed::from_f64(0.08);
                 let attachment_threat = (separation_distress + isolation_threat).clamp_01();
+                // Iteration 192 (famine-chain closure): past the 0.5
+                // goal-congruence gate, the excess unmet need drags the
+                // signed future outlook negative (see the future_implication
+                // field comment below). Keyed on HUNGER — the same signal the
+                // goal-congruence gate uses (`needs[i].hunger < 0.5` above) —
+                // not need_pressure: thirst routinely exceeds 0.5 in calm
+                // windows (drink windows are spaced), so a max(hunger,thirst)
+                // key would fire transient despair in CALM (probe-pinned:
+                // calm maxD 0.880) and break the golden byte-identity.
+                // Hunger stays below 0.5 in calm/pestilence, so the term is
+                // zero there and only the famine window (hunger 0.711 peak)
+                // crosses it.
+                let bleak_excess = (needs[i].hunger - Fixed::from_f64(0.5))
+                    .max(Fixed::ZERO)
+                    * Fixed::from_f64(2.0);
                 let appraisal = Appraisal {
                     goal_relevance: need_pressure.max(threat).max(feud_pressure),
                     goal_congruence: if threat > Fixed::from_f64(0.2) {
@@ -4951,8 +4973,26 @@ impl Simulation {
                     controllability: (personalities[i].conscientiousness * (Fixed::ONE - threat))
                         .clamp_01(),
                     // Signed future outlook; provably in [-1, 1] (threat and
-                    // need_pressure are both clamped to 0..1), no clamp needed.
-                    future_implication: Fixed::ONE - threat - need_pressure,
+                    // need_pressure are both clamped to 0..1), clamped for the
+                    // Iter-192 bleak-excess term below (worst case threat 1.0 +
+                    // need 1.0 + excess 1.0 = -2, so the clamp binds only in
+                    // the impossible simultaneous-max corner).
+                    //
+                    // Iteration 192 (famine-chain closure): `1 - threat -
+                    // need_pressure` can only go negative when threat +
+                    // need_pressure > 1, so a famine (threat 0, need peaking
+                    // at 0.71) left a starving agent at +0.29 -> HOPE fired
+                    // and despair stayed 0.000 (probe-pinned) — the documented
+                    // "sadness -> despair -> depression-from-deprivation"
+                    // chain (famine-grain-drain comment below) died at the
+                    // despair link. Past the 0.5 goal-congruence gate the
+                    // excess unmet need drags the outlook negative at 2x the
+                    // excess (need 0.667 -> 0, need 0.711 -> -0.13, need 1.0
+                    // -> -1.0), so despair is reachable from deprivation
+                    // alone. Below the gate the formula is byte-identical
+                    // (calm/pestilence need ~0.23-0.28 -> unchanged).
+                    future_implication: (Fixed::ONE - threat - need_pressure - bleak_excess)
+                        .clamp(-Fixed::ONE, Fixed::ONE),
                     narrative_meaning: coherence,
                 };
 
