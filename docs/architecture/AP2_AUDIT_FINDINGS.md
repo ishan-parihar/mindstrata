@@ -589,3 +589,28 @@ birth + kinship mirror. Updated both doc comments to reflect the live wiring.
 - snapshots: 8/0 ✅
 - golden: 8/0 ✅
 - clippy: clean ✅
+
+### Iteration 208: narrative_strength placeholder → propaganda-derived
+**AP2 §:** 11.3, 13.4
+**Date:** August 18, 2026
+
+`stabilize_hierarchy`'s `narrative_strength` parameter was a hardcoded 0.3
+placeholder — the comment literally said "placeholder." The §11.3 plan
+specifies narrative strength should derive from institutional propaganda
+capacity. Replaced with: average effectiveness of the institution's active
+propaganda campaigns (0.3 fallback when no campaigns are active, preserving
+the calibrated baseline). This closes the propaganda→cohesion feedback loop:
+strong campaigns strengthen cohesion, weak/corrupted ones do not. The wiring
+is inside the centum-phase `tick_institutional_psychology` block (sim.rs:7697).
+
+**Blast radius:** zero — propaganda campaigns don't fire within the 1000-tick
+golden window (seeded at tick 0 with ~4320-tick intervals), so the fallback
+0.3 preserves byte-identical golden replay and all snapshots.
+
+### Gate
+- sim lib: 1005/0 ✅
+- snapshots: 17/0 ✅
+- golden: 8/0 ✅
+- behavioral_delta: 12/0 ✅
+- property: 21/0 ✅
+- clippy: clean ✅

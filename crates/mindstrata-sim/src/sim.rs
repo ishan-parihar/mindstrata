@@ -7694,11 +7694,37 @@ impl Simulation {
                     .map(|r| r.synchrony)
                     .fold(Fixed::ZERO, |a, b| a + b)
                     * Fixed::from_f64(0.5);
+                // §13.4: Narrative strength derives from the institution's
+                // active propaganda campaigns instead of a static placeholder.
+                // Average the effectiveness of campaigns sponsored by this
+                // institution (0.3 fallback when no campaigns are active
+                // preserves the calibrated baseline). The propaganda system
+                // already computes effectiveness from legitimacy × audience_fear
+                // × repetition × identity_congruence, so this wiring means
+                // propaganda → cohesion is now a live feedback loop: strong
+                // campaigns strengthen cohesion, weak/corrupted ones do not.
+                let narrative_strength = {
+                    let active: Vec<Fixed> = self
+                        .propaganda_registry
+                        .campaigns
+                        .iter()
+                        .filter(|c| c.active && c.sponsor == institution.id as usize)
+                        .map(|c| c.effectiveness)
+                        .collect();
+                    if active.is_empty() {
+                        Fixed::from_f64(0.3)
+                    } else {
+                        let sum: Fixed = active
+                            .iter()
+                            .fold(Fixed::ZERO, |acc, &v| acc + v);
+                        sum / Fixed::from_int(active.len() as i64)
+                    }
+                };
                 crate::social::hierarchy::stabilize_hierarchy(
                     institution,
                     ritual_strength.min(Fixed::ONE),
                     institution.enforcement_capacity,
-                    Fixed::from_f64(0.3), // narrative strength placeholder
+                    narrative_strength,
                 );
 
                 // §16.1: Record ritual provenance trace (format! hoisted outside loop)
