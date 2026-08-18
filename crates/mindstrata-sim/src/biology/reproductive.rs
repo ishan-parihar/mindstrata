@@ -63,13 +63,11 @@ pub enum GestationStage {
 /// inside `ReproductiveState`. Iteration 42 upgraded the flat
 /// `pregnant: bool + pregnancy_progress: Fixed` pair into this struct.
 ///
-/// Zero-drift note: the biological pregnancy lifecycle (conception →
-/// gestation → birth) is currently dormant — births flow through the
-/// probabilistic demography path (§31 `should_birth`), and `attempt_conception`
-/// is not yet wired into the sim (it draws RNG and would perturb calibrated
-/// trajectories). So in real runs `pregnancy` stays `None`, and the richer
-/// fields here are observational state for the future calibrated conception
-/// wiring.
+/// The biological pregnancy lifecycle (conception → gestation → birth) is
+/// fully wired (Iteration 92): `attempt_conception` → `PregnancyState` →
+/// gestation tick → `complete_pregnancy` → birth + kinship mirror. The
+/// probabilistic demography path (`should_birth`) provides a separate,
+/// non-pregnancy birth channel for background fertility.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PregnancyState {
     /// Gestation progress (0 = conception, 1 = birth) — maps 1:1 from the old
@@ -115,8 +113,8 @@ pub struct ReproductiveState {
     pub libido: Fixed,
     /// Pair-bond strength with current partner (0 = none, 1 = deep bond).
     pub pair_bond_strength: Fixed,
-    /// §7.2.6: Current pregnancy, if any. `None` in real runs today (the
-    /// lifecycle is dormant — see [`PregnancyState`]).
+    /// §7.2.6: Current pregnancy, if any. Set by `attempt_conception` (Iter 92);
+    /// `None` when not pregnant.
     #[serde(default)]
     pub pregnancy: Option<PregnancyState>,
     /// Number of children born.

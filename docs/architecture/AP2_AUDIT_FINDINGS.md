@@ -565,3 +565,27 @@ calibrated runs stay byte-identical.
 - snapshots: 8/0 ✅
 - golden: 8/0 ✅
 - clippy: clean ✅
+
+---
+
+## Iteration 207 — Stale doc fix (S4-2-1) + dead accessor removal (S4-2-2)
+
+### S4-2-1: reproductive.rs doc drift (fixed)
+The `PregnancyState` and `ReproductiveState.pregnancy` doc comments said the
+pregnancy lifecycle is "currently dormant" — false since Iteration 92 wired
+`attempt_conception` → `PregnancyState` → gestation → `complete_pregnancy` →
+birth + kinship mirror. Updated both doc comments to reflect the live wiring.
+
+### S4-2-2: dead biology accessors (partially cleaned)
+- `MetabolicState::in_crisis()` — zero production callers (only its own unit
+  test). Removed with `dehydration_detected` test.
+- Already removed in prior iterations: `effective_strength`, `exhausted`,
+  `collapse_risk`, `derived_hunger`, `social_engagement_capacity` (Iter 206),
+  `stress_cognitive_modifier`, `bonding_trust_modifier` (pre-Iter-205).
+- Still live: `should_sleep()` and `sleep_deprived()` (consumed at sim.rs:3196–3198).
+
+### Gate
+- sim lib: 1005/0 ✅ (−1 from removed dehydration_detected test)
+- snapshots: 8/0 ✅
+- golden: 8/0 ✅
+- clippy: clean ✅

@@ -79,10 +79,6 @@ impl MetabolicState {
         self.fat_reserves = (self.fat_reserves + fat_gain).clamp_01();
     }
 
-    /// Whether the agent is in metabolic crisis (starving or dehydrated).
-    pub fn in_crisis(&self) -> bool {
-        self.energy_reserves < Fixed::from_f64(0.15) || self.hydration < Fixed::from_f64(0.15)
-    }
 }
 
 #[cfg(test)]
@@ -107,12 +103,4 @@ mod tests {
         assert!(m.satiety > initial_satiety);
     }
 
-    #[test]
-    fn dehydration_detected() {
-        let m = MetabolicState {
-            hydration: Fixed::from_f64(0.1),
-            ..Default::default()
-        };
-        assert!(m.in_crisis());
-    }
 }
