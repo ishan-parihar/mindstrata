@@ -3452,18 +3452,15 @@ impl Simulation {
                     // consistent with update() — both skip together on
                     // budget exhaustion.
                     let ef_depth = self.agents[i].cognitive_runtime.effective_planning_depth();
-                    // §8.1.16 (Iteration 187 — the psychopathology cognitive
-                    // consumer): a mental-health collapse halves the
-                    // executive fold that feeds planning confidence — the
-                    // `cognitive_modifier()` interface is live, gated on the
-                    // same `is_impaired()` crisis threshold as the social
-                    // gate above. ONE-SIDED: healthy agents keep the exact
-                    // pre-Iter-187 value.
-                    let ef_depth = if self.agents[i].psychopathology.is_impaired() {
-                        ef_depth * Fixed::from_f64(0.5)
-                    } else {
-                        ef_depth
-                    };
+                    // §8.1.16 (Iteration 187 → 211 graduated): the binary
+                    // `is_impaired()` gate (health < 0.5 → halve) is replaced
+                    // by `cognitive_modifier()` which returns `overall_health`
+                    // directly — a smooth gradient instead of a cliff. Fully
+                    // healthy agents (health ≈ 1.0) keep near-full planning
+                    // depth; severely impaired agents (health → 0.0) get
+                    // near-zero. Deterministic, no RNG.
+                    let ef_depth = ef_depth
+                        * self.agents[i].psychopathology.cognitive_modifier();
                     self.agents[i].prospection.planning_confidence =
                         (self.agents[i].prospection.planning_confidence + ef_depth)
                             * Fixed::from_f64(0.5);

@@ -157,9 +157,12 @@ impl PsychopathologyState {
     }
 
     /// Compute modifier for cognitive function from mental health state.
+    /// Returns the agent's `overall_health` directly: fully healthy (1.0)
+    /// gives full planning depth; severely impaired (0.0) gives near-zero.
+    /// Replaces the binary `is_impaired()` gate (§8.1.16) with a smooth
+    /// graduated modifier — no cliff at the 0.5 threshold.
     pub fn cognitive_modifier(&self) -> Fixed {
-        // Mental health impairment reduces cognitive function
-        (Fixed::ONE - self.overall_health * Fixed::from_f64(0.3)).clamp_01()
+        self.overall_health
     }
 
 }
@@ -379,5 +382,48 @@ mod tests {
             Fixed::ZERO, // despair
         );
         assert!(p.overall_health < Fixed::from_f64(0.5));
+    }
+
+    /// Iteration 211: the graduated cognitive_modifier replaces the binary
+    /// is_impaired() gate. Formula: returns overall_health directly.
+    /// Fully healthy → 1.0, severely impaired → ~0.0.
+    #[test]
+    fn cognitive_modifier_equals_overall_health() {
+        let mut p = PsychopathologyState::default();
+        // Default: overall_health = 0.8, modifier should match
+        assert_eq!(p.cognitive_modifier(), p.overall_health);
+        // Impair the agent
+        for _ in 0..500 {
+            p.tick_update(
+                Fixed::from_f64(0.8), // chronic stress
+                Fixed::ZERO,
+                Fixed::from_f64(0.8), // isolation
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::from_f64(0.5), // genetic depression
+                Fixed::ZERO,
+                Fixed::from_f64(0.2), // low support
+                Fixed::ONE,           // despair
+            );
+        }
+        // Modifier should now be < 0.8 and track overall_health
+        assert!(p.cognitive_modifier() < Fixed::from_f64(0.8));
+        assert_eq!(p.cognitive_modifier(), p.overall_health);
+    }
+
+    #[test]
+    fn cognitive_modifier_is_graduated_not_binary() {
+        // The modifier must be smooth: a partially impaired agent (health
+        // = 0.7) gets a partial reduction, not the full 0.5× cliff.
+        let mut p = PsychopathologyState::default();
+        // Manually set health to a mid-range value
+        p.overall_health = Fixed::from_f64(0.7);
+        assert_eq!(p.cognitive_modifier(), Fixed::from_f64(0.7));
+        // The modifier should be between 0.5 and 1.0 (graduated, not binary)
+        assert!(p.cognitive_modifier() > Fixed::from_f64(0.5));
+        assert!(p.cognitive_modifier() < Fixed::ONE);
     }
 }

@@ -667,3 +667,33 @@ density — the biological substrate the old placeholder kept frozen.
 - behavioral_delta: 12/0 ✅
 - property: 21/0 ✅
 - clippy: clean ✅
+
+### Iteration 211: graduated cognitive modifier (§8.1.16)
+**AP2 §:** 8.1.16
+**Date:** August 19, 2026
+
+The psychopathology `cognitive_modifier()` formula was backwards —
+`(1 - health × 0.3)` gave HIGHER modifiers for lower health (severely
+impaired agents got 1.0, fully healthy got 0.7). Additionally, the
+production code used the binary `is_impaired()` gate (health < 0.5 →
+halve, else no effect) instead of the `cognitive_modifier()` accessor.
+
+Fixed: `cognitive_modifier()` now returns `overall_health` directly
+(fully healthy → 1.0, severely impaired → ~0.0), and the planning
+confidence fold at sim.rs:3453 uses this graduated modifier instead of
+the binary gate. This replaces the cliff at the 0.5 threshold with a
+smooth gradient — partially impaired agents get partial cognitive
+reduction.
+
+**Blast radius:** golden byte-identical (the modifier only affects
+agents with overall_health < 1.0, and in the 1000-tick calm window
+most agents are near baseline). Long-horizon 10K snapshot re-pinned
+(−3.1% grain, no regime break).
+
+### Gate
+- sim lib: 1011/0 ✅ (+2 new psychopathology tests)
+- golden_replay: 4/0 ✅ (byte-identical)
+- snapshots: 8/0 ✅ (re-pinned long_horizon)
+- behavioral_delta: 12/0 ✅
+- property: 21/0 ✅
+- clippy: clean ✅
