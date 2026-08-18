@@ -656,7 +656,7 @@ mod tests {
         };
         let weak_rumor = Rumor {
             original_resistance: Fixed::from_f64(0.1),
-            ..strong_rumor.clone()
+            ..strong_rumor
         };
         let personality = make_personality();
 
@@ -711,7 +711,7 @@ mod tests {
         };
         let strong_result = GossipResult {
             original_resistance: Fixed::from_f64(0.9),
-            ..weak_result.clone()
+            ..weak_result
         };
 
         let mut weak_beliefs: Vec<Belief> = vec![];

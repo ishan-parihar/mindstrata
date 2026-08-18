@@ -3771,9 +3771,9 @@ impl Simulation {
                 // Daily cadence: status fields refresh on the daily
                 // decay/sync pattern in this same loop (taboo_penalty,
                 // kinship_penalty below use the same `phases.is_daily`
-                // fold). Deterministic, no RNG; dominance feeds no decision
-                // consumer yet (the accessors are unwired), so the golden
-                // baseline stays byte-identical.
+                // fold). Deterministic, no RNG; dominance feeds
+                // `dominance_aggression_modifier` into `should_escalate`
+                // (Iteration 187), so the level is decision-live.
                 if phases.is_daily {
                     agent.embodied.endocrine.dominance.update(
                         eff_status,

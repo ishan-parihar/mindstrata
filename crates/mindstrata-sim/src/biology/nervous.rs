@@ -324,10 +324,6 @@ impl NervousSystemState {
         .clamp_01();
     }
 
-    /// Social engagement capacity — requires parasympathetic dominance.
-    pub fn social_engagement_capacity(&self) -> Fixed {
-        self.parasympathetic_tone
-    }
 }
 
 #[cfg(test)]
@@ -385,20 +381,6 @@ mod tests {
             );
         }
         assert!(ns.parasympathetic_tone > Fixed::from_f64(0.1));
-    }
-
-    #[test]
-    fn social_engagement_requires_parasympathetic() {
-        let ns_high = NervousSystemState {
-            parasympathetic_tone: Fixed::from_f64(0.8),
-            ..NervousSystemState::default()
-        };
-        assert!(ns_high.social_engagement_capacity() > Fixed::from_f64(0.5));
-        let ns_low = NervousSystemState {
-            parasympathetic_tone: Fixed::from_f64(0.1),
-            ..NervousSystemState::default()
-        };
-        assert!(ns_low.social_engagement_capacity() < Fixed::from_f64(0.3));
     }
 
     #[test]

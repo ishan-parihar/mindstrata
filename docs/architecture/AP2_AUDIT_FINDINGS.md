@@ -543,3 +543,25 @@ calibrated runs stay byte-identical.
 - property: 21/0 ✅
 - behavioral_delta: 12/0 ✅
 - long_horizon: 2/0 ✅
+
+---
+
+## Iteration 206 — Dead accessor removal + stale comment + clippy fixes
+
+### Dead accessor removed
+- `NervousSystemState::social_engagement_capacity()` — thin wrapper over `parasympathetic_tone` with zero production callers (only used in its own test). Removed with its test `social_engagement_requires_parasympathetic`. The underlying `parasympathetic_tone` field remains live (feeds endocrine recovery).
+
+### Stale comment corrected
+- `sim.rs:3775`: "dominance feeds no decision consumer yet (the accessors are unwired)" → now documents that `dominance_aggression_modifier` feeds `should_escalate` (Iteration 187).
+
+### Clippy fixes (rust-best-practices)
+- `integration_tests.rs:12927`: `.len() >= 1` → `!.is_empty()` (clippy::len_zero)
+- `integration_tests.rs:13053`: `.get(0).unwrap()` → `.first().unwrap()` (clippy::get_first)
+- `gossip.rs:659,714`: removed redundant `.clone()` on struct-update syntax (clippy::redundant_clone)
+
+### Gate
+- sim lib: 1006/0 ✅
+- core: 20/0 ✅
+- snapshots: 8/0 ✅
+- golden: 8/0 ✅
+- clippy: clean ✅

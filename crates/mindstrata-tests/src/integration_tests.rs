@@ -12924,7 +12924,7 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
     // extensions as the calm world's triggers slow).
     let mid = crate::test_helpers::run_sim(1, 79000);
     assert!(
-        mid.moral_panic_registry.panics.len() >= 1,
+        !mid.moral_panic_registry.panics.is_empty(),
         "seed 1 must hold a registered panic by 79000 ticks"
     );
     let panic = &mid.moral_panic_registry.panics[0];
@@ -13050,7 +13050,7 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
     // (probe-pinned inactive, intensity 0.0464) — the drain horizon
     // extends 77K → 100K.
     let sim = crate::test_helpers::run_sim(1, 100000);
-    let drained = sim.moral_panic_registry.panics.get(0).unwrap();
+    let drained = sim.moral_panic_registry.panics.first().unwrap();
     assert!(
         !drained.active,
         "the ~21,302-tick-old panic must have fully drained by 100,000"
