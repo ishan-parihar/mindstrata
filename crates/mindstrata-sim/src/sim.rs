@@ -3556,11 +3556,10 @@ impl Simulation {
                     );
                     self.agents[i].self_model.reconcile_self_esteem();
                     // §8.1.7 (P3-2): coherence and security now have
-                    // producers — the two write-only dead fields (probe:
-                    // 0.600/0.500, 12/12 identical in every window). Both
-                    // are observational (only the yearly plasticity reads
-                    // coherence; security has no consumer), so short-horizon
-                    // calibrated runs stay byte-identical.
+                    // producers. Coherence feeds the yearly plasticity gate
+                    // (identity_integration → plastic_update); security is
+                    // observational (no behavioral consumer — see
+                    // psych_probe.rs for diagnostics).
                     self.agents[i].self_model.update_coherence();
                     self.agents[i].self_model.update_security(
                         negative_events,

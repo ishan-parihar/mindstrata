@@ -40,10 +40,10 @@
 //! factor: it is represented by each need's per-need `urgency_weight`
 //! (pre-existing design — competition strength is a property of the need,
 //! not the agent), so the base term is `deficit × urgency_weight`.
-//! All of this is **write-only observational state**:
-//! `dominant_need`/`dominant_pressure` have no consumers in the sim (the
-//! documented future consumer is action-selection bias), so the richer
-//! formula is drift-free by construction.
+//! `dominant_need`/`dominant_pressure` feed `compute_utility()` (the
+//! `dominant_pressure` × `urgency_weight` bonus biases action selection
+//! toward the need-matched action — §8.1.5). The richer formula is
+//! drift-free by construction.
 
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
@@ -150,7 +150,7 @@ pub struct MotivationState {
     /// Dominant need index (updated each tick).
     pub dominant_need: MotiveCategory,
 
-    // ── §8.1.5 full-formula context (write-only observational) ──
+    // ── §8.1.5 full-formula context (feeds compute_utility) ──
     // Per-category modulation is what makes the formula genuinely live: a
     // fearful agent's safety pressure out-competes, an angry agent's justice
     // need rises, scarcity amplifies hunger/thirst — not a uniform multiplier
@@ -323,9 +323,9 @@ impl MotivationState {
         self.recognition.tick();
     }
 
-    /// §8.1.5: set the full-formula context for this tick. Write-only
-    /// observational — the sim derives the values from affect, the
-    /// legitimacy field, and world food/water stocks.
+    /// §8.1.5: set the full-formula context for this tick. The context
+    /// feeds `compute_utility()` — the sim derives the values from affect,
+    /// the legitimacy field, and world food/water stocks.
     pub fn set_context(
         &mut self,
         fear: Fixed,

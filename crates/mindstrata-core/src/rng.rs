@@ -16,7 +16,6 @@ use rand_chacha::ChaCha8Rng;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RngStream {
     World,
-    Psychology,
     Behavior,
     Social,
     Economy,
@@ -28,7 +27,6 @@ impl RngStream {
     /// All defined streams, in a stable order.
     pub const ALL: &'static [RngStream] = &[
         RngStream::World,
-        RngStream::Psychology,
         RngStream::Behavior,
         RngStream::Social,
         RngStream::Economy,
@@ -42,7 +40,6 @@ impl RngStream {
 /// RNG streams are NOT serialised.  To replay, re-seed from the master seed.
 pub struct RngStreams {
     world: ChaCha8Rng,
-    psychology: ChaCha8Rng,
     behavior: ChaCha8Rng,
     social: ChaCha8Rng,
     economy: ChaCha8Rng,
@@ -57,7 +54,6 @@ impl RngStreams {
         // We use different constants per stream to guarantee separation.
         Self {
             world: ChaCha8Rng::seed_from_u64(master_seed.wrapping_add(1)),
-            psychology: ChaCha8Rng::seed_from_u64(master_seed.wrapping_add(2)),
             behavior: ChaCha8Rng::seed_from_u64(master_seed.wrapping_add(3)),
             social: ChaCha8Rng::seed_from_u64(master_seed.wrapping_add(4)),
             economy: ChaCha8Rng::seed_from_u64(master_seed.wrapping_add(5)),
@@ -70,7 +66,6 @@ impl RngStreams {
     pub fn get_mut(&mut self, stream: RngStream) -> &mut ChaCha8Rng {
         match stream {
             RngStream::World => &mut self.world,
-            RngStream::Psychology => &mut self.psychology,
             RngStream::Behavior => &mut self.behavior,
             RngStream::Social => &mut self.social,
             RngStream::Economy => &mut self.economy,

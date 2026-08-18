@@ -505,3 +505,41 @@ Retracted during vetting: `rumor_v2` (fully live — create/register/tick_all/tr
 5. **Unit tests (+2):** `planning_confidence_boosts_work_and_suppresses_idle` and `planning_confidence_leaves_non_planning_actions_untouched`.
 
 **Final gate: sim 1007/0 (+2), full tests-crate 305/0 (incl. long-horizon re-anchor seed 13→5), golden + 7 snapshots green, clippy clean.**
+
+---
+
+## Iteration 205 — Audit Hygiene (comment correctness + dead-code removal)
+
+### S4-1: Dead RngStream::Psychology (closed)
+The `RngStream::Psychology` enum variant, its `psychology` field in `RngStreams`, the seed
+derivation `wrapping_add(2)`, and the match arm in `get_mut()` were dead code — zero
+production consumers across the entire codebase (only the rng.rs unit tests touched it).
+Removed the variant, field, and match arm. Since the stream was never consumed, all
+calibrated runs stay byte-identical.
+
+### Stale write-only comments (corrected)
+- `motivation.rs:43`: "write-only observational state... no consumers" → now documents that
+  `dominant_need`/`dominant_pressure` feed `compute_utility()`.
+- `motivation.rs:153,326`: "write-only observational" → now documents the `compute_utility`
+  consumer path.
+- `relational_power.rs:9`: "write-only today (nothing downstream reads it)" → now documents
+  that `power_balance` feeds `quality()` (domination → resentment, §11.2).
+- `sim.rs:3559`: "Both are observational (only the yearly plasticity reads coherence;
+  security has no consumer)" → now documents that coherence feeds `plastic_update` via
+  `identity_integration`, while security is genuinely observational.
+
+### Verified live (no gap)
+- `socialization_completeness` → feeds interaction magnitudes (sim.rs:4835–4839). ✅
+- `cognitive_development` → feeds focal-agent cognition (sim.rs:12685). ✅
+- `self_model.security` → genuinely observational (no behavioral consumer). Intentional.
+- `power_balance` → feeds `quality()` (relationship_v2.rs:485). ✅
+- `dominant_need`/`dominant_pressure` → feed `compute_utility()` (actions.rs:476–485). ✅
+
+### Gate
+- sim lib: 1007/0 ✅
+- core: 20/0 ✅
+- snapshots: 8/0 ✅
+- golden: 8/0 ✅
+- property: 21/0 ✅
+- behavioral_delta: 12/0 ✅
+- long_horizon: 2/0 ✅

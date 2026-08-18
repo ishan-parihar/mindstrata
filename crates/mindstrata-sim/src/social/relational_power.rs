@@ -6,10 +6,9 @@
 //! `RelationshipV2.power_balance`, which was declared but never updated — the
 //! classic declared-but-dead-field pattern this iteration closes.
 //!
-//! Zero-drift design: `power_balance` is write-only today (nothing downstream
-//! reads it; it is not in `agent_summaries()`), so populating it cannot perturb
-//! any calibrated run, snapshot, or golden baseline. The computation is a pure
-//! function of existing relationship + status state — no RNG, fully
+//! Zero-drift design: `power_balance` is read by `quality()` (domination
+//! feeds resentment — §11.2) and by the inspector API. The computation is a
+//! pure function of existing relationship + status state — no RNG, fully
 //! deterministic.
 
 use mindstrata_core::fixed::Fixed;
