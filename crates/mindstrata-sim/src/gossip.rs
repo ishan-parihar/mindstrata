@@ -93,6 +93,11 @@ pub struct GossipResult {
     pub belief_delta: Fixed,
     /// Whether the rumor was accepted (passed salience threshold).
     pub accepted: bool,
+    /// Resistance of the source belief the rumor was born from (how hard
+    /// the ORIGINAL belief was to update) — inherited by a newly-created
+    /// listener belief so a rumor from a deeply-held source seeds a more
+    /// entrenched belief than one from a weakly-held source.
+    pub original_resistance: Fixed,
 }
 
 /// Compute the mutated confidence of a rumor during transmission.
@@ -101,15 +106,33 @@ pub struct GossipResult {
 /// * transmission_fidelity * emotional_salience_bias * identity_bias"
 pub fn mutate_rumor(
     rumor: &Rumor,
-    _source_trust: Fixed,
+    source_trust: Fixed,
     spreader_emotions: &DiscreteEmotions,
     spreader_personality: &Personality,
     listener_personality: &Personality,
     gossip_base_fidelity: Fixed,
     gossip_emotional_distortion: Fixed,
 ) -> (Fixed, Fixed) {
+    // §11.2 source factors — the relay previously dropped BOTH of them:
+    // `source_trust` was received but unused (`_source_trust`), and
+    // `original_resistance` (captured at `from_belief`) was never read.
+    // A rumor born from a firmly-held belief and spread through a trusted
+    // relationship survives the relay with higher fidelity: the source's
+    // conviction anchors the message against telephone-game drift, while
+    // a weakly-held belief from a low-trust source degrades fast.
+    //
+    // The anchor applies at hops=0 too (the sim's only condition — rumors
+    // are re-created fresh from the spreader's belief each interaction), so
+    // a weakly-held belief no longer spreads at full strength: conviction
+    // and trust act as fidelity discounts (each ~0.9 at neutral, ~0.98 at
+    // strong), keeping the relay near the original strength while still
+    // making the source factors genuinely live.
+    let conviction_discount = Fixed::from_f64(0.9) + rumor.original_resistance * Fixed::from_f64(0.08);
+    let trust_discount = Fixed::from_f64(0.9) + source_trust * Fixed::from_f64(0.08);
+    let source_fidelity = (conviction_discount * trust_discount).clamp_01();
+
     // Source memory accuracy: degrades with hops (telephone game)
-    let memory_accuracy = Fixed::from_f64(0.95).powi(rumor.hops);
+    let memory_accuracy = Fixed::from_f64(0.95).powi(rumor.hops) * source_fidelity;
 
     // Transmission fidelity: extraversion and agreeableness improve fidelity
     let transmission_fidelity = gossip_base_fidelity
@@ -195,6 +218,7 @@ pub fn process_gossip(
         emotional_charge,
         belief_delta,
         accepted,
+        original_resistance: rumor.original_resistance,
     }
 }
 
@@ -221,12 +245,20 @@ pub fn apply_gossip(listener_beliefs: &mut Vec<Belief>, result: &GossipResult, t
         // Compare mutated confidence against 0.5 (neutral) as proxy for wild distortion.
         let distortion = (result.mutated_confidence - Fixed::from_f64(0.5)).abs();
         let is_accurate = distortion < Fixed::from_f64(0.3);
+        // Iteration 202 (§11.2 source factors): the new belief's resistance
+        // inherits the SOURCE's conviction — a rumor born from a deeply-held
+        // belief (high original_resistance) seeds a more entrenched belief
+        // than one from a weakly-held source. The floor stays 0.3 (rumors
+        // are still initially easier to update than direct experience); the
+        // source's conviction adds up to +0.4 on top.
+        let inherited_resistance =
+            (Fixed::from_f64(0.3) + result.original_resistance * Fixed::from_f64(0.4)).clamp_01();
         listener_beliefs.push(Belief {
             proposition_id: result.proposition_id,
             confidence: result.mutated_confidence,
             emotional_charge: result.emotional_charge,
             identity_linkage: Fixed::from_f64(0.2), // rumors start with low identity linkage
-            resistance: Fixed::from_f64(0.3),       // rumors are initially easy to update
+            resistance: inherited_resistance,       // inherits the source's conviction
             last_reinforced_tick: tick,
             source: crate::person::EvidenceSource::Hearsay,
             social_reinforcement: 0,
@@ -519,6 +551,7 @@ mod tests {
             emotional_charge: Fixed::from_f64(0.4),
             belief_delta: Fixed::from_f64(0.15),
             accepted: true,
+            original_resistance: Fixed::from_f64(0.5),
         };
 
         apply_gossip(&mut beliefs, &result, 200);
@@ -539,6 +572,7 @@ mod tests {
             emotional_charge: Fixed::from_f64(0.3),
             belief_delta: Fixed::from_f64(0.6),
             accepted: true,
+            original_resistance: Fixed::from_f64(0.8),
         };
 
         apply_gossip(&mut beliefs, &result, 200);
@@ -556,6 +590,7 @@ mod tests {
             emotional_charge: Fixed::from_f64(0.5),
             belief_delta: Fixed::from_f64(0.2),
             accepted: false,
+            original_resistance: Fixed::from_f64(0.5),
         };
 
         apply_gossip(&mut beliefs, &result, 200);
@@ -600,6 +635,102 @@ mod tests {
             result.belief_delta.abs() < Fixed::from_f64(0.1),
             "High resistance belief should barely change from gossip, delta={}",
             result.belief_delta.to_f64()
+        );
+    }
+
+    #[test]
+    fn source_conviction_anchors_relay_fidelity() {
+        // §11.2 source factors (Iteration 202): a rumor born from a
+        // deeply-held belief (high original_resistance) relayed through a
+        // trusted relationship survives the telephone game with higher
+        // fidelity than a weakly-held one from a low-trust source.
+        let strong_rumor = Rumor {
+            proposition_id: 0,
+            confidence: Fixed::from_f64(0.7),
+            hops: 0,
+            origin_tick: 0,
+            last_heard_tick: 0,
+            emotional_charge: Fixed::from_f64(0.3),
+            identity_linkage: Fixed::ZERO,
+            original_resistance: Fixed::from_f64(0.9),
+        };
+        let weak_rumor = Rumor {
+            original_resistance: Fixed::from_f64(0.1),
+            ..strong_rumor.clone()
+        };
+        let personality = make_personality();
+
+        let (strong_fixed, _) = mutate_rumor(
+            &strong_rumor,
+            Fixed::from_f64(0.9), // high trust
+            &make_emotions(),
+            &personality,
+            &personality,
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.15),
+        );
+        let (weak_fixed, _) = mutate_rumor(
+            &weak_rumor,
+            Fixed::from_f64(0.2), // low trust
+            &make_emotions(),
+            &personality,
+            &personality,
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.15),
+        );
+
+        assert!(
+            strong_fixed > weak_fixed,
+            "Deeply-held belief via trusted source should relay stronger: strong={} weak={}",
+            strong_fixed.to_f64(),
+            weak_fixed.to_f64()
+        );
+        // The anchor is live at hops=0: a weakly-held rumor must NOT spread
+        // at full strength — its relayed confidence drops below the source's.
+        assert!(
+            weak_fixed < strong_rumor.confidence,
+            "Weakly-held rumor should degrade through the relay: relayed={} source={}",
+            weak_fixed.to_f64(),
+            strong_rumor.confidence.to_f64()
+        );
+    }
+
+    #[test]
+    fn new_belief_inherits_source_resistance() {
+        // §11.2 source factors (Iteration 202): a rumor born from a
+        // deeply-held belief seeds a MORE entrenched new belief than one
+        // from a weakly-held source (floor 0.3 stays — rumors are still
+        // easier to update than direct experience).
+        let weak_result = GossipResult {
+            proposition_id: 5,
+            mutated_confidence: Fixed::from_f64(0.6),
+            emotional_charge: Fixed::from_f64(0.3),
+            belief_delta: Fixed::from_f64(0.6),
+            accepted: true,
+            original_resistance: Fixed::from_f64(0.1),
+        };
+        let strong_result = GossipResult {
+            original_resistance: Fixed::from_f64(0.9),
+            ..weak_result.clone()
+        };
+
+        let mut weak_beliefs: Vec<Belief> = vec![];
+        let mut strong_beliefs: Vec<Belief> = vec![];
+        apply_gossip(&mut weak_beliefs, &weak_result, 200);
+        apply_gossip(&mut strong_beliefs, &strong_result, 200);
+
+        assert_eq!(weak_beliefs.len(), 1);
+        assert_eq!(strong_beliefs.len(), 1);
+        // Floor 0.3 + 0.1*0.4 = 0.34 vs 0.3 + 0.9*0.4 = 0.66
+        assert!(
+            strong_beliefs[0].resistance > weak_beliefs[0].resistance,
+            "Deeply-held source should seed a more resistant new belief: strong={} weak={}",
+            strong_beliefs[0].resistance.to_f64(),
+            weak_beliefs[0].resistance.to_f64()
+        );
+        assert!(
+            weak_beliefs[0].resistance >= Fixed::from_f64(0.3),
+            "Rumor-seeded beliefs keep the 0.3 floor"
         );
     }
 

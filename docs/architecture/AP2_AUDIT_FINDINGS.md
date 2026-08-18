@@ -459,3 +459,20 @@ Retracted during vetting: `rumor_v2` (fully live — create/register/tick_all/tr
 **Documented deferral:** the behavioral read stays deferred — the §10.3 ladder is dense in every calibrated window (113/132 edges past Unnoticed even at the 1000-tick golden), so a live consumer (e.g. smoothing the obligation multiplier or interaction deltas by within-stage progress) would re-pace the golden, the Iter-199 class. The discrete stage steps already encode the social meaning; the continuous field is now honest observable state for a future smoothing iteration.
 
 **Final gate: sim 1001/0 (+1), full tests-crate 304/0, golden byte-identical, TUI 17/0 (+2), clippy clean.**
+
+## Iteration 202 — `Rumor.original_resistance` §11.2 source-factor closure: the dead conviction carrier is now read in both the relay and the seed (zero-blast on all calibrated observables)
+
+**Finding 25 — `original_resistance` was write-only: the §11.2 source factors were structurally absent from the relay.** `Rumor.from_belief` captured `original_resistance` ("how hard the original belief is to update") but nothing ever read it: `mutate_rumor` received `_source_trust` **unused** (the §11.2 formula at the module top names `source_memory_accuracy * source_trust` as the first factors of `rumor_accuracy`), and the memory term was a bare `0.95^hops` telephone decay — inert at `hops=0`, the sim's only condition (rumors are re-created fresh from the spreader's belief each interaction). `apply_gossip` seeded every new belief with a flat 0.3 resistance ("rumors are initially easy to update"), dropping the source's conviction at the last boundary too.
+
+**Fix — both §11.2 consumers now genuinely live:**
+1. **Relay fidelity anchoring** (`mutate_rumor`): the memory-accuracy term is now `0.95^hops × source_fidelity`, where `source_fidelity = conviction_discount × trust_discount`, `conviction_discount = 0.9 + original_resistance × 0.08`, `trust_discount = 0.9 + source_trust × 0.08` — a rumor born from a deeply-held belief and spread through a trusted relationship survives the telephone game with higher fidelity (each factor ~0.9 at neutral, ~0.98 at strong; the gentle band keeps the relay near original strength while making the factors live).
+2. **New-belief resistance inheritance** (`apply_gossip` via `GossipResult.original_resistance`): the seeded belief's resistance is now `0.3 + original_resistance × 0.4` (floor 0.3 stays — rumors are still easier to update than direct experience; the source's conviction adds up to +0.4).
+
+**Honesty verification (the Iter-199 lesson applied):**
+1. **Belief level: genuinely live** — stash-swap probe @10K across calm/famine/pestilence: belief-confidence sums shift measurably (e.g. calm@1K 12.68→10.80) — the mutation reaches agent beliefs.
+2. **Observables: byte-identical** — events, fear, population, grain, resistance sums all pinned across scenarios @10K pre/post. The closure is zero-blast on every calibrated observable (no re-pace wave, golden byte-identical, all 17 snapshots intact).
+3. **Unit tests (+2):** `source_conviction_anchors_relay_fidelity` (strong source via trusted relay relays higher; weak source relays BELOW its own confidence — the anchor is live at hops=0) and `new_belief_inherits_source_resistance` (0.3 + 0.9×0.4 = 0.66 vs 0.3 + 0.1×0.4 = 0.34, floor 0.3 held).
+
+**Re-pins (1-pin wave):** `noospheric_belief_confidence_sustains_conviction` delta threshold 0.3 → 0.25 — the source factors shrink the confident/weak gap 0.3701 → 0.2885 honestly (high ecology 0.4663→0.4289: every relay now carries a <1.0 fidelity discount; weak ecology 0.0962→0.1404: inherited resistance makes weak beliefs stickier). Both legs still pass with margin (high 0.4289 > 0.4 ✓, low 0.1404 < 0.15 ✓).
+
+**Final gate: sim 1003/0 (+2), full tests-crate 304/0, golden + 17 snapshots green, clippy clean.**

@@ -12042,9 +12042,15 @@ fn noospheric_belief_confidence_sustains_conviction() {
     // regardless of seeded confidence) — probe-pinned 0.4663 vs 0.0962 at
     // 2000, delta 0.3701. Thresholds recalibrated to the honest post-168
     // spread; the differential (confident far above weak) still holds.
+    // Iteration 202 re-pin (§11.2 source factors): wiring
+    // `original_resistance`/`source_trust` into the relay shrinks the gap
+    // to 0.2885 (high 0.4663→0.4289 from the relay fidelity discount;
+    // low 0.0962→0.1404 from resistance inheritance making weak beliefs
+    // stickier). Delta threshold 0.3 → 0.25; both legs still pass with
+    // margin (high > 0.4 ✓, low < 0.15 ✓).
     assert!(
-        high_mean > low_mean + 0.3,
-        "the confident belief ecology must persist far above the weak one (probe-pinned 0.4663 vs 0.0962 at 2000, got {high_mean:.4} vs {low_mean:.4})"
+        high_mean > low_mean + 0.25,
+        "the confident belief ecology must persist far above the weak one (probe-pinned 0.4289 vs 0.1404 at 2000, got {high_mean:.4} vs {low_mean:.4})"
     );
     assert!(
         high_mean > 0.4,
