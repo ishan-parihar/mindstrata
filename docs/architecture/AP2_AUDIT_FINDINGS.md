@@ -614,3 +614,27 @@ golden window (seeded at tick 0 with ~4320-tick intervals), so the fallback
 - behavioral_delta: 12/0 ✅
 - property: 21/0 ✅
 - clippy: clean ✅
+
+### Iteration 209: moral identity development (§8.1.10)
+**AP2 §:** 8.1.10
+**Date:** August 19, 2026
+
+`moral_cognition.moral_identity` was a static 0.5 multiplier that never
+evolved — it multiplied shame/pride utility terms but was never updated by
+moral experience. Added `develop_moral_identity` to the yearly cognitive
+pass: small nudge (0.0015/tick) toward the mean moral-foundations score,
+weighted by achieved moral achievements and witnessed norm enforcement
+(with a hypocrisy factor that dampens the effect when the agent's own
+conduct is below the norm). Bounds: [0.05, 0.95] clamped.
+
+**Blast radius:** small — the yearly gate fires at tick 8760+, well beyond
+the 1000-tick golden window. Golden replay stays byte-identical. The 2K
+snapshots re-pace honestly (−4.2% grain, no regime break).
+
+### Gate
+- sim lib: 1009/0 ✅ (+4 new moral_cognition unit tests)
+- snapshots: 8/0 ✅ (re-pinned)
+- golden: 8/0 ✅ (re-generated)
+- behavioral_delta: 12/0 ✅
+- property: 21/0 ✅
+- clippy: clean ✅

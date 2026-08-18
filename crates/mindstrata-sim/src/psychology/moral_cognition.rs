@@ -226,6 +226,24 @@ impl MoralCognition {
                 * Fixed::from_f64(0.03))
         .clamp_01();
 
+        // §8.1.10: Moral identity development — the centrality of morality
+        // to the agent's self-concept evolves with moral experience.
+        // Achievements increase moral identity (morality becomes more central);
+        // personal violations decrease it (the agent distances from moral
+        // failure). Rates are very slow (0.001–0.002) because moral identity
+        // is a deep personality trait. The 0.5 default is stable: when
+        // achievements == violations == 0, the net change is zero.
+        if moral_achievements > Fixed::ZERO {
+            self.moral_identity = (self.moral_identity
+                + moral_achievements * Fixed::from_f64(0.002))
+            .clamp_01();
+        }
+        if personal_violations > Fixed::ZERO {
+            self.moral_identity = (self.moral_identity
+                - personal_violations * Fixed::from_f64(0.001))
+            .max(Fixed::from_f64(0.1));
+        }
+
         // Decay all moral emotions
         let decay = Fixed::from_f64(0.003);
         self.moral_emotions.outrage = (self.moral_emotions.outrage - decay).max(Fixed::ZERO);
@@ -477,5 +495,76 @@ mod tests {
         // must NOT touch it (both zero here).
         assert_eq!(low.moral_emotions.outrage, Fixed::ZERO);
         assert_eq!(high.moral_emotions.outrage, Fixed::ZERO);
+    }
+
+    /// §8.1.10 (Iteration 209): moral identity develops with moral experience.
+    /// Achievements increase it; violations decrease it. The 0.5 default is
+    /// stable: zero events → zero net change.
+    #[test]
+    fn moral_identity_default_is_stable() {
+        let mut mc = MoralCognition::default();
+        let original = mc.moral_identity;
+        mc.update_moral_emotions(Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::from_f64(0.4));
+        assert_eq!(
+            mc.moral_identity, original,
+            "zero events must not change moral identity"
+        );
+    }
+
+    #[test]
+    fn moral_identity_increases_with_achievements() {
+        let mut mc = MoralCognition::default();
+        let before = mc.moral_identity;
+        mc.update_moral_emotions(
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::from_f64(1.0), // full moral achievement
+            Fixed::from_f64(0.4),
+        );
+        assert!(
+            mc.moral_identity > before,
+            "moral achievements must increase moral identity ({} > {})",
+            mc.moral_identity, before
+        );
+    }
+
+    #[test]
+    fn moral_identity_decreases_with_violations() {
+        let mut mc = MoralCognition::default();
+        let before = mc.moral_identity;
+        mc.update_moral_emotions(
+            Fixed::ZERO,
+            Fixed::from_f64(1.0), // full personal violation
+            Fixed::ZERO,
+            Fixed::from_f64(0.4),
+        );
+        assert!(
+            mc.moral_identity < before,
+            "moral violations must decrease moral identity ({} < {})",
+            mc.moral_identity, before
+        );
+    }
+
+    #[test]
+    fn moral_identity_clamps_at_bounds() {
+        let mut mc = MoralCognition::default();
+        // Saturate at 1.0 via many achievements
+        for _ in 0..600 {
+            mc.update_moral_emotions(
+                Fixed::ZERO, Fixed::ZERO, Fixed::ONE, Fixed::from_f64(0.4),
+            );
+        }
+        assert!(mc.moral_identity <= Fixed::ONE, "must clamp at 1.0");
+        // Reset and saturate at floor via many violations
+        mc.moral_identity = Fixed::from_f64(0.15);
+        for _ in 0..600 {
+            mc.update_moral_emotions(
+                Fixed::ZERO, Fixed::ONE, Fixed::ZERO, Fixed::from_f64(0.4),
+            );
+        }
+        assert!(
+            mc.moral_identity >= Fixed::from_f64(0.1),
+            "must floor at 0.1"
+        );
     }
 }
