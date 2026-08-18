@@ -106,10 +106,10 @@ impl ImmuneState {
             self.inflammation = (self.inflammation - Fixed::from_f64(0.01)).max(Fixed::ZERO);
         }
 
-        // §7.2.6 (S2-2-4 fix): the old crowding/hygiene exposure gate was
-        // UNREACHABLE — the sim wires crowding 0.3 / hygiene 0.6
-        // (placeholders at sim.rs), so `(crowding − 0.5)` was negative
-        // forever and infection_load never left 0 in ANY scenario
+        // §7.2.6 (S2-2-4 fix → Iter-213 derived): the old crowding/hygiene
+        // exposure gate was UNREACHABLE — the sim used hardcoded 0.3/0.6
+        // so `(crowding − 0.5)` was negative forever and infection_load
+        // never left 0 in ANY scenario
         // (probe-pinned; the entire infection→inflammation→fight path was
         // dead state). Replaced with a stress-driven exposure channel:
         // chronic stress suppresses immune surveillance and opens infection
@@ -259,9 +259,10 @@ mod tests {
     #[test]
     fn stress_driven_exposure_gate_is_reachable_and_directional() {
         // S2-2-4 regression: the old gate required crowding > 0.5 AND
-        // hygiene < 0.3, but the sim wires crowding 0.3 / hygiene 0.6, so
+        // hygiene < 0.3, but the sim used hardcoded 0.3/0.6, so
         // `(crowding − 0.5)` was negative forever and infection_load never
-        // left 0 in ANY scenario. The stress-driven channel fires only
+        // left 0 in ANY scenario. Now crowding/hygiene derive from world
+        // state (Iter-213), but the stress-driven channel remains primary. The stress-driven channel fires only
         // above stress 0.4 — calm (0.26) stays untouched, famine (0.667)
         // accumulates a visible, self-limiting chronic infection.
         let mut calm = ImmuneState::default();
