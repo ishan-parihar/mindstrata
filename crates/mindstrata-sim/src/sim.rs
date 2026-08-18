@@ -11974,15 +11974,23 @@ impl Simulation {
                                 amount: taken.to_f64(),
                             },
                         );
-                        // §7.2.7: Food enters the digestive system. Quality 0.6
-                        // matches the sim-wide nutrition placeholder — good food,
-                        // so effective_digestion stays exactly 1.0 (zero drift);
-                        // a future spoilage mechanism can lower it.
+                        // §7.2.7 (Iteration 212): food quality now derives
+                        // from world food abundance (same ratio as the biology
+                        // tick_update). In famine, digestible quality drops.
                         if taken > Fixed::ZERO {
+                            let total = self.world.total_food();
+                            let exp = crate::sim::EXPECTED_GRAIN_PER_AGENT as i64
+                                * self.agents.len() as i64;
+                            let food_quality = if exp > 0 {
+                                (total / Fixed::from_int(exp))
+                                    .clamp(Fixed::from_f64(0.1), Fixed::ONE)
+                            } else {
+                                Fixed::from_f64(0.6)
+                            };
                             self.agents[*agent_idx]
                                 .embodied
                                 .digestive
-                                .consume_food(Fixed::from_f64(0.6));
+                                .consume_food(food_quality);
                         }
                         taken > Fixed::ZERO
                     } else {

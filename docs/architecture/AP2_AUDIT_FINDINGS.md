@@ -697,3 +697,28 @@ most agents are near baseline). Long-horizon 10K snapshot re-pinned
 - behavioral_delta: 12/0 ✅
 - property: 21/0 ✅
 - clippy: clean ✅
+
+### Iteration 212: digestive food quality → world-food-derived (§7.2.7)
+**AP2 §:** 7.2.7
+**Date:** August 19, 2026
+
+The `digestive.consume_food()` call in the Eat action execution
+(sim.rs:11980) used a hardcoded 0.6 quality — the last remaining
+nutrition placeholder after Iteration 210 wired the biology tick_update.
+In famine, this meant the digestive system still processed food as
+"good" even when the world was starving. Replaced with the same
+world_food_total / expected_food ratio used in the biology pass
+(clamped [0.1, 1.0]).
+
+**Blast radius:** zero in calm (ratio ≈ 1.0, `effective_digestion`
+stays 1.0). In famine, digestive quality now drops below 1.0, reducing
+energy yield from eating — compounding the biology-layer starvation
+effect wired in Iteration 210.
+
+### Gate
+- sim lib: 1011/0 ✅
+- golden_replay: 4/0 ✅ (byte-identical)
+- snapshots: 8/0 ✅
+- behavioral_delta: 12/0 ✅
+- property: 21/0 ✅
+- clippy: clean ✅
