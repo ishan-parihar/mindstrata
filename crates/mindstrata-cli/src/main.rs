@@ -404,6 +404,7 @@ fn main() {
                                 mindstrata_core::id::AgentId::new(to as u64),
                                 sim.relationships(),
                                 &summaries,
+                                sim.relationship_v2_between(from, to),
                             )
                         );
                     } else {

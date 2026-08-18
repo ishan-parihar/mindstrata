@@ -186,6 +186,49 @@ pub fn is_authority_stage(stage: RelationshipStage) -> bool {
     )
 }
 
+/// §10.3 (Iteration 201): continuous within-stage progress toward the next
+/// stage's thresholds — the ratio of the least-satisfied gate to its
+/// requirement, clamped to [0, 1].
+///
+/// This is the write-side closure for the previously-dead
+/// `RelationshipV2.stage_progress` field: the ladder advances with discrete
+/// threshold jumps (`try_advance_stage`), but the continuous "how close are
+/// we to the next stage" signal was never computed, so the field pinned at
+/// ZERO forever. Each gate (interactions, trust, affection) contributes the
+/// fraction `actual / required`; the minimum (the binding constraint) is the
+/// progress. A stage with no next (kin/authority/negative-terminal) has no
+/// progress to make — returns `None`, and callers leave the field unchanged
+/// (1.0 means "threshold already crossed, advancement is pending the next
+/// daily pass").
+pub fn stage_progress_toward_next(
+    current: RelationshipStage,
+    interactions: u32,
+    trust: Fixed,
+    affection: Fixed,
+) -> Option<Fixed> {
+    let next = current.next_positive()?;
+    let min_i = min_interactions_for_stage(next);
+    let trust_req = trust_threshold_for_stage(next);
+    let affection_req = affection_threshold_for_stage(next);
+
+    let i_frac = if min_i == 0 {
+        Fixed::ONE
+    } else {
+        Fixed::from_int(interactions as i64) / Fixed::from_int(min_i as i64)
+    };
+    let t_frac = if trust_req == Fixed::ZERO {
+        Fixed::ONE
+    } else {
+        (trust / trust_req).clamp(Fixed::ZERO, Fixed::ONE)
+    };
+    let a_frac = if affection_req == Fixed::ZERO {
+        Fixed::ONE
+    } else {
+        (affection / affection_req).clamp(Fixed::ZERO, Fixed::ONE)
+    };
+    Some(i_frac.min(t_frac).min(a_frac).clamp(Fixed::ZERO, Fixed::ONE))
+}
+
 /// Try to advance a relationship stage based on current metrics.
 ///
 /// Returns the new stage if advancement occurred, None otherwise.
@@ -245,6 +288,70 @@ pub fn try_regress_stage(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stage_progress_toward_next_tracks_binding_gate() {
+        // Fresh acquaintance (0 interactions, low trust/affection): progress
+        // toward Familiar is 0 — the interaction gate binds.
+        let p = stage_progress_toward_next(
+            RelationshipStage::Acquaintance,
+            0,
+            Fixed::from_f64(0.15),
+            Fixed::from_f64(0.05),
+        );
+        assert_eq!(p, Some(Fixed::ZERO));
+
+        // 2 of the 3 interactions needed for Familiar with trust/affection
+        // at threshold: the interaction gate (2/3) binds over the saturated
+        // trust/affection gates.
+        let p = stage_progress_toward_next(
+            RelationshipStage::Acquaintance,
+            2,
+            Fixed::from_f64(0.3),
+            Fixed::from_f64(0.15),
+        );
+        assert_eq!(p, Some(Fixed::from_int(2) / Fixed::from_int(3)));
+
+        // Trust binds instead: 3 interactions, trust 0.2 vs the 0.3
+        // Familiar threshold → progress 0.2/0.3 = 0.667 (Fixed: 2/3).
+        let p = stage_progress_toward_next(
+            RelationshipStage::Acquaintance,
+            3,
+            Fixed::from_f64(0.2),
+            Fixed::from_f64(0.15),
+        );
+        assert_eq!(p, Some(Fixed::from_int(2) / Fixed::from_int(3)));
+
+        // Clamped above 1 when every gate is overshot (advancement is
+        // pending the next daily pass).
+        let p = stage_progress_toward_next(
+            RelationshipStage::Acquaintance,
+            10,
+            Fixed::from_f64(0.9),
+            Fixed::from_f64(0.5),
+        );
+        assert_eq!(p, Some(Fixed::ONE));
+
+        // Terminal/negative stages have no next — None (no progress to make).
+        assert_eq!(
+            stage_progress_toward_next(
+                RelationshipStage::Nemesis,
+                0,
+                Fixed::ZERO,
+                Fixed::ZERO,
+            ),
+            None
+        );
+        assert_eq!(
+            stage_progress_toward_next(
+                RelationshipStage::ParentChild,
+                0,
+                Fixed::ZERO,
+                Fixed::ZERO,
+            ),
+            None
+        );
+    }
 
     #[test]
     fn stage_advances_with_sufficient_metrics() {

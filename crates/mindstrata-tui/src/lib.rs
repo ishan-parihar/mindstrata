@@ -260,6 +260,7 @@ pub fn render_relationship_view(
     to_id: AgentId,
     relationships: &[Relationship],
     agents: &[AgentSummary],
+    v2_edge: Option<&mindstrata_sim::social::relationship_v2::RelationshipV2>,
 ) -> String {
     let from_name = agents
         .get(from_id.as_u64() as usize)
@@ -282,6 +283,17 @@ pub fn render_relationship_view(
          ╚══════════════════════════════════════════╝\n\
          {from_name} → {to_name}\n"
     ));
+
+    // Iteration 201 (observability closure): the V2 edge exposes the §10.3
+    // stage ladder + the continuous within-stage progress toward the next
+    // stage (previously a dead field — never produced, never consumed).
+    if let Some(v2) = v2_edge {
+        out.push_str(&format!(
+            "  stage:      {:?} (progress {:.2} → next)\n",
+            v2.stage,
+            v2.stage_progress.to_f64(),
+        ));
+    }
 
     if let Some(r) = forward {
         out.push_str(&format!(
@@ -1834,6 +1846,74 @@ mod tests {
         let agent = &sim.agents[0];
         let out = render_psychology_inspector(0, "anna", agent);
         assert!(out.contains("(no goal history yet)"), "{out}");
+    }
+
+    #[test]
+    fn relationship_view_shows_v2_stage_and_progress() {
+        // Iteration 201: `RelationshipV2.stage_progress` was a dead field
+        // (never produced, never consumed); the daily pass now writes the
+        // continuous progress toward the next §10.3 stage, and the
+        // relationship view surfaces it. Run a short sim (the ladder is
+        // dense even at 500 ticks), render with the v2 edge, and assert
+        // the stage + progress line exists.
+        let config = mindstrata_sim::sim::SimConfig {
+            seed: 42,
+            max_ticks: 500,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = mindstrata_sim::Simulation::new(config);
+        sim.populate();
+        sim.run(500);
+        let summaries = sim.agent_summaries();
+        let v2 = sim.relationship_v2_between(0, 1);
+        assert!(
+            v2.is_some(),
+            "a populated 12-agent world must hold the 0→1 v2 edge"
+        );
+        let out = render_relationship_view(
+            mindstrata_core::id::AgentId::new(0),
+            mindstrata_core::id::AgentId::new(1),
+            sim.relationships(),
+            &summaries,
+            v2,
+        );
+        assert!(out.contains("stage:"), "{out}");
+        assert!(out.contains("progress"), "{out}");
+        // The write-side production must have populated the field (non-zero
+        // on a dense ladder — the golden probe shows 113/132 edges past
+        // Unnoticed at 1000 ticks).
+        assert!(
+            v2.unwrap().stage_progress > Fixed::ZERO,
+            "stage_progress must be produced by the daily pass"
+        );
+    }
+
+    #[test]
+    fn relationship_view_handles_missing_edge() {
+        let config = mindstrata_sim::sim::SimConfig {
+            seed: 42,
+            max_ticks: 0,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = mindstrata_sim::Simulation::new(config);
+        sim.populate();
+        let summaries = sim.agent_summaries();
+        // Agent 0 → 0 is not a valid edge (self), so v2_edge is None.
+        let out = render_relationship_view(
+            mindstrata_core::id::AgentId::new(0),
+            mindstrata_core::id::AgentId::new(1),
+            sim.relationships(),
+            &summaries,
+            None,
+        );
+        assert!(out.contains("Relationship View"), "{out}");
+        assert!(!out.contains("stage:"), "{out}");
     }
 
     #[test]

@@ -6777,6 +6777,18 @@ impl Simulation {
         &self.relationships
     }
 
+    /// §10.3 (Iteration 201): the V2 relationship edge from `from` to `to`,
+    /// when it exists — exposes the enriched stage/stage_progress fields the
+    /// legacy `Relationship` summary lacks, for zero-blast observability
+    /// (the TUI relationship view).
+    pub fn relationship_v2_between(&self, from: usize, to: usize) -> Option<&RelationshipV2> {
+        if from >= self.agents.len() || to >= self.agents.len() || from == to {
+            return None;
+        }
+        let idx = Self::relationship_v2_pos(from, to);
+        self.agents[from].relationship_v2s.get(idx)
+    }
+
     /// Get recent events (last n).
     pub fn recent_events(&self, n: usize) -> &[SimEvent] {
         let start = self.events.len().saturating_sub(n);
@@ -10469,6 +10481,26 @@ impl Simulation {
                     let trust = self.agents[i].relationship_v2s[rv2_idx].trust;
                     let affection = self.agents[i].relationship_v2s[rv2_idx].affection;
                     let fear = self.agents[i].relationship_v2s[rv2_idx].fear;
+                    // Iteration 201 (write-side closure): produce the
+                    // continuous within-stage progress toward the next
+                    // stage's thresholds — the previously-dead
+                    // `stage_progress` field (never computed, never
+                    // consumed, pinned at ZERO). Deterministic, no RNG;
+                    // write-only today (the behavioral read is deferred —
+                    // the §10.3 ladder is dense in every calibrated
+                    // window, so a live consumer would re-pace the
+                    // golden, the Iter-199 class).
+                    let rv2 = &mut self.agents[i].relationship_v2s[rv2_idx];
+                    if let Some(progress) =
+                        crate::social::relationship_stages::stage_progress_toward_next(
+                            rv2.stage,
+                            rv2.interaction_count,
+                            rv2.trust,
+                            rv2.affection,
+                        )
+                    {
+                        rv2.stage_progress = progress;
+                    }
                     // Try advancement first; if not, try regression
                     if let Some(new_stage) = crate::social::relationship_stages::try_advance_stage(
                         current_stage,
