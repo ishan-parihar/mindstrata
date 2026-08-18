@@ -5050,7 +5050,26 @@ impl Simulation {
                     //   - impersonal scarcity (famine/pestilence with no
                     //     social cause) → Circumstance → sadness/fear
                     //     (unchanged).
-                    agency: if threat <= Fixed::from_f64(0.2)
+                    agency: if in_feud {
+                        // Iteration 200 (feud-guilt shadowing closure): the
+                        // `in_feud → Self_ → guilt` branch was DOCUMENTED as
+                        // the "aggressor's path" but sat AFTER the
+                        // `threat ≤ 0.2 && hunger < 0.5` needs-met branch, so
+                        // a feuding agent whose needs were met took the FIRST
+                        // branch (Other(self) when separation < 0.3) and got
+                        // OTHER-attributed ANGER instead of guilt — probe:
+                        // agents 8/9 in a calm feud ran in_feud=true,
+                        // ag=Other(E(8)), goalC=-0.300, dA=+0.150/day,
+                        // anger ratcheting to 0.94, stress (fear+anger ≈
+                        // 1.88) tripping should_abandon EVERY tick → the
+                        // 100%-Eat rejection churn that polluted Iter-199's
+                        // goal-learning signal. A feud is goal-INCONGRUENT
+                        // (goal_congruence = -0.3 below) by construction, so
+                        // the self-attributed-failure path must win over the
+                        // needs-met credit branch: the agent escalated the
+                        // feud, it is its own doing.
+                        Agency::Self_
+                    } else if threat <= Fixed::from_f64(0.2)
                         && needs[i].hunger < Fixed::from_f64(0.5)
                     {
                         // Goal-congruent: who gets credit?
@@ -5065,10 +5084,6 @@ impl Simulation {
                         } else {
                             Agency::Circumstance
                         }
-                    } else if in_feud {
-                        // Own aggression escalated the feud → self-attributed
-                        // failure → guilt.
-                        Agency::Self_
                     } else if unfairness > Fixed::from_f64(0.05) {
                         // Someone else's wrongdoing caused the failure → anger.
                         Agency::Other(AgentId::new(i as u64))

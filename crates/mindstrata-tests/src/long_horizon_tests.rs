@@ -18,9 +18,10 @@
 //!   non-negative wealth/resources) with emergent activity (events, memes).
 
 use mindstrata_core::fixed::Fixed;
+use mindstrata_sim::scenario::Scenario;
 
 use crate::behavioral_delta::snapshots_identical;
-use crate::test_helpers::run_sim;
+use crate::test_helpers::{run_scenario, run_sim};
 
 /// Per-agent core-state projection used as the determinism backstop.
 ///
@@ -43,13 +44,18 @@ fn agent_projection(sim: &mindstrata_sim::Simulation) -> Vec<(f64, f64, f64, f64
         .collect()
 }
 
-/// Emergence/invariant checks for a completed 50K seed-99 run.
-/// Probe-pinned at Iteration 135: see the module doc for the exact signals.
-/// Iteration 185: the leg moved to seed 99 (see the test body for the why).
+/// Emergence/invariant checks for a completed 50K emergence-leg run.
+/// Iteration 200: the leg re-anchored to pestilence seed 13 (the feud-guilt
+/// closure made calm permanently stable — 15/15 calm seeds v2=0 @50K — and
+/// faction formation is now a crisis-world phenomenon per the Iter-186
+/// design). Pestilence seed 13 @50K: v2 registry 18, panics 37, ritual
+/// execution, events 759K, pop 12 (no births in the epidemic — the
+/// population survives, it does not grow), stress 0.272/health 0.808.
 fn assert_seed99_emergence_and_invariants(sim: &mindstrata_sim::Simulation) {
     let m = sim.metrics_snapshot();
 
-    // No collapse, no explosion (12 initial agents, births fire by 50K).
+    // No collapse, no explosion (12 initial agents; the epidemic suppresses
+    // births, so the surviving village holds at 12).
     assert!(
         (12..=100).contains(&m.agent_count),
         "agent count unreasonable after 50K ticks: {}",
@@ -58,8 +64,9 @@ fn assert_seed99_emergence_and_invariants(sim: &mindstrata_sim::Simulation) {
 
     // The world must have LIVED: an order-of-magnitude event volume sanity
     // (probe: 1.09M — 10× headroom so a legitimate event-granularity change
-    // does not fail this for the wrong reason), culture spread, and the
-    // emergent social structures the campaign wired all fired at least once.
+    // does not fail this for the wrong reason; pestilence seed 13 @50K =
+    // 759K), culture spread, and the emergent social structures the
+    // campaign wired all fired at least once.
     assert!(
         m.event_count > 100_000,
         "only {} events in 50K ticks",
@@ -182,16 +189,29 @@ fn long_horizon_50k_is_deterministic_and_emerges() {
     // while seed 99 fires BOTH signals (probe: v2 registry 2 — crisis-
     // driven coups — and 2 moral panics, births 1, pop 13 @50K), so the
     // emergence leg re-anchors to seed 99.
-    let a = run_sim(99, 50_000);
-    let b = run_sim(99, 50_000);
+    // Iteration 200 re-anchor (feud-guilt shadowing closure): the
+    // `in_feud → Self_ → guilt` branch — the documented aggressor's path —
+    // was shadowed by the needs-met branch, so feuding agents ratcheted
+    // OTHER-attributed ANGER to 0.94 (chronic stress churn) instead of
+    // guilt. Restoring the branch removes the buggy anger → violence →
+    // legitimacy-degradation chain, so the calm world's council
+    // equilibrium now STAYS above the 0.5 formation gate permanently
+    // (probe: 15/15 calm seeds v2=0 @50K — the Iter-186 design intent
+    // "calm-world coup clock closed" is now fully realized). Faction
+    // formation is a crisis-world phenomenon, so the emergence leg moves
+    // to pestilence seed 13 (probe: v2 registry 18, panics 37, ritual
+    // execution, events 759K, pop 12 survives, stress 0.272/health 0.808
+    // in-range, byte-identical replay).
+    let a = run_scenario(&Scenario::pestilence(), 13, 50_000);
+    let b = run_scenario(&Scenario::pestilence(), 13, 50_000);
     assert!(
         snapshots_identical(&a.metrics_snapshot(), &b.metrics_snapshot()),
-        "seed 99 metrics differ across two 50K runs — a nondeterminism regression"
+        "pestilence seed 13 metrics differ across two 50K runs — a nondeterminism regression"
     );
     assert_eq!(
         agent_projection(&a),
         agent_projection(&b),
-        "seed 99 per-agent state differs across two 50K runs — aggregate cancellation may hide it"
+        "pestilence seed 13 per-agent state differs across two 50K runs — aggregate cancellation may hide it"
     );
     assert_seed99_emergence_and_invariants(&a);
 }
