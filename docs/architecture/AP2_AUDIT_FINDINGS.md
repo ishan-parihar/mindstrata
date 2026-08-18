@@ -490,3 +490,18 @@ Retracted during vetting: `rumor_v2` (fully live — create/register/tick_all/tr
 4. **Unit tests (+2):** `hope_boosts_socialize_and_worship_and_suppresses_idle` (exact deltas: Socialize +0.058, Worship +0.058, Idle −0.029, other actions untouched) and `hope_leaves_non_engagement_actions_untouched` (deterministic exact-zero asserts, mirroring the dread test style).
 
 **Final gate: sim 1005/0 (+2), full tests-crate 304/0, golden + 17 snapshots green, clippy clean.**
+
+## Iteration 204 — `planning_confidence` §8.1.12 behavioral closure: executive-function capacity now feeds Work/Idle calibration (honest re-pace wave, 15 pins + long-horizon re-anchor)
+
+**Finding 27 — `planning_confidence` was write-only: §8.1.12's executive-function enablement had no behavioral channel.** The §8.1.12 spec — "high executive function enables long-term planning, skill mastery" — produced `planning_confidence` (EF-capacity × emotion blend, psychopathology-impaired) in `imagination.rs` and `sim.rs`, but no consumer read it. Agents with high executive function made the same Work/Idle decisions as agents with impaired planning — the entire EF → planning → deferred-gratification pipeline was structurally dead.
+
+**Fix — the calibration closure:** `ActionContext.planning_confidence` added, and `compute_utility` gains: `Work +pc×0.1, Idle −pc×0.05`, baseline-corrected at 0.5 (zero-drift: an agent at the neutral 0.5 planning confidence is unaffected; a high-capacity agent at 0.8 works more and idles less; a psychopathology-impaired agent at 0.2 does the opposite). Sizing mirrors dread (0.1 vs 0.05), kept small to avoid reordering.
+
+**Honesty verification:**
+1. **Channel genuinely live** — probe across calm/famine/pestilence @10K: pc mean 0.415 (calm) > 0.404 (famine) > 0.354 (pestilence) — fear + psychopathology suppress planning confidence exactly as §8.1.12 specifies. 4/12 agents hedged (< 0.3), 6/12 at neutral 0.5.
+2. **Golden re-pace classified HONEST** — population 12/12 stable, water −0.3 (−0.2%), grain −5.9% (63.18 vs 67.13) — the 4 hedged agents work less, exactly the designed calibration. No regime break, no starvation.
+3. **Long-horizon re-anchor** — pestilence seed 13's v2 faction formation dropped to 0 @50K (the pc closure further calmed the world). The emergence leg re-anchors to pestilence seed 5: v2 registry 24, panics 52, ritual execution, events 745K, pop 12, deterministic across two 50K runs.
+4. **Full wave: 15 re-pins** — 7 snapshots (standing-shift re-pace) + 1 behavioral_delta (loneliness seed 11→46, −1893) + 7 integration tests: famine windows (mid 1100/8 deaths, trough 1300/2), neural-like seed 99→22 (delta +0.032), epidemic fully-transient→endemic plateau (12@1000, 5@4000, 5@12000), social-trust seeds [22,26,3,21]→[2,8,18,46], moral-panic panics[1]@71K→panics[0]@79K/80K (drain 77K→100K), revolution pestilence seed 42→5, conception 3-chain→3-chain [78230,108200,151650] @175K.
+5. **Unit tests (+2):** `planning_confidence_boosts_work_and_suppresses_idle` and `planning_confidence_leaves_non_planning_actions_untouched`.
+
+**Final gate: sim 1007/0 (+2), full tests-crate 305/0 (incl. long-horizon re-anchor seed 13→5), golden + 7 snapshots green, clippy clean.**

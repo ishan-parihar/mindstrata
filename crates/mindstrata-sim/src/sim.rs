@@ -4303,6 +4303,15 @@ impl Simulation {
                                 // engagement — Socialize/Worship up, Idle
                                 // down (the positive mirror of dread).
                                 hope: self.agents[i].prospection.hope,
+                                // §8.1.12 (Iteration 204): the blended
+                                // emotion + executive-function planning
+                                // confidence drives deferred-gratification
+                                // calibration — Work up / Idle down when
+                                // confident (baseline-corrected at 0.5, so
+                                // default populations stay byte-identical).
+                                planning_confidence: self.agents[i]
+                                    .prospection
+                                    .planning_confidence,
                             },
                             ctx.rng,
                         )

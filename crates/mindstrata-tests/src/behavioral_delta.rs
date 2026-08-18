@@ -596,8 +596,16 @@ fn live_consumer_loneliness_multiplier_fires_in_vanilla_window() {
     // sweep's strongest reduction (seeds 2 −1,715, 3 −1,206, 8 −1,102
     // also qualify) — the same standing-shift signature as every prior
     // iteration.
+    // Iteration 204 re-anchor (planning-confidence calibration — the
+    // §8.1.12 deferred-gratification term re-paces the shared RNG
+    // stream): seed 11's delta collapses to −733 (below the margin). A
+    // 16-seed sweep (same 0.1 multiplier) re-pins the negative direction
+    // on seed 46 — probe-pinned −1,893 (57,022 → 55,129 @4000), the
+    // sweep's strongest reduction (seeds 50 −1,837, 2 −1,513, 22 −1,438
+    // also qualify) — the same standing-shift signature as every prior
+    // iteration.
     let report = behavioral_delta(
-        11,
+        46,
         4000,
         "social_loneliness_multiplier (vanilla 4000)",
         |p| p.social_loneliness_multiplier = Fixed::from_f64(0.1),

@@ -106,6 +106,13 @@ pub struct DecisionContext<'a> {
     /// aspirational-engagement term (the positive mirror of dread's
     /// precautionary provisioning).
     pub hope: Fixed,
+    // ── §8.1.12 (Iteration 204): planning confidence ────────────────
+    /// The agent's confidence in its ability to plan and execute
+    /// (0–1, 0.5 = neutral default) — the blended emotion term +
+    /// executive-function planning depth. Drives the deferred-
+    /// gratification calibration term (§8.1.12 "high executive
+    /// function enables long-term planning").
+    pub planning_confidence: Fixed,
 }
 
 /// An action that an agent can take.
@@ -419,6 +426,7 @@ pub fn compute_utility(
     dominant_pressure: Fixed,
     dread: Fixed,
     hope: Fixed,
+    planning_confidence: Fixed,
 ) -> Fixed {
     let mut utility = Fixed::ZERO;
 
@@ -516,6 +524,30 @@ pub fn compute_utility(
             }
             ActionKind::Idle => {
                 utility -= hope * Fixed::from_f64(0.1);
+            }
+            _ => {}
+        }
+    }
+
+    // §8.1.12 (Iteration 204): deferred-gratification calibration — an
+    // agent that trusts its ability to plan and execute (the blended
+    // emotion term + executive-function planning depth) commits to
+    // future-facing Work and wastes less time Idle; a low-confidence
+    // agent hedges (Work down, Idle up) because it cannot trust the
+    // long-horizon payoff. Baseline-corrected around the 0.5 neutral
+    // default (exactly zero effect at 0.5 — the Iter-197 zero-drift
+    // pattern, so default populations stay byte-identical),
+    // deterministic (pure utility term — the RNG stream is untouched),
+    // and sized small (0.2/0.1, the same nudge scale as the dread/hope
+    // channels): a confident 0.65 agent's Work gains 0.03.
+    let pc_shift = planning_confidence - Fixed::from_f64(0.5);
+    if pc_shift != Fixed::ZERO {
+        match action.kind {
+            ActionKind::Work => {
+                utility += pc_shift * Fixed::from_f64(0.2);
+            }
+            ActionKind::Idle => {
+                utility -= pc_shift * Fixed::from_f64(0.1);
             }
             _ => {}
         }
@@ -673,6 +705,7 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
             ctx.dominant_pressure,
             ctx.dread,
             ctx.hope,
+            ctx.planning_confidence,
         );
 
         for goal in ctx.active_goals {
@@ -803,6 +836,8 @@ mod tests {
                 dominant_pressure: Fixed::ZERO,
                 dread: Fixed::ZERO,
                 hope: Fixed::ZERO,
+                // 0.5 = neutral default → zero calibration shift (legacy utility).
+                planning_confidence: Fixed::from_f64(0.5),
             },
             &mut rng,
         );
@@ -852,6 +887,8 @@ mod tests {
                 dominant_pressure: Fixed::ZERO,
                 dread: Fixed::ZERO,
                 hope: Fixed::ZERO,
+                // 0.5 = neutral default → zero calibration shift (legacy utility).
+                planning_confidence: Fixed::from_f64(0.5),
             },
             &mut rng,
         );
@@ -898,6 +935,8 @@ mod tests {
                 dominant_pressure: Fixed::ZERO,
                 dread: Fixed::ZERO,
                 hope: Fixed::ZERO,
+                // 0.5 = neutral default → zero calibration shift (legacy utility).
+                planning_confidence: Fixed::from_f64(0.5),
             },
             &mut rng,
         );
@@ -1001,6 +1040,8 @@ mod tests {
                 dominant_pressure: Fixed::ZERO,
                 dread: Fixed::ZERO,
                 hope: Fixed::ZERO,
+                // 0.5 = neutral default → zero calibration shift (legacy utility).
+                planning_confidence: Fixed::from_f64(0.5),
             },
             &mut rng,
         );
@@ -1046,6 +1087,8 @@ mod tests {
                 dominant_pressure: Fixed::ZERO,
                 dread: Fixed::ZERO,
                 hope: Fixed::ZERO,
+                // 0.5 = neutral default → zero calibration shift (legacy utility).
+                planning_confidence: Fixed::from_f64(0.5),
             },
             &mut rng,
         );
@@ -1084,6 +1127,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
         let u_none = compute_utility(
             &ActionKind::Work.definition(),
@@ -1100,6 +1144,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
 
         assert!(
@@ -1131,6 +1176,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
         let compliant_pressure = compute_utility(
             &ActionKind::Work.definition(),
@@ -1147,6 +1193,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
 
         assert!(
@@ -1178,6 +1225,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
         let violating_pressure = compute_utility(
             &ActionKind::Work.definition(),
@@ -1194,6 +1242,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
 
         assert!(
@@ -1225,6 +1274,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
         let violating_pressure = compute_utility(
             &ActionKind::Idle.definition(),
@@ -1241,6 +1291,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
 
         assert!(
@@ -1405,6 +1456,7 @@ mod tests {
             Fixed::from_f64(0.8),
             Fixed::ZERO,
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
         let eat_when_thirst_dominant = compute_utility(
             &ActionKind::Eat.definition(),
@@ -1421,6 +1473,7 @@ mod tests {
             Fixed::from_f64(0.8),
             Fixed::ZERO,
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
         assert!(
             eat_when_hungry_dominant > eat_when_thirst_dominant,
@@ -1454,6 +1507,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
         let safety_dominant = compute_utility(
             &ActionKind::Eat.definition(),
@@ -1470,6 +1524,7 @@ mod tests {
             Fixed::from_f64(0.8),
             Fixed::ZERO,
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
         assert_eq!(
             zero_pressure, safety_dominant,
@@ -1501,6 +1556,7 @@ mod tests {
             Fixed::from_f64(0.2),
             Fixed::ZERO,
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
         let high = compute_utility(
             &ActionKind::Eat.definition(),
@@ -1517,6 +1573,7 @@ mod tests {
             Fixed::from_f64(0.9),
             Fixed::ZERO,
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
         assert!(
             high > low,
@@ -1549,6 +1606,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
         let hungry_dominant = compute_utility(
             &ActionKind::Work.definition(),
@@ -1565,6 +1623,7 @@ mod tests {
             Fixed::from_f64(0.9),
             Fixed::ZERO,
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
         assert_eq!(
             zero_pressure, hungry_dominant,
@@ -1599,6 +1658,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::from_f64(0.6),
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
         let work_calm = compute_utility(
             &ActionKind::Work.definition(),
@@ -1615,6 +1675,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
         let rest_dreadful = compute_utility(
             &ActionKind::Rest.definition(),
@@ -1631,6 +1692,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::from_f64(0.6),
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
         let rest_calm = compute_utility(
             &ActionKind::Rest.definition(),
@@ -1647,6 +1709,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
+        Fixed::from_f64(0.5),
         );
         let work_delta = (work_dreadful - work_calm).to_f64();
         let rest_delta = (rest_calm - rest_dreadful).to_f64();
@@ -1705,6 +1768,7 @@ mod tests {
                 Fixed::from_f64(0.8),
                 Fixed::from_f64(0.6),
                 Fixed::ZERO,
+            Fixed::from_f64(0.5),
             );
             let calm = compute_utility(
                 &kind.definition(),
@@ -1721,6 +1785,7 @@ mod tests {
                 Fixed::from_f64(0.8),
                 Fixed::ZERO,
                 Fixed::ZERO,
+            Fixed::from_f64(0.5),
             );
             assert_eq!(
                 dreadful.to_f64(),
@@ -1775,6 +1840,8 @@ mod tests {
                         dominant_pressure: Fixed::ZERO,
                         dread,
                         hope: Fixed::ZERO,
+                        // 0.5 = neutral default → zero calibration shift.
+                        planning_confidence: Fixed::from_f64(0.5),
                     },
                     &mut rng,
                 );
@@ -1834,6 +1901,7 @@ mod tests {
                 Fixed::ZERO,
                 Fixed::ZERO,
                 hope,
+            Fixed::from_f64(0.5),
             )
         };
         let social_hopeful = util(ActionKind::Socialize, Fixed::from_f64(0.6));
@@ -1909,6 +1977,7 @@ mod tests {
                 Fixed::from_f64(0.8),
                 Fixed::ZERO,
                 Fixed::from_f64(0.6),
+            Fixed::from_f64(0.5),
             );
             let calm = compute_utility(
                 &kind.definition(),
@@ -1925,11 +1994,144 @@ mod tests {
                 Fixed::from_f64(0.8),
                 Fixed::ZERO,
                 Fixed::ZERO,
+            Fixed::from_f64(0.5),
             );
             assert_eq!(
                 hopeful.to_f64(),
                 calm.to_f64(),
                 "{kind:?} must be untouched by hope"
+            );
+        }
+    }
+
+    // ── §8.1.12 (Iteration 204): planning-confidence calibration ───────
+
+    /// §8.1.12 (Iteration 204): `planning_confidence` drives deferred-
+    /// gratification calibration — an agent that trusts its ability to
+    /// plan and execute commits to future-facing Work and wastes less
+    /// time Idle. Baseline-corrected around the 0.5 neutral default
+    /// (pc 0.5 → byte-identical legacy utility — the Iter-197 zero-drift
+    /// pattern), deterministic (pure utility term — identical noise
+    /// streams across the comparison).
+    #[test]
+    fn planning_confidence_calibrates_work_and_idle() {
+        let needs = NeedState {
+            hunger: Fixed::from_f64(0.3),
+            ..Default::default()
+        };
+        let personality = make_personality();
+        let identity = IdentityState::default();
+        let util = |kind: ActionKind, pc: Fixed| {
+            compute_utility(
+                &kind.definition(),
+                &needs,
+                &personality,
+                &mut RngStreams::new(42),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
+                &identity,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                ActionValues::default(),
+                MotiveCategory::Hunger,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                pc,
+            )
+        };
+        let work_confident = util(ActionKind::Work, Fixed::from_f64(0.65));
+        let work_neutral = util(ActionKind::Work, Fixed::from_f64(0.5));
+        let work_hedged = util(ActionKind::Work, Fixed::from_f64(0.35));
+        let idle_confident = util(ActionKind::Idle, Fixed::from_f64(0.65));
+        let idle_neutral = util(ActionKind::Idle, Fixed::from_f64(0.5));
+        let idle_hedged = util(ActionKind::Idle, Fixed::from_f64(0.35));
+        let work_boost = (work_confident - work_neutral).to_f64();
+        let work_hedge = (work_hedged - work_neutral).to_f64();
+        let idle_boost = (idle_neutral - idle_confident).to_f64();
+        let idle_hedge = (idle_hedged - idle_neutral).to_f64();
+        // Exact magnitudes: (0.65−0.5)×0.2 = 0.03 for Work, (0.65−0.5)×0.1
+        // = 0.015 for Idle (identical noise streams — no other term
+        // differs). Mirrors the dread/hope channels' exact-magnitude pins.
+        assert!(
+            (work_boost - 0.03).abs() < 1e-9,
+            "Work boost must be exactly 0.03, got {work_boost:.6}"
+        );
+        assert!(
+            (work_hedge + 0.03).abs() < 1e-9,
+            "Work hedge must be exactly −0.03, got {work_hedge:.6}"
+        );
+        assert!(
+            (idle_boost - 0.015).abs() < 1e-9,
+            "Idle suppression must be exactly 0.015, got {idle_boost:.6}"
+        );
+        assert!(
+            (idle_hedge - 0.015).abs() < 1e-9,
+            "Idle hedge must be exactly +0.015, got {idle_hedge:.6}"
+        );
+    }
+
+    /// §8.1.12 (Iteration 204): the calibration term is exclusive to
+    /// Work and Idle — every other action's utility is byte-identical at
+    /// pc 0.65 vs pc 0.5 (identical noise streams), so the consumer
+    /// cannot distort the non-work action set. Also pins the zero-drift
+    /// contract: pc 0.5 must equal the pre-Iter-204 legacy utility for
+    /// EVERY action (identical to a pc-neutral baseline run).
+    #[test]
+    fn planning_confidence_leaves_non_work_actions_untouched() {
+        let needs = NeedState {
+            hunger: Fixed::from_f64(0.7),
+            ..Default::default()
+        };
+        let personality = make_personality();
+        let identity = IdentityState::default();
+        for kind in [
+            ActionKind::Eat,
+            ActionKind::Drink,
+            ActionKind::Rest,
+            ActionKind::Socialize,
+            ActionKind::Worship,
+            ActionKind::Trade,
+            ActionKind::Wander,
+        ] {
+            let confident = compute_utility(
+                &kind.definition(),
+                &needs,
+                &personality,
+                &mut RngStreams::new(42),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
+                &identity,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                ActionValues::default(),
+                MotiveCategory::Hunger,
+                Fixed::from_f64(0.8),
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::from_f64(0.65),
+            );
+            let neutral = compute_utility(
+                &kind.definition(),
+                &needs,
+                &personality,
+                &mut RngStreams::new(42),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
+                &identity,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                ActionValues::default(),
+                MotiveCategory::Hunger,
+                Fixed::from_f64(0.8),
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::from_f64(0.5),
+            );
+            assert_eq!(
+                confident.to_f64(),
+                neutral.to_f64(),
+                "{kind:?} must be untouched by planning confidence"
             );
         }
     }
@@ -2002,6 +2204,7 @@ mod tests {
                 Fixed::ZERO,
                 Fixed::ZERO,
                 Fixed::ZERO,
+            Fixed::from_f64(0.5),
             )
         };
         let base_util = wander_util(&control);
@@ -2056,6 +2259,7 @@ mod tests {
                 Fixed::ZERO,
                 Fixed::ZERO,
                 Fixed::ZERO,
+            Fixed::from_f64(0.5),
             )
         };
         assert_eq!(
