@@ -264,6 +264,7 @@ impl EmbodiedState {
         hygiene: Fixed,
         hunger: Fixed,
         thirst: Fixed,
+        nutrition_quality: Fixed,
         params: &crate::parameters::SimParameters,
     ) {
         // 1. Circadian — advances time of day
@@ -339,7 +340,7 @@ impl EmbodiedState {
             activity_level,
             self.injury,
             self.endocrine.stress.level,
-            Fixed::from_f64(0.6), // nutrition quality placeholder
+            nutrition_quality,
             age_modifier,
         );
 
@@ -359,7 +360,7 @@ impl EmbodiedState {
             Fixed::from_f64(0.3)
         };
         self.immune.tick_update(
-            Fixed::from_f64(0.6), // nutrition quality placeholder
+            nutrition_quality,
             self.endocrine.stress.level,
             sleep_quality,
             self.injury,
@@ -371,7 +372,7 @@ impl EmbodiedState {
         // 8. Musculoskeletal — strength, fatigue
         self.muscular.tick_update(
             activity_level,
-            Fixed::from_f64(0.6), // nutrition quality placeholder
+            nutrition_quality,
             if is_sleeping {
                 Fixed::ONE
             } else {
@@ -384,7 +385,7 @@ impl EmbodiedState {
         self.skeletal.tick_update(
             self.age,
             self.injury,
-            Fixed::from_f64(0.6), // nutrition quality placeholder
+            nutrition_quality,
         );
 
         // 8c. Digestive (§7.2.7) — stomach processing, gut health
@@ -397,7 +398,7 @@ impl EmbodiedState {
             self.derived_health(),
             self.endocrine.stress.level,
             bonding,
-            Fixed::from_f64(0.6), // nutrition placeholder
+            nutrition_quality,
             reproductive::ReproductiveUpdateParams {
                 stress_suppression: params.reproduction_stress_suppression,
                 age_decline_rate: params.reproduction_age_decline_rate,
@@ -409,7 +410,7 @@ impl EmbodiedState {
         // Note: age advancement is handled externally by the simulation tick loop
         // to avoid double-counting. Development only updates environment quality here.
         self.development.update_environment(
-            Fixed::from_f64(0.6), // nutrition
+            nutrition_quality,
             social_safety,
             social_safety, // social support ≈ social safety for now
         );
@@ -526,6 +527,7 @@ mod tests {
             Fixed::from_f64(0.7),
             Fixed::from_f64(0.4),
             Fixed::from_f64(0.4),
+            Fixed::from_f64(0.6), // nutrition quality
             &crate::parameters::SimParameters::default(),
         );
         // Should not panic and values should remain in range
@@ -547,6 +549,7 @@ mod tests {
             Fixed::ONE,
             Fixed::ZERO,
             Fixed::ZERO,
+            Fixed::from_f64(0.6), // nutrition quality
             &crate::parameters::SimParameters::default(),
         );
         assert!(embodied.nervous.sleep_pressure < Fixed::from_f64(0.8));
@@ -577,6 +580,7 @@ mod tests {
                     Fixed::from_f64(0.6), // hygiene
                     hunger,
                     thirst,
+                    Fixed::from_f64(0.6), // nutrition quality
                     &crate::parameters::SimParameters::default(),
                 );
             }

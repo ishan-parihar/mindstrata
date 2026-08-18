@@ -638,3 +638,32 @@ snapshots re-pace honestly (−4.2% grain, no regime break).
 - behavioral_delta: 12/0 ✅
 - property: 21/0 ✅
 - clippy: clean ✅
+
+### Iteration 210: nutrition quality placeholder → world-food-derived (§7.2.9)
+**AP2 §:** 7.2.9
+**Date:** August 19, 2026
+
+The `nutrition_quality` parameter passed to 6 biology subsystems
+(cardiovascular, immune, musculoskeletal, skeletal, reproductive,
+development) was a hardcoded `Fixed::from_f64(0.6)` — a constant that
+made famine starvation invisible to the biology layer. Replaced with a
+live ratio: `world_food_total / expected_food`, clamped [0.1, 1.0].
+The world_food_total is precomputed at line 2844 (before the ctx block)
+and the ratio is computed per-agent inside the biology pass. Floor 0.1
+prevents total starvation from disabling all biology gains. The 0.6
+fallback is preserved when expected_food is zero (degenerate case).
+
+**Blast radius:** zero in calm — food is abundant (ratio ≈ 1.0, clamped
+to 1.0) and the biology subsystems' saturating behavior means the shift
+from 0.6→1.0 is invisible at 1000 ticks (golden byte-identical). In
+famine/pestilence, the ratio drops below 0.6, making starvation
+genuinely degrade cardiovascular fitness, immune resistance, and bone
+density — the biological substrate the old placeholder kept frozen.
+
+### Gate
+- sim lib: 1009/0 ✅
+- golden_replay: 4/0 ✅ (byte-identical)
+- snapshots: 8/0 ✅
+- behavioral_delta: 12/0 ✅
+- property: 21/0 ✅
+- clippy: clean ✅

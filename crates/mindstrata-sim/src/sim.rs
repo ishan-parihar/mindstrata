@@ -2972,6 +2972,20 @@ impl Simulation {
                 // chronic dehydration genuinely elevate cortisol.
                 let live_hunger = self.agents[i].needs.hunger;
                 let live_thirst = self.agents[i].needs.thirst;
+                // §7.2.9 (Iteration 210): nutrition quality derives from
+                // world food abundance instead of a hardcoded 0.6 placeholder.
+                // Ratio: world_food / expected_food, clamped [0.1, 1.0].
+                // Floor 0.1 prevents total starvation from disabling all
+                // biology gains (agents still degrade, just slower). Ceiling
+                // 1.0 is natural from the ratio. Deterministic, no RNG.
+                let expected_food = crate::sim::EXPECTED_GRAIN_PER_AGENT as i64
+                    * self.agents.len() as i64;
+                let nutrition_quality = if expected_food > 0 {
+                    (world_food_total / Fixed::from_int(expected_food))
+                        .clamp(Fixed::from_f64(0.1), Fixed::ONE)
+                } else {
+                    Fixed::from_f64(0.6)
+                };
                 self.agents[i].embodied.tick_update(
                     threat_level,
                     social_safety,
@@ -2982,6 +2996,7 @@ impl Simulation {
                     hygiene,
                     live_hunger,
                     live_thirst,
+                    nutrition_quality,
                     &self.params,
                 );
                 // Sync derived body fields from EmbodiedState back to legacy BodyState.
