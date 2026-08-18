@@ -100,6 +100,12 @@ pub struct DecisionContext<'a> {
     /// The agent's scenario-grounded dread (0–1) — how much it fears the
     /// imagined bad future. Drives the precautionary-provisioning term.
     pub dread: Fixed,
+    // ── §8.1.16 (Iteration 203): prospection hope ───────────────────
+    /// The agent's scenario-grounded hope (0–1) — how much it looks
+    /// forward to the imagined good future. Drives the
+    /// aspirational-engagement term (the positive mirror of dread's
+    /// precautionary provisioning).
+    pub hope: Fixed,
 }
 
 /// An action that an agent can take.
@@ -412,6 +418,7 @@ pub fn compute_utility(
     dominant_need: MotiveCategory,
     dominant_pressure: Fixed,
     dread: Fixed,
+    hope: Fixed,
 ) -> Fixed {
     let mut utility = Fixed::ZERO;
 
@@ -486,6 +493,29 @@ pub fn compute_utility(
             }
             ActionKind::Rest => {
                 utility -= dread * Fixed::from_f64(0.1);
+            }
+            _ => {}
+        }
+    }
+
+    // §8.1.16 (Iteration 203): aspirational engagement — an agent who
+    // daily imagines the village thriving (scenario-grounded hope) builds
+    // toward that future: Socialize and Worship (community and collective
+    // meaning) gain utility and Idle loses it. The positive mirror of
+    // dread's precautionary provisioning (Iteration 103): dread stocks up
+    // (Work/Trade), hope engages (Socialize/Worship); the channels are
+    // disjoint so they compose without double-counting. Zero-at-zero
+    // (hope 0 → exact legacy utility), deterministic (pure utility term —
+    // the RNG stream is untouched), and sized small (0.2/0.1, same as the
+    // dread nudge): a hope 0.4 agent's Socialize gains 0.08 — a genuine
+    // nudge, not a reordering lever.
+    if hope > Fixed::ZERO {
+        match action.kind {
+            ActionKind::Socialize | ActionKind::Worship => {
+                utility += hope * Fixed::from_f64(0.2);
+            }
+            ActionKind::Idle => {
+                utility -= hope * Fixed::from_f64(0.1);
             }
             _ => {}
         }
@@ -642,6 +672,7 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
             ctx.dominant_need,
             ctx.dominant_pressure,
             ctx.dread,
+            ctx.hope,
         );
 
         for goal in ctx.active_goals {
@@ -771,6 +802,7 @@ mod tests {
                 dominant_need: MotiveCategory::Hunger,
                 dominant_pressure: Fixed::ZERO,
                 dread: Fixed::ZERO,
+                hope: Fixed::ZERO,
             },
             &mut rng,
         );
@@ -819,6 +851,7 @@ mod tests {
                 dominant_need: MotiveCategory::Hunger,
                 dominant_pressure: Fixed::ZERO,
                 dread: Fixed::ZERO,
+                hope: Fixed::ZERO,
             },
             &mut rng,
         );
@@ -864,6 +897,7 @@ mod tests {
                 dominant_need: MotiveCategory::Hunger,
                 dominant_pressure: Fixed::ZERO,
                 dread: Fixed::ZERO,
+                hope: Fixed::ZERO,
             },
             &mut rng,
         );
@@ -966,6 +1000,7 @@ mod tests {
                 dominant_need: MotiveCategory::Hunger,
                 dominant_pressure: Fixed::ZERO,
                 dread: Fixed::ZERO,
+                hope: Fixed::ZERO,
             },
             &mut rng,
         );
@@ -1010,6 +1045,7 @@ mod tests {
                 dominant_need: MotiveCategory::Hunger,
                 dominant_pressure: Fixed::ZERO,
                 dread: Fixed::ZERO,
+                hope: Fixed::ZERO,
             },
             &mut rng,
         );
@@ -1047,6 +1083,7 @@ mod tests {
             MotiveCategory::Hunger,
             Fixed::ZERO,
             Fixed::ZERO,
+            Fixed::ZERO,
         );
         let u_none = compute_utility(
             &ActionKind::Work.definition(),
@@ -1060,6 +1097,7 @@ mod tests {
             Fixed::ZERO,
             ActionValues::default(),
             MotiveCategory::Hunger,
+            Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
         );
@@ -1092,6 +1130,7 @@ mod tests {
             MotiveCategory::Hunger,
             Fixed::ZERO,
             Fixed::ZERO,
+            Fixed::ZERO,
         );
         let compliant_pressure = compute_utility(
             &ActionKind::Work.definition(),
@@ -1105,6 +1144,7 @@ mod tests {
             Fixed::ZERO,
             ActionValues::default(),
             MotiveCategory::Hunger,
+            Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
         );
@@ -1137,6 +1177,7 @@ mod tests {
             MotiveCategory::Hunger,
             Fixed::ZERO,
             Fixed::ZERO,
+            Fixed::ZERO,
         );
         let violating_pressure = compute_utility(
             &ActionKind::Work.definition(),
@@ -1150,6 +1191,7 @@ mod tests {
             Fixed::ZERO,
             ActionValues::default(),
             MotiveCategory::Hunger,
+            Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
         );
@@ -1182,6 +1224,7 @@ mod tests {
             MotiveCategory::Hunger,
             Fixed::ZERO,
             Fixed::ZERO,
+            Fixed::ZERO,
         );
         let violating_pressure = compute_utility(
             &ActionKind::Idle.definition(),
@@ -1195,6 +1238,7 @@ mod tests {
             Fixed::ZERO,
             ActionValues::default(),
             MotiveCategory::Hunger,
+            Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
         );
@@ -1360,6 +1404,7 @@ mod tests {
             MotiveCategory::Hunger,
             Fixed::from_f64(0.8),
             Fixed::ZERO,
+            Fixed::ZERO,
         );
         let eat_when_thirst_dominant = compute_utility(
             &ActionKind::Eat.definition(),
@@ -1374,6 +1419,7 @@ mod tests {
             ActionValues::default(),
             MotiveCategory::Thirst,
             Fixed::from_f64(0.8),
+            Fixed::ZERO,
             Fixed::ZERO,
         );
         assert!(
@@ -1407,6 +1453,7 @@ mod tests {
             MotiveCategory::Hunger,
             Fixed::ZERO,
             Fixed::ZERO,
+            Fixed::ZERO,
         );
         let safety_dominant = compute_utility(
             &ActionKind::Eat.definition(),
@@ -1421,6 +1468,7 @@ mod tests {
             ActionValues::default(),
             MotiveCategory::Safety,
             Fixed::from_f64(0.8),
+            Fixed::ZERO,
             Fixed::ZERO,
         );
         assert_eq!(
@@ -1452,6 +1500,7 @@ mod tests {
             MotiveCategory::Hunger,
             Fixed::from_f64(0.2),
             Fixed::ZERO,
+            Fixed::ZERO,
         );
         let high = compute_utility(
             &ActionKind::Eat.definition(),
@@ -1466,6 +1515,7 @@ mod tests {
             ActionValues::default(),
             MotiveCategory::Hunger,
             Fixed::from_f64(0.9),
+            Fixed::ZERO,
             Fixed::ZERO,
         );
         assert!(
@@ -1498,6 +1548,7 @@ mod tests {
             MotiveCategory::Hunger,
             Fixed::ZERO,
             Fixed::ZERO,
+            Fixed::ZERO,
         );
         let hungry_dominant = compute_utility(
             &ActionKind::Work.definition(),
@@ -1512,6 +1563,7 @@ mod tests {
             ActionValues::default(),
             MotiveCategory::Hunger,
             Fixed::from_f64(0.9),
+            Fixed::ZERO,
             Fixed::ZERO,
         );
         assert_eq!(
@@ -1546,6 +1598,7 @@ mod tests {
             MotiveCategory::Hunger,
             Fixed::ZERO,
             Fixed::from_f64(0.6),
+            Fixed::ZERO,
         );
         let work_calm = compute_utility(
             &ActionKind::Work.definition(),
@@ -1559,6 +1612,7 @@ mod tests {
             Fixed::ZERO,
             ActionValues::default(),
             MotiveCategory::Hunger,
+            Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
         );
@@ -1576,6 +1630,7 @@ mod tests {
             MotiveCategory::Hunger,
             Fixed::ZERO,
             Fixed::from_f64(0.6),
+            Fixed::ZERO,
         );
         let rest_calm = compute_utility(
             &ActionKind::Rest.definition(),
@@ -1589,6 +1644,7 @@ mod tests {
             Fixed::ZERO,
             ActionValues::default(),
             MotiveCategory::Hunger,
+            Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
         );
@@ -1648,6 +1704,7 @@ mod tests {
                 MotiveCategory::Hunger,
                 Fixed::from_f64(0.8),
                 Fixed::from_f64(0.6),
+                Fixed::ZERO,
             );
             let calm = compute_utility(
                 &kind.definition(),
@@ -1662,6 +1719,7 @@ mod tests {
                 ActionValues::default(),
                 MotiveCategory::Hunger,
                 Fixed::from_f64(0.8),
+                Fixed::ZERO,
                 Fixed::ZERO,
             );
             assert_eq!(
@@ -1716,6 +1774,7 @@ mod tests {
                         dominant_need: MotiveCategory::Hunger,
                         dominant_pressure: Fixed::ZERO,
                         dread,
+                        hope: Fixed::ZERO,
                     },
                     &mut rng,
                 );
@@ -1737,6 +1796,142 @@ mod tests {
             rest_dreadful < rest_calm,
             "dread must push selections away from Rest: {rest_dreadful} vs {rest_calm}"
         );
+    }
+
+    /// §8.1.16 (Iteration 203): `hope` drives aspirational engagement —
+    /// an agent who imagines the village thriving prefers Socialize and
+    /// Worship (community / collective meaning) and avoids Idle, the
+    /// positive mirror of dread's precautionary provisioning. Zero-at-zero
+    /// (hope 0 → identical legacy selections), deterministic (pure utility
+    /// term — same seed, identical RNG stream).
+    /// §8.1.16 (Iteration 203): `hope` drives aspirational engagement —
+    /// an agent who imagines the village thriving prefers Socialize and
+    /// Worship (community / collective meaning) and avoids Idle, the
+    /// positive mirror of dread's precautionary provisioning. Zero-at-zero
+    /// (hope 0 → byte-identical legacy utility), deterministic (pure
+    /// utility term — identical noise streams across the comparison).
+    #[test]
+    fn hope_boosts_engagement_and_suppresses_idle() {
+        let needs = NeedState {
+            hunger: Fixed::from_f64(0.3),
+            ..Default::default()
+        };
+        let personality = make_personality();
+        let identity = IdentityState::default();
+        let util = |kind: ActionKind, hope: Fixed| {
+            compute_utility(
+                &kind.definition(),
+                &needs,
+                &personality,
+                &mut RngStreams::new(42),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
+                &identity,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                ActionValues::default(),
+                MotiveCategory::Hunger,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                hope,
+            )
+        };
+        let social_hopeful = util(ActionKind::Socialize, Fixed::from_f64(0.6));
+        let social_calm = util(ActionKind::Socialize, Fixed::ZERO);
+        let worship_hopeful = util(ActionKind::Worship, Fixed::from_f64(0.6));
+        let worship_calm = util(ActionKind::Worship, Fixed::ZERO);
+        let idle_hopeful = util(ActionKind::Idle, Fixed::from_f64(0.6));
+        let idle_calm = util(ActionKind::Idle, Fixed::ZERO);
+        let social_delta = (social_hopeful - social_calm).to_f64();
+        let worship_delta = (worship_hopeful - worship_calm).to_f64();
+        let idle_delta = (idle_calm - idle_hopeful).to_f64();
+        assert!(
+            social_delta > 0.0,
+            "hope must boost Socialize, delta {social_delta:.6}"
+        );
+        assert!(
+            worship_delta > 0.0,
+            "hope must boost Worship, delta {worship_delta:.6}"
+        );
+        assert!(
+            idle_delta > 0.0,
+            "hope must suppress Idle, delta {idle_delta:.6}"
+        );
+        // Exact magnitude: 0.6 × 0.2 = 0.12 for Socialize/Worship, 0.6 ×
+        // 0.1 = 0.06 for Idle (identical noise streams — no other term
+        // differs). Mirrors the dread channel's exact-magnitude pin.
+        assert!(
+            (social_delta - 0.12).abs() < 1e-9,
+            "Socialize boost must be exactly 0.12, got {social_delta:.6}"
+        );
+        assert!(
+            (worship_delta - 0.12).abs() < 1e-9,
+            "Worship boost must be exactly 0.12, got {worship_delta:.6}"
+        );
+        assert!(
+            (idle_delta - 0.06).abs() < 1e-9,
+            "Idle penalty must be exactly 0.06, got {idle_delta:.6}"
+        );
+    }
+
+    /// §8.1.16 (Iteration 203): the aspirational term is exclusive to
+    /// engagement — every other action's utility is byte-identical at hope
+    /// 0.6 vs hope 0 (identical noise streams), so the consumer cannot
+    /// distort the non-engagement action set.
+    #[test]
+    fn hope_leaves_non_engagement_actions_untouched() {
+        let needs = NeedState {
+            hunger: Fixed::from_f64(0.7),
+            ..Default::default()
+        };
+        let personality = make_personality();
+        let identity = IdentityState::default();
+        for kind in [
+            ActionKind::Eat,
+            ActionKind::Drink,
+            ActionKind::Rest,
+            ActionKind::Work,
+            ActionKind::Trade,
+            ActionKind::Wander,
+        ] {
+            let hopeful = compute_utility(
+                &kind.definition(),
+                &needs,
+                &personality,
+                &mut RngStreams::new(42),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
+                &identity,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                ActionValues::default(),
+                MotiveCategory::Hunger,
+                Fixed::from_f64(0.8),
+                Fixed::ZERO,
+                Fixed::from_f64(0.6),
+            );
+            let calm = compute_utility(
+                &kind.definition(),
+                &needs,
+                &personality,
+                &mut RngStreams::new(42),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
+                &identity,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                ActionValues::default(),
+                MotiveCategory::Hunger,
+                Fixed::from_f64(0.8),
+                Fixed::ZERO,
+                Fixed::ZERO,
+            );
+            assert_eq!(
+                hopeful.to_f64(),
+                calm.to_f64(),
+                "{kind:?} must be untouched by hope"
+            );
+        }
     }
 
     // ── §8.1.6 (Iteration 162): temperament decision consumers ─────────
@@ -1806,6 +2001,7 @@ mod tests {
                 MotiveCategory::Hunger,
                 Fixed::ZERO,
                 Fixed::ZERO,
+                Fixed::ZERO,
             )
         };
         let base_util = wander_util(&control);
@@ -1857,6 +2053,7 @@ mod tests {
                 Fixed::ZERO,
                 ActionValues::default(),
                 MotiveCategory::Hunger,
+                Fixed::ZERO,
                 Fixed::ZERO,
                 Fixed::ZERO,
             )

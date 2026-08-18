@@ -4298,6 +4298,11 @@ impl Simulation {
                                 // whose tiers do not run prospection hold
                                 // dread 0 → legacy utility.
                                 dread: self.agents[i].prospection.dread,
+                                // §8.1.16 (Iteration 203): the scenario-
+                                // grounded hope drives aspirational
+                                // engagement — Socialize/Worship up, Idle
+                                // down (the positive mirror of dread).
+                                hope: self.agents[i].prospection.hope,
                             },
                             ctx.rng,
                         )
