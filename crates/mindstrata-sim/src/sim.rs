@@ -2963,8 +2963,26 @@ impl Simulation {
                 // the respiratory consumer receives cold_stress (≈0 in
                 // Spring/Summer/Autumn) via irritation.
                 let ambient_temperature = self.weather.temperature;
-                let crowding = Fixed::from_f64(0.3); // village-level crowding
-                let hygiene = Fixed::from_f64(0.6); // moderate hygiene
+                // §7.2.6 (Iteration 213): crowding and hygiene now derive
+                // from world state instead of hardcoded 0.3/0.6.
+                // Crowding: more agents → higher crowding (disease spreads
+                // faster). Anchored at 0.3 for 24 agents, scales linearly.
+                let agent_ratio = Fixed::from_int(self.agents.len() as i64)
+                    / Fixed::from_int(24);
+                let crowding = (Fixed::from_f64(0.3) * agent_ratio)
+                    .clamp(Fixed::from_f64(0.15), Fixed::from_f64(0.6));
+                // Hygiene: water scarcity degrades hygiene (less water →
+                // poorer sanitation → disease spreads faster). Anchored
+                // at 0.6 for abundant water, drops toward 0.3 in drought.
+                let expected_water = crate::sim::EXPECTED_WATER_PER_AGENT as i64
+                    * self.agents.len() as i64;
+                let water_ratio = if expected_water > 0 {
+                    (world_water_total / Fixed::from_int(expected_water))
+                        .clamp(Fixed::from_f64(0.5), Fixed::ONE)
+                } else {
+                    Fixed::ONE
+                };
+                let hygiene = Fixed::from_f64(0.3) + water_ratio * Fixed::from_f64(0.4);
                 // §7.2.2 (Iteration 188 — the S2-2-2 hunger/thirst channel):
                 // the endocrine acute-stress term now reads the LIVE needs
                 // (the same values the Eat/Drink decisions use) instead of

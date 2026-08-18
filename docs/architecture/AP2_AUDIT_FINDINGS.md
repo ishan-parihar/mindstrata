@@ -722,3 +722,29 @@ effect wired in Iteration 210.
 - behavioral_delta: 12/0 ✅
 - property: 21/0 ✅
 - clippy: clean ✅
+
+### Iteration 213: crowding/hygiene → world-state-derived (§7.2.6)
+**AP2 §:** 7.2.6
+**Date:** August 19, 2026
+
+The `crowding` (0.3) and `hygiene` (0.6) parameters to the biology
+tick_update were hardcoded constants — the last two biology-layer
+placeholders. Crowding now derives from agent count (more agents →
+higher crowding → faster disease spread), anchored at 0.3 for 24
+agents, clamped [0.15, 0.6]. Hygiene now derives from water
+availability (water scarcity degrades sanitation → disease spreads
+faster), ranging from 0.3 (drought) to 0.7 (abundant water).
+
+**Blast radius:** zero in calm — 24 agents gives crowding = 0.3
+(exactly the old value), and abundant water gives hygiene = 0.7
+(only +0.1 from the old 0.6, invisible at 1000 ticks). In
+pestilence with crowding or drought, both values now shift to
+amplify disease dynamics.
+
+### Gate
+- sim lib: 1011/0 ✅
+- golden_replay: 4/0 ✅ (byte-identical)
+- snapshots: 8/0 ✅
+- behavioral_delta: 12/0 ✅
+- property: 21/0 ✅
+- clippy: clean ✅
