@@ -748,3 +748,8 @@ amplify disease dynamics.
 - behavioral_delta: 12/0 ✅
 - property: 21/0 ✅
 - clippy: clean ✅
+
+### S3-2-3 — smoke_exposure and damp_housing hardcoded ZERO (Iteration 214)
+**Status:** CLOSED
+**Fix:** smoke_exposure now derives from ambient temperature (cold → more fires → more smoke; scale 0–0.6), damp_housing from rainfall (heavy rain → damper housing; scale 0–0.5). Both pass through BodyState::tick_update to RespiratoryState. The respiratory irritation channel now genuinely differentiates winter/cold/wet environments from summer/dry ones.
+**Gate:** 1011/0, golden byte-identical, clippy clean.

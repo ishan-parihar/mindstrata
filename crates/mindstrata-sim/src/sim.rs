@@ -3004,6 +3004,22 @@ impl Simulation {
                 } else {
                     Fixed::from_f64(0.6)
                 };
+                // §7.2.6 (Iteration 214): smoke_exposure derives from
+                // ambient temperature — cold weather means more indoor
+                // fires for heating/cooking, increasing smoke exposure.
+                // Smoke scale: 0 in summer (temp ≈ 0.9) to 0.6 in winter
+                // (temp ≈ 0.2). Formula: (1 − temp) × 0.8, clamped [0, 0.6].
+                let smoke_exposure = ((Fixed::ONE - ambient_temperature)
+                    * Fixed::from_f64(0.8))
+                    .clamp(Fixed::ZERO, Fixed::from_f64(0.6));
+                // §7.2.6 (Iteration 214): damp_housing derives from
+                // rainfall — heavy rain makes houses damper, promoting
+                // respiratory irritation and mold-related illness.
+                // Damp scale: 0 in drought (rainfall ≈ 0.1) to 0.5 in
+                // flood (rainfall ≈ 0.9). Formula: rainfall × 0.55, clamped.
+                let damp_housing = (self.weather.rainfall
+                    * Fixed::from_f64(0.55))
+                    .clamp(Fixed::ZERO, Fixed::from_f64(0.5));
                 self.agents[i].embodied.tick_update(
                     threat_level,
                     social_safety,
@@ -3015,6 +3031,8 @@ impl Simulation {
                     live_hunger,
                     live_thirst,
                     nutrition_quality,
+                    smoke_exposure,
+                    damp_housing,
                     &self.params,
                 );
                 // Sync derived body fields from EmbodiedState back to legacy BodyState.

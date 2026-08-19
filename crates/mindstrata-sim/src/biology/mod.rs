@@ -265,6 +265,8 @@ impl EmbodiedState {
         hunger: Fixed,
         thirst: Fixed,
         nutrition_quality: Fixed,
+        smoke_exposure: Fixed,
+        damp_housing: Fixed,
         params: &crate::parameters::SimParameters,
     ) {
         // 1. Circadian — advances time of day
@@ -345,11 +347,13 @@ impl EmbodiedState {
         );
 
         // 6. Respiratory — exertion, disease
+        // §7.2.6 (Iteration 214): smoke_exposure and damp_housing now
+        // derive from world weather state instead of hardcoded ZERO.
         self.respiratory.tick_update(
             activity_level,
             self.thermal.cold_stress,
-            Fixed::ZERO, // smoke exposure (placeholder)
-            Fixed::ZERO, // damp housing (placeholder)
+            smoke_exposure,
+            damp_housing,
             age_modifier,
         );
 
@@ -528,6 +532,8 @@ mod tests {
             Fixed::from_f64(0.4),
             Fixed::from_f64(0.4),
             Fixed::from_f64(0.6), // nutrition quality
+            Fixed::ZERO,           // smoke_exposure
+            Fixed::ZERO,           // damp_housing
             &crate::parameters::SimParameters::default(),
         );
         // Should not panic and values should remain in range
@@ -550,6 +556,8 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::from_f64(0.6), // nutrition quality
+            Fixed::ZERO,           // smoke_exposure
+            Fixed::ZERO,           // damp_housing
             &crate::parameters::SimParameters::default(),
         );
         assert!(embodied.nervous.sleep_pressure < Fixed::from_f64(0.8));
@@ -581,6 +589,8 @@ mod tests {
                     hunger,
                     thirst,
                     Fixed::from_f64(0.6), // nutrition quality
+                    Fixed::ZERO,           // smoke_exposure
+                    Fixed::ZERO,           // damp_housing
                     &crate::parameters::SimParameters::default(),
                 );
             }
