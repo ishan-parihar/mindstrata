@@ -354,15 +354,6 @@ impl EndocrineState {
         }
     }
 
-    /// Compute parasympathetic tone from stress and arousal (inverse relationship).
-    /// High stress/arousal = low parasympathetic tone.
-    pub fn parasympathetic_tone(&self) -> Fixed {
-        (Fixed::ONE
-            - self.stress.level * Fixed::from_f64(0.5)
-            - self.arousal.level * Fixed::from_f64(0.3))
-        .clamp_01()
-    }
-
     /// Dominance modifier for aggression (Iteration 191: now live — the
     /// escalation decision at the violence site folds this into
     /// `aggressor_aggression`, closing the S2-2-2 write-only axis).
@@ -520,21 +511,6 @@ mod tests {
             "sustained stress must accumulate meaningful chronic load (got {:.3})",
             axis.chronic_load.to_f64()
         );
-    }
-
-    #[test]
-    fn parasympathetic_tone_inversely_relates_to_stress() {
-        let mut endo = EndocrineState {
-            stress: StressAxis {
-                level: Fixed::from_f64(0.1),
-                ..StressAxis::default()
-            },
-            ..EndocrineState::default()
-        };
-        let calm_tone = endo.parasympathetic_tone();
-        endo.stress.level = Fixed::from_f64(0.9);
-        let stressed_tone = endo.parasympathetic_tone();
-        assert!(calm_tone > stressed_tone);
     }
 
     #[test]
