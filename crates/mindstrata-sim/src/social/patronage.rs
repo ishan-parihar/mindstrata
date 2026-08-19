@@ -74,13 +74,6 @@ impl PatronageRelation {
         }
     }
 
-    /// Compute the power balance — positive means patron dominates.
-    pub fn power_balance(&self) -> Fixed {
-        let patron_power = self.provision + self.patron_obligation * Fixed::from_f64(0.3);
-        let client_power = self.loyalty + self.labor_contribution + self.political_support;
-        (patron_power - client_power).clamp(Fixed::from_f64(-1.0), Fixed::ONE)
-    }
-
     /// Compute overall relationship health.
     pub fn health(&self) -> Fixed {
         (self.provision * Fixed::from_f64(0.25)
