@@ -6539,14 +6539,13 @@ impl Simulation {
                     .random_range(0..from_beliefs.len());
                 let source_trust = trust_from_to;
                 let rumor = gossip::Rumor::from_belief(&from_beliefs[pick], tick_u64);
-                let listener_beliefs = self.agents[to_idx].beliefs.clone();
                 let result = gossip::process_gossip(
                     &rumor,
                     source_trust,
                     &self.agents[from_idx].emotions,
                     &self.agents[from_idx].personality,
                     &self.agents[to_idx].personality,
-                    &listener_beliefs,
+                    &self.agents[to_idx].beliefs,
                     tick_u64,
                     self.params.gossip_base_fidelity,
                     self.params.gossip_emotional_distortion,
