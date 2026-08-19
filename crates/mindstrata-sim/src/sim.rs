@@ -2938,13 +2938,25 @@ impl Simulation {
                 let social_safety = Fixed::ONE - threat_level;
                 let is_sleeping = matches!(self.agents[i].current_action, ActionKind::Rest);
                 // Compute activity level from current action
-                let activity_level = match self.agents[i].current_action {
+                let raw_activity = match self.agents[i].current_action {
                     ActionKind::Work => Fixed::from_f64(0.8),
                     ActionKind::Wander | ActionKind::Move { .. } => Fixed::from_f64(0.4),
                     ActionKind::Trade => Fixed::from_f64(0.3),
                     ActionKind::Socialize | ActionKind::Worship => Fixed::from_f64(0.2),
                     _ => Fixed::from_f64(0.1),
                 };
+                // §7.2.6 (Iteration 215): respiratory endurance_modifier
+                // from the PREVIOUS tick dampens current activity — an agent
+                // with poor lung capacity (smoke/cold/disease) cannot sustain
+                // high activity. At endurance 0.8 (healthy default) the
+                // dampening is mild (×0.9); at endurance 0.3 (chronic
+                // respiratory disease) it halves activity (×0.65). Floor at
+                // 0.3 prevents total paralysis. Deterministic, no RNG.
+                let activity_level = (raw_activity
+                    * (Fixed::from_f64(0.3)
+                        + self.agents[i].embodied.respiratory.endurance_modifier
+                            * Fixed::from_f64(0.7)))
+                    .clamp_01();
                 // §5 (S3-2-1 fix): the biology pass used a HARDCODED
                 // "temperate default" 0.5 here, which froze the thermal
                 // system at thermoneutral in every scenario (probe: body_temp
@@ -5860,7 +5872,6 @@ impl Simulation {
 
         // ── 17. Health: disease effects on agents ──
         {
-            let health_cfg = self.health_config.clone();
             let n = self.agents.len();
             for i in 0..n {
                 let hunger = self.agents[i].needs.hunger;
@@ -5872,7 +5883,7 @@ impl Simulation {
                     &mut self.agent_diseases[i],
                     hunger,
                     fatigue,
-                    &health_cfg,
+                    &self.health_config,
                 );
             }
         }

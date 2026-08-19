@@ -753,3 +753,8 @@ amplify disease dynamics.
 **Status:** CLOSED
 **Fix:** smoke_exposure now derives from ambient temperature (cold → more fires → more smoke; scale 0–0.6), damp_housing from rainfall (heavy rain → damper housing; scale 0–0.5). Both pass through BodyState::tick_update to RespiratoryState. The respiratory irritation channel now genuinely differentiates winter/cold/wet environments from summer/dry ones.
 **Gate:** 1011/0, golden byte-identical, clippy clean.
+
+### S4-2-3 — respiratory endurance_modifier write-only (Iteration 215)
+**Status:** CLOSED
+**Fix:** The respiratory system's `endurance_modifier` (derived from lung_health and oxygenation) was computed every tick but never consumed. Now modulates `activity_level` in the per-agent biology pass: `activity = raw_activity × (0.3 + endurance × 0.7)`, clamped [0,1]. An agent with poor lung health (from chronic smoke/cold/disease) genuinely reduces activity. Also removed the unnecessary `health_config.clone()` in the health pass (now borrows `&self.health_config` directly).
+**Gate:** 1011/0, golden byte-identical, clippy clean.
