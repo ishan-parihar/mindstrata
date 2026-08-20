@@ -8994,7 +8994,7 @@ impl Simulation {
                     }
                     let age_a = self.agents[i].age.to_f64();
                     let age_b = self.agents[partner_idx].age.to_f64();
-                    let avg_age = (age_a + age_b) * 0.5;
+
                     let health_a = self.agents[i].body.health;
                     let health_b = self.agents[partner_idx].body.health;
                     let min_health = health_a.min(health_b);
@@ -9009,16 +9009,53 @@ impl Simulation {
                                 || (a.parent_a == Some(partner_idx) && a.parent_b == Some(i))
                         })
                         .count();
+                    // Iteration 220: Extract biology-driven conception parameters.
+                    // fertility and libido from the reproductive state of both partners
+                    // (age, health, stress, bonding-dependent from §7.2.6).
+                    let fertility_a = self.agents[i].embodied.reproductive.fertility;
+                    let fertility_b = self.agents[partner_idx].embodied.reproductive.fertility;
+                    let min_fertility = fertility_a.min(fertility_b);
+                    let libido_a = self.agents[i].embodied.reproductive.libido;
+                    let libido_b = self.agents[partner_idx].embodied.reproductive.libido;
+                    let avg_libido = (libido_a + libido_b) * Fixed::from_f64(0.5);
+                    // nutrition: use the minimum digestive health of both
+                    // partners (gut_health reflects actual nutritional status,
+                    // not the volatile world stock which depletes to near-zero
+                    // between harvests).
+                    let gut_a = self.agents[i].embodied.digestive.gut_health;
+                    let gut_b = self.agents[partner_idx].embodied.digestive.gut_health;
+                    let nutrition = gut_a.min(gut_b);
+                    // intimacy: relationship quality with partner.
+                    let v2_pos = Self::relationship_v2_pos(i, partner_idx);
+                    let intimacy = if v2_pos < self.agents[i].relationship_v2s.len() {
+                        self.agents[i].relationship_v2s[v2_pos].quality()
+                    } else {
+                        Fixed::from_f64(0.3) // baseline
+                    };
+                    // parental_drive: from the reproductive state.
+                    let pd_a = self.agents[i].embodied.reproductive.parental_drive;
+                    let pd_b = self.agents[partner_idx].embodied.reproductive.parental_drive;
+                    let avg_pd = (pd_a + pd_b) * Fixed::from_f64(0.5);
+                    // Iteration 220: use the younger partner's age for the childbearing
+                    // check (not avg_age, which filters out couples where one
+                    // partner is older). At least one partner must be in range.
+                    let younger_age = age_a.min(age_b);
                     let should = demography::should_birth(
                         true,
                         min_health,
-                        avg_age,
+                        younger_age,
                         existing_children,
                         DEMOGRAPHY_TICK_INTERVAL,
                         &self.demography_config,
                         rng_val,
                         self.params.reproduction_conception_multiplier.to_f64(),
+                        min_fertility,
+                        avg_libido,
+                        nutrition,
+                        intimacy,
+                        avg_pd,
                     );
+
                     if should {
                         // The female partner carries the pregnancy; a couple
                         // with no female partner (same-sex) keeps the legacy
