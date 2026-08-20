@@ -7509,10 +7509,13 @@ impl Simulation {
                 .any(|p| p.name == "Fine Theft Policy");
             if has_fine_theft && phases.is_centum {
                 let members = institution.members.clone();
+                // Iteration 219: eliminate double-clone — move into record_action,
+                // clone once for the provenance trace.
+                let trace_affected = members.clone();
                 institution.record_action(
                     tick_u64,
                     "Fine Theft Policy enacted".into(),
-                    members.clone(),
+                    members,
                     true,
                 );
                 // §19.5.B: Record institutional provenance trace
@@ -7522,7 +7525,7 @@ impl Simulation {
                         tick: tick_u64,
                         decision_kind: "policy_enacted".into(),
                         description: "Fine Theft Policy enacted".into(),
-                        affected: members,
+                        affected: trace_affected,
                         success: true,
                     });
             }
@@ -7582,10 +7585,13 @@ impl Simulation {
                             }
                         };
                         let inst_name = institution.kind.name().to_string();
+                        // Iteration 219: eliminate double-clone.
+                        let trace_affected = members.clone();
+                        let trace_action = action_name.clone();
                         institution.record_action(
                             tick_u64,
-                            action_name.clone(),
-                            members.clone(),
+                            action_name,
+                            members,
                             true,
                         );
                         // §19.5.B: Record institutional provenance trace for tax collection
@@ -7594,8 +7600,8 @@ impl Simulation {
                                 institution_name: inst_name,
                                 tick: tick_u64,
                                 decision_kind: "tax_collection".into(),
-                                description: action_name,
-                                affected: members,
+                                description: trace_action,
+                                affected: trace_affected,
                                 success: true,
                             },
                         );
@@ -7700,10 +7706,13 @@ impl Simulation {
                             paid.to_f64(),
                             role_names.join(", ")
                         );
+                        // Iteration 219: eliminate double-clone.
+                        let trace_affected = members.clone();
+                        let trace_msg = wage_msg.clone();
                         institution.record_action(
                             tick_u64,
-                            wage_msg.clone(),
-                            members.clone(),
+                            wage_msg,
+                            members,
                             true,
                         );
                         // §19.5.B: Record institutional provenance trace for wage payment
@@ -7712,8 +7721,8 @@ impl Simulation {
                                 institution_name: kind_name,
                                 tick: tick_u64,
                                 decision_kind: "wage_payment".into(),
-                                description: wage_msg,
-                                affected: members,
+                                description: trace_msg,
+                                affected: trace_affected,
                                 success: true,
                             },
                         );
