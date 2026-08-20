@@ -5026,6 +5026,54 @@ impl Simulation {
                                 (witnessed_unfairness[idx] + Fixed::from_f64(0.05)).clamp_01();
                         }
                     }
+                    // Iteration 221: hostile social interactions (insults,
+                    // threats) feed the appraisal system so contempt, envy,
+                    // and humiliation become reachable in calm worlds.
+                    // These are the most common hostile events in peaceful
+                    // settlements (7K+ insults, 1K+ threats per 100K ticks)
+                    // but previously had no cognitive pathway.
+                    SimEvent::InteractionOccurred {
+                        kind,
+                        from,
+                        to,
+                        ..
+                    } => {
+                        let f = from.as_u64() as usize;
+                        let t = to.as_u64() as usize;
+                        match kind {
+                            InteractionKind::Insult => {
+                                // Target feels threatened; witnesses feel unfairness.
+                                if t < self.agents.len() {
+                                    threat_exposure[t] = (threat_exposure[t]
+                                        + Fixed::from_f64(0.15))
+                                    .clamp_01();
+                                    witnessed_unfairness[t] = (witnessed_unfairness[t]
+                                        + Fixed::from_f64(0.08))
+                                    .clamp_01();
+                                }
+                            }
+                            InteractionKind::Threaten => {
+                                // Target feels strong threat; aggressor feels mild
+                                // contempt (dominance display).
+                                if t < self.agents.len() {
+                                    threat_exposure[t] = (threat_exposure[t]
+                                        + Fixed::from_f64(0.25))
+                                    .clamp_01();
+                                    witnessed_unfairness[t] = (witnessed_unfairness[t]
+                                        + Fixed::from_f64(0.1))
+                                    .clamp_01();
+                                }
+                                if f < self.agents.len() {
+                                    // Aggressor's dominance display → mild contempt
+                                    // (looking down on the threatened target).
+                                    witnessed_unfairness[f] = (witnessed_unfairness[f]
+                                        + Fixed::from_f64(0.03))
+                                    .clamp_01();
+                                }
+                            }
+                            _ => {} // Help, Comfort, Gossip, etc. — no threat
+                        }
+                    }
                     _ => {}
                 }
             }
