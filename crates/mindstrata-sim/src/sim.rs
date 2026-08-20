@@ -604,6 +604,14 @@ pub struct Simulation {
     pub group_registry: crate::social::group_formation::GroupRegistry,
     /// §17.4: Accumulated exposure samples from gossip block, flushed daily into meme_aggregator.
     exposure_samples: Vec<crate::culture::meme_aggregator::ExposureSample>,
+    /// Iteration 218: Pre-allocated tick-scoped scratch buffers.
+    /// These Vecs were previously created and dropped every tick, causing
+    /// ~15.7M unnecessary heap allocations over a 100K run. Now allocated
+    /// once in `populate()` and reused via `clear()` each tick.
+    tick_trust_deltas: Vec<Vec<(u64, Fixed)>>,
+    tick_agent_ages: Vec<Fixed>,
+    tick_rel_snapshot: Vec<(AgentId, AgentId, Fixed, Fixed)>,
+    tick_action_starts: Vec<(usize, ActionKind)>,
 }
 
 impl Simulation {
@@ -699,6 +707,10 @@ impl Simulation {
             patronage_registry: crate::social::patronage::PatronageRegistry::new(),
             group_registry: crate::social::group_formation::GroupRegistry::new(),
             exposure_samples: Vec::new(),
+            tick_trust_deltas: Vec::new(),
+            tick_agent_ages: Vec::new(),
+            tick_rel_snapshot: Vec::new(),
+            tick_action_starts: Vec::new(),
         };
         // Meme seeding moved to `populate()` (Iteration 174): seeding here
         // would read `params.meme_virality_scaling` before the caller's
@@ -879,6 +891,10 @@ impl Simulation {
             patronage_registry: crate::social::patronage::PatronageRegistry::new(),
             group_registry: crate::social::group_formation::GroupRegistry::new(),
             exposure_samples: Vec::new(),
+            tick_trust_deltas: Vec::new(),
+            tick_agent_ages: Vec::new(),
+            tick_rel_snapshot: Vec::new(),
+            tick_action_starts: Vec::new(),
         };
         // Rebuild the GroupRegistry membership cache (skipped by serde).
         sim.group_registry.rebuild_cache();
@@ -1569,6 +1585,15 @@ impl Simulation {
         self.seed_initial_clans();
         self.seed_initial_collective_memory();
         self.seed_initial_noosphere();
+
+        // Iteration 218: Pre-allocate tick-scoped scratch buffers.
+        // These were previously created and dropped every tick, causing
+        // ~15.7M unnecessary heap allocations over a 100K run.
+        let n = self.agents.len();
+        self.tick_trust_deltas = (0..n).map(|_| Vec::new()).collect();
+        self.tick_agent_ages = Vec::with_capacity(n);
+        self.tick_rel_snapshot = Vec::with_capacity(self.relationships.len());
+        self.tick_action_starts = Vec::with_capacity(n);
     }
 
     /// Seed the village's recurring rituals and founding propaganda campaigns.
@@ -2829,14 +2854,17 @@ impl Simulation {
         let pre_tick_events = self.events.len();
 
         // §19.5.J: Capture relationship snapshot before any systems modify relationships
-        let rel_snapshot: Vec<(AgentId, AgentId, Fixed, Fixed)> = self
-            .relationships
-            .iter()
-            .map(|r| (r.from, r.to, r.trust, r.affection))
-            .collect();
+        // Iteration 218: reuse pre-allocated buffer to avoid per-tick heap allocation.
+        self.tick_rel_snapshot.clear();
+        self.tick_rel_snapshot.extend(
+            self.relationships
+                .iter()
+                .map(|r| (r.from, r.to, r.trust, r.affection)),
+        );
 
         // Collect action starts to defer resource operations outside the ctx block
-        let mut action_starts: Vec<(usize, ActionKind)> = Vec::new();
+        // Iteration 218: reuse pre-allocated buffer.
+        self.tick_action_starts.clear();
 
         // §8.1.5: Precompute world food/water totals before SystemContext borrows
         // self.world mutably (the motivation block reads them later, so they must
@@ -2896,23 +2924,28 @@ impl Simulation {
             // Sync TrustNetwork from existing relationship trust values.
             // O(N) pre-computation: build a per-agent trust delta map from relationships.
             // This bridges the social interaction system's trust with the epistemic layer.
-            let mut trust_deltas: Vec<Vec<(u64, Fixed)>> = Vec::with_capacity(self.agents.len());
-            for _ in 0..self.agents.len() {
-                trust_deltas.push(Vec::new());
+            // Iteration 218: reuse pre-allocated buffer — resize if population changed
+            // (births can add agents mid-tick), then clear inner Vecs and refill.
+            let n_agents = self.agents.len();
+            if self.tick_trust_deltas.len() < n_agents {
+                self.tick_trust_deltas.resize_with(n_agents, Vec::new);
+            }
+            for td in &mut self.tick_trust_deltas[..n_agents] {
+                td.clear();
             }
             for rel in &self.relationships {
                 let from_idx = rel.from.as_u64() as usize;
-                if from_idx < trust_deltas.len() {
+                if from_idx < n_agents {
                     let target_id = rel.to.as_u64();
-                    trust_deltas[from_idx].push((target_id, rel.trust));
+                    self.tick_trust_deltas[from_idx].push((target_id, rel.trust));
                 }
             }
-            #[expect(
+            #[allow(
                 clippy::needless_range_loop,
                 reason = "intentional parallel-array indexing: trust_deltas[i] + agents[i]"
             )]
             for i in 0..self.agents.len() {
-                for &(target_id, rel_trust) in &trust_deltas[i] {
+                for &(target_id, rel_trust) in &self.tick_trust_deltas[i] {
                     let current_trust = self.agents[i]
                         .epistemic
                         .trust_network
@@ -3757,7 +3790,9 @@ impl Simulation {
                // the outer loop iterates `&mut self.agents`, so a nested
                // `self.agents[j].age` read would be a borrow conflict; the ages
                // are pure reads collected once (deterministic, no RNG).
-            let agent_ages: Vec<Fixed> = self.agents.iter().map(|a| a.age).collect();
+            // Iteration 218: reuse pre-allocated buffer.
+            self.tick_agent_ages.clear();
+            self.tick_agent_ages.extend(self.agents.iter().map(|a| a.age));
             for (i, agent) in self.agents.iter_mut().enumerate() {
                 // Architecture-plan-2 §11.1: Status dimensions update.
                 // Decay shame and honor gradually; update wealth_rank from relative wealth.
@@ -3924,7 +3959,7 @@ impl Simulation {
                 if phases.is_daily {
                     let adult_age = Fixed::from_f64(16.0);
                     let mut max_relatedness = Fixed::ZERO;
-                    for (j, age) in agent_ages.iter().enumerate() {
+                    for (j, age) in self.tick_agent_ages.iter().enumerate() {
                         if j == i || *age < adult_age {
                             continue;
                         }
@@ -4415,7 +4450,7 @@ impl Simulation {
                     }
                     self.agents[i].current_action = action;
                     self.agents[i].action_progress = action.definition().duration_ticks;
-                    action_starts.push((i, action));
+                    self.tick_action_starts.push((i, action));
 
                     let agent_id = AgentId::new(i as u64);
 
@@ -5663,8 +5698,8 @@ impl Simulation {
         // §19.5.J: Record relationship traces for any changes from social interactions
         // This must happen after ctx is dropped so we can read self.events.
         for (i, rel) in self.relationships.iter().enumerate() {
-            if i < rel_snapshot.len() {
-                let (from, to, old_trust, old_affection) = rel_snapshot[i];
+            if i < self.tick_rel_snapshot.len() {
+                let (from, to, old_trust, old_affection) = self.tick_rel_snapshot[i];
                 let trust_changed = (rel.trust - old_trust).abs() > Fixed::from_f64(0.001);
                 let affection_changed =
                     (rel.affection - old_affection).abs() > Fixed::from_f64(0.001);
@@ -5788,7 +5823,14 @@ impl Simulation {
         }
 
         // ── 4b. Resource operations (extracted) ──
-        self.tick_resource_operations(&action_starts, pre_tick_events, tick_u64, tick);
+        // Iteration 218: drain the pre-allocated buffer into a local Vec
+        // so tick_resource_operations can take &mut self without borrow conflict.
+        // The buffer is refilled on the next tick via clear()+push().
+        let action_starts_local: Vec<(usize, ActionKind)> =
+            std::mem::take(&mut self.tick_action_starts);
+        self.tick_resource_operations(&action_starts_local, pre_tick_events, tick_u64, tick);
+        // Restore the buffer (now empty) for the next tick's clear()+push() cycle.
+        self.tick_action_starts = action_starts_local;
 
         // ── 9. Memory encoding (extracted) ──
         self.tick_memory_encoding(pre_tick_events, tick_u64, phases);
@@ -5847,7 +5889,7 @@ impl Simulation {
             *tick = 0;
         }
         // Count work actions per site this tick
-        for (_agent_idx, action) in &action_starts {
+        for (_agent_idx, action) in &self.tick_action_starts {
             if let ActionKind::Work = action {
                 if let Some(farm_idx) = self.world.best_farm_for_work() {
                     if farm_idx < self.site_work_ticks.len() {
