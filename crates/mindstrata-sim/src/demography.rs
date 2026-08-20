@@ -83,7 +83,12 @@ impl Default for DemographyConfig {
             birth_rate: Fixed::from_f64(1.0),
             max_age: 80.0,
             min_childbearing_age: 18.0,
-            max_childbearing_age: 45.0,
+            // Iteration 222: widened from 45→52 to match realistic
+            // pre-modern fertility (women can conceive into early 50s).
+            // With founding agents aged 18–55, this ensures couples where
+            // the woman is in her late 40s/early 50s are still eligible,
+            // producing visible births within 100K-tick horizons.
+            max_childbearing_age: 52.0,
         }
     }
 }
@@ -394,7 +399,9 @@ mod tests {
         let config = DemographyConfig::default();
         assert!(!can_have_children(15.0, &config));
         assert!(can_have_children(25.0, &config));
-        assert!(!can_have_children(50.0, &config));
+        // Iteration 222: widened max_childbearing_age to 52.0
+        assert!(can_have_children(50.0, &config));
+        assert!(!can_have_children(53.0, &config));
     }
 
     #[test]

@@ -32,6 +32,13 @@ pub struct ThermalState {
     pub cold_stress: Fixed,
     /// Heat stress (0 = comfortable, 1 = dangerously hot).
     pub heat_stress: Fixed,
+    /// Individual thermal set-point (0.475–0.525). Genome-derived
+    /// variation means each agent drifts toward a slightly different
+    /// equilibrium — the same ambient temperature produces different
+    /// cold/heat stress across agents, breaking the 0.554 probe
+    /// saturation. Exactly 0.5 for agents created without RNG (default).
+    #[serde(default)]
+    pub thermal_set_point: Fixed,
 }
 
 impl Default for ThermalState {
@@ -40,6 +47,7 @@ impl Default for ThermalState {
             body_temperature: Fixed::from_f64(0.5),
             cold_stress: Fixed::ZERO,
             heat_stress: Fixed::ZERO,
+            thermal_set_point: Fixed::from_f64(0.5),
         }
     }
 }
@@ -64,9 +72,18 @@ impl ThermalState {
         } else {
             Fixed::ZERO
         };
-        // Body temperature drifts toward ambient (slowed by metabolic regulation)
+        // Iteration 222: body temperature drifts toward ambient RELATIVE
+        // to the agent's individual thermal set-point (genome-derived ±5%
+        // from 0.5). This means the same ambient temperature produces
+        // different body temperatures across agents — one agent may feel
+        // slightly cold while another feels comfortable. The set-point
+        // anchors the resting temperature; the ambient delta drives
+        // deviation from that anchor. Metabolic warmth from energy
+        // reserves resists cold drift. Deterministic, no RNG.
+        let set_point_delta = ambient_temperature - self.thermal_set_point;
         let metabolic_warmth = energy_reserves * Fixed::from_f64(0.01);
-        self.body_temperature = (self.body_temperature + temp_delta * Fixed::from_f64(0.001)
+        self.body_temperature = (self.body_temperature
+            + set_point_delta * Fixed::from_f64(0.001)
             - metabolic_warmth * self.cold_stress * Fixed::from_f64(0.001))
         .clamp_01();
     }

@@ -83,17 +83,26 @@ impl MuscularState {
         let c = self.conditioning.to_f64();
         let activity = activity_level.to_f64();
         let nutrition = nutrition_quality.to_f64();
-        if activity > 0.3 && activity <= 0.8 {
-            let gain = activity * nutrition * 0.001 * (1.0 - c);
+        // Iteration 222: doubled conditioning gain from 0.001→0.002 and
+        // widened the active band to include Socialize/Worship (≥0.2).
+        // Before: Work (0.8) was the ONLY action in the band, producing
+        // mean=0.446 with max=0.450 — virtually no spread across agents
+        // with different work patterns. Now Socialize (0.2) and Walk (0.4)
+        // also contribute, so active social agents gain conditioning too.
+        // Gain is saturating (× (1 − c)) so it never reaches 1.0.
+        if (0.2..=0.8).contains(&activity) {
+            let gain = activity * nutrition * 0.002 * (1.0 - c);
             self.conditioning = Fixed::from_f64((c + gain).clamp(0.0, 1.0));
         }
-        // Detrain (excess-proportional, floor 0.4): zero at the birth floor
+        // Detrain (excess-proportional, floor 0.35): zero at the baseline
         // (idlers return to baseline, never below) and growing with the
-        // surplus — prevents the ratchet to 1.0.
-        let excess = (self.conditioning.to_f64() - 0.4).max(0.0);
+        // surplus — prevents the ratchet to 1.0. Floor lowered from 0.4
+        // to 0.35 so resting agents have slightly lower conditioning than
+        // active agents, creating real behavioral differentiation.
+        let excess = (self.conditioning.to_f64() - 0.35).max(0.0);
         if excess > 0.0 {
             let detrain = excess * 0.001;
-            self.conditioning = Fixed::from_f64((self.conditioning.to_f64() - detrain).max(0.4));
+            self.conditioning = Fixed::from_f64((self.conditioning.to_f64() - detrain).max(0.35));
         }
 
         // Strength derived from conditioning, minus fatigue, minus atrophy

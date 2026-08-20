@@ -160,7 +160,18 @@ impl EmbodiedState {
                 ..ReproductiveState::default()
             },
             circadian: CircadianState::default(),
-            thermal: ThermalState::default(),
+            // Iteration 222: genome-derived thermal set-point variation
+            // (±5% from 0.5). Uses stress_reactivity (already drawn from
+            // RNG, so zero additional stream consumption) to derive a ±5%
+            // offset from the 0.5 baseline. High-reactivity agents run
+            // slightly hotter; low-reactivity agents run slightly cooler.
+            // Deterministic from genome; no extra RNG draw.
+            thermal: ThermalState {
+                thermal_set_point: Fixed::from_f64(0.475)
+                    + genome.trait_predispositions.stress_reactivity
+                        * Fixed::from_f64(0.05),
+                ..ThermalState::default()
+            },
             development,
             health: Fixed::from_f64(0.9) + Fixed::from_f64(rng.random_range(0.0..0.1)),
             energy: Fixed::from_f64(0.7) + Fixed::from_f64(rng.random_range(0.0..0.2)),
