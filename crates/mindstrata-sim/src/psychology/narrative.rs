@@ -116,6 +116,8 @@ pub enum LifeTheme {
     Punishment,
     /// Life is a mission with purpose.
     Mission,
+    /// Life is about contentment and stability (low-agency positive).
+    Rest,
 }
 
 /// Narrative identity — the story the agent tells about themselves.
@@ -314,6 +316,10 @@ impl NarrativeIdentity {
                 && temperament.agency > Fixed::from_f64(0.5)
             {
                 LifeTheme::Mission
+            } else if temperament.agency < Fixed::from_f64(0.3) {
+                // Iteration 230: low-agency agents in positive worlds
+                // land on Rest — "I'm content, no need to strive."
+                LifeTheme::Rest
             } else {
                 LifeTheme::Growth
             }
