@@ -5586,12 +5586,15 @@ impl Simulation {
                             + anxiety_delta
                     ).clamp_01();
 
-                    // ── Jealousy from partner attention to others ──────
-                    // When the agent's partner has high trust with someone
-                    // else, mild jealousy accumulates — the "they're
-                    // closer to someone else" channel. This is the natural
-                    // romantic jealousy that doesn't require a formal
-                    // threat event. Only fires for partnered agents.
+                    // ── Iteration 235: Relational jealousy wiring ────
+                    // When the agent's partner has trust with someone else,
+                    // mild jealousy accumulates — the "they're closer to
+                    // someone else" channel. This is the natural romantic
+                    // jealousy that doesn't require a formal threat event.
+                    // Only fires for partnered agents.
+                    // Iteration 235: lowered threshold from 0.5 to 0.3 so
+                    // jealousy fires in calm worlds where partner trust is
+                    // moderate. Also increased rate from 0.004 to 0.006.
                     if let Some(partner_idx) = self.agents[i].partner {
                         let partner_trust_others: Fixed = self.agents[partner_idx]
                             .relationship_v2s
@@ -5600,13 +5603,10 @@ impl Simulation {
                             .filter(|(j, _)| *j != i)
                             .map(|(_, r)| r.trust)
                             .fold(Fixed::ZERO, Fixed::max);
-                        // Jealousy fires when partner's max trust with
-                        // others exceeds 0.5 (close friendship territory).
-                        // Proportional to the excess over 0.5.
                         let jealousy_delta = (partner_trust_others
-                            - Fixed::from_f64(0.5))
+                            - Fixed::from_f64(0.3))
                             .max(Fixed::ZERO)
-                            * Fixed::from_f64(0.004);
+                            * Fixed::from_f64(0.006);
                         emotions[i].jealousy =
                             (emotions[i].jealousy + jealousy_delta).clamp_01();
                     }                    // ── Disgust from witnessing norm violations ────────
