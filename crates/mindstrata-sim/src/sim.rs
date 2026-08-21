@@ -5452,6 +5452,69 @@ impl Simulation {
                         * Fixed::from_f64(0.002);
                     emotions[i].despair =
                         (emotions[i].despair + sustained_despair).clamp_01();
+
+                    // ── Iteration 224: Positive-emotion drain pathways ──
+                    // These drain saturated positive emotions when their
+                    // source conditions are absent, breaking the ceiling
+                    // that kept hope/relief/nostalgia/gratitude/tenderness
+                    // pinned at 0.88 in every calm window.
+
+                    // Hope erodes when future outlook is negative — the
+                    // "things aren't going well" channel. Uses the same
+                    // bleak_excess signal the despair producer uses: when
+                    // hunger > 0.5, hope drains proportionally.
+                    let hope_drain = (needs[i].hunger - Fixed::from_f64(0.5))
+                        .max(Fixed::ZERO)
+                        * Fixed::from_f64(0.004);
+                    emotions[i].hope =
+                        (emotions[i].hope - hope_drain).max(Fixed::ZERO);
+
+                    // Relief erodes when stress is present — the "calm
+                    // didn't last" channel. Uses the live stress level as
+                    // the drain signal: stressed agents feel less relief.
+                    let relief_drain = self.agents[i].embodied.endocrine.stress.level
+                        * Fixed::from_f64(0.003);
+                    emotions[i].relief =
+                        (emotions[i].relief - relief_drain).max(Fixed::ZERO);
+
+                    // Nostalgia erodes when social connections are weak —
+                    // the "nothing worth remembering" channel. Uses the
+                    // agent's average relationship quality as the drain.
+                    let avg_rel_quality = if !self.agents[i].relationship_v2s.is_empty() {
+                        let sum: Fixed = self.agents[i]
+                            .relationship_v2s
+                            .iter()
+                            .map(|r| r.trust)
+                            .fold(Fixed::ZERO, |acc, t| acc + t);
+                        sum / Fixed::from_int(
+                            self.agents[i].relationship_v2s.len() as i64,
+                        )
+                    } else {
+                        Fixed::from_f64(0.3)
+                    };
+                    let nostalgia_drain = (Fixed::from_f64(0.5) - avg_rel_quality)
+                        .max(Fixed::ZERO)
+                        * Fixed::from_f64(0.004);
+                    emotions[i].nostalgia =
+                        (emotions[i].nostalgia - nostalgia_drain).max(Fixed::ZERO);
+
+                    // Gratitude erodes when social support is low — the
+                    // "nobody helps me" channel. Uses the same social
+                    // support metric the appraisal system uses.
+                    let gratitude_drain = (Fixed::from_f64(0.5) - avg_rel_quality)
+                        .max(Fixed::ZERO)
+                        * Fixed::from_f64(0.003);
+                    emotions[i].gratitude =
+                        (emotions[i].gratitude - gratitude_drain).max(Fixed::ZERO);
+
+                    // Tenderness erodes when partner is absent — the
+                    // "I miss them" channel. Partnered agents retain
+                    // tenderness; unpartnered agents drain it.
+                    if self.agents[i].partner.is_none() {
+                        emotions[i].tenderness =
+                            (emotions[i].tenderness - Fixed::from_f64(0.005))
+                                .max(Fixed::ZERO);
+                    }
                 }
 
                 // §8.1.4: Valence is SIGNED (-1..1). The old `.clamp_01()` floored

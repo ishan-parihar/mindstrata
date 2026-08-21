@@ -4,12 +4,11 @@ expression: stage_counts
 ---
 {
     "Acquaintance": 17,
-    "Ally": 62,
-    "CloseFriend": 3,
-    "Confidant": 1,
+    "Ally": 60,
+    "CloseFriend": 5,
     "ElderJunior": 4,
     "Familiar": 15,
-    "Friend": 1,
+    "Friend": 2,
     "PatronClient": 3,
     "Unnoticed": 26,
 }
