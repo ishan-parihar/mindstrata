@@ -76,11 +76,17 @@ impl Default for DemographyConfig {
         Self {
             ticks_per_year: 35040,
             elder_death_rate: Fixed::from_f64(0.15),
-            // ~1.0/yr ≈ one child per year per couple. Realistic for a
-            // pre-modern village without contraception. The old 0.3/yr
-            // produced zero births in 100K ticks because the per-step
-            // probability was too small relative to RNG resolution.
-            birth_rate: Fixed::from_f64(1.0),
+            // Iteration 227: increased from 1.0 to 1.5 to account for
+            // the gap between theoretical and actual biology factors.
+            // The normalization divides by the theoretical default product
+            // (0.084) but actual factors in practice average ~0.054
+            // (fertility 0.65, libido 0.61, gut_health 0.51, intimacy
+            // 0.53, parental_drive 0.5), so the effective rate was
+            // 0.643 × elapsed_years instead of the intended 1.0. At 1.5
+            // the effective rate becomes ~0.96 × elapsed_years, yielding
+            // ~5-6 births over 100K ticks for 5 couples — realistic for
+            // a pre-modern village.
+            birth_rate: Fixed::from_f64(1.5),
             max_age: 80.0,
             min_childbearing_age: 18.0,
             // Iteration 222: widened from 45→52 to match realistic
@@ -261,8 +267,12 @@ pub fn should_birth(
         return false; // too unhealthy
     }
 
-    // Birth rate decreases with existing children (investment dilution)
-    let child_penalty = Fixed::from_f64(0.02) * Fixed::from_int(existing_children as i64);
+    // Iteration 227: reduced child penalty from 0.02 to 0.01 per child
+    // so couples with 1-2 children still have meaningful conception
+    // probability. The old 0.02 meant a couple with 2 children had
+    // rate 0.96 instead of 1.0 — a 4% reduction that compounded with
+    // the low biology product to suppress births.
+    let child_penalty = Fixed::from_f64(0.01) * Fixed::from_int(existing_children as i64);
     let base_rate = (config.birth_rate - child_penalty).max(Fixed::ZERO);
 
     // ── Biology-driven conception probability ──
@@ -430,10 +440,11 @@ mod tests {
             ticks_per_year: 100,
             ..DemographyConfig::default()
         };
-        // With birth_rate=1.0 and default biology factors, the effective
-        // rate for 0-kids is ~1.0/yr → 0.1 per 0.1yr step.
-        // For 5-kids: 1.0 - 0.1 = 0.9/yr → 0.09 per step.
-        // rng 0.095 is below 0.1 (births) but above 0.09 (no births).
+        // Iteration 227: birth_rate=1.5, child_penalty=0.01/child.
+        // With default biology factors (0.084/0.084=1.0 normalization):
+        // 0-kids: base_rate=1.5, effective=1.5, period_prob=1.5×0.1=0.15
+        // 5-kids: base_rate=1.45, effective=1.45, period_prob=1.45×0.1=0.145
+        // rng 0.148 is below 0.15 (births) but above 0.145 (no births).
         let no_kids = should_birth(
             true,
             Fixed::ONE,
@@ -441,7 +452,7 @@ mod tests {
             0,
             10,
             &config,
-            Fixed::from_f64(0.095),
+            Fixed::from_f64(0.148),
             1.0,
             Fixed::from_f64(0.8),
             Fixed::from_f64(0.6),
@@ -456,7 +467,7 @@ mod tests {
             5,
             10,
             &config,
-            Fixed::from_f64(0.095),
+            Fixed::from_f64(0.148),
             1.0,
             Fixed::from_f64(0.8),
             Fixed::from_f64(0.6),
@@ -464,8 +475,8 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.5),
         );
-        assert!(no_kids, "0-kid couple should get a birth at rng 0.095 < 0.1");
-        assert!(!many_kids, "5-kid couple should not at rng 0.095 > 0.09");
+        assert!(no_kids, "0-kid couple should get a birth at rng 0.148 < 0.15");
+        assert!(!many_kids, "5-kid couple should not at rng 0.148 > 0.145");
     }
 
     #[test]
@@ -518,8 +529,8 @@ mod tests {
             ticks_per_year: 100,
             ..DemographyConfig::default()
         };
-        // With birth_rate=1.0, effective rate per step is ~0.1.
-        // rng 0.15 is above 0.1 (no birth at 1.0x) but below 0.4 (birth at 4.0x).
+        // Iteration 227: birth_rate=1.5, effective rate per step is ~0.15.
+        // rng 0.16 is above 0.15 (no birth at 1.0x) but below 0.6 (birth at 4.0x).
         let base = should_birth(
             true,
             Fixed::ONE,
@@ -527,7 +538,7 @@ mod tests {
             0,
             10,
             &config,
-            Fixed::from_f64(0.15),
+            Fixed::from_f64(0.16),
             1.0,
             Fixed::from_f64(0.8),
             Fixed::from_f64(0.6),
@@ -542,7 +553,7 @@ mod tests {
             0,
             10,
             &config,
-            Fixed::from_f64(0.15),
+            Fixed::from_f64(0.16),
             4.0,
             Fixed::from_f64(0.8),
             Fixed::from_f64(0.6),
@@ -550,8 +561,8 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.5),
         );
-        assert!(!base, "identity multiplier must not fire at rng 0.15 > 0.1");
-        assert!(boosted, "4x multiplier must fire at rng 0.15 < 0.4");
+        assert!(!base, "identity multiplier must not fire at rng 0.16 > 0.15");
+        assert!(boosted, "4x multiplier must fire at rng 0.16 < 0.6");
     }
 
     #[test]

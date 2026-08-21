@@ -7,7 +7,7 @@ expression: endocrine_states
         name: "Anna",
         stress: 0.0,
         bonding: 0.3537,
-        dominance: 0.3197,
+        dominance: 0.3193,
         fertility: 0.7653,
         metabolic_energy: 1.0,
         arousal: 0.3831,

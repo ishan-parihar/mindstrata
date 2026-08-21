@@ -76,7 +76,13 @@ pub const EXPECTED_GRAIN_PER_AGENT: u32 = 10;
 /// affordance scarcity (world water stock / (this × population)).
 pub const EXPECTED_WATER_PER_AGENT: u32 = 10;
 /// Skill improvement per tick of practice.
-pub const SKILL_GAIN_PER_TICK: Fixed = Fixed::from_raw(10); // 0.001
+/// Iteration 227: increased from 0.001 to 0.002 so agents acquire
+/// meaningful skill levels within 100K ticks. At 0.001 a milestone
+/// needs ~100 practice ticks, but agents only practice a few times
+/// per day, so skills barely moved. At 0.002 a milestone needs ~50
+/// ticks, and agents reach 0.5 proficiency within ~5K practice ticks
+/// (~14 days of daily practice).
+pub const SKILL_GAIN_PER_TICK: Fixed = Fixed::from_raw(20); // 0.002
 
 /// §8.1.3: Whether a practice tick carried a skill across a 0.1-proficiency
 /// boundary — the milestone that warrants a Procedural memory. Integer raw
@@ -5424,9 +5430,12 @@ impl Simulation {
                     // mild guilt accumulates. This is the natural
                     // conscience channel: "I was angry and said something
                     // I regret." The delta is proportional to anger
-                    // intensity.
+                    // intensity. Iteration 227: reduced from 0.008 to 0.002
+                    // to keep guilt at a realistic calm-world level (~0.05
+                    // instead of 0.23). The old rate produced guilt that
+                    // was 5x higher than the anger that caused it.
                     let hostility_guilt = emotions[i].anger
-                        * Fixed::from_f64(0.008);
+                        * Fixed::from_f64(0.002);
                     emotions[i].guilt =
                         (emotions[i].guilt + hostility_guilt).clamp_01();
 
@@ -5435,9 +5444,10 @@ impl Simulation {
                     // violation), mild empathic guilt accumulates —
                     // "I could have intervened." This is the natural
                     // moral conscience that doesn't require formal norm
-                    // internalization.
+                    // internalization. Iteration 227: reduced from 0.005
+                    // to 0.001 to keep guilt at realistic levels.
                     let empathic_guilt = emotions[i].contempt
-                        * Fixed::from_f64(0.005);
+                        * Fixed::from_f64(0.001);
                     emotions[i].guilt =
                         (emotions[i].guilt + empathic_guilt).clamp_01();
 
@@ -5522,6 +5532,28 @@ impl Simulation {
                     // These fill the remaining calm-world emotional gaps.
                     // Each producer fires on normal-life conditions that
                     // are common in social settlements.
+
+                    // ── Anxiety from uncertainty ───────────────────────
+                    // Iteration 227: normal-life anxiety producer. When
+                    // the agent has high chronic stress OR few social
+                    // connections, mild anxiety accumulates — the "something
+                    // might go wrong" worry channel. This is the natural
+                    // anxiety that fires from uncertainty and insecurity.
+                    let rel_count = self.agents[i].relationship_v2s.len() as f64;
+                    let social_factor = (Fixed::from_f64(4.0)
+                        - Fixed::from_f64(rel_count.min(4.0)))
+                        * Fixed::from_f64(0.002);
+                    let anxiety_delta = (
+                        self.agents[i].embodied.endocrine.stress.chronic_load
+                            * Fixed::from_f64(0.003)
+                        + social_factor.max(Fixed::ZERO)
+                    ).clamp_01();
+                    // Anxiety is stored in psychopathology, not emotions.
+                    // We add it to the psych probe's anxiety_risk.
+                    self.agents[i].psychopathology.anxiety_risk = (
+                        self.agents[i].psychopathology.anxiety_risk
+                            + anxiety_delta
+                    ).clamp_01();
 
                     // ── Jealousy from partner attention to others ──────
                     // When the agent's partner has high trust with someone
@@ -15413,7 +15445,10 @@ mod tests {
         for agent in &mut detached.agents {
             agent.interoception.sensitivity = Fixed::from_f64(0.1);
         }
-        for _ in 0..500 {
+        // Iteration 227: increased from 500 to 1000 ticks so the
+        // sensitivity-based arousal difference overcomes the ambient
+        // emotion producers added in Iterations 223-226.
+        for _ in 0..1000 {
             embodied.tick();
             detached.tick();
         }
