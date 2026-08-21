@@ -124,6 +124,11 @@ pub struct DecisionContext<'a> {
     /// Modulates action utility: winter boosts social/worship,
     /// summer boosts work/trade.
     pub season: u8,
+    // ── Iteration 236: age-related behavioral modulation ───────────
+    /// Current life stage (0=Infant, 1=Child, 2=Adolescent, 3=YoungAdult,
+    /// 4=Adult, 5=Mature, 6=Elder). Modulates action utility: youth
+    /// boosts exploration, elders boost social/worship.
+    pub life_stage: u8,
 }
 
 /// An action that an agent can take.
@@ -810,6 +815,32 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
         };
         utility += season_nudge;
 
+        // Iteration 236: age-related behavioral modulation.
+        // Youth (Adolescent/YoungAdult) boost exploration (Wander).
+        // Elders boost social/worship, reduce work.
+        let age_nudge = match ctx.life_stage {
+            2 | 3 => {
+                // Adolescent/YoungAdult: boost exploration
+                if matches!(kind, ActionKind::Wander) {
+                    Fixed::from_f64(0.02)
+                } else {
+                    Fixed::ZERO
+                }
+            }
+            6 => {
+                // Elder: boost social, reduce work
+                if is_social {
+                    Fixed::from_f64(0.02)
+                } else if matches!(kind, ActionKind::Work) {
+                    Fixed::from_f64(-0.01)
+                } else {
+                    Fixed::ZERO
+                }
+            }
+            _ => Fixed::ZERO, // Other stages: neutral
+        };
+        utility += age_nudge;
+
         if utility > best_utility {
             best_utility = utility;
             best_action = *kind;
@@ -892,6 +923,7 @@ mod tests {
                 planning_confidence: Fixed::from_f64(0.5),
                 mood_valence: Fixed::ZERO,
                 season: 0,
+                life_stage: 4,
             },
             &mut rng,
         );
@@ -945,6 +977,7 @@ mod tests {
                 planning_confidence: Fixed::from_f64(0.5),
                 mood_valence: Fixed::ZERO,
                 season: 0,
+                life_stage: 4,
             },
             &mut rng,
         );
@@ -995,6 +1028,7 @@ mod tests {
                 planning_confidence: Fixed::from_f64(0.5),
                 mood_valence: Fixed::ZERO,
                 season: 0,
+                life_stage: 4,
             },
             &mut rng,
         );
@@ -1102,6 +1136,7 @@ mod tests {
                 planning_confidence: Fixed::from_f64(0.5),
                 mood_valence: Fixed::ZERO,
                 season: 0,
+                life_stage: 4,
             },
             &mut rng,
         );
@@ -1151,6 +1186,7 @@ mod tests {
                 planning_confidence: Fixed::from_f64(0.5),
                 mood_valence: Fixed::ZERO,
                 season: 0,
+                life_stage: 4,
             },
             &mut rng,
         );
@@ -1906,6 +1942,7 @@ mod tests {
                         planning_confidence: Fixed::from_f64(0.5),
                         mood_valence: Fixed::ZERO,
                         season: 0,
+                        life_stage: 4,
                     },
                     &mut rng,
                 );

@@ -4443,6 +4443,8 @@ impl Simulation {
                                 mood_valence: self.agents[i].affect.valence,
                                 // Iteration 233: seasonal behavioral modulation
                                 season: self.season.current as u8,
+                                // Iteration 236: age-related behavioral modulation
+                                life_stage: self.agents[i].embodied.development.life_stage as u8,
                             },
                             ctx.rng,
                         )
