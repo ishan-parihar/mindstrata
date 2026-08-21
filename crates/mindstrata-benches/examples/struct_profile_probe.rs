@@ -8,42 +8,121 @@ fn main() {
     println!("=== STRUCT SIZES ===");
 
     // Core types from person.rs (all pub)
-    println!("  Personality:             {:>8} bytes", std::mem::size_of::<mindstrata_sim::person::Personality>());
-    println!("  Temperament:             {:>8} bytes", std::mem::size_of::<mindstrata_sim::person::Temperament>());
-    println!("  BodyState:               {:>8} bytes", std::mem::size_of::<mindstrata_sim::person::BodyState>());
-    println!("  NeedState:               {:>8} bytes", std::mem::size_of::<mindstrata_sim::person::NeedState>());
-    println!("  Affect:                  {:>8} bytes", std::mem::size_of::<mindstrata_sim::person::Affect>());
-    println!("  DiscreteEmotions:        {:>8} bytes", std::mem::size_of::<mindstrata_sim::person::DiscreteEmotions>());
-    println!("  CognitiveState:          {:>8} bytes", std::mem::size_of::<mindstrata_sim::person::CognitiveState>());
+    println!(
+        "  Personality:             {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::person::Personality>()
+    );
+    println!(
+        "  Temperament:             {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::person::Temperament>()
+    );
+    println!(
+        "  BodyState:               {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::person::BodyState>()
+    );
+    println!(
+        "  NeedState:               {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::person::NeedState>()
+    );
+    println!(
+        "  Affect:                  {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::person::Affect>()
+    );
+    println!(
+        "  DiscreteEmotions:        {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::person::DiscreteEmotions>()
+    );
+    println!(
+        "  CognitiveState:          {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::person::CognitiveState>()
+    );
 
     // Biology
-    println!("  EmbodiedState:           {:>8} bytes", std::mem::size_of::<mindstrata_sim::biology::EmbodiedState>());
+    println!(
+        "  EmbodiedState:           {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::biology::EmbodiedState>()
+    );
 
     // Psychology sub-types
-    println!("  NarrativeIdentity:       {:>8} bytes", std::mem::size_of::<mindstrata_sim::psychology::narrative::NarrativeIdentity>());
-    println!("  AttachmentSystem:        {:>8} bytes", std::mem::size_of::<mindstrata_sim::psychology::attachment::AttachmentSystem>());
-    println!("  MoralCognition:          {:>8} bytes", std::mem::size_of::<mindstrata_sim::psychology::moral_cognition::MoralCognition>());
-    println!("  SelfModel:               {:>8} bytes", std::mem::size_of::<mindstrata_sim::psychology::self_model::SelfModel>());
-    println!("  DecisionPolicy:          {:>8} bytes", std::mem::size_of::<mindstrata_sim::psychology::decision_policy::DecisionPolicy>());
-    println!("  ProspectionState:        {:>8} bytes", std::mem::size_of::<mindstrata_sim::psychology::imagination::ProspectionState>());
-    println!("  EmotionRegulationState:  {:>8} bytes", std::mem::size_of::<mindstrata_sim::psychology::emotion_regulation::EmotionRegulationState>());
-    println!("  DevelopmentalPsychState: {:>8} bytes", std::mem::size_of::<mindstrata_sim::psychology::developmental::DevelopmentalPsychState>());
-    println!("  CulturalCognition:       {:>8} bytes", std::mem::size_of::<mindstrata_sim::psychology::cultural_cognition::CulturalCognition>());
-    println!("  SkillState:              {:>8} bytes", std::mem::size_of::<mindstrata_sim::psychology::skill::SkillState>());
+    println!(
+        "  NarrativeIdentity:       {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::psychology::narrative::NarrativeIdentity>()
+    );
+    println!(
+        "  AttachmentSystem:        {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::psychology::attachment::AttachmentSystem>()
+    );
+    println!(
+        "  MoralCognition:          {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::psychology::moral_cognition::MoralCognition>()
+    );
+    println!(
+        "  SelfModel:               {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::psychology::self_model::SelfModel>()
+    );
+    println!(
+        "  DecisionPolicy:          {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::psychology::decision_policy::DecisionPolicy>()
+    );
+    println!(
+        "  ProspectionState:        {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::psychology::imagination::ProspectionState>()
+    );
+    println!(
+        "  EmotionRegulationState:  {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::psychology::emotion_regulation::EmotionRegulationState>(
+        )
+    );
+    println!(
+        "  DevelopmentalPsychState: {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::psychology::developmental::DevelopmentalPsychState>()
+    );
+    println!(
+        "  CulturalCognition:       {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::psychology::cultural_cognition::CulturalCognition>()
+    );
+    println!(
+        "  SkillState:              {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::psychology::skill::SkillState>()
+    );
 
     // Social
-    println!("  RelationshipV2:          {:>8} bytes", std::mem::size_of::<mindstrata_sim::social::relationship_v2::RelationshipV2>());
-    println!("  EpistemicState:          {:>8} bytes", std::mem::size_of::<mindstrata_sim::social::epistemic::EpistemicState>());
+    println!(
+        "  RelationshipV2:          {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::social::relationship_v2::RelationshipV2>()
+    );
+    println!(
+        "  EpistemicState:          {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::social::epistemic::EpistemicState>()
+    );
 
     // Culture
-    println!("  SacredValues:            {:>8} bytes", std::mem::size_of::<mindstrata_sim::culture::sacred::SacredValues>());
-    println!("  EducationState:          {:>8} bytes", std::mem::size_of::<mindstrata_sim::culture::education::EducationState>());
-    println!("  NarrativeFrameSet:       {:>8} bytes", std::mem::size_of::<mindstrata_sim::culture::narrative_frame::NarrativeFrameSet>());
+    println!(
+        "  SacredValues:            {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::culture::sacred::SacredValues>()
+    );
+    println!(
+        "  EducationState:          {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::culture::education::EducationState>()
+    );
+    println!(
+        "  NarrativeFrameSet:       {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::culture::narrative_frame::NarrativeFrameSet>()
+    );
 
     // Other
-    println!("  AttentionState:          {:>8} bytes", std::mem::size_of::<mindstrata_sim::attention::AttentionState>());
-    println!("  MemoryStore:             {:>8} bytes", std::mem::size_of::<mindstrata_sim::memory::MemoryStore>());
-    println!("  AgentTierState:          {:>8} bytes", std::mem::size_of::<mindstrata_sim::agent_tier::AgentTierState>());
+    println!(
+        "  AttentionState:          {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::attention::AttentionState>()
+    );
+    println!(
+        "  MemoryStore:             {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::memory::MemoryStore>()
+    );
+    println!(
+        "  AgentTierState:          {:>8} bytes",
+        std::mem::size_of::<mindstrata_sim::agent_tier::AgentTierState>()
+    );
 
     println!();
     println!("=== CACHE-LINE ANALYSIS ===");
@@ -52,7 +131,10 @@ fn main() {
         + std::mem::size_of::<mindstrata_sim::person::DiscreteEmotions>();
     println!("  x86_64 cache line:             {cache_line} bytes");
     println!("  BodyState + DiscreteEmotions:  {body_emotions} bytes (hot fields)");
-    println!("  → agents per cache line (hot): {:.1}", cache_line as f64 / body_emotions as f64);
+    println!(
+        "  → agents per cache line (hot): {:.1}",
+        cache_line as f64 / body_emotions as f64
+    );
     println!();
 
     println!("=== O(N²) HOT PATHS IN TICK LOOP ===");

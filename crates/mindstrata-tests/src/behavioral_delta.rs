@@ -334,7 +334,8 @@ fn scenario_delta_is_live_and_contexts_differ() {
     let mut best_min2 = f64::NEG_INFINITY;
     for &seed in &[1, 2, 5, 7, 11, 12, 13, 17, 42, 44, 46, 55, 99] {
         let v = behavioral_delta(
-            seed, 3000,
+            seed,
+            3000,
             "conflict_escalation_chance (sweep)",
             |p| p.conflict_escalation_chance = Fixed::from_f64(0.9),
             |m| m.event_count as f64,
@@ -840,7 +841,10 @@ fn calm_scenario_baseline_differs_from_drought() {
         ds.seed = seed;
         let c = conflict_delta_in(&cs);
         let d = conflict_delta_in(&ds);
-        eprintln!("  seed {seed:3}: calm delta={:+.0} drought delta={:+.0}", c.delta, d.delta);
+        eprintln!(
+            "  seed {seed:3}: calm delta={:+.0} drought delta={:+.0}",
+            c.delta, d.delta
+        );
         if c.delta > 0.0 && d.delta > 0.0 {
             let min_d = c.delta.min(d.delta);
             if min_d > best_min_delta {

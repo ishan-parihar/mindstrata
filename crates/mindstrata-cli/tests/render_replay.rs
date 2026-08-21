@@ -54,7 +54,10 @@ fn cli_render_replay_writes_a_valid_animated_gif() {
     let width = u16::from_le_bytes([bytes[6], bytes[7]]);
     let height = u16::from_le_bytes([bytes[8], bytes[9]]);
     assert_eq!((width, height), (192, 192), "16x16 world at 12px/cell");
-    assert!(bytes.ends_with(&[0x3B]), "GIF stream must end with the trailer");
+    assert!(
+        bytes.ends_with(&[0x3B]),
+        "GIF stream must end with the trailer"
+    );
 
     let _ = std::fs::remove_file(&path);
 }

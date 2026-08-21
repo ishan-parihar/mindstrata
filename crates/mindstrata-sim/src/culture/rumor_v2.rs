@@ -350,7 +350,6 @@ impl RumorRegistry {
     pub fn active_count(&self) -> usize {
         self.rumors.iter().filter(|r| r.active).count()
     }
-
 }
 
 #[cfg(test)]

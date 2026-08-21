@@ -191,7 +191,6 @@ impl AttachmentSystem {
             }
         }
     }
-
 }
 
 #[cfg(test)]
@@ -259,7 +258,11 @@ mod tests {
         open.initialize(Fixed::from_f64(0.8), Fixed::ZERO, Fixed::from_f64(0.3));
         open.separation_distress = Fixed::from_f64(0.6);
         let mut guarded = AttachmentSystem::default();
-        guarded.initialize(Fixed::from_f64(0.2), Fixed::from_f64(0.7), Fixed::from_f64(0.8));
+        guarded.initialize(
+            Fixed::from_f64(0.2),
+            Fixed::from_f64(0.7),
+            Fixed::from_f64(0.8),
+        );
         guarded.separation_distress = Fixed::from_f64(0.6);
         open.receive_comfort(
             Fixed::from_f64(0.9),

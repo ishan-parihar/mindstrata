@@ -461,7 +461,9 @@ impl CulturalCognition {
 /// 130): the rate is the dampening strength, the floor is the never-fully-
 /// cancels guard.
 pub fn taboo_knowledge_factor(max_taboo_strength: Fixed, rate: Fixed, floor: Fixed) -> Fixed {
-    (Fixed::ONE - max_taboo_strength * rate).max(floor).clamp_01()
+    (Fixed::ONE - max_taboo_strength * rate)
+        .max(floor)
+        .clamp_01()
 }
 
 #[cfg(test)]
@@ -661,7 +663,10 @@ mod tests {
             "the floor must prevent fully blocking absorption"
         );
         // Clamp on the upside for pathological inputs.
-        assert_eq!(taboo_knowledge_factor(Fixed::from_f64(-0.5), rate, floor), Fixed::ONE);
+        assert_eq!(
+            taboo_knowledge_factor(Fixed::from_f64(-0.5), rate, floor),
+            Fixed::ONE
+        );
     }
 
     /// §8.1.18 (Iteration 167): `taboo_violation_cost_for` returns the
@@ -685,7 +690,10 @@ mod tests {
         // Case-insensitive: uppercase keyword matches.
         assert_eq!(seeded.taboo_violation_cost_for("VIOLENCE"), violence_cost);
         // Theft (secular, base 0.5) at trad 0.5: 0.5 × 0.75 = 0.375.
-        assert_eq!(seeded.taboo_violation_cost_for("theft"), Fixed::from_f64(0.375));
+        assert_eq!(
+            seeded.taboo_violation_cost_for("theft"),
+            Fixed::from_f64(0.375)
+        );
         // Sacred taboo gets the sacred boost: Incest at trad 0.5 has strength
         // 0.525 and violation_cost = 0.525 + 0.3 = 0.825.
         assert_eq!(
@@ -696,8 +704,7 @@ mod tests {
         let mut trad = CulturalCognition::default();
         trad.seed_village_taboos(Fixed::ONE);
         assert!(
-            trad.taboo_violation_cost_for("violence")
-                > seeded.taboo_violation_cost_for("violence"),
+            trad.taboo_violation_cost_for("violence") > seeded.taboo_violation_cost_for("violence"),
             "higher traditionalism must raise the sacred-severity term"
         );
     }

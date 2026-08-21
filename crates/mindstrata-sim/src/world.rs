@@ -314,9 +314,9 @@ impl World {
             .enumerate()
             .find(|(_, s)| {
                 s.kind == SiteKind::Farm
-                    && s.inventory.iter().any(|r| {
-                        r.resource_id == GRAIN_RESOURCE_ID && r.quantity >= amount
-                    })
+                    && s.inventory
+                        .iter()
+                        .any(|r| r.resource_id == GRAIN_RESOURCE_ID && r.quantity >= amount)
             })
             .map(|(i, _)| i)
     }
@@ -422,9 +422,9 @@ impl World {
             .enumerate()
             .find(|(i, s)| {
                 s.kind == SiteKind::Farm
-                    && s.inventory.iter().any(|r| {
-                        r.resource_id == GRAIN_RESOURCE_ID && r.quantity >= amount
-                    })
+                    && s.inventory
+                        .iter()
+                        .any(|r| r.resource_id == GRAIN_RESOURCE_ID && r.quantity >= amount)
                     && self.can_access_resource(*i, GRAIN_RESOURCE_ID, agent_id, institutions)
             })
             .map(|(i, _)| i)
@@ -483,9 +483,9 @@ impl World {
             .enumerate()
             .find(|(i, s)| {
                 s.kind == SiteKind::Farm
-                    && s.inventory.iter().any(|r| {
-                        r.resource_id == GRAIN_RESOURCE_ID && r.quantity >= amount
-                    })
+                    && s.inventory
+                        .iter()
+                        .any(|r| r.resource_id == GRAIN_RESOURCE_ID && r.quantity >= amount)
                     && !self.can_access_resource(*i, GRAIN_RESOURCE_ID, agent_id, institutions)
             })
             .map(|(i, _)| i)

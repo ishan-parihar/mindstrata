@@ -268,8 +268,8 @@ impl NervousSystemState {
         // `tone* = buildup / drain_coeff`: calm (low threat) settles in
         // rest/digest dominance, famine in fight/flight, with no majority
         // pinning at either extreme.)
-        let drain_coeff = self.sympathetic_arousal * Fixed::from_f64(0.05)
-            + threat_input * Fixed::from_f64(0.05);
+        let drain_coeff =
+            self.sympathetic_arousal * Fixed::from_f64(0.05) + threat_input * Fixed::from_f64(0.05);
         let parasympathetic_drain = drain_coeff * self.parasympathetic_tone;
         self.parasympathetic_tone = (self.parasympathetic_tone + parasympathetic_buildup
             - parasympathetic_drain)
@@ -323,7 +323,6 @@ impl NervousSystemState {
             - self.pain.chronic * Fixed::from_f64(0.1))
         .clamp_01();
     }
-
 }
 
 #[cfg(test)]
@@ -554,7 +553,13 @@ mod tests {
         // Threat recedes to a low level; safety stays low so the tone itself
         // cannot rebuild — only the floor can supply recovery.
         for _ in 0..50 {
-            ns.update(Fixed::from_f64(0.05), Fixed::ZERO, Fixed::ZERO, false, params);
+            ns.update(
+                Fixed::from_f64(0.05),
+                Fixed::ZERO,
+                Fixed::ZERO,
+                false,
+                params,
+            );
         }
         assert!(
             ns.sympathetic_arousal < Fixed::from_f64(0.9),

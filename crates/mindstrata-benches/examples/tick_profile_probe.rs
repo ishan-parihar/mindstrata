@@ -101,10 +101,19 @@ fn profile_scenario(name: &str, seed: u64, ticks: u64) {
     //   4. Power balance: O(N²) daily
     //   5. Relationship decay: O(R) per agent → O(N×R)
     eprintln!("  complexity estimates:");
-    eprintln!("    trust_sync per tick:     O(N×R) = {} ops", n * n_relationships);
-    eprintln!("    social_support per tick: O(N×R) = {} ops", n * n_relationships);
+    eprintln!(
+        "    trust_sync per tick:     O(N×R) = {} ops",
+        n * n_relationships
+    );
+    eprintln!(
+        "    social_support per tick: O(N×R) = {} ops",
+        n * n_relationships
+    );
     eprintln!("    kinship BFS per day:     O(N³) = {} ops", n * n * n);
-    eprintln!("    power_balance per day:   O(N²×R) = {} ops", n * n * n_relationships);
+    eprintln!(
+        "    power_balance per day:   O(N²×R) = {} ops",
+        n * n * n_relationships
+    );
 
     // Phase 4: Memory layout analysis
     // Check agent struct size for cache-line friendliness
@@ -120,7 +129,10 @@ fn profile_scenario(name: &str, seed: u64, ticks: u64) {
     eprintln!("  memory layout:");
     eprintln!("    agent struct size:  {agent_size} bytes");
     eprintln!("    agents per cache line: {agents_per_line:.2}");
-    eprintln!("    full agent array:   {:.1} KB", (agent_size * n) as f64 / 1024.0);
+    eprintln!(
+        "    full agent array:   {:.1} KB",
+        (agent_size * n) as f64 / 1024.0
+    );
 
     println!();
 }

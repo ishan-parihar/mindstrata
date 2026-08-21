@@ -44,7 +44,11 @@ fn main() {
         let first_death = death_ticks.iter().min().copied();
         let (mut old, mut mid, mut young) = (0usize, 0usize, 0usize);
         let mut max_age = 0.0f64;
-        let alive = sim.agents.iter().filter(|a| a.body.health > mindstrata_core::fixed::Fixed::ZERO).count();
+        let alive = sim
+            .agents
+            .iter()
+            .filter(|a| a.body.health > mindstrata_core::fixed::Fixed::ZERO)
+            .count();
         for a in &sim.agents {
             let age = a.age.to_f64();
             max_age = max_age.max(age);
@@ -66,9 +70,15 @@ fn main() {
 
     // Population + food trajectory for the worst seed (42)
     println!("\n=== seed 42 trajectory (sampled every 2K) ===");
-    for ticks in [2000u64, 4000, 6000, 8000, 10000, 12000, 14000, 16000, 18000, 20000] {
+    for ticks in [
+        2000u64, 4000, 6000, 8000, 10000, 12000, 14000, 16000, 18000, 20000,
+    ] {
         let sim = run(42, ticks);
-        let alive = sim.agents.iter().filter(|a| a.body.health > mindstrata_core::fixed::Fixed::ZERO).count();
+        let alive = sim
+            .agents
+            .iter()
+            .filter(|a| a.body.health > mindstrata_core::fixed::Fixed::ZERO)
+            .count();
         let deaths = sim
             .recent_events(10_000_000)
             .iter()

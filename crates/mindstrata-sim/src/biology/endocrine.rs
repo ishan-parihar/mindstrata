@@ -145,15 +145,13 @@ impl StressAxis {
         // financial worry, social conflict) does cause chronic health
         // degradation, just more slowly than acute crisis.
         if self.level > Fixed::from_f64(0.6) {
-            self.chronic_load = (self.chronic_load
-                + chronic_rate * (Fixed::ONE - self.chronic_load))
-                .clamp_01();
+            self.chronic_load =
+                (self.chronic_load + chronic_rate * (Fixed::ONE - self.chronic_load)).clamp_01();
         } else if self.level > Fixed::from_f64(0.4) {
             // Moderate stress: slow chronic accumulation (1/4 rate).
             let slow_rate = chronic_rate * Fixed::from_f64(0.25);
-            self.chronic_load = (self.chronic_load
-                + slow_rate * (Fixed::ONE - self.chronic_load))
-                .clamp_01();
+            self.chronic_load =
+                (self.chronic_load + slow_rate * (Fixed::ONE - self.chronic_load)).clamp_01();
         } else {
             // Low stress: chronic load recovers very slowly, proportionally.
             self.chronic_load =
@@ -555,7 +553,11 @@ mod tests {
         };
         // 20K ticks of sustained famine-scale stress (rise 0.3, decay 0.1).
         for _ in 0..20_000 {
-            famine.update(Fixed::from_f64(0.667), Fixed::from_f64(0.3), Fixed::from_f64(0.1));
+            famine.update(
+                Fixed::from_f64(0.667),
+                Fixed::from_f64(0.3),
+                Fixed::from_f64(0.1),
+            );
         }
         let famine_level = famine.level.to_f64();
         assert!(
@@ -572,14 +574,21 @@ mod tests {
             baseline: Fixed::from_f64(0.3),
         };
         for _ in 0..20_000 {
-            calm.update(Fixed::from_f64(0.26), Fixed::from_f64(0.3), Fixed::from_f64(0.1));
+            calm.update(
+                Fixed::from_f64(0.26),
+                Fixed::from_f64(0.3),
+                Fixed::from_f64(0.1),
+            );
         }
         let calm_level = calm.level.to_f64();
         assert!(
             calm_level < famine_level,
             "calm arousal must sit below famine arousal ({calm_level} vs {famine_level})"
         );
-        assert!(calm_level > 0.4, "calm arousal should stay mildly elevated (got {calm_level})");
+        assert!(
+            calm_level > 0.4,
+            "calm arousal should stay mildly elevated (got {calm_level})"
+        );
     }
 
     #[test]
@@ -607,8 +616,14 @@ mod tests {
         for _ in 0..5 {
             axis.update(Fixed::from_f64(0.2), Fixed::from_f64(0.02));
         }
-        assert!(axis.level > Fixed::from_f64(0.4), "bonding must rise with ritual input");
-        assert!(axis.level < Fixed::from_f64(0.9), "bonding must not saturate");
+        assert!(
+            axis.level > Fixed::from_f64(0.4),
+            "bonding must rise with ritual input"
+        );
+        assert!(
+            axis.level < Fixed::from_f64(0.9),
+            "bonding must not saturate"
+        );
         // No input: recovery drains the axis back down.
         let before = axis.level;
         for _ in 0..3 {
@@ -625,7 +640,7 @@ mod tests {
         // The logistic (1 − level) factor bounds the axis at a stable
         // equilibrium below 1.0 no matter how many fires accumulate.
         let mut axis = BondingAxis {
-            level: Fixed::from_f64(0.6), // max birth value
+            level: Fixed::from_f64(0.6),       // max birth value
             receptivity: Fixed::from_f64(0.8), // max receptivity
         };
         // 11 monthly fires ≈ the 50K-tick long-horizon window.
@@ -654,7 +669,10 @@ mod tests {
         for _ in 0..30 {
             axis.update(Fixed::from_f64(0.8), Fixed::from_f64(0.1));
         }
-        assert!(axis.level > Fixed::from_f64(0.6), "dominance must rise toward high status");
+        assert!(
+            axis.level > Fixed::from_f64(0.6),
+            "dominance must rise toward high status"
+        );
         // Low-status agent (effective_status ~0.2) converges down.
         let mut low = DominanceAxis {
             level: Fixed::from_f64(0.4),
@@ -662,7 +680,10 @@ mod tests {
         for _ in 0..30 {
             low.update(Fixed::from_f64(0.2), Fixed::from_f64(0.1));
         }
-        assert!(low.level < Fixed::from_f64(0.3), "dominance must fall with low status");
+        assert!(
+            low.level < Fixed::from_f64(0.3),
+            "dominance must fall with low status"
+        );
     }
 
     #[test]
@@ -678,7 +699,9 @@ mod tests {
             ..EndocrineState::default()
         };
         for _ in 0..30 {
-            elite.dominance.update(Fixed::from_f64(0.9), Fixed::from_f64(0.1));
+            elite
+                .dominance
+                .update(Fixed::from_f64(0.9), Fixed::from_f64(0.1));
         }
         let mut drained = EndocrineState {
             dominance: DominanceAxis {
@@ -687,11 +710,12 @@ mod tests {
             ..EndocrineState::default()
         };
         for _ in 0..30 {
-            drained.dominance.update(Fixed::from_f64(0.1), Fixed::from_f64(0.1));
+            drained
+                .dominance
+                .update(Fixed::from_f64(0.1), Fixed::from_f64(0.1));
         }
         assert!(
-            elite.dominance_aggression_modifier()
-                > drained.dominance_aggression_modifier(),
+            elite.dominance_aggression_modifier() > drained.dominance_aggression_modifier(),
             "the aggression modifier must differentiate status: {} vs {}",
             elite.dominance_aggression_modifier().to_f64(),
             drained.dominance_aggression_modifier().to_f64()
@@ -702,8 +726,11 @@ mod tests {
     fn growth_axis_converges_to_life_stage_target() {
         use crate::biology::development::LifeStage;
         let mut axis = GrowthAxis::default(); // capacity 0.6
-        // Adolescent target 1.0: capacity rises.
-        axis.update(LifeStage::Adolescent.growth_modifier(), Fixed::from_f64(0.01));
+                                              // Adolescent target 1.0: capacity rises.
+        axis.update(
+            LifeStage::Adolescent.growth_modifier(),
+            Fixed::from_f64(0.01),
+        );
         assert!(axis.capacity > Fixed::from_f64(0.6));
         assert_eq!(
             axis.developmental_modifier,
@@ -716,6 +743,9 @@ mod tests {
         };
         elder.update(LifeStage::Elder.growth_modifier(), Fixed::from_f64(0.01));
         assert!(elder.capacity < Fixed::from_f64(0.6));
-        assert_eq!(elder.developmental_modifier, LifeStage::Elder.growth_modifier());
+        assert_eq!(
+            elder.developmental_modifier,
+            LifeStage::Elder.growth_modifier()
+        );
     }
 }

@@ -32,13 +32,7 @@ fn main() {
                 p.intensity.to_f64()
             )
         });
-        let l = late_panic.map(|p| {
-            format!(
-                "active={} int={:.3}",
-                p.active,
-                p.intensity.to_f64()
-            )
-        });
+        let l = late_panic.map(|p| format!("active={} int={:.3}", p.active, p.intensity.to_f64()));
         println!(
             "seed {seed}: mid@11K={m:?} late@20K={l:?} count={}",
             mid.moral_panic_registry.panics.len()

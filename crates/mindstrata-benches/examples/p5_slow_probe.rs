@@ -13,7 +13,11 @@ fn main() {
         sim.populate();
         sim.run(5000);
         let ms = sim.metrics_snapshot();
-        let fear: Vec<f64> = sim.agents.iter().map(|a| a.emotions.fear.to_f64()).collect();
+        let fear: Vec<f64> = sim
+            .agents
+            .iter()
+            .map(|a| a.emotions.fear.to_f64())
+            .collect();
         let mean = fear.iter().sum::<f64>() / fear.len() as f64;
         // Full-snapshot byte-identity via Debug (MetricsSnapshot has no JSON
         // dep in benches; Debug is total and order-stable for fixed-size f64s).

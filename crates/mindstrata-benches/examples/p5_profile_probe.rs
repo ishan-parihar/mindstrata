@@ -66,11 +66,7 @@ fn main() {
         t += chunk;
         let seg = seg_start.elapsed().as_secs_f64();
         seg_start = Instant::now();
-        let sick = sim
-            .agent_diseases
-            .iter()
-            .filter(|d| !d.is_empty())
-            .count();
+        let sick = sim.agent_diseases.iter().filter(|d| !d.is_empty()).count();
         let total_entries: usize = sim.agent_diseases.iter().map(std::vec::Vec::len).sum();
         println!(
             "  t={t:>7}: chunk={seg:5.2}s events={} sick={sick}/{} entries={total_entries}",

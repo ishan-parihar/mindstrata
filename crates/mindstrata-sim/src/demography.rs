@@ -193,12 +193,8 @@ pub fn age_agent(
 
     // ── Combined annual mortality rate ──
     // Sum of all pathways, clamped to [0, 1].
-    let annual_rate = (senescence_rate
-        + disease_rate
-        + starvation_rate
-        + collapse_rate
-        + stress_rate)
-    .clamp_01();
+    let annual_rate =
+        (senescence_rate + disease_rate + starvation_rate + collapse_rate + stress_rate).clamp_01();
 
     let death_chance = (annual_rate * elapsed_years).clamp_01();
     (new_age, rng_value < death_chance)
@@ -251,10 +247,10 @@ pub fn should_birth(
     rng_value: Fixed, // 0..1 random value
     conception_multiplier: f64,
     // ── New biology-driven parameters ──
-    fertility: Fixed,    // from reproductive state
-    libido: Fixed,       // from reproductive state
-    nutrition: Fixed,    // food quality from world state
-    intimacy: Fixed,     // relationship quality with partner
+    fertility: Fixed,      // from reproductive state
+    libido: Fixed,         // from reproductive state
+    nutrition: Fixed,      // food quality from world state
+    intimacy: Fixed,       // relationship quality with partner
     parental_drive: Fixed, // desire for children
 ) -> bool {
     if !partner_exists {
@@ -304,8 +300,7 @@ pub fn should_birth(
     };
 
     let elapsed_years = ticks_elapsed as f64 / config.ticks_per_year as f64;
-    let period_prob =
-        (effective_rate.to_f64() * elapsed_years * conception_multiplier).min(1.0);
+    let period_prob = (effective_rate.to_f64() * elapsed_years * conception_multiplier).min(1.0);
     rng_value.to_f64() < period_prob
 }
 
@@ -475,7 +470,10 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.5),
         );
-        assert!(no_kids, "0-kid couple should get a birth at rng 0.148 < 0.15");
+        assert!(
+            no_kids,
+            "0-kid couple should get a birth at rng 0.148 < 0.15"
+        );
         assert!(!many_kids, "5-kid couple should not at rng 0.148 > 0.145");
     }
 
@@ -561,7 +559,10 @@ mod tests {
             Fixed::from_f64(0.5),
             Fixed::from_f64(0.5),
         );
-        assert!(!base, "identity multiplier must not fire at rng 0.16 > 0.15");
+        assert!(
+            !base,
+            "identity multiplier must not fire at rng 0.16 > 0.15"
+        );
         assert!(boosted, "4x multiplier must fire at rng 0.16 < 0.6");
     }
 

@@ -82,7 +82,6 @@ impl RespiratoryState {
             + self.oxygenation * Fixed::from_f64(0.5))
         .clamp_01();
     }
-
 }
 
 #[cfg(test)]

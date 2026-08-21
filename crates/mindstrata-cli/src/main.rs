@@ -247,39 +247,42 @@ fn main() {
             // (no RNG, no mutation), so the tick stream is byte-identical
             // to a plain `sim.run(ticks)` — replay capture cannot perturb
             // the simulation.
-            let replay_frames: Option<Vec<(mindstrata_sim::world::World, Vec<mindstrata_render::RenderAgent>)>> =
-                if let Some(ref path) = render_replay {
-                    let every = replay_every.max(1);
-                    let mut frames = Vec::new();
-                    let sample = |sim: &Simulation, frames: &mut Vec<_>| {
-                        let agents: Vec<mindstrata_render::RenderAgent> = sim
-                            .agents
-                            .iter()
-                            .enumerate()
-                            .map(|(i, a)| {
-                                mindstrata_render::RenderAgent::new(
-                                    a.position.x,
-                                    a.position.y,
-                                    i as u8,
-                                )
-                            })
-                            .collect();
-                        frames.push((sim.world().clone(), agents));
-                    };
-                    // Frame 0: the populated starting state.
-                    sample(&sim, &mut frames);
-                    for i in 0..ticks {
-                        sim.tick();
-                        if (i + 1) % every == 0 {
-                            sample(&sim, &mut frames);
-                        }
-                    }
-                    println!("  Replay sampled {} frames (every {every} ticks) → {path}", frames.len());
-                    Some(frames)
-                } else {
-                    sim.run(ticks);
-                    None
+            let replay_frames: Option<
+                Vec<(
+                    mindstrata_sim::world::World,
+                    Vec<mindstrata_render::RenderAgent>,
+                )>,
+            > = if let Some(ref path) = render_replay {
+                let every = replay_every.max(1);
+                let mut frames = Vec::new();
+                let sample = |sim: &Simulation, frames: &mut Vec<_>| {
+                    let agents: Vec<mindstrata_render::RenderAgent> = sim
+                        .agents
+                        .iter()
+                        .enumerate()
+                        .map(|(i, a)| {
+                            mindstrata_render::RenderAgent::new(a.position.x, a.position.y, i as u8)
+                        })
+                        .collect();
+                    frames.push((sim.world().clone(), agents));
                 };
+                // Frame 0: the populated starting state.
+                sample(&sim, &mut frames);
+                for i in 0..ticks {
+                    sim.tick();
+                    if (i + 1) % every == 0 {
+                        sample(&sim, &mut frames);
+                    }
+                }
+                println!(
+                    "  Replay sampled {} frames (every {every} ticks) → {path}",
+                    frames.len()
+                );
+                Some(frames)
+            } else {
+                sim.run(ticks);
+                None
+            };
             let elapsed = start.elapsed();
 
             print_results(&sim, elapsed);
@@ -347,10 +350,7 @@ fn main() {
             if let (Some(path), Some(frames)) = (render_replay.as_ref(), replay_frames.as_ref()) {
                 let replay: Vec<mindstrata_render::ReplayFrame> = frames
                     .iter()
-                    .map(|(world, agents)| mindstrata_render::ReplayFrame {
-                        world,
-                        agents,
-                    })
+                    .map(|(world, agents)| mindstrata_render::ReplayFrame { world, agents })
                     .collect();
                 match mindstrata_render::render_replay_gif(
                     &replay,
@@ -361,7 +361,10 @@ fn main() {
                     Ok(gif) => match std::fs::write(path, &gif) {
                         Ok(()) => {
                             let (fw, fh) = frames.first().map_or((0, 0), |(w, _)| {
-                                (w.width * mindstrata_render::DEFAULT_CELL_PIXELS, w.height * mindstrata_render::DEFAULT_CELL_PIXELS)
+                                (
+                                    w.width * mindstrata_render::DEFAULT_CELL_PIXELS,
+                                    w.height * mindstrata_render::DEFAULT_CELL_PIXELS,
+                                )
                             });
                             println!(
                                 "\n  Animated replay ({} frames, {fw}x{fh}px) written to: {path}",
@@ -535,11 +538,8 @@ fn main() {
 
             // §13 (Iteration 178): Noosphere/culture inspector
             if noosphere {
-                let legitimacy_fields: Vec<_> = sim
-                    .agents
-                    .iter()
-                    .map(|a| &a.legitimacy_field)
-                    .collect();
+                let legitimacy_fields: Vec<_> =
+                    sim.agents.iter().map(|a| &a.legitimacy_field).collect();
                 println!();
                 println!(
                     "{}",
@@ -597,7 +597,9 @@ fn main() {
                     Ok(s) => s,
                     Err(e) => {
                         eprintln!("Unknown scenario: {other}");
-                        eprintln!("Available: riverford, drought, famine, pestilence, collapse, calm");
+                        eprintln!(
+                            "Available: riverford, drought, famine, pestilence, collapse, calm"
+                        );
                         eprintln!("Or pass a path to a .ron scenario file: {e}");
                         std::process::exit(1);
                     }

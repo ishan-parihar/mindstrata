@@ -632,7 +632,9 @@ pub fn compute_utility(
     // ±0.05 exploration jitter shrinks with the deviation (floored so even
     // maximal persistence keeps a minimal jitter). Zero at zero deviation.
     let amplitude = noise_amplitude(persistence_dev);
-    let noise_roll: f64 = rng.get_mut(RngStream::Behavior).random_range(-amplitude..amplitude);
+    let noise_roll: f64 = rng
+        .get_mut(RngStream::Behavior)
+        .random_range(-amplitude..amplitude);
     utility += Fixed::from_f64(noise_roll);
 
     // Approach/withdrawal: an approach-biased agent explores more, a
@@ -1225,7 +1227,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
         let u_none = compute_utility(
             &ActionKind::Work.definition(),
@@ -1242,7 +1244,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
 
         assert!(
@@ -1274,7 +1276,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
         let compliant_pressure = compute_utility(
             &ActionKind::Work.definition(),
@@ -1291,7 +1293,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
 
         assert!(
@@ -1323,7 +1325,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
         let violating_pressure = compute_utility(
             &ActionKind::Work.definition(),
@@ -1340,7 +1342,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
 
         assert!(
@@ -1372,7 +1374,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
         let violating_pressure = compute_utility(
             &ActionKind::Idle.definition(),
@@ -1389,7 +1391,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
 
         assert!(
@@ -1554,7 +1556,7 @@ mod tests {
             Fixed::from_f64(0.8),
             Fixed::ZERO,
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
         let eat_when_thirst_dominant = compute_utility(
             &ActionKind::Eat.definition(),
@@ -1571,7 +1573,7 @@ mod tests {
             Fixed::from_f64(0.8),
             Fixed::ZERO,
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
         assert!(
             eat_when_hungry_dominant > eat_when_thirst_dominant,
@@ -1605,7 +1607,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
         let safety_dominant = compute_utility(
             &ActionKind::Eat.definition(),
@@ -1622,7 +1624,7 @@ mod tests {
             Fixed::from_f64(0.8),
             Fixed::ZERO,
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
         assert_eq!(
             zero_pressure, safety_dominant,
@@ -1654,7 +1656,7 @@ mod tests {
             Fixed::from_f64(0.2),
             Fixed::ZERO,
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
         let high = compute_utility(
             &ActionKind::Eat.definition(),
@@ -1671,7 +1673,7 @@ mod tests {
             Fixed::from_f64(0.9),
             Fixed::ZERO,
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
         assert!(
             high > low,
@@ -1704,7 +1706,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
         let hungry_dominant = compute_utility(
             &ActionKind::Work.definition(),
@@ -1721,7 +1723,7 @@ mod tests {
             Fixed::from_f64(0.9),
             Fixed::ZERO,
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
         assert_eq!(
             zero_pressure, hungry_dominant,
@@ -1756,7 +1758,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::from_f64(0.6),
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
         let work_calm = compute_utility(
             &ActionKind::Work.definition(),
@@ -1773,7 +1775,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
         let rest_dreadful = compute_utility(
             &ActionKind::Rest.definition(),
@@ -1790,7 +1792,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::from_f64(0.6),
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
         let rest_calm = compute_utility(
             &ActionKind::Rest.definition(),
@@ -1807,7 +1809,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::ZERO,
-        Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
         );
         let work_delta = (work_dreadful - work_calm).to_f64();
         let rest_delta = (rest_calm - rest_dreadful).to_f64();
@@ -1866,7 +1868,7 @@ mod tests {
                 Fixed::from_f64(0.8),
                 Fixed::from_f64(0.6),
                 Fixed::ZERO,
-            Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
             );
             let calm = compute_utility(
                 &kind.definition(),
@@ -1883,7 +1885,7 @@ mod tests {
                 Fixed::from_f64(0.8),
                 Fixed::ZERO,
                 Fixed::ZERO,
-            Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
             );
             assert_eq!(
                 dreadful.to_f64(),
@@ -2002,7 +2004,7 @@ mod tests {
                 Fixed::ZERO,
                 Fixed::ZERO,
                 hope,
-            Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
             )
         };
         let social_hopeful = util(ActionKind::Socialize, Fixed::from_f64(0.6));
@@ -2078,7 +2080,7 @@ mod tests {
                 Fixed::from_f64(0.8),
                 Fixed::ZERO,
                 Fixed::from_f64(0.6),
-            Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
             );
             let calm = compute_utility(
                 &kind.definition(),
@@ -2095,7 +2097,7 @@ mod tests {
                 Fixed::from_f64(0.8),
                 Fixed::ZERO,
                 Fixed::ZERO,
-            Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
             );
             assert_eq!(
                 hopeful.to_f64(),
@@ -2246,7 +2248,11 @@ mod tests {
     #[test]
     fn persistence_narrows_decision_noise_amplitude() {
         assert_eq!(noise_amplitude(Fixed::ZERO), 0.05);
-        assert_eq!(noise_amplitude(-Fixed::from_f64(0.2)), 0.05, "negative deviation is defensively legacy");
+        assert_eq!(
+            noise_amplitude(-Fixed::from_f64(0.2)),
+            0.05,
+            "negative deviation is defensively legacy"
+        );
         assert!(noise_amplitude(Fixed::from_f64(0.3)) < 0.05);
         assert!(
             noise_amplitude(Fixed::from_f64(0.6)) < noise_amplitude(Fixed::from_f64(0.3)),
@@ -2305,7 +2311,7 @@ mod tests {
                 Fixed::ZERO,
                 Fixed::ZERO,
                 Fixed::ZERO,
-            Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
             )
         };
         let base_util = wander_util(&control);
@@ -2360,7 +2366,7 @@ mod tests {
                 Fixed::ZERO,
                 Fixed::ZERO,
                 Fixed::ZERO,
-            Fixed::from_f64(0.5),
+                Fixed::from_f64(0.5),
             )
         };
         assert_eq!(

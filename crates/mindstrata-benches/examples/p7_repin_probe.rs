@@ -56,7 +56,9 @@ fn event_count(m: &MetricsSnapshot) -> f64 {
 
 fn conflict_delta(seed: u64) -> (f64, f64) {
     let base = sim(seed, 3000, |_| {});
-    let treated = sim(seed, 3000, |p| p.conflict_escalation_chance = Fixed::from_f64(0.9));
+    let treated = sim(seed, 3000, |p| {
+        p.conflict_escalation_chance = Fixed::from_f64(0.9)
+    });
     let b = event_count(&base.metrics_snapshot());
     let t = event_count(&treated.metrics_snapshot());
     (b, t - b)
@@ -68,7 +70,9 @@ fn scen_conflict_delta(sc: &Scenario, seed: u64) -> (f64, f64) {
     let base = scen(&mut sc_b, 3000, |_| {});
     let mut sc_t = sc.clone();
     sc_t.seed = seed;
-    let treated = scen(&mut sc_t, 3000, |p| p.conflict_escalation_chance = Fixed::from_f64(0.9));
+    let treated = scen(&mut sc_t, 3000, |p| {
+        p.conflict_escalation_chance = Fixed::from_f64(0.9)
+    });
     let b = event_count(&base.metrics_snapshot());
     let t = event_count(&treated.metrics_snapshot());
     (b, t - b)
@@ -84,10 +88,25 @@ fn json_diff(a: &MetricsSnapshot, b: &MetricsSnapshot) -> Vec<(String, f64, f64)
         };
     }
     cmp!(
-        avg_hunger, avg_thirst, avg_fatigue, avg_valence, avg_joy, avg_fear, total_grain,
-        total_water, event_count, journal_len, agent_count, avg_stress, avg_health,
-        avg_trauma_load, avg_relationship_trust, avg_relationship_quality, active_meme_count,
-        polarization_index, household_count
+        avg_hunger,
+        avg_thirst,
+        avg_fatigue,
+        avg_valence,
+        avg_joy,
+        avg_fear,
+        total_grain,
+        total_water,
+        event_count,
+        journal_len,
+        agent_count,
+        avg_stress,
+        avg_health,
+        avg_trauma_load,
+        avg_relationship_trust,
+        avg_relationship_quality,
+        active_meme_count,
+        polarization_index,
+        household_count
     );
     out
 }
@@ -135,10 +154,15 @@ fn main() {
     if section == "dormant" || section == "all" {
         println!("=== dormant-consumer vanilla leg (seed 42, 5000 ticks, appraisal_fear_coping_multiplier 2.0) ===");
         let base = sim(42, 5000, |_| {});
-        let treated = sim(42, 5000, |p| p.appraisal_fear_coping_multiplier = Fixed::from_f64(2.0));
+        let treated = sim(42, 5000, |p| {
+            p.appraisal_fear_coping_multiplier = Fixed::from_f64(2.0)
+        });
         let mb = base.metrics_snapshot();
         let mt = treated.metrics_snapshot();
-        println!("avg_fear baseline={:.6} treated={:.6}", mb.avg_fear, mt.avg_fear);
+        println!(
+            "avg_fear baseline={:.6} treated={:.6}",
+            mb.avg_fear, mt.avg_fear
+        );
         for (k, fb, ft) in json_diff(&mb, &mt) {
             println!("  diverged field: {k} baseline={fb:.6} treated={ft:.6}");
         }
@@ -149,7 +173,10 @@ fn main() {
 
     if section == "neural" || section == "all" {
         println!("=== neural belief-fold sweep (abundant vs scarcity, 5000 ticks) ===");
-        for seed in [1u64, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 42, 46, 55, 99] {
+        for seed in [
+            1u64, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24, 25, 26, 27, 28, 29, 30, 42, 46, 55, 99,
+        ] {
             let conf = |qty: f64| {
                 // Match the test exactly: populate → mutate inventory →
                 // single run (no double-run).
@@ -183,7 +210,10 @@ fn main() {
             };
             let ab = conf(500.0);
             let sc = conf(0.0);
-            println!("seed {seed:>2}: abundant={ab:.4} scarcity={sc:.4} diff={:.4}", sc - ab);
+            println!(
+                "seed {seed:>2}: abundant={ab:.4} scarcity={sc:.4} diff={:.4}",
+                sc - ab
+            );
         }
     }
 
@@ -227,9 +257,14 @@ fn main() {
             trusting.run(2000);
             let t = vcount(&trusting);
             rows.push((seed, c, t));
-            println!("seed {seed:>2}: control={c} trusting={t} pacified={}", t < c);
+            println!(
+                "seed {seed:>2}: control={c} trusting={t} pacified={}",
+                t < c
+            );
         }
-        let (ct, tt): (usize, usize) = rows.iter().fold((0, 0), |(c, t), (_, c2, t2)| (c + c2, t + t2));
+        let (ct, tt): (usize, usize) = rows
+            .iter()
+            .fold((0, 0), |(c, t), (_, c2, t2)| (c + c2, t + t2));
         println!("aggregate: control={ct} trusting={tt} pacified={}", tt < ct);
         // Exact harness replica for the pinned set [13, 42, 7, 55] and the
         // candidate replacement set [2, 3, 8, 18].
@@ -257,7 +292,12 @@ fn main() {
             s.journal()
                 .entries_in_range(0, u64::MAX)
                 .iter()
-                .filter(|e| matches!(e.kind, mindstrata_sim::journal::JournalEntryKind::Died { .. }))
+                .filter(|e| {
+                    matches!(
+                        e.kind,
+                        mindstrata_sim::journal::JournalEntryKind::Died { .. }
+                    )
+                })
                 .count()
         };
         for pest_tick in [900u64, 1000, 1100, 1200, 1300, 1400] {
@@ -277,11 +317,7 @@ fn main() {
         let late = sim(13, 170_000, |_| {});
         let ticks = birth_ticks(&late);
         println!("birth_ticks={ticks:?}");
-        let live = late
-            .agents
-            .iter()
-            .filter(|a| a.parent_a.is_some())
-            .count();
+        let live = late.agents.iter().filter(|a| a.parent_a.is_some()).count();
         let mchildren: usize = late
             .marriage_registry
             .marriages

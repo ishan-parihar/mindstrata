@@ -242,8 +242,7 @@ pub struct PlasticitySignals {
 /// verbatim by both callers to preserve byte-identical drift.
 fn plasticity_rate(s: &PlasticitySignals, rate_const: f64) -> Fixed {
     // Developmental plasticity decays with age — full at birth, zero at 70.
-    let developmental =
-        (Fixed::ONE - (s.age_years / Fixed::from_f64(70.0)).clamp_01()).clamp_01();
+    let developmental = (Fixed::ONE - (s.age_years / Fixed::from_f64(70.0)).clamp_01()).clamp_01();
     let integration = s.identity_integration.clamp_01();
     if developmental <= Fixed::ZERO || integration <= Fixed::ZERO {
         return Fixed::ZERO;
@@ -390,9 +389,9 @@ impl Personality {
         }
         // `TraitConstitution` is `Copy`; `is_none()` was just checked above,
         // so this read cannot fail (avoids a borrow-held reference).
-        let constitution = self.constitution.unwrap_or_else(|| {
-            TraitConstitution::from_personality(self)
-        });
+        let constitution = self
+            .constitution
+            .unwrap_or_else(|| TraitConstitution::from_personality(self));
         let rate = plasticity_rate(s, CORE_TRAIT_PLASTICITY_RATE);
         if rate <= Fixed::ZERO {
             return;
@@ -416,10 +415,9 @@ impl Personality {
             + (constitution.impulsivity - self.impulsivity) * rate)
             .clamp_01();
         // Openness: pushed by recovery (novel positive engagement opens minds).
-        self.openness = (self.openness
-            + recovery * rate
-            + (constitution.openness - self.openness) * rate)
-            .clamp_01();
+        self.openness =
+            (self.openness + recovery * rate + (constitution.openness - self.openness) * rate)
+                .clamp_01();
         // Extraversion: pushed by social engagement.
         self.extraversion = (self.extraversion
             + social * rate
@@ -449,25 +447,22 @@ impl Personality {
             + (constitution.conformity - self.conformity) * rate)
             .clamp_01();
         // Ambition: pushed by goal striving.
-        self.ambition = (self.ambition
-            + striving * rate
-            + (constitution.ambition - self.ambition) * rate)
-            .clamp_01();
+        self.ambition =
+            (self.ambition + striving * rate + (constitution.ambition - self.ambition) * rate)
+                .clamp_01();
         // Altruism: pushed by social engagement (prosocial practice).
-        self.altruism = (self.altruism
-            + social * rate
-            + (constitution.altruism - self.altruism) * rate)
-            .clamp_01();
+        self.altruism =
+            (self.altruism + social * rate + (constitution.altruism - self.altruism) * rate)
+                .clamp_01();
         // Traditionalism: pushed by identity integration (stability-seeking).
         self.traditionalism = (self.traditionalism
             + integration * rate
             + (constitution.traditionalism - self.traditionalism) * rate)
             .clamp_01();
         // Dominance: pushed by goal striving (assertion through striving).
-        self.dominance = (self.dominance
-            + striving * rate
-            + (constitution.dominance - self.dominance) * rate)
-            .clamp_01();
+        self.dominance =
+            (self.dominance + striving * rate + (constitution.dominance - self.dominance) * rate)
+                .clamp_01();
     }
 }
 
@@ -1325,7 +1320,9 @@ mod temperament_tests {
         };
         p.plastic_update_traits(&stressed);
         // The anchor must be the pre-tick traits (captured before any push).
-        let anchored = p.constitution.expect("lazy anchor must set the constitution");
+        let anchored = p
+            .constitution
+            .expect("lazy anchor must set the constitution");
         let expected = TraitConstitution::from_personality(&pre_tick_traits);
         assert_eq!(
             anchored, expected,

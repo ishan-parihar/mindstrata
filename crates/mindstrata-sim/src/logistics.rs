@@ -84,7 +84,6 @@ impl CarryingCapacity {
         self.current_load = (self.current_load + added).min(self.max_weight);
         added
     }
-
 }
 
 /// Local scarcity pricing modifier.

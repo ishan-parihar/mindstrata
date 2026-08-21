@@ -226,7 +226,12 @@ pub fn stage_progress_toward_next(
     } else {
         (affection / affection_req).clamp(Fixed::ZERO, Fixed::ONE)
     };
-    Some(i_frac.min(t_frac).min(a_frac).clamp(Fixed::ZERO, Fixed::ONE))
+    Some(
+        i_frac
+            .min(t_frac)
+            .min(a_frac)
+            .clamp(Fixed::ZERO, Fixed::ONE),
+    )
 }
 
 /// Try to advance a relationship stage based on current metrics.
@@ -334,21 +339,11 @@ mod tests {
 
         // Terminal/negative stages have no next — None (no progress to make).
         assert_eq!(
-            stage_progress_toward_next(
-                RelationshipStage::Nemesis,
-                0,
-                Fixed::ZERO,
-                Fixed::ZERO,
-            ),
+            stage_progress_toward_next(RelationshipStage::Nemesis, 0, Fixed::ZERO, Fixed::ZERO,),
             None
         );
         assert_eq!(
-            stage_progress_toward_next(
-                RelationshipStage::ParentChild,
-                0,
-                Fixed::ZERO,
-                Fixed::ZERO,
-            ),
+            stage_progress_toward_next(RelationshipStage::ParentChild, 0, Fixed::ZERO, Fixed::ZERO,),
             None
         );
     }

@@ -403,7 +403,6 @@ impl Institution {
     pub fn increase_legitimacy(&mut self, amount: Fixed) {
         self.legitimacy = (self.legitimacy + amount).clamp_01();
     }
-
 }
 
 /// Create default institutions for a settlement.

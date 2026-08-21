@@ -127,7 +127,6 @@ impl MuscularState {
         // Age reduces peak strength
         self.strength = (self.strength - age_modifier * Fixed::from_f64(0.0001)).max(Fixed::ZERO);
     }
-
 }
 
 #[cfg(test)]
@@ -187,8 +186,14 @@ mod tests {
                 Fixed::from_f64(0.3),
             );
         }
-        assert!(m.conditioning < Fixed::from_f64(0.8), "conditioning must decay when idle");
-        assert!(m.conditioning >= Fixed::from_f64(0.4), "detrain floor holds");
+        assert!(
+            m.conditioning < Fixed::from_f64(0.8),
+            "conditioning must decay when idle"
+        );
+        assert!(
+            m.conditioning >= Fixed::from_f64(0.4),
+            "detrain floor holds"
+        );
     }
 
     #[test]
@@ -206,8 +211,14 @@ mod tests {
             );
         }
         let after = m.conditioning.to_f64();
-        assert!(after > 0.5, "sustained Work must lift conditioning (got {after})");
-        assert!(after < 0.95, "equilibrium must stay below 1.0 (got {after})");
+        assert!(
+            after > 0.5,
+            "sustained Work must lift conditioning (got {after})"
+        );
+        assert!(
+            after < 0.95,
+            "equilibrium must stay below 1.0 (got {after})"
+        );
     }
 
     #[test]

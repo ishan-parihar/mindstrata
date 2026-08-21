@@ -78,7 +78,6 @@ impl MetabolicState {
         self.satiety = (self.satiety + satiety_gain).clamp_01();
         self.fat_reserves = (self.fat_reserves + fat_gain).clamp_01();
     }
-
 }
 
 #[cfg(test)]
@@ -102,5 +101,4 @@ mod tests {
         assert!(m.energy_reserves > initial_energy);
         assert!(m.satiety > initial_satiety);
     }
-
 }

@@ -382,7 +382,6 @@ impl EpistemicState {
         self.information_overload =
             (self.information_overload - Fixed::from_f64(0.05)).max(Fixed::ZERO);
     }
-
 }
 
 #[cfg(test)]

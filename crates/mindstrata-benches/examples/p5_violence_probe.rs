@@ -65,7 +65,11 @@ fn main() {
             dom_risk_high += 1;
         }
     }
-    println!("  agreeableness<0.35: {agree_below}/{}  dom+risk>1.2: {dom_risk_high}/{}", sim.agents.len(), sim.agents.len());
+    println!(
+        "  agreeableness<0.35: {agree_below}/{}  dom+risk>1.2: {dom_risk_high}/{}",
+        sim.agents.len(),
+        sim.agents.len()
+    );
 
     // Fear levels (threat_failed gate: fear < 0.3 → escalate opportunity)
     let fear_lt = sim
@@ -78,10 +82,18 @@ fn main() {
         .iter()
         .filter(|a| a.emotions.anger.to_f64() > 0.5)
         .count();
-    println!("  agents fear<0.3: {fear_lt}/{}  anger>0.5: {anger_gt}/{}", sim.agents.len(), sim.agents.len());
+    println!(
+        "  agents fear<0.3: {fear_lt}/{}  anger>0.5: {anger_gt}/{}",
+        sim.agents.len(),
+        sim.agents.len()
+    );
 
     // Health recovery check: what's the mean health trajectory?
-    let health_mean: f64 =
-        sim.agents.iter().map(|a| a.body.health.to_f64()).sum::<f64>() / sim.agents.len() as f64;
+    let health_mean: f64 = sim
+        .agents
+        .iter()
+        .map(|a| a.body.health.to_f64())
+        .sum::<f64>()
+        / sim.agents.len() as f64;
     println!("  mean health @2000: {health_mean:.2}");
 }

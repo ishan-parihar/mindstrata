@@ -217,13 +217,14 @@ impl MoralCognition {
         .clamp_01();
         // Shame from personal violations
         self.moral_emotions.shame = (self.moral_emotions.shame
-            + personal_violations * self.moral_identity * development_scale
+            + personal_violations
+                * self.moral_identity
+                * development_scale
                 * Fixed::from_f64(0.05))
         .clamp_01();
         // Pride from moral achievements
         self.moral_emotions.pride = (self.moral_emotions.pride
-            + moral_achievements * self.moral_identity * development_scale
-                * Fixed::from_f64(0.03))
+            + moral_achievements * self.moral_identity * development_scale * Fixed::from_f64(0.03))
         .clamp_01();
 
         // §8.1.10: Moral identity development — the centrality of morality
@@ -234,9 +235,8 @@ impl MoralCognition {
         // is a deep personality trait. The 0.5 default is stable: when
         // achievements == violations == 0, the net change is zero.
         if moral_achievements > Fixed::ZERO {
-            self.moral_identity = (self.moral_identity
-                + moral_achievements * Fixed::from_f64(0.002))
-            .clamp_01();
+            self.moral_identity =
+                (self.moral_identity + moral_achievements * Fixed::from_f64(0.002)).clamp_01();
         }
         if personal_violations > Fixed::ZERO {
             self.moral_identity = (self.moral_identity
@@ -524,7 +524,8 @@ mod tests {
         assert!(
             mc.moral_identity > before,
             "moral achievements must increase moral identity ({} > {})",
-            mc.moral_identity, before
+            mc.moral_identity,
+            before
         );
     }
 
@@ -541,7 +542,8 @@ mod tests {
         assert!(
             mc.moral_identity < before,
             "moral violations must decrease moral identity ({} < {})",
-            mc.moral_identity, before
+            mc.moral_identity,
+            before
         );
     }
 
@@ -550,17 +552,13 @@ mod tests {
         let mut mc = MoralCognition::default();
         // Saturate at 1.0 via many achievements
         for _ in 0..600 {
-            mc.update_moral_emotions(
-                Fixed::ZERO, Fixed::ZERO, Fixed::ONE, Fixed::from_f64(0.4),
-            );
+            mc.update_moral_emotions(Fixed::ZERO, Fixed::ZERO, Fixed::ONE, Fixed::from_f64(0.4));
         }
         assert!(mc.moral_identity <= Fixed::ONE, "must clamp at 1.0");
         // Reset and saturate at floor via many violations
         mc.moral_identity = Fixed::from_f64(0.15);
         for _ in 0..600 {
-            mc.update_moral_emotions(
-                Fixed::ZERO, Fixed::ONE, Fixed::ZERO, Fixed::from_f64(0.4),
-            );
+            mc.update_moral_emotions(Fixed::ZERO, Fixed::ONE, Fixed::ZERO, Fixed::from_f64(0.4));
         }
         assert!(
             mc.moral_identity >= Fixed::from_f64(0.1),

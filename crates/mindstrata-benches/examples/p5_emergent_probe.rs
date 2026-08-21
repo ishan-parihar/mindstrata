@@ -108,7 +108,9 @@ fn main() {
         // ── Life themes (narrative identity) ───────────────────────────
         let mut themes: BTreeMap<String, u32> = BTreeMap::new();
         for a in &sim.agents {
-            *themes.entry(format!("{:?}", a.narrative.life_theme)).or_insert(0) += 1;
+            *themes
+                .entry(format!("{:?}", a.narrative.life_theme))
+                .or_insert(0) += 1;
         }
 
         // ── Event distribution ─────────────────────────────────────────
@@ -128,7 +130,11 @@ fn main() {
         }
         let nemesis = *stages.get("Nemesis").unwrap_or(&0);
         let total_edges: u32 = stages.values().sum();
-        let nemesis_share = if total_edges == 0 { 0.0 } else { nemesis as f64 / total_edges as f64 };
+        let nemesis_share = if total_edges == 0 {
+            0.0
+        } else {
+            nemesis as f64 / total_edges as f64
+        };
 
         // ── Emotion means ──────────────────────────────────────────────
         let (mut joy, mut anger, mut fear) = (0.0f64, 0.0f64, 0.0f64);
@@ -137,7 +143,9 @@ fn main() {
             joy += a.emotions.joy.to_f64();
             anger += a.emotions.anger.to_f64();
             fear += a.emotions.fear.to_f64();
-            *att_styles.entry(format!("{:?}", a.attachment.style)).or_insert(0) += 1;
+            *att_styles
+                .entry(format!("{:?}", a.attachment.style))
+                .or_insert(0) += 1;
         }
 
         // ── Story artifacts: clan myths, collective memories, chapters ─
@@ -161,19 +169,40 @@ fn main() {
             .sum();
 
         // ── Focal narrative differentiation (legibility) ───────────────
-        let focal: Vec<&mindstrata_sim::sim::AgentBundle> =
-            sim.agents.iter().filter(|a| a.agent_tier.tier == AgentTier::Focal).collect();
+        let focal: Vec<&mindstrata_sim::sim::AgentBundle> = sim
+            .agents
+            .iter()
+            .filter(|a| a.agent_tier.tier == AgentTier::Focal)
+            .collect();
         let (mut focal_scripts, mut focal_themes) = (0.0f64, 0.0f64);
         for a in &focal {
-            let s = a.narrative.redemption_script.to_f64() + a.narrative.victimhood_script.to_f64()
+            let s = a.narrative.redemption_script.to_f64()
+                + a.narrative.victimhood_script.to_f64()
                 + a.narrative.heroism_script.to_f64();
             focal_scripts += s;
-            focal_themes += if a.narrative.life_theme == mindstrata_sim::psychology::narrative::LifeTheme::Growth { 0.0 } else { 1.0 };
+            focal_themes += if a.narrative.life_theme
+                == mindstrata_sim::psychology::narrative::LifeTheme::Growth
+            {
+                0.0
+            } else {
+                1.0
+            };
         }
-        let f_mean = if focal.is_empty() { 0.0 } else { focal_scripts / focal.len() as f64 };
-        let f_theme_frac = if focal.is_empty() { 0.0 } else { focal_themes / focal.len() as f64 };
+        let f_mean = if focal.is_empty() {
+            0.0
+        } else {
+            focal_scripts / focal.len() as f64
+        };
+        let f_theme_frac = if focal.is_empty() {
+            0.0
+        } else {
+            focal_themes / focal.len() as f64
+        };
 
-        let top = kinds.iter().max_by_key(|(_, v)| **v).map_or("none", |(k, _)| *k);
+        let top = kinds
+            .iter()
+            .max_by_key(|(_, v)| **v)
+            .map_or("none", |(k, _)| *k);
         println!(
             "seed {seed:>2} @{ticks}: deaths={deaths:>2} themes={themes:?} | events={total_events} ({diverse_kinds} kinds, top={top}) | \
              stages={stages:?} nemesis_share={nemesis_share:.2} | joy={joy:.2} anger={anger:.2} fear={fear:.2} att={att_styles:?} | \
@@ -183,7 +212,11 @@ fn main() {
 
         // Population stability: a healthy 12-agent village keeps most alive
         // at 20K ticks (Fixed is NaN-proof by construction).
-        let alive = sim.agents.iter().filter(|a| a.body.health > Fixed::ZERO).count();
+        let alive = sim
+            .agents
+            .iter()
+            .filter(|a| a.body.health > Fixed::ZERO)
+            .count();
         if alive < 6 {
             println!("  !! seed {seed}: population collapse at {ticks} ({alive}/12 alive)");
             all_ok = false;
@@ -200,14 +233,22 @@ fn main() {
             let b_set: std::collections::HashSet<&(usize, usize)> = pb.iter().collect();
             let inter = a_set.intersection(&b_set).count();
             let union = a_set.union(&b_set).count();
-            let jac = if union == 0 { 1.0 } else { 1.0 - inter as f64 / union as f64 };
+            let jac = if union == 0 {
+                1.0
+            } else {
+                1.0 - inter as f64 / union as f64
+            };
             println!("  seed {sa:>2} vs {sb:>2}: {pa:?} vs {pb:?} → divergence {jac:.2}");
         }
     }
 
     // ── 50K stability leg ──────────────────────────────────────────────
     let sim = run(42, 50_000);
-    let alive = sim.agents.iter().filter(|a| a.body.health > Fixed::ZERO).count();
+    let alive = sim
+        .agents
+        .iter()
+        .filter(|a| a.body.health > Fixed::ZERO)
+        .count();
     let stable = alive >= 6;
     all_ok &= stable;
     println!(
@@ -216,7 +257,14 @@ fn main() {
         if stable { "STABLE" } else { "UNSTABLE" }
     );
 
-    println!("\nEMERGENT PROBE: {}", if all_ok { "ALL CHECKS PASS" } else { "ISSUES FOUND" });
+    println!(
+        "\nEMERGENT PROBE: {}",
+        if all_ok {
+            "ALL CHECKS PASS"
+        } else {
+            "ISSUES FOUND"
+        }
+    );
     if !all_ok {
         std::process::exit(1);
     }

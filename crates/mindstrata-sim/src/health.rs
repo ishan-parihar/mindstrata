@@ -233,7 +233,9 @@ pub fn apply_injury(
     // Chance of wound infection from injury — the caller's seeded RNG draw.
     if rng_value < config.injury_chance
         && diseases.len() < MAX_CONCURRENT_DISEASES
-        && !diseases.iter().any(|d| d.kind == DiseaseKind::WoundInfection)
+        && !diseases
+            .iter()
+            .any(|d| d.kind == DiseaseKind::WoundInfection)
     {
         diseases.push(ActiveDisease::new(DiseaseKind::WoundInfection));
     }

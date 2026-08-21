@@ -410,7 +410,8 @@ impl AttentionState {
         prediction_error: Fixed,
         arousal: Fixed,
     ) {
-        let threat_input = fear + anger + trauma_risk + (arousal - Fixed::from_f64(0.5)) * Fixed::from_f64(0.5);
+        let threat_input =
+            fear + anger + trauma_risk + (arousal - Fixed::from_f64(0.5)) * Fixed::from_f64(0.5);
         self.threat_bias = (Fixed::from_raw(5000)
             + (threat_input - Fixed::ONE) * Fixed::from_f64(0.2))
         .clamp(Fixed::from_f64(0.3), Fixed::from_f64(0.7));
@@ -693,7 +694,10 @@ mod tests {
             Fixed::from_f64(0.5),
         );
         assert_eq!(anchor.threat_bias, Fixed::from_f64(0.3));
-        assert!(high.threat_bias <= Fixed::from_f64(0.7), "stays in the clamp");
+        assert!(
+            high.threat_bias <= Fixed::from_f64(0.7),
+            "stays in the clamp"
+        );
     }
 
     #[test]

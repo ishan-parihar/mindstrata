@@ -166,12 +166,10 @@ impl EmbodiedState {
             // offset from the 0.5 baseline. High-reactivity agents run
             // slightly hotter; low-reactivity agents run slightly cooler.
             // Deterministic from genome; no extra RNG draw.
-            thermal: ThermalState {
-                thermal_set_point: Fixed::from_f64(0.475)
-                    + genome.trait_predispositions.stress_reactivity
-                        * Fixed::from_f64(0.05),
-                ..ThermalState::default()
-            },
+            thermal: ThermalState::with_set_point(
+                Fixed::from_f64(0.475)
+                    + genome.trait_predispositions.stress_reactivity * Fixed::from_f64(0.05),
+            ),
             development,
             health: Fixed::from_f64(0.9) + Fixed::from_f64(rng.random_range(0.0..0.1)),
             energy: Fixed::from_f64(0.7) + Fixed::from_f64(rng.random_range(0.0..0.2)),
@@ -336,7 +334,9 @@ impl EmbodiedState {
         // feeds no decision consumer, so calibrated runs stay byte-identical
         // and the golden baseline is untouched.
         let growth_target = self.development.life_stage.growth_modifier();
-        self.endocrine.growth.update(growth_target, params.endocrine_growth_recovery);
+        self.endocrine
+            .growth
+            .update(growth_target, params.endocrine_growth_recovery);
 
         // 4. Metabolic — energy, hunger (thermoregulation now in ThermalState)
         self.metabolic.tick_update(activity_level);
@@ -397,11 +397,8 @@ impl EmbodiedState {
         );
 
         // 8b. Skeletal (§7.2.3) — frailty, fracture, malnutrition
-        self.skeletal.tick_update(
-            self.age,
-            self.injury,
-            nutrition_quality,
-        );
+        self.skeletal
+            .tick_update(self.age, self.injury, nutrition_quality);
 
         // 8c. Digestive (§7.2.7) — stomach processing, gut health
         self.digestive.tick_update();
@@ -543,8 +540,8 @@ mod tests {
             Fixed::from_f64(0.4),
             Fixed::from_f64(0.4),
             Fixed::from_f64(0.6), // nutrition quality
-            Fixed::ZERO,           // smoke_exposure
-            Fixed::ZERO,           // damp_housing
+            Fixed::ZERO,          // smoke_exposure
+            Fixed::ZERO,          // damp_housing
             &crate::parameters::SimParameters::default(),
         );
         // Should not panic and values should remain in range
@@ -567,8 +564,8 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             Fixed::from_f64(0.6), // nutrition quality
-            Fixed::ZERO,           // smoke_exposure
-            Fixed::ZERO,           // damp_housing
+            Fixed::ZERO,          // smoke_exposure
+            Fixed::ZERO,          // damp_housing
             &crate::parameters::SimParameters::default(),
         );
         assert!(embodied.nervous.sleep_pressure < Fixed::from_f64(0.8));
@@ -591,7 +588,7 @@ mod tests {
             for _ in 0..200 {
                 embodied.tick_update(
                     Fixed::ZERO, // threat
-                    Fixed::ONE,   // social safety
+                    Fixed::ONE,  // social safety
                     false,
                     Fixed::from_f64(0.1), // activity
                     Fixed::from_f64(0.5), // ambient
@@ -600,8 +597,8 @@ mod tests {
                     hunger,
                     thirst,
                     Fixed::from_f64(0.6), // nutrition quality
-                    Fixed::ZERO,           // smoke_exposure
-                    Fixed::ZERO,           // damp_housing
+                    Fixed::ZERO,          // smoke_exposure
+                    Fixed::ZERO,          // damp_housing
                     &crate::parameters::SimParameters::default(),
                 );
             }
@@ -616,8 +613,14 @@ mod tests {
         );
         // The fed agent's acute term (0.1×0.3 + 0.1×0.2 = 0.05) keeps it in
         // the calm band; the starved term (0.45) must push past it.
-        assert!(fed < Fixed::from_f64(0.4), "fed agent stays calm (got {fed:.4})");
-        assert!(starved > Fixed::from_f64(0.4), "starved agent rises (got {starved:.4})");
+        assert!(
+            fed < Fixed::from_f64(0.4),
+            "fed agent stays calm (got {fed:.4})"
+        );
+        assert!(
+            starved > Fixed::from_f64(0.4),
+            "starved agent rises (got {starved:.4})"
+        );
     }
 
     fn derived_health_in_range(e: &EmbodiedState) -> bool {

@@ -66,8 +66,7 @@ impl ImmuneState {
         self.resistance = (self.resistance - stress_suppression).max(Fixed::ZERO);
 
         // Sleep is critical for immune recovery (saturating, same rationale)
-        let sleep_boost =
-            sleep_quality * Fixed::from_f64(0.001) * (Fixed::ONE - self.resistance);
+        let sleep_boost = sleep_quality * Fixed::from_f64(0.001) * (Fixed::ONE - self.resistance);
         self.resistance = (self.resistance + sleep_boost).clamp_01();
 
         // Age reduces immune function
@@ -253,7 +252,10 @@ mod tests {
             famine_res < calm_res,
             "famine resistance must sit below calm ({famine_res} vs {calm_res})"
         );
-        assert!(famine_res > 0.3, "famine resistance should not collapse (got {famine_res})");
+        assert!(
+            famine_res > 0.3,
+            "famine resistance should not collapse (got {famine_res})"
+        );
     }
 
     #[test]
@@ -295,7 +297,10 @@ mod tests {
             );
         }
         let load = famine.infection_load.to_f64();
-        assert!(load > 0.0, "famine stress must open infection channels (got {load})");
+        assert!(
+            load > 0.0,
+            "famine stress must open infection channels (got {load})"
+        );
         assert!(load < 1.0, "infection must not pin at 1.0 (got {load})");
     }
 }

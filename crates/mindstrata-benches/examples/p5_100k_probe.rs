@@ -42,7 +42,10 @@ fn run_scenario(name: &str, seed: u64) -> Simulation {
     sim.populate();
     let start = std::time::Instant::now();
     sim.run(ticks);
-    eprintln!("  [{name} seed {seed}] ran {ticks} ticks in {:?}", start.elapsed());
+    eprintln!(
+        "  [{name} seed {seed}] ran {ticks} ticks in {:?}",
+        start.elapsed()
+    );
     sim
 }
 
@@ -145,7 +148,11 @@ fn main() {
             .iter()
             .filter(|m| m.active)
             .count();
-        let multi_hh = sim.households.iter().filter(|h| h.members.len() > 1).count();
+        let multi_hh = sim
+            .households
+            .iter()
+            .filter(|h| h.members.len() > 1)
+            .count();
         let clans = sim.clan_registry.clans.len();
         let myths: usize = sim.clan_registry.clans.iter().map(|c| c.myths.len()).sum();
         let collective: usize = sim
@@ -173,9 +180,12 @@ fn main() {
         // Life themes / attachments / emotions / stress
         let mut themes: BTreeMap<String, u32> = BTreeMap::new();
         let mut att: BTreeMap<String, u32> = BTreeMap::new();
-        let (mut joy, mut anger, mut fear, mut stress, mut health) = (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64);
+        let (mut joy, mut anger, mut fear, mut stress, mut health) =
+            (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64);
         for a in &sim.agents {
-            *themes.entry(format!("{:?}", a.narrative.life_theme)).or_insert(0) += 1;
+            *themes
+                .entry(format!("{:?}", a.narrative.life_theme))
+                .or_insert(0) += 1;
             *att.entry(format!("{:?}", a.attachment.style)).or_insert(0) += 1;
             joy += a.emotions.joy.to_f64();
             anger += a.emotions.anger.to_f64();
@@ -208,5 +218,12 @@ fn main() {
         );
     }
 
-    println!("\n100K STABILITY: {}", if all_ok { "PASS — no system dominates" } else { "ISSUES — see above" });
+    println!(
+        "\n100K STABILITY: {}",
+        if all_ok {
+            "PASS — no system dominates"
+        } else {
+            "ISSUES — see above"
+        }
+    );
 }

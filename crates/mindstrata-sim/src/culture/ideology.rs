@@ -65,7 +65,6 @@ impl Ideology {
             Fixed::ZERO
         }
     }
-
 }
 
 /// Network-level belief ecology — tracks polarization across the population.

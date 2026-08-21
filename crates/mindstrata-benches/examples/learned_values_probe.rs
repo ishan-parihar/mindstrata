@@ -39,7 +39,11 @@ fn sample_folds(sim: &Simulation) -> (f64, f64, usize, f64, usize, f64) {
         nb_raised,
         ar_max,
         any_belief,
-        if any_belief > 0 { conf_sum / any_belief as f64 } else { 0.0 },
+        if any_belief > 0 {
+            conf_sum / any_belief as f64
+        } else {
+            0.0
+        },
     )
 }
 
@@ -75,10 +79,30 @@ fn main() {
                 let nl = &a.neural_like;
                 // Learned-delta magnitude across the 4 action outcome profiles.
                 let profiles = [
-                    [Fixed::from_f64(0.8), Fixed::from_f64(0.2), Fixed::from_f64(0.0), Fixed::from_f64(0.0)], // Eat
-                    [Fixed::from_f64(0.7), Fixed::from_f64(0.1), Fixed::from_f64(0.1), Fixed::from_f64(0.1)], // Work
-                    [Fixed::from_f64(0.2), Fixed::from_f64(0.4), Fixed::from_f64(0.3), Fixed::from_f64(0.1)], // Socialize
-                    [Fixed::from_f64(0.0), Fixed::from_f64(0.2), Fixed::from_f64(0.2), Fixed::from_f64(0.6)], // Worship
+                    [
+                        Fixed::from_f64(0.8),
+                        Fixed::from_f64(0.2),
+                        Fixed::from_f64(0.0),
+                        Fixed::from_f64(0.0),
+                    ], // Eat
+                    [
+                        Fixed::from_f64(0.7),
+                        Fixed::from_f64(0.1),
+                        Fixed::from_f64(0.1),
+                        Fixed::from_f64(0.1),
+                    ], // Work
+                    [
+                        Fixed::from_f64(0.2),
+                        Fixed::from_f64(0.4),
+                        Fixed::from_f64(0.3),
+                        Fixed::from_f64(0.1),
+                    ], // Socialize
+                    [
+                        Fixed::from_f64(0.0),
+                        Fixed::from_f64(0.2),
+                        Fixed::from_f64(0.2),
+                        Fixed::from_f64(0.6),
+                    ], // Worship
                 ];
                 let mut max = 0.0f64;
                 for p in profiles {

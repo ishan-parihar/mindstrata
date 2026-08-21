@@ -38,10 +38,17 @@ fn main() {
     let rate = Fixed::from_f64(0.15);
     // Defaults: redemption 0.5, contamination 0.2, victimhood 0.2,
     // heroism 0.5, chosenness 0.1, shame 0.1, coherence 0.6.
-    for (seed, ticks) in [(42u64, 2000u64), (42, 5000), (42, 10000), (1, 2000), (7, 2000)] {
+    for (seed, ticks) in [
+        (42u64, 2000u64),
+        (42, 5000),
+        (42, 10000),
+        (1, 2000),
+        (7, 2000),
+    ] {
         let sim = run(seed, ticks);
         let n = sim.agents.len() as f64;
-        let (mut red, mut cont, mut vict, mut hero, mut chos, mut shame) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+        let (mut red, mut cont, mut vict, mut hero, mut chos, mut shame) =
+            (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
         let mut factors: Vec<f64> = Vec::new();
         for a in &sim.agents {
             red += a.narrative.redemption_script.to_f64();
@@ -50,7 +57,11 @@ fn main() {
             hero += a.narrative.heroism_script.to_f64();
             chos += a.narrative.chosenness_script.to_f64();
             shame += a.narrative.shame_script.to_f64();
-            factors.push(a.narrative.stress_resilience_factor(rate, a.embodied.endocrine.stress.chronic_load).to_f64());
+            factors.push(
+                a.narrative
+                    .stress_resilience_factor(rate, a.embodied.endocrine.stress.chronic_load)
+                    .to_f64(),
+            );
         }
         let f_mean: f64 = factors.iter().sum::<f64>() / n;
         let f_min = factors.iter().copied().fold(f64::INFINITY, f64::min);
@@ -69,7 +80,9 @@ fn main() {
     let mut off_focal = 0;
     let mut focal_factors: Vec<f64> = Vec::new();
     for a in &sim.agents {
-        let f = a.narrative.stress_resilience_factor(rate, a.embodied.endocrine.stress.chronic_load);
+        let f = a
+            .narrative
+            .stress_resilience_factor(rate, a.embodied.endocrine.stress.chronic_load);
         if a.agent_tier.tier == AgentTier::Focal {
             if f != Fixed::ONE {
                 off_focal += 1;
@@ -87,7 +100,11 @@ fn main() {
     // Stress input liveness: mean cognitive.stress and the fear+anger sum
     // the resilience channel scales.
     let sim = run(42, 2000);
-    let stress_mean: f64 = sim.agents.iter().map(|a| a.cognitive.stress.to_f64()).sum::<f64>()
+    let stress_mean: f64 = sim
+        .agents
+        .iter()
+        .map(|a| a.cognitive.stress.to_f64())
+        .sum::<f64>()
         / sim.agents.len() as f64;
     println!("seed42/2000: stress_mean={stress_mean:.3}");
 

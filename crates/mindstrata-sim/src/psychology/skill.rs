@@ -281,7 +281,11 @@ mod tests {
         );
         // The decay pass then leaves it untouched (recency within range).
         s.decay_habits(5100);
-        assert_eq!(s.habits.len(), 1, "an actively-practiced habit must persist");
+        assert_eq!(
+            s.habits.len(),
+            1,
+            "an actively-practiced habit must persist"
+        );
         // An abandoned habit (no refresh) decays out.
         let mut s2 = SkillState::default();
         s2.form_habit("Work".into(), "hunger".into(), Fixed::from_f64(0.3), 0);

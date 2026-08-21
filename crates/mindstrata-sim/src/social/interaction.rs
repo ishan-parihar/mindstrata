@@ -1330,7 +1330,10 @@ mod tests {
             &mut rng,
             &[true, false],
         );
-        assert_eq!(none, None, "ineligible-only neighborhood must yield no target");
+        assert_eq!(
+            none, None,
+            "ineligible-only neighborhood must yield no target"
+        );
 
         // Source 0 eligible, targets 1 (ineligible) + 2 (eligible): the draw
         // must always land on 2 across many rolls.
@@ -1423,7 +1426,11 @@ mod tests {
 
         // Lone Background agent: complete no-op.
         let (bg, total) = run(vec![background(0)]);
-        assert_eq!((bg, total), (0, 0), "lone Background agent must not interact");
+        assert_eq!(
+            (bg, total),
+            (0, 0),
+            "lone Background agent must not interact"
+        );
 
         // One Background + two social agents: the eligible pair still
         // interacts (the Background's ineligibility must not freeze the

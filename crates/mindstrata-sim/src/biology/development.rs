@@ -84,7 +84,6 @@ impl LifeStage {
             Self::Elder => Fixed::from_f64(0.7),
         }
     }
-
 }
 
 /// Developmental history — accumulated experiences that shape the agent.

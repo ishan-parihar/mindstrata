@@ -47,8 +47,10 @@ fn main() {
         sim.run(horizon);
 
         let n = sim.agents.len().max(1) as f64;
-        let (mut joy, mut fear, mut anger, mut sad, mut trust) = (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64);
-        let (mut res, mut val, mut stress, mut auton, mut meaning) = (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64);
+        let (mut joy, mut fear, mut anger, mut sad, mut trust) =
+            (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64);
+        let (mut res, mut val, mut stress, mut auton, mut meaning) =
+            (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64);
         for a in &sim.agents {
             joy += a.emotions.joy.to_f64();
             fear += a.emotions.fear.to_f64();
@@ -75,16 +77,17 @@ fn main() {
                     _ => *kinds.entry("other").or_insert(0) += 1,
                 },
                 SimEvent::ConflictOccurred { kind, .. } => {
-                    *kinds.entry(match kind {
-                        mindstrata_core::conflict::ConflictKind::Threat => "c_threat",
-                        mindstrata_core::conflict::ConflictKind::Violence => "c_violence",
-                        mindstrata_core::conflict::ConflictKind::Intimidation => "c_intim",
-                        mindstrata_core::conflict::ConflictKind::Feud => "c_feud",
-                        mindstrata_core::conflict::ConflictKind::MoralPanic => "c_panic",
-                        mindstrata_core::conflict::ConflictKind::Revolution => "c_rev",
-                        mindstrata_core::conflict::ConflictKind::Combat => "c_combat",
-                    })
-                    .or_insert(0) += 1;
+                    *kinds
+                        .entry(match kind {
+                            mindstrata_core::conflict::ConflictKind::Threat => "c_threat",
+                            mindstrata_core::conflict::ConflictKind::Violence => "c_violence",
+                            mindstrata_core::conflict::ConflictKind::Intimidation => "c_intim",
+                            mindstrata_core::conflict::ConflictKind::Feud => "c_feud",
+                            mindstrata_core::conflict::ConflictKind::MoralPanic => "c_panic",
+                            mindstrata_core::conflict::ConflictKind::Revolution => "c_rev",
+                            mindstrata_core::conflict::ConflictKind::Combat => "c_combat",
+                        })
+                        .or_insert(0) += 1;
                 }
                 _ => {}
             }

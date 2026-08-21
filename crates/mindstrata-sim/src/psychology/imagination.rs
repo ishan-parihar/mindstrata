@@ -760,10 +760,16 @@ mod tests {
             .iter()
             .any(|s| s.kind == ScenarioKind::D6Hopeful);
         assert!(has_threat, "fearful agent generates the threat scenario");
-        assert!(has_hopeful, "fearful agent ALSO generates the hopeful default");
+        assert!(
+            has_hopeful,
+            "fearful agent ALSO generates the hopeful default"
+        );
         // And the hopeful scenario feeds `hope` after evaluation.
         pro.evaluate_scenarios();
-        assert!(pro.hope > Fixed::ZERO, "hope is no longer structurally starved");
+        assert!(
+            pro.hope > Fixed::ZERO,
+            "hope is no longer structurally starved"
+        );
     }
 
     #[test]
@@ -883,7 +889,10 @@ mod tests {
                 true,
             ),
         );
-        assert!(pro.scenarios.iter().any(|s| s.kind == ScenarioKind::D2Threat));
+        assert!(pro
+            .scenarios
+            .iter()
+            .any(|s| s.kind == ScenarioKind::D2Threat));
 
         // D3 injustice (anger 0.6, everything else calm).
         pro.generate_daily_scenario(

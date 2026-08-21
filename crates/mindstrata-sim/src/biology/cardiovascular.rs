@@ -143,7 +143,6 @@ impl CardiovascularState {
             + self.cardiac_capacity * Fixed::from_f64(0.3))
         .clamp_01()
     }
-
 }
 
 #[cfg(test)]
@@ -206,7 +205,10 @@ mod tests {
                 Fixed::from_f64(0.3),
             );
         }
-        assert!(cv.fitness < Fixed::from_f64(0.85), "fitness must decay when idle");
+        assert!(
+            cv.fitness < Fixed::from_f64(0.85),
+            "fitness must decay when idle"
+        );
         assert!(cv.fitness >= Fixed::from_f64(0.5), "detrain floor holds");
     }
 
@@ -226,8 +228,14 @@ mod tests {
             );
         }
         let after = cv.fitness.to_f64();
-        assert!(after > 0.55, "sustained Work must lift fitness (got {after})");
-        assert!(after < 0.95, "equilibrium must stay below 1.0 (got {after})");
+        assert!(
+            after > 0.55,
+            "sustained Work must lift fitness (got {after})"
+        );
+        assert!(
+            after < 0.95,
+            "equilibrium must stay below 1.0 (got {after})"
+        );
     }
 
     #[test]

@@ -358,7 +358,6 @@ impl SeasonTracker {
             false
         }
     }
-
 }
 
 /// Apply ecology systems for one tick.

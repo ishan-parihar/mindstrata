@@ -246,7 +246,6 @@ impl NoosphericField {
             node.activation = (node.activation - effective_decay).max(Fixed::ZERO);
         }
     }
-
 }
 
 #[cfg(test)]

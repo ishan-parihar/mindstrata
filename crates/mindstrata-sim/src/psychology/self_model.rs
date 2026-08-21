@@ -317,7 +317,10 @@ mod tests {
         for _ in 0..60 {
             sm.update_coherence();
         }
-        assert!(sm.coherence < Fixed::from_f64(0.6), "fragmented narrative lowers coherence");
+        assert!(
+            sm.coherence < Fixed::from_f64(0.6),
+            "fragmented narrative lowers coherence"
+        );
         // A redemption/heroism-heavy narrative integrates the self.
         let mut sm2 = SelfModel::default();
         sm2.narrative.redemption_script = Fixed::from_f64(1.0);
@@ -327,7 +330,10 @@ mod tests {
         for _ in 0..60 {
             sm2.update_coherence();
         }
-        assert!(sm2.coherence > Fixed::from_f64(0.6), "redemptive narrative raises coherence");
+        assert!(
+            sm2.coherence > Fixed::from_f64(0.6),
+            "redemptive narrative raises coherence"
+        );
     }
 
     /// §8.1.7 (P3-2): security must respond to unsupported suffering and
@@ -338,22 +344,17 @@ mod tests {
         let start = sm.security;
         // Unsupported suffering erodes security.
         for _ in 0..60 {
-            sm.update_security(
-                Fixed::from_f64(0.08),
-                Fixed::ZERO,
-                Fixed::from_f64(0.2),
-            );
+            sm.update_security(Fixed::from_f64(0.08), Fixed::ZERO, Fixed::from_f64(0.2));
         }
         assert!(sm.security < start, "unsupported suffering lowers security");
         // Positive events + support restore it.
         for _ in 0..60 {
-            sm.update_security(
-                Fixed::ZERO,
-                Fixed::from_f64(0.05),
-                Fixed::from_f64(0.9),
-            );
+            sm.update_security(Fixed::ZERO, Fixed::from_f64(0.05), Fixed::from_f64(0.9));
         }
-        assert!(sm.security > start, "support + positive events restore security");
+        assert!(
+            sm.security > start,
+            "support + positive events restore security"
+        );
         assert!(sm.security <= Fixed::ONE);
     }
 

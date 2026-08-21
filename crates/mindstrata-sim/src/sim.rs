@@ -793,7 +793,7 @@ impl Simulation {
                 *content,
                 Fixed::from_f64(*emotional),
                 Fixed::from_f64(*identity),
-                0,                                  // created_tick — deterministic across new()/from_snapshot()
+                0, // created_tick — deterministic across new()/from_snapshot()
                 self.params.meme_virality_scaling, // Iteration 174: the §13.1
                 // virality knob is now LIVE — previously hardcoded 0.8, so the
                 // tuning parameter was a no-op. Default preserved at 0.8 (the
@@ -808,6 +808,19 @@ impl Simulation {
     pub fn from_scenario(scenario: Scenario) -> Self {
         let config = scenario.to_sim_config();
         let mut sim = Self::new(config);
+        // Iteration 238: pre-set drought_until if the scenario has a
+        // drought shock, so that aquifer and flood recharge are suppressed
+        // from tick 0 (not just after the shock fires). Without this,
+        // weather-driven flood mode during ticks 0..shock_tick recharges
+        // water past the shock drain (400 → 2000+ before the shock, then
+        // 70% drain leaves 600 — still above the 150 threshold).
+        if let Some(drought_shock) = scenario
+            .shocks
+            .iter()
+            .find(|s| matches!(s.kind, ShockKind::Drought))
+        {
+            sim.drought_until = drought_shock.at_tick + 3000;
+        }
         sim.scenario = Some(scenario);
         sim
     }
@@ -1135,11 +1148,7 @@ impl Simulation {
                 self_model: crate::psychology::SelfModel::default(),
                 attachment: {
                     let mut att = crate::psychology::AttachmentSystem::default();
-                    att.initialize(
-                        caregiver_security,
-                        trauma_history,
-                        attachment_vulnerability,
-                    );
+                    att.initialize(caregiver_security, trauma_history, attachment_vulnerability);
                     att
                 },
                 emotion_regulation: {
@@ -2009,8 +2018,7 @@ impl Simulation {
         let violence_taboo_cost = self.agents[from_idx]
             .cultural_cognition
             .taboo_violation_cost_sum("violence");
-        let taboo_aversion = (Fixed::ONE
-            - violence_taboo_cost * VIOLENCE_TABOO_AVERSION_RATE)
+        let taboo_aversion = (Fixed::ONE - violence_taboo_cost * VIOLENCE_TABOO_AVERSION_RATE)
             .max(VIOLENCE_TABOO_AVERSION_FLOOR)
             .clamp_01();
         // §10.2 (Iteration 102): Relational dominance feeds the escalation
@@ -2782,9 +2790,8 @@ impl Simulation {
                         // trickle still yielded ~2 full portions/day and the
                         // village scraped by (probe: top hunger 0.488, never
                         // crossing the 0.5 gate). A famine starves.
-                        self.famine_production_factor = shock.magnitude
-                            * Fixed::from_f64(0.05)
-                            .max(Fixed::from_f64(0.01));
+                        self.famine_production_factor =
+                            shock.magnitude * Fixed::from_f64(0.05).max(Fixed::from_f64(0.01));
                     }
                     ShockKind::Pestilence => {
                         // A pestilence strikes in two composed waves, both routed
@@ -3017,7 +3024,7 @@ impl Simulation {
                     * (Fixed::from_f64(0.3)
                         + self.agents[i].embodied.respiratory.endurance_modifier
                             * Fixed::from_f64(0.7)))
-                    .clamp_01();
+                .clamp_01();
                 // §5 (S3-2-1 fix): the biology pass used a HARDCODED
                 // "temperate default" 0.5 here, which froze the thermal
                 // system at thermoneutral in every scenario (probe: body_temp
@@ -3040,15 +3047,14 @@ impl Simulation {
                 // from world state instead of hardcoded 0.3/0.6.
                 // Crowding: more agents → higher crowding (disease spreads
                 // faster). Anchored at 0.3 for 24 agents, scales linearly.
-                let agent_ratio = Fixed::from_int(self.agents.len() as i64)
-                    / Fixed::from_int(24);
+                let agent_ratio = Fixed::from_int(self.agents.len() as i64) / Fixed::from_int(24);
                 let crowding = (Fixed::from_f64(0.3) * agent_ratio)
                     .clamp(Fixed::from_f64(0.15), Fixed::from_f64(0.6));
                 // Hygiene: water scarcity degrades hygiene (less water →
                 // poorer sanitation → disease spreads faster). Anchored
                 // at 0.6 for abundant water, drops toward 0.3 in drought.
-                let expected_water = crate::sim::EXPECTED_WATER_PER_AGENT as i64
-                    * self.agents.len() as i64;
+                let expected_water =
+                    crate::sim::EXPECTED_WATER_PER_AGENT as i64 * self.agents.len() as i64;
                 let water_ratio = if expected_water > 0 {
                     (world_water_total / Fixed::from_int(expected_water))
                         .clamp(Fixed::from_f64(0.5), Fixed::ONE)
@@ -3069,8 +3075,8 @@ impl Simulation {
                 // Floor 0.1 prevents total starvation from disabling all
                 // biology gains (agents still degrade, just slower). Ceiling
                 // 1.0 is natural from the ratio. Deterministic, no RNG.
-                let expected_food = crate::sim::EXPECTED_GRAIN_PER_AGENT as i64
-                    * self.agents.len() as i64;
+                let expected_food =
+                    crate::sim::EXPECTED_GRAIN_PER_AGENT as i64 * self.agents.len() as i64;
                 let nutrition_quality = if expected_food > 0 {
                     (world_food_total / Fixed::from_int(expected_food))
                         .clamp(Fixed::from_f64(0.1), Fixed::ONE)
@@ -3082,16 +3088,14 @@ impl Simulation {
                 // fires for heating/cooking, increasing smoke exposure.
                 // Smoke scale: 0 in summer (temp ≈ 0.9) to 0.6 in winter
                 // (temp ≈ 0.2). Formula: (1 − temp) × 0.8, clamped [0, 0.6].
-                let smoke_exposure = ((Fixed::ONE - ambient_temperature)
-                    * Fixed::from_f64(0.8))
+                let smoke_exposure = ((Fixed::ONE - ambient_temperature) * Fixed::from_f64(0.8))
                     .clamp(Fixed::ZERO, Fixed::from_f64(0.6));
                 // §7.2.6 (Iteration 214): damp_housing derives from
                 // rainfall — heavy rain makes houses damper, promoting
                 // respiratory irritation and mold-related illness.
                 // Damp scale: 0 in drought (rainfall ≈ 0.1) to 0.5 in
                 // flood (rainfall ≈ 0.9). Formula: rainfall × 0.55, clamped.
-                let damp_housing = (self.weather.rainfall
-                    * Fixed::from_f64(0.55))
+                let damp_housing = (self.weather.rainfall * Fixed::from_f64(0.55))
                     .clamp(Fixed::ZERO, Fixed::from_f64(0.5));
                 self.agents[i].embodied.tick_update(
                     threat_level,
@@ -3157,8 +3161,7 @@ impl Simulation {
             // fear + anger) is NOT changed by the buffer.
             let kin_rate = Fixed::from_f64(crate::social::relational_field::KIN_STRESS_RATE);
             let kin_cap = Fixed::from_f64(crate::social::relational_field::KIN_STRESS_CAP);
-            let narr_rate =
-                Fixed::from_f64(crate::psychology::NARRATIVE_STRESS_RESILIENCE_RATE);
+            let narr_rate = Fixed::from_f64(crate::psychology::NARRATIVE_STRESS_RESILIENCE_RATE);
             for i in 0..self.agents.len() {
                 // §8.1.3 (Iteration 181): the narrative scripts' first decision
                 // consumer — the plan's "narrative feeds ... resilience". A
@@ -3343,8 +3346,7 @@ impl Simulation {
                 // anchor: the fear/anger blend replaces the accumulator, so
                 // the axis differentiates and dominant_need reflects actual
                 // drives. Deterministic, no RNG.
-                let safety_deficit =
-                    (emotions[i].fear + emotions[i].anger) * Fixed::from_f64(0.5);
+                let safety_deficit = (emotions[i].fear + emotions[i].anger) * Fixed::from_f64(0.5);
                 self.agents[i].motivation.safety.deficit = safety_deficit.clamp_01();
                 self.agents[i].motivation.update();
 
@@ -3473,8 +3475,7 @@ impl Simulation {
                     // probe-confirmed 0.000 in calm/famine/pestilence
                     // windows, and this consumer is Focal-gated like the
                     // producer.
-                    let moral_development =
-                        self.agents[i].developmental.moral_development;
+                    let moral_development = self.agents[i].developmental.moral_development;
                     self.agents[i].moral_cognition.update_moral_emotions(
                         witnessed_violations,
                         personal_violations,
@@ -3571,8 +3572,7 @@ impl Simulation {
                     // healthy agents (health ≈ 1.0) keep near-full planning
                     // depth; severely impaired agents (health → 0.0) get
                     // near-zero. Deterministic, no RNG.
-                    let ef_depth = ef_depth
-                        * self.agents[i].psychopathology.cognitive_modifier();
+                    let ef_depth = ef_depth * self.agents[i].psychopathology.cognitive_modifier();
                     self.agents[i].prospection.planning_confidence =
                         (self.agents[i].prospection.planning_confidence + ef_depth)
                             * Fixed::from_f64(0.5);
@@ -3602,11 +3602,9 @@ impl Simulation {
                     // value every tick so movement is event-driven but bounded
                     // (the Iter-179 pull pattern). Runs before interpretation
                     // so today's events act on today's re-anchored envelope.
-                    self.agents[i]
-                        .narrative
-                        .decay_scripts(Fixed::from_f64(
-                            crate::psychology::NARRATIVE_SCRIPT_DECAY_RATE,
-                        ));
+                    self.agents[i].narrative.decay_scripts(Fixed::from_f64(
+                        crate::psychology::NARRATIVE_SCRIPT_DECAY_RATE,
+                    ));
                     let positive_event_magnitude = if emotions[i].joy > Fixed::from_f64(0.3) {
                         emotions[i].joy * Fixed::from_f64(0.1)
                     } else {
@@ -3708,8 +3706,7 @@ impl Simulation {
                     // at 0.3 in the apprenticeship pass) instead of the
                     // hardcoded 0.5 placeholder, so identity formation
                     // genuinely scales with the education pipeline.
-                    let education_quality =
-                        self.agents[i].education.learning_aptitude;
+                    let education_quality = self.agents[i].education.learning_aptitude;
                     self.agents[i].developmental.tick_update(
                         agent_age,
                         social_support,
@@ -3821,9 +3818,10 @@ impl Simulation {
                // the outer loop iterates `&mut self.agents`, so a nested
                // `self.agents[j].age` read would be a borrow conflict; the ages
                // are pure reads collected once (deterministic, no RNG).
-            // Iteration 218: reuse pre-allocated buffer.
+               // Iteration 218: reuse pre-allocated buffer.
             self.tick_agent_ages.clear();
-            self.tick_agent_ages.extend(self.agents.iter().map(|a| a.age));
+            self.tick_agent_ages
+                .extend(self.agents.iter().map(|a| a.age));
             for (i, agent) in self.agents.iter_mut().enumerate() {
                 // Architecture-plan-2 §11.1: Status dimensions update.
                 // Decay shame and honor gradually; update wealth_rank from relative wealth.
@@ -3901,10 +3899,11 @@ impl Simulation {
                 // `dominance_aggression_modifier` into `should_escalate`
                 // (Iteration 187), so the level is decision-live.
                 if phases.is_daily {
-                    agent.embodied.endocrine.dominance.update(
-                        eff_status,
-                        self.params.endocrine_dominance_response,
-                    );
+                    agent
+                        .embodied
+                        .endocrine
+                        .dominance
+                        .update(eff_status, self.params.endocrine_dominance_response);
                 }
                 // §10.4 (Iteration 78): the two per-agent aversion channels.
                 // social_cost mirrors the agent's criminal notoriety from the
@@ -4434,9 +4433,7 @@ impl Simulation {
                                 // calibration — Work up / Idle down when
                                 // confident (baseline-corrected at 0.5, so
                                 // default populations stay byte-identical).
-                                planning_confidence: self.agents[i]
-                                    .prospection
-                                    .planning_confidence,
+                                planning_confidence: self.agents[i].prospection.planning_confidence,
                                 // Iteration 232: mood drift — valence
                                 // from affect module ([-1,1]) drives
                                 // social/exploration vs withdrawal.
@@ -5071,21 +5068,15 @@ impl Simulation {
                     // These are the most common hostile events in peaceful
                     // settlements (7K+ insults, 1K+ threats per 100K ticks)
                     // but previously had no cognitive pathway.
-                    SimEvent::InteractionOccurred {
-                        kind,
-                        from,
-                        to,
-                        ..
-                    } => {
+                    SimEvent::InteractionOccurred { kind, from, to, .. } => {
                         let f = from.as_u64() as usize;
                         let t = to.as_u64() as usize;
                         match kind {
                             InteractionKind::Insult => {
                                 // Target feels threatened; witnesses feel unfairness.
                                 if t < self.agents.len() {
-                                    threat_exposure[t] = (threat_exposure[t]
-                                        + Fixed::from_f64(0.15))
-                                    .clamp_01();
+                                    threat_exposure[t] =
+                                        (threat_exposure[t] + Fixed::from_f64(0.15)).clamp_01();
                                     witnessed_unfairness[t] = (witnessed_unfairness[t]
                                         + Fixed::from_f64(0.08))
                                     .clamp_01();
@@ -5095,12 +5086,10 @@ impl Simulation {
                                 // Target feels strong threat; aggressor feels mild
                                 // contempt (dominance display).
                                 if t < self.agents.len() {
-                                    threat_exposure[t] = (threat_exposure[t]
-                                        + Fixed::from_f64(0.25))
-                                    .clamp_01();
-                                    witnessed_unfairness[t] = (witnessed_unfairness[t]
-                                        + Fixed::from_f64(0.1))
-                                    .clamp_01();
+                                    threat_exposure[t] =
+                                        (threat_exposure[t] + Fixed::from_f64(0.25)).clamp_01();
+                                    witnessed_unfairness[t] =
+                                        (witnessed_unfairness[t] + Fixed::from_f64(0.1)).clamp_01();
                                 }
                                 if f < self.agents.len() {
                                     // Aggressor's dominance display → mild contempt
@@ -5170,8 +5159,7 @@ impl Simulation {
                     Fixed::from_f64(rel_count.min(4.0) * 0.1)
                 };
                 let social_visibility = social_visibility.clamp_01();
-                let isolation_threat =
-                    (Fixed::ONE - social_visibility) * Fixed::from_f64(0.08);
+                let isolation_threat = (Fixed::ONE - social_visibility) * Fixed::from_f64(0.08);
                 let attachment_threat = (separation_distress + isolation_threat).clamp_01();
                 // Iteration 192 (famine-chain closure): past the 0.5
                 // goal-congruence gate, the excess unmet need drags the
@@ -5185,8 +5173,7 @@ impl Simulation {
                 // Hunger stays below 0.5 in calm/pestilence, so the term is
                 // zero there and only the famine window (hunger 0.711 peak)
                 // crosses it.
-                let bleak_excess = (needs[i].hunger - Fixed::from_f64(0.5))
-                    .max(Fixed::ZERO)
+                let bleak_excess = (needs[i].hunger - Fixed::from_f64(0.5)).max(Fixed::ZERO)
                     * Fixed::from_f64(2.0);
                 let appraisal = Appraisal {
                     goal_relevance: need_pressure.max(threat).max(feud_pressure),
@@ -5296,8 +5283,7 @@ impl Simulation {
                     // relevant (pride/shame/humiliation/awe all scale with
                     // it). Exact no-op at populate defaults.
                     identity_relevance: Fixed::from_f64(0.2)
-                        + (self.agents[i].developmental.identity_formation
-                            - Fixed::from_f64(0.5))
+                        + (self.agents[i].developmental.identity_formation - Fixed::from_f64(0.5))
                             * Fixed::from_f64(0.2),
                     sacredness_violation: (unfairness * max_sacredness).clamp_01(),
                     attachment_threat,
@@ -5421,13 +5407,9 @@ impl Simulation {
                     // hunger — which routinely exceeds 0.3 in normal
                     // eat/drink cycles — produces a baseline sadness
                     // signal. The excess scales proportionally.
-                    let need_excess = needs[i].hunger.max(needs[i].thirst)
-                        - Fixed::from_f64(0.3);
-                    let hunger_sadness = need_excess
-                        .max(Fixed::ZERO)
-                        * Fixed::from_f64(0.005);
-                    emotions[i].sadness =
-                        (emotions[i].sadness + hunger_sadness).clamp_01();
+                    let need_excess = needs[i].hunger.max(needs[i].thirst) - Fixed::from_f64(0.3);
+                    let hunger_sadness = need_excess.max(Fixed::ZERO) * Fixed::from_f64(0.005);
+                    emotions[i].sadness = (emotions[i].sadness + hunger_sadness).clamp_01();
 
                     // ── Sadness from social loss ──────────────────────
                     // When the agent's closest relationship trust drops
@@ -5439,11 +5421,9 @@ impl Simulation {
                         .iter()
                         .map(|r| r.trust)
                         .fold(Fixed::ONE, Fixed::min);
-                    let social_sadness = (Fixed::from_f64(0.5) - min_trust)
-                        .max(Fixed::ZERO)
+                    let social_sadness = (Fixed::from_f64(0.5) - min_trust).max(Fixed::ZERO)
                         * Fixed::from_f64(0.003);
-                    emotions[i].sadness =
-                        (emotions[i].sadness + social_sadness).clamp_01();
+                    emotions[i].sadness = (emotions[i].sadness + social_sadness).clamp_01();
 
                     // ── Sadness from loneliness ───────────────────────
                     // When loneliness exceeds 0.05 (nearly always — the
@@ -5452,10 +5432,8 @@ impl Simulation {
                     // mild sadness accumulates. This couples the two
                     // emotions as in real life: feeling alone makes you
                     // feel sad.
-                    let lonely_sadness = emotions[i].loneliness
-                        * Fixed::from_f64(0.003);
-                    emotions[i].sadness =
-                        (emotions[i].sadness + lonely_sadness).clamp_01();
+                    let lonely_sadness = emotions[i].loneliness * Fixed::from_f64(0.003);
+                    emotions[i].sadness = (emotions[i].sadness + lonely_sadness).clamp_01();
 
                     // ── Guilt from hostile behavior ───────────────────
                     // When anger exceeds 0.01 (nearly always — even calm
@@ -5467,10 +5445,8 @@ impl Simulation {
                     // to keep guilt at a realistic calm-world level (~0.05
                     // instead of 0.23). The old rate produced guilt that
                     // was 5x higher than the anger that caused it.
-                    let hostility_guilt = emotions[i].anger
-                        * Fixed::from_f64(0.002);
-                    emotions[i].guilt =
-                        (emotions[i].guilt + hostility_guilt).clamp_01();
+                    let hostility_guilt = emotions[i].anger * Fixed::from_f64(0.002);
+                    emotions[i].guilt = (emotions[i].guilt + hostility_guilt).clamp_01();
 
                     // ── Guilt from empathic distress ──────────────────
                     // When the agent feels contempt (witnessing moral
@@ -5479,10 +5455,8 @@ impl Simulation {
                     // moral conscience that doesn't require formal norm
                     // internalization. Iteration 227: reduced from 0.005
                     // to 0.001 to keep guilt at realistic levels.
-                    let empathic_guilt = emotions[i].contempt
-                        * Fixed::from_f64(0.001);
-                    emotions[i].guilt =
-                        (emotions[i].guilt + empathic_guilt).clamp_01();
+                    let empathic_guilt = emotions[i].contempt * Fixed::from_f64(0.001);
+                    emotions[i].guilt = (emotions[i].guilt + empathic_guilt).clamp_01();
 
                     // ── Despair from sustained sadness ────────────────
                     // When sadness exceeds 0.05 (nearly always once the
@@ -5493,10 +5467,8 @@ impl Simulation {
                     // despair and eventually depression.
                     // Iteration 226: rate increased from 0.002 to 0.005
                     // so despair becomes visible within 100K ticks.
-                    let sustained_despair = emotions[i].sadness
-                        * Fixed::from_f64(0.005);
-                    emotions[i].despair =
-                        (emotions[i].despair + sustained_despair).clamp_01();
+                    let sustained_despair = emotions[i].sadness * Fixed::from_f64(0.005);
+                    emotions[i].despair = (emotions[i].despair + sustained_despair).clamp_01();
 
                     // ── Iteration 224: Positive-emotion drain pathways ──
                     // These drain saturated positive emotions when their
@@ -5508,19 +5480,16 @@ impl Simulation {
                     // "things aren't going well" channel. Uses the same
                     // bleak_excess signal the despair producer uses: when
                     // hunger > 0.5, hope drains proportionally.
-                    let hope_drain = (needs[i].hunger - Fixed::from_f64(0.5))
-                        .max(Fixed::ZERO)
+                    let hope_drain = (needs[i].hunger - Fixed::from_f64(0.5)).max(Fixed::ZERO)
                         * Fixed::from_f64(0.004);
-                    emotions[i].hope =
-                        (emotions[i].hope - hope_drain).max(Fixed::ZERO);
+                    emotions[i].hope = (emotions[i].hope - hope_drain).max(Fixed::ZERO);
 
                     // Relief erodes when stress is present — the "calm
                     // didn't last" channel. Uses the live stress level as
                     // the drain signal: stressed agents feel less relief.
-                    let relief_drain = self.agents[i].embodied.endocrine.stress.level
-                        * Fixed::from_f64(0.003);
-                    emotions[i].relief =
-                        (emotions[i].relief - relief_drain).max(Fixed::ZERO);
+                    let relief_drain =
+                        self.agents[i].embodied.endocrine.stress.level * Fixed::from_f64(0.003);
+                    emotions[i].relief = (emotions[i].relief - relief_drain).max(Fixed::ZERO);
 
                     // Nostalgia erodes when social connections are weak —
                     // the "nothing worth remembering" channel. Uses the
@@ -5531,14 +5500,11 @@ impl Simulation {
                             .iter()
                             .map(|r| r.trust)
                             .fold(Fixed::ZERO, |acc, t| acc + t);
-                        sum / Fixed::from_int(
-                            self.agents[i].relationship_v2s.len() as i64,
-                        )
+                        sum / Fixed::from_int(self.agents[i].relationship_v2s.len() as i64)
                     } else {
                         Fixed::from_f64(0.3)
                     };
-                    let nostalgia_drain = (Fixed::from_f64(0.5) - avg_rel_quality)
-                        .max(Fixed::ZERO)
+                    let nostalgia_drain = (Fixed::from_f64(0.5) - avg_rel_quality).max(Fixed::ZERO)
                         * Fixed::from_f64(0.004);
                     emotions[i].nostalgia =
                         (emotions[i].nostalgia - nostalgia_drain).max(Fixed::ZERO);
@@ -5546,8 +5512,7 @@ impl Simulation {
                     // Gratitude erodes when social support is low — the
                     // "nobody helps me" channel. Uses the same social
                     // support metric the appraisal system uses.
-                    let gratitude_drain = (Fixed::from_f64(0.5) - avg_rel_quality)
-                        .max(Fixed::ZERO)
+                    let gratitude_drain = (Fixed::from_f64(0.5) - avg_rel_quality).max(Fixed::ZERO)
                         * Fixed::from_f64(0.003);
                     emotions[i].gratitude =
                         (emotions[i].gratitude - gratitude_drain).max(Fixed::ZERO);
@@ -5557,8 +5522,7 @@ impl Simulation {
                     // tenderness; unpartnered agents drain it.
                     if self.agents[i].partner.is_none() {
                         emotions[i].tenderness =
-                            (emotions[i].tenderness - Fixed::from_f64(0.005))
-                                .max(Fixed::ZERO);
+                            (emotions[i].tenderness - Fixed::from_f64(0.005)).max(Fixed::ZERO);
                     }
 
                     // ── Iteration 226: Dead-emotion producers ─────────
@@ -5576,17 +5540,14 @@ impl Simulation {
                     let social_factor = (Fixed::from_f64(4.0)
                         - Fixed::from_f64(rel_count.min(4.0)))
                         * Fixed::from_f64(0.002);
-                    let anxiety_delta = (
-                        self.agents[i].embodied.endocrine.stress.chronic_load
-                            * Fixed::from_f64(0.003)
-                        + social_factor.max(Fixed::ZERO)
-                    ).clamp_01();
+                    let anxiety_delta = (self.agents[i].embodied.endocrine.stress.chronic_load
+                        * Fixed::from_f64(0.003)
+                        + social_factor.max(Fixed::ZERO))
+                    .clamp_01();
                     // Anxiety is stored in psychopathology, not emotions.
                     // We add it to the psych probe's anxiety_risk.
-                    self.agents[i].psychopathology.anxiety_risk = (
-                        self.agents[i].psychopathology.anxiety_risk
-                            + anxiety_delta
-                    ).clamp_01();
+                    self.agents[i].psychopathology.anxiety_risk =
+                        (self.agents[i].psychopathology.anxiety_risk + anxiety_delta).clamp_01();
 
                     // ── Iteration 235: Relational jealousy wiring ────
                     // When the agent's partner has trust with someone else,
@@ -5605,48 +5566,45 @@ impl Simulation {
                             .filter(|(j, _)| *j != i)
                             .map(|(_, r)| r.trust)
                             .fold(Fixed::ZERO, Fixed::max);
-                        let jealousy_delta = (partner_trust_others
-                            - Fixed::from_f64(0.3))
+                        let jealousy_delta = (partner_trust_others - Fixed::from_f64(0.3))
                             .max(Fixed::ZERO)
                             * Fixed::from_f64(0.006);
-                        emotions[i].jealousy =
-                            (emotions[i].jealousy + jealousy_delta).clamp_01();
-                    }                    // ── Disgust from witnessing norm violations ────────
-                    // When the agent witnesses another agent's bad behavior
-                    // (measured by the other agent's anger level as a proxy
-                    // for aggression), mild disgust accumulates — the
-                    // "that's not right" moral recoil. This is the natural
-                    // moral disgust that doesn't require formal purity
-                    // violation events. Threshold lowered from 0.05 to 0.005
-                    // so it fires in calm (anger max ~0.016).
-                    let max_other_anger: Fixed = self.agents.iter()
+                        emotions[i].jealousy = (emotions[i].jealousy + jealousy_delta).clamp_01();
+                    } // ── Disgust from witnessing norm violations ────────
+                      // When the agent witnesses another agent's bad behavior
+                      // (measured by the other agent's anger level as a proxy
+                      // for aggression), mild disgust accumulates — the
+                      // "that's not right" moral recoil. This is the natural
+                      // moral disgust that doesn't require formal purity
+                      // violation events. Threshold lowered from 0.05 to 0.005
+                      // so it fires in calm (anger max ~0.016).
+                    let max_other_anger: Fixed = self
+                        .agents
+                        .iter()
                         .enumerate()
                         .filter(|(j, _)| *j != i)
                         .map(|(_, a)| a.emotions.anger)
                         .fold(Fixed::ZERO, Fixed::max);
-                    let disgust_delta = (max_other_anger
-                        - Fixed::from_f64(0.005))
-                        .max(Fixed::ZERO)
+                    let disgust_delta = (max_other_anger - Fixed::from_f64(0.005)).max(Fixed::ZERO)
                         * Fixed::from_f64(0.003);
-                    emotions[i].disgust =
-                        (emotions[i].disgust + disgust_delta).clamp_01();                    // ── Contempt from witnessing incompetence ──────────
-                    // When other agents have lower health than the agent,
-                    // mild contempt accumulates — the "they can't take
-                    // care of themselves" disdain. This is the natural
-                    // social contempt that fires from status comparison.
-                    // Threshold lowered from 0.7 to 0.9 (the average
-                    // health) so it fires in calm.
-                    let min_other_health: Fixed = self.agents.iter()
+                    emotions[i].disgust = (emotions[i].disgust + disgust_delta).clamp_01(); // ── Contempt from witnessing incompetence ──────────
+                                                                                            // When other agents have lower health than the agent,
+                                                                                            // mild contempt accumulates — the "they can't take
+                                                                                            // care of themselves" disdain. This is the natural
+                                                                                            // social contempt that fires from status comparison.
+                                                                                            // Threshold lowered from 0.7 to 0.9 (the average
+                                                                                            // health) so it fires in calm.
+                    let min_other_health: Fixed = self
+                        .agents
+                        .iter()
                         .enumerate()
                         .filter(|(j, _)| *j != i)
                         .map(|(_, a)| a.body.health)
                         .fold(Fixed::ONE, Fixed::min);
                     let my_health = self.agents[i].body.health;
-                    let contempt_delta = (my_health - min_other_health)
-                        .max(Fixed::ZERO)
-                        * Fixed::from_f64(0.003);
-                    emotions[i].contempt =
-                        (emotions[i].contempt + contempt_delta).clamp_01();
+                    let contempt_delta =
+                        (my_health - min_other_health).max(Fixed::ZERO) * Fixed::from_f64(0.003);
+                    emotions[i].contempt = (emotions[i].contempt + contempt_delta).clamp_01();
 
                     // ── Moral outrage from witnessing unfairness ───────
                     // When other agents show anger (conflict), mild moral
@@ -5655,9 +5613,7 @@ impl Simulation {
                     // doesn't require formal sacredness violation.
                     // Threshold lowered from 0.1 to 0.005 so it fires
                     // in calm (anger max ~0.016).
-                    let outrage_delta = (max_other_anger
-                        - Fixed::from_f64(0.005))
-                        .max(Fixed::ZERO)
+                    let outrage_delta = (max_other_anger - Fixed::from_f64(0.005)).max(Fixed::ZERO)
                         * Fixed::from_f64(0.002);
                     emotions[i].moral_outrage =
                         (emotions[i].moral_outrage + outrage_delta).clamp_01();
@@ -5667,11 +5623,9 @@ impl Simulation {
                     // (social tension), mild anger accumulates — the
                     // "people are being difficult" frustration. This is
                     // the natural anger that fires from social friction.
-                    let social_anger = (Fixed::from_f64(0.4) - min_trust)
-                        .max(Fixed::ZERO)
+                    let social_anger = (Fixed::from_f64(0.4) - min_trust).max(Fixed::ZERO)
                         * Fixed::from_f64(0.002);
-                    emotions[i].anger =
-                        (emotions[i].anger + social_anger).clamp_01();
+                    emotions[i].anger = (emotions[i].anger + social_anger).clamp_01();
 
                     // ── Shame from social comparison ───────────────────
                     // When the agent's status is below average, mild shame
@@ -5680,17 +5634,17 @@ impl Simulation {
                     // social comparison. Uses the agent's status vs the
                     // average status of others.
                     let my_status = self.agents[i].status_v2.effective_status();
-                    let avg_status: Fixed = self.agents.iter()
+                    let avg_status: Fixed = self
+                        .agents
+                        .iter()
                         .enumerate()
                         .filter(|(j, _)| *j != i)
                         .map(|(_, a)| a.status_v2.effective_status())
                         .fold(Fixed::ZERO, |acc, s| acc + s)
                         / Fixed::from_int((self.agents.len() - 1) as i64);
-                    let shame_delta = (avg_status - my_status)
-                        .max(Fixed::ZERO)
-                        * Fixed::from_f64(0.002);
-                    emotions[i].shame =
-                        (emotions[i].shame + shame_delta).clamp_01();
+                    let shame_delta =
+                        (avg_status - my_status).max(Fixed::ZERO) * Fixed::from_f64(0.002);
+                    emotions[i].shame = (emotions[i].shame + shame_delta).clamp_01();
 
                     // ── Humiliation from public failure ────────────────
                     // When the agent has low status AND witnesses others'
@@ -5700,9 +5654,8 @@ impl Simulation {
                     // Threshold lowered from 0.05 to 0.005 so it fires
                     // in calm.
                     if my_status < avg_status && max_other_anger > Fixed::from_f64(0.005) {
-                        let humiliation_delta = (avg_status - my_status)
-                            * max_other_anger
-                            * Fixed::from_f64(0.003);
+                        let humiliation_delta =
+                            (avg_status - my_status) * max_other_anger * Fixed::from_f64(0.003);
                         emotions[i].humiliation =
                             (emotions[i].humiliation + humiliation_delta).clamp_01();
                     }
@@ -5712,15 +5665,16 @@ impl Simulation {
                     // accumulates — the "they have what I want" coveting.
                     // This is the natural envy that fires from social
                     // comparison. Proportional to the status deficit.
-                    let max_other_status: Fixed = self.agents.iter()
+                    let max_other_status: Fixed = self
+                        .agents
+                        .iter()
                         .enumerate()
                         .filter(|(j, _)| *j != i)
-                        .map(|(_, a)| a.status_v2.effective_status())                            .fold(Fixed::ZERO, Fixed::max);
-                    let envy_delta = (max_other_status - my_status)
-                        .max(Fixed::ZERO)
-                        * Fixed::from_f64(0.002);
-                    emotions[i].envy =
-                        (emotions[i].envy + envy_delta).clamp_01();
+                        .map(|(_, a)| a.status_v2.effective_status())
+                        .fold(Fixed::ZERO, Fixed::max);
+                    let envy_delta =
+                        (max_other_status - my_status).max(Fixed::ZERO) * Fixed::from_f64(0.002);
+                    emotions[i].envy = (emotions[i].envy + envy_delta).clamp_01();
 
                     // ── Iteration 231: Trust from positive social interactions ─
                     // Trust was permanently 0.000 in calm because the only
@@ -5735,10 +5689,9 @@ impl Simulation {
                         .fold(Fixed::ZERO, |acc, t| acc + t)
                         / Fixed::from_int(self.agents[i].relationship_v2s.len().max(1) as i64);
                     if agent_avg_trust > Fixed::from_f64(0.3) {
-                        let trust_delta = (agent_avg_trust - Fixed::from_f64(0.3))
-                            * Fixed::from_f64(0.002);
-                        emotions[i].trust =
-                            (emotions[i].trust + trust_delta).clamp_01();
+                        let trust_delta =
+                            (agent_avg_trust - Fixed::from_f64(0.3)) * Fixed::from_f64(0.002);
+                        emotions[i].trust = (emotions[i].trust + trust_delta).clamp_01();
                     }
 
                     // ── Increased despair rate ─────────────────────────
@@ -5749,14 +5702,9 @@ impl Simulation {
                     // chronic stress — the "I'm worn down" channel.
                     // (The sadness cascade above already contributes;
                     // this is an additional direct channel.)
-                    let chronic_despair = self.agents[i]
-                        .embodied
-                        .endocrine
-                        .stress
-                        .chronic_load
+                    let chronic_despair = self.agents[i].embodied.endocrine.stress.chronic_load
                         * Fixed::from_f64(0.001);
-                    emotions[i].despair =
-                        (emotions[i].despair + chronic_despair).clamp_01();
+                    emotions[i].despair = (emotions[i].despair + chronic_despair).clamp_01();
 
                     // ── Iteration 229: Moral emotion ambient producers ─
                     // moral.shame and moral.pride were permanently 0.000
@@ -5768,14 +5716,12 @@ impl Simulation {
                     let moral_id = self.agents[i].moral_cognition.moral_identity;
                     // Moral shame: social comparison below average →
                     // "I failed morally by being worse than others."
-                    let moral_shame_delta = (avg_status - my_status)
-                        .max(Fixed::ZERO)
+                    let moral_shame_delta = (avg_status - my_status).max(Fixed::ZERO)
                         * moral_id
                         * Fixed::from_f64(0.001);
-                    self.agents[i].moral_cognition.moral_emotions.shame = (
-                        self.agents[i].moral_cognition.moral_emotions.shame
-                            + moral_shame_delta
-                    ).clamp_01();
+                    self.agents[i].moral_cognition.moral_emotions.shame =
+                        (self.agents[i].moral_cognition.moral_emotions.shame + moral_shame_delta)
+                            .clamp_01();
                     // Moral pride: high status + good relationships →
                     // "I earned this through moral behavior."
                     let avg_trust: Fixed = self.agents[i]
@@ -5784,15 +5730,13 @@ impl Simulation {
                         .map(|r| r.trust)
                         .fold(Fixed::ZERO, |acc, t| acc + t)
                         / Fixed::from_int(self.agents[i].relationship_v2s.len().max(1) as i64);
-                    let moral_pride_delta = (my_status - avg_status)
-                        .max(Fixed::ZERO)
+                    let moral_pride_delta = (my_status - avg_status).max(Fixed::ZERO)
                         * avg_trust
                         * moral_id
                         * Fixed::from_f64(0.001);
-                    self.agents[i].moral_cognition.moral_emotions.pride = (
-                        self.agents[i].moral_cognition.moral_emotions.pride
-                            + moral_pride_delta
-                    ).clamp_01();
+                    self.agents[i].moral_cognition.moral_emotions.pride =
+                        (self.agents[i].moral_cognition.moral_emotions.pride + moral_pride_delta)
+                            .clamp_01();
                 }
 
                 // §8.1.4: Valence is SIGNED (-1..1). The old `.clamp_01()` floored
@@ -5856,17 +5800,13 @@ impl Simulation {
             for emotion in &mut emotions {
                 let base_rate = crate::appraisal::BASE_EMOTION_DECAY_RATE;
                 emotion.fear = crate::appraisal::secondary_emotion_decay(emotion.fear, base_rate);
-                emotion.anger =
-                    crate::appraisal::secondary_emotion_decay(emotion.anger, base_rate);
+                emotion.anger = crate::appraisal::secondary_emotion_decay(emotion.anger, base_rate);
                 emotion.joy = crate::appraisal::secondary_emotion_decay(emotion.joy, base_rate);
                 emotion.sadness =
                     crate::appraisal::secondary_emotion_decay(emotion.sadness, base_rate);
-                emotion.shame =
-                    crate::appraisal::secondary_emotion_decay(emotion.shame, base_rate);
-                emotion.pride =
-                    crate::appraisal::secondary_emotion_decay(emotion.pride, base_rate);
-                emotion.guilt =
-                    crate::appraisal::secondary_emotion_decay(emotion.guilt, base_rate);
+                emotion.shame = crate::appraisal::secondary_emotion_decay(emotion.shame, base_rate);
+                emotion.pride = crate::appraisal::secondary_emotion_decay(emotion.pride, base_rate);
+                emotion.guilt = crate::appraisal::secondary_emotion_decay(emotion.guilt, base_rate);
                 // §8.1.4 (P2/P3 audit closure): `trust` was decay-exempt with
                 // the justification "probes at exactly 0 in calibrated
                 // windows" — but the appraisal block now produces it
@@ -5874,8 +5814,7 @@ impl Simulation {
                 // become a write-only ratchet to 1.0 (the same class as the
                 // Iter-183 tenderness fix). Joined the base decay so it sits
                 // at a producer-driven steady state.
-                emotion.trust =
-                    crate::appraisal::secondary_emotion_decay(emotion.trust, base_rate);
+                emotion.trust = crate::appraisal::secondary_emotion_decay(emotion.trust, base_rate);
                 // §8.1.4 (Iteration 116): The expanded emotion families decay
                 // proportionally EVERY TICK (SECONDARY_EMOTION_DECAY_RATE,
                 // probe-calibrated) — the base-8 linear decay (0.002/tick) is
@@ -6260,16 +6199,28 @@ impl Simulation {
                 }
             }
             ecology::WeatherRegime::Flood => {
-                let recharge = self.weather.config.flood_water_recharge;
-                for site in &mut self.world.sites {
-                    // Cap recharged wells at the site's storage capacity so a
-                    // sustained flood cannot balloon water past the §19.5.E
-                    // storage contract (the cap only binds during floods,
-                    // which never fire in calibrated windows).
-                    let cap = site.storage_capacity;
-                    for stock in &mut site.inventory {
-                        if stock.resource_id == WATER_RESOURCE_ID && stock.quantity > Fixed::ZERO {
-                            stock.quantity = (stock.quantity * (Fixed::ONE + recharge)).min(cap);
+                // Iteration 238: suppress flood recharge during the drought
+                // shock window — a drought desiccates the aquifer, so even
+                // flood weather cannot restore water until the drought
+                // pressure window expires. Without this, the weather tracker
+                // can enter Flood mode during a drought scenario, recharging
+                // water past the shock drain (water goes from 120 back to
+                // 643 in 500 ticks, defeating the drought test).
+                if tick_u64 >= self.drought_until {
+                    let recharge = self.weather.config.flood_water_recharge;
+                    for site in &mut self.world.sites {
+                        // Cap recharged wells at the site's storage capacity so a
+                        // sustained flood cannot balloon water past the §19.5.E
+                        // storage contract (the cap only binds during floods,
+                        // which never fire in calibrated windows).
+                        let cap = site.storage_capacity;
+                        for stock in &mut site.inventory {
+                            if stock.resource_id == WATER_RESOURCE_ID
+                                && stock.quantity > Fixed::ZERO
+                            {
+                                stock.quantity =
+                                    (stock.quantity * (Fixed::ONE + recharge)).min(cap);
+                            }
                         }
                     }
                 }
@@ -6292,11 +6243,17 @@ impl Simulation {
                 if tick_u64 >= self.drought_until {
                     let recharge_rate = Fixed::from_f64(0.0005);
                     for site in &mut self.world.sites {
+                        // Iteration 237: only Wells receive aquifer recharge.
+                        // Non-Well sites (Farms, generic) must not gain water
+                        // from groundwater — the isolation-chamber test (and
+                        // realism) demands that water at a non-Well site stays
+                        // exactly stable absent explicit production.
+                        if site.kind != crate::world::SiteKind::Well {
+                            continue;
+                        }
                         let cap = site.storage_capacity;
                         for stock in &mut site.inventory {
-                            if stock.resource_id == WATER_RESOURCE_ID
-                                && stock.quantity < cap
-                            {
+                            if stock.resource_id == WATER_RESOURCE_ID && stock.quantity < cap {
                                 let deficit = cap - stock.quantity;
                                 let recharge = deficit * recharge_rate;
                                 stock.quantity = (stock.quantity + recharge).min(cap);
@@ -6323,8 +6280,7 @@ impl Simulation {
             for site in &mut self.world.sites {
                 for stock in &mut site.inventory {
                     if stock.resource_id == GRAIN_RESOURCE_ID && stock.quantity > Fixed::ZERO {
-                        stock.quantity =
-                            (stock.quantity * (Fixed::ONE - drain)).max(Fixed::ZERO);
+                        stock.quantity = (stock.quantity * (Fixed::ONE - drain)).max(Fixed::ZERO);
                     }
                 }
             }
@@ -6491,7 +6447,10 @@ impl Simulation {
                         // Iteration 185: also skip if a same-kind infection is
                         // already pending for j THIS tick (see the block
                         // comment above).
-                        if new_infections.iter().any(|(aj, ak)| *aj == j && *ak == disease.kind) {
+                        if new_infections
+                            .iter()
+                            .any(|(aj, ak)| *aj == j && *ak == disease.kind)
+                        {
                             continue;
                         }
                         // Probability check — reduced by distance and target health
@@ -6550,18 +6509,16 @@ impl Simulation {
                         .iter()
                         .any(|d| d.kind == health::DiseaseKind::Fever);
                     if !has_cold {
-                        let cold_roll = Fixed::from_f64(
-                            self.rng.get_mut(RngStream::Social).random::<f64>(),
-                        );
+                        let cold_roll =
+                            Fixed::from_f64(self.rng.get_mut(RngStream::Social).random::<f64>());
                         if cold_roll < COLD_SEASON_RATE * cold_season {
                             self.agent_diseases[i]
                                 .push(health::ActiveDisease::new(health::DiseaseKind::Cold));
                             tracing::debug!(agent = i, "Seasonal cold contracted");
                         }
                     } else if !has_fever {
-                        let fever_roll = Fixed::from_f64(
-                            self.rng.get_mut(RngStream::Social).random::<f64>(),
-                        );
+                        let fever_roll =
+                            Fixed::from_f64(self.rng.get_mut(RngStream::Social).random::<f64>());
                         if fever_roll < FEVER_ESCALATION_RATE {
                             self.agent_diseases[i]
                                 .push(health::ActiveDisease::new(health::DiseaseKind::Fever));
@@ -7953,7 +7910,7 @@ impl Simulation {
                     // Revolutions become crisis-driven, not clock-driven.
                     (institution.collective.morale.max(Fixed::from_f64(0.6))
                         * (Fixed::ONE - avg_grievance * Fixed::from_f64(0.25)))
-                        .clamp_01()
+                    .clamp_01()
                 } else {
                     (institution.collective.morale.max(Fixed::from_f64(0.3))).clamp_01()
                 };
@@ -8096,12 +8053,7 @@ impl Simulation {
                         // Iteration 219: eliminate double-clone.
                         let trace_affected = members.clone();
                         let trace_action = action_name.clone();
-                        institution.record_action(
-                            tick_u64,
-                            action_name,
-                            members,
-                            true,
-                        );
+                        institution.record_action(tick_u64, action_name, members, true);
                         // §19.5.B: Record institutional provenance trace for tax collection
                         self.provenance.record_institutional(
                             crate::provenance::InstitutionalTrace {
@@ -8217,12 +8169,7 @@ impl Simulation {
                         // Iteration 219: eliminate double-clone.
                         let trace_affected = members.clone();
                         let trace_msg = wage_msg.clone();
-                        institution.record_action(
-                            tick_u64,
-                            wage_msg,
-                            members,
-                            true,
-                        );
+                        institution.record_action(tick_u64, wage_msg, members, true);
                         // §19.5.B: Record institutional provenance trace for wage payment
                         self.provenance.record_institutional(
                             crate::provenance::InstitutionalTrace {
@@ -8331,9 +8278,7 @@ impl Simulation {
                     if active.is_empty() {
                         Fixed::from_f64(0.3)
                     } else {
-                        let sum: Fixed = active
-                            .iter()
-                            .fold(Fixed::ZERO, |acc, &v| acc + v);
+                        let sum: Fixed = active.iter().fold(Fixed::ZERO, |acc, &v| acc + v);
                         sum / Fixed::from_int(active.len() as i64)
                     }
                 };
@@ -9542,7 +9487,10 @@ impl Simulation {
                     };
                     // parental_drive: from the reproductive state.
                     let pd_a = self.agents[i].embodied.reproductive.parental_drive;
-                    let pd_b = self.agents[partner_idx].embodied.reproductive.parental_drive;
+                    let pd_b = self.agents[partner_idx]
+                        .embodied
+                        .reproductive
+                        .parental_drive;
                     let avg_pd = (pd_a + pd_b) * Fixed::from_f64(0.5);
                     // Iteration 220: use the younger partner's age for the childbearing
                     // check (not avg_age, which filters out couples where one
@@ -9663,6 +9611,14 @@ impl Simulation {
                         .wrapping_add(child_idx as u64),
                 );
                 let child_personality = Personality::random(&mut child_rng);
+                // Iteration 239 (H6): personality-driven emotion-regulation
+                // seeding must match the initial population AND
+                // build_replacement_newborn (P3-4 contract). The real-birth
+                // path previously took EmotionRegulationState::default()
+                // (permanent Reappraisal), so death-heavy worlds refilled
+                // with default-strategy newborns — the exact single-strategy
+                // collapse P3-4 documents.
+                let child_reg_personality = child_personality.clone();
                 let child_age = Fixed::from_f64(0.0); // newborn
 
                 // Allocate home site
@@ -9738,7 +9694,11 @@ impl Simulation {
                         );
                         att
                     },
-                    emotion_regulation: crate::psychology::EmotionRegulationState::default(),
+                    emotion_regulation: {
+                        let mut reg = crate::psychology::EmotionRegulationState::default();
+                        reg.initialize_from_personality(&child_reg_personality);
+                        reg
+                    },
                     moral_cognition: crate::psychology::MoralCognition::default(),
                     prospection: crate::psychology::ProspectionState::default(),
                     narrative: crate::psychology::NarrativeIdentity::default(),
@@ -11049,14 +11009,11 @@ impl Simulation {
                             if let Some(stage) =
                                 crate::social::relationship_stages::kin_stage_for_link(link)
                             {
-                                if link
-                                    == crate::social::kinship::KinshipLink::InLaw
-                                {
+                                if link == crate::social::kinship::KinshipLink::InLaw {
                                     marital_inlaw = true;
                                 } else {
                                     if current != stage {
-                                        let rv2 =
-                                            &mut self.agents[i].relationship_v2s[rv2_idx];
+                                        let rv2 = &mut self.agents[i].relationship_v2s[rv2_idx];
                                         rv2.stage = stage;
                                         rv2.update_identity_metadata();
                                     }
@@ -11110,12 +11067,10 @@ impl Simulation {
                         // No blood chain: only now does a marital InLaw edge
                         // (or a direct InLaw stage) apply.
                         if marital_inlaw {
-                            if current
-                                != crate::social::relationship_v2::RelationshipStage::InLaw
-                            {
+                            if current != crate::social::relationship_v2::RelationshipStage::InLaw {
                                 let rv2 = &mut self.agents[i].relationship_v2s[rv2_idx];
-                                rv2.stage = crate::social::relationship_v2::RelationshipStage::
-                                    InLaw;
+                                rv2.stage =
+                                    crate::social::relationship_v2::RelationshipStage::InLaw;
                                 rv2.update_identity_metadata();
                             }
                             continue;
@@ -11491,8 +11446,8 @@ impl Simulation {
                             // `reinforce_norm`'s internalize path) now
                             // differentiates the population.
                             let conformity = self.agents[p].personality.conformity;
-                            let internalize_scale = Fixed::from_f64(0.5)
-                                + conformity * Fixed::from_f64(0.5);
+                            let internalize_scale =
+                                Fixed::from_f64(0.5) + conformity * Fixed::from_f64(0.5);
                             for norm in self.norms.norms() {
                                 let reinforcement = ritual.norm_reinforcement_for_institutional(
                                     norm.internalization,
@@ -12583,14 +12538,11 @@ impl Simulation {
                     // meals, keeping hunger pinned near 0 through the famine
                     // window). Success now requires the FULL portion; a farm
                     // holding less than a meal's worth fails the Eat.
-                    if let Some(farm_idx) = self
-                        .world
-                        .accessible_farm_with_grain_amount(
-                            agent_id,
-                            &self.institutions,
-                            amount,
-                        )
-                    {
+                    if let Some(farm_idx) = self.world.accessible_farm_with_grain_amount(
+                        agent_id,
+                        &self.institutions,
+                        amount,
+                    ) {
                         let taken =
                             self.world
                                 .consume_resource(farm_idx, GRAIN_RESOURCE_ID, amount);
@@ -12640,14 +12592,11 @@ impl Simulation {
                         // full portion, but inaccessible farms holding one exist?
                         // (P3-6: amount-gated like the accessible path — a crumb
                         // is not worth stealing and must not feed the thief.)
-                        if let Some(thief_idx) = self
-                            .world
-                            .inaccessible_farm_with_grain_amount(
-                                agent_id,
-                                &self.institutions,
-                                amount,
-                            )
-                        {
+                        if let Some(thief_idx) = self.world.inaccessible_farm_with_grain_amount(
+                            agent_id,
+                            &self.institutions,
+                            amount,
+                        ) {
                             self.enforce_theft(
                                 *agent_idx,
                                 agent_id,
@@ -12815,11 +12764,7 @@ impl Simulation {
                     let quantity = Fixed::from_f64(0.1);
                     let farm_idx = self
                         .world
-                        .accessible_farm_with_grain_amount(
-                            agent_id,
-                            &self.institutions,
-                            quantity,
-                        )
+                        .accessible_farm_with_grain_amount(agent_id, &self.institutions, quantity)
                         .or_else(|| self.world.farm_with_grain_amount(quantity));
                     if let (Some(seller), Some(farm_idx)) = (seller_info, farm_idx) {
                         let trust = self
@@ -12857,11 +12802,9 @@ impl Simulation {
                         );
                         let local_price_mod =
                             (local_modifier - Fixed::ONE) * LOGISTICS_PRICE_DAMP + Fixed::ONE;
-                        let price = (base_price
-                            * trust_modifier
-                            * trend_modifier
-                            * local_price_mod)
-                            .max(Fixed::from_f64(1.0));
+                        let price =
+                            (base_price * trust_modifier * trend_modifier * local_price_mod)
+                                .max(Fixed::from_f64(1.0));
                         let cost = price * quantity;
                         if buyer_coin >= cost {
                             let taken =
@@ -13328,31 +13271,23 @@ impl Simulation {
             // proficiency, and crossing the 0.1-proficiency milestone forms
             // (or reinforces) the corresponding habit.
             let psych_skill = match agent.current_action {
-                crate::actions::ActionKind::Work => Some((
-                    crate::psychology::skill::SKILL_FARMING,
-                    "Work",
-                    "hunger",
-                )),
-                crate::actions::ActionKind::Trade => Some((
-                    crate::psychology::skill::SKILL_TRADING,
-                    "Trade",
-                    "thirst",
-                )),
+                crate::actions::ActionKind::Work => {
+                    Some((crate::psychology::skill::SKILL_FARMING, "Work", "hunger"))
+                }
+                crate::actions::ActionKind::Trade => {
+                    Some((crate::psychology::skill::SKILL_TRADING, "Trade", "thirst"))
+                }
                 crate::actions::ActionKind::Socialize => Some((
                     crate::psychology::skill::SKILL_SPEAKING,
                     "Socialize",
                     "social",
                 )),
-                crate::actions::ActionKind::Worship => Some((
-                    crate::psychology::skill::SKILL_RITUAL,
-                    "Worship",
-                    "meaning",
-                )),
-                crate::actions::ActionKind::Eat => Some((
-                    crate::psychology::skill::SKILL_COOKING,
-                    "Eat",
-                    "hunger",
-                )),
+                crate::actions::ActionKind::Worship => {
+                    Some((crate::psychology::skill::SKILL_RITUAL, "Worship", "meaning"))
+                }
+                crate::actions::ActionKind::Eat => {
+                    Some((crate::psychology::skill::SKILL_COOKING, "Eat", "hunger"))
+                }
                 // Iteration 234: expanded action-to-skill mappings so
                 // more skill types are practiced during normal behavior.
                 crate::actions::ActionKind::Wander => Some((
@@ -13360,16 +13295,12 @@ impl Simulation {
                     "Wander",
                     "safety",
                 )),
-                crate::actions::ActionKind::Rest => Some((
-                    crate::psychology::skill::SKILL_PARENTING,
-                    "Rest",
-                    "fatigue",
-                )),
-                crate::actions::ActionKind::Idle => Some((
-                    crate::psychology::skill::SKILL_DIPLOMACY,
-                    "Idle",
-                    "social",
-                )),
+                crate::actions::ActionKind::Rest => {
+                    Some((crate::psychology::skill::SKILL_PARENTING, "Rest", "fatigue"))
+                }
+                crate::actions::ActionKind::Idle => {
+                    Some((crate::psychology::skill::SKILL_DIPLOMACY, "Idle", "social"))
+                }
                 _ => None,
             };
             if let Some((skill_id, action_name, trigger)) = psych_skill {
@@ -13386,8 +13317,7 @@ impl Simulation {
                     // cognitive_development for Focal agents), and only
                     // agents whose cognition actually developed diverge.
                     let cognitive_scale = Fixed::ONE
-                        + (agent.developmental.cognitive_development
-                            - Fixed::from_f64(0.7))
+                        + (agent.developmental.cognitive_development - Fixed::from_f64(0.7))
                             * Fixed::from_f64(0.5);
                     agent.psych_skills.practice(
                         skill_id,
@@ -13399,8 +13329,8 @@ impl Simulation {
                     // uses, so habits arrive with genuine mastery (~100
                     // practice ticks). Deterministic, no RNG.
                     let prof = agent.psych_skills.proficiency(skill_id);
-                    let crossed = prof >= Fixed::from_f64(0.1)
-                        && prof - skill_gain < Fixed::from_f64(0.1);
+                    let crossed =
+                        prof >= Fixed::from_f64(0.1) && prof - skill_gain < Fixed::from_f64(0.1);
                     if crossed {
                         agent.psych_skills.form_habit(
                             action_name.to_string(),
@@ -13542,14 +13472,12 @@ impl Simulation {
                             // violence more readily; a high-inhibition agent
                             // holds back (the stress-degraded inhibition
                             // channel is now behaviorally live).
-                            let inhibition_hold = if self.agents[from_idx]
-                                .cognitive_runtime
-                                .can_inhibit()
-                            {
-                                Fixed::from_f64(0.0)
-                            } else {
-                                Fixed::from_f64(0.15)
-                            };
+                            let inhibition_hold =
+                                if self.agents[from_idx].cognitive_runtime.can_inhibit() {
+                                    Fixed::from_f64(0.0)
+                                } else {
+                                    Fixed::from_f64(0.15)
+                                };
                             let aggressor_aggression = self.agents[from_idx].personality.dominance
                                 + self.agents[from_idx].personality.risk_tolerance
                                 + endo_dominance * self.params.conflict_dominance_weight
@@ -13599,9 +13527,7 @@ impl Simulation {
                                     let injury = violence_result.injury;
                                     if injury > Fixed::ZERO {
                                         let wound_roll = Fixed::from_f64(
-                                            self.rng
-                                                .get_mut(RngStream::Behavior)
-                                                .random::<f64>(),
+                                            self.rng.get_mut(RngStream::Behavior).random::<f64>(),
                                         );
                                         // Destructure the body borrow so the
                                         // two disjoint fields (health, energy)
@@ -13790,7 +13716,7 @@ impl Simulation {
                                     self.agents[from_idx].emotions.shame =
                                         (self.agents[from_idx].emotions.shame
                                             + Fixed::from_f64(0.15) * taboo_shame_factor)
-                                        .clamp_01();
+                                            .clamp_01();
 
                                     // §19.5.H: Check if violence was lethal
                                     if self.agents[to_idx].body.health <= Fixed::ZERO {
@@ -14313,9 +14239,7 @@ impl Simulation {
                     // seeding does not produce). Read before the mutable
                     // `beliefs` borrow; deterministic, zero new RNG.
                     let cultural_dampening = (Fixed::ONE
-                        - self.agents[from_idx]
-                            .cultural_cognition
-                            .change_resistance()
+                        - self.agents[from_idx].cultural_cognition.change_resistance()
                             * BELIEF_CULTURAL_RATE)
                         .max(BELIEF_CULTURAL_FLOOR)
                         .clamp_01();
@@ -14328,8 +14252,10 @@ impl Simulation {
                     // calm windows → byte-identical); at 0.3 gain a 0.3
                     // surprise adds 0.09 reinforcement — a modest honest
                     // nudge on top of the evidence term.
-                    let from_surprise =
-                        self.agents[from_idx].neural_like.expectation.last_prediction_error;
+                    let from_surprise = self.agents[from_idx]
+                        .neural_like
+                        .expectation
+                        .last_prediction_error;
                     let emotional_reinforcement = if from_surprise > Fixed::from_f64(0.3) {
                         from_surprise * Fixed::from_f64(0.3)
                     } else {

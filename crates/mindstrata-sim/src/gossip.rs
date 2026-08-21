@@ -127,7 +127,8 @@ pub fn mutate_rumor(
     // and trust act as fidelity discounts (each ~0.9 at neutral, ~0.98 at
     // strong), keeping the relay near the original strength while still
     // making the source factors genuinely live.
-    let conviction_discount = Fixed::from_f64(0.9) + rumor.original_resistance * Fixed::from_f64(0.08);
+    let conviction_discount =
+        Fixed::from_f64(0.9) + rumor.original_resistance * Fixed::from_f64(0.08);
     let trust_discount = Fixed::from_f64(0.9) + source_trust * Fixed::from_f64(0.08);
     let source_fidelity = (conviction_discount * trust_discount).clamp_01();
 

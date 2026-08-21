@@ -1208,10 +1208,7 @@ pub fn render_psychology_inspector(
         out.push_str("  (no goal history yet)\n\n");
     } else {
         if !agent.rejected_goals.is_empty() {
-            out.push_str(&format!(
-                "  rejected ({}): ",
-                agent.rejected_goals.len()
-            ));
+            out.push_str(&format!("  rejected ({}): ", agent.rejected_goals.len()));
             let kinds: Vec<String> = agent
                 .rejected_goals
                 .iter()
@@ -1223,10 +1220,7 @@ pub fn render_psychology_inspector(
             out.push_str("  ← suppresses re-forming\n");
         }
         if !agent.completed_goals.is_empty() {
-            out.push_str(&format!(
-                "  completed ({}): ",
-                agent.completed_goals.len()
-            ));
+            out.push_str(&format!("  completed ({}): ", agent.completed_goals.len()));
             let kinds: Vec<String> = agent
                 .completed_goals
                 .iter()
@@ -1531,11 +1525,7 @@ pub fn render_noosphere_inspector(
     let mean_legitimacy = if legitimacy.is_empty() {
         0.0
     } else {
-        legitimacy
-            .iter()
-            .map(|l| l.overall.to_f64())
-            .sum::<f64>()
-            / legitimacy.len() as f64
+        legitimacy.iter().map(|l| l.overall.to_f64()).sum::<f64>() / legitimacy.len() as f64
     };
     out.push_str(&format!(
         "  Agents: {}   Mean overall: {:.3}\n",
@@ -1600,7 +1590,11 @@ pub fn render_noosphere_inspector(
             panic.intensity.to_f64(),
             panic.fear_level.to_f64(),
             panic.participants,
-            if panic.active { " [ACTIVE]" } else { " [resolved]" },
+            if panic.active {
+                " [ACTIVE]"
+            } else {
+                " [resolved]"
+            },
         ));
     }
 
@@ -1616,11 +1610,7 @@ pub fn render_noosphere_inspector(
         out.push_str("  (no campaigns)\n");
     }
     for campaign in &propaganda.campaigns {
-        let channels: Vec<String> = campaign
-            .channels
-            .iter()
-            .map(|c| format!("{c:?}"))
-            .collect();
+        let channels: Vec<String> = campaign.channels.iter().map(|c| format!("{c:?}")).collect();
         out.push_str(&format!(
             "    #{} sponsor={} intensity={:.2} credibility={:.2} remaining={}/{}{}\n",
             campaign.id,
@@ -1631,7 +1621,11 @@ pub fn render_noosphere_inspector(
             campaign.duration,
             if campaign.active { "" } else { " [ended]" },
         ));
-        out.push_str(&format!("      \"{}\" via {}\n", campaign.narrative, channels.join("+")));
+        out.push_str(&format!(
+            "      \"{}\" via {}\n",
+            campaign.narrative,
+            channels.join("+")
+        ));
     }
 
     // ── Echo chambers ─────────────────────────────────────────────
@@ -1994,7 +1988,13 @@ mod tests {
         let rumors = RumorRegistry::default();
         let noosphere = NoosphericField::new();
         let out = render_noosphere_inspector(
-            &memes, &panics, &propaganda, &legitimacy_refs, &echo, &rumors, &noosphere,
+            &memes,
+            &panics,
+            &propaganda,
+            &legitimacy_refs,
+            &echo,
+            &rumors,
+            &noosphere,
         );
         assert!(out.contains("Noosphere / Culture Inspector"), "{out}");
         assert!(out.contains("Agents: 1   Mean overall: 0.500"), "{out}");
@@ -2042,12 +2042,14 @@ mod tests {
         ));
 
         let mut legitimacy = LegitimacyField::new(f(0.6));
-        legitimacy.sources.push(mindstrata_sim::noosphere::LegitimacySource {
-            name: "divine mandate".to_string(),
-            strength: f(0.4),
-            decay_rate: f(0.001),
-            requires_ritual: true,
-        });
+        legitimacy
+            .sources
+            .push(mindstrata_sim::noosphere::LegitimacySource {
+                name: "divine mandate".to_string(),
+                strength: f(0.4),
+                decay_rate: f(0.001),
+                requires_ritual: true,
+            });
         let legitimacy_refs = [&legitimacy];
 
         let mut echo = EchoChamberState::default();
@@ -2067,17 +2069,34 @@ mod tests {
         ));
 
         let mut noosphere = NoosphericField::new();
-        noosphere.nodes.push(mindstrata_sim::noosphere::SymbolicNode::new(0, Default::default()));
+        noosphere
+            .nodes
+            .push(mindstrata_sim::noosphere::SymbolicNode::new(
+                0,
+                Default::default(),
+            ));
 
         let out = render_noosphere_inspector(
-            &memes, &panics, &propaganda, &legitimacy_refs, &echo, &rumors, &noosphere,
+            &memes,
+            &panics,
+            &propaganda,
+            &legitimacy_refs,
+            &echo,
+            &rumors,
+            &noosphere,
         );
         assert!(out.contains("Memes: 1 total, 1 active"), "{out}");
         assert!(out.contains("\"The temple hoards grain\""), "{out}");
         assert!(out.contains("InstitutionalCorruption"), "{out}");
         assert!(out.contains("participants 12 [resolved]"), "{out}");
-        assert!(out.contains("\"Order preserves survival\" via Edict"), "{out}");
-        assert!(out.contains("Agent 0: overall 0.600 (1 source, decay 0.0001)"), "{out}");
+        assert!(
+            out.contains("\"Order preserves survival\" via Edict"),
+            "{out}"
+        );
+        assert!(
+            out.contains("Agent 0: overall 0.600 (1 source, decay 0.0001)"),
+            "{out}"
+        );
         assert!(out.contains("Polarization: 0.350"), "{out}");
         assert!(out.contains("meme #0: dominance 0.610"), "{out}");
         assert!(out.contains("#0 [agent 5]"), "{out}");

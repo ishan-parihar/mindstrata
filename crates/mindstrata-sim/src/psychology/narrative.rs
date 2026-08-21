@@ -178,9 +178,9 @@ impl NarrativeIdentity {
         // but the rate is modulated by support — unsupported agents (0.3)
         // develop it 3× faster than well-supported agents (1.0).
         let victimhood_rate = (Fixed::from_f64(0.008)
-            * (Fixed::ONE - social_support * Fixed::from_f64(0.6))).max(Fixed::from_f64(0.002));
-        self.victimhood_script =
-            (self.victimhood_script + severity * victimhood_rate).clamp_01();
+            * (Fixed::ONE - social_support * Fixed::from_f64(0.6)))
+        .max(Fixed::from_f64(0.002));
+        self.victimhood_script = (self.victimhood_script + severity * victimhood_rate).clamp_01();
 
         // Heroism strengthens when there's support to overcome
         if social_support > Fixed::from_f64(0.4) {
@@ -201,7 +201,8 @@ impl NarrativeIdentity {
         // it faster. The distinction from victimhood is the blame target.
         if !has_blame_target {
             let shame_rate = (Fixed::from_f64(0.005)
-                * (Fixed::ONE - social_support * Fixed::from_f64(0.5))).max(Fixed::from_f64(0.001));
+                * (Fixed::ONE - social_support * Fixed::from_f64(0.5)))
+            .max(Fixed::from_f64(0.001));
             self.shame_script = (self.shame_script + severity * shame_rate).clamp_01();
         }
 
@@ -286,8 +287,7 @@ impl NarrativeIdentity {
         // Chronic stress pulls the factor below 1.0 — sustained stress
         // erodes narrative resilience even when the story is balanced.
         let stress_pull = chronic_stress * Fixed::from_f64(0.05);
-        (Fixed::ONE - delta * rate - stress_pull)
-            .clamp(Fixed::from_f64(0.8), Fixed::from_f64(1.2))
+        (Fixed::ONE - delta * rate - stress_pull).clamp(Fixed::from_f64(0.8), Fixed::from_f64(1.2))
     }
 
     /// Update the dominant life theme based on current script balance and
@@ -465,9 +465,7 @@ mod tests {
             n.decay_scripts(Fixed::from_f64(0.02));
         }
         assert!((n.redemption_script - d.redemption_script).abs() < Fixed::from_f64(0.01));
-        assert!(
-            (n.contamination_script - d.contamination_script).abs() < Fixed::from_f64(0.01)
-        );
+        assert!((n.contamination_script - d.contamination_script).abs() < Fixed::from_f64(0.01));
     }
 
     #[test]
@@ -494,7 +492,10 @@ mod tests {
     fn stress_resilience_factor_is_one_at_birth_envelope() {
         // Identity-at-birth: a default-envelope agent is untouched.
         let n = NarrativeIdentity::default();
-        assert_eq!(n.stress_resilience_factor(Fixed::from_f64(0.15), Fixed::ZERO), Fixed::ONE);
+        assert_eq!(
+            n.stress_resilience_factor(Fixed::from_f64(0.15), Fixed::ZERO),
+            Fixed::ONE
+        );
     }
 
     #[test]
@@ -569,7 +570,10 @@ mod tests {
             ..Default::default()
         };
         let factor = n.stress_resilience_factor(Fixed::from_f64(0.15), Fixed::ZERO);
-        assert!(factor > Fixed::ONE, "contaminated story must amplify stress");
+        assert!(
+            factor > Fixed::ONE,
+            "contaminated story must amplify stress"
+        );
         assert!(factor <= Fixed::from_f64(1.2));
     }
 }

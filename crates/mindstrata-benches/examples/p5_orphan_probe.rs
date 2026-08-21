@@ -32,7 +32,11 @@ fn main() {
         .iter()
         .find(|r| r.to == mindstrata_core::id::AgentId::new(1))
         .map(|r| r.trust.to_f64());
-    println!("after-household: stage={:?} trust={:?}", stage(&sim), trust.map(|t| format!("{t:.3}")));
+    println!(
+        "after-household: stage={:?} trust={:?}",
+        stage(&sim),
+        trust.map(|t| format!("{t:.3}"))
+    );
     // Remove the producer: dissolve the household (drop member 1).
     for h in &mut sim.households {
         h.members.retain(|m| *m != 1);

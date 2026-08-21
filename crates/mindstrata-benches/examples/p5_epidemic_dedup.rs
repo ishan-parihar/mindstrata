@@ -69,10 +69,7 @@ fn main() {
         t += chunk;
         let ok = check_sample(&sim, t);
         all_ok &= ok;
-        eprintln!(
-            "  [t={t}] {:.1}s elapsed",
-            start.elapsed().as_secs_f64()
-        );
+        eprintln!("  [t={t}] {:.1}s elapsed", start.elapsed().as_secs_f64());
     }
     let elapsed = start.elapsed().as_secs_f64();
     let fp = fingerprint(&sim);

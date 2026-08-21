@@ -164,7 +164,6 @@ impl PsychopathologyState {
     pub fn cognitive_modifier(&self) -> Fixed {
         self.overall_health
     }
-
 }
 
 #[cfg(test)]

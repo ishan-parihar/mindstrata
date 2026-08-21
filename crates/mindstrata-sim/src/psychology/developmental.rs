@@ -156,7 +156,6 @@ impl DevelopmentalPsychState {
         self.history.trauma_history =
             (self.history.trauma_history + severity * Fixed::from_f64(0.02)).clamp_01();
     }
-
 }
 
 #[cfg(test)]
@@ -212,8 +211,16 @@ mod tests {
             ..Default::default()
         };
         for _ in 0..10 {
-            low.tick_update(Fixed::from_f64(16.0), Fixed::from_f64(0.7), Fixed::from_f64(0.2));
-            high.tick_update(Fixed::from_f64(16.0), Fixed::from_f64(0.7), Fixed::from_f64(0.9));
+            low.tick_update(
+                Fixed::from_f64(16.0),
+                Fixed::from_f64(0.7),
+                Fixed::from_f64(0.2),
+            );
+            high.tick_update(
+                Fixed::from_f64(16.0),
+                Fixed::from_f64(0.7),
+                Fixed::from_f64(0.9),
+            );
         }
         assert!(
             high.identity_formation > low.identity_formation,

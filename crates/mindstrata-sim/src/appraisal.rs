@@ -109,7 +109,6 @@ pub struct EmotionDelta {
     pub moral_outrage: Fixed,
 }
 
-
 /// Derive emotional response from an appraisal.
 ///
 /// This implements the cognitive appraisal → emotion mapping from
@@ -840,7 +839,15 @@ mod tests {
         // value), exact +0.115 at half altruism with the shipped 0.23
         // multiplier, exact +0.23 at full, clamp at 1.0. Deterministic.
         assert_eq!(
-            help_propensity(Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, Fixed::ZERO, 0.5, 0.5, 0.23),
+            help_propensity(
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                0.5,
+                0.5,
+                0.23
+            ),
             Fixed::ZERO,
             "zero altruism must add exactly 0"
         );

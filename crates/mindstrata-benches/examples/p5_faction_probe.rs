@@ -89,7 +89,10 @@ fn main() {
         .faction_v2_registry
         .factions
         .iter()
-        .filter(|f| f.attachment_style != mindstrata_sim::social::group_formation::GroupAttachmentStyle::Secure)
+        .filter(|f| {
+            f.attachment_style
+                != mindstrata_sim::social::group_formation::GroupAttachmentStyle::Secure
+        })
         .count();
     println!(
         "  [{scen} seed {seed} @{horizon}] first_faction={first_faction:?} v2_history={v2_history} non_secure_in_history={non_secure}"

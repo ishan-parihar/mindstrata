@@ -36,7 +36,10 @@ fn main() {
     for tick in (500..=70_000).step_by(500) {
         sim.run(500);
         if faction_born.is_none()
-            && sim.institutions.iter().any(|i| i.kind == InstitutionKind::Faction)
+            && sim
+                .institutions
+                .iter()
+                .any(|i| i.kind == InstitutionKind::Faction)
         {
             faction_born = Some(tick as u64);
         }
@@ -131,12 +134,15 @@ fn main() {
             _ => None,
         })
         .collect();
-    println!("birth_ticks={:?} (count={})", birth_ticks, birth_ticks.len());
+    println!(
+        "birth_ticks={:?} (count={})",
+        birth_ticks,
+        birth_ticks.len()
+    );
     println!(
         "marriages={} marriage_children_sum={}",
         sim2.marriage_registry.marriages.len(),
-        sim2
-            .marriage_registry
+        sim2.marriage_registry
             .marriages
             .iter()
             .map(|m| m.children.len())
@@ -184,7 +190,5 @@ fn main() {
         .map(|a| a.narrative.heroism_script.to_f64())
         .sum::<f64>()
         / sim2.agents.len().max(1) as f64;
-    println!(
-        "script_envelope_end red={red_mean:.3} cont={cont_mean:.3} hero={hero_mean:.3}"
-    );
+    println!("script_envelope_end red={red_mean:.3} cont={cont_mean:.3} hero={hero_mean:.3}");
 }

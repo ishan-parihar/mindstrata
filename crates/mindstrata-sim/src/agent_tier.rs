@@ -663,13 +663,17 @@ mod tests {
             Fixed::from_f64(0.3),
             false,
             false,
-            Fixed::from_f64(0.7),  // elevated fear — the differentiated band
-            Fixed::ZERO,           // but not acutely angry
+            Fixed::from_f64(0.7), // elevated fear — the differentiated band
+            Fixed::ZERO,          // but not acutely angry
             0,
             100,
             10,
         );
-        assert_eq!(state.tier, AgentTier::Focal, "elevated fear must count as crisis (Iter-164 fear-crisis anchor)");
+        assert_eq!(
+            state.tier,
+            AgentTier::Focal,
+            "elevated fear must count as crisis (Iter-164 fear-crisis anchor)"
+        );
         // Same state at a sub-threshold fear: no crisis → stays Secondary
         // (the role/importance gradient alone drives the split).
         let mut calm = AgentTierState::new(AgentTier::Secondary, 0);

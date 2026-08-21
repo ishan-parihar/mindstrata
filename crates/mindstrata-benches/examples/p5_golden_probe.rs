@@ -9,7 +9,12 @@ fn main() {
     let mut sim = Simulation::from_scenario(sc);
     sim.populate();
     sim.run(1000);
-    let active_marriages = sim.marriage_registry.marriages.iter().filter(|m| m.active).count();
+    let active_marriages = sim
+        .marriage_registry
+        .marriages
+        .iter()
+        .filter(|m| m.active)
+        .count();
     let pair_bonds = sim.marriage_registry.pair_bonds.len();
     let mut int_sum = 0.0f64;
     let mut int_nonzero = 0usize;

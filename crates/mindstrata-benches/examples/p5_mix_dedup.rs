@@ -46,9 +46,9 @@ fn inject(sim: &mut Simulation, kind: DiseaseKind, tick: u64) {
     // re-runs the identical injection sequence. The stride spreads each
     // vector across the village so the contagion pass has dense sources.
     let stride = match kind {
-        DiseaseKind::Cold => 3,             // ~1/3 of agents
-        DiseaseKind::Fever => 4,            // ~1/4 of agents
-        DiseaseKind::WoundInfection => 2,   // ~1/2 of agents (non-contagious)
+        DiseaseKind::Cold => 3,           // ~1/3 of agents
+        DiseaseKind::Fever => 4,          // ~1/4 of agents
+        DiseaseKind::WoundInfection => 2, // ~1/2 of agents (non-contagious)
         _ => 1,
     };
     let n = sim.agents.len();
@@ -132,9 +132,7 @@ fn main() {
     }
     let pop_ok = n >= agents as usize / 2;
     let deaths_ok = deaths < 60;
-    println!(
-        "  end state: pop={n} deaths={deaths} (pop_ok={pop_ok} deaths_ok={deaths_ok})"
-    );
+    println!("  end state: pop={n} deaths={deaths} (pop_ok={pop_ok} deaths_ok={deaths_ok})");
     all_ok &= pop_ok && deaths_ok;
 
     // Determinism twin: re-run the same config INCLUDING the injection

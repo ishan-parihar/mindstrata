@@ -73,7 +73,8 @@ fn avg_grievance(sim: &Simulation) -> f64 {
 fn theme_hist(sim: &Simulation) -> BTreeMap<String, u32> {
     let mut h = BTreeMap::new();
     for a in &sim.agents {
-        *h.entry(format!("{:?}", a.narrative.life_theme)).or_insert(0) += 1;
+        *h.entry(format!("{:?}", a.narrative.life_theme))
+            .or_insert(0) += 1;
     }
     h
 }
@@ -201,7 +202,8 @@ fn main() {
             }
             println!(
                 "  needs @{horizon}: hunger={:.3} thirst={:.3}",
-                hunger / sim.agents.len() as f64, thirst / sim.agents.len() as f64
+                hunger / sim.agents.len() as f64,
+                thirst / sim.agents.len() as f64
             );
         }
         if filter == "theme" {

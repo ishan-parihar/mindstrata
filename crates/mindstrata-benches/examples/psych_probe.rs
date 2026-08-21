@@ -46,12 +46,10 @@ fn field(a: &AgentBundle, key: &str) -> Fixed {
         "narr.chosenness" => a.narrative.chosenness_script,
         "narr.shame" => a.narrative.shame_script,
         "narr.coherence" => a.narrative.coherence,
-        "narr.resilience_factor" => {
-            a.narrative.stress_resilience_factor(
-                Fixed::from_f64(0.15),
-                a.embodied.endocrine.stress.chronic_load,
-            )
-        }
+        "narr.resilience_factor" => a.narrative.stress_resilience_factor(
+            Fixed::from_f64(0.15),
+            a.embodied.endocrine.stress.chronic_load,
+        ),
         // Prospection
         "prosp.hope" => a.prospection.hope,
         "prosp.dread" => a.prospection.dread,
@@ -150,11 +148,23 @@ impl Stats {
         }
         let mean: f64 = self.values.iter().sum::<f64>() / n;
         let min = self.values.iter().copied().fold(f64::INFINITY, f64::min);
-        let max = self.values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        let max = self
+            .values
+            .iter()
+            .copied()
+            .fold(f64::NEG_INFINITY, f64::max);
         let at_zero = self.values.iter().filter(|v| **v <= 0.0).count();
         let at_one = self.values.iter().filter(|v| **v >= 1.0).count();
-        let sat = if at_one as f64 > n * 0.5 { " ⚠ SATURATED-HIGH" } else { "" };
-        let dead = if max - min < 0.001 { " (no spread)" } else { "" };
+        let sat = if at_one as f64 > n * 0.5 {
+            " ⚠ SATURATED-HIGH"
+        } else {
+            ""
+        };
+        let dead = if max - min < 0.001 {
+            " (no spread)"
+        } else {
+            ""
+        };
         format!(
             "  {:<28} mean={:.3} min={:.3} max={:.3} [0:{}/{}, 1:{}/{}]{}{}",
             self.label,
@@ -230,9 +240,28 @@ const FIELDS: &[&str] = &[
 ];
 
 const EMOTIONS: &[&str] = &[
-    "fear", "anger", "joy", "sadness", "trust", "shame", "pride", "guilt", "disgust",
-    "contempt", "awe", "gratitude", "jealousy", "envy", "loneliness", "tenderness",
-    "humiliation", "relief", "hope", "despair", "nostalgia", "moral_outrage",
+    "fear",
+    "anger",
+    "joy",
+    "sadness",
+    "trust",
+    "shame",
+    "pride",
+    "guilt",
+    "disgust",
+    "contempt",
+    "awe",
+    "gratitude",
+    "jealousy",
+    "envy",
+    "loneliness",
+    "tenderness",
+    "humiliation",
+    "relief",
+    "hope",
+    "despair",
+    "nostalgia",
+    "moral_outrage",
 ];
 
 fn main() {
@@ -287,7 +316,8 @@ fn main() {
 
                 let mut st = Stats::new("moral.norm_count");
                 for a in &sim.agents {
-                    st.values.push(a.moral_cognition.internalized_norms.len() as f64);
+                    st.values
+                        .push(a.moral_cognition.internalized_norms.len() as f64);
                 }
                 println!("{}", st.report());
 
@@ -329,7 +359,10 @@ fn main() {
                     "{}",
                     counts(
                         "narr.life_theme",
-                        &sim.agents.iter().map(|a| a.narrative.life_theme).collect::<Vec<_>>()
+                        &sim.agents
+                            .iter()
+                            .map(|a| a.narrative.life_theme)
+                            .collect::<Vec<_>>()
                     )
                 );
                 println!(

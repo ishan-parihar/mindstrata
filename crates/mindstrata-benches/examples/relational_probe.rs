@@ -36,9 +36,7 @@ fn main() {
             for a in &sim.agents {
                 for r in &a.relationship_v2s {
                     n_edges += 1;
-                    *stage_counts
-                        .entry(format!("{:?}", r.stage))
-                        .or_insert(0u32) += 1;
+                    *stage_counts.entry(format!("{:?}", r.stage)).or_insert(0u32) += 1;
                     let i = r.intimacy.to_f64();
                     int_sum += i;
                     if i > 0.01 {
@@ -61,7 +59,11 @@ fn main() {
                 .filter(|m| m.active)
                 .count();
             let active_courtships = sim.active_courtships.iter().filter(|c| c.active).count();
-            let multi_households = sim.households.iter().filter(|h| h.members.len() >= 2).count();
+            let multi_households = sim
+                .households
+                .iter()
+                .filter(|h| h.members.len() >= 2)
+                .count();
             let mut hh_sizes: Vec<usize> = sim.households.iter().map(|h| h.members.len()).collect();
             hh_sizes.sort_unstable();
             let clans = sim.clan_registry.clans.len();

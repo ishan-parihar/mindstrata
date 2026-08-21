@@ -319,7 +319,6 @@ impl EchoChamberState {
         }
         self.compute_polarization();
     }
-
 }
 
 #[cfg(test)]

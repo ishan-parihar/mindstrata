@@ -108,7 +108,6 @@ impl RelationshipStage {
     }
 }
 
-
 /// §10.2 (AP2): Public relationship label — the §10.3 taxonomy.
 ///
 /// General social stages, the negative branch, and the kin branch map 1:1
@@ -402,8 +401,7 @@ impl RelationshipV2 {
         // Positive interactions now build closeness (intimacy) and
         // persistence (commitment) at a slower rate than trust.
         self.intimacy = (self.intimacy + magnitude * vol * Fixed::from_f64(0.01)).clamp_01();
-        self.commitment =
-            (self.commitment + magnitude * vol * Fixed::from_f64(0.008)).clamp_01();
+        self.commitment = (self.commitment + magnitude * vol * Fixed::from_f64(0.008)).clamp_01();
         // §10.2: positive history accumulates into the memory weight.
         self.positive_memory_weight =
             (self.positive_memory_weight + magnitude * Fixed::from_f64(0.01)).clamp_01();

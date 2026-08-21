@@ -295,7 +295,11 @@ mod tests {
     fn preferred_seeded_from_personality() {
         // P3-4 regression: `preferred` was never assigned, so every agent
         // was permanently Reappraisal. Personality seeding must diversify.
-        fn personality(extraversion: f64, agreeableness: f64, neuroticism: f64) -> crate::person::Personality {
+        fn personality(
+            extraversion: f64,
+            agreeableness: f64,
+            neuroticism: f64,
+        ) -> crate::person::Personality {
             crate::person::Personality {
                 openness: Fixed::from_f64(0.5),
                 conscientiousness: Fixed::from_f64(0.5),

@@ -18,10 +18,7 @@ fn main() {
         .unwrap_or(42);
 
     for horizon in [500u64, 1000, 1500, 2000, 2500, 3000, 5000, 10000] {
-        for (name, scen) in [
-            ("calm", Scenario::calm()),
-            ("famine", Scenario::famine()),
-        ] {
+        for (name, scen) in [("calm", Scenario::calm()), ("famine", Scenario::famine())] {
             let mut sc = scen;
             sc.seed = seed;
             sc.ticks = horizon;
