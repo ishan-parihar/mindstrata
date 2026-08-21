@@ -119,6 +119,11 @@ pub struct DecisionContext<'a> {
     /// boosts withdrawal/work. This is the plan's "mood affects behavior"
     /// channel — making agents feel adaptive rather than static.
     pub mood_valence: Fixed,
+    // ── Iteration 233: seasonal behavioral modulation ──────────────
+    /// Current season (0=Spring, 1=Summer, 2=Autumn, 3=Winter).
+    /// Modulates action utility: winter boosts social/worship,
+    /// summer boosts work/trade.
+    pub season: u8,
 }
 
 /// An action that an agent can take.
@@ -777,6 +782,34 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
         };
         utility += mood_nudge;
 
+        // Iteration 233: seasonal behavioral modulation.
+        // Winter boosts social/worship (+0.02), summer boosts work (+0.02).
+        // Sized at ±0.02 so it's a genuine nudge, not a reordering lever.
+        let season_nudge = match ctx.season {
+            3 => {
+                // Winter: boost social, reduce work
+                if is_social {
+                    Fixed::from_f64(0.02)
+                } else if matches!(kind, ActionKind::Work) {
+                    Fixed::from_f64(-0.01)
+                } else {
+                    Fixed::ZERO
+                }
+            }
+            1 => {
+                // Summer: boost work, reduce social
+                if matches!(kind, ActionKind::Work) {
+                    Fixed::from_f64(0.02)
+                } else if is_social {
+                    Fixed::from_f64(-0.01)
+                } else {
+                    Fixed::ZERO
+                }
+            }
+            _ => Fixed::ZERO, // Spring/Autumn: neutral
+        };
+        utility += season_nudge;
+
         if utility > best_utility {
             best_utility = utility;
             best_action = *kind;
@@ -858,6 +891,7 @@ mod tests {
                 // 0.5 = neutral default → zero calibration shift (legacy utility).
                 planning_confidence: Fixed::from_f64(0.5),
                 mood_valence: Fixed::ZERO,
+                season: 0,
             },
             &mut rng,
         );
@@ -910,6 +944,7 @@ mod tests {
                 // 0.5 = neutral default → zero calibration shift (legacy utility).
                 planning_confidence: Fixed::from_f64(0.5),
                 mood_valence: Fixed::ZERO,
+                season: 0,
             },
             &mut rng,
         );
@@ -959,6 +994,7 @@ mod tests {
                 // 0.5 = neutral default → zero calibration shift (legacy utility).
                 planning_confidence: Fixed::from_f64(0.5),
                 mood_valence: Fixed::ZERO,
+                season: 0,
             },
             &mut rng,
         );
@@ -1065,6 +1101,7 @@ mod tests {
                 // 0.5 = neutral default → zero calibration shift (legacy utility).
                 planning_confidence: Fixed::from_f64(0.5),
                 mood_valence: Fixed::ZERO,
+                season: 0,
             },
             &mut rng,
         );
@@ -1113,6 +1150,7 @@ mod tests {
                 // 0.5 = neutral default → zero calibration shift (legacy utility).
                 planning_confidence: Fixed::from_f64(0.5),
                 mood_valence: Fixed::ZERO,
+                season: 0,
             },
             &mut rng,
         );
@@ -1867,6 +1905,7 @@ mod tests {
                         // 0.5 = neutral default → zero calibration shift.
                         planning_confidence: Fixed::from_f64(0.5),
                         mood_valence: Fixed::ZERO,
+                        season: 0,
                     },
                     &mut rng,
                 );

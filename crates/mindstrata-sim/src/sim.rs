@@ -4437,6 +4437,8 @@ impl Simulation {
                                 // from affect module ([-1,1]) drives
                                 // social/exploration vs withdrawal.
                                 mood_valence: self.agents[i].affect.valence,
+                                // Iteration 233: seasonal behavioral modulation
+                                season: self.season.current as u8,
                             },
                             ctx.rng,
                         )
