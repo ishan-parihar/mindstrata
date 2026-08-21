@@ -82,18 +82,29 @@ impl CardiovascularState {
         // truncation pinched the plateau to exactly 0.55 — a per-tick net
         // ≈0.000058 rounds to 0. The larger constant lifts the equilibrium
         // to ≈0.70, comfortably clear of the 0.0001 quantization step.)
+        // Iteration 225: widened fitness gain band and increased rate.
+        // Before: activity > 0.3 && <= 0.8 with rate 0.0015, floor 0.5.
+        // Result: fitness = 0.550 uniform (no spread across agents).
+        // Now: activity >= 0.1 && <= 0.8 with rate 0.002, floor 0.4.
+        // The wider band includes Wander (0.4), Socialize (0.2), and
+        // Trade (0.3), so social agents gain fitness too. The higher
+        // rate lifts the equilibrium from ~0.55 to ~0.65, and the lower
+        // floor (0.4) creates real differentiation between active and
+        // idle agents.
         let f = self.fitness.to_f64();
         let activity = activity_level.to_f64();
         let nutrition = nutrition_quality.to_f64();
-        if activity > 0.3 && activity <= 0.8 {
-            let gain = activity * nutrition * 0.0015 * (1.0 - f);
+        if (0.1..=0.8).contains(&activity) {
+            let gain = activity * nutrition * 0.002 * (1.0 - f);
             self.fitness = Fixed::from_f64((f + gain).clamp(0.0, 1.0));
         }
-        // Detrain (excess-proportional, floor 0.5).
-        let excess = (self.fitness.to_f64() - 0.5).max(0.0);
+        // Detrain (excess-proportional, floor 0.4): idle agents drift
+        // back to baseline, active agents retain gains. The 0.4 floor
+        // ensures even resting agents have some baseline fitness.
+        let excess = (self.fitness.to_f64() - 0.4).max(0.0);
         if excess > 0.0 {
             let detrain = excess * 0.001;
-            self.fitness = Fixed::from_f64((self.fitness.to_f64() - detrain).max(0.5));
+            self.fitness = Fixed::from_f64((self.fitness.to_f64() - detrain).max(0.4));
         }
         // Overexertion reduces fitness
         if activity_level > Fixed::from_f64(0.85) {
