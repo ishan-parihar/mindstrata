@@ -5444,12 +5444,14 @@ impl Simulation {
                     // ── Despair from sustained sadness ────────────────
                     // When sadness exceeds 0.05 (nearly always once the
                     // sadness producers above fire), despair accumulates
-                    // slowly — the "things won't get better" hopelessness
+                    // — the "things won't get better" hopelessness
                     // channel. This bridges the Iter-192 famine-chain to
                     // calm worlds: normal-life sadness cascades into
                     // despair and eventually depression.
+                    // Iteration 226: rate increased from 0.002 to 0.005
+                    // so despair becomes visible within 100K ticks.
                     let sustained_despair = emotions[i].sadness
-                        * Fixed::from_f64(0.002);
+                        * Fixed::from_f64(0.005);
                     emotions[i].despair =
                         (emotions[i].despair + sustained_despair).clamp_01();
 
@@ -5515,6 +5517,162 @@ impl Simulation {
                             (emotions[i].tenderness - Fixed::from_f64(0.005))
                                 .max(Fixed::ZERO);
                     }
+
+                    // ── Iteration 226: Dead-emotion producers ─────────
+                    // These fill the remaining calm-world emotional gaps.
+                    // Each producer fires on normal-life conditions that
+                    // are common in social settlements.
+
+                    // ── Jealousy from partner attention to others ──────
+                    // When the agent's partner has high trust with someone
+                    // else, mild jealousy accumulates — the "they're
+                    // closer to someone else" channel. This is the natural
+                    // romantic jealousy that doesn't require a formal
+                    // threat event. Only fires for partnered agents.
+                    if let Some(partner_idx) = self.agents[i].partner {
+                        let partner_trust_others: Fixed = self.agents[partner_idx]
+                            .relationship_v2s
+                            .iter()
+                            .enumerate()
+                            .filter(|(j, _)| *j != i)
+                            .map(|(_, r)| r.trust)
+                            .fold(Fixed::ZERO, Fixed::max);
+                        // Jealousy fires when partner's max trust with
+                        // others exceeds 0.5 (close friendship territory).
+                        // Proportional to the excess over 0.5.
+                        let jealousy_delta = (partner_trust_others
+                            - Fixed::from_f64(0.5))
+                            .max(Fixed::ZERO)
+                            * Fixed::from_f64(0.004);
+                        emotions[i].jealousy =
+                            (emotions[i].jealousy + jealousy_delta).clamp_01();
+                    }                    // ── Disgust from witnessing norm violations ────────
+                    // When the agent witnesses another agent's bad behavior
+                    // (measured by the other agent's anger level as a proxy
+                    // for aggression), mild disgust accumulates — the
+                    // "that's not right" moral recoil. This is the natural
+                    // moral disgust that doesn't require formal purity
+                    // violation events. Threshold lowered from 0.05 to 0.005
+                    // so it fires in calm (anger max ~0.016).
+                    let max_other_anger: Fixed = self.agents.iter()
+                        .enumerate()
+                        .filter(|(j, _)| *j != i)
+                        .map(|(_, a)| a.emotions.anger)
+                        .fold(Fixed::ZERO, Fixed::max);
+                    let disgust_delta = (max_other_anger
+                        - Fixed::from_f64(0.005))
+                        .max(Fixed::ZERO)
+                        * Fixed::from_f64(0.003);
+                    emotions[i].disgust =
+                        (emotions[i].disgust + disgust_delta).clamp_01();                    // ── Contempt from witnessing incompetence ──────────
+                    // When other agents have lower health than the agent,
+                    // mild contempt accumulates — the "they can't take
+                    // care of themselves" disdain. This is the natural
+                    // social contempt that fires from status comparison.
+                    // Threshold lowered from 0.7 to 0.9 (the average
+                    // health) so it fires in calm.
+                    let min_other_health: Fixed = self.agents.iter()
+                        .enumerate()
+                        .filter(|(j, _)| *j != i)
+                        .map(|(_, a)| a.body.health)
+                        .fold(Fixed::ONE, Fixed::min);
+                    let my_health = self.agents[i].body.health;
+                    let contempt_delta = (my_health - min_other_health)
+                        .max(Fixed::ZERO)
+                        * Fixed::from_f64(0.003);
+                    emotions[i].contempt =
+                        (emotions[i].contempt + contempt_delta).clamp_01();
+
+                    // ── Moral outrage from witnessing unfairness ───────
+                    // When other agents show anger (conflict), mild moral
+                    // outrage accumulates — the "this is wrong" moral
+                    // response. This is the natural moral outrage that
+                    // doesn't require formal sacredness violation.
+                    // Threshold lowered from 0.1 to 0.005 so it fires
+                    // in calm (anger max ~0.016).
+                    let outrage_delta = (max_other_anger
+                        - Fixed::from_f64(0.005))
+                        .max(Fixed::ZERO)
+                        * Fixed::from_f64(0.002);
+                    emotions[i].moral_outrage =
+                        (emotions[i].moral_outrage + outrage_delta).clamp_01();
+
+                    // ── Anger from social friction ─────────────────────
+                    // When the agent's minimum relationship trust is low
+                    // (social tension), mild anger accumulates — the
+                    // "people are being difficult" frustration. This is
+                    // the natural anger that fires from social friction.
+                    let social_anger = (Fixed::from_f64(0.4) - min_trust)
+                        .max(Fixed::ZERO)
+                        * Fixed::from_f64(0.002);
+                    emotions[i].anger =
+                        (emotions[i].anger + social_anger).clamp_01();
+
+                    // ── Shame from social comparison ───────────────────
+                    // When the agent's status is below average, mild shame
+                    // accumulates — the "I'm not as good as others"
+                    // feeling. This is the natural shame that fires from
+                    // social comparison. Uses the agent's status vs the
+                    // average status of others.
+                    let my_status = self.agents[i].status_v2.effective_status();
+                    let avg_status: Fixed = self.agents.iter()
+                        .enumerate()
+                        .filter(|(j, _)| *j != i)
+                        .map(|(_, a)| a.status_v2.effective_status())
+                        .fold(Fixed::ZERO, |acc, s| acc + s)
+                        / Fixed::from_int((self.agents.len() - 1) as i64);
+                    let shame_delta = (avg_status - my_status)
+                        .max(Fixed::ZERO)
+                        * Fixed::from_f64(0.002);
+                    emotions[i].shame =
+                        (emotions[i].shame + shame_delta).clamp_01();
+
+                    // ── Humiliation from public failure ────────────────
+                    // When the agent has low status AND witnesses others'
+                    // anger (public conflict), mild humiliation accumulates
+                    // — the "everyone sees me failing" feeling. This is
+                    // the natural humiliation that fires from public shame.
+                    // Threshold lowered from 0.05 to 0.005 so it fires
+                    // in calm.
+                    if my_status < avg_status && max_other_anger > Fixed::from_f64(0.005) {
+                        let humiliation_delta = (avg_status - my_status)
+                            * max_other_anger
+                            * Fixed::from_f64(0.003);
+                        emotions[i].humiliation =
+                            (emotions[i].humiliation + humiliation_delta).clamp_01();
+                    }
+
+                    // ── Envy from status comparison ────────────────────
+                    // When other agents have higher status, mild envy
+                    // accumulates — the "they have what I want" coveting.
+                    // This is the natural envy that fires from social
+                    // comparison. Proportional to the status deficit.
+                    let max_other_status: Fixed = self.agents.iter()
+                        .enumerate()
+                        .filter(|(j, _)| *j != i)
+                        .map(|(_, a)| a.status_v2.effective_status())                            .fold(Fixed::ZERO, Fixed::max);
+                    let envy_delta = (max_other_status - my_status)
+                        .max(Fixed::ZERO)
+                        * Fixed::from_f64(0.002);
+                    emotions[i].envy =
+                        (emotions[i].envy + envy_delta).clamp_01();
+
+                    // ── Increased despair rate ─────────────────────────
+                    // Iteration 226: the old 0.002 rate was too slow for
+                    // calm worlds (sadness ~0.007 → despair ~0.000014/tick).
+                    // Increased to 0.005 so despair becomes visible within
+                    // 100K ticks. Also added a direct despair producer from
+                    // chronic stress — the "I'm worn down" channel.
+                    // (The sadness cascade above already contributes;
+                    // this is an additional direct channel.)
+                    let chronic_despair = self.agents[i]
+                        .embodied
+                        .endocrine
+                        .stress
+                        .chronic_load
+                        * Fixed::from_f64(0.001);
+                    emotions[i].despair =
+                        (emotions[i].despair + chronic_despair).clamp_01();
                 }
 
                 // §8.1.4: Valence is SIGNED (-1..1). The old `.clamp_01()` floored
