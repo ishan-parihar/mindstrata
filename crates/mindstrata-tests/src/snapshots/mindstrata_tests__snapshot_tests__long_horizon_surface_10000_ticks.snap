@@ -26,7 +26,7 @@ LongHorizonSurface10000 {
     avg_norm_strength: 0.18062727272727275,
     avg_physical_attraction: 0.5,
     avg_personality_attraction: 0.5,
-    avg_status_attraction: 0.28770833333333334,
+    avg_status_attraction: 0.28789166666666666,
     avg_moral_attraction: 0.5,
     avg_familiarity: 0.7999999999999999,
     avg_envy_cost: 0.002166666666666666,

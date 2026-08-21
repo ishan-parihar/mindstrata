@@ -113,6 +113,12 @@ pub struct DecisionContext<'a> {
     /// gratification calibration term (§8.1.12 "high executive
     /// function enables long-term planning").
     pub planning_confidence: Fixed,
+    // ── Iteration 232: mood drift ──────────────────────────────────
+    /// Agent's current mood valence (-1 to 1, derived from affect).
+    /// Positive mood boosts social/exploration actions; negative mood
+    /// boosts withdrawal/work. This is the plan's "mood affects behavior"
+    /// channel — making agents feel adaptive rather than static.
+    pub mood_valence: Fixed,
 }
 
 /// An action that an agent can take.
@@ -758,6 +764,19 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
         let habit = ctx.decision_policy.habit_modifier(is_routine, ctx.stress);
         utility += emo + moral + habit;
 
+        // Iteration 232: mood drift — positive mood boosts social/
+        // exploration actions; negative mood boosts withdrawal/work.
+        // Sized at ±0.03 (comparable to dread/hope nudge) so it's a
+        // genuine behavioral nudge, not a reordering lever.
+        let mood_nudge = if is_social && ctx.mood_valence > Fixed::ZERO {
+            ctx.mood_valence * Fixed::from_f64(0.03)
+        } else if is_withdrawal && ctx.mood_valence < Fixed::ZERO {
+            (-ctx.mood_valence) * Fixed::from_f64(0.03)
+        } else {
+            Fixed::ZERO
+        };
+        utility += mood_nudge;
+
         if utility > best_utility {
             best_utility = utility;
             best_action = *kind;
@@ -838,6 +857,7 @@ mod tests {
                 hope: Fixed::ZERO,
                 // 0.5 = neutral default → zero calibration shift (legacy utility).
                 planning_confidence: Fixed::from_f64(0.5),
+                mood_valence: Fixed::ZERO,
             },
             &mut rng,
         );
@@ -889,6 +909,7 @@ mod tests {
                 hope: Fixed::ZERO,
                 // 0.5 = neutral default → zero calibration shift (legacy utility).
                 planning_confidence: Fixed::from_f64(0.5),
+                mood_valence: Fixed::ZERO,
             },
             &mut rng,
         );
@@ -937,6 +958,7 @@ mod tests {
                 hope: Fixed::ZERO,
                 // 0.5 = neutral default → zero calibration shift (legacy utility).
                 planning_confidence: Fixed::from_f64(0.5),
+                mood_valence: Fixed::ZERO,
             },
             &mut rng,
         );
@@ -1042,6 +1064,7 @@ mod tests {
                 hope: Fixed::ZERO,
                 // 0.5 = neutral default → zero calibration shift (legacy utility).
                 planning_confidence: Fixed::from_f64(0.5),
+                mood_valence: Fixed::ZERO,
             },
             &mut rng,
         );
@@ -1089,6 +1112,7 @@ mod tests {
                 hope: Fixed::ZERO,
                 // 0.5 = neutral default → zero calibration shift (legacy utility).
                 planning_confidence: Fixed::from_f64(0.5),
+                mood_valence: Fixed::ZERO,
             },
             &mut rng,
         );
@@ -1842,6 +1866,7 @@ mod tests {
                         hope: Fixed::ZERO,
                         // 0.5 = neutral default → zero calibration shift.
                         planning_confidence: Fixed::from_f64(0.5),
+                        mood_valence: Fixed::ZERO,
                     },
                     &mut rng,
                 );

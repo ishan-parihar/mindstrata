@@ -420,20 +420,29 @@ impl CulturalCognition {
     /// Tick update — conservatism shifts based on exposure.
     /// Positive exposure reduces conservatism; negative exposure increases it.
     pub fn tick_update(&mut self, positive_exposure: Fixed, negative_exposure: Fixed) {
-        // Positive cultural exposure slightly reduces conservatism
+        // Iteration 231: increased drift rates so conservatism actually
+        // moves. The old rates (0.001/0.0015) produced <0.01 change over
+        // 20K ticks. Increased to 0.005/0.007 so agents differentiate.
+        // Positive cultural exposure reduces conservatism
         self.conservatism = (self.conservatism
-            - positive_exposure * Fixed::from_f64(0.001) * (Fixed::ONE - self.conservatism))
+            - positive_exposure * Fixed::from_f64(0.005) * (Fixed::ONE - self.conservatism))
             .max(Fixed::ZERO);
         // Negative exposure (threat, trauma) increases conservatism
         self.conservatism = (self.conservatism
-            + negative_exposure * Fixed::from_f64(0.0015) * (Fixed::ONE - self.conservatism))
+            + negative_exposure * Fixed::from_f64(0.007) * (Fixed::ONE - self.conservatism))
             .clamp_01();
-        // Taboo strength decays slowly for non-sacred taboos
+        // Iteration 231: taboo decay for non-sacred taboos. The old rate
+        // (0.0005/call × ~140 calls in 20K ticks = 0.07 total) was too slow
+        // to differentiate agents — all stayed at 7 taboos. Increased to
+        // 0.003 so non-sacred taboos decay noticeably within 10K ticks
+        // (0.003 × 140 = 0.42 total), creating real cultural variation.
         for taboo in &mut self.taboos {
             if !taboo.sacred {
-                taboo.strength = (taboo.strength - Fixed::from_f64(0.0005)).max(Fixed::ZERO);
+                taboo.strength = (taboo.strength - Fixed::from_f64(0.003)).max(Fixed::ZERO);
             }
         }
+        // Remove non-sacred taboos that have fully decayed
+        self.taboos.retain(|t| t.sacred || t.strength > Fixed::ZERO);
     }
 }
 

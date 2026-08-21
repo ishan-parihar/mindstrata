@@ -565,6 +565,9 @@ pub struct Simulation {
     /// never rose (probe: needs.hunger 0.006–0.041 in EVERY scenario, famine ≈
     /// calm — the goal-incongruence branch was unreachable). 0 = no famine.
     famine_until: u64,
+    /// Iteration 232: drought-pressure window. While active, aquifer
+    /// recharge is suppressed so the drought shock's water drain persists.
+    drought_until: u64,
     /// §8.1.4 (P3-6): Grain-output multiplier while `famine_until` is active —
     /// `1 − magnitude` of the triggering shock (0.3 for the standard 0.7 famine).
     famine_production_factor: Fixed,
@@ -696,6 +699,7 @@ impl Simulation {
             last_moral_panic_tick: 0,
             last_cult_formation_tick: 0,
             famine_until: 0,
+            drought_until: 0,
             famine_production_factor: Fixed::ONE,
             black_market: crate::black_market::BlackMarketState::default(),
             kinship_graph: crate::social::kinship::KinshipGraph::default(),
@@ -870,6 +874,7 @@ impl Simulation {
             last_moral_panic_tick: snapshot.last_moral_panic_tick,
             last_cult_formation_tick: snapshot.last_cult_formation_tick,
             famine_until: 0,
+            drought_until: 0,
             famine_production_factor: Fixed::ONE,
             black_market: snapshot.black_market,
             // §10.6: Serialized since v10 — restore the exact marriage/birth-
@@ -2735,7 +2740,9 @@ impl Simulation {
                         // recharge during Normal weather restores it by tick 3000
                         // — making drought and vanilla baselines identical
                         // (both 38,226 events at 3K).
-                        // Drought shock drains 70% of water.
+                        // Iteration 232: set drought window to suppress
+                        // aquifer recharge for 3000 ticks.
+                        self.drought_until = tick_u64 + 3000;
                     }
                     ShockKind::Famine => {
                         // A famine destroys the grain supply (GRAIN_RESOURCE_ID).
@@ -4426,6 +4433,10 @@ impl Simulation {
                                 planning_confidence: self.agents[i]
                                     .prospection
                                     .planning_confidence,
+                                // Iteration 232: mood drift — valence
+                                // from affect module ([-1,1]) drives
+                                // social/exploration vs withdrawal.
+                                mood_valence: self.agents[i].affect.valence,
                             },
                             ctx.rng,
                         )
@@ -5703,6 +5714,25 @@ impl Simulation {
                     emotions[i].envy =
                         (emotions[i].envy + envy_delta).clamp_01();
 
+                    // ── Iteration 231: Trust from positive social interactions ─
+                    // Trust was permanently 0.000 in calm because the only
+                    // producer was the appraisal system's rare positive-
+                    // interaction events. This ambient producer fires when
+                    // the agent has good relationships (high avg trust),
+                    // creating a "people are reliable" channel.
+                    let agent_avg_trust: Fixed = self.agents[i]
+                        .relationship_v2s
+                        .iter()
+                        .map(|r| r.trust)
+                        .fold(Fixed::ZERO, |acc, t| acc + t)
+                        / Fixed::from_int(self.agents[i].relationship_v2s.len().max(1) as i64);
+                    if agent_avg_trust > Fixed::from_f64(0.3) {
+                        let trust_delta = (agent_avg_trust - Fixed::from_f64(0.3))
+                            * Fixed::from_f64(0.002);
+                        emotions[i].trust =
+                            (emotions[i].trust + trust_delta).clamp_01();
+                    }
+
                     // ── Increased despair rate ─────────────────────────
                     // Iteration 226: the old 0.002 rate was too slow for
                     // calm worlds (sadness ~0.007 → despair ~0.000014/tick).
@@ -6250,16 +6280,19 @@ impl Simulation {
                 // window (3000 ticks). Without this, aquifer recharge
                 // restores water by tick 3000, making drought and vanilla
                 // baselines identical.
-                let recharge_rate = Fixed::from_f64(0.0005);
-                for site in &mut self.world.sites {
-                    let cap = site.storage_capacity;
-                    for stock in &mut site.inventory {
-                        if stock.resource_id == WATER_RESOURCE_ID
-                            && stock.quantity < cap
-                        {
-                            let deficit = cap - stock.quantity;
-                            let recharge = deficit * recharge_rate;
-                            stock.quantity = (stock.quantity + recharge).min(cap);
+                // Iteration 232: suppress recharge during drought window
+                if tick_u64 >= self.drought_until {
+                    let recharge_rate = Fixed::from_f64(0.0005);
+                    for site in &mut self.world.sites {
+                        let cap = site.storage_capacity;
+                        for stock in &mut site.inventory {
+                            if stock.resource_id == WATER_RESOURCE_ID
+                                && stock.quantity < cap
+                            {
+                                let deficit = cap - stock.quantity;
+                                let recharge = deficit * recharge_rate;
+                                stock.quantity = (stock.quantity + recharge).min(cap);
+                            }
                         }
                     }
                 }

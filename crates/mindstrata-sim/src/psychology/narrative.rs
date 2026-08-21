@@ -171,18 +171,16 @@ impl NarrativeIdentity {
         self.contamination_script =
             (self.contamination_script + severity * Fixed::from_f64(0.01)).clamp_01();
 
-        // Victimhood strengthens without support. §8.1.17 (P3-9): the gate was
-        // `social_support < 0.3` — but the no-relationship baseline in the sim
-        // is EXACTLY 0.3, so an isolated agent (the most victimhood-prone) sat
-        // AT the gate and never qualified; victimhood stayed frozen at birth
-        // 0.200 in every window. The gate now includes the baseline
-        // (`<= 0.3`), so genuinely unsupported agents (pestilence orphans with
-        // zero relationships, whose support sits at the 0.3 floor) develop
-        // victimhood while well-supported villagers (support ≈ 1.0) do not.
-        if social_support <= Fixed::from_f64(0.3) {
-            self.victimhood_script =
-                (self.victimhood_script + severity * Fixed::from_f64(0.008)).clamp_01();
-        }
+        // Victimhood strengthens from negative events. §8.1.17 (P3-9):
+        // The old gate (`social_support <= 0.3`) froze victimhood at birth
+        // 0.200 because calm-world agents always had support > 0.3.
+        // Iteration 231: ALL agents develop victimhood from negative events,
+        // but the rate is modulated by support — unsupported agents (0.3)
+        // develop it 3× faster than well-supported agents (1.0).
+        let victimhood_rate = (Fixed::from_f64(0.008)
+            * (Fixed::ONE - social_support * Fixed::from_f64(0.6))).max(Fixed::from_f64(0.002));
+        self.victimhood_script =
+            (self.victimhood_script + severity * victimhood_rate).clamp_01();
 
         // Heroism strengthens when there's support to overcome
         if social_support > Fixed::from_f64(0.4) {
@@ -196,14 +194,15 @@ impl NarrativeIdentity {
         }
 
         // Shame script strengthens from personal failure without external blame.
-        // §8.1.17 (P3-9): the gate was `social_support < 0.2` — stricter than
-        // the no-relationship baseline (0.3), so shame NEVER fired (frozen at
-        // birth 0.100 in every window). Aligned with the victimhood gate
-        // (`<= 0.3`): an isolated agent failing without a blame target feels
-        // shame; the distinction from victimhood is the blame target, not a
-        // second support threshold.
-        if !has_blame_target && social_support <= Fixed::from_f64(0.3) {
-            self.shame_script = (self.shame_script + severity * Fixed::from_f64(0.005)).clamp_01();
+        // §8.1.17 (P3-9): The old gate (`social_support < 0.2`) froze shame
+        // at birth 0.100 because calm-world agents always had support > 0.3.
+        // Iteration 231: ALL agents develop shame from blameless failures,
+        // but the rate is modulated by support — unsupported agents develop
+        // it faster. The distinction from victimhood is the blame target.
+        if !has_blame_target {
+            let shame_rate = (Fixed::from_f64(0.005)
+                * (Fixed::ONE - social_support * Fixed::from_f64(0.5))).max(Fixed::from_f64(0.001));
+            self.shame_script = (self.shame_script + severity * shame_rate).clamp_01();
         }
 
         self.events_integrated += 1;
