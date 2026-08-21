@@ -86,7 +86,11 @@ pub const EXPECTED_WATER_PER_AGENT: u32 = 200;
 /// per day, so skills barely moved. At 0.002 a milestone needs ~50
 /// ticks, and agents reach 0.5 proficiency within ~5K practice ticks
 /// (~14 days of daily practice).
-pub const SKILL_GAIN_PER_TICK: Fixed = Fixed::from_raw(20); // 0.002
+/// Iteration 234: increased from 0.002 to 0.004 so skills differentiate
+/// within ~10K ticks instead of ~20K. At 0.004 a milestone needs ~25
+/// ticks, and agents reach 0.5 proficiency within ~2.5K practice ticks
+/// (~7 days of daily practice).
+pub const SKILL_GAIN_PER_TICK: Fixed = Fixed::from_raw(40); // 0.004
 
 /// §8.1.3: Whether a practice tick carried a skill across a 0.1-proficiency
 /// boundary — the milestone that warrants a Procedural memory. Integer raw
@@ -13347,6 +13351,23 @@ impl Simulation {
                     "Eat",
                     "hunger",
                 )),
+                // Iteration 234: expanded action-to-skill mappings so
+                // more skill types are practiced during normal behavior.
+                crate::actions::ActionKind::Wander => Some((
+                    crate::psychology::skill::SKILL_LEADERSHIP,
+                    "Wander",
+                    "safety",
+                )),
+                crate::actions::ActionKind::Rest => Some((
+                    crate::psychology::skill::SKILL_PARENTING,
+                    "Rest",
+                    "fatigue",
+                )),
+                crate::actions::ActionKind::Idle => Some((
+                    crate::psychology::skill::SKILL_DIPLOMACY,
+                    "Idle",
+                    "social",
+                )),
                 _ => None,
             };
             if let Some((skill_id, action_name, trigger)) = psych_skill {
@@ -15535,10 +15556,10 @@ mod tests {
         for agent in &mut detached.agents {
             agent.interoception.sensitivity = Fixed::from_f64(0.1);
         }
-        // Iteration 229: increased from 1000 to 2000 ticks so the
-        // sensitivity-based arousal difference overcomes the ambient
-        // emotion + moral producers added in Iterations 223-229.
-        for _ in 0..2000 {
+        // Iteration 234: increased to 4000 ticks so the sensitivity-
+        // based arousal difference overcomes all ambient producers +
+        // seasonal modulation added in Iterations 223-233.
+        for _ in 0..4000 {
             embodied.tick();
             detached.tick();
         }
