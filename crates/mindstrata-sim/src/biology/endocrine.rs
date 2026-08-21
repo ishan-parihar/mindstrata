@@ -131,14 +131,31 @@ impl StressAxis {
             );
         }
         self.level = (self.level + acute_delta + chronic_delta - recovery).clamp_01();
-        // Chronic load accumulates slowly from high acute stress, saturating
-        // (logistic) so it can never exceed 1.0 or ratchet linearly.
+        // Chronic load accumulates slowly from sustained acute stress,
+        // saturating (logistic) so it can never exceed 1.0 or ratchet
+        // linearly.
+        //
+        // Iteration 223: added a minimum accumulation floor at moderate
+        // stress (0.4). Before: only stress > 0.6 accumulated chronic
+        // load, but calm agents never reach 0.6, so chronic stress was
+        // permanently dead — the depression pathway never activated.
+        // Now: stress 0.4-0.6 accumulates at 1/4 rate (slow drift),
+        // stress > 0.6 at full rate (fast accumulation). This matches
+        // real psychoneuroimmunology: sustained moderate stress (e.g.,
+        // financial worry, social conflict) does cause chronic health
+        // degradation, just more slowly than acute crisis.
         if self.level > Fixed::from_f64(0.6) {
             self.chronic_load = (self.chronic_load
                 + chronic_rate * (Fixed::ONE - self.chronic_load))
                 .clamp_01();
+        } else if self.level > Fixed::from_f64(0.4) {
+            // Moderate stress: slow chronic accumulation (1/4 rate).
+            let slow_rate = chronic_rate * Fixed::from_f64(0.25);
+            self.chronic_load = (self.chronic_load
+                + slow_rate * (Fixed::ONE - self.chronic_load))
+                .clamp_01();
         } else {
-            // Chronic load recovers very slowly, proportionally.
+            // Low stress: chronic load recovers very slowly, proportionally.
             self.chronic_load =
                 (self.chronic_load - chronic_recovery * self.chronic_load).max(Fixed::ZERO);
         }

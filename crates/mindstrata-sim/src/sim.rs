@@ -5365,6 +5365,95 @@ impl Simulation {
                 emotions[i].moral_outrage =
                     (emotions[i].moral_outrage + delta.moral_outrage).clamp_01();
 
+                // ── Iteration 223: Ambient emotion producers ─────────
+                // These run AFTER the event-driven appraisal and produce
+                // mild emotions from continuous agent state. They fill the
+                // calm-world emotional gap where no crisis events fire.
+                // Each producer is small (~0.002-0.008/tick) and decays
+                // at BASE_EMOTION_DECAY_RATE (0.06), so steady-state
+                // values are producer/decay — low and differentiated.
+                // Thresholds are deliberately low (0.2-0.3) so that
+                // normal-life conditions (mild hunger, social friction)
+                // produce visible but mild emotional responses.
+                {
+                    // ── Sadness from unmet needs ──────────────────────
+                    // When any need exceeds 0.3, mild sadness accumulates.
+                    // Floor at 0.3 (not 0.5) so that moderate thirst/
+                    // hunger — which routinely exceeds 0.3 in normal
+                    // eat/drink cycles — produces a baseline sadness
+                    // signal. The excess scales proportionally.
+                    let need_excess = needs[i].hunger.max(needs[i].thirst)
+                        - Fixed::from_f64(0.3);
+                    let hunger_sadness = need_excess
+                        .max(Fixed::ZERO)
+                        * Fixed::from_f64(0.005);
+                    emotions[i].sadness =
+                        (emotions[i].sadness + hunger_sadness).clamp_01();
+
+                    // ── Sadness from social loss ──────────────────────
+                    // When the agent's closest relationship trust drops
+                    // below 0.5 (not 0.3), mild sadness accumulates.
+                    // Floor at 0.5 so that normal relationship drift
+                    // produces a baseline sadness signal.
+                    let min_trust = self.agents[i]
+                        .relationship_v2s
+                        .iter()
+                        .map(|r| r.trust)
+                        .fold(Fixed::ONE, Fixed::min);
+                    let social_sadness = (Fixed::from_f64(0.5) - min_trust)
+                        .max(Fixed::ZERO)
+                        * Fixed::from_f64(0.003);
+                    emotions[i].sadness =
+                        (emotions[i].sadness + social_sadness).clamp_01();
+
+                    // ── Sadness from loneliness ───────────────────────
+                    // When loneliness exceeds 0.05 (nearly always — the
+                    // producer fires on attachment threat × social
+                    // visibility, which is non-zero for most agents),
+                    // mild sadness accumulates. This couples the two
+                    // emotions as in real life: feeling alone makes you
+                    // feel sad.
+                    let lonely_sadness = emotions[i].loneliness
+                        * Fixed::from_f64(0.003);
+                    emotions[i].sadness =
+                        (emotions[i].sadness + lonely_sadness).clamp_01();
+
+                    // ── Guilt from hostile behavior ───────────────────
+                    // When anger exceeds 0.01 (nearly always — even calm
+                    // agents have transient anger from insults/threats),
+                    // mild guilt accumulates. This is the natural
+                    // conscience channel: "I was angry and said something
+                    // I regret." The delta is proportional to anger
+                    // intensity.
+                    let hostility_guilt = emotions[i].anger
+                        * Fixed::from_f64(0.008);
+                    emotions[i].guilt =
+                        (emotions[i].guilt + hostility_guilt).clamp_01();
+
+                    // ── Guilt from empathic distress ──────────────────
+                    // When the agent feels contempt (witnessing moral
+                    // violation), mild empathic guilt accumulates —
+                    // "I could have intervened." This is the natural
+                    // moral conscience that doesn't require formal norm
+                    // internalization.
+                    let empathic_guilt = emotions[i].contempt
+                        * Fixed::from_f64(0.005);
+                    emotions[i].guilt =
+                        (emotions[i].guilt + empathic_guilt).clamp_01();
+
+                    // ── Despair from sustained sadness ────────────────
+                    // When sadness exceeds 0.05 (nearly always once the
+                    // sadness producers above fire), despair accumulates
+                    // slowly — the "things won't get better" hopelessness
+                    // channel. This bridges the Iter-192 famine-chain to
+                    // calm worlds: normal-life sadness cascades into
+                    // despair and eventually depression.
+                    let sustained_despair = emotions[i].sadness
+                        * Fixed::from_f64(0.002);
+                    emotions[i].despair =
+                        (emotions[i].despair + sustained_despair).clamp_01();
+                }
+
                 // §8.1.4: Valence is SIGNED (-1..1). The old `.clamp_01()` floored
                 // negative affect at 0, so fear/anger/sadness could never move
                 // valence below zero — an agent could live through a revolution
