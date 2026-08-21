@@ -50,7 +50,7 @@ fn main() {
             hero += a.narrative.heroism_script.to_f64();
             chos += a.narrative.chosenness_script.to_f64();
             shame += a.narrative.shame_script.to_f64();
-            factors.push(a.narrative.stress_resilience_factor(rate).to_f64());
+            factors.push(a.narrative.stress_resilience_factor(rate, a.embodied.endocrine.stress.chronic_load).to_f64());
         }
         let f_mean: f64 = factors.iter().sum::<f64>() / n;
         let f_min = factors.iter().copied().fold(f64::INFINITY, f64::min);
@@ -69,7 +69,7 @@ fn main() {
     let mut off_focal = 0;
     let mut focal_factors: Vec<f64> = Vec::new();
     for a in &sim.agents {
-        let f = a.narrative.stress_resilience_factor(rate);
+        let f = a.narrative.stress_resilience_factor(rate, a.embodied.endocrine.stress.chronic_load);
         if a.agent_tier.tier == AgentTier::Focal {
             if f != Fixed::ONE {
                 off_focal += 1;

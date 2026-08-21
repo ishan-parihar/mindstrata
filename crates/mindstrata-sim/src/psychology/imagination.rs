@@ -366,8 +366,13 @@ impl ProspectionState {
             - depression * Fixed::from_f64(0.2))
         .clamp_01();
 
-        // Depression reduces hope
-        self.hope = (self.hope - depression * Fixed::from_f64(0.01)).max(Fixed::ZERO);
+        // Iteration 229: hope has a producer (optimism_bias) and a
+        // drain (depression). Without the producer, hope was permanently
+        // 0.000 because only decay existed. Optimistic agents in calm
+        // worlds slowly rebuild hope; depressed agents lose it faster.
+        let hope_gain = self.optimism_bias * Fixed::from_f64(0.002);
+        let hope_loss = depression * Fixed::from_f64(0.008);
+        self.hope = (self.hope + hope_gain - hope_loss).clamp_01();
 
         // Planning confidence affected by cognitive state
         self.planning_confidence = (Fixed::from_f64(0.5) - fear * Fixed::from_f64(0.2)

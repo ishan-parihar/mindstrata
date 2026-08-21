@@ -273,11 +273,19 @@ impl NarrativeIdentity {
     /// Non-focal agents never run the narrative block, so their scripts stay
     /// at the birth envelope → factor ≈1.0 → near-zero blast below the
     /// focal tier.
-    pub fn stress_resilience_factor(&self, rate: Fixed) -> Fixed {
+    /// Iteration 229: added `chronic_stress` parameter. Chronic stress
+    /// modulates the factor downward (<1.0) when sustained — the "I'm
+    /// worn down" channel. Without this, the factor was permanently
+    /// saturated near 1.0 in calm because the birth envelope balanced
+    /// positive and negative scripts equally.
+    pub fn stress_resilience_factor(&self, rate: Fixed, chronic_stress: Fixed) -> Fixed {
         let positive = self.redemption_script + self.heroism_script + self.coherence;
         let negative = self.contamination_script + self.victimhood_script + self.shame_script;
         let delta = (positive - negative - BIRTH_BALANCE).clamp(-Fixed::ONE, Fixed::ONE);
-        (Fixed::ONE - delta * rate)
+        // Chronic stress pulls the factor below 1.0 — sustained stress
+        // erodes narrative resilience even when the story is balanced.
+        let stress_pull = chronic_stress * Fixed::from_f64(0.05);
+        (Fixed::ONE - delta * rate - stress_pull)
             .clamp(Fixed::from_f64(0.8), Fixed::from_f64(1.2))
     }
 
@@ -481,7 +489,7 @@ mod tests {
     fn stress_resilience_factor_is_one_at_birth_envelope() {
         // Identity-at-birth: a default-envelope agent is untouched.
         let n = NarrativeIdentity::default();
-        assert_eq!(n.stress_resilience_factor(Fixed::from_f64(0.15)), Fixed::ONE);
+        assert_eq!(n.stress_resilience_factor(Fixed::from_f64(0.15), Fixed::ZERO), Fixed::ONE);
     }
 
     #[test]
@@ -495,7 +503,7 @@ mod tests {
             coherence: Fixed::from_f64(0.9),
             ..Default::default()
         };
-        let factor = n.stress_resilience_factor(Fixed::from_f64(0.15));
+        let factor = n.stress_resilience_factor(Fixed::from_f64(0.15), Fixed::ZERO);
         let drift = (factor - Fixed::ONE).abs();
         assert!(
             drift <= Fixed::from_f64(0.05),
@@ -520,7 +528,7 @@ mod tests {
         for _ in 0..1000 {
             n.decay_scripts(Fixed::from_f64(0.005));
         }
-        let factor = n.stress_resilience_factor(Fixed::from_f64(0.15));
+        let factor = n.stress_resilience_factor(Fixed::from_f64(0.15), Fixed::ZERO);
         let drift = (factor - Fixed::ONE).abs();
         assert!(
             drift < Fixed::from_f64(0.1),
@@ -539,7 +547,7 @@ mod tests {
             shame_script: Fixed::from_f64(0.1),
             ..Default::default()
         };
-        let factor = n.stress_resilience_factor(Fixed::from_f64(0.15));
+        let factor = n.stress_resilience_factor(Fixed::from_f64(0.15), Fixed::ZERO);
         assert!(factor < Fixed::ONE, "redemptive story must buffer stress");
         assert!(factor >= Fixed::from_f64(0.8));
     }
@@ -555,7 +563,7 @@ mod tests {
             shame_script: Fixed::from_f64(0.9),
             ..Default::default()
         };
-        let factor = n.stress_resilience_factor(Fixed::from_f64(0.15));
+        let factor = n.stress_resilience_factor(Fixed::from_f64(0.15), Fixed::ZERO);
         assert!(factor > Fixed::ONE, "contaminated story must amplify stress");
         assert!(factor <= Fixed::from_f64(1.2));
     }

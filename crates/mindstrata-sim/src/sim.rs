@@ -3169,7 +3169,10 @@ impl Simulation {
                         kin_rate,
                         kin_cap,
                     )
-                    * self.agents[i].narrative.stress_resilience_factor(narr_rate);
+                    * self.agents[i].narrative.stress_resilience_factor(
+                        narr_rate,
+                        self.agents[i].embodied.endocrine.stress.chronic_load,
+                    );
                 let need_fatigue = needs[i].fatigue.max(needs[i].hunger).max(needs[i].thirst);
                 self.agents[i].cognitive.update(stress, need_fatigue);
 
@@ -5716,6 +5719,42 @@ impl Simulation {
                         * Fixed::from_f64(0.001);
                     emotions[i].despair =
                         (emotions[i].despair + chronic_despair).clamp_01();
+
+                    // ── Iteration 229: Moral emotion ambient producers ─
+                    // moral.shame and moral.pride were permanently 0.000
+                    // because update_moral_emotions() was gated on base
+                    // emotions (guilt/shame/pride) that were themselves
+                    // near-zero in calm. These ambient producers bypass
+                    // that chicken-and-egg problem by feeding moral
+                    // cognition directly from social dynamics.
+                    let moral_id = self.agents[i].moral_cognition.moral_identity;
+                    // Moral shame: social comparison below average →
+                    // "I failed morally by being worse than others."
+                    let moral_shame_delta = (avg_status - my_status)
+                        .max(Fixed::ZERO)
+                        * moral_id
+                        * Fixed::from_f64(0.001);
+                    self.agents[i].moral_cognition.moral_emotions.shame = (
+                        self.agents[i].moral_cognition.moral_emotions.shame
+                            + moral_shame_delta
+                    ).clamp_01();
+                    // Moral pride: high status + good relationships →
+                    // "I earned this through moral behavior."
+                    let avg_trust: Fixed = self.agents[i]
+                        .relationship_v2s
+                        .iter()
+                        .map(|r| r.trust)
+                        .fold(Fixed::ZERO, |acc, t| acc + t)
+                        / Fixed::from_int(self.agents[i].relationship_v2s.len().max(1) as i64);
+                    let moral_pride_delta = (my_status - avg_status)
+                        .max(Fixed::ZERO)
+                        * avg_trust
+                        * moral_id
+                        * Fixed::from_f64(0.001);
+                    self.agents[i].moral_cognition.moral_emotions.pride = (
+                        self.agents[i].moral_cognition.moral_emotions.pride
+                            + moral_pride_delta
+                    ).clamp_01();
                 }
 
                 // §8.1.4: Valence is SIGNED (-1..1). The old `.clamp_01()` floored
@@ -15461,10 +15500,10 @@ mod tests {
         for agent in &mut detached.agents {
             agent.interoception.sensitivity = Fixed::from_f64(0.1);
         }
-        // Iteration 227: increased from 500 to 1000 ticks so the
+        // Iteration 229: increased from 1000 to 2000 ticks so the
         // sensitivity-based arousal difference overcomes the ambient
-        // emotion producers added in Iterations 223-226.
-        for _ in 0..1000 {
+        // emotion + moral producers added in Iterations 223-229.
+        for _ in 0..2000 {
             embodied.tick();
             detached.tick();
         }

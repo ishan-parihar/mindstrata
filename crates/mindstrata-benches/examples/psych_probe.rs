@@ -47,7 +47,10 @@ fn field(a: &AgentBundle, key: &str) -> Fixed {
         "narr.shame" => a.narrative.shame_script,
         "narr.coherence" => a.narrative.coherence,
         "narr.resilience_factor" => {
-            a.narrative.stress_resilience_factor(Fixed::from_f64(0.15))
+            a.narrative.stress_resilience_factor(
+                Fixed::from_f64(0.15),
+                a.embodied.endocrine.stress.chronic_load,
+            )
         }
         // Prospection
         "prosp.hope" => a.prospection.hope,
