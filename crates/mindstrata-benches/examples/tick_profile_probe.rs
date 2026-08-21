@@ -100,8 +100,6 @@ fn profile_scenario(name: &str, seed: u64, ticks: u64) {
     //   3. Kinship BFS: O(N²) per agent daily → O(N³) daily
     //   4. Power balance: O(N²) daily
     //   5. Relationship decay: O(R) per agent → O(N×R)
-    let est_n2_ops_per_tick = n * n_relationships;
-    let est_n3_ops_per_day = n * n * n; // kinship BFS
     eprintln!("  complexity estimates:");
     eprintln!("    trust_sync per tick:     O(N×R) = {} ops", n * n_relationships);
     eprintln!("    social_support per tick: O(N×R) = {} ops", n * n_relationships);

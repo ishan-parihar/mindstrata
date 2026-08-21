@@ -105,10 +105,15 @@ pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
         name: "Village Well".into(),
         owner: None,
         capacity: 20,
-        storage_capacity: Fixed::from_f64(1000.0),
+        // Iteration 228: well capacity raised from 1000→2000 and initial
+        // stock from 200→2000 so the Drought shock's 70% proportional drain
+        // leaves 600 water — enough to create ~500 ticks of additional
+        // scarcity beyond normal consumption. Previously, agent consumption
+        // drained the 200-stock well faster than the shock could matter.
+        storage_capacity: Fixed::from_f64(2000.0),
         inventory: vec![ResourceStock {
             resource_id: 1, // WATER_RESOURCE_ID
-            quantity: Fixed::from_f64(200.0),
+            quantity: Fixed::from_f64(2000.0),
             quality: Fixed::from_f64(1.0),
             access: AccessRight::Public,
         }],

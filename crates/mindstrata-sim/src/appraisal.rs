@@ -425,7 +425,15 @@ pub fn appraise(
 
             match appraisal.agency {
                 Agency::Self_ => {
-                    delta.guilt = intensity * appraisal.fairness.abs();
+                    // Iteration 228: guilt only fires above a minimum
+                    // intensity threshold. In calm worlds, mild self-caused
+                    // interactions (insults, threats) accumulate guilt faster
+                    // than the 0.06 decay can remove it (observed calm mean
+                    // 0.233). The threshold gates trivial events so guilt
+                    // only accumulates from meaningful moral violations.
+                    if intensity > Fixed::from_f64(0.1) {
+                        delta.guilt = intensity * appraisal.fairness.abs();
+                    }
                     delta.shame = intensity * appraisal.identity_relevance;
                 }
                 Agency::Other(_) => {

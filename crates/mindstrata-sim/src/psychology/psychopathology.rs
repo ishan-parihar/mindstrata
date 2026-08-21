@@ -418,9 +418,10 @@ mod tests {
     fn cognitive_modifier_is_graduated_not_binary() {
         // The modifier must be smooth: a partially impaired agent (health
         // = 0.7) gets a partial reduction, not the full 0.5× cliff.
-        let mut p = PsychopathologyState::default();
-        // Manually set health to a mid-range value
-        p.overall_health = Fixed::from_f64(0.7);
+        let p = PsychopathologyState {
+            overall_health: Fixed::from_f64(0.7),
+            ..Default::default()
+        };
         assert_eq!(p.cognitive_modifier(), Fixed::from_f64(0.7));
         // The modifier should be between 0.5 and 1.0 (graduated, not binary)
         assert!(p.cognitive_modifier() > Fixed::from_f64(0.5));

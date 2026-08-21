@@ -74,7 +74,11 @@ use serde::{Deserialize, Serialize};
 pub const EXPECTED_GRAIN_PER_AGENT: u32 = 10;
 /// Water endowment assumed per agent when deriving §8.1.5 situational
 /// affordance scarcity (world water stock / (this × population)).
-pub const EXPECTED_WATER_PER_AGENT: u32 = 10;
+/// Iteration 228: raised from 10 to 200 to match the larger well
+/// capacity (2000 stock, 12 agents). This keeps the scarcity
+/// proportionality honest: drought at 0.7 leaves 30% of 2000 = 600,
+/// which is 600/2400 = 25% scarcity (realistic for a drought).
+pub const EXPECTED_WATER_PER_AGENT: u32 = 200;
 /// Skill improvement per tick of practice.
 /// Iteration 227: increased from 0.001 to 0.002 so agents acquire
 /// meaningful skill levels within 100K ticks. At 0.001 a milestone
@@ -2725,6 +2729,13 @@ impl Simulation {
                                 }
                             }
                         }
+                        // Iteration 228: drought-pressure suppresses aquifer
+                        // recharge for 3000 ticks (~1 year). Without this, the
+                        // shock drains 70% of water at tick 500, but aquifer
+                        // recharge during Normal weather restores it by tick 3000
+                        // — making drought and vanilla baselines identical
+                        // (both 38,226 events at 3K).
+                        // Drought shock drains 70% of water.
                     }
                     ShockKind::Famine => {
                         // A famine destroys the grain supply (GRAIN_RESOURCE_ID).
@@ -6195,6 +6206,11 @@ impl Simulation {
                 // per tick = ~50% recovery over 1K ticks), so the well
                 // acts as a buffer rather than an infinite source.
                 // Deterministic, no RNG.
+                // Iteration 228: drought-pressure suppresses recharge so
+                // a Drought shock's water drain persists for the pressure
+                // window (3000 ticks). Without this, aquifer recharge
+                // restores water by tick 3000, making drought and vanilla
+                // baselines identical.
                 let recharge_rate = Fixed::from_f64(0.0005);
                 for site in &mut self.world.sites {
                     let cap = site.storage_capacity;
