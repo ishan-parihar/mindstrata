@@ -96,6 +96,11 @@ pub struct DecisionContext<'a> {
     pub dominant_need: MotiveCategory,
     /// Pressure of the dominant need (full formula) — scales the urgency boost.
     pub dominant_pressure: Fixed,
+    // ── §8.1 (Iteration 248): sleep-debt social withdrawal ──────────
+    /// How much circadian sleep debt suppresses social participation.
+    /// Zero below the `sleep_deprived()` threshold (0.5), scaling above —
+    /// an exhausted agent declines gatherings before it neglects work.
+    pub social_withdrawal: Fixed,
     // ── §8.1 (Iteration 247): interoceptive somatic marker ──────────
     /// How much worse than a default interoceptor the agent feels right
     /// now (fatigue + pain amplification). Biases risky actions down —
@@ -790,6 +795,13 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
             utility -= ctx.somatic_marker * Fixed::from_f64(0.1);
         }
 
+        // Iteration 248 (Arc B): sleep-debt withdrawal — social actions
+        // lose utility as unpaid sleep accumulates. Zero below the
+        // deprivation threshold, so rested agents are byte-identical.
+        if is_social && ctx.social_withdrawal > Fixed::ZERO {
+            utility -= ctx.social_withdrawal * Fixed::from_f64(0.08);
+        }
+
         // Iteration 232: mood drift — positive mood boosts social/
         // exploration actions; negative mood boosts withdrawal/work.
         // Sized at ±0.03 (comparable to dread/hope nudge) so it's a
@@ -926,6 +938,7 @@ mod tests {
                 joy: Fixed::ZERO,
                 sadness: Fixed::ZERO,
                 stress: Fixed::ZERO,
+                social_withdrawal: Fixed::ZERO,
                 fairness: Fixed::ZERO,
                 authority: Fixed::ZERO,
                 care: Fixed::ZERO,
@@ -981,6 +994,7 @@ mod tests {
                 joy: Fixed::ZERO,
                 sadness: Fixed::ZERO,
                 stress: Fixed::ZERO,
+                social_withdrawal: Fixed::ZERO,
                 fairness: Fixed::ZERO,
                 authority: Fixed::ZERO,
                 care: Fixed::ZERO,
@@ -1033,6 +1047,7 @@ mod tests {
                 joy: Fixed::ZERO,
                 sadness: Fixed::ZERO,
                 stress: Fixed::ZERO,
+                social_withdrawal: Fixed::ZERO,
                 fairness: Fixed::ZERO,
                 authority: Fixed::ZERO,
                 care: Fixed::ZERO,
@@ -1142,6 +1157,7 @@ mod tests {
                 joy: Fixed::ZERO,
                 sadness: Fixed::ZERO,
                 stress: Fixed::ZERO,
+                social_withdrawal: Fixed::ZERO,
                 fairness: Fixed::ZERO,
                 authority: Fixed::ZERO,
                 care: Fixed::ZERO,
@@ -1193,6 +1209,7 @@ mod tests {
                 joy: Fixed::ZERO,
                 sadness: Fixed::ZERO,
                 stress: Fixed::ZERO,
+                social_withdrawal: Fixed::ZERO,
                 fairness: Fixed::ZERO,
                 authority: Fixed::ZERO,
                 care: Fixed::ZERO,
@@ -1950,6 +1967,7 @@ mod tests {
                         joy: Fixed::ZERO,
                         sadness: Fixed::ZERO,
                         stress: Fixed::ZERO,
+                        social_withdrawal: Fixed::ZERO,
                         fairness: Fixed::ZERO,
                         authority: Fixed::ZERO,
                         care: Fixed::ZERO,

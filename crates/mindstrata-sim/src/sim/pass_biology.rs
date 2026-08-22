@@ -17,6 +17,23 @@ impl Simulation {
         // Tick the rich biological substrate before cognitive processing.
         // Uses previous tick's emotions — biology reacts to current felt state.
         // EmbodiedState feeds endocrine/nervous signals into the legacy BodyState.
+
+        // Iteration 248 (Arc B — Whitehall gradient, G3): the village-mean
+        // effective status anchors the hierarchy→biology loop. Computed
+        // once per pass (deterministic, RNG-free); agents below the mean
+        // accumulate chronic stress faster, agents above recover faster —
+        // applied after `EmbodiedState::tick_update` so it composes with
+        // (not replaces) the graded endocrine dynamics from Iter-189/223.
+        let mean_status_f = if agents.is_empty() {
+            0.5
+        } else {
+            agents
+                .iter()
+                .map(|a| a.status_v2.effective_status().to_f64())
+                .sum::<f64>()
+                / agents.len() as f64
+        };
+
         for i in 0..agents.len() {
             let threat_level = emotions[i].fear + emotions[i].anger;
             let social_safety = Fixed::ONE - threat_level;
@@ -125,6 +142,25 @@ impl Simulation {
                 damp_housing,
                 params,
             );
+            // Iteration 248 (Arc B — Whitehall gradient): hierarchy
+            // position feeds chronic-stress load — the plan's
+            // "status → chronic stress → health" loop (G3). Sub-mean
+            // status accelerates chronic accumulation; above-mean status
+            // earns a slower recovery bonus. Computed in f64 and
+            // quantized ONCE per direction (Fixed-4 truncation disease:
+            // the raw products sit at ~1e-5/tick). An agent AT the
+            // village mean gets exactly zero — midpoint neutrality.
+            let status_gap_f = mean_status_f - agents[i].status_v2.effective_status().to_f64();
+            let load = agents[i].embodied.endocrine.stress.chronic_load.to_f64();
+            if status_gap_f > 0.0 {
+                let add = 0.002 * status_gap_f * (1.0 - load);
+                agents[i].embodied.endocrine.stress.chronic_load =
+                    mindstrata_core::fixed::Fixed::from_f64((load + add).min(1.0));
+            } else if status_gap_f < 0.0 {
+                let relief = 0.001 * (-status_gap_f) * load;
+                agents[i].embodied.endocrine.stress.chronic_load =
+                    mindstrata_core::fixed::Fixed::from_f64((load - relief).max(0.0));
+            }
             // Sync derived body fields from EmbodiedState back to legacy BodyState.
             // Compute values first to avoid borrow conflicts between embodied and body.
             // Boundary: hunger/thirst/sickness/injury are managed by health.rs and

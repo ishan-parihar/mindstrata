@@ -255,6 +255,18 @@ impl Simulation {
                             season: season.current as u8,
                             // Iteration 236: age-related behavioral modulation
                             life_stage: agents[i].embodied.development.life_stage as u8,
+                            // Iteration 248 (Arc B): sleep-debt social
+                            // withdrawal — zero below the deprivation
+                            // threshold (0.5), scaling above; rested
+                            // agents are byte-identical.
+                            social_withdrawal: {
+                                let debt = agents[i].embodied.circadian.sleep_debt;
+                                if debt > Fixed::from_f64(0.5) {
+                                    debt - Fixed::from_f64(0.5)
+                                } else {
+                                    Fixed::ZERO
+                                }
+                            },
                             // Iteration 247 (Arc B — interoception): the
                             // somatic marker — how much worse than a
                             // default interoceptor the agent feels (fatigue

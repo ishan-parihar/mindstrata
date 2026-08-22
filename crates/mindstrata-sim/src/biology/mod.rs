@@ -227,12 +227,19 @@ impl EmbodiedState {
         let immune_modifier = Fixed::from_f64(0.7)
             + self.genome.health_predispositions.immune_strength * Fixed::from_f64(0.3);
         let stress_penalty = self.endocrine.stress.level * Fixed::from_f64(0.2);
+        // Iteration 248 (Arc B — Whitehall downstream): sustained chronic
+        // load erodes the restoration ceiling itself — the allostatic
+        // cost of prolonged hierarchy stress. At load 1.0 the penalty
+        // (0.15) is comparable to full acute-stress; at the calm-world
+        // loads (~0.0-0.2) it is a gentle tilt, not a regime change.
+        let chronic_penalty = self.endocrine.stress.chronic_load * Fixed::from_f64(0.15);
         let pain_penalty = self.nervous.pain.effective_pain() * Fixed::from_f64(0.1);
         let sickness_penalty = self.immune.sickness_level() * Fixed::from_f64(0.15);
         let shock_penalty = self.cardiovascular.shock_risk * Fixed::from_f64(0.1);
         let skeletal_factor = self.skeletal.health_factor();
         ((base * immune_modifier
             - stress_penalty
+            - chronic_penalty
             - pain_penalty
             - sickness_penalty
             - shock_penalty)
