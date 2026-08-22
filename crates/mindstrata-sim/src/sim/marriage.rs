@@ -111,11 +111,32 @@ impl Simulation {
                     } else {
                         Fixed::ONE
                     };
+                    // Iteration 249 (Arc C — G4): partner choice conditions
+                    // on MODELED reliability, not just proximity/wealth
+                    // terms — an agent who models the candidate as Friendly
+                    // commits more readily (x1.25), one who models them as
+                    // Threatening/Deceptive balks (x0.75), matching the
+                    // Iter-198 consumer convention. No model -> exactly x1.0,
+                    // so unmodeled pairs are byte-identical.
+                    let tom_factor = self.agents[i]
+                        .mind_models
+                        .get(mindstrata_core::id::AgentId::new(j as u64))
+                        .map_or(Fixed::ONE, |m| match m.perceived_intent {
+                            crate::psychology::theory_of_mind::IntentPerception::Friendly => {
+                                Fixed::from_f64(1.25)
+                            }
+                            crate::psychology::theory_of_mind::IntentPerception::Threatening
+                            | crate::psychology::theory_of_mind::IntentPerception::Deceptive => {
+                                Fixed::from_f64(0.75)
+                            }
+                            _ => Fixed::ONE,
+                        });
                     let marriage_chance = attraction_score
                         * health
                         * trust
                         * self.params.marriage_formation_rate
-                        * clan_factor;
+                        * clan_factor
+                        * tom_factor;
                     let rng_val =
                         Fixed::from_f64(self.rng.get_mut(RngStream::Social).random::<f64>());
                     if rng_val < marriage_chance {

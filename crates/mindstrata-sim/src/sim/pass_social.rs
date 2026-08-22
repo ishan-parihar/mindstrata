@@ -326,6 +326,7 @@ impl Simulation {
                         credibility,
                         tick_u64,
                     );
+                    let act_intent = act.relational_intent;
                     let effect = act.resolve_effect();
                     let log = &mut agents[fi].speech_log;
                     log.push(act);
@@ -435,14 +436,79 @@ impl Simulation {
                         } else {
                             rv2.record_positive(tick_u64, magnitude_ti);
                         }
+                        // Iteration 249: listener→speaker trust snapshot for
+                        // the ToM intent inference below (hoisted ahead of the
+                        // `rv2s` borrow to keep disjoint agents borrowable).
+                        let trust_ti = agents[ti].relationship_v2s[l_pos].trust;
                         let s_pos = Self::relationship_v2_pos(fi, ti);
                         let rv2s = &mut agents[fi].relationship_v2s[s_pos];
                         rv2s.respect = (rv2s.respect + effect.status_delta).clamp_01();
+                        // Iteration 249 (Arc C — G4): the LISTENER'S
+                        // theory-of-mind model of the speaker now updates
+                        // from the act's relational intent — speech carries
+                        // content about the speaker's mind, not just
+                        // relational deltas. Affiliate/Repair read
+                        // helpful-warm; Dominate/Distance harmful;
+                        // Solicit/neutral kinds neither.
+                        //
+                        // DECEPTION DETECTION: affiliating talk over a
+                        // Threatening/Deceptive prior contradicts history —
+                        // the listener marks the speaker Deceptive and
+                        // erodes V2 trust (words don't match deeds). The
+                        // existing Iter-198 consumer then discounts that
+                        // speaker's future bond extensions (×0.75), closing
+                        // the loop: deceive once, be believed less.
+                        let mut deception_penalty = Fixed::ZERO;
+                        {
+                            use crate::psychology::theory_of_mind::IntentPerception as IP;
+                            let (helpful, harmful) = match act_intent {
+                                crate::social::speech_act::RelationalIntent::Affiliate
+                                | crate::social::speech_act::RelationalIntent::Repair => {
+                                    (Fixed::from_f64(0.6), Fixed::ZERO)
+                                }
+                                crate::social::speech_act::RelationalIntent::Dominate
+                                | crate::social::speech_act::RelationalIntent::Distance => {
+                                    (Fixed::ZERO, Fixed::from_f64(0.6))
+                                }
+                                _ => (Fixed::ZERO, Fixed::ZERO),
+                            };
+                            if helpful > Fixed::ZERO || harmful > Fixed::ZERO {
+                                let model = agents[ti]
+                                    .mind_models
+                                    .get_or_create(mindstrata_core::id::AgentId::new(from_u));
+                                let prior_hostile = matches!(
+                                    model.perceived_intent,
+                                    IP::Threatening | IP::Deceptive
+                                );
+                                if helpful > Fixed::ZERO && prior_hostile {
+                                    // Words contradict deeds → deception.
+                                    model.perceived_intent = IP::Deceptive;
+                                    model.model_trust =
+                                        (model.model_trust - Fixed::from_f64(0.1)).max(Fixed::ZERO);
+                                    deception_penalty = Fixed::from_f64(0.3);
+                                } else {
+                                    model.update_from_observation(
+                                        helpful,
+                                        harmful,
+                                        Fixed::ZERO,
+                                        Fixed::ONE,
+                                    );
+                                    model.infer_intent(trust_ti, helpful, harmful);
+                                }
+                            }
+                        }
                         let magnitude_fi = (magnitude * fi_social * fi_tom).clamp_01();
                         if kind_is_hostile {
                             rv2s.record_negative(tick_u64, magnitude_fi);
                         } else {
                             rv2s.record_positive(tick_u64, magnitude_fi);
+                        }
+                        // Iteration 249: deception erosion — applied after the
+                        // speaker-side borrow releases (disjoint agents, but
+                        // the borrow checker sees the shared slice).
+                        if deception_penalty > Fixed::ZERO {
+                            agents[ti].relationship_v2s[l_pos]
+                                .record_negative(tick_u64, deception_penalty);
                         }
                     }
                 }
