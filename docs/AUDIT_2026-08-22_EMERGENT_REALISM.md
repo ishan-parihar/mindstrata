@@ -113,21 +113,17 @@ Farming pins at 1.00 population-wide while Trading sits at 0.00 — skill curves
 
 ## 4. Remaining red suite (post-fix state, root-caused)
 
-**Iteration 240 tally: 290 passed / 14 failed** (was 287/17 after Iter-239).
-Healed this iteration: `factions_emerge_from_grievance`, `faction_v2_fighting_strength_links_to_protests`,
-`faction_attachment_styles_scale_upward_and_dynamics_run`, `faction_counts_vary_across_worlds`
-(crisis-pressure accumulator + recruitment wiring + entrenchment window; see git log).
-Newly exposed (downstream re-pacing casualties of restored faction liveness):
-`collective_fear_amplifies_panic_legitimacy_damage_end_to_end`, `taboo_shame_amplification_is_live_and_one_sided`,
-`reproduction_conception_multiplier_parameter_is_live`.
+**Tally progression:** Iter-239: 287/17 → Iter-240 (faction lifecycle): 290/14 →
+Iter-241 (belief charging): 293/11 → **Iter-242 (pairing pipeline + health sync): 298/6.**
 
-All are consequences of the knife-edge architecture (§E4/E5) plus assertion staleness; each needs a root-first fix, not another lucky-seed re-pin.
+Healed along the way: the four faction tests, moral-panic cluster (3), marriage mechanics,
+kinship-tie formation, the conception→pregnancy→birth pipeline, the fertility-multiplier
+liveness, taboo-shame cascade, and the regime-change path.
 
-| Cluster | Tests | Root cause |
-|---|---|---|
-| Moral panic | `moral_panic_lifecycle_registers_and_drains…`, `collective_fear_amplifies_panic…`, `long_horizon_50k…` (panic leg) | Panic trigger/lifetime drift — panics stopped firing or drain too fast in anchored windows. |
-| Pairing pipeline | `marriage_forges_spouse_and_inlaw_kinship`, `kinship_penalty_rises_when_families_form`, `conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic`, `reproduction_conception_multiplier_parameter_is_live` | Formation rolls zeroed by downstream state shifts (feud-driven clan enmity between engineered pairs; water-economy shifts moving conception odds); windows are single-seed fragile. |
-| Single-system drift | `collapse_famine_timing…`, `institutional_rank_weighted_into_effective_status`, `memory_system_produces_plan_taxonomy…`, `motivation_emotional_context_is_live`, `neural_like_prediction_error…`, `noospheric_belief_confidence_sustains_conviction`, `taboo_shame_amplification…` | Margins collapsed to ties or inverted under accumulated re-pacing (e.g., patronage 7 vs 7; flashbulb gate never fires; escalation-taboo comparison flipped). |
+Remaining six are single-system calibration drift, each an independent iteration:
+`collapse_famine_timing_shapes_plague_mortality`, `institutional_rank_weighted_into_effective_status`,
+`memory_system_produces_plan_taxonomy_and_trace_properties`, `motivation_emotional_context_is_live`,
+`neural_like_prediction_error_folds_are_live_and_directional`, `noospheric_belief_confidence_sustains_conviction`.
 
 ---
 

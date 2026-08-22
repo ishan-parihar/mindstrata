@@ -6,8 +6,8 @@ expression: agent_states
     AgentSnapshot {
         name: "Anna",
         age: 38.2898,
-        health: 1.0,
-        energy: 0.9574,
+        health: 0.8562,
+        energy: 0.951,
         hunger: 0.012,
         fear: 0.0047,
         anger: 0.0,
@@ -24,8 +24,8 @@ expression: agent_states
     AgentSnapshot {
         name: "Bran",
         age: 20.5284,
-        health: 1.0,
-        energy: 0.9574,
+        health: 0.9032,
+        energy: 0.9542,
         hunger: 0.012,
         fear: 0.0235,
         anger: 0.0,
@@ -42,8 +42,8 @@ expression: agent_states
     AgentSnapshot {
         name: "Cara",
         age: 33.6084,
-        health: 1.0,
-        energy: 0.9574,
+        health: 0.7543,
+        energy: 0.9478,
         hunger: 0.012,
         fear: 0.0,
         anger: 0.0,

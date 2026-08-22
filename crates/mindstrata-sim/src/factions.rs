@@ -133,7 +133,16 @@ pub const REVOLUTION_COOLDOWN: u64 = 200;
 pub const REVOLUTION_HONEYMOON_TICKS: u64 = 3504;
 
 /// §7.3: Revolution score threshold — when exceeded, faction seizes control.
-pub const REVOLUTION_SCORE_THRESHOLD: Fixed = Fixed::from_raw(6000); // 0.6
+/// Revolution score threshold.
+///
+/// Iteration 242 recalibration 0.6 -> 0.5: formation no longer requires a
+/// legitimacy cliff, so factions organize against a ~0.55-legitimacy council
+/// and the old threshold was unreachable in every probed world (pestilence
+/// seed 5: 4 blocs / 160K, ZERO revolts - the §7.3 mechanism was dead). At
+/// 0.5, sustained multi-crisis worlds cross via grievance + size + pressure
+/// momentum, while calm worlds top out ~0.40 (small factions, healthy
+/// legitimacy, near-zero pressure) - crisis-driven rebellion preserved.
+pub const REVOLUTION_SCORE_THRESHOLD: Fixed = Fixed::from_raw(5000); // 0.5
 
 /// §7.3: Minimum tick before any revolution can occur (allows settlement to stabilize).
 pub const REVOLUTION_MIN_TICK: u64 = 500;
@@ -146,6 +155,16 @@ pub const REVOLUTION_SIZE_WEIGHT: Fixed = Fixed::from_raw(3000); // 0.3
 
 /// §7.3: Weight of council illegitimacy in revolution score.
 pub const REVOLUTION_LEGITIMACY_WEIGHT: Fixed = Fixed::from_raw(3000); // 0.3
+
+/// §7.3 (Iteration 242): Weight of the accumulated crisis-pressure tank in
+/// the revolution score. Restores the §7.3 firing path after formation
+/// stopped requiring a legitimacy cliff: without it no probed world could
+/// cross the 0.6 threshold again (pestilence seed 5: 4 protest blocs /
+/// 160K, ZERO revolts — the mechanism was dead). A full pressure tank adds
+/// +0.2 — enough for a bloc with meaningful grievance and size to revolt
+/// against a ~0.55-legitimacy council; calm-world residue (+≤0.06) stays
+/// sub-threshold.
+pub const REVOLUTION_PRESSURE_WEIGHT: f64 = 0.2;
 
 /// Compute an agent's grievance level from their existing derived state.
 ///

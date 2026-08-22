@@ -6083,7 +6083,27 @@ impl Simulation {
             }
 
             // ── Write back (std::mem::take avoids cloning) ────────────
+            //
+            // Iteration 242 (root-cause fix, audit finding E3/E4): since the
+            // Iteration-218 mem::take buffer refactor, the biology pass's
+            // legacy-field sync (health/energy/fatigue <- derived) wrote into
+            // the TAKEN placeholder that this write-back then discarded — the
+            // sync has been dead code ever since. Consequences (probe-pinned,
+            // seed 51): an agent whose thirst crossed 0.9 for ~300 ticks
+            // decayed to body.health == 0.000 EXACTLY (clamp pin, no restoring
+            // force) and stayed there permanently — blocking conception
+            // (min-health < 0.3 hard gate), marriage (health product), and
+            // work, while the EmbodiedState substrate reported 0.97/derived
+            // 0.81. The fix converges the legacy track toward the biological
+            // envelope (tau ~10 ticks) after the systems deltas of this tick:
+            // acute damage (dehydration/starvation/injury) still bites within
+            // the tick and repeated deprivation still collapses health, but a
+            // fed, hydrated agent recovers instead of ratcheting to zero.
             for (i, agent) in self.agents.iter_mut().enumerate() {
+                let derived_health = agent.embodied.derived_health();
+                let h = &mut bodies[i];
+                h.health += (derived_health - h.health) * Fixed::from_f64(0.1);
+                h.health = h.health.clamp_01();
                 agent.body = std::mem::take(&mut bodies[i]);
                 agent.needs = std::mem::take(&mut needs[i]);
                 agent.goals = std::mem::take(&mut goals[i]);
@@ -9636,13 +9656,18 @@ impl Simulation {
                     let libido_a = self.agents[i].embodied.reproductive.libido;
                     let libido_b = self.agents[partner_idx].embodied.reproductive.libido;
                     let avg_libido = (libido_a + libido_b) * Fixed::from_f64(0.5);
-                    // nutrition: use the minimum digestive health of both
-                    // partners (gut_health reflects actual nutritional status,
-                    // not the volatile world stock which depletes to near-zero
-                    // between harvests).
+                    // nutrition: the couple's AVERAGE digestive health
+                    // (gut_health reflects actual nutritional status, not the
+                    // volatile world stock). Iteration 242: was MIN(gut_a,
+                    // gut_b) — a single partner whose gut had floored at the
+                    // 0.1 chronic-spoilage floor sterilized the COUPLE
+                    // outright (probe: seed 5, product 0.016 vs the 0.084
+                    // normalization anchor → ~0.06 conceptions/couple/year).
+                    // Averaging keeps deficiency meaningful without letting
+                    // one gut veto fertility.
                     let gut_a = self.agents[i].embodied.digestive.gut_health;
                     let gut_b = self.agents[partner_idx].embodied.digestive.gut_health;
-                    let nutrition = gut_a.min(gut_b);
+                    let nutrition = (gut_a + gut_b) * Fixed::from_f64(0.5);
                     // intimacy: relationship quality with partner.
                     let v2_pos = Self::relationship_v2_pos(i, partner_idx);
                     let intimacy = if v2_pos < self.agents[i].relationship_v2s.len() {
@@ -14109,12 +14134,28 @@ impl Simulation {
                 let faction_size = faction.members.len();
                 let total_pop = self.agents.len();
 
-                // Revolution score: weighted combination of grievance, size, and council weakness
+                // Revolution score: weighted combination of grievance, size,
+                // council weakness — and (Iteration 240/242) accumulated
+                // crisis pressure. Without the pressure term the score could
+                // never cross the 0.6 threshold again once formation stopped
+                // requiring a legitimacy cliff: factions now organize at
+                // legitimacy ~0.55 (probe: pestilence seed 5 holds 3-4
+                // protest blocs through 160K, council recovering to ~0.56,
+                // ZERO revolts - the §7.3 mechanism was dead). The same
+                // accumulator that armed formation measures how much
+                // sustained discontent has built since the last answer;
+                // a bloc backed by a full pressure tank (1.0 -> +0.2)
+                // carries enough momentum to revolt, while calm-world
+                // residue (+<=0.06) stays safely sub-threshold.
                 let revolution_score = faction_grievance * factions::REVOLUTION_GRIEVANCE_WEIGHT
                     + Fixed::from_int(faction_size as i64)
                         / Fixed::from_int(total_pop.max(1) as i64)
                         * factions::REVOLUTION_SIZE_WEIGHT
-                    + (Fixed::ONE - council_legitimacy) * factions::REVOLUTION_LEGITIMACY_WEIGHT;
+                    + (Fixed::ONE - council_legitimacy) * factions::REVOLUTION_LEGITIMACY_WEIGHT
+                    + Fixed::from_f64(
+                        self.faction_crisis_pressure.min(1.0)
+                            * factions::REVOLUTION_PRESSURE_WEIGHT,
+                    );
 
                 let revolution_cooldown_ok = tick_u64.saturating_sub(self.last_revolution_tick)
                     >= factions::REVOLUTION_COOLDOWN;

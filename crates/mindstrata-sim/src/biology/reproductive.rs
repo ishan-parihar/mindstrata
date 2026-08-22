@@ -194,10 +194,24 @@ impl ReproductiveState {
 
         // Pregnancy progression (§7.2.6) — identical gestation dynamics to the
         // pre-Iter-42 flat `pregnancy_progress`, now inside `Option<PregnancyState>`.
+        //
+        // Iteration 242 (Fixed-truncation fix, audit finding E4): the rate
+        // product computed in Fixed truncates to ZERO whenever
+        // `0.001 × health × nutrition < 5e-5` — i.e. at the 0.1 world-nutrition
+        // floor with any plausible health, every tick (probe: two pregnancies
+        // frozen at exactly 0.0 progress through thousands of ticks on seed
+        // 51; a third crawled at ~1e-6/tick on sporadic quantization luck).
+        // Pregnancies were conceived but could never reach term in depleted
+        // worlds. The increment is computed in f64 (the `should_birth` /
+        // nervous-recovery / thermal-239 precedent for sub-resolution rates)
+        // and stored once per tick.
         if let Some(p) = &mut self.pregnancy {
-            let gestation_rate =
-                Fixed::from_f64(0.001) * health * nutrition * params.gestation_rate_mult;
-            p.gestation_progress = (p.gestation_progress + gestation_rate).clamp_01();
+            let gestation_rate = 0.001_f64
+                * health.to_f64()
+                * nutrition.to_f64()
+                * params.gestation_rate_mult.to_f64();
+            p.gestation_progress =
+                Fixed::from_f64((p.gestation_progress.to_f64() + gestation_rate).min(1.0));
             p.gestation_stage = gestation_stage_of(p.gestation_progress);
             // Observational maternal burden (never consumed — zero drift):
             // strain tracks gestation; complication risk rises with maternal
