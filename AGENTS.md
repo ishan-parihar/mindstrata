@@ -48,20 +48,20 @@ state, no re-summarizing, no clarifying questions.
 These rules exist because we repeatedly paid for violating them:
 
 1. **No lucky-seed re-pins.** If a test only passes on one seed after a sweep, the *system*
-     is broken — fix the hazard/gate design, not the seed. (Iter-236 shipped 24 red and
-     created a backlog that took six iterations to clear.)
+   is broken — fix the hazard/gate design, not the seed. (Iter-236 shipped 24 red and
+   created a backlog that took six iterations to clear.)
 2. **Test re-anchors require probe evidence in the comment**: the measured value, the old
-     band, and the *mechanism* that moved it ("health-sync restoration lifted contempt to
-     0.073"), never "widen until green."
+   band, and the *mechanism* that moved it ("health-sync restoration lifted contempt to
+   0.073"), never "widen until green."
 3. **A dead producer is a bug even when tests pass.** Tests can pass on saturated states
-         (fear pinned at 0.99 everywhere). Probe equilibrium values, not just assertions.
+   (fear pinned at 0.99 everywhere). Probe equilibrium values, not just assertions.
 4. **Distinguish re-pins from re-contracts.** Re-pin = measured magnitude drifted, same
-     contract. Re-contract = the old assertion tested something heredity/pacing legitimately
-     invalidates (e.g., magnitude-similarity bands); say so explicitly and guard the real
-     invariant instead (liveness, positivity, decoupling bounds).
+   contract. Re-contract = the old assertion tested something heredity/pacing legitimately
+   invalidates (e.g., magnitude-similarity bands); say so explicitly and guard the real
+   invariant instead (liveness, positivity, decoupling bounds).
 5. **Knife-edge flags are debt.** When a pin sits on an unstable equilibrium (epidemic R0≈1
-     flipping TRANSIENT↔ENDemic nine times), record it as systemic debt in the ledger rather
-     than flip-flopping pins forever.
+   flipping TRANSIENT↔ENDEMIC nine times), record it as systemic debt in the ledger rather
+   than flip-flopping pins forever.
 
 ## 5. Known Systemic Hazards
 
@@ -79,11 +79,85 @@ These rules exist because we repeatedly paid for violating them:
   `Personality::inherit` consumes exactly one draw per trait to preserve alignment.
   Different range widths consume different byte counts — count-alignment ≠ byte-alignment.
 
-## 6. Hierarchical Module Splitting (the scaling foundation)
+## 6. Rust Craft Standards (rust-best-practices handbook)
 
-As systems grow, files MUST split hierarchically — a god-file cannot be developed safely by
-parallel agents or reviewed precisely. The pattern established by the sim.rs split (17,942
-lines → `sim/` directory):
+Based on Apollo GraphQL's [Rust Best Practices Handbook]
+(https://github.com/ApolloGraphQL/rust-best-practices) — full chapters live at
+`~/.agents/skills/rust-best-practices/references/`. Adapted to this repo's realities
+below; where this section conflicts with a determinism rule from §5, determinism wins
+and the deviation gets a `// ponytail:` comment naming the ceiling and upgrade path.
+
+### Borrowing, cloning, ownership
+
+- Prefer `&T` / `&str` / `&[T]` parameters; clone only at ownership-transfer points
+  (birth-path value snapshots are legitimate: the parent keeps living).
+- Small `Copy` types (`Fixed`, indices, bools) pass **by value** — do not take `&Fixed`
+  in new APIs.
+- No `.clone()` inside per-tick loops; hoist or borrow. The tick pipeline runs 100K+
+  iterations in probes — redundant clones there are real regressions.
+- Use `.iter()` over `&Vec` collections; `.copied()`/`.cloned()` at the END of an
+  iterator chain, not per-element maps.
+
+### Error handling
+
+- Fallible operations return `Result<T, E>`; no `unwrap()`/`expect()` outside tests.
+  (Existing sim code predates this rule; fix opportunistically, never churn a file
+  just for this.)
+- Library crates use concrete error types (`thiserror` when introduced); `anyhow` is
+  for binaries only.
+- Prefer `?` and combinator methods (`map_or`, `ok_or_else`) over match chains.
+
+### Performance mindset
+
+- Benchmark with `--release` only; debug numbers are meaningless here.
+- Watch clippy's perf lints: `redundant_clone`, `needless_collect`,
+  `large_enum_variant`, `clone_on_copy`.
+- Hot-path math stays in `Fixed`/f64 primitives — no allocation in per-tick passes;
+  iterators over index loops where it reads better, not for its own sake.
+
+### Linting discipline
+
+- The gate command (§3) already covers the workspace; treat NEW warnings as errors.
+- Fix warnings, don't silence them. When suppression is truly justified use
+  `#[expect(clippy::lint)]` (auto-fails when stale) with a why-comment — never bare
+  `#[allow(...)]`.
+- Transitional `use super::*` wildcards from the sim split are tracked debt (§7
+  queue item), not a license for new ones.
+
+### Testing craft
+
+- Descriptive names stating behavior: `values_transmit_vertically`, not `test_moral`.
+  One concept per test; probe evidence lives in the comment.
+- Doc tests (`/// ```rust`) for pure public helpers — see `person::inherit_surname`
+  for the pattern.
+- Snapshot drift via `cargo insta` per §3 rules.
+
+### Generics & dispatch
+
+- Static dispatch by default; `dyn Trait` only for genuinely heterogeneous collections.
+  Box at API boundaries, not inside hot loops.
+
+### Type-state pattern
+
+- Encode invalid states in types when a lifecycle exists (e.g., pregnancy phases,
+  institution lifecycles). Adopt incrementally on touched code; do not retrofit working
+  state machines wholesale.
+
+### Comments vs documentation
+
+- `//` explains WHY (calibration evidence, hazard workarounds, the mechanism that moved
+  a test); `///` explains WHAT/HOW for public API consumers.
+- Every calibration re-anchor comment names: measured value, old band, mechanism
+  (§4.2). A TODO without a follow-up path doesn't belong — record it in the plan doc
+  instead.
+- `#![deny(missing_docs)]` is aspirational for `mindstrata-core`; don't enable it
+  workspace-wide while public surfaces still churn.
+
+## 7. Hierarchical Module Splitting (the scaling foundation)
+
+As systems grow, files MUST split hierarchically — a god-file cannot be developed safely
+by parallel agents or reviewed precisely. The pattern established by the sim.rs split
+(17,942 lines → `sim/` directory):
 
 ### When to split
 
@@ -95,16 +169,17 @@ lines → `sim/` directory):
 
 1. **One domain per module**: `sim/family.rs` (marriage/birth/kinship), `sim/economy.rs`,
    `sim/norms_impl.rs`… name by domain, not by layer.
-2. **The struct stays in `mod.rs`** (`Simulation`, `AgentBundle`): state definitions live at
-   the root; behavior lives in domain modules as `impl Simulation` blocks using
+2. **The struct stays in `mod.rs`** (`Simulation`, `AgentBundle`): state definitions live
+   at the root; behavior lives in domain modules as `impl Simulation` blocks using
    `pub(super)` visibility for internal steps.
 3. **Move code verbatim** — a split is a pure refactor proven by **byte-identical golden**
    runs and an unchanged suite. Never mix behavioral changes into a split commit.
-4. **Tests follow their subject**: `sim/tests.rs` for unit-level, per-domain test modules in
-   `integration_tests/{economy,governance,psychology,social,…}/`. Namespaced paths make
+4. **Tests follow their subject**: `sim/tests.rs` for unit-level, per-domain test modules
+   in `integration_tests/{economy,governance,psychology,social,…}/`. Namespaced paths make
    failure triage instant.
-5. **Wildcards are transitional**: `use super::*` in fresh impl modules is tolerated during
-   migration but is cleanup debt — settle to explicit imports once the module stabilizes.
+5. **Wildcards are transitional**: `use super::*` in fresh impl modules is tolerated
+   during migration but is cleanup debt — settle to explicit imports once the module
+   stabilizes.
 
 ### Current layout (post-split)
 
@@ -133,7 +208,7 @@ crates/mindstrata-tests/src/integration_tests/
 - Commit boundaries belong to the iteration owner; if your edit rides inside someone's
   uncommitted file, note it honestly in the commit message.
 
-## 7. Where Things Stand / Next Work
+## 8. Where Things Stand / Next Work
 
 Landed through Iteration 246 (see `git log` for the full trail):
 faction crisis-pressure lifecycle, lived-experience belief charging, health-sync revival +
@@ -153,10 +228,11 @@ Queue, in order:
 3. **Arc C — mind→social depth**: ToM-driven partner choice, speech-act intent/deception
    feeding trust.
 4. **Arc D — infrastructure**: extract bio/psych passes from `sim/core.rs` into `systems/`
-   (byte-identity-guarded), lineage/emotion/Gini metrics + TUI longitudinal charts.
+   (byte-identity-guarded per §6 procedure), lineage/emotion/Gini metrics + TUI
+   longitudinal charts.
 5. Then resume audit Phases 2–6 in `docs/AUDIT_2026-08-22_EMERGENT_REALISM.md`.
 
-## 8. Tone & Conduct
+## 9. Tone & Conduct
 
 - No over-explaining infrastructure the operator already has. Concise relevance assessments.
 - Code first; explanations only what was asked. Mark deliberate simplifications
