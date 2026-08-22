@@ -295,7 +295,7 @@ pub struct MoralPanicResult {
 /// it can trigger a sudden collapse in trust — a moral panic.
 /// This implements §7.2: "Gossip about institutions spreads through the
 /// social graph. Distorted rumors can create moral panics."
-pub fn detect_moral_panic(beliefs: &[&Vec<Belief>], proposition_id: u64) -> MoralPanicResult {
+pub fn detect_moral_panic(beliefs: &[&[Belief]], proposition_id: u64) -> MoralPanicResult {
     // Collect emotional charges from all agents' beliefs about this proposition
     let charges: Vec<Fixed> = beliefs
         .iter()
@@ -753,7 +753,7 @@ mod tests {
             b.emotional_charge = Fixed::from_f64(0.7);
             vec![b]
         };
-        let beliefs: Vec<&Vec<Belief>> = vec![&b1, &b2, &b3];
+        let beliefs: Vec<&[Belief]> = vec![&b1[..], &b2[..], &b3[..]];
 
         let result = detect_moral_panic(&beliefs, 1);
         assert!(
@@ -771,7 +771,7 @@ mod tests {
             b.emotional_charge = Fixed::from_f64(0.2); // well below 0.55 threshold
             vec![b]
         };
-        let beliefs: Vec<&Vec<Belief>> = vec![&b1];
+        let beliefs: Vec<&[Belief]> = vec![&b1[..]];
 
         let result = detect_moral_panic(&beliefs, 1);
         assert!(
@@ -784,7 +784,7 @@ mod tests {
 
     #[test]
     fn moral_panic_no_beliefs_returns_no_trigger() {
-        let empty_beliefs: Vec<&Vec<Belief>> = vec![];
+        let empty_beliefs: Vec<&[Belief]> = vec![];
         let result = detect_moral_panic(&empty_beliefs, 1);
         assert!(!result.triggered);
         assert_eq!(result.avg_charge, Fixed::ZERO);
@@ -802,7 +802,7 @@ mod tests {
         let b3 = vec![low_charge.clone()];
         let b4 = vec![low_charge.clone()];
         let b5 = vec![low_charge];
-        let beliefs: Vec<&Vec<Belief>> = vec![&b1, &b2, &b3, &b4, &b5];
+        let beliefs: Vec<&[Belief]> = vec![&b1[..], &b2[..], &b3[..], &b4[..], &b5[..]];
 
         let result = detect_moral_panic(&beliefs, 1);
         // avg_charge = (0.7 + 0.3 + 0.3 + 0.3 + 0.3) / 5 = 0.38 — below 0.55 threshold

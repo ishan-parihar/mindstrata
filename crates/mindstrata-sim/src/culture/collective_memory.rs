@@ -301,13 +301,13 @@ pub struct CollectiveMemoryRegistry {
 impl CollectiveMemoryRegistry {
     /// Get or create collective memory for a group.
     pub fn get_or_create(&mut self, group_id: usize) -> &mut CollectiveMemory {
-        if !self.entries.iter().any(|e| e.group_id == group_id) {
+        let idx = if let Some(i) = self.entries.iter().position(|e| e.group_id == group_id) {
+            i
+        } else {
             self.entries.push(CollectiveMemory::new(group_id));
-        }
-        self.entries
-            .iter_mut()
-            .find(|e| e.group_id == group_id)
-            .expect("just inserted")
+            self.entries.len() - 1
+        };
+        &mut self.entries[idx]
     }
 
     /// Get collective memory for a group (read-only).

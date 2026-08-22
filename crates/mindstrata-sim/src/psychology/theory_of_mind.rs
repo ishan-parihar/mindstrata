@@ -172,13 +172,13 @@ pub struct MindModels {
 impl MindModels {
     /// Get or create a model for an agent.
     pub fn get_or_create(&mut self, target: AgentId) -> &mut OtherMindModel {
-        if !self.models.iter().any(|m| m.target == target) {
+        let idx = if let Some(i) = self.models.iter().position(|m| m.target == target) {
+            i
+        } else {
             self.models.push(OtherMindModel::new(target));
-        }
-        self.models
-            .iter_mut()
-            .find(|m| m.target == target)
-            .expect("just pushed model for target")
+            self.models.len() - 1
+        };
+        &mut self.models[idx]
     }
 
     /// Get a model for an agent, if it exists.
