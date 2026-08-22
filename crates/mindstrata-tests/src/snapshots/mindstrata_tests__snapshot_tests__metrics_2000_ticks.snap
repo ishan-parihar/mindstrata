@@ -9,7 +9,7 @@ Metrics2000 {
     avg_stress: 0.3864846153846154,
     avg_health: 0.8297846153846153,
     avg_relationship_trust: 0.6936346153846155,
-    polarization_index: 0.0281,
+    polarization_index: 0.0372,
     agent_count: 13.0,
     household_count: 12.0,
 }

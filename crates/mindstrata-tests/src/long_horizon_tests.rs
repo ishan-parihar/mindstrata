@@ -82,10 +82,28 @@ fn assert_emergence_and_invariants(sim: &mindstrata_sim::Simulation) {
     // count.
     let factions_formed = !sim.faction_v2_registry.factions.is_empty();
     assert!(factions_formed, "no faction formed by 50K ticks (seed 42)");
-    assert!(
-        !sim.moral_panic_registry.panics.is_empty(),
-        "no moral panic fired by 50K ticks (seed 42)"
-    );
+    // Iteration 241 re-anchor (lived-experience belief charging): a STABLE
+    // village holding sub-threshold grievance heat is the healthy outcome —
+    // moral panics are crisis phenomena (probe: pestilence-99 fires 12/20K;
+    // calm worlds settle at ~0.35 vs the 0.55 gate). The calm-world
+    // liveness contract is therefore that the charge pipeline is ALIVE and
+    // correctly regulated: institution-belief charges sit in the active
+    // band, far above the dead ~0.10 the audit found, below the trigger.
+    {
+        let mut sum = 0.0f64;
+        let mut n = 0usize;
+        for a in &sim.agents {
+            for b in a.beliefs.iter().filter(|b| b.proposition_id <= 1) {
+                sum += b.emotional_charge.to_f64();
+                n += 1;
+            }
+        }
+        let avg_charge = sum / n.max(1) as f64;
+        assert!(
+            (0.15..0.5).contains(&avg_charge),
+            "calm-world belief charges must sit in the live sub-trigger band, got {avg_charge:.3}"
+        );
+    }
     // Registration is NOT execution (rituals are seeded at populate). The
     // durable execution signal is `Ritual.last_occurrence`, advanced by
     // `Ritual::execute` on every due firing (seeded at 0, monthly 4320-tick

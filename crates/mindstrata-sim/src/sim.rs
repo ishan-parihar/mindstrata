@@ -14446,6 +14446,40 @@ impl Simulation {
             }
         }
 
+        // §7.2 (Iteration 241): Lived-experience emotional reinforcement of
+        // institution-directed beliefs — the missing production half of the
+        // moral-panic pipeline. `detect_moral_panic` requires avg belief
+        // charge >= 0.55 across propositions 0/1 ("the market is fair",
+        // "the council protects us"), but NOTHING systematically charged
+        // them: beliefs are born at charge 0, `update_belief` never touches
+        // emotional_charge, and the only live writer (echo-chamber feedback)
+        // adds ~5e-4/day — probed equilibrium ~0.10–0.13 vs the 0.55
+        // trigger, so panics stopped firing in every anchored window.
+        //
+        // The realistic mechanism: chronic distress heats grievance
+        // narratives. Each day, an agent's emotional climate (fear +
+        // negative valence + anger) drives its institution-directed beliefs
+        // toward a distress-proportional equilibrium (eq = 1.2 x distress:
+        // calm ~0.32 -> eq ~0.38, safely sub-threshold; epidemic distress
+        // ~0.63 -> eq ~0.76, panic territory); sustained calm cools them
+        // again. Daily increments (~1e-2..1e-3) clear the Fixed quantum;
+        // deterministic, zero RNG.
+        if tick_u64.is_multiple_of(144) && tick_u64 > 0 {
+            const CHARGE_SCALE: f64 = 0.075;
+            const CHARGE_DECAY: f64 = 0.05;
+            for agent in &mut self.agents {
+                let distress = (0.6 * agent.emotions.fear.to_f64()
+                    + 0.4 * (-agent.affect.valence.to_f64()).max(0.0)
+                    + 0.2 * agent.emotions.anger.to_f64())
+                .clamp(0.0, 1.0);
+                for b in agent.beliefs.iter_mut().filter(|b| b.proposition_id <= 1) {
+                    let c = b.emotional_charge.to_f64();
+                    let next = c + CHARGE_SCALE * distress - CHARGE_DECAY * c;
+                    b.emotional_charge = Fixed::from_f64(next).clamp_01();
+                }
+            }
+        }
+
         // §10.1: Refresh each agent's three relational fields (sensory /
         // social / noospheric) on the daily cadence.
         self.refresh_relational_fields();

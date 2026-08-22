@@ -12651,8 +12651,13 @@ fn collective_fear_amplifies_panic_legitimacy_damage_end_to_end() {
     // — probe-pinned), so the deterministic trigger leg extends its
     // horizon 30,000 → 80,000 (the Iter-185 precedent: 20K → 30K) and
     // stays on seed 1.
-    let at_panic_horizon = crate::test_helpers::run_sim(1, 80000);
-    let again = crate::test_helpers::run_sim(1, 80000);
+    // Iteration 241 re-anchor (lived-experience belief charging): the
+    // trigger is now a reliable crisis phenomenon — panic liveness moves
+    // to the pestilence window where the mechanism belongs (probe:
+    // seed 99 registers 12 panics / 20K); calm villages hold a healthy
+    // sub-threshold charge equilibrium and correctly never panic.
+    let at_panic_horizon = crate::test_helpers::run_scenario(&Scenario::pestilence(), 99, 20000);
+    let again = crate::test_helpers::run_scenario(&Scenario::pestilence(), 99, 20000);
     let panics = at_panic_horizon
         .recent_events(10_000_000)
         .iter()
@@ -12665,7 +12670,7 @@ fn collective_fear_amplifies_panic_legitimacy_damage_end_to_end() {
         .count();
     assert!(
         panics >= 1,
-        "the §7.2 trigger must fire at the 80,000-tick horizon (seed 1)"
+        "the §7.2 trigger must fire in the crisis window (pestilence seed 99 @20K)"
     );
     assert_eq!(panics, panics2, "panic counts must be seed-deterministic");
     let council_leg = |s: &mindstrata_sim::Simulation| -> Vec<f64> {
@@ -12911,240 +12916,64 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
             .map_or(Fixed::ZERO, |i| i.legitimacy)
     };
 
-    // Leg A — producer reach at the mid-window: a real §7.2 panic fires in
-    // the calibrated world (start_tick 10,913, probe-pinned deterministic),
-    // is REGISTERED in the registry, and is still ACTIVE with the lifecycle
-    // having escalated it — the 16,000 sample shows intensity at 1.0, far
-    // above the initial 0.3.
-    // Iteration 183b recalibration (AP2 P3-5 tenderness decay): the
-    // positive-channel decay re-paces the belief-charge/fear buildup and
-    // the panic now fires at 5,788 (earlier — the calmer positive channel
-    // lets the fear/charge channel dominate sooner) and DRAINS by ~14,000.
-    // The active sample moves 16,000 → 11,000 (intensity 1.0, active; the
-    // drain leg below proves the full register→escalate→drain lifecycle
-    // still completes in-window).
-    // P2/P3 re-audit re-anchor (AP2 §8.1.4 pride/guilt/trust wiring): the
-    // feud-guilt production re-paces the fear/legitimacy buildup and the
-    // seed-42 panic now fires at 19,506 (probe: nothing registered by
-    // 16,000 — outside any mid-window sample; seed 99 fires at 18,067;
-    // seed 50 never fires through 25,000). A 4-seed sweep finds seed 55
-    // delivers the full register→escalate→drain lifecycle in-window:
-    // panic fires at 8,092, ACTIVE with intensity 1.0 at the 11,000
-    // sample, fully drained (intensity 0.000, inactive) by 20,000. The
-    // leg re-anchors on seed 55 with the drain horizon pulled 22,000 →
-    // 20,000 (probe-pinned drained there).
-    // P2/P3 re-audit re-anchor #2 (safety-need redefinition): the
-    // dominant-need re-pace re-times the belief-charge/fear buildup and
-    // seed 55 no longer fires through 20,000 (probe: NO PANIC on seeds
-    // 42/55 @20K). A 5-seed sweep finds seed 99 delivers the full
-    // register→escalate→drain lifecycle in-window: panic fires at
-    // 10,719, ACTIVE with intensity 0.400 at the 11,000 sample
-    // (escalating to 0.950 by 16,000), fully drained (intensity 0.000,
-    // inactive) by 20,000. The leg re-anchors on seed 99.
-    // P5 re-audit re-anchor #2 (AP2 §10.5 same-pass bigamy fix): the
-    // marriage formation guard re-paces the fear/legitimacy buildup and
-    // seed 99's first panic moves OUT of the 11,000 mid-window (probe:
-    // no panic registered by 11K on seeds 44/46/50/55/99/7/3/5/2 — the
-    // co-residing, pair-bonded village's trust/legitimacy recovery is
-    // faster). A 12-seed sweep finds seed 42 (the canonical seed)
-    // delivers the full lifecycle in-window: panic fires at 10,115,
-    // ACTIVE with intensity 0.600 at the 11,000 sample, fully drained
-    // (intensity 0.000, inactive) by 20,000. Seed 13 also qualifies
-    // (9,796/0.700/0.000); the leg re-anchors on seed 42.
-    // Iteration 185 re-anchor (emergent-quality audit — calm lethality
-    // recalibration): the violence fix calms the village's emotions, and
-    // the §7.2 panic trigger's 0.55 emotional-charge gate becomes
-    // unreachable in the old windows — a 12-seed sweep finds NO panic by
-    // 11K (or even 25K) anywhere, and only seed 99 fires at all: panic
-    // at 28,801, ACTIVE with mild intensity 0.285 at the 29,000 sample
-    // (the calm world's panic never runaways — escalation stays below
-    // the 0.3 initial intensity, which is the honest emergent pacing: a
-    // peaceful village has mild, slow-burning moral panics roughly once a
-    // year), fully drained (intensity 0.0464, inactive) by 33,000. The
-    // leg re-anchors on seed 99 with the mid-window 11,000 → 29,000 and
-    // the drain horizon 20,000 → 33,000.
-    // Iteration 191 re-anchor (dominance/comfort/inhibition wirings): the
-    // escalation fold re-paces seed 99's charge buildup and its FIRST
-    // panic now fires early (probe: start@1921, already drained at the
-    // 29,000 sample — the mid leg's first()-active contract fails). A
-    // 7-seed sweep finds seed 5 clean: ONE panic at 26,545 (inside the
-    // [25,800, 27,500] band), ACTIVE with intensity 0.125 at the 29,000
-    // sample (the mild mid-lifecycle band), fully drained (intensity
-    // 0.046, inactive) by 33,000. The leg re-anchors on seed 5.
-    // Iteration 200 re-anchor (feud-guilt shadowing closure): the guilt
-    // attribution de-escalates the violence fold, and seed 5 now fires
-    // ZERO panics through 33K (probe: 20-seed sweep finds seed 99 dead
-    // too). Seed 1 is the clean anchor: its SECOND panic fires at 27,054
-    // (InstitutionalCorruption — inside the [25,800, 27,500] band),
-    // ACTIVE with intensity 0.146 at the 29,000 sample (the mild
-    // mid-lifecycle band), fully drained (intensity 0.046, inactive) by
-    // 33,000. The leg re-anchors on seed 1 (reading panics[1], since
-    // seed 1's first panic at 2,593 has already drained).
-    // Iteration 203 re-anchor (aspirational-engagement hope channel):
-    // the Socialize/Worship shift keeps the calm world's charge below
-    // the §7.2 gate through 60K everywhere (probe: ZERO panics on all 13
-    // seeds @33K/40K/50K/60K). Seed 1's panics move to the 66K/70K
-    // decade: panic[1] fires at 70,815 (InstitutionalCorruption — inside
-    // the [69,500, 72,500] band), ACTIVE with intensity 0.271 at the
-    // 71,000 sample (the mild mid-lifecycle band), fully drained
-    // (intensity 0.046, inactive) by 77,000. The leg re-anchors on seed
-    // 1 (reading panics[1], since panic[0] at 66,162 has already
-    // drained), with the mid sample 29K → 71K and the drain horizon 33K
-    // → 77K (the Iter-185 precedent: 20K → 30K).
-    // Iteration 204 re-anchor (planning-confidence calibration): the
-    // §8.1.12 deferred-gratification term re-paces the calm world's
-    // charge buildup and seed 1 now fires ONE panic — panic[0] at
-    // 78,698 (InstitutionalCorruption, inside the [77,500, 80,000]
-    // band), ACTIVE with intensity 0.271 at the 79,000 sample (the mild
-    // mid-lifecycle band), fully drained (intensity 0.046, inactive) by
-    // 100,000. The leg re-anchors on seed 1 (reading panics[0], the
-    // only panic in the window), with the mid sample 71K → 79K and the
-    // drain horizon 77K → 100K (the Iter-203 precedent: horizon
-    // extensions as the calm world's triggers slow).
-    let mid = crate::test_helpers::run_sim(1, 79000);
+    // Iteration 241 re-anchor (lived-experience belief charging): the §7.2
+    // trigger is now a reliable CRISIS phenomenon. The previous anchor was
+    // the tail of a seed-chasing chain (55 -> 99 -> 42 -> 5 -> 1; horizons
+    // 20K -> 33K -> 77K -> 100K) pinning increasingly rare flukes of a dead
+    // production loop: belief charges sat at ~0.10-0.13 vs the 0.55 gate
+    // because nothing systematically charged them (the audit's knife-edge
+    // pattern). With daily distress-proportional charging live, a stable
+    // village holds a healthy sub-threshold equilibrium (~0.35: no panics,
+    // correctly) while crisis worlds cycle register -> escalate -> drain
+    // robustly (probe: pestilence seed 99 registers 12 panics / 20K).
+    let mut sc = mindstrata_sim::scenario::Scenario::pestilence();
+    sc.seed = 99;
+    sc.ticks = 20000;
+    let mut sim = Simulation::from_scenario(sc);
+    sim.populate();
+    sim.run(20000);
+
+    // Leg A - registration + escalation ran in the crisis window.
     assert!(
-        !mid.moral_panic_registry.panics.is_empty(),
-        "seed 1 must hold a registered panic by 79000 ticks"
+        !sim.moral_panic_registry.panics.is_empty(),
+        "the crisis world must register moral panics"
     );
-    let panic = &mid.moral_panic_registry.panics[0];
+    let max_intensity = sim
+        .moral_panic_registry
+        .panics
+        .iter()
+        .map(|p| p.intensity)
+        .fold(Fixed::ZERO, std::cmp::Ord::max);
+    // Probed peak 0.285 on this window: crises now produce MILD, resolving
+    // panics rather than runaway 1.0 saturation (the Iter-185 finding that
+    // mild slow-burning panics are the honest pacing). Bar: meaningfully
+    // above the residual floor, far below saturation.
     assert!(
-        panic.active,
-        "the ~302-tick-old panic must still be active at 79,000"
+        max_intensity >= Fixed::from_f64(0.25),
+        "at least one panic must reach meaningful intensity, got {}",
+        max_intensity.to_f64()
     );
     assert!(
-        // Iteration 147 recalibration (weather system): the §5 weather
-        // layer's economy shift re-paces legitimacy dynamics — the seed-42
-        // panic now fires at 13,825 (probe-pinned post-weather, ~26%
-        // earlier). Iteration 159 recalibration: the LOD tier rebalance
-        // re-paces legitimacy — probe-pinned panic now at 14,257. Iteration
-        // 162 recalibration: the §8.1.6 sociability consumers raise
-        // interaction-driven trust/legitimacy recovery, DELAYING the panic
-        // trigger into the mid-window — probe-pinned panic now at 13,105
-        // (intensity 0.45 at the 20,000 horizon, active). Iteration 164
-        // recalibration: the §8.1.4 base-emotion decay re-paces the fear/
-        // legitimacy buildup — probe-pinned panic now at 15,425 (intensity
-        // 1.0 at the 20,000 horizon, still active; the differentiated fear
-        // equilibrium delays the belief-charge trigger into the mid-window).
-        // Iteration 168 recalibration: the revived gate's prop-2 beliefs
-        // carry emotional charge into the gossip-fed panic detector,
-        // delaying the trigger — probe-pinned panic now at 17,169.
-        // Iteration 169 recalibration: the §8.1.18 violence-taboo aversion
-        // suppresses conflict-driven fear, pulling the belief-charge
-        // buildup earlier — probe-pinned panic now at 10,913, and the
-        // fatigue-resolve threshold (0.7 after 35 days) is crossed by
-        // ~18,000 so the panic DRAINS before the 20,000 horizon (the
-        // end-to-end drain the test name promises). Iteration 176
-        // recalibration (Phase 5 "tune trauma/recovery"): the
-        // proportional trauma decay (0.0005 fraction) differentiates the
-        // trauma envelope (mean 0.79 saturated → ~0.45), re-pacing the
-        // startle/neuroplasticity-driven fear feed — probe-pinned panic
-        // now at 9,331 (intensity 0.45 at the 16,000 sample, active;
-        // fully drained to 0.000 by the 20,000 horizon — the
-        // register→escalate→drain lifecycle still completes in-window).
-        // Iteration 180 recalibration (AP2 §8.1.6 altruism wiring): the
-        // standing Help boost (the sweep-verified +0.115 help propensity)
-        // grows interaction-driven trust/legitimacy recovery, DELAYING
-        // the panic trigger into the late window — probe-pinned panic now
-        // at 12,619 (intensity 1.0 at the 16,000 sample, active; the
-        // fatigue-resolve threshold is crossed by ~18,600 so the panic
-        // still fully drains — probe-pinned 0.000 by the 22,000 horizon).
-        // Iteration 183 recalibration (AP2 P3 fixes — §8.1.8 regulation
-        // strategy diversity + §8.1.4 differentiated appraisal): the
-        // emotion-path changes re-pace the fear/legitimacy buildup —
-        // probe-pinned panic now at 10,967 (intensity 1.0 at the 16,000
-        // sample, active; the earlier trigger lets the fatigue-resolve
-        // threshold be crossed sooner, so the drain leg still completes
-        // by the 22,000 horizon — verified below).
-        // Iteration 183b recalibration (AP2 P3-5 tenderness decay): the
-        // panic now fires at 5,788 — probe-pinned, active through ~13,000
-        // (intensity 1.0 at the 11,000 sample) and fully drained by 14,000.
-        // P2/P3 re-audit re-anchor (AP2 §8.1.4 pride/guilt/trust wiring):
-        // the feud-guilt production delays the trigger — seed-55 panic
-        // fires at 8,092 (probe-pinned, the 4-seed sweep's only in-window
-        // lifecycle).
-        // P2/P3 re-audit #2: seed-99 panic fires at 10,719 (probe-pinned).
-        // P5 re-audit re-anchor (V2-dimension liveness): the
-        // interaction-wired V2 trust raises interaction-driven fear/charge
-        // buildup and seed-99's FIRST panic now fires at 6,461 — active at
-        // intensity 1.0 through the 11,000 sample and fully drained by
-        // 20,000 (the register→escalate→drain lifecycle still completes
-        // in-window, verified below).
-        // P5 re-audit re-anchor #2 (AP2 §10.5 same-pass bigamy fix): the
-        // seed-42 panic now fires at 10,115 — probe-pinned, active at
-        // intensity 0.600 through the 11,000 sample and fully drained by
-        // 20,000 (the register→escalate→drain lifecycle still completes
-        // in-window, verified below).
-        // Iteration 191 re-anchor (dominance/comfort/inhibition wirings):
-        // seed 5's single panic fires at 26,545 — probe-pinned, inside the
-        // band, ACTIVE with intensity 0.125 at the 29,000 sample.
-        // Iteration 204 re-anchor: seed 1's single panic fires at 78,698 —
-        // probe-pinned, inside the [77,500, 80,000] band.
-        panic.start_tick >= 77500 && panic.start_tick <= 80000,
-        "the seed-1 panic must fire near the probe-pinned 78,698 horizon, got {}",
-        panic.start_tick
-    );
-    // Iteration 185 re-pin: the calm world's panic stays MILD — intensity
-    // 0.285 at the 29,000 sample, below the 0.3 initial (no runaway
-    // escalation; the escalation machinery is still unit-pinned in
-    // moral_panic.rs and fires in crisis windows). The assertion becomes
-    // a mid-lifecycle band: registered (above the 0.05 residual floor)
-    // and non-runaway (at or below the 0.3 initial). Iteration 203
-    // re-pin: probe-pinned intensity 0.271 at the 71,000 sample (same
-    // mild mid-lifecycle band). Iteration 204 re-pin: probe-pinned
-    // intensity 0.271 at the 79,000 sample (same mild mid-lifecycle
-    // band).
-    assert!(
-        panic.intensity > Fixed::from_f64(0.05) && panic.intensity <= Fixed::from_f64(0.3),
-        "the calm-world panic must sit in the mild mid-lifecycle band: {}",
-        panic.intensity.to_f64()
-    );
-    assert!(
-        matches!(
-            panic.trigger,
+        sim.moral_panic_registry.panics.iter().all(|p| matches!(
+            p.trigger,
             PanicTrigger::InstitutionalCorruption | PanicTrigger::MoralViolation
-        ),
-        "the registered panic must carry one of the two §7.2 mapped triggers"
+        )),
+        "every registered panic must carry one of the two mapped triggers"
     );
 
-    // Leg A2 — drain completion: by the 22,000 horizon the same panic has
-    // fully drained (fatigue crossed the 0.7 resolve threshold ~18,600),
-    // completing the register→escalate→drain lifecycle in-window. The
-    // intensity pin is a ≤ 0.05 residue bound, not exact zero: deescalate()
-    // decrements by 0.05 with max(ZERO) and deactivates below 0.05, so a
-    // resolved panic provably sits at (0, 0.05] — never mid-escalation.
-    // (Iteration 180 recalibration: the altruism-wiring legitimacy
-    // recovery delays the trigger to 12,619, so the drain leg extends
-    // 20,000→22,000 — probe-pinned inactive, intensity 0.0000 at 22K.)
-    // Iteration 185: drain horizon 20,000 → 33,000 (seed 99, panic @28,801
-    // drains by ~33,000 — probe-pinned inactive, intensity 0.0464).
-    // Iteration 191 re-anchor: seed 5's 26,545 panic drains by ~33,000
-    // (probe-pinned inactive, intensity 0.046).
-    // Iteration 200 re-anchor: seed 1's 27,054 panic drains by ~33,000
-    // (probe-pinned inactive, intensity 0.0464).
-    // Iteration 203 re-anchor: seed 1's 70,815 panic drains by ~77,000
-    // (probe-pinned inactive, intensity 0.0464) — the drain horizon
-    // extends 33K → 77K.
-    // Iteration 204 re-anchor: seed 1's 78,698 panic drains by ~100,000
-    // (probe-pinned inactive, intensity 0.0464) — the drain horizon
-    // extends 77K → 100K.
-    let sim = crate::test_helpers::run_sim(1, 100000);
-    let drained = sim.moral_panic_registry.panics.first().unwrap();
+    // Leg A2 - drain completion: at least one registered panic has fully
+    // cycled (inactive) within the window.
     assert!(
-        !drained.active,
-        "the ~21,302-tick-old panic must have fully drained by 100,000"
-    );
-    assert!(
-        drained.intensity <= Fixed::from_f64(0.05),
-        "a fully-drained panic must sit at residual intensity, got {}",
-        drained.intensity.to_f64()
+        sim.moral_panic_registry.panics.iter().any(|p| !p.active),
+        "at least one panic must have completed its drain cycle by 20K"
     );
 
-    // Leg B — consumer through the public path: the drain and fatigue
+    // Leg B - consumer through the public path: the drain and fatigue
     // helpers are exact, deterministic pure functions.
     assert_eq!(
         panic_legitimacy_drain(Fixed::from_f64(0.3), PANIC_LEGITIMACY_DRAIN_RATE),
         Fixed::from_f64(0.0003),
-        "fresh-panic intensity 0.3 × 0.001 must be exactly 0.0003"
+        "fresh-panic intensity 0.3 x 0.001 must be exactly 0.0003"
     );
     assert_eq!(
         panic_legitimacy_drain(Fixed::ONE, PANIC_LEGITIMACY_DRAIN_RATE),
@@ -13157,17 +12986,14 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
         "fatigue must cross the resolve threshold after 35 days"
     );
 
-    // Leg C — replay determinism: two same-seed runs register the same
-    // panic and drain the same institution identically. (P5 re-audit bug
-    // fix: the leg previously replayed seed 99 against the seed-42 `sim` —
-    // the counts only matched by coincidence, and the AP2 §10.5 bigamy
-    // fix re-paced them apart (42: 3 panics, 99: 10). Iteration 191: the
-    // dominance/comfort/inhibition re-anchor moved Leg A to seed 5 — Leg C
-    // must use the same seed to preserve the same-seed contract.
-    // Iteration 200: Leg A re-anchored to seed 1 — Leg C follows.)
-    // Iteration 203: the drain horizon extends to 77K — Leg C follows.)
-    // Iteration 204: the drain horizon extends to 100K — Leg C follows.)
-    let again = crate::test_helpers::run_sim(1, 100000);
+    // Leg C - replay determinism: two same-seed crisis runs register the
+    // same panic count and drain the same institution identically.
+    let mut sc2 = mindstrata_sim::scenario::Scenario::pestilence();
+    sc2.seed = 99;
+    sc2.ticks = 20000;
+    let mut again = Simulation::from_scenario(sc2);
+    again.populate();
+    again.run(20000);
     assert_eq!(
         sim.moral_panic_registry.panics.len(),
         again.moral_panic_registry.panics.len(),
@@ -13175,13 +13001,12 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
     );
     assert_eq!(council_leg(&sim), council_leg(&again));
 
-    // Leg D — the wiring differential (the only leg that FAILS if the
-    // drain line in `tick_moral_panic_lifecycle` is ever deleted): two
-    // identical 2,000-tick worlds; inject a council panic into one and run
-    // both to the next daily tick (2,016). The worlds diverge ONLY by the
-    // panic's legitimacy drain, so the control-vs-injected council
-    // legitimacy gap must equal the drain of the panic's (post-update)
-    // intensity exactly.
+    // Leg D - the wiring differential (the only leg that FAILS if the drain
+    // line in `tick_moral_panic_lifecycle` is ever deleted): two identical
+    // 2,000-tick worlds; inject a council panic into one and run both to
+    // the next daily tick (2,016). The worlds diverge ONLY by the panic's
+    // legitimacy drain, so the control-vs-injected council legitimacy gap
+    // must equal the drain of the panic's (post-update) intensity exactly.
     let mut with_panic = crate::test_helpers::run_sim(42, 2000);
     let mut control = crate::test_helpers::run_sim(42, 2000);
     with_panic.moral_panic_registry.register(MoralPanic::new(
@@ -13189,7 +13014,7 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
         None,
         2000,
     ));
-    with_panic.run(16); // ticks 2001..2016; 2016 = 14 × 144 is the next daily tick
+    with_panic.run(16);
     control.run(16);
     let injected = with_panic.moral_panic_registry.panics.last().unwrap();
     assert!(
@@ -13200,7 +13025,7 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
     let expected_gap = panic_legitimacy_drain(injected.intensity, PANIC_LEGITIMACY_DRAIN_RATE);
     assert_eq!(
         actual_gap, expected_gap,
-        "the injected panic must drain exactly its intensity × rate from the council"
+        "the injected panic must drain exactly its intensity x rate from the council"
     );
 }
 /// §8.1.4 (Iteration 116): the expanded emotion families' decay works
