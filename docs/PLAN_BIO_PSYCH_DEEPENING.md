@@ -1,0 +1,187 @@
+# Plan — Biological & Psychological Deepening (bio/psycho → social upgrade)
+
+*Created Iteration 242+, post-commit `8881980`. Supersedes nothing; extends the
+audit roadmap's Phase 1 into a full bio↔psych↔social coupling program.*
+
+## 0. Where we are
+
+Suite **298 passed / 6 failed** (`cargo test -p mindstrata-tests --lib --release`,
+post-Iter-242). Audit Phases 0 is functionally complete: hazard accumulation
+ships (faction pressure, mobilization windows, marriage/courtship liveness),
+regime change fires crisis-spaced, belief charging runs daily. The six red
+tests are independent single-system calibration drift — none block architecture
+work except by our own green-before-commit rule.
+
+Layer inventory (all wired unless noted): 15 biology modules, 17 psychology
+modules, 20 social modules, 14 culture modules, 4 noosphere modules.
+Determinism byte-identical, provenance traces live, spec_lint validates RON,
+agent_tier LOD exists (34 fns), metrics CSV export exists.
+
+## 1. Gap analysis (evidence-first)
+
+### G1 — Heredity does not exist (the biggest gap)
+
+Both birth paths construct newborns with **fresh random** endowments:
+
+- Real-birth path `sim.rs:~9821`: `Personality::random(rng)` +
+  `EmbodiedState::random(child_age, rng)`
+- Replacement path `build_replacement_newborn` `sim.rs:9259`: same pattern
+
+Consequences: `Genome` (5 predisposition families) never transmits;
+personality has zero parent correlation; children share no family resemblance;
+`foundational_beliefs()` re-rolls values; no parent links on replacement
+newborns. The genome system is per-agent decoration, not a population-level
+genetic substrate.
+
+Sub-gaps inside G1:
+- **G1a**: no crossover/mutation operators anywhere (`genome.rs` has only
+  `Genome::random`).
+- **G1b**: 3 of 5 predisposition families are effectively dead:
+  `metabolic_predispositions`, `physical_potential`, and most of
+  `health_predispositions` have no consumers outside `genome.rs`
+  (only `immune_strength` at `biology/mod.rs:201`; fertility → base_fertility
+  at :181; trait predispositions partially read for attachment/depression/
+  addiction at `sim.rs:1057/3739/9277`). Even where read, they seed states —
+  they do not modulate ongoing dynamics.
+- **G1c**: naming is `Child_{idx}` on the replacement path; no family names,
+  so lineage is invisible in every downstream artifact (chronicles, dossiers).
+
+### G2 — Interoception is built but dormant
+
+`psychology/interoception.rs` implements the felt-signal filters
+(`felt_hunger/thirst/fatigue/pain`, `emotional_body_tone`,
+`felt_need_deficit`) — and **none of them sit in the decision pipeline**.
+Only call sites: one metrics computation (`sim.rs:14373`) and tests. Body
+state reaches the mind through raw deficits, not through per-agent felt
+intensity. The "Genome → Endocrine → Nervous → Interoception → Emotion" chain
+claimed in `biology/mod.rs:8` breaks at the Interoception link.
+
+### G3 — Bio→social gradients absent
+
+No status→health gradient (Whitehall effect): hierarchy position does not
+feed chronic stress load, so `social/hierarchy.rs` outcomes cannot feed back
+into biology. Social support feeds psychopathology ✓, but rank does not.
+
+### G4 — Psych→social coupling is thin relative to layer size
+
+`theory_of_mind` has ~10 refs in an 18K-line tick loop against a 20-module
+social layer; attachment influences exist at seeding only. Courtship/marriage
+do not condition on partner-modeling quality; speech acts carry no deception /
+belief-about-believer content.
+
+### G5 — Architecture debt concentrated in one file
+
+`sim.rs` = **17,942 lines**, 40 public fns; the tick pipeline interleaves
+biology, psychology, social, culture passes inline. `systems/` module exists
+but is empty (`mod.rs` only). Every behavioral iteration risks collateral
+blast radius because passes aren't isolated; extraction is prerequisite
+infrastructure for safe deepening.
+
+### G6 — Known calibration drift (Iteration 243 scope)
+
+Six single-system failures: famine timing, patronage rank weighting,
+flashbulb/plan taxonomy memory, motivation emotional context, neural-like
+prediction-error gates, noosphere conviction margin. Each needs root-first
+recalibration, not re-pins (memory rule #1773 / ledger discipline).
+
+## 2. Upgrade plan (ordered, each iteration committed green)
+
+Ordering principle unchanged: green suite + byte-identical short-horizon
+golden between iterations; long-horizon surfaces re-pinned once per arc with
+lineage/evidence probes. Fixed-truncation disease rules apply everywhere
+(f64 shadow fields for sub-resolution rates).
+
+### Iteration 243 — Suite green *(prerequisite, already scoped)*
+Root-cause the six drift tests. Exit: `cargo test --workspace` fully green.
+
+### Arc A — Real heredity (Iterations 244–246) *— closes G1*
+
+**Iter 244 — Genetic substrate**
+1. `Genome::blend(a, b, rng, mutation_rate)` in `genome.rs`: per-gene
+   midpoint + noise (diploid-average approximation; deterministic from
+   seed+tick stream). Sex: 50/50 draw.
+2. Wire into BOTH birth paths; record `parent_ids` on every newborn
+   (replacement path inherits deceased's parents if absent — orphan rule).
+3. Activate dead predisposition families: metabolic → hunger/thirst rate
+   multipliers; physical_potential → injury susceptibility & labor output;
+   health_predispositions → disease resistance & recovery tau.
+   *All five families must have ≥1 dynamic consumer (spec_lint-style check).*
+
+**Iter 245 — Quantitative-genetics personality + names**
+1. Personality: child trait = mid-parent + shrinkage toward mean + Gaussian
+   noise (variance calibrated so population variance is stationary, not
+   collapsing across generations).
+2. Family surnames: household-carried; children take father's/mother's per
+   scenario culture; uniqueness enforcement; replace `Child_{idx}`.
+3. Unify regulation-init across both birth paths (closes audit H6).
+Verification probe: sibling-sibling trait correlation > stranger correlation;
+parent-child regression slope in [0.3, 0.7].
+
+**Iter 246 — Vertical culture transmission**
+1. Moral values & foundational beliefs seeded from parents (with noisy
+   adoption) + community priors weighted by exposure; not re-rolled.
+2. Ideology initial affinity inherited with mutation.
+Verification probe: ideological clustering by family vs random assignment;
+golden blast contained to long-horizon surfaces (births rare in short windows).
+
+### Arc B — Embodiment → mind (Iterations 247–248) *— closes G2, G3*
+
+**Iter 247 — Interoception activation**
+1. Route need salience through `felt_*`: action utilities consume felt
+   deficits, not raw ones; sensitivity set by genome+nervous sensitivity
+   (already stored).
+2. Somatic marker: high felt-pain/fatigue biases risk-averse action choice.
+3. `emotional_body_tone` joins appraisal inputs (embodied emotion bias).
+Probe: high-sensitivity agents react to deficits earlier than low-sensitivity
+at identical body state; calm-world action mix unchanged within bands.
+
+**Iter 248 — Social physiology**
+1. Whitehall gradient: effective-status percentile feeds chronic-stress
+   accumulation rate (low rank → higher load), closing the hierarchy→biology
+   loop.
+2. Sleep debt → next-day social participation penalty (withdrawal already
+   modeled in psychopathology — reuse channels).
+Probe: high-status cohort mean chronic_load < low-status cohort across seeds.
+
+### Arc C — Mind → social depth (Iteration 249) *— closes G4*
+
+**Iter 249 — Social cognition steering**
+1. Partner choice conditions on modeled reliability (ToM estimate of
+   counterpart), not just proximity/wealth terms.
+2. Speech acts gain intent tags (deceive/impress/inform); receivers update
+   trust on detected mismatch (rumor_v2 + epistemic integration points exist).
+Probe: repeated defectors lose invite rate over time vs one-shot strangers.
+
+### Arc D — Architecture extraction (Iterations 250–251) *— closes G5*
+
+**Iter 250 — Pass decomposition (pure refactor)**
+Move the interleaved bio/psych/social passes from `sim.rs` into
+`systems/{biology_pass,psych_pass,social_pass,...}.rs` behind a pass
+registry. Golden snapshots MUST remain byte-identical (this proves the
+refactor moved code, not behavior). Exit criterion: `sim.rs` < 6K lines,
+each pass owns its section header contract.
+
+**Iter 251 — Observability for the new layers**
+Extend `metric_history` with lineage stats (family count, mean kinship,
+trait variance trajectory), emotion distribution percentiles, Gini + skill
+curves (closes E6/E8 monitoring). TUI longitudinal charts from CSV
+(pull-forward of audit Phase 6.3 — cheap now that CSV exists).
+
+### After Arc D
+Resume audit roadmap Phases 2–6 exactly as written there (affect realism,
+survival reflexes, de-scripted founding, world variance, chronicle UX) —
+Arc A makes Phase 6 agent dossiers (lineage trees) immediately possible.
+
+## 3. Effort summary
+
+| Arc | Iters | Theme | Risk |
+|-----|-------|-------|------|
+| 243 | 1 | suite green | low (calibration only) |
+| A | 244–246 | heredity substrate | med (demographic coupling) |
+| B | 247–248 | embodiment→mind | med (decision-path blast) |
+| C | 249 | social cognition | low-med |
+| D | 250–251 | refactor + observability | refactor guarded by byte-identity |
+
+Roughly eight working iterations before audit Phase 2 resumes. Each is an
+independent commit point; the program degrades gracefully if paused at any
+boundary.
