@@ -203,10 +203,14 @@ impl Simulation {
                         // selection is index-fair — a plague spares no one.
                         let mut infected = 0usize;
                         for i in 0..n {
+                            // Iteration 252: prior-epidemic survivors resist
+                            // reinfection by their accumulated immunity.
+                            let susceptibility = magnitude
+                                * (Fixed::ONE - self.agents[i].embodied.immune.epidemic_immunity);
                             let roll = Fixed::from_f64(
                                 self.rng.get_mut(RngStream::Behavior).random::<f64>(),
                             );
-                            if roll < magnitude {
+                            if roll < susceptibility {
                                 let already = self.agent_diseases[i]
                                     .iter()
                                     .any(|d| d.kind == health::DiseaseKind::Epidemic);
@@ -776,10 +780,17 @@ impl Simulation {
         // ── 17. Health: disease effects on agents ──
         {
             let n = self.agents.len();
+            let decay_day = tick_u64.is_multiple_of(24); // daily cadence
             for i in 0..n {
                 let hunger = self.agents[i].needs.hunger;
                 let fatigue = self.agents[i].needs.fatigue;
                 let body = &mut self.agents[i].body;
+                // Iteration 252: hazard-accumulated immunity — a completed
+                // Epidemic course grants lasting resistance that decays on
+                // a generational scale (~0.0005/day ≈ 48K-tick half-life).
+                let had_epidemic = self.agent_diseases[i]
+                    .iter()
+                    .any(|d| d.kind == health::DiseaseKind::Epidemic);
                 health::system_health(
                     &mut body.health,
                     &mut body.energy,
@@ -788,6 +799,19 @@ impl Simulation {
                     fatigue,
                     &self.health_config,
                 );
+                let cleared_epidemic = had_epidemic
+                    && !self.agent_diseases[i]
+                        .iter()
+                        .any(|d| d.kind == health::DiseaseKind::Epidemic);
+                if cleared_epidemic {
+                    self.agents[i].embodied.immune.epidemic_immunity = Fixed::ONE;
+                } else if decay_day {
+                    // Sub-resolution per-day decrement computed in f64 and
+                    // quantized once (Fixed-4 truncation disease).
+                    let imm = self.agents[i].embodied.immune.epidemic_immunity.to_f64();
+                    self.agents[i].embodied.immune.epidemic_immunity =
+                        Fixed::from_f64((imm - 0.0005).max(0.0));
+                }
             }
         }
 
@@ -850,13 +874,17 @@ impl Simulation {
                         {
                             continue;
                         }
-                        // Probability check — reduced by distance and target health
+                        // Probability check — reduced by distance, target
+                        // health, and (Iteration 252) the target's accumulated
+                        // epidemic immunity: immune contacts are dead ends.
                         let distance_factor = Fixed::from_f64(1.0)
                             - Fixed::from_f64(dist as f64) * Fixed::from_f64(0.25);
                         let health_factor = self.agents[j].body.health;
+                        let immunity = self.agents[j].embodied.immune.epidemic_immunity;
                         let transmission_prob = rate
                             * distance_factor
-                            * (Fixed::ONE - health_factor * Fixed::from_f64(0.5));
+                            * (Fixed::ONE - health_factor * Fixed::from_f64(0.5))
+                            * (Fixed::ONE - immunity);
                         let roll =
                             Fixed::from_f64(self.rng.get_mut(RngStream::Social).random::<f64>());
                         if roll < transmission_prob {

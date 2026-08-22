@@ -8,6 +8,12 @@ use serde::{Deserialize, Serialize};
 /// Immune state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImmuneState {
+    /// Iteration 252: hazard-accumulated epidemic immunity (0–1). Set to
+    /// 1.0 when an Epidemic disease course completes, decays ~0.0005/day
+    /// (generational scale). Multiplies exposure/transmission by
+    /// (1 − immunity): survivor immunity turns the R0≈1 knife-edge into
+    /// damped burnout against a stable immunity wall.
+    pub epidemic_immunity: Fixed,
     /// Baseline resistance (0 = immunocompromised, 1 = robust).
     pub resistance: Fixed,
     /// Current inflammation level (0 = none, 1 = systemic).
@@ -28,6 +34,7 @@ impl Default for ImmuneState {
             infection_load: Fixed::ZERO,
             recovery_capacity: Fixed::from_f64(0.5),
             autoimmune_risk: Fixed::ZERO,
+            epidemic_immunity: Fixed::ZERO,
         }
     }
 }
@@ -330,5 +337,31 @@ mod tests {
             "famine stress must open infection channels (got {load})"
         );
         assert!(load < 1.0, "infection must not pin at 1.0 (got {load})");
+    }
+}
+
+#[cfg(test)]
+mod immunity_tests {
+    use super::*;
+
+    #[test]
+    fn default_population_has_no_immunity() {
+        let d = ImmuneState::default();
+        assert_eq!(d.epidemic_immunity, Fixed::ZERO);
+    }
+
+    #[test]
+    fn immunity_is_bounded_and_representable() {
+        // The daily decay decrement (0.0005) must survive Fixed-4
+        // quantization — the truncation disease would silently disable
+        // the decay and freeze the immunity wall permanently.
+        let step = Fixed::from_f64(0.0005);
+        assert!(step > Fixed::ZERO, "decay step quantized to zero");
+        let full = Fixed::ONE;
+        assert_eq!(
+            Fixed::from_f64(full.to_f64() - step.to_f64()) < full,
+            true,
+            "one decay day must strictly reduce full immunity"
+        );
     }
 }

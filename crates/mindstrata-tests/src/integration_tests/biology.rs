@@ -614,9 +614,16 @@ fn pestilence_epidemic_onset_outpaces_riverford() {
     // returns to ENDEMIC — probe-pinned 5 carriers @4000 (the Iter-191
     // state). The mid-tail pin flips from burnout (= 0) back to
     // persistence (≥ 1), the same flip Iteration 183c/191 documented.
+    // Iteration 252 re-contract (TERMINAL — hazard-accumulated immunity):
+    // completed Epidemic courses grant lasting resistance (decaying
+    // ~0.0005/day), so each wave burns out against a growing immunity
+    // wall. Probe: ZERO carriers @4000 AND at every checkpoint through
+    // 30K on pestilence seed 5 — clearance is no longer an R0≈1 coin
+    // flip but a restoring force (re-seeding waves are blocked by
+    // survivor immunity). This flip is structural, not another era.
     assert!(
-        mid_infected >= 1,
-        "the epidemic must persist at the mid tail \
+        mid_infected == 0,
+        "the epidemic must burn out against the immunity wall \
          (got {mid_infected} carriers @4000)"
     );
     // Iteration 110 recalibration: the trust-pacification consumer re-paces
