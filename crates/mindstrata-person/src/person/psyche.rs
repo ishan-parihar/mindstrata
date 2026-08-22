@@ -32,17 +32,29 @@ pub const CORE_TRAIT_PLASTICITY_RATE: f64 = 0.0005;
 /// its current traits on the first plasticity tick.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct TraitConstitution {
+    /// Openness. (doc added at S2 extraction)
     pub openness: Fixed,
+    /// Conscientiousness. (doc added at S2 extraction)
     pub conscientiousness: Fixed,
+    /// Extraversion. (doc added at S2 extraction)
     pub extraversion: Fixed,
+    /// Agreeableness. (doc added at S2 extraction)
     pub agreeableness: Fixed,
+    /// Neuroticism. (doc added at S2 extraction)
     pub neuroticism: Fixed,
+    /// Risk tolerance. (doc added at S2 extraction)
     pub risk_tolerance: Fixed,
+    /// Conformity. (doc added at S2 extraction)
     pub conformity: Fixed,
+    /// Ambition. (doc added at S2 extraction)
     pub ambition: Fixed,
+    /// Altruism. (doc added at S2 extraction)
     pub altruism: Fixed,
+    /// Traditionalism. (doc added at S2 extraction)
     pub traditionalism: Fixed,
+    /// Dominance. (doc added at S2 extraction)
     pub dominance: Fixed,
+    /// Impulsivity. (doc added at S2 extraction)
     pub impulsivity: Fixed,
 }
 
@@ -69,17 +81,29 @@ impl TraitConstitution {
 /// Personality trait model (Big Five + extensions).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Personality {
+    /// Openness. (doc added at S2 extraction)
     pub openness: Fixed,
+    /// Conscientiousness. (doc added at S2 extraction)
     pub conscientiousness: Fixed,
+    /// Extraversion. (doc added at S2 extraction)
     pub extraversion: Fixed,
+    /// Agreeableness. (doc added at S2 extraction)
     pub agreeableness: Fixed,
+    /// Neuroticism. (doc added at S2 extraction)
     pub neuroticism: Fixed,
+    /// Risk tolerance. (doc added at S2 extraction)
     pub risk_tolerance: Fixed,
+    /// Conformity. (doc added at S2 extraction)
     pub conformity: Fixed,
+    /// Ambition. (doc added at S2 extraction)
     pub ambition: Fixed,
+    /// Altruism. (doc added at S2 extraction)
     pub altruism: Fixed,
+    /// Traditionalism. (doc added at S2 extraction)
     pub traditionalism: Fixed,
+    /// Dominance. (doc added at S2 extraction)
     pub dominance: Fixed,
+    /// Impulsivity. (doc added at S2 extraction)
     pub impulsivity: Fixed,
     /// §8.1.6: Biologically-rooted temperament layer (the state-trait dynamics
     /// target). Derived deterministically from the traits at construction,
@@ -447,51 +471,75 @@ impl Personality {
 /// Dimensional affect (PAD model).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Affect {
+    /// Valence. (doc added at S2 extraction)
     pub valence: Fixed,
+    /// Arousal. (doc added at S2 extraction)
     pub arousal: Fixed,
+    /// Control. (doc added at S2 extraction)
     pub control: Fixed,
 }
 
 /// Discrete emotion intensities (initial set: 8 core emotions).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DiscreteEmotions {
+    /// Fear. (doc added at S2 extraction)
     pub fear: Fixed,
+    /// Anger. (doc added at S2 extraction)
     pub anger: Fixed,
+    /// Joy. (doc added at S2 extraction)
     pub joy: Fixed,
+    /// Sadness. (doc added at S2 extraction)
     pub sadness: Fixed,
+    /// Trust. (doc added at S2 extraction)
     pub trust: Fixed,
+    /// Shame. (doc added at S2 extraction)
     pub shame: Fixed,
+    /// Pride. (doc added at S2 extraction)
     pub pride: Fixed,
+    /// Guilt. (doc added at S2 extraction)
     pub guilt: Fixed,
     /// §8.1.4 expanded emotion families — the plan's 22-family roster
     /// (write-only observational state; nothing reads them for decisions).
     #[serde(default)]
     pub disgust: Fixed,
     #[serde(default)]
+    /// Contempt. (doc added at S2 extraction)
     pub contempt: Fixed,
     #[serde(default)]
+    /// Awe. (doc added at S2 extraction)
     pub awe: Fixed,
     #[serde(default)]
+    /// Gratitude. (doc added at S2 extraction)
     pub gratitude: Fixed,
     #[serde(default)]
+    /// Jealousy. (doc added at S2 extraction)
     pub jealousy: Fixed,
     #[serde(default)]
+    /// Envy. (doc added at S2 extraction)
     pub envy: Fixed,
     #[serde(default)]
+    /// Loneliness. (doc added at S2 extraction)
     pub loneliness: Fixed,
     #[serde(default)]
+    /// Tenderness. (doc added at S2 extraction)
     pub tenderness: Fixed,
     #[serde(default)]
+    /// Humiliation. (doc added at S2 extraction)
     pub humiliation: Fixed,
     #[serde(default)]
+    /// Relief. (doc added at S2 extraction)
     pub relief: Fixed,
     #[serde(default)]
+    /// Hope. (doc added at S2 extraction)
     pub hope: Fixed,
     #[serde(default)]
+    /// Despair. (doc added at S2 extraction)
     pub despair: Fixed,
     #[serde(default)]
+    /// Nostalgia. (doc added at S2 extraction)
     pub nostalgia: Fixed,
     #[serde(default)]
+    /// Moral outrage. (doc added at S2 extraction)
     pub moral_outrage: Fixed,
 }
 

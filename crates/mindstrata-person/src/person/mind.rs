@@ -38,11 +38,17 @@ impl EvidenceSource {
 /// Belief about a proposition.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Belief {
+    /// Proposition id. (doc added at S2 extraction)
     pub proposition_id: u64,
+    /// Confidence. (doc added at S2 extraction)
     pub confidence: Fixed,
+    /// Emotional charge. (doc added at S2 extraction)
     pub emotional_charge: Fixed,
+    /// Identity linkage. (doc added at S2 extraction)
     pub identity_linkage: Fixed,
+    /// Resistance. (doc added at S2 extraction)
     pub resistance: Fixed,
+    /// Last reinforced tick. (doc added at S2 extraction)
     pub last_reinforced_tick: u64,
     /// §19.5.A: How this belief was originally acquired.
     pub source: EvidenceSource,
@@ -86,22 +92,34 @@ pub enum GoalSource {
 /// Goal priority and source.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Goal {
+    /// Kind. (doc added at S2 extraction)
     pub kind: GoalKind,
+    /// Priority. (doc added at S2 extraction)
     pub priority: Fixed,
+    /// Commitment. (doc added at S2 extraction)
     pub commitment: Fixed,
+    /// Created tick. (doc added at S2 extraction)
     pub created_tick: u64,
     /// §24: What triggered this goal — affects abandonment thresholds.
     pub source: GoalSource,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Enum. (doc added at S2 extraction)
 pub enum GoalKind {
+    /// Eat. (doc added at S2 extraction)
     Eat,
+    /// Drink. (doc added at S2 extraction)
     Drink,
+    /// Rest. (doc added at S2 extraction)
     Rest,
+    /// Work. (doc added at S2 extraction)
     Work,
+    /// Socialize. (doc added at S2 extraction)
     Socialize,
+    /// Worship. (doc added at S2 extraction)
     Worship,
+    /// SeekSafety. (doc added at S2 extraction)
     SeekSafety,
 }
 
@@ -111,21 +129,27 @@ pub enum GoalKind {
 /// Only identities that affect action utility are included (YAGNI).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum IdentityKind {
+    /// Farmer. (doc added at S2 extraction)
     Farmer,
+    /// Parent. (doc added at S2 extraction)
     Parent,
+    /// Believer. (doc added at S2 extraction)
     Believer,
 }
 
 /// An agent's identity with its strength (0.0–1.0).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentIdentity {
+    /// Kind. (doc added at S2 extraction)
     pub kind: IdentityKind,
+    /// Strength. (doc added at S2 extraction)
     pub strength: Fixed,
 }
 
 /// Identity state for an agent.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct IdentityState {
+    /// Identities. (doc added at S2 extraction)
     pub identities: Vec<AgentIdentity>,
 }
 
@@ -343,14 +367,23 @@ impl Default for DerivedMentalState {
 /// Inputs for derived mental state computation.
 /// Grouped to avoid too-many-arguments clippy lint. Ephemeral per-tick.
 pub struct MentalStateInput {
+    /// Stress. (doc added at S2 extraction)
     pub stress: Fixed,
+    /// Coping potential. (doc added at S2 extraction)
     pub coping_potential: Fixed,
+    /// Social support. (doc added at S2 extraction)
     pub social_support: Fixed,
+    /// Need deficit avg. (doc added at S2 extraction)
     pub need_deficit_avg: Fixed,
+    /// Meaning. (doc added at S2 extraction)
     pub meaning: Fixed,
+    /// Autonomy. (doc added at S2 extraction)
     pub autonomy: Fixed,
+    /// Success rate. (doc added at S2 extraction)
     pub success_rate: Fixed,
+    /// Neuroticism. (doc added at S2 extraction)
     pub neuroticism: Fixed,
+    /// Justice perception. (doc added at S2 extraction)
     pub justice_perception: Fixed,
 }
 

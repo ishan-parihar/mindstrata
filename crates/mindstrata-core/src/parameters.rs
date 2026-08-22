@@ -15,7 +15,7 @@
 //!   - Scheduler: tick intervals, phase boundaries
 //! ```
 
-use mindstrata_core::fixed::Fixed;
+use crate::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 
 /// Top-level simulation parameters — all tuning constants in one place.

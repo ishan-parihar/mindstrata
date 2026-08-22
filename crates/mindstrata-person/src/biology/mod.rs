@@ -310,7 +310,7 @@ impl EmbodiedState {
         nutrition_quality: Fixed,
         smoke_exposure: Fixed,
         damp_housing: Fixed,
-        params: &crate::parameters::SimParameters,
+        params: &mindstrata_core::parameters::SimParameters,
     ) {
         // 1. Circadian — advances time of day
         self.circadian.tick_update(144, is_sleeping); // 144 ticks per day
@@ -602,7 +602,7 @@ mod tests {
             Fixed::from_f64(0.6), // nutrition quality
             Fixed::ZERO,          // smoke_exposure
             Fixed::ZERO,          // damp_housing
-            &crate::parameters::SimParameters::default(),
+            &mindstrata_core::parameters::SimParameters::default(),
         );
         // Should not panic and values should remain in range
         assert!(derived_health_in_range(&embodied));
@@ -626,7 +626,7 @@ mod tests {
             Fixed::from_f64(0.6), // nutrition quality
             Fixed::ZERO,          // smoke_exposure
             Fixed::ZERO,          // damp_housing
-            &crate::parameters::SimParameters::default(),
+            &mindstrata_core::parameters::SimParameters::default(),
         );
         assert!(embodied.nervous.sleep_pressure < Fixed::from_f64(0.8));
     }
@@ -659,7 +659,7 @@ mod tests {
                     Fixed::from_f64(0.6), // nutrition quality
                     Fixed::ZERO,          // smoke_exposure
                     Fixed::ZERO,          // damp_housing
-                    &crate::parameters::SimParameters::default(),
+                    &mindstrata_core::parameters::SimParameters::default(),
                 );
             }
             embodied.endocrine.stress.level

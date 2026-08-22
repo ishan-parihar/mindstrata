@@ -9,17 +9,24 @@ use serde::{Deserialize, Serialize};
 /// Biological sex (from genome).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BiologicalSex {
+    /// Male. (doc added at S2 extraction)
     Male,
+    /// Female. (doc added at S2 extraction)
     Female,
 }
 
 /// Puberty stage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum PubertyStage {
+    /// Prepubescent. (doc added at S2 extraction)
     Prepubescent,
+    /// Early. (doc added at S2 extraction)
     Early,
+    /// Mid. (doc added at S2 extraction)
     Mid,
+    /// Late. (doc added at S2 extraction)
     Late,
+    /// Complete. (doc added at S2 extraction)
     Complete,
 }
 
@@ -53,9 +60,13 @@ impl Default for ReproductiveUpdateParams {
 /// Late < 1.0, FullTerm at 1.0 (birth due).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GestationStage {
+    /// Early. (doc added at S2 extraction)
     Early,
+    /// Mid. (doc added at S2 extraction)
     Mid,
+    /// Late. (doc added at S2 extraction)
     Late,
+    /// FullTerm. (doc added at S2 extraction)
     FullTerm,
 }
 

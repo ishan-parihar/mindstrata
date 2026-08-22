@@ -10,12 +10,19 @@ use serde::{Deserialize, Serialize};
 /// Life stage classification.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum LifeStage {
+    /// Infant. (doc added at S2 extraction)
     Infant,
+    /// Child. (doc added at S2 extraction)
     Child,
+    /// Adolescent. (doc added at S2 extraction)
     Adolescent,
+    /// YoungAdult. (doc added at S2 extraction)
     YoungAdult,
+    /// Adult. (doc added at S2 extraction)
     Adult,
+    /// Mature. (doc added at S2 extraction)
     Mature,
+    /// Elder. (doc added at S2 extraction)
     Elder,
 }
 

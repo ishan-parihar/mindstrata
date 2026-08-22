@@ -18,7 +18,9 @@ use serde::{Deserialize, Serialize};
 /// Biological sex of an agent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Sex {
+    /// Male. (doc added at S2 extraction)
     Male,
+    /// Female. (doc added at S2 extraction)
     Female,
 }
 
@@ -141,11 +143,17 @@ impl Default for FertilityPredispositions {
 /// Genes bias but do not determine — environment moderates expression.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Genome {
+    /// Sex. (doc added at S2 extraction)
     pub sex: Sex,
+    /// Trait predispositions. (doc added at S2 extraction)
     pub trait_predispositions: TraitPredispositions,
+    /// Health predispositions. (doc added at S2 extraction)
     pub health_predispositions: HealthPredispositions,
+    /// Metabolic predispositions. (doc added at S2 extraction)
     pub metabolic_predispositions: MetabolicPredispositions,
+    /// Physical potential. (doc added at S2 extraction)
     pub physical_potential: PhysicalPotential,
+    /// Fertility predispositions. (doc added at S2 extraction)
     pub fertility_predispositions: FertilityPredispositions,
 }
 

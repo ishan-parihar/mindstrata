@@ -165,6 +165,7 @@ impl StressAxis {
 /// Effects: increases trust, attachment, in-group favoritism.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BondingAxis {
+    /// Level. (doc added at S2 extraction)
     pub level: Fixed,
     /// Baseline receptivity to bonding.
     pub receptivity: Fixed,
@@ -207,6 +208,7 @@ impl BondingAxis {
 /// Effects: modulates confidence, aggression, risk tolerance.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DominanceAxis {
+    /// Level. (doc added at S2 extraction)
     pub level: Fixed,
 }
 
@@ -329,11 +331,17 @@ impl GrowthAxis {
 /// Complete endocrine state — all hormonal axes.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct EndocrineState {
+    /// Stress. (doc added at S2 extraction)
     pub stress: StressAxis,
+    /// Bonding. (doc added at S2 extraction)
     pub bonding: BondingAxis,
+    /// Dominance. (doc added at S2 extraction)
     pub dominance: DominanceAxis,
+    /// Metabolic. (doc added at S2 extraction)
     pub metabolic: MetabolicAxis,
+    /// Arousal. (doc added at S2 extraction)
     pub arousal: ArousalAxis,
+    /// Growth. (doc added at S2 extraction)
     pub growth: GrowthAxis,
 }
 

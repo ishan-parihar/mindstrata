@@ -9,11 +9,17 @@ use serde::{Deserialize, Serialize};
 /// §19.5.G: Type of relationship — determines interaction patterns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RelationshipKind {
+    /// Stranger. (doc added at S2 extraction)
     Stranger,
+    /// Neighbor. (doc added at S2 extraction)
     Neighbor,
+    /// Colleague. (doc added at S2 extraction)
     Colleague,
+    /// Friend. (doc added at S2 extraction)
     Friend,
+    /// Rival. (doc added at S2 extraction)
     Rival,
+    /// Kin. (doc added at S2 extraction)
     Kin,
 }
 
@@ -54,13 +60,21 @@ impl StatusState {
 /// A directed relationship between two agents.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Relationship {
+    /// From. (doc added at S2 extraction)
     pub from: AgentId,
+    /// To. (doc added at S2 extraction)
     pub to: AgentId,
+    /// Trust. (doc added at S2 extraction)
     pub trust: Fixed,
+    /// Affection. (doc added at S2 extraction)
     pub affection: Fixed,
+    /// Respect. (doc added at S2 extraction)
     pub respect: Fixed,
+    /// Fear. (doc added at S2 extraction)
     pub fear: Fixed,
+    /// Obligation. (doc added at S2 extraction)
     pub obligation: Fixed,
+    /// Last interaction tick. (doc added at S2 extraction)
     pub last_interaction_tick: u64,
     /// §19.5.G: Relationship type — evolves based on interaction history.
     pub kind: RelationshipKind,

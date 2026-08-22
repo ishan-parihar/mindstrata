@@ -10,7 +10,9 @@ pub mod agent_tier;
 pub mod appraisal;
 pub mod attention;
 pub mod belief_update;
-pub mod biology;
+pub mod biology {
+    pub use mindstrata_person::biology::*;
+}
 pub mod black_market;
 pub mod conflict;
 pub mod culture;
@@ -30,8 +32,12 @@ pub mod military;
 pub mod mods;
 pub mod noosphere;
 pub mod norms;
-pub mod parameters;
-pub mod person;
+pub mod parameters {
+    pub use mindstrata_core::parameters::*;
+}
+pub mod person {
+    pub use mindstrata_person::person::*;
+}
 pub mod population_cap;
 pub mod provenance;
 pub mod psychology;
