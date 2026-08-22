@@ -3,6 +3,8 @@
 //!
 //! Extracted from `mindstrata-sim` (S3 of `docs/PLAN_SCALING_FOUNDATION.md`).
 
+#![deny(missing_docs)]
+
 pub mod black_market;
 pub mod demography;
 pub mod ecology;

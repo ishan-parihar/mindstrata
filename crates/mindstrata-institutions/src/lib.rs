@@ -5,6 +5,8 @@
 //! Pure domain types and free functions; Simulation glue stays in
 //! `mindstrata-sim::sim::{institutions,legal,...}_impl`.
 
+#![deny(missing_docs)]
+
 pub mod diplomacy;
 pub mod factions;
 pub mod institutions;

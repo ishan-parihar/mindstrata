@@ -174,3 +174,25 @@ Behavioral work concentrates in `psychology/ social/ actions.rs` right now
 - **Residual**: sim retains orchestration + impl-glue (~35K LOC target met later via
   Arc-D systems extraction); TUI longitudinal-chart wiring landed separately by the
   behavioral session (Iter-251).
+- **IMPLEMENTATION AUDIT (post-S3)** — all exit criteria verified:
+  - *S1*: zero `use super::*` in non-test sources across all 7 crates; coupling map
+    committed. (The plan's "102 files" baseline figure included idiomatic test globs.)
+  - *S2*: `mindstrata-person` builds standalone; golden byte-identical; sim −39,880 LOC
+    via pure renames.
+  - *S3*: declared DAG is edge-exact and cycle-free — core ← person ← psych ← social;
+    institutions/world as siblings below person/institutions; sim consumes all five;
+    tui/cli/render/tests/benches reach domains only through sim's shims. All five new
+    crates pass `cargo check -p` standalone.
+  - *Test conservation*: S3 moved exactly 669 executed units out of sim (917→248) and
+    the four crates gained exactly 669 (172+67+371+59). Zero lost.
+  - *Doctrine gap found & fixed*: new crates were born at warn-level docs lint with full
+    coverage instead of `deny`; all five flipped to `#![deny(missing_docs)]`.
+- **Flagged debt (owned by behavioral session, not this program)**:
+  1. Commit `af19b6b` ("Iteration 251") accidentally captured half of S2 via the shared
+     git index and does not build standalone — bisect-skip it; `git notes` attached to
+     both it and `e702a77`. Treat af19b6b+e702a77 as one logical change.
+  2. Iteration 252 (`49c847d`, epidemic-immunity R0 resolution) landed with **10 pins
+     un-re-anchored**: 7 snapshot_tests + kin_support/social_trust/one behavioral test.
+     Golden replay still passes (no epidemic ignites in the riverford_minor seed-42
+     window), so the shift escaped its gate. Per §4.2 these re-anchors need probe
+     evidence naming measured value, old band, and mechanism — do not batch-accept.
