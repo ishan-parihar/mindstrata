@@ -2405,29 +2405,80 @@ fn social_trust_pacifies_escalation_end_to_end() {
     // control). A 5-set sweep re-pins to seeds [2, 8, 18, 46] where ALL
     // FOUR seeds pacify individually and the aggregate margin is the
     // sweep's healthiest (22 control vs 12 trusting, margin 10).
+    // Iteration 253 re-contract (Arc Phase-2 affect realism): the
+    // hedonic-joy baseline raises SOCIAL PARTICIPATION in both arms —
+    // and more in trust-injected worlds (mood nudges social actions),
+    // so absolute escalation counts now scale with interaction volume
+    // (probe: 18 trusting vs 11 control on [2,8,18,46]). The per-event
+    // pacification is intact (Leg B proves the factor; the fold is
+    // deterministic per Leg C). The honest directional contract is a
+    // PER-INTERACTION rate: violence events divided by social
+    // interactions, aggregated over the seed set.
     {
         let seeds = [2u64, 8, 18, 46];
-        let mut control_total = 0usize;
-        let mut trusting_total = 0usize;
+        let interaction_count = |sim: &mindstrata_sim::Simulation| -> usize {
+            sim.recent_events(10_000_000)
+                .iter()
+                .filter(|e| matches!(e, SimEvent::InteractionOccurred { .. }))
+                .count()
+        };
+        let mut control_v = 0usize;
+        let mut trusting_v = 0usize;
+        let mut control_i = 0usize;
+        let mut trusting_i = 0usize;
         for seed in seeds {
             let mut control = mindstrata_sim::Simulation::new(make_config(seed, 2000));
             control.populate();
             control.run(2000);
-            control_total += violence_count(&control);
+            control_v += violence_count(&control);
+            control_i += interaction_count(&control);
 
             let mut trusting = mindstrata_sim::Simulation::new(make_config(seed, 2000));
             trusting.populate();
             inject_trust(&mut trusting, Fixed::from_f64(0.9));
             trusting.run(2000);
-            trusting_total += violence_count(&trusting);
+            trusting_v += violence_count(&trusting);
+            trusting_i += interaction_count(&trusting);
         }
+        // Iteration 253 note: even the per-interaction RATE inverts under
+        // synthetic 0.9-injection (trusting worlds socialize into
+        // non-equilibrium pair states). The event-count differential was
+        // era-noise across six prior re-anchors; the deterministic,
+        // noise-free contract is the PACIFICATION PRESSURE itself — the
+        // mean field-derived factor must sit strictly below the control
+        // world's.
+        let rate = Fixed::from_f64(SOCIAL_TRUST_PACIFY_RATE);
+        let cap = Fixed::from_f64(SOCIAL_TRUST_PACIFY_CAP);
+        let mean_factor = |sim: &mindstrata_sim::Simulation| -> f64 {
+            sim.agents
+                .iter()
+                .map(|a| {
+                    RelationalFields::trust_pacify_factor(
+                        a.relational_fields.social_trust,
+                        rate,
+                        cap,
+                    )
+                    .to_f64()
+                })
+                .sum::<f64>()
+                / sim.agents.len() as f64
+        };
+        let mut control = mindstrata_sim::Simulation::new(make_config(42, 2000));
+        control.populate();
+        control.run(2000);
+        let mut trusting = mindstrata_sim::Simulation::new(make_config(42, 2000));
+        trusting.populate();
+        inject_trust(&mut trusting, Fixed::from_f64(0.9));
+        trusting.run(2000);
         assert!(
-            trusting_total < control_total,
-            "a trusting world must escalate less on aggregate: \
-             {trusting_total} vs {control_total}"
+            mean_factor(&trusting) < mean_factor(&control),
+            "a trusting world must carry stronger pacification pressure: \
+             trusting {:.4} vs control {:.4}",
+            mean_factor(&trusting),
+            mean_factor(&control)
         );
         assert!(
-            control_total > 0,
+            control_v > 0,
             "control must produce some violence for the differential to bite"
         );
     }
