@@ -805,6 +805,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mindstrata-person"
+version = "0.1.0"
+dependencies = [
+ "mindstrata-core",
+ "rand",
+ "rand_chacha",
+ "serde",
+]
+
+[[package]]
 name = "mindstrata-render"
 version = "0.1.0"
 dependencies = [
@@ -818,6 +828,7 @@ name = "mindstrata-sim"
 version = "0.1.0"
 dependencies = [
  "mindstrata-core",
+ "mindstrata-person",
  "postcard",
  "rand",
  "rand_chacha",
