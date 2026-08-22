@@ -339,9 +339,36 @@ impl Simulation {
                 delta.fear = (delta.fear + sep * style_factor).clamp_01();
             }
 
-            emotions[i].fear = (emotions[i].fear + delta.fear).clamp_01();
+            // Iteration 253 (audit Phase 2 - affect realism): piecewise
+            // soft shoulder. Below SOFT_FEAR_CEILING accumulation is
+            // BYTE-IDENTICAL to the old linear form; above it, overshoot
+            // compresses at half weight - turning the census's hard 0.94
+            // saturation wall (bimodal plateau, every seed) into a graded
+            // 0.85-0.93 shoulder while leaving every sub-ceiling dynamic
+            // untouched.
+            const SOFT_FEAR_CEILING: Fixed = Fixed::from_raw(8500); // 0.85
+            let raw_fear = emotions[i].fear + delta.fear;
+            emotions[i].fear = if raw_fear > SOFT_FEAR_CEILING {
+                (SOFT_FEAR_CEILING + (raw_fear - SOFT_FEAR_CEILING) * Fixed::from_f64(0.5))
+                    .clamp_01()
+            } else {
+                raw_fear.clamp_01()
+            };
             emotions[i].anger = (emotions[i].anger + delta.anger).clamp_01();
-            emotions[i].joy = (emotions[i].joy + delta.joy).clamp_01();
+            // Iteration 253 (hedonic adaptation): a comfortable body
+            // generates mild BACKGROUND joy - needs met + rested accrues
+            // ~+0.02/day, holding a small positive joy equilibrium against
+            // the decay pass instead of the census's dead 0.000 (which
+            // structurally pinned calm-world valence below zero).
+            let comfort_joy = if needs[i].hunger < Fixed::from_f64(0.5)
+                && needs[i].thirst < Fixed::from_f64(0.5)
+                && agents[i].embodied.circadian.sleep_debt < Fixed::from_f64(0.3)
+            {
+                Fixed::from_f64(0.0008)
+            } else {
+                Fixed::ZERO
+            };
+            emotions[i].joy = (emotions[i].joy + delta.joy + comfort_joy).clamp_01();
             emotions[i].sadness = (emotions[i].sadness + delta.sadness).clamp_01();
             emotions[i].trust = (emotions[i].trust + delta.trust).clamp_01();
             emotions[i].shame = (emotions[i].shame + delta.shame).clamp_01();
