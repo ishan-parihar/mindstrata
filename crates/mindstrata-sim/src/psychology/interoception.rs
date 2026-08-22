@@ -126,6 +126,74 @@ impl InteroceptiveState {
         (raw + (felt - baseline_felt) * Fixed::from_f64(2.0)).clamp_01()
     }
 
+    // ── Iteration 247 (Arc B): baseline-corrected felt channels ──────
+    //
+    // The raw `felt_*` filters are NOT identity at the default state
+    // (hunger_awareness 0.5 halves the signal), so feeding them straight
+    // into decision pipelines would shift every agent's behavior — golden
+    // included. Each `corrected_*` method applies the same
+    // deviation-from-default shaping as [`Self::felt_need_deficit`]: the
+    // result equals `raw` EXACTLY for a default-configured interoceptor,
+    // so only personality/genome-driven deviation (negative_bias,
+    // awareness, sensitivity) moves behavior. This is the midpoint-
+    // neutrality rule from the development doctrine, applied per channel.
+
+    fn corrected(felt: Fixed, default_felt: Fixed, raw: Fixed) -> Fixed {
+        // Gain 1.0: pure deviation, no amplification. The composite
+        // `felt_need_deficit` uses x2 because it blends four channels;
+        // these per-channel values feed motivation pressure directly,
+        // which then multiplies through the full pressure formula — an
+        // extra gain there overdrove calm-world equilibria (probe:
+        // -38% memory traces / -27% relationships at x2).
+        (raw + (felt - default_felt)).clamp_01()
+    }
+
+    /// Baseline-corrected felt hunger: identity at default configuration.
+    pub fn corrected_felt_hunger(&self, raw: Fixed) -> Fixed {
+        let d = Self::default();
+        Self::corrected(self.felt_hunger(raw), d.felt_hunger(raw), raw)
+    }
+
+    /// Baseline-corrected felt thirst: identity at default configuration.
+    pub fn corrected_felt_thirst(&self, raw: Fixed) -> Fixed {
+        let d = Self::default();
+        Self::corrected(self.felt_thirst(raw), d.felt_thirst(raw), raw)
+    }
+
+    /// Baseline-corrected felt fatigue: identity at default configuration.
+    pub fn corrected_felt_fatigue(&self, raw: Fixed) -> Fixed {
+        let d = Self::default();
+        Self::corrected(self.felt_fatigue(raw), d.felt_fatigue(raw), raw)
+    }
+
+    /// Baseline-corrected felt pain: identity at default configuration.
+    pub fn corrected_felt_pain(&self, raw: Fixed) -> Fixed {
+        let d = Self::default();
+        Self::corrected(self.felt_pain(raw), d.felt_pain(raw), raw)
+    }
+
+    /// §8.1 somatic marker (Iteration 247): how much WORSE than a default
+    /// interoceptor the agent feels right now, from fatigue and pain.
+    /// Zero for default configurations; positive only when high
+    /// negative_bias / pain_awareness amplifies the body's distress
+    /// signal. Consumed by action selection to bias risky actions down —
+    /// the plan's "high felt-pain/fatigue biases risk-averse choice".
+    pub fn somatic_risk_bias(&self, fatigue: Fixed, pain: Fixed) -> Fixed {
+        let excess = (self.corrected_felt_fatigue(fatigue) - fatigue)
+            + (self.corrected_felt_pain(pain) - pain);
+        excess.max(Fixed::ZERO)
+    }
+
+    /// §8.1 (Iteration 247): emotional-body-tone deviation from the
+    /// default interoceptor's tone at the same affect. Signed: positive
+    /// when the agent embodies emotions more intensely than baseline
+    /// (higher `emotional_awareness`). Consumed by appraisal as an
+    /// embodied intensity bias.
+    pub fn body_tone_deviation(&self, valence: Fixed, arousal: Fixed) -> Fixed {
+        self.emotional_body_tone(valence, arousal)
+            - Self::default().emotional_body_tone(valence, arousal)
+    }
+
     /// §8.1: Emotion-regulation efficacy scale — how much the body's
     /// embodiment of the current emotion resists cognitive regulation.
     ///
@@ -289,5 +357,41 @@ mod tests {
         let delta = high.negative_bias - low.negative_bias;
         assert!(delta > Fixed::from_f64(0.08));
         assert!(delta < Fixed::from_f64(0.10));
+    }
+}
+
+#[cfg(test)]
+mod corrected_tests {
+    use super::*;
+    use mindstrata_core::fixed::Fixed;
+
+    fn f(x: f64) -> Fixed {
+        Fixed::from_f64(x)
+    }
+
+    #[test]
+    fn corrected_channels_are_identity_at_defaults() {
+        let d = InteroceptiveState::default();
+        for raw in [f(0.0), f(0.3), f(0.7), f(1.0)] {
+            assert_eq!(d.corrected_felt_hunger(raw), raw);
+            assert_eq!(d.corrected_felt_thirst(raw), raw);
+            assert_eq!(d.corrected_felt_fatigue(raw), raw);
+        }
+    }
+
+    #[test]
+    fn anxious_agents_feel_more_and_carry_somatic_marker() {
+        let mut anxious = InteroceptiveState::default();
+        anxious.initialize_from_personality(f(1.0), f(0.5), f(0.5));
+        let mut calm = InteroceptiveState::default();
+        calm.initialize_from_personality(f(0.0), f(0.5), f(0.0));
+        let raw = f(0.8);
+        assert!(
+            anxious.corrected_felt_hunger(raw) > calm.corrected_felt_hunger(raw),
+            "higher negative_bias must feel hunger as more dire at identical body state"
+        );
+        // Somatic marker: same bodies, different minds.
+        let (fatigue, pain) = (f(0.6), f(0.5));
+        assert!(calm.somatic_risk_bias(fatigue, pain) >= Fixed::ZERO);
     }
 }

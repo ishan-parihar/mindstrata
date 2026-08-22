@@ -96,6 +96,12 @@ pub struct DecisionContext<'a> {
     pub dominant_need: MotiveCategory,
     /// Pressure of the dominant need (full formula) — scales the urgency boost.
     pub dominant_pressure: Fixed,
+    // ── §8.1 (Iteration 247): interoceptive somatic marker ──────────
+    /// How much worse than a default interoceptor the agent feels right
+    /// now (fatigue + pain amplification). Biases risky actions down —
+    /// a body in distress votes against gambles. Exactly zero for
+    /// default configurations, so calm-world selection is unchanged.
+    pub somatic_marker: Fixed,
     // ── §8.1.16 (Iteration 103): prospection dread ──────────────────
     /// The agent's scenario-grounded dread (0–1) — how much it fears the
     /// imagined bad future. Drives the precautionary-provisioning term.
@@ -776,6 +782,14 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
         let habit = ctx.decision_policy.habit_modifier(is_routine, ctx.stress);
         utility += emo + moral + habit;
 
+        // Iteration 247 (Arc B — interoception): the somatic marker
+        // biases risky actions DOWN — a body in distress votes against
+        // gambles (Wander is the classified risky action). Zero for
+        // default interoceptors, so calm worlds are byte-identical.
+        if is_risky && ctx.somatic_marker > Fixed::ZERO {
+            utility -= ctx.somatic_marker * Fixed::from_f64(0.1);
+        }
+
         // Iteration 232: mood drift — positive mood boosts social/
         // exploration actions; negative mood boosts withdrawal/work.
         // Sized at ±0.03 (comparable to dread/hope nudge) so it's a
@@ -926,6 +940,7 @@ mod tests {
                 mood_valence: Fixed::ZERO,
                 season: 0,
                 life_stage: 4,
+                somatic_marker: Fixed::ZERO,
             },
             &mut rng,
         );
@@ -980,6 +995,7 @@ mod tests {
                 mood_valence: Fixed::ZERO,
                 season: 0,
                 life_stage: 4,
+                somatic_marker: Fixed::ZERO,
             },
             &mut rng,
         );
@@ -1031,6 +1047,7 @@ mod tests {
                 mood_valence: Fixed::ZERO,
                 season: 0,
                 life_stage: 4,
+                somatic_marker: Fixed::ZERO,
             },
             &mut rng,
         );
@@ -1139,6 +1156,7 @@ mod tests {
                 mood_valence: Fixed::ZERO,
                 season: 0,
                 life_stage: 4,
+                somatic_marker: Fixed::ZERO,
             },
             &mut rng,
         );
@@ -1189,6 +1207,7 @@ mod tests {
                 mood_valence: Fixed::ZERO,
                 season: 0,
                 life_stage: 4,
+                somatic_marker: Fixed::ZERO,
             },
             &mut rng,
         );
@@ -1945,6 +1964,7 @@ mod tests {
                         mood_valence: Fixed::ZERO,
                         season: 0,
                         life_stage: 4,
+                        somatic_marker: Fixed::ZERO,
                     },
                     &mut rng,
                 );

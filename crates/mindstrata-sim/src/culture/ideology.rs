@@ -65,6 +65,65 @@ impl Ideology {
             Fixed::ZERO
         }
     }
+
+    /// Iteration 247 (Arc A carry-over): vertical ideological
+    /// transmission. Axis positions blend mid-parent (70%) with the 0.5
+    /// community midpoint (30%) plus ±0.08 enculturation noise;
+    /// conviction and the three meta-parameters blend mid-parent toward
+    /// their defaults with the same shape. `other` is None for
+    /// single-parent (replacement-newborn) inheritance. Axes match by
+    /// name — unmatched axes pass through from `self` unchanged.
+    #[must_use]
+    pub fn inherit(&self, other: Option<&Self>, rng: &mut impl rand::Rng) -> Self {
+        use mindstrata_core::fixed::Fixed;
+
+        let mid = |a: Fixed, b: Option<Fixed>| b.map_or(a, |b| (a + b) * Fixed::from_f64(0.5));
+        let mut shape = |mid: Fixed, default: Fixed| -> Fixed {
+            (mid * Fixed::from_f64(0.7)
+                + default * Fixed::from_f64(0.3)
+                + Fixed::from_f64(rng.random_range(-0.08..0.08)))
+            .clamp_01()
+        };
+        let axes = self
+            .axes
+            .iter()
+            .map(|axis| {
+                let other_axis = other.and_then(|o| o.axes.iter().find(|a2| a2.name == axis.name));
+                IdeologyAxis {
+                    name: axis.name.clone(),
+                    position: shape(
+                        mid(axis.position, other_axis.map(|a2| a2.position)),
+                        Fixed::from_f64(0.5),
+                    ),
+                    conviction: shape(
+                        mid(axis.conviction, other_axis.map(|a2| a2.conviction)),
+                        Fixed::from_f64(0.5),
+                    ),
+                }
+            })
+            .collect();
+        Self {
+            axes,
+            dogmatism: shape(
+                mid(self.dogmatism, other.map(|o| o.dogmatism)),
+                Fixed::from_f64(0.4),
+            ),
+            echo_chamber_strength: shape(
+                mid(
+                    self.echo_chamber_strength,
+                    other.map(|o| o.echo_chamber_strength),
+                ),
+                Fixed::from_f64(0.3),
+            ),
+            polarization_tendency: shape(
+                mid(
+                    self.polarization_tendency,
+                    other.map(|o| o.polarization_tendency),
+                ),
+                Fixed::from_f64(0.3),
+            ),
+        }
+    }
 }
 
 /// Network-level belief ecology — tracks polarization across the population.
