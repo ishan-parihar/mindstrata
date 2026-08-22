@@ -213,18 +213,20 @@ mod tests {
     /// is degenerate (non-deterministic emergence is the expected contract).
     ///
     /// Iteration 186: re-anchored from the base world to the grievance-crisis
-    /// scenario (pestilence). The council-legitimacy equilibrium fix (floor
-    /// 0.6, suppression scale 0.25) sits the BASE world's equilibrium above
-    /// the 0.5 formation gate — calm/riverford villages no longer radicalize
-    /// (the calm-world coup clock is closed; probe: calm 0 coups @100K), so
-    /// the formation system's cross-seed variance is now exercised where the
-    /// trigger is actually armed: the epidemic's grievance surge (probe:
-    /// pestilence seeds form their first factions at 1–4K and the per-seed
-    /// faction counts vary 1–17 over 30K). Horizon raised to 3000 so the
-    /// early-forming seeds clear formation.
+    /// scenario (pestilence) — the calm-world coup clock is closed and the
+    /// formation system's cross-seed variance is exercised where the trigger
+    /// arms.
+    /// Iteration 240 re-anchor (crisis-pressure accumulator): formation no
+    /// longer requires the single-tick legitimacy cliff (which produced {0}
+    /// across ALL seeds after Iterations 228–236 re-paced legitimacy), so
+    /// the horizon moves to the accumulator's arming scale — sustained
+    /// epidemic discontent crosses the 0.5 pressure threshold at ~5–13K
+    /// (probe: pestilence-5 arms ~8K, calm-42 ~13K), so 12K gives
+    /// high-grievance seeds formations while stable ones stay clean — real
+    /// cross-seed variance instead of a shared zero.
     ///
-    /// Runtime note: 20 seeds × 3000 pestilence ticks ≈ 60–90s (the epidemic
-    /// machinery is heavier; acceptable for the gate).
+    /// Runtime note: 20 seeds × 12K pestilence ticks ≈ 3–4 min release-mode
+    /// (the epidemic machinery is heavier; acceptable for the gate).
     #[test]
     fn faction_counts_vary_across_worlds() {
         use mindstrata_sim::institutions::InstitutionKind;
@@ -233,15 +235,21 @@ mod tests {
         for seed in 0..20u64 {
             let mut sc = Scenario::pestilence();
             sc.seed = seed;
-            sc.ticks = 3000;
+            sc.ticks = 12_000;
             let mut sim = Simulation::from_scenario(sc);
             sim.populate();
-            sim.run(3000);
+            sim.run(12_000);
             let faction_count = sim
-                .institutions
+                .faction_v2_registry
+                .factions
                 .iter()
-                .filter(|i| i.kind == InstitutionKind::Faction)
-                .count();
+                .filter(|f| f.active)
+                .count()
+                + sim
+                    .institutions
+                    .iter()
+                    .filter(|i| i.kind == InstitutionKind::Faction)
+                    .count();
             counts.insert(faction_count);
         }
         assert!(

@@ -129,6 +129,14 @@ pub struct Institution {
     pub inertia: Fixed,
     /// Monotonic counter for unique policy IDs.
     pub policy_counter: u64,
+    /// §7.3 (Iteration 240): Tick this institution was created. Drives the
+    /// faction entrenchment requirement — a freshly formed faction cannot
+    /// revolt the same tick it organizes (movements need time to mobilize;
+    /// probed: formation → successful coup within < 1K ticks made every
+    /// crisis faction invisible at sampling instants). Serde default keeps
+    /// pre-240 snapshots loadable (founding institutions read as ageless).
+    #[serde(default)]
+    pub formed_tick: u64,
 }
 
 /// §19.5.C: A policy issued by an institution.
@@ -204,6 +212,7 @@ impl Institution {
             treasury: Fixed::ZERO,
             inertia: Fixed::from_f64(0.3),
             policy_counter: 0,
+            formed_tick: 0,
         }
     }
 

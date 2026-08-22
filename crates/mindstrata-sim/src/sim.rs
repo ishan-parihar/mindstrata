@@ -572,6 +572,17 @@ pub struct Simulation {
     /// Iteration 232: drought-pressure window. While active, aquifer
     /// recharge is suppressed so the drought shock's water drain persists.
     drought_until: u64,
+    /// §29.2 (Iteration 240): Crisis-pressure hazard accumulator — sustained
+    /// grievance/legitimacy-deficit builds toward faction formation; peace
+    /// bleeds it off. See `factions::CRISIS_PRESSURE_BUILD_RATE` for the
+    /// design rationale and the Fixed-quantization rationale for f64 storage.
+    /// Not serialized: a restored world re-accumulates from zero (the crisis
+    /// conditions that built it are re-observable in the restored state).
+    faction_crisis_pressure: f64,
+    /// §29.2 (Iteration 240): Tick of the most recent faction formation —
+    /// enforces the pressure-path rearm refractory. Not serialized (same
+    /// rationale as the accumulator).
+    last_faction_formation_tick: u64,
     /// §8.1.4 (P3-6): Grain-output multiplier while `famine_until` is active —
     /// `1 − magnitude` of the triggering shock (0.3 for the standard 0.7 famine).
     famine_production_factor: Fixed,
@@ -704,6 +715,8 @@ impl Simulation {
             last_cult_formation_tick: 0,
             famine_until: 0,
             drought_until: 0,
+            faction_crisis_pressure: 0.0,
+            last_faction_formation_tick: 0,
             famine_production_factor: Fixed::ONE,
             black_market: crate::black_market::BlackMarketState::default(),
             kinship_graph: crate::social::kinship::KinshipGraph::default(),
@@ -892,6 +905,8 @@ impl Simulation {
             last_cult_formation_tick: snapshot.last_cult_formation_tick,
             famine_until: 0,
             drought_until: 0,
+            faction_crisis_pressure: 0.0,
+            last_faction_formation_tick: 0,
             famine_production_factor: Fixed::ONE,
             black_market: snapshot.black_market,
             // §10.6: Serialized since v10 — restore the exact marriage/birth-
@@ -7373,6 +7388,43 @@ impl Simulation {
         &self.events[start..]
     }
 
+    /// §29.2 (Iteration 240): Current accumulated faction crisis pressure
+    /// (0..1). Observability accessor for probes/inspectors — mutation
+    /// happens only inside the faction-dynamics tick.
+    pub fn faction_crisis_pressure(&self) -> f64 {
+        self.faction_crisis_pressure
+    }
+
+    /// §29.2 (Iteration 240): Mean faction grievance across the unorganized
+    /// pool (agents not currently in a faction) — the same aggregate the
+    /// crisis-pressure accumulator consumes. Observability for probes,
+    /// inspectors, and calibration.
+    pub fn faction_pool_mean_grievance(&self) -> f64 {
+        let grievances = self.unorganized_grievances();
+        if grievances.is_empty() {
+            return 0.0;
+        }
+        let sum: f64 = grievances.iter().map(|(_, g)| g.to_f64()).sum();
+        sum / grievances.len() as f64
+    }
+
+    /// §29.2: Per-agent faction grievance over every agent NOT currently in a
+    /// faction (factions are exclusive — members are never re-recruited).
+    fn unorganized_grievances(&self) -> Vec<(AgentId, Fixed)> {
+        let already_factioned: std::collections::HashSet<AgentId> = self
+            .institutions
+            .iter()
+            .filter(|i| i.kind == InstitutionKind::Faction)
+            .flat_map(|f| f.members.iter().copied())
+            .collect();
+        self.agents
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !already_factioned.contains(&AgentId::new(*i as u64)))
+            .map(|(i, _)| (AgentId::new(i as u64), self.faction_grievance(i)))
+            .collect()
+    }
+
     /// §19.5.D: Detect and punish theft — consumes resource, fines agent,
     /// records norm violation with enforcement probability, emits event, reduces trust with owner.
     /// Returns (taken > 0, was_caught): theft succeeded and whether it was detected.
@@ -8439,20 +8491,9 @@ impl Simulation {
             // §29.2: Factions must be exclusive — an agent already in a faction
             // cannot be recruited again. Without this, every new faction pulls
             // from the same grievance pool, producing overlapping memberships
-            // (e.g. 4 factions × 22 members on 48 agents).
-            let already_factioned: std::collections::HashSet<AgentId> = self
-                .institutions
-                .iter()
-                .filter(|i| i.kind == InstitutionKind::Faction)
-                .flat_map(|f| f.members.iter().copied())
-                .collect();
-            let grievances: Vec<(AgentId, Fixed)> = self
-                .agents
-                .iter()
-                .enumerate()
-                .filter(|(i, _)| !already_factioned.contains(&AgentId::new(*i as u64)))
-                .map(|(i, _)| (AgentId::new(i as u64), self.faction_grievance(i)))
-                .collect();
+            // (e.g. 4 factions × 22 members on 48 agents). Enforced inside
+            // `unorganized_grievances()` (Iteration 240 extraction).
+            let grievances: Vec<(AgentId, Fixed)> = self.unorganized_grievances();
 
             // Find council legitimacy (average across councils)
             let avg_council_legitimacy: Fixed = {
@@ -8472,10 +8513,49 @@ impl Simulation {
                 }
             };
 
-            // Faction formation: when grievance is high and council legitimacy is low
+            // ── Iteration 240: crisis-pressure hazard accumulator (§29.2) ──
+            // Sustained grievance above the recruitment anchor and council
+            // illegitimacy below the gate build pressure; genuine peace bleeds
+            // it off. Crossing the threshold arms formation through the exact
+            // legacy path below — same recruitment, leader selection,
+            // registration, provenance — so a crisis that never produces a
+            // single-tick legitimacy/grievance cliff still reliably organizes
+            // opposition, while transient spikes are erased by peace and can
+            // no longer compound into clock-driven coups. Zero RNG-stream
+            // consumption (pure arithmetic on already-computed aggregates).
+            {
+                use factions::{CRISIS_PRESSURE_BLEED_RATE, CRISIS_PRESSURE_BUILD_RATE};
+                let grievance_excess = {
+                    // Mean over the unorganized pool (already excludes current
+                    // faction members): exactly the population a new faction
+                    // would recruit from.
+                    let mean = if grievances.is_empty() {
+                        0.0
+                    } else {
+                        let sum: f64 = grievances.iter().map(|(_, g)| g.to_f64()).sum();
+                        sum / grievances.len() as f64
+                    };
+                    (mean - factions::CRISIS_GRIEVANCE_ANCHOR).max(0.0)
+                };
+                let legitimacy_deficit = (0.5 - avg_council_legitimacy.to_f64()).max(0.0);
+                if grievance_excess > 0.0 || legitimacy_deficit > 0.0 {
+                    self.faction_crisis_pressure += grievance_excess * CRISIS_PRESSURE_BUILD_RATE
+                        + legitimacy_deficit * CRISIS_PRESSURE_BUILD_RATE;
+                } else {
+                    self.faction_crisis_pressure *= 1.0 - CRISIS_PRESSURE_BLEED_RATE;
+                }
+                self.faction_crisis_pressure = self.faction_crisis_pressure.clamp(0.0, 1.0);
+            }
+            let pressure_arms = self.faction_crisis_pressure
+                >= factions::FACTION_FORMATION_PRESSURE_THRESHOLD
+                && tick_u64.saturating_sub(self.last_faction_formation_tick)
+                    >= factions::FACTION_REARM_COOLDOWN_TICKS;
+
+            // Faction formation: instant arm on the legitimacy cliff (legacy
+            // path) OR accumulated crisis pressure (Iteration 240).
             let should_form = faction_count < factions::MAX_FACTIONS
-                && avg_council_legitimacy < Fixed::from_f64(0.5)
-                && tick_u64 > factions::FORMATION_COOLDOWN;
+                && tick_u64 > factions::FORMATION_COOLDOWN
+                && (avg_council_legitimacy < Fixed::from_f64(0.5) || pressure_arms);
 
             if should_form {
                 let recruitable = factions::find_recruitable_agents(
@@ -8493,9 +8573,19 @@ impl Simulation {
                     sum / Fixed::from_int(recruitable.len() as i64)
                 };
 
-                if avg_grievance >= factions::FORMATION_GRIEVANCE_THRESHOLD
-                    && recruitable.len() >= 2
-                {
+                let pool_ok = if pressure_arms {
+                    // Pressure-certified: the accumulator has proven sustained
+                    // collective discontent, so a real recruitment pool is the
+                    // only remaining requirement — demanding the legacy 0.5
+                    // recruitable mean here would re-impose the same
+                    // single-tick cliff the accumulator exists to remove.
+                    recruitable.len() >= 2
+                } else {
+                    avg_grievance >= factions::FORMATION_GRIEVANCE_THRESHOLD
+                        && recruitable.len() >= 2
+                };
+
+                if pool_ok {
                     // Find leader candidates: high ambition, high dominance, low anger
                     let leader_candidates: Vec<_> = recruitable
                         .iter()
@@ -8569,6 +8659,21 @@ impl Simulation {
 
                         self.institutions.push(new_faction);
 
+                        // Iteration 240: record the formation tick so the
+                        // §7.3 revolution gate can enforce the mobilization
+                        // (entrenchment) window.
+                        let formed = self.institutions.last_mut().unwrap();
+                        formed.formed_tick = tick_u64;
+
+                        // Iteration 240: the crisis that armed this formation
+                        // has been answered — bleed the accumulator and start
+                        // the rearm refractory so one long crisis cannot stack
+                        // formations back-to-back (the FORMATION_COOLDOWN
+                        // alone was ~1K-tick-scale; probed churn hit 20
+                        // form/dissolve cycles per 30K epidemic ticks).
+                        self.faction_crisis_pressure = 0.0;
+                        self.last_faction_formation_tick = tick_u64;
+
                         // Architecture-plan-2 §5.2: Also register a FactionV2 in the upgraded registry.
                         let member_indices: Vec<usize> = members
                             .iter()
@@ -8607,6 +8712,66 @@ impl Simulation {
                             tick = tick_u64,
                             "FactionV2 registered alongside v1"
                         );
+                    }
+                }
+            }
+
+            // ── Iteration 240: faction RECRUITMENT — the lifecycle's missing
+            // stage ──
+            // The AP2 lifecycle is formation → recruitment → entrenchment →
+            // dissolution, but `FactionV2::recruitment_chance` had ZERO call
+            // sites: factions formed with their founding membership and could
+            // only shrink (deaths), so crisis factions dissolved within days
+            // of plague attrition (probe: pestilence-5 formed 3 factions /
+            // 30K, ALL dissolved before every 5K sample). One admission pass
+            // per day per faction: the highest-grievance unorganized agent
+            // joins when the faction's morale × the candidate's grievance
+            // clears a conviction threshold — demoralized factions stop
+            // growing, content agents never join, and replenishment offsets
+            // casualty attrition. Deterministic (threshold-gated on
+            // already-computed quantities, stable tie-break on agent order):
+            // zero RNG-stream consumption.
+            if tick_u64.is_multiple_of(144) {
+                let village_cap = self.agents.len() / 2;
+                let mut admissions: Vec<(usize, AgentId)> = Vec::new();
+                for fv2 in &mut self.faction_v2_registry.factions {
+                    if !fv2.active || fv2.members.len() >= village_cap {
+                        continue;
+                    }
+                    // The single most convincing remaining candidate: highest
+                    // grievance among the unorganized pool above the
+                    // recruitment floor whose conviction (morale × grievance)
+                    // clears the threshold. Stable max by (grievance, then
+                    // lowest agent id) keeps selection deterministic.
+                    let recruit_id = grievances
+                        .iter()
+                        .copied()
+                        .filter(|(id, g)| {
+                            *g >= factions::RECRUITMENT_GRIEVANCE_THRESHOLD
+                                && fv2.morale * *g >= factions::FACTION_RECRUIT_CONVICTION_THRESHOLD
+                                && !fv2.members.contains(&(id.as_u64() as usize))
+                        })
+                        .max_by_key(|(id, g)| (*g, std::cmp::Reverse(*id)))
+                        .map(|(id, _)| id);
+                    let Some(recruit) = recruit_id else {
+                        continue;
+                    };
+                    let recruit_idx = recruit.as_u64() as usize;
+                    if recruit_idx >= self.agents.len() {
+                        continue;
+                    }
+                    fv2.members.push(recruit_idx);
+                    admissions.push((fv2.leader, recruit));
+                }
+                for (leader_idx, recruit) in admissions {
+                    // Mirror into the paired v1 institution (matched by its
+                    // leader's membership — formation registers both with the
+                    // same leader).
+                    if let Some(inst) = self.institutions.iter_mut().find(|i| {
+                        i.kind == InstitutionKind::Faction
+                            && i.members.contains(&AgentId::new(leader_idx as u64))
+                    }) {
+                        inst.members.push(recruit);
                     }
                 }
             }
@@ -13953,9 +14118,14 @@ impl Simulation {
 
                 let revolution_cooldown_ok = tick_u64.saturating_sub(self.last_revolution_tick)
                     >= factions::REVOLUTION_COOLDOWN;
+                // §7.3 (Iteration 240): mobilization window — a faction must
+                // have existed long enough to organize before it can revolt.
+                let entrenchment_ok = tick_u64.saturating_sub(faction.formed_tick)
+                    >= factions::FACTION_ENTRENCHMENT_MIN_TICKS;
                 if revolution_score >= factions::REVOLUTION_SCORE_THRESHOLD
                     && tick_u64 > factions::REVOLUTION_MIN_TICK
                     && revolution_cooldown_ok
+                    && entrenchment_ok
                 {
                     tracing::warn!(
                         faction = inst_idx,

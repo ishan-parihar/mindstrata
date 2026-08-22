@@ -28,11 +28,86 @@ pub const LEADER_AMBITION_THRESHOLD: Fixed = Fixed::from_raw(5500); // 0.55
 /// Maximum number of factions that can exist simultaneously.
 pub const MAX_FACTIONS: usize = 4;
 
+// §29.2 (Iteration 240): Crisis-pressure hazard accumulator. Faction
+// formation previously required the council-legitimacy cliff (< 0.5) AND a
+// ≥ 0.5 recruitable-grievance mean to hold at the SAME evaluation tick — a
+// knife-edge that stopped firing entirely once the Iter-186 legitimacy
+// equilibrium (floor 0.6) settled at ~0.53 even under pestilence
+// (probe: pestilence seed 5 @30K = 0 factions, 0 revolutions, legit
+// 0.525–0.546). Sustained discontent now accumulates deterministic crisis
+// pressure instead: grievance above the anchor and council illegitimacy
+// below the gate each contribute build; genuine peace bleeds pressure off
+// proportionally. Crossing the threshold arms formation through the exact
+// legacy path (same recruitment, leader selection, registration,
+// provenance). f64 storage: per-tick increments (~1e-5…1e-4) sit below the
+// Fixed-4 quantum — the thermal-Iter-239 lesson — so Fixed accumulation
+// would stall at zero forever. Pure arithmetic on already-computed
+// aggregates: zero RNG-stream consumption, replay determinism preserved.
+// The three constants below are the calibration surface.
+
+/// Grievance anchor for the crisis-pressure build term. Deliberately BELOW
+/// `FORMATION_GRIEVANCE_THRESHOLD` (0.5) and calibrated against probed pool
+/// means: a pristine population runs ≈0.45–0.52 (calm-42 ≈0.455–0.465,
+/// epidemic peaks higher), so ordinary worlds accumulate slowly (liveness:
+/// mild discontent eventually organizes — a stable village forms ~1 faction
+/// per 30–50K instead of never), while the 10K calibrated windows stay far
+/// below the 0.5 arm threshold (probe: calm-42 pressure ≈0.1 @10K). NOTE:
+/// the anchor applies to the POOL MEAN, which drops sharply once a faction
+/// absorbs the most aggrieved agents (probed 0.46 → 0.28) — self-limiting
+/// cascade formation.
+pub const CRISIS_GRIEVANCE_ANCHOR: f64 = 0.45;
+
+/// Build rate per unit of crisis excess (grievance above `CRISIS_GRIEVANCE_ANCHOR`,
+/// council-legitimacy deficit below 0.5), applied per tick. Calibration: a
+/// sustained excess of 0.05 (epidemic-grade discontent) arms in ~5K ticks; the
+/// calm-world excess (~0.005–0.015) arms in ~25–50K — liveness without
+/// clock-coups (the Iter-186 lesson).
+pub const CRISIS_PRESSURE_BUILD_RATE: f64 = 0.002;
+
+/// Proportional pressure bleed per tick while NO crisis signal is present
+/// (τ ≈ 2000 ticks). A real stretch of peace erases accumulated pressure so
+/// transient spikes cannot compound into organization.
+pub const CRISIS_PRESSURE_BLEED_RATE: f64 = 0.0005;
+
+/// Accumulated pressure that arms faction formation (through the legacy
+/// recruitment/leader path).
+pub const FACTION_FORMATION_PRESSURE_THRESHOLD: f64 = 0.5;
+
+/// §29.2 (Iteration 240): Minimum ticks between PRESSURE-ARMED formations.
+/// A village that just organized a protest bloc does not immediately spawn
+/// another — without this refractory, compounding crisis grievance
+/// (epidemic pool-mean probed up to 0.72 → excess 0.27) re-arms the
+/// accumulator within ~1K ticks and churns form/dissolve cycles (~20
+/// formations / 30K probed). One formation per ~2 months of sustained peak
+/// crisis preserves the pressure-valve dynamic while giving each bloc time
+/// to act (protests, negotiation, dissolution). The legacy legitimacy-cliff
+/// path bypasses this gate (an outright legitimacy collapse always arms).
+pub const FACTION_REARM_COOLDOWN_TICKS: u64 = 8640;
+
 /// Minimum tick interval between faction formation attempts.
 pub const FORMATION_COOLDOWN: u64 = 100;
 
 /// Minimum tick interval between protests from the same faction.
 pub const PROTEST_COOLDOWN: u64 = 50;
+
+/// §7.3 (Iteration 240): Minimum ticks between a faction's formation and its
+/// eligibility to stage a revolution — the mobilization/entrenchment window.
+/// A freshly formed faction previously carried its full founding size into
+/// the revolution score immediately, so an epidemic village (size fraction
+/// ~0.8, grievance ~0.7, council legitimacy ~0.52 → score ≈0.66 vs
+/// threshold 0.6) formed and overthrew the council within days, making
+/// every crisis faction invisible at sampling instants and reducing
+/// "politics" to instant coups. One month of organizing (protests,
+/// recruitment, negotiation) precedes any revolt attempt.
+pub const FACTION_ENTRENCHMENT_MIN_TICKS: u64 = 4320;
+
+/// §29.2 (Iteration 240): Recruitment conviction threshold — a candidate
+/// joins an active faction only when `faction.morale × candidate_grievance`
+/// clears this bar. At the 0.25 anchor a healthy faction (morale 0.5)
+/// recruits agents with grievance ≥ 0.5; a demoralized one (morale 0.2)
+/// needs near-certain believers (≥ 0.75) — recruitment self-throttles as
+/// the faction weakens, and dead factions recruit nobody.
+pub const FACTION_RECRUIT_CONVICTION_THRESHOLD: Fixed = Fixed::from_raw(2500); // 0.25
 
 /// Grievance that triggers a protest event.
 pub const PROTEST_GRIEVANCE_THRESHOLD: Fixed = Fixed::from_raw(6500); // 0.65

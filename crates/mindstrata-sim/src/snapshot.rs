@@ -119,7 +119,10 @@ pub struct Snapshot {
 /// `last_episode_tick` (episode-gated notoriety), changing the postcard wire
 /// format of `NormRegistry` inside `Snapshot`. Old serialized bytes would
 /// fail postcard deserialization (no default-fill), so the version guards it.
-pub const SNAPSHOT_VERSION: u32 = 11;
+/// Iteration 240: bumped 11 → 12 — `Institution` gained `formed_tick`
+/// (faction mobilization/entrenchment window), changing the postcard wire
+/// layout of the institutions slice.
+pub const SNAPSHOT_VERSION: u32 = 12;
 
 /// Bundles all simulation state references needed to capture a snapshot.
 /// Replaces the 21-parameter `capture()` signature with a single struct.
