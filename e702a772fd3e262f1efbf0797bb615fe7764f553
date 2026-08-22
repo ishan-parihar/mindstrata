@@ -1,0 +1,4 @@
+NOTE: completes the extraction whose renames were accidentally captured
+by the preceding behavioral commit af19b6b (shared-index interleave between
+parallel sessions). Together af19b6b+e702a77 form one logical S2 change.
+See docs/PLAN_SCALING_FOUNDATION.md status log.
