@@ -11,9 +11,9 @@ pub use render::{
     render_agent_inspector, render_agent_list, render_belief_inspector, render_clan_dashboard,
     render_dashboard, render_decision_traces, render_event_log, render_event_log_detailed,
     render_faction_dashboard, render_institutional_records, render_market_dashboard,
-    render_military_dashboard, render_noosphere_inspector, render_patronage_dashboard,
-    render_psychology_inspector, render_relationship_view, render_theology_dashboard,
-    render_world_map, AgentMarker, DashboardConfig,
+    render_metric_charts, render_military_dashboard, render_noosphere_inspector,
+    render_patronage_dashboard, render_psychology_inspector, render_relationship_view,
+    render_theology_dashboard, render_world_map, AgentMarker, DashboardConfig,
 };
 pub use session::{key_to_command, mark_selected_agent_row, UiState, View};
 
@@ -128,7 +128,29 @@ mod tests {
         ui.cycle_view();
         assert_eq!(ui.view, View::Map);
         ui.cycle_view();
+        // Iteration 251: the Trends view joins the cycle before wrap.
+        assert_eq!(ui.view, View::Trends);
+        ui.cycle_view();
         assert_eq!(ui.view, View::Dashboard);
+    }
+
+    #[test]
+    fn trends_view_renders_history_and_empty_state() {
+        use mindstrata_sim::sim::MetricsSnapshot;
+        let empty = render_metric_charts(&[]);
+        assert!(empty.contains("No metric history yet"));
+        let mut history = Vec::new();
+        for t in 0..10u64 {
+            let mut m = MetricsSnapshot::default();
+            m.tick = t * 100;
+            m.avg_stress = t as f64 / 10.0;
+            history.push(m);
+        }
+        let rendered = render_metric_charts(&history);
+        assert!(rendered.contains("Village Trends"));
+        assert!(rendered.contains("stress"));
+        assert!(rendered.contains("families"));
+        assert!(rendered.contains("samples 10"));
     }
 
     #[test]

@@ -347,6 +347,89 @@ pub struct DashboardConfig {
 }
 
 /// §17.1: Enhanced system dashboard with season, institutions, factions.
+/// Iteration 251: ASCII longitudinal charts over the metric history.
+///
+/// Each tracked series renders as a one-row block-character sparkline
+/// over the most recent `width` samples, scaled to its own observed
+/// range (bounded [0,1] series use that range directly). Deterministic,
+/// allocation-light, no external deps.
+fn sparkline(values: &[f64], lo: f64, hi: f64) -> String {
+    const BARS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+    if values.is_empty() {
+        return String::new();
+    }
+    let span = (hi - lo).max(1e-9);
+    values
+        .iter()
+        .map(|v| {
+            let t = ((v - lo) / span).clamp(0.0, 1.0);
+            let idx = ((t * 7.0).round() as usize).min(7);
+            BARS[idx]
+        })
+        .collect()
+}
+
+fn series_chart(name: &str, values: &[f64], lo: f64, hi: f64, unit: &str) -> String {
+    if values.is_empty() {
+        return format!("{name:<14} (no history)");
+    }
+    let first = values[0];
+    let last = values[values.len() - 1];
+    let delta = last - first;
+    let arrow = if delta > 1e-6 {
+        "↑"
+    } else if delta < -1e-6 {
+        "↓"
+    } else {
+        "→"
+    };
+    format!(
+        "{name:<14} {spark} {arrow} {last:.3}{unit:>2} (was {first:.3})",
+        spark = sparkline(values, lo, hi),
+    )
+}
+
+/// Longitudinal trends view: the village's vital signs over time.
+pub fn render_metric_charts(history: &[mindstrata_sim::sim::MetricsSnapshot]) -> String {
+    if history.is_empty() {
+        return "No metric history yet — run the simulation.".into();
+    }
+    const WINDOW: usize = 60;
+    let tail = |pick: &dyn Fn(&mindstrata_sim::sim::MetricsSnapshot) -> f64| -> Vec<f64> {
+        let start = history.len().saturating_sub(WINDOW);
+        history[start..].iter().map(pick).collect()
+    };
+    let mut out = String::from("── Village Trends (most recent 60 samples) ──\n");
+    // Bounded [0,1] series chart against their natural range.
+    type Pick = Box<dyn Fn(&mindstrata_sim::sim::MetricsSnapshot) -> f64>;
+    let bounded: Vec<(&str, Pick, &str)> = vec![
+        ("stress", Box::new(|m: &_| m.avg_stress), ""),
+        ("health", Box::new(|m: &_| m.avg_health), ""),
+        ("fear p90", Box::new(|m: &_| m.fear_p90), ""),
+        ("joy p90", Box::new(|m: &_| m.joy_p90), ""),
+        ("gini", Box::new(|m: &_| m.gini), ""),
+        ("best skill", Box::new(|m: &_| m.avg_best_skill), ""),
+    ];
+    for (name, picker, unit) in &bounded {
+        let v = tail(picker.as_ref());
+        out.push_str(&series_chart(name, &v, 0.0, 1.0, unit));
+        out.push('\n');
+    }
+    // Unbounded count series scale to their own observed range.
+    let fam = tail(&|m: &mindstrata_sim::sim::MetricsSnapshot| m.family_count as f64);
+    let fam_hi = fam.iter().copied().fold(0.0f64, f64::max);
+    out.push_str(&series_chart("families", &fam, 0.0, fam_hi.max(1.0), ""));
+    out.push('\n');
+    out.push_str(&format!(
+        "samples {} · ticks {}..{}\n",
+        history.len(),
+        history[0].tick,
+        history[history.len() - 1].tick
+    ));
+    out
+}
+
+/// Render the main dashboard: agent summaries, events, tick, metrics.
 pub fn render_dashboard(
     agents: &[AgentSummary],
     events_count: usize,

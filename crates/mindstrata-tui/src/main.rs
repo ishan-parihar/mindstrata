@@ -28,8 +28,8 @@ use mindstrata_sim::institutions::InstitutionKind;
 use mindstrata_sim::sim::{SimConfig, Simulation};
 use mindstrata_tui::{
     key_to_command, mark_selected_agent_row, render_agent_inspector, render_agent_list,
-    render_dashboard, render_event_log, render_world_map, AgentMarker, DashboardConfig, UiState,
-    View,
+    render_dashboard, render_event_log, render_metric_charts, render_world_map, AgentMarker,
+    DashboardConfig, UiState, View,
 };
 use ratatui::layout::{Constraint, Layout};
 use ratatui::text::Line;
@@ -254,6 +254,7 @@ fn render_view(sim: &Simulation, ui: &UiState) -> String {
             }
         }
         View::Events => render_event_log(sim.recent_events(40), 40),
+        View::Trends => render_metric_charts(&sim.metric_history),
         View::Map => {
             let markers: Vec<AgentMarker> = sim
                 .agents

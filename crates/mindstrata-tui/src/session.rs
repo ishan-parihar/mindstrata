@@ -22,6 +22,8 @@ pub enum View {
     Events,
     /// The ASCII world map with agent markers.
     Map,
+    /// Longitudinal metric trends (Iteration 251).
+    Trends,
 }
 
 impl View {
@@ -33,6 +35,7 @@ impl View {
             View::Inspector => "Inspector",
             View::Events => "Events",
             View::Map => "Map",
+            View::Trends => "Trends",
         }
     }
 }
@@ -92,7 +95,8 @@ impl UiState {
             View::Agents => View::Inspector,
             View::Inspector => View::Events,
             View::Events => View::Map,
-            View::Map => View::Dashboard,
+            View::Map => View::Trends,
+            View::Trends => View::Dashboard,
         };
     }
 
