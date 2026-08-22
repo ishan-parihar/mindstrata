@@ -90,18 +90,28 @@ pub struct MetricsSnapshot {
     /// Active patronage relations (§10.9).
     #[serde(default)]
     pub patronage_relation_count: u64,
+    /// Iteration 251 (observability): distinct family surnames among
+    /// living agents — lineage proliferation over generational time.
+    pub family_count: u64,
+    /// Mean of each agent's best skill (max of farming/trading/social) —
+    /// the village's human-capital curve.
+    pub avg_best_skill: f64,
+    /// 90th-percentile fear — the distress tail the means hide.
+    pub fear_p90: f64,
+    /// 90th-percentile joy — the wellbeing tail.
+    pub joy_p90: f64,
 }
 
 impl MetricsSnapshot {
     /// §5.1/§19: CSV header for exporting metrics for analysis.
     pub fn csv_header() -> &'static str {
-        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_trauma_load,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,gini,avg_wealth,median_wealth,total_trades,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds,clan_count,clan_relation_count,cult_count,noosphere_nodes,noosphere_zeitgeist,collective_memory_count,patronage_relation_count"
+        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_trauma_load,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,gini,avg_wealth,median_wealth,total_trades,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds,clan_count,clan_relation_count,cult_count,noosphere_nodes,noosphere_zeitgeist,collective_memory_count,patronage_relation_count,family_count,avg_best_skill,fear_p90,joy_p90"
     }
 
     /// §5.1/§19: One CSV line for this snapshot.
     pub fn to_csv_line(&self) -> String {
         format!(
-            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             self.tick,
             self.avg_hunger, self.avg_thirst, self.avg_fatigue,
             self.avg_valence, self.avg_joy, self.avg_fear,
@@ -117,6 +127,10 @@ impl MetricsSnapshot {
             self.noosphere_nodes,
             self.noosphere_zeitgeist, self.collective_memory_count,
             self.patronage_relation_count,
+            self.family_count,
+            self.avg_best_skill,
+            self.fear_p90,
+            self.joy_p90,
         )
     }
 }
@@ -332,6 +346,44 @@ impl Simulation {
             .filter(|r| r.active)
             .count() as u64;
 
+        // Iteration 251 (observability): lineage + tail metrics.
+        // family_count: distinct surnames ("Given Surname", Iter-245);
+        // single-token founder names don't count as families.
+        let family_count = self
+            .agents
+            .iter()
+            .filter_map(|a| a.name.split_once(' ').map(|(_, sur)| sur))
+            .collect::<std::collections::HashSet<_>>()
+            .len() as u64;
+        let avg_best_skill = if self.agents.is_empty() {
+            0.0
+        } else {
+            self.agents
+                .iter()
+                .map(|a| {
+                    a.skills
+                        .farming
+                        .to_f64()
+                        .max(a.skills.trading.to_f64())
+                        .max(a.skills.social.to_f64())
+                })
+                .sum::<f64>()
+                / self.agents.len() as f64
+        };
+        // Nearest-rank percentile over sorted per-agent emotion values.
+        let percentile = |mut vals: Vec<f64>, q: f64| -> f64 {
+            if vals.is_empty() {
+                return 0.0;
+            }
+            vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let idx = (((vals.len() as f64) * q).ceil() as usize)
+                .saturating_sub(1)
+                .min(vals.len() - 1);
+            vals[idx]
+        };
+        let fear_p90 = percentile(summaries.iter().map(|x| x.fear.to_f64()).collect(), 0.9);
+        let joy_p90 = percentile(summaries.iter().map(|x| x.joy.to_f64()).collect(), 0.9);
+
         MetricsSnapshot {
             tick: self.current_tick().as_u64(),
             avg_hunger: summaries.iter().map(|s| s.hunger.to_f64()).sum::<f64>() * n_inv,
@@ -371,6 +423,10 @@ impl Simulation {
             noosphere_zeitgeist,
             collective_memory_count,
             patronage_relation_count,
+            family_count,
+            avg_best_skill,
+            fear_p90,
+            joy_p90,
         }
     }
 }
