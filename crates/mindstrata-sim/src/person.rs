@@ -125,6 +125,35 @@ impl TraitConstitution {
     }
 }
 
+/// Founder given names (Iteration 245): shared by `populate` and the
+/// birth paths so every villager — founder or newborn — draws from one
+/// name pool. Newborns append the family surname; founders are single-
+/// token roots.
+pub const FIRST_NAMES: [&str; 24] = [
+    "Anna", "Bran", "Cara", "Dane", "Elise", "Finn", "Greta", "Hans", "Ines", "Jorik", "Kira",
+    "Lars", "Mira", "Nils", "Opal", "Poul", "Quinn", "Rosa", "Sven", "Tova", "Ulf", "Vera", "Wulf",
+    "Xena",
+];
+
+/// Iteration 245 (Arc A heredity): derive a child's full name from a
+/// parent's name and a given name. The surname is the parent's family
+/// token — everything after their first space — so second-generation
+/// children keep the founding line's surname. A founder parent (single
+/// token) lends their own given name as the founding family name, which
+/// reads as a patronymic lineage from generation one. Replacement
+/// newborns pass the deceased's name for household continuity.
+///
+/// ```
+/// use mindstrata_sim::person::inherit_surname;
+/// assert_eq!(inherit_surname("Mira Lars", "Tova"), "Tova Lars");
+/// assert_eq!(inherit_surname("Anna", "Bran"), "Bran Anna");
+/// assert_eq!(inherit_surname("Mira Lars", "Tova") , inherit_surname("Kira Lars", "Tova"));
+/// ```
+pub fn inherit_surname(parent_name: &str, given_name: &str) -> String {
+    let surname = parent_name.split_once(' ').map_or(parent_name, |(_, s)| s);
+    format!("{given_name} {surname}")
+}
+
 /// Personality trait model (Big Five + extensions).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Personality {
@@ -1371,5 +1400,25 @@ mod temperament_tests {
             p.plastic_update_traits(&stressed);
         }
         assert!(p.neuroticism > n0, "anchored traits must then drift");
+    }
+}
+
+#[cfg(test)]
+mod surname_tests {
+    use super::inherit_surname;
+
+    #[test]
+    fn surnames_form_lineages() {
+        assert_eq!(inherit_surname("Mira Lars", "Tova"), "Tova Lars");
+        assert_eq!(inherit_surname("Anna", "Bran"), "Bran Anna");
+        // Any Lars-parent child carries the Lars line.
+        assert_eq!(inherit_surname("Kira Lars", "Ulf"), "Ulf Lars");
+        assert_eq!(
+            inherit_surname("Mira Lars", "Tova"),
+            inherit_surname("Kira Lars", "Tova")
+        );
+        // Third generation keeps the founding surname through the space rule.
+        let gen2 = inherit_surname("Bran Anna", "Cara");
+        assert_eq!(gen2, "Cara Anna");
     }
 }
