@@ -528,6 +528,10 @@ fn scenario_delta_is_live_and_contexts_differ() {
 /// state the parameter feeds) still moves by +0.231 — the honest, directly
 /// observable liveness proof. The calm-window sweep (Iteration 134)
 /// documented this knob as inert; the firing window is where it acts.
+/// Iteration 244 re-pin (genome-coupled metabolism/immune): heterogeneous
+/// physiology lowers ambient pestilence stress, shrinking the trauma pool
+/// the knob acts on — probe-pinned delta +0.0416 (was +0.231 pre-coupling).
+/// Still live-positive and directional; magnitude bar relaxes 0.1 → 0.03.
 #[test]
 fn live_consumer_trauma_accumulation_fires_in_pestilence_window() {
     let report = scenario_behavioral_delta(
@@ -537,7 +541,7 @@ fn live_consumer_trauma_accumulation_fires_in_pestilence_window() {
         |p| p.nervous_trauma_accumulation = Fixed::from_f64(0.05),
         |m| m.avg_trauma_load,
     );
-    assert_live_delta(&report, 0.1);
+    assert_live_delta(&report, 0.03);
     assert!(
         report.delta > 0.0,
         "more trauma accumulation must RAISE trauma_load, got {report:?}"

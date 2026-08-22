@@ -39,10 +39,25 @@ impl Default for MetabolicState {
 impl MetabolicState {
     /// Consume energy each tick. Returns energy actually expended.
     /// Thermoregulation moved to `ThermalState::tick_update` (Iter 45).
-    pub fn tick_update(&mut self, activity_level: Fixed) {
-        // Total demand = basal + activity-driven
+    ///
+    /// Iteration 244: genome metabolic predispositions are now DYNAMIC
+    /// consumers (they previously had none outside initialization):
+    /// - `metabolic_rate` scales total demand (±30% around 1.0),
+    /// - `hunger_sensitivity` scales satiety decay (faster-fading satiety
+    ///   → more frequent foraging pressure),
+    /// - `fat_storage` scales starvation fat conversion and dietary fat
+    ///   gain (efficient storers buffer famine longer).
+    pub fn tick_update(
+        &mut self,
+        activity_level: Fixed,
+        metabolic_rate: Fixed,
+        hunger_sensitivity: Fixed,
+        fat_storage: Fixed,
+    ) {
+        // Total demand = basal + activity-driven, genome-scaled
+        let rate_mult = Fixed::from_f64(0.7) + metabolic_rate * Fixed::from_f64(0.6);
         let activity_demand = activity_level * Fixed::from_f64(0.02);
-        self.demand = self.basal_rate + activity_demand;
+        self.demand = (self.basal_rate + activity_demand) * rate_mult;
 
         // Energy reserves deplete based on demand
         let fat_contribution = if self.energy_reserves < Fixed::from_f64(0.3) {
@@ -54,15 +69,22 @@ impl MetabolicState {
         self.energy_reserves = (self.energy_reserves - self.demand + fat_contribution).clamp_01();
 
         // Fat reserves slowly convert to energy when starving
+        // (conversion efficiency scaled by genome fat_storage)
         if self.energy_reserves < Fixed::from_f64(0.2) && self.fat_reserves > Fixed::ZERO {
-            let conversion = (Fixed::from_f64(0.2) - self.energy_reserves) * Fixed::from_f64(0.005);
+            let storage_mult = Fixed::from_f64(0.5) + fat_storage;
+            let conversion = (Fixed::from_f64(0.2) - self.energy_reserves)
+                * Fixed::from_f64(0.005)
+                * storage_mult;
             let converted = conversion.min(self.fat_reserves);
             self.energy_reserves = (self.energy_reserves + converted).clamp_01();
             self.fat_reserves = (self.fat_reserves - converted).max(Fixed::ZERO);
         }
 
-        // Satiety decays over time
-        self.satiety = (self.satiety - Fixed::from_f64(0.003)).clamp_01();
+        // Satiety decays over time — hunger-sensitive genomes fade faster
+        // (midpoint-neutral: ×1.0 at sensitivity 0.5)
+        let satiety_decay = Fixed::from_f64(0.003)
+            * (Fixed::from_f64(0.7) + hunger_sensitivity * Fixed::from_f64(0.6));
+        self.satiety = (self.satiety - satiety_decay).clamp_01();
 
         // Hydration depletes slowly
         self.hydration = (self.hydration - Fixed::from_f64(0.002)).clamp_01();
@@ -88,7 +110,12 @@ mod tests {
     fn energy_depletes_with_activity() {
         let mut m = MetabolicState::default();
         let initial = m.energy_reserves;
-        m.tick_update(Fixed::from_f64(0.8));
+        m.tick_update(
+            Fixed::from_f64(0.8),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.5),
+        );
         assert!(m.energy_reserves < initial);
     }
 

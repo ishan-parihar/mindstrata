@@ -43,6 +43,8 @@ impl ImmuneState {
         crowding: Fixed,
         hygiene: Fixed,
         age_modifier: Fixed,
+        recovery_rate: Fixed,
+        disease_susceptibility: Fixed,
     ) {
         // §7.2.6 (S2-2-4 fix): *saturating* boosts. The old linear form
         // (nutrition +0.002/tick, sleep +0.001/tick vs stress −0.001/tick,
@@ -94,7 +96,10 @@ impl ImmuneState {
             let fight = self.resistance
                 * self.recovery_capacity
                 * Fixed::from_f64(0.005)
-                * self.infection_load;
+                * self.infection_load
+                // Iteration 244: genome recovery_rate scales pathogen
+                // clearance (±30% around 1.0) — previously a dead gene.
+                * (Fixed::from_f64(0.7) + recovery_rate * Fixed::from_f64(0.6));
             self.infection_load = (self.infection_load - fight).max(Fixed::ZERO);
             // Chronic inflammation damages resistance
             if self.inflammation > Fixed::from_f64(0.5) {
@@ -124,10 +129,19 @@ impl ImmuneState {
         // this fix is meant to expose.
         if stress_level > Fixed::from_f64(0.4) {
             let crowding_amplifier = Fixed::from_f64(0.5) + crowding;
-            let exposure = (stress_level - Fixed::from_f64(0.4))
-                * (Fixed::ONE - hygiene)
-                * crowding_amplifier
-                * Fixed::from_f64(0.002);
+            // Iteration 244: genome disease_susceptibility scales exposure
+            // intake (±30% around 1.0) — previously a dead gene.
+            // Computed in f64 and quantized ONCE: a Fixed-only chain would
+            // truncate the ~0.00017 exposure to zero at the 4-decimal scale
+            // (the Iteration-239/240/242 truncation-disease class).
+            let suscept_mult = 0.7 + disease_susceptibility.to_f64() * 0.6;
+            let exposure = Fixed::from_f64(
+                (stress_level.to_f64() - 0.4)
+                    * (1.0 - hygiene.to_f64())
+                    * crowding_amplifier.to_f64()
+                    * 0.002
+                    * suscept_mult,
+            );
             self.infection_load = (self.infection_load + exposure).clamp_01();
         }
 
@@ -167,6 +181,8 @@ mod tests {
                 Fixed::ZERO,
                 Fixed::from_f64(0.8),
                 Fixed::from_f64(0.3),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.4),
             );
         }
         assert!(immune.resistance > initial);
@@ -186,6 +202,8 @@ mod tests {
             Fixed::ZERO,
             Fixed::ONE,
             Fixed::from_f64(0.3),
+            Fixed::from_f64(0.5),
+            Fixed::from_f64(0.4),
         );
         assert!(immune.inflammation > Fixed::ZERO);
     }
@@ -205,6 +223,8 @@ mod tests {
                 Fixed::ZERO,
                 Fixed::ONE,
                 Fixed::from_f64(0.3),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.4),
             );
         }
         assert!(immune.resistance < Fixed::from_f64(0.7));
@@ -228,6 +248,8 @@ mod tests {
                 Fixed::from_f64(0.3),
                 Fixed::from_f64(0.6),
                 Fixed::from_f64(0.3),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.4),
             );
         }
         let calm_res = calm.resistance.to_f64();
@@ -245,6 +267,8 @@ mod tests {
                 Fixed::from_f64(0.3),
                 Fixed::from_f64(0.6),
                 Fixed::from_f64(0.3),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.4),
             );
         }
         let famine_res = famine.resistance.to_f64();
@@ -277,6 +301,8 @@ mod tests {
                 Fixed::from_f64(0.3),
                 Fixed::from_f64(0.6),
                 Fixed::from_f64(0.3),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.4),
             );
         }
         assert_eq!(
@@ -294,6 +320,8 @@ mod tests {
                 Fixed::from_f64(0.3),
                 Fixed::from_f64(0.6),
                 Fixed::from_f64(0.3),
+                Fixed::from_f64(0.5),
+                Fixed::from_f64(0.4),
             );
         }
         let load = famine.infection_load.to_f64();

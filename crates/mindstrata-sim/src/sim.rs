@@ -9270,9 +9270,15 @@ impl Simulation {
                 .wrapping_add(tick_u64)
                 .wrapping_add(idx as u64),
         );
-        let child_personality = Personality::random(&mut child_rng);
+        // Iteration 244: replacement newborns continue the deceased's
+        // household lineage — single-ancestor blend (self-blend + mutation)
+        // keeps family resemblance through the house without fabricating an
+        // unknown second parent.
+        let child_personality =
+            Personality::inherit(&self.agents[idx].personality, None, &mut child_rng);
         let child_age = Fixed::from_f64(0.0); // newborn
-        let child_embodied = EmbodiedState::random(child_age, &mut child_rng);
+        let child_embodied =
+            EmbodiedState::born(&self.agents[idx].embodied, None, child_age, &mut child_rng);
         let child_attachment_vulnerability = child_embodied
             .genome
             .trait_predispositions
@@ -9800,7 +9806,22 @@ impl Simulation {
                         .wrapping_add(tick_u64)
                         .wrapping_add(child_idx as u64),
                 );
-                let child_personality = Personality::random(&mut child_rng);
+                // Iteration 244 (Arc A heredity): genome + personality now
+                // blend from the parents instead of re-rolling — vertical
+                // transmission makes family resemblance a population-level
+                // property. `Personality::inherit` consumes exactly one RNG
+                // draw per trait, so downstream stream alignment matches
+                // the old `random` call count.
+                let father_embodied = parent_b
+                    .and_then(|fb| self.agents.get(fb))
+                    .map(|p| &p.embodied);
+                let child_personality = Personality::inherit(
+                    &self.agents[parent_a].personality,
+                    parent_b
+                        .and_then(|fb| self.agents.get(fb))
+                        .map(|p| &p.personality),
+                    &mut child_rng,
+                );
                 // Iteration 239 (H6): personality-driven emotion-regulation
                 // seeding must match the initial population AND
                 // build_replacement_newborn (P3-4 contract). The real-birth
@@ -9816,7 +9837,12 @@ impl Simulation {
 
                 let agent_id = AgentId::new(child_idx as u64);
 
-                let child_embodied = EmbodiedState::random(child_age, &mut child_rng);
+                let child_embodied = EmbodiedState::born(
+                    &self.agents[parent_a].embodied,
+                    father_embodied,
+                    child_age,
+                    &mut child_rng,
+                );
                 let child_attachment_vulnerability = child_embodied
                     .genome
                     .trait_predispositions

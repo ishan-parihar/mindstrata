@@ -183,6 +183,43 @@ impl Personality {
         p.constitution = Some(TraitConstitution::from_personality(&p));
         p
     }
+
+    /// Quantitative-genetics inheritance (Iteration 244): child trait =
+    /// parental midpoint, shrunk 20% toward the population mean (0.5), plus
+    /// small noise (±0.06). With `other == None` (single known ancestor —
+    /// household continuity for replacement newborns) the child clusters
+    /// around that ancestor. Temperament and birth constitution are re-derived
+    /// exactly as in `random` (zero extra RNG draws beyond the per-trait
+    /// noise, keeping seeded streams stable and short).
+    pub fn inherit(parent: &Personality, other: Option<&Personality>, rng: &mut impl Rng) -> Self {
+        let mut blend_trait = |a: Fixed, b: Fixed| -> Fixed {
+            let mid = (a.to_f64() + b.to_f64()) * 0.5;
+            let shrunk = mid * 0.8 + 0.5 * 0.2;
+            let noise = rng.random_range(-0.06f64..0.06);
+            Fixed::from_f64((shrunk + noise).clamp(0.0, 1.0))
+        };
+        let fallback = parent;
+        let b = other.unwrap_or(fallback);
+        let mut p = Self {
+            openness: blend_trait(parent.openness, b.openness),
+            conscientiousness: blend_trait(parent.conscientiousness, b.conscientiousness),
+            extraversion: blend_trait(parent.extraversion, b.extraversion),
+            agreeableness: blend_trait(parent.agreeableness, b.agreeableness),
+            neuroticism: blend_trait(parent.neuroticism, b.neuroticism),
+            risk_tolerance: blend_trait(parent.risk_tolerance, b.risk_tolerance),
+            conformity: blend_trait(parent.conformity, b.conformity),
+            ambition: blend_trait(parent.ambition, b.ambition),
+            altruism: blend_trait(parent.altruism, b.altruism),
+            traditionalism: blend_trait(parent.traditionalism, b.traditionalism),
+            dominance: blend_trait(parent.dominance, b.dominance),
+            impulsivity: blend_trait(parent.impulsivity, b.impulsivity),
+            temperament: Temperament::default(),
+            constitution: None,
+        };
+        p.temperament = Temperament::from_traits(&p);
+        p.constitution = Some(TraitConstitution::from_personality(&p));
+        p
+    }
 }
 
 /// §8.1.6: Biologically-rooted temperament layer — the plan's seven

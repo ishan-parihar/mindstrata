@@ -138,6 +138,33 @@ impl EmbodiedState {
     /// Generate a random embodied state for a new agent.
     pub fn random(age: Fixed, rng: &mut impl Rng) -> Self {
         let genome = Genome::random(rng);
+        Self::from_genome(genome, age, rng)
+    }
+
+    /// Generate an embodied state for a BORN child (Iteration 244): the
+    /// genome is blended from the parents (`parent_b == None` → single-
+    /// ancestor household continuity for replacement newborns) while all
+    /// subsystem states initialize exactly as a random newborn's would.
+    /// Genome-derived fields (reproductive sex, thermal set-point, base
+    /// fertility) derive from the BLENDED genome, not either parent's.
+    pub fn born(
+        parent_a: &EmbodiedState,
+        parent_b: Option<&EmbodiedState>,
+        age: Fixed,
+        rng: &mut impl Rng,
+    ) -> Self {
+        let b = parent_b.unwrap_or(parent_a);
+        let genome = Genome::blend(&parent_a.genome, &b.genome, rng);
+        Self::from_genome(genome, age, rng)
+    }
+
+    /// Shared constructor: all subsystem defaults as a function of genome,
+    /// age, and the tail of the RNG stream (endocrine draw, health/energy
+    /// jitter).
+    ///
+    /// Both `random` and `born` route through here so genome-derived
+    /// initialization can never drift between birth paths.
+    fn from_genome(genome: Genome, age: Fixed, rng: &mut impl Rng) -> Self {
         let mut development = DevelopmentalState::default();
         development.age = age;
         development.life_stage = crate::biology::development::LifeStage::from_age(age);
@@ -339,7 +366,14 @@ impl EmbodiedState {
             .update(growth_target, params.endocrine_growth_recovery);
 
         // 4. Metabolic — energy, hunger (thermoregulation now in ThermalState)
-        self.metabolic.tick_update(activity_level);
+        // Iteration 244: genome metabolic predispositions scale demand,
+        // satiety decay, and fat buffering (see MetabolicState::tick_update).
+        self.metabolic.tick_update(
+            activity_level,
+            self.genome.metabolic_predispositions.metabolic_rate,
+            self.genome.metabolic_predispositions.hunger_sensitivity,
+            self.genome.metabolic_predispositions.fat_storage,
+        );
 
         // 4b. Thermal — body temperature homeostasis, cold/heat stress.
         // Runs immediately after metabolic with the post-update energy
@@ -382,6 +416,10 @@ impl EmbodiedState {
             crowding,
             hygiene,
             age_modifier,
+            // Iteration 244: genome health predispositions as dynamic
+            // consumers (clearance rate + exposure susceptibility).
+            self.genome.health_predispositions.recovery_rate,
+            self.genome.health_predispositions.disease_susceptibility,
         );
 
         // 8. Musculoskeletal — strength, fatigue
@@ -395,6 +433,21 @@ impl EmbodiedState {
             },
             age_modifier,
         );
+        // Iteration 244: genome physical potential caps realized strength
+        // and endurance — `strength_ceiling`/`endurance_ceiling` previously
+        // had NO dynamic consumer (dead genes). The generic formula tops
+        // out at conditioning 1.0 → strength 0.9 / endurance 0.9; ceilings
+        // in [0.3, 0.9] bind only above-genome performers, so calibrated
+        // mid-range agents are untouched while high-potential lineages stay
+        // distinct from low ones across generations.
+        self.muscular.strength = self
+            .muscular
+            .strength
+            .min(self.genome.physical_potential.strength_ceiling);
+        self.muscular.endurance = self
+            .muscular
+            .endurance
+            .min(self.genome.physical_potential.endurance_ceiling);
 
         // 8b. Skeletal (§7.2.3) — frailty, fracture, malnutrition
         self.skeletal
