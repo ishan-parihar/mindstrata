@@ -805,6 +805,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mindstrata-institutions"
+version = "0.1.0"
+dependencies = [
+ "mindstrata-core",
+ "mindstrata-person",
+ "serde",
+]
+
+[[package]]
 name = "mindstrata-person"
 version = "0.1.0"
 dependencies = [
@@ -812,6 +821,18 @@ dependencies = [
  "rand",
  "rand_chacha",
  "serde",
+]
+
+[[package]]
+name = "mindstrata-psych"
+version = "0.1.0"
+dependencies = [
+ "mindstrata-core",
+ "mindstrata-person",
+ "rand",
+ "rand_chacha",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -828,7 +849,11 @@ name = "mindstrata-sim"
 version = "0.1.0"
 dependencies = [
  "mindstrata-core",
+ "mindstrata-institutions",
  "mindstrata-person",
+ "mindstrata-psych",
+ "mindstrata-social",
+ "mindstrata-world",
  "postcard",
  "rand",
  "rand_chacha",
@@ -837,6 +862,19 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tracing",
+]
+
+[[package]]
+name = "mindstrata-social"
+version = "0.1.0"
+dependencies = [
+ "mindstrata-core",
+ "mindstrata-institutions",
+ "mindstrata-person",
+ "mindstrata-psych",
+ "rand",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -860,6 +898,18 @@ dependencies = [
  "mindstrata-sim",
  "ratatui",
  "tracing",
+]
+
+[[package]]
+name = "mindstrata-world"
+version = "0.1.0"
+dependencies = [
+ "mindstrata-core",
+ "mindstrata-institutions",
+ "mindstrata-person",
+ "rand",
+ "rand_chacha",
+ "serde",
 ]
 
 [[package]]

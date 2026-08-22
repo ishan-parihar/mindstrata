@@ -156,3 +156,21 @@ Behavioral work concentrates in `psychology/ social/ actions.rs` right now
 ## Status log
 
 - Post `e5cb5a9`: baseline recorded (see top blockquote). S1 not started.
+- **S1 CLOSED** (no-op discovery): round-1 settlement (`e5cb5a9`) had already cleared
+  all production wildcards; remaining 102 glob hits are idiomatic test-module globs
+  (kept per §2 scope). Deliverable shipped instead: `docs/scaling/coupling_map.md`.
+- **S2 DONE** (commit `e702a77`): `mindstrata-person` extracted (person/ + biology/,
+  106 tests); `parameters.rs` moved to `mindstrata-core::parameters` (shared vocabulary,
+  19 consumers). Golden 8/8 byte-identical; 145 items documented at crate birth.
+- **S3 DONE** (this commit), order adjusted per coupling map: `mindstrata-psych`
+  (+ appraisal.rs — map revealed social→appraisal inversion; appraisal has core-only
+  deps so it lives below social), `mindstrata-institutions` (8 root files, zero
+  impl-Simulation blocks — pure domain layer; Simulation glue stays in sim/*_impl),
+  `mindstrata-social` (social/ culture/ noosphere/), `mindstrata-world` (7 root files).
+  451 missing_docs items documented across the four births. Golden replay byte-identical
+  (304/0 release suite incl. golden_replay_vs_baseline).
+- **Architectural finding recorded**: none blocking. One DAG inversion found
+  (social→appraisal) and resolved by placement, not by god-crate.
+- **Residual**: sim retains orchestration + impl-glue (~35K LOC target met later via
+  Arc-D systems extraction); TUI longitudinal-chart wiring landed separately by the
+  behavioral session (Iter-251).

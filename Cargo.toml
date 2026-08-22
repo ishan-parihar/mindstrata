@@ -3,6 +3,10 @@ resolver = "2"
 members = [
     "crates/mindstrata-core",
     "crates/mindstrata-person",
+    "crates/mindstrata-psych",
+    "crates/mindstrata-institutions",
+    "crates/mindstrata-social",
+    "crates/mindstrata-world",
     "crates/mindstrata-sim",
     "crates/mindstrata-cli",
     "crates/mindstrata-tui",
@@ -63,6 +67,10 @@ cast_possible_wrap = "allow"
 # Internal crates
 mindstrata-core = { path = "crates/mindstrata-core" }
 mindstrata-person = { path = "crates/mindstrata-person" }
+mindstrata-psych = { path = "crates/mindstrata-psych" }
+mindstrata-institutions = { path = "crates/mindstrata-institutions" }
+mindstrata-social = { path = "crates/mindstrata-social" }
+mindstrata-world = { path = "crates/mindstrata-world" }
 mindstrata-sim = { path = "crates/mindstrata-sim" }
 
 # Serialization

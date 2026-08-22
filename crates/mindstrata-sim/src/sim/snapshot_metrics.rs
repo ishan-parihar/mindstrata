@@ -14,7 +14,7 @@ use super::{
 pub(super) const MAX_METRIC_HISTORY: usize = 20_000;
 
 /// A snapshot of key simulation metrics at a specific tick.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MetricsSnapshot {
     pub tick: u64,
     // ── Basic need state ──

@@ -1,0 +1,12 @@
+[package]
+name = "mindstrata-institutions"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+mindstrata-core = { workspace = true }
+mindstrata-person = { workspace = true }
+serde = { workspace = true }
+
+[lints]
+workspace = true

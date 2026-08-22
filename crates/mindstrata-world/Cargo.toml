@@ -1,0 +1,17 @@
+[package]
+name = "mindstrata-world"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+mindstrata-core = { workspace = true }
+mindstrata-person = { workspace = true }
+mindstrata-institutions = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+rand_chacha = { workspace = true }
+
+[lints]
+workspace = true

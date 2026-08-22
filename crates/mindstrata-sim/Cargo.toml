@@ -8,6 +8,10 @@ license.workspace = true
 [dependencies]
 mindstrata-core = { workspace = true }
 mindstrata-person = { workspace = true }
+mindstrata-psych = { workspace = true }
+mindstrata-institutions = { workspace = true }
+mindstrata-social = { workspace = true }
+mindstrata-world = { workspace = true }
 serde = { workspace = true }
 ron = { workspace = true }
 postcard = { workspace = true }
