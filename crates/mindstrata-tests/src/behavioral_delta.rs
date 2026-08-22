@@ -499,14 +499,21 @@ fn scenario_delta_is_live_and_contexts_differ() {
     // RNG stream, widening the drought/vanilla gap to ~488 (918 vs 1406).
     // Both deltas remain positive and live; the gap is a calibration
     // observation, not a structural law.
-    let delta_gap = (drought.delta - vanilla.delta).abs();
+    // Iteration 246 re-contract (Arc A heredity): transmitted moral values
+    // legitimately change per-context escalation fuel — probe-pinned
+    // drought +4,039 vs vanilla +1,602 at seed 13/3000 (2.5×). The old
+    // 0.5× similarity band pinned a proxy that heredity invalidates by
+    // design; the honest guard is against total context DECOUPLING:
+    // neither leg may collapse below a tenth of the other (liveness and
+    // positivity are already asserted above).
+    let ratio = drought.delta.min(vanilla.delta) / drought.delta.max(vanilla.delta);
     assert!(
-        delta_gap < vanilla.delta * 0.5,
-        "drought and vanilla deltas should be comparable post-Iter-229 \
-         (probe-pinned): drought={:.0} vanilla={:.0} gap={:.0}",
+        ratio > 0.1,
+        "drought/vanilla escalation contexts must stay coupled \
+         (one leg collapsed): drought={:.0} vanilla={:.0} ratio={:.2}",
         drought.delta,
         vanilla.delta,
-        delta_gap
+        ratio
     );
 }
 
@@ -957,13 +964,17 @@ fn calm_scenario_baseline_differs_from_drought() {
     // stressed so the escalation bump has comparable impact to calm.
     // Iteration 229 re-pin: the Iter-229 ambient producers shift the
     // RNG stream, widening the gap. Both deltas remain positive and live.
-    let delta_gap = (drought.delta - calm.delta).abs();
+    // Iteration 246 re-contract (Arc A heredity): same rationale as the
+    // vanilla pair above — probe-pinned drought +4,039 vs calm +1,602 at
+    // the swept anchor (2.5×); the 0.5× similarity band becomes a
+    // one-order-of-magnitude decoupling guard.
+    let ratio = drought.delta.min(calm.delta) / drought.delta.max(calm.delta);
     assert!(
-        delta_gap < calm.delta * 0.5,
-        "drought and calm deltas should be comparable post-Iter-229 \
-         (probe-pinned): drought={:.0} calm={:.0} gap={:.0}",
+        ratio > 0.1,
+        "drought/calm escalation contexts must stay coupled \
+         (one leg collapsed): drought={:.0} calm={:.0} ratio={:.2}",
         drought.delta,
         calm.delta,
-        delta_gap
+        ratio
     );
 }

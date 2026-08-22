@@ -765,6 +765,58 @@ impl MoralValues {
         }
     }
 
+    /// Iteration 246 (Arc A heredity): vertical cultural transmission.
+    /// Each foundation blends the mid-parent value (70%) with the village's
+    /// living-community prior (30%) plus ±0.08 enculturation noise —
+    /// children resemble their parents and their neighbors more than
+    /// chance, while the population keeps drifting. Consumes exactly six
+    /// RNG draws (one per foundation), matching `random`'s stream contract
+    /// so downstream alignment is preserved.
+    pub fn inherit(
+        parent_a: &Self,
+        parent_b: Option<&Self>,
+        community_prior: &Self,
+        rng: &mut impl Rng,
+    ) -> Self {
+        let mut blend = |a: Fixed, b: Option<Fixed>, c: Fixed| -> Fixed {
+            let mid = b.map_or(a, |b| (a + b) * Fixed::from_f64(0.5));
+            let shaped = mid * Fixed::from_f64(0.7) + c * Fixed::from_f64(0.3);
+            (shaped + Fixed::from_f64(rng.random_range(-0.08..0.08))).clamp_01()
+        };
+        Self {
+            care: blend(
+                parent_a.care,
+                parent_b.map(|p| p.care),
+                community_prior.care,
+            ),
+            fairness: blend(
+                parent_a.fairness,
+                parent_b.map(|p| p.fairness),
+                community_prior.fairness,
+            ),
+            loyalty: blend(
+                parent_a.loyalty,
+                parent_b.map(|p| p.loyalty),
+                community_prior.loyalty,
+            ),
+            authority: blend(
+                parent_a.authority,
+                parent_b.map(|p| p.authority),
+                community_prior.authority,
+            ),
+            purity: blend(
+                parent_a.purity,
+                parent_b.map(|p| p.purity),
+                community_prior.purity,
+            ),
+            liberty: blend(
+                parent_a.liberty,
+                parent_b.map(|p| p.liberty),
+                community_prior.liberty,
+            ),
+        }
+    }
+
     /// Compute how much moral outrage a norm violation causes.
     /// Higher values = more anger/shame when the agent witnesses a violation.
     pub fn moral_outrage(&self, violation_severity: Fixed) -> Fixed {
@@ -1420,5 +1472,65 @@ mod surname_tests {
         // Third generation keeps the founding surname through the space rule.
         let gen2 = inherit_surname("Bran Anna", "Cara");
         assert_eq!(gen2, "Cara Anna");
+    }
+}
+
+#[cfg(test)]
+mod moral_inherit_tests {
+    use super::{MoralValues, FIRST_NAMES};
+    use mindstrata_core::fixed::Fixed;
+    use rand::{Rng, SeedableRng};
+
+    #[test]
+    fn values_transmit_vertically() {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(7);
+        let mut a = MoralValues::random(&mut rng);
+        let mut b = MoralValues::random(&mut rng);
+        // Extreme parents for a strong signal.
+        a.care = Fixed::from_f64(0.9);
+        b.care = Fixed::from_f64(0.8);
+        let prior = MoralValues::default(); // 0.5 everywhere
+        let child = MoralValues::inherit(&a, Some(&b), &prior, &mut rng);
+        // Child care near the mid-parent (0.85 shaped toward 0.5 by 30%):
+        // expected ~0.745 ± noise; must be FAR from either stranger draw.
+        let c = child.care.to_f64();
+        assert!(
+            (0.60..0.87).contains(&c),
+            "child care {c} should sit between mid-parent and community prior"
+        );
+        let stranger = MoralValues::random(&mut rng).care.to_f64();
+        assert!(
+            (child.care.to_f64() - 0.745).abs() <= (stranger - 0.745).abs() + 0.15,
+            "parental blend should beat a random stranger draw on average"
+        );
+    }
+
+    #[test]
+    fn single_parent_path_works() {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(9);
+        let mut a = MoralValues::random(&mut rng);
+        a.loyalty = Fixed::from_f64(0.95);
+        let prior = MoralValues::default();
+        let child = MoralValues::inherit(&a, None, &prior, &mut rng);
+        // Sole parent 0.95 * 0.7 + 0.5 * 0.3 = 0.815 ± 0.08
+        let l = child.loyalty.to_f64();
+        assert!(
+            (0.70..0.92).contains(&l),
+            "sole-parent loyalty {l} out of band"
+        );
+        //
+        // NOTE on RNG streams: `random` and `inherit` both consume six
+        // draws but over DIFFERENT widths (e.g. 0.2..0.9 vs -0.08..0.08),
+        // so byte-level stream alignment between them is impossible — and
+        // irrelevant: `moral_values` is the LAST rng-consuming initializer
+        // in both birth constructors (everything after is
+        // `Default::default()`), so no downstream consumer can observe the
+        // difference.
+    }
+
+    #[test]
+    fn first_names_pool_is_stable() {
+        assert_eq!(FIRST_NAMES.len(), 24);
+        assert!(FIRST_NAMES.iter().all(|n| !n.contains(' ')));
     }
 }

@@ -301,6 +301,31 @@ impl Simulation {
     /// Foundational beliefs seeded into every agent at populate, and now also
     /// into newborns (born or replacement) so they can participate in belief
     /// propagation instead of starting with an empty set.
+    /// Iteration 246: the village's living-community moral prior — the
+    /// per-foundation mean across all living agents. Births blend this in
+    /// at 30% so each generation re-anchors slightly toward the current
+    /// consensus instead of drifting freely.
+    fn community_moral_prior(&self) -> MoralValues {
+        if self.agents.is_empty() {
+            return MoralValues::default();
+        }
+        let n = Fixed::from_int(self.agents.len() as i64);
+        let mean = |pick: fn(&MoralValues) -> Fixed| -> Fixed {
+            self.agents
+                .iter()
+                .fold(Fixed::ZERO, |acc, a| acc + pick(&a.moral_values))
+                / n
+        };
+        MoralValues {
+            care: mean(|m| m.care),
+            fairness: mean(|m| m.fairness),
+            loyalty: mean(|m| m.loyalty),
+            authority: mean(|m| m.authority),
+            purity: mean(|m| m.purity),
+            liberty: mean(|m| m.liberty),
+        }
+    }
+
     pub(super) fn foundational_beliefs() -> Vec<Belief> {
         vec![
             Belief {
@@ -407,7 +432,12 @@ impl Simulation {
             attention: AttentionState::default(),
             intention: None,
             routine: DailyRoutine::village_routine(),
-            moral_values: MoralValues::random(&mut child_rng),
+            // Iteration 246: the replacement newborn inherits the deceased
+            // household's values (sole-parent blend) + community prior.
+            moral_values: {
+                let prior = Self::community_moral_prior(self);
+                MoralValues::inherit(&self.agents[idx].moral_values, None, &prior, &mut child_rng)
+            },
             cognitive: CognitiveState::default(),
             derived: DerivedMentalState::default(),
             relational_fields: Default::default(),
@@ -974,7 +1004,19 @@ impl Simulation {
                     attention: AttentionState::default(),
                     intention: None,
                     routine: DailyRoutine::village_routine(),
-                    moral_values: MoralValues::random(&mut child_rng),
+                    // Iteration 246 (Arc A heredity): values transmit from
+                    // both parents, blended with the community prior.
+                    moral_values: {
+                        let prior = self.community_moral_prior();
+                        let mother_vals = self.agents[parent_a].moral_values.clone();
+                        let father_vals = parent_b.map(|p| self.agents[p].moral_values.clone());
+                        MoralValues::inherit(
+                            &mother_vals,
+                            father_vals.as_ref(),
+                            &prior,
+                            &mut child_rng,
+                        )
+                    },
                     cognitive: CognitiveState::default(),
                     derived: DerivedMentalState::default(),
                     relational_fields: Default::default(),
