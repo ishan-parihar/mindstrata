@@ -181,21 +181,52 @@ by parallel agents or reviewed precisely. The pattern established by the sim.rs 
    during migration but is cleanup debt — settle to explicit imports once the module
    stabilizes.
 
-### Current layout (post-split)
+### Current layout (post-segregation, commit `e5cb5a9`)
 
 ```
 crates/mindstrata-sim/src/
-  sim/mod.rs        # Simulation struct, AgentBundle, config, wiring
-  sim/core.rs       # main tick() pipeline orchestration (largest; further splits expected)
-  sim/{family,economy,norms_impl,factions_impl,institutions_impl,legal_impl,
-       diplomacy_impl,education,cults_noosphere,memory_ops,social_cluster,
-       clans,snapshot_metrics,tests}.rs
+  sim/mod.rs        # Simulation struct, AgentBundle, config, wiring (hub root)
+  sim/core.rs       # main tick() pipeline orchestration (1,234 lines)
+  sim/pass_{biology,cognitive,action,social,appraisal,decay}.rs  # verbatim tick passes
+  sim/{population,api}.rs            # constructors/seeding; command channel + accessors
+  sim/{marriage,births_deaths,household,economy,norms_impl,factions_impl,
+       institutions_impl,legal_impl,diplomacy_impl,education,cults_noosphere,
+       memory_ops,social_cluster,clans,snapshot_metrics}.rs
+  person/{mod,body,psyche,mind,social_self}.rs   # re-export shim keeps crate::person paths
   biology/          # genome, metabolism, immune, thermal, nervous, … (EmbodiedState)
   psychology/       # emotions, theory_of_mind, moral_cognition, interoception, …
   systems/          # future home for extracted pass modules
 crates/mindstrata-tests/src/integration_tests/
-  {economy,governance,psychology,social,…}/   # namespaced integration suites
+  {biology,psychology,social,culture,governance,economy,legal,infra}.rs
+crates/mindstrata-tui/src/{lib,render,session}.rs
 ```
+
+### The module → crate ladder (scaling to 200K+ LOC)
+
+File splits fix navigability; only **crate boundaries** fix build-time coupling and
+dependency direction. The ladder, one rung per iteration:
+
+1. **S1 — settle remaining wildcards** (~102 files in `biology/ psychology/ culture/
+   social/ noosphere/` + roots). Explicit imports double as the coupling survey.
+2. **S2 — extract `mindstrata-person`** (+ `biology/`) as the first leaf crate;
+   proves the recipe on the smallest blast radius.
+3. **S3+ — cluster extractions** (`mindstrata-psych`, `mindstrata-social`,
+   `mindstrata-institutions`, `mindstrata-world`) ordered by the S1 coupling map.
+   End state: `sim` = pure orchestration (<15K LOC), dependency DAG enforced by cargo.
+
+Crate-extraction discipline (full procedure in `docs/PLAN_SCALING_FOUNDATION.md`):
+
+- **Golden replay is the referee** — every extraction byte-identical, behavioral
+  changes never mixed into structural commits.
+- **Shim transitions** — old paths keep compiling via `pub use`; call-site churn is a
+  separate later commit or nothing.
+- **Coupling survey before surgery** — never pick seams without the S1 map; if an
+  extraction hits a genuine cycle, STOP and record it as an architectural finding.
+  Cycles are resolved behaviorally in their own iteration; never papered over with a
+  god-crate.
+- **Serde shape is frozen while moving** — no attribute/field-order edits inside an
+  extraction (snapshot compatibility rides golden's agent_hash).
+- **New crates get `deny(missing_docs)` at birth** — cheap when born, expensive later.
 
 ### Splitting etiquette for parallel agents
 
@@ -210,27 +241,31 @@ crates/mindstrata-tests/src/integration_tests/
 
 ## 8. Where Things Stand / Next Work
 
-Landed through Iteration 246 (see `git log` for the full trail):
-faction crisis-pressure lifecycle, lived-experience belief charging, health-sync revival +
-fertility restoration, genome blending + dead-predisposition activation (Arc A part 1),
-family surnames (part 2), vertical moral-values transmission (part 3).
+Landed through Iteration 247 + refactor `e5cb5a9` (see `git log` for the full trail):
+faction crisis-pressure lifecycle, lived-experience belief charging, health-sync
+revival, genome blending + dead-predisposition activation (Arc A), family surnames,
+vertical moral-values transmission, Iteration-243 knife-edge calibrations (304/0),
+Iteration-247 interoception activation + ideology inheritance (Arc B opens), and the
+full module-segregation refactor: sim god-file → hub + six verbatim tick passes,
+integration tests namespaced by domain, TUI render/session split, person/ split — all
+golden-proven byte-identical.
 
 Queue, in order:
 
-1. **Iteration 243 — six single-system calibrations** (suite currently 298 passed / 6 failed):
-   famine timing vs plague mortality, patronage rank→status margin, flashbulb memory gate,
-   motivation fear context floor, neural prediction-error gate, noosphere conviction margin.
-   Each is independent; probe → fix producer or re-anchor with evidence.
-2. **Arc B — embodiment→mind**: interoception activation (`felt_*` filters exist in
-   `psychology/interoception.rs` but have ZERO call sites in decision pipelines — the
-   Genome→Endocrine→Nervous→Interoception→Emotion chain breaks at link 4); then Whitehall
-   gradient (status→chronic stress→health) and sleep-debt withdrawal effects.
-3. **Arc C — mind→social depth**: ToM-driven partner choice, speech-act intent/deception
+1. **S1 — wildcard settlement round 2** (~102 files) per
+   `docs/PLAN_SCALING_FOUNDATION.md`; produces the coupling map that orders S3.
+2. **Arc B — embodiment→mind** (behavioral): Whitehall gradient (status→chronic
+   stress→health) and sleep-debt withdrawal effects; interoception activation shipped
+   Iter-247.
+3. **S2 — extract `mindstrata-person`** (+ `biology/`) as first leaf crate; sequence
+   into a gap between Arc B behavioral landings.
+4. **Arc C — mind→social depth**: ToM-driven partner choice, speech-act intent/deception
    feeding trust.
-4. **Arc D — infrastructure**: extract bio/psych passes from `sim/core.rs` into `systems/`
-   (byte-identity-guarded per §6 procedure), lineage/emotion/Gini metrics + TUI
-   longitudinal charts.
-5. Then resume audit Phases 2–6 in `docs/AUDIT_2026-08-22_EMERGENT_REALISM.md`.
+5. **Arc D — infrastructure**: extract bio/psych passes from `sim/core.rs` into
+   `systems/`, lineage/emotion/Gini metrics + TUI longitudinal charts. Fold S3 crate
+   extractions (`psych`, `social`, `institutions`, `world`) in here as their coupling
+   clusters stabilize, one crate per iteration.
+6. Then resume audit Phases 2–6 in `docs/AUDIT_2026-08-22_EMERGENT_REALISM.md`.
 
 ## 9. Tone & Conduct
 
