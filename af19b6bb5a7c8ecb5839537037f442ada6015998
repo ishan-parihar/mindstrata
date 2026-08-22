@@ -1,0 +1,9 @@
+NOTE (scaling-program audit): this commit, labeled 'Iteration 251',
+inadvertently carries HALF of the S2 crate extraction (person/ + biology/ ->
+mindstrata-person renames and parameters.rs -> mindstrata-core). Two parallel
+sessions shared one git index; the behavioral commit swept up structural staging
+that was mid-flight. This snapshot does NOT build standalone (sim/lib.rs still
+declares plain 'pub mod person;' while the module tree was moved out).
+The completing half — glob shims, Cargo/workspace wiring, doc coverage — landed
+in e702a77 ('refactor(S2)'). Bisect guidance: treat af19b6b+e702a77 as ONE
+logical change; skip af19b6b with 'git bisect skip'.
