@@ -3,6 +3,36 @@
 *Created Iteration 242+, post-commit `8881980`. Supersedes nothing; extends the
 audit roadmap's Phase 1 into a full bio↔psych↔social coupling program.*
 
+> **STATUS UPDATE (post-Iter-246, commit `36dd22b`) — Arc A COMPLETE.**
+>
+> Landed vs plan, with deviations:
+> - **Iter 244** shipped genome blending (`Genome::blend`, midpoint ± 0.06
+>   mutation), `EmbodiedState::born` shared constructor, `Personality::inherit`
+>   (mid-parent + 20% shrinkage), and THREE dead gene families activated
+>   (metabolic rate/satiety/fat-storage, immune recovery/exposure,
+>   strength/endurance ceilings). Deviation: physical_potential →
+>   injury-susceptibility & labor-output wiring DEFERRED (conflict code lives
+>   in the hot tick path); ceilings only.
+> - **Parent links**: landed as `AgentBundle.parent_a/parent_b: Option<usize>`
+>   (parallel agent, sim split) — supersedes this plan's orphan-rule sketch.
+> - **Iter 245** shipped family surnames (`person::FIRST_NAMES`,
+>   `person::inherit_surname`, maternal-line inheritance at both birth paths).
+>   Deviations: uniqueness enforcement NOT needed (given names cycle a pool;
+>   collisions acceptable); regulation-init unification (audit H6) was ALREADY
+>   closed by Iter-239 — plan item stale.
+> - **Iter 246** shipped moral-values vertical transmission (mid-parent 70% +
+>   community prior 30% + noise, both birth paths). Deviation: foundational-
+>   beliefs and ideology-axis affinity inheritance NOT yet done — newborns
+>   still take hardcoded axis defaults (`family.rs` both sites); folded into
+>   Iter 247 prep below as a small carry-over item.
+> - Verification probes run: value-band contracts, sole-parent path, surname
+>   three-generation lineage test, six-draw RNG contract. STILL OPEN from the
+>   original Arc A exit criteria: end-to-end sibling-vs-stranger correlation
+>   probe and parent-child regression slope in [0.3, 0.7] (needs population
+>   stats over a long horizon — fold into Iter 251 metrics).
+>
+> Suite: 298 passed / 6 failed (unchanged failure set through Arc A).
+
 ## 0. Where we are
 
 Suite **298 passed / 6 failed** (`cargo test -p mindstrata-tests --lib --release`,
@@ -126,10 +156,13 @@ golden blast contained to long-horizon surfaces (births rare in short windows).
 
 ### Arc B — Embodiment → mind (Iterations 247–248) *— closes G2, G3*
 
-**Iter 247 — Interoception activation**
+**Iter 247 — Interoception activation** *(next up)*
+0. Carry-over from Arc A: inherit ideology-axis affinity + foundational
+   beliefs from parents (small; same blend shape as moral values).
 1. Route need salience through `felt_*`: action utilities consume felt
    deficits, not raw ones; sensitivity set by genome+nervous sensitivity
-   (already stored).
+   (already stored). NOTE: wiring sites moved to `sim/core.rs` +
+   `sim/family.rs` after the split — check mtimes before editing.
 2. Somatic marker: high felt-pain/fatigue biases risk-averse action choice.
 3. `emotional_body_tone` joins appraisal inputs (embodied emotion bias).
 Probe: high-sensitivity agents react to deficits earlier than low-sensitivity
