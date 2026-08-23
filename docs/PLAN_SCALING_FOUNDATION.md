@@ -196,6 +196,24 @@ Behavioral work concentrates in `psychology/ social/ actions.rs` right now
      Golden replay still passes (no epidemic ignites in the riverford_minor seed-42
      window), so the shift escaped its gate. Per §4.2 these re-anchors need probe
      evidence naming measured value, old band, and mechanism — do not batch-accept.
+- **DOCTRINE CORRECTION (Wave-1 recon, measured)**: the remaining `sim/*_impl` bulk is
+  **irreducible orchestration**, not detanglable debt. Evidence per file: each impl
+  block is a small cross-registry transaction — diplomacy tick touches
+  diplomacy+world+military+journal+rng; household touches 30 distinct Simulation
+  fields; memory encoding iterates all agents across ~20 composite subfields plus
+  events/relationships/rng. Moving these requires either pub-across-crate Simulation
+  fields (encapsulation loss) or speculative trait inversion (§7 anti-scope) — both
+  forbidden. **sim IS the integration crate; the "<15K" LOC target is retired.**
+  Replacement success metric: domain-logic changes must not require sim recompiles
+  (already true via the crate DAG); orchestration stays reviewable via the six-pass
+  hub layout (already true). True extractions still happen where a method is
+  genuinely single-registry (e.g., memory_ops::record_{famine,faction_founding}
+  → social crate free functions).
+- **GATE HARDENING (Phase 2 of forward plan)**: single-baseline blind spot — the
+  golden scenario (12 agents, calm village) never ignites epidemics/revolutions,
+  which is exactly how Iter-252's R0 shift escaped. Remedy in flight: second stored
+  baseline `riverford_dense` (denser population, longer horizon) so crisis-path
+  behavior is byte-pinned alongside the calm path.
 - **SLIMMING MIGRATION DONE** (`3ad212b`): root mind/social modules moved to domain
   crates per the end-state clause — psych += memory/attention/belief_update/journal
   (+45 tests), social += gossip/conflict (+21), person += health (+12). Pure renames;
