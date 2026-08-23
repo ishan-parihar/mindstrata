@@ -35,7 +35,9 @@ state, no re-summarizing, no clarifying questions.
 ## 3. Verification Discipline (non-negotiable)
 
 - `cargo fmt --all && cargo clippy --workspace --quiet && cargo test -p mindstrata-tests --lib --release`
-  must run before EVERY commit. No exceptions, no reminders.
+  must run before EVERY commit. No exceptions, no reminders. Behavioral iterations
+  additionally run `scripts/gate --full` before push — the pre-commit hook covers only
+  fmt+clippy; the release suite + golden baselines are enforced at push time.
 - Full suite is release-mode (`--release`); debug-mode runs of long-horizon tests take 10–20×.
 - Snapshot drift is reviewed via `cargo insta test -p mindstrata-tests --release`, then
   `cargo insta accept --all` **only with documented evidence** of why the shift is expected.

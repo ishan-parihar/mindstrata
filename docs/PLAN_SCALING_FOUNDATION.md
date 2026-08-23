@@ -219,5 +219,24 @@ Behavioral work concentrates in `psychology/ social/ actions.rs` right now
   (+45 tests), social += gossip/conflict (+21), person += health (+12). Pure renames;
   shims preserve all paths; golden byte-identical on detached snapshot; failure set
   exactly equals HEAD's documented Iter-252 pins (zero new reds). sim now 25,582 LOC.
-- **Remaining toward <15K**: ~10K is `sim/*_impl` glue + passes awaiting Arc-D systems
-  extraction; actions.rs (2,416) stays put while behavioral arcs hold it hot (§5).
+- **Remaining toward <15K**: ~~retired~~ superseded by the DOCTRINE CORRECTION above
+  (sim impl-glue = irreducible orchestration). See Arc-D queue in AGENTS.md §8.
+- **PROGRAM COMPLETE — closing audit (post-`68ffde4`)**: all structural exit criteria
+  mechanically re-verified against HEAD: zero production wildcards (112 globs are
+  cfg(test)-scoped); DAG edge-exact from live Cargo.tomls, acyclic, six crates check
+  standalone; `deny(missing_docs)` on all five births; sim 25,774 LOC; shim surface
+  intact; six-pass hub + actions split landed; second (compound-crisis) golden
+  baseline stored, hash-distinct from calm, byte-deterministic — it caught its first
+  real shift within hours of landing.
+- **LEDGER RECONCILIATION (flagged-debt item #2 resolved)**: Iteration-252's 7 snapshot
+  pins were re-anchored *in practice* but silently absorbed across the 248/249/254
+  landings (5–7 `.snap` files each) — per-pin §4.2 evidence attribution is no longer
+  recoverable from history. The three behavioral pins are green today. Verdict:
+  closed-with-caveat; the failure mode (batch absorbs defeating evidence trails) is
+  precisely what push-time gate enforcement now prevents.
+- **POST-AUDIT REMEDIATION SHIPPED**: `scripts/gate [--full]` wrapper (push-time suite +
+  baseline enforcement, referenced from AGENTS.md §3); coupling map v2 generator
+  (`scripts/gen_coupling_map.py`) emitting enforced-DAG + orchestration-heat layers;
+  integration-test splits psychology/social/sim-tests per the >2,500 policy.
+  Remaining before expansive depth work: calm+crisis baselines green at a settled HEAD
+  (owned by the behavioral session's 256/257 re-anchor cycle).

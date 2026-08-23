@@ -2,10 +2,10 @@
   "scenario": "collapse",
   "seed": 42,
   "ticks": 4320,
-  "metric_hash": 2243963945652061674,
-  "event_hash": 11687971009020039195,
-  "agent_hash": 2559643071676179431,
+  "metric_hash": 18399769777530976645,
+  "event_hash": 4066213356484310257,
+  "agent_hash": 1353764335819338011,
   "agent_count": 12,
-  "total_grain": 1.4337,
-  "total_water": 1142.7608
+  "total_grain": 0.7462,
+  "total_water": 1141.968
 }

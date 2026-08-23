@@ -44,15 +44,51 @@ pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
         }
     }
 
-    // Add a river running through the middle
-    let river_x = w / 2;
+    // Iteration 257 (audit Phase 5 - world variance): the river MEANDERS -
+    // a momentum random walk instead of a ruler-straight line - and its
+    // banks carry a distance-falloff fertility gradient (rich bottomland
+    // near the water, thin soil far from it). Same seed -> same river.
+    let mut river_x = w / 2;
+    let mut drift: i32 = 0;
     for y in 2..h - 2 {
+        if world_rng.random_bool(0.35) {
+            drift += world_rng.random_range(-1..=1);
+        }
+        drift = drift.clamp(-2, 2);
+        river_x = (river_x + drift).clamp(2, w - 3);
         let idx = (y * w + river_x) as usize;
         world.tiles[idx] = Tile::new(Terrain::Water);
-        if river_x > 0 {
-            let bank_idx = (y * w + (river_x - 1)) as usize;
-            world.tiles[bank_idx].fertility = Fixed::from_f64(0.95);
-            world.tiles[bank_idx].moisture = Fixed::from_f64(0.9);
+        for bank in [river_x - 1, river_x + 1] {
+            if bank > 0 && bank < w {
+                let bank_idx = (y * w + bank) as usize;
+                world.tiles[bank_idx].fertility = Fixed::from_f64(0.95);
+                world.tiles[bank_idx].moisture = Fixed::from_f64(0.9);
+            }
+        }
+    }
+    // Distance-to-water fertility field: every non-water tile's fertility
+    // grades from 0.9 adjacent to the river toward 0.4 at the map edge,
+    // plus small per-tile noise. Deterministic from the World stream.
+    let water_cols: Vec<i32> = (0..h)
+        .flat_map(|y| (0..w).map(move |x| (x, y)))
+        .filter(|(x, y)| matches!(world.tiles[(y * w + x) as usize].terrain, Terrain::Water))
+        .map(|(x, _)| x)
+        .collect();
+    for y in 0..h {
+        for x in 0..w {
+            let idx = (y * w + x) as usize;
+            if matches!(world.tiles[idx].terrain, Terrain::Water) {
+                continue;
+            }
+            let nearest = water_cols
+                .iter()
+                .map(|cx| (cx - x).abs())
+                .min()
+                .unwrap_or(w);
+            let base = 0.9 - (nearest as f64 * 0.08);
+            let noise: f64 = world_rng.random_range(-0.05..0.05);
+            let fert = (base + noise).clamp(0.3, 0.95);
+            world.tiles[idx].fertility = Fixed::from_f64(fert);
         }
     }
 
@@ -60,11 +96,21 @@ pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
     let center_x = w / 2;
     let center_y = h / 2;
 
-    // Place houses around center (8 houses)
+    // Iteration 257: houses on a jittered ring - seeded per-house radius
+    // (3-5) and angle wobble break the perfect-circle grammar. A candidate
+    // that lands on water falls back to the unjittered position.
     for i in 0..8 {
-        let angle = (i as f64) * std::f64::consts::PI / 4.0;
-        let hx = center_x + (angle.cos() * 4.0) as i32;
-        let hy = center_y + (angle.sin() * 4.0) as i32;
+        let angle = (i as f64) * std::f64::consts::PI / 4.0 + world_rng.random_range(-0.15..0.15);
+        let radius = 4.0 + world_rng.random_range(-1.0..1.0);
+        let mut hx = center_x + (angle.cos() * radius) as i32;
+        let mut hy = center_y + (angle.sin() * radius) as i32;
+        let on_water = world
+            .tile(hx, hy)
+            .is_some_and(|t| matches!(t.terrain, Terrain::Water));
+        if on_water {
+            hx = center_x + (angle.cos() * 4.0) as i32;
+            hy = center_y + (angle.sin() * 4.0) as i32;
+        }
         let site = Site {
             id: EntityId::new(site_id),
             kind: SiteKind::House,
@@ -89,7 +135,14 @@ pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
         storage_capacity: Fixed::from_f64(500.0),
         inventory: vec![ResourceStock {
             resource_id: GRAIN_RESOURCE_ID,
-            quantity: Fixed::from_f64(100.0),
+            // Iteration 257: soil-quality multiplier from the local
+            // fertility field - richer land founds with bigger granaries.
+            quantity: Fixed::from_f64(
+                100.0
+                    * world
+                        .tile(center_x.saturating_sub(6), center_y)
+                        .map_or(1.4, |t| (0.6 + t.fertility.to_f64()).clamp(0.8, 1.5)),
+            ),
             quality: Fixed::from_f64(0.8),
             access: AccessRight::Public,
         }],

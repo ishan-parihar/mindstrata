@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Full verification gate — run before EVERY push (§3 discipline).
+# The pre-commit hook covers fmt+clippy cheaply; this adds the release
+# suite + both golden baselines. Behavioral iterations MUST pass this.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+FULL=0
+[ "${1:-}" = "--full" ] && FULL=1
+
+echo "[gate 1/3] fmt --check"
+cargo fmt --all --check
+
+echo "[gate 2/3] clippy --workspace"
+cargo clippy --workspace --quiet 2>&1 | grep -E "^warning|^error" && {
+    echo "CLIPPY NOT CLEAN"; exit 1; } || true
+
+if [ "$FULL" -eq 1 ]; then
+    echo "[gate 3/3] tests-crate release suite (+ golden baselines)"
+    cargo test -p mindstrata-tests --lib --release
+else
+    echo "[gate 3/3] golden baselines only (--full adds the whole suite)"
+    cargo test -p mindstrata-tests --lib --release golden_replay
+fi
+
+echo "GATE GREEN"
