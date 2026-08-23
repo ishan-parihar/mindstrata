@@ -329,6 +329,74 @@ impl Simulation {
                         }
                     }
                 }
+                // Iteration 261 (audit E6): council poor relief — the
+                // council recirculates a capped slice of its treasury to
+                // destitute members each quincenntial cycle. Probe evidence
+                // (i261_gini): Gini still climbs monotonically
+                // (~0.15→0.6+ by 20K across seeds) because tax flow nets
+                // coin from members while the Market dividend and wages
+                // miss non-role holders who have already sunk below
+                // subsistence. Sized as a small deterministic drip (≤0.5
+                // coins per destitute member per cycle, treasury reserve
+                // preserved) to stay inside the calibrated
+                // grievance/legitimacy envelope — same discipline as the
+                // §10.9 patronage rate.
+                if institution.kind == institutions::InstitutionKind::Council {
+                    /// ponytail: mirrors PATRONAGE_DESTITUTION_FLOOR;
+                    /// unify when sim/mod.rs settles
+                    const POOR_RELIEF_FLOOR_COINS: f64 = 1.0;
+                    let reserve = Fixed::from_f64(20.0);
+                    let budget = (institution.treasury - reserve).max(Fixed::ZERO);
+                    if budget > Fixed::ZERO && !institution.members.is_empty() {
+                        let mut destitute: Vec<(AgentId, Fixed)> = institution
+                            .members
+                            .iter()
+                            .filter_map(|m| {
+                                let idx = m.as_u64() as usize;
+                                (idx < self.agents.len()
+                                    && self.agents[idx].wealth.coin.to_f64()
+                                        < POOR_RELIEF_FLOOR_COINS)
+                                    .then_some((*m, self.agents[idx].wealth.coin))
+                            })
+                            .collect();
+                        if !destitute.is_empty() {
+                            let per_head = (budget / Fixed::from_int(destitute.len() as i64))
+                                .min(Fixed::from_f64(0.5));
+                            let mut paid_total = Fixed::ZERO;
+                            for (agent_id, coin) in &mut destitute {
+                                let idx = agent_id.as_u64() as usize;
+                                if institution.treasury - paid_total < reserve + per_head {
+                                    break;
+                                }
+                                self.agents[idx].wealth.coin = *coin + per_head;
+                                *coin = self.agents[idx].wealth.coin;
+                                paid_total += per_head;
+                            }
+                            if paid_total > Fixed::ZERO {
+                                institution.treasury -= paid_total;
+                                let members = institution.members.clone();
+                                let msg = format!(
+                                    "Council poor relief: {:.1} coins to {} destitute members",
+                                    paid_total.to_f64(),
+                                    destitute.len()
+                                );
+                                let trace_msg = msg.clone();
+                                let trace_affected = members.clone();
+                                institution.record_action(tick_u64, msg, members, true);
+                                self.provenance.record_institutional(
+                                    crate::provenance::InstitutionalTrace {
+                                        institution_name: "council".into(),
+                                        tick: tick_u64,
+                                        decision_kind: "poor_relief".into(),
+                                        description: trace_msg,
+                                        affected: trace_affected,
+                                        success: true,
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
                 let wage = Fixed::from_f64(institutions::BASE_WAGE);
                 let role_holder_count = institution
                     .roles
