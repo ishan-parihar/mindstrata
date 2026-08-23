@@ -420,6 +420,14 @@ pub fn render_metric_charts(history: &[mindstrata_sim::sim::MetricsSnapshot]) ->
     let fam_hi = fam.iter().copied().fold(0.0f64, f64::max);
     out.push_str(&series_chart("families", &fam, 0.0, fam_hi.max(1.0), ""));
     out.push('\n');
+    // Iteration 262: trait variance — the heredity-stationarity monitor.
+    // Unbounded (variance of 0-1 traits tops out at 0.25) so scale to a
+    // fixed [0, 0.25] band: flat-at-zero would mean genetic collapse.
+    let tv = tail(&|m: &mindstrata_sim::sim::MetricsSnapshot| m.trait_variance);
+    out.push_str(&series_chart("trait var", &tv, 0.0, 0.25, ""));
+    let mk = tail(&|m: &mindstrata_sim::sim::MetricsSnapshot| m.mean_kinship);
+    out.push_str(&series_chart("kinship", &mk, 0.0, 0.5, ""));
+    out.push('\n');
     out.push_str(&format!(
         "samples {} · ticks {}..{}\n",
         history.len(),

@@ -100,18 +100,24 @@ pub struct MetricsSnapshot {
     pub fear_p90: f64,
     /// 90th-percentile joy — the wellbeing tail.
     pub joy_p90: f64,
+    /// Population variance of big-five personality traits (Iteration 262):
+    /// the quantitative-genetics stationarity monitor promised by the
+    /// deepening plan — collapse would signal heredity over-shrinkage.
+    pub trait_variance: f64,
+    /// Mean genetic relatedness over active kinship edges (Iteration 262).
+    pub mean_kinship: f64,
 }
 
 impl MetricsSnapshot {
     /// §5.1/§19: CSV header for exporting metrics for analysis.
     pub fn csv_header() -> &'static str {
-        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_trauma_load,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,gini,avg_wealth,median_wealth,total_trades,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds,clan_count,clan_relation_count,cult_count,noosphere_nodes,noosphere_zeitgeist,collective_memory_count,patronage_relation_count,family_count,avg_best_skill,fear_p90,joy_p90"
+        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_trauma_load,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,gini,avg_wealth,median_wealth,total_trades,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds,clan_count,clan_relation_count,cult_count,noosphere_nodes,noosphere_zeitgeist,collective_memory_count,patronage_relation_count,family_count,avg_best_skill,fear_p90,joy_p90,trait_variance,mean_kinship"
     }
 
     /// §5.1/§19: One CSV line for this snapshot.
     pub fn to_csv_line(&self) -> String {
         format!(
-            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             self.tick,
             self.avg_hunger, self.avg_thirst, self.avg_fatigue,
             self.avg_valence, self.avg_joy, self.avg_fear,
@@ -131,6 +137,8 @@ impl MetricsSnapshot {
             self.avg_best_skill,
             self.fear_p90,
             self.joy_p90,
+            self.trait_variance,
+            self.mean_kinship,
         )
     }
 }
@@ -384,6 +392,46 @@ impl Simulation {
         let fear_p90 = percentile(summaries.iter().map(|x| x.fear.to_f64()).collect(), 0.9);
         let joy_p90 = percentile(summaries.iter().map(|x| x.joy.to_f64()).collect(), 0.9);
 
+        // Iteration 262 (observability completion): the two Iter-251
+        // promises that never shipped.
+        // trait_variance: mean per-trait population variance across the
+        // big five — the stationarity monitor for quantitative-genetics
+        // heredity (collapse would mean over-shrinkage toward the mean).
+        let trait_variance = if self.agents.is_empty() {
+            0.0
+        } else {
+            let n = self.agents.len() as f64;
+            let accessors = [
+                |a: &crate::sim::AgentBundle| a.personality.openness.to_f64(),
+                |a: &crate::sim::AgentBundle| a.personality.conscientiousness.to_f64(),
+                |a: &crate::sim::AgentBundle| a.personality.extraversion.to_f64(),
+                |a: &crate::sim::AgentBundle| a.personality.agreeableness.to_f64(),
+                |a: &crate::sim::AgentBundle| a.personality.neuroticism.to_f64(),
+            ];
+            let mut total = 0.0;
+            for accessor in accessors {
+                let vals: Vec<f64> = self.agents.iter().map(accessor).collect();
+                let m = vals.iter().sum::<f64>() / n;
+                total += vals.iter().map(|v| (v - m) * (v - m)).sum::<f64>() / n;
+            }
+            total / 5.0
+        };
+        // mean_kinship: average genetic relatedness across active edges
+        // (0.5 parent-child/sibling by construction; spouses/in-laws 0).
+        let mean_kinship = {
+            let act: Vec<_> = self
+                .kinship_graph
+                .edges
+                .iter()
+                .filter(|e| e.active)
+                .collect();
+            if act.is_empty() {
+                0.0
+            } else {
+                act.iter().map(|e| e.coefficient.to_f64()).sum::<f64>() / act.len() as f64
+            }
+        };
+
         MetricsSnapshot {
             tick: self.current_tick().as_u64(),
             avg_hunger: summaries.iter().map(|s| s.hunger.to_f64()).sum::<f64>() * n_inv,
@@ -427,6 +475,8 @@ impl Simulation {
             avg_best_skill,
             fear_p90,
             joy_p90,
+            trait_variance,
+            mean_kinship,
         }
     }
 }
