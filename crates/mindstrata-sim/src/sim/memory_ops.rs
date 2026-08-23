@@ -12,19 +12,6 @@ impl Simulation {
     /// a scarcity trauma is not re-recorded while a recent one exists, so
     /// one crisis yields one memory. Deterministic (reads agent needs).
     pub(super) fn record_famine_memory(&mut self, tick: u64) {
-        use crate::culture::SharedMemoryKind;
-        // Episode guard — skip while a *live* scarcity trauma exists. Seeded
-        // origin memories have event_tick == 0 and never block.
-        let recent = self.collective_memory_registry.get(0).is_some_and(|cm| {
-            cm.memories.iter().any(|m| {
-                m.kind == SharedMemoryKind::Trauma
-                    && m.event_tick > 0
-                    && tick.saturating_sub(m.event_tick) < 43200 // ~300 days
-            })
-        });
-        if recent {
-            return;
-        }
         let n = self.agents.len().max(1);
         let inv = Fixed::from_f64(1.0 / n as f64);
         let avg_hunger = self
@@ -39,33 +26,22 @@ impl Simulation {
             .map(|a| a.needs.thirst)
             .fold(Fixed::ZERO, |acc, t| acc + t)
             * inv;
-        let (desc, charge) = if avg_thirst > Fixed::from_f64(0.6) {
-            ("Thirst gripped the village when the wells ran low", 0.8)
-        } else if avg_hunger > Fixed::from_f64(0.6) {
-            ("The village went hungry when the harvest failed", 0.8)
-        } else {
-            return;
-        };
-        self.collective_memory_registry.get_or_create(0).add_memory(
-            desc.into(),
-            SharedMemoryKind::Trauma,
+        crate::culture::maybe_record_famine(
+            &mut self.collective_memory_registry,
+            avg_hunger,
+            avg_thirst,
             tick,
-            Fixed::from_f64(charge),
         );
     }
 
     /// §13.5: Record a faction's founding myth — group 1 + faction id keeps
     /// faction memory separate from the village's (group 0).
     pub(super) fn record_faction_founding_memory(&mut self, faction_id: usize, tick: u64) {
-        use crate::culture::SharedMemoryKind;
-        self.collective_memory_registry
-            .get_or_create(1 + faction_id)
-            .add_memory(
-                "The faction was born of shared grievance against the council".into(),
-                SharedMemoryKind::Founding,
-                tick,
-                Fixed::from_f64(0.7),
-            );
+        crate::culture::record_faction_founding(
+            &mut self.collective_memory_registry,
+            faction_id,
+            tick,
+        );
     }
 
     /// Section 9: Memory encoding from this tick's events.

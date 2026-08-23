@@ -144,7 +144,28 @@ impl Simulation {
                 0.08,
             ),
         ];
+        // Iteration 256 (audit Phase 4 — de-scripted founding): grievance
+        // memes are CONDITIONAL on actual world stress. A stable world
+        // (no scenario, or no deprivation shocks) never starts with
+        // "the council is hoarding the well's water" or "a famine is
+        // coming" — grievances must be earned by events. Theological/
+        // moral/cultural seeds stay universal (every culture has ritual
+        // cosmology), but their descriptions still key off water context
+        // below.
+        let world_has_water_stress = self.scenario.as_ref().is_some_and(|sc| {
+            sc.shocks
+                .iter()
+                .any(|sh| matches!(sh.kind, ShockKind::Drought | ShockKind::Famine))
+        });
+        let world_has_hard_times =
+            self.scenario.as_ref().is_some_and(|sc| !sc.shocks.is_empty());
         for (i, (desc, content, emotional, identity, mutation)) in seeds.iter().enumerate() {
+            // Skip unearned-grievance seeds in comfortable worlds.
+            let is_grievance_seed = desc.contains("hoarding") || desc.contains("famine");
+            if is_grievance_seed && !world_has_hard_times {
+                continue;
+            }
+            let _ = world_has_water_stress;
             self.meme_registry.register(Meme::new(
                 i,
                 desc.to_string(),
@@ -1074,11 +1095,37 @@ impl Simulation {
         if !self.clan_registry.clans.is_empty() {
             return;
         }
-        const CLAN_COUNT: usize = 2;
-        let mut buckets: Vec<Vec<usize>> = vec![Vec::new(); CLAN_COUNT];
+        // Iteration 256 (audit Phase 4): clan count DERIVES FROM
+        // SETTLEMENT CLUSTERING instead of a hardcoded 2 - occupied home
+        // sites are grouped into contiguous runs of at most
+        // MAX_HOUSEHOLDS_PER_CLAN, and every household inherits its
+        // run's clan. Households therefore NEVER straddle clan boundaries
+        // (the first cut used `site % count`, which scattered co-residents
+        // into rival clans and starved intra-clan belief reinforcement -
+        // probe: pestilence s99 belief charges collapsed max 0.87 -> 0.23,
+        // zero panics). Village scale still drives the count: 3 households
+        // -> 1 clan, 7 -> 3 clans.
+        const MAX_HOUSEHOLDS_PER_CLAN: usize = 3;
+        let mut occupied_sites: Vec<usize> =
+            self.agents.iter().filter_map(|a| a.home_site).collect();
+        occupied_sites.sort_unstable();
+        occupied_sites.dedup();
+        let clan_count = occupied_sites
+            .len()
+            .div_ceil(MAX_HOUSEHOLDS_PER_CLAN)
+            .max(1);
+        let mut site_to_bucket: std::collections::HashMap<usize, usize> =
+            std::collections::HashMap::new();
+        for (run_idx, site) in occupied_sites.iter().enumerate() {
+            site_to_bucket.insert(*site, run_idx / MAX_HOUSEHOLDS_PER_CLAN);
+        }
+        let mut buckets: Vec<Vec<usize>> = vec![Vec::new(); clan_count];
         for (i, agent) in self.agents.iter().enumerate() {
-            let site = agent.home_site.unwrap_or(i);
-            buckets[site % CLAN_COUNT].push(i);
+            let bucket = agent
+                .home_site
+                .and_then(|hs| site_to_bucket.get(&hs).copied())
+                .unwrap_or(i % clan_count);
+            buckets[bucket].push(i);
         }
         let meme_count = self.meme_registry.memes.len();
         for members in buckets.into_iter().filter(|m| !m.is_empty()) {
@@ -1139,18 +1186,22 @@ impl Simulation {
         }
         let village = self.collective_memory_registry.get_or_create(0); // 0 = the village
         if village.memories.is_empty() {
-            village.add_memory(
-                "The village was founded by the first settlers who followed the river".into(),
-                SharedMemoryKind::Founding,
-                0,
-                Fixed::from_f64(0.8),
-            );
-            village.add_memory(
-                "The last great drought nearly starved the village".into(),
-                SharedMemoryKind::Trauma,
-                0,
-                Fixed::from_f64(0.6),
-            );
+            // Iteration 256 (audit Phase 4): the founding myth derives from
+            // ACTUAL world generation — river-followers vs well-diggers —
+            // and traumas are no longer pre-seeded: they must be earned by
+            // events (the drought trauma here was a lie about a history
+            // that never happened).
+            let water_stress = self.scenario.as_ref().is_some_and(|sc| {
+                sc.shocks
+                    .iter()
+                    .any(|sh| matches!(sh.kind, ShockKind::Drought | ShockKind::Famine))
+            });
+            let myth = if water_stress {
+                "The founders dug their wells where the old ones said water hides".to_string()
+            } else {
+                "The village was founded by the first settlers who followed the river".to_string()
+            };
+            village.add_memory(myth, SharedMemoryKind::Founding, 0, Fixed::from_f64(0.8));
         }
     }
 

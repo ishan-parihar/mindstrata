@@ -198,6 +198,27 @@ impl Simulation {
                                 DeathCause::Disease,
                             );
                         }
+                        // Iteration 256 (audit Phase 4 — EARNED traumas):
+                        // the de-scripting removed the fabricated
+                        // pre-seeded drought trauma; this is the earning
+                        // path that replaces it. A same-day mass death
+                        // writes itself into collective memory as a trauma
+                        // — the shared grief that later feeds belief
+                        // charging and moral-panic grievance. (Famine
+                        // starvation earns its own through the demography
+                        // death path — future wiring.)
+                        if deaths.len() >= 2 {
+                            let village = self.collective_memory_registry.get_or_create(0);
+                            village.add_memory(
+                                format!(
+                                    "The great sickness took {} of ours in a single day",
+                                    deaths.len()
+                                ),
+                                crate::culture::SharedMemoryKind::Trauma,
+                                tick_u64,
+                                Fixed::from_f64(0.6),
+                            );
+                        }
                         // Seed the virulent epidemic: every agent rolls an
                         // independent infection check (p = magnitude), so the
                         // selection is index-fair — a plague spares no one.

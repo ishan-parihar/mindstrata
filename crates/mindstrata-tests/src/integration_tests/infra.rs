@@ -698,8 +698,11 @@ fn collective_structures_seeded_in_fresh_and_restored_runs() {
         fresh_memories >= 1,
         "village collective memory should be seeded, got {fresh_memories}"
     );
+    // Iteration 256 (Phase 4 de-scripting): the founding meme pool is now
+    // world-conditional — grievance memes only seed in hard-times worlds,
+    // so a stable world's noosphere mirrors fewer nodes (probe: 3).
     assert!(
-        fresh_nodes >= 5,
+        fresh_nodes >= 3,
         "noosphere should mirror the founding memes, got {fresh_nodes}"
     );
 
@@ -896,7 +899,10 @@ fn tier_mix_envelope_pinned_across_population_sizes() {
         eprintln!(
             "PROBE agents={agents} seed={seed}: focal={focal} secondary={secondary} background={background}"
         );
-        let n = agents as usize;
+        // Iteration 256: populations are LIVE post-Phase-2 fertility
+        // restoration — a birth during run(1000) grows the roster, so the
+        // tier sum must equal the CURRENT agent count, not the config.
+        let n = sim.agents.len();
         assert_eq!(
             focal + secondary + background,
             n,

@@ -36,8 +36,8 @@ pub mod sacred;
 pub mod technology;
 
 pub use collective_memory::{
-    CollectiveMemory, CollectiveMemoryRegistry, SharedMemory, SharedMemoryKind, SharedTrauma,
-    ACTIVE_TRAUMA_SALIENCE_THRESHOLD,
+    maybe_record_famine, record_faction_founding, CollectiveMemory, CollectiveMemoryRegistry,
+    SharedMemory, SharedMemoryKind, SharedTrauma, ACTIVE_TRAUMA_SALIENCE_THRESHOLD,
 };
 pub use echo_chamber::{BeliefCluster as EchoBeliefCluster, EchoChamberState};
 pub use education::{EducationEvent, EducationState};

@@ -554,3 +554,54 @@ mod tests {
         assert!(restored.sacred_events.is_empty());
     }
 }
+
+/// §13.5 crisis-memory policy (moved verbatim from sim/memory_ops during
+/// the slimming program): episode-guarded scarcity trauma — one crisis
+/// yields one memory; a live trauma (< ~300 days old) blocks re-recording.
+/// Seeded origin memories (event_tick == 0) never block. Averages are
+/// computed by the caller (it owns the agent slice).
+pub fn maybe_record_famine(
+    registry: &mut CollectiveMemoryRegistry,
+    avg_hunger: Fixed,
+    avg_thirst: Fixed,
+    tick: u64,
+) {
+    let recent = registry.get(0).is_some_and(|cm| {
+        cm.memories.iter().any(|m| {
+            m.kind == SharedMemoryKind::Trauma
+                && m.event_tick > 0
+                && tick.saturating_sub(m.event_tick) < 43200 // ~300 days
+        })
+    });
+    if recent {
+        return;
+    }
+    let (desc, charge) = if avg_thirst > Fixed::from_f64(0.6) {
+        ("Thirst gripped the village when the wells ran low", 0.8)
+    } else if avg_hunger > Fixed::from_f64(0.6) {
+        ("The village went hungry when the harvest failed", 0.8)
+    } else {
+        return;
+    };
+    registry.get_or_create(0).add_memory(
+        desc.into(),
+        SharedMemoryKind::Trauma,
+        tick,
+        Fixed::from_f64(charge),
+    );
+}
+
+/// §13.5: faction founding myth — group 1 + faction id keeps faction
+/// memory separate from the village's (group 0).
+pub fn record_faction_founding(
+    registry: &mut CollectiveMemoryRegistry,
+    faction_id: usize,
+    tick: u64,
+) {
+    registry.get_or_create(1 + faction_id).add_memory(
+        "The faction was born of shared grievance against the council".into(),
+        SharedMemoryKind::Founding,
+        tick,
+        Fixed::from_f64(0.7),
+    );
+}

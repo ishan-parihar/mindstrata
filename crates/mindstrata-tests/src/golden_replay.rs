@@ -29,12 +29,20 @@ struct GoldenBaseline {
 }
 
 fn run_golden(seed: u64, ticks: u64) -> GoldenBaseline {
+    run_golden_configured(seed, ticks, 12)
+}
+
+/// Parametrized runner — `num_agents` selects the demographic regime.
+/// The calm village (12 agents) rarely ignites epidemics or revolutions;
+/// the dense variant exists so crisis-path behavior is byte-pinned too
+/// (the Iter-252 lesson: an R0 shift escaped a single-calm-baseline gate).
+fn run_golden_configured(seed: u64, ticks: u64, num_agents: u32) -> GoldenBaseline {
     let config = SimConfig {
         seed,
         max_ticks: ticks,
         world_width: 16,
         world_height: 16,
-        num_agents: 12,
+        num_agents,
         snapshot_interval: None,
     };
     let mut sim = Simulation::new(config);
@@ -138,13 +146,32 @@ mod tests {
 
     #[test]
     fn golden_replay_vs_baseline() {
-        let path = golden_path("riverford_minor", TEST_SEED);
+        assert_matches_baseline("riverford_minor", TEST_SEED, TEST_TICKS, 12);
+    }
+
+    /// Crisis-path baseline: the compound-crisis stress test (drought at
+    /// 500 → famine at 800 → pestilence at 1100 on one weakened population).
+    /// Pins mortality, generational replacement, and breakdown dynamics
+    /// that the calm-village baseline structurally cannot see — the exact
+    /// escape hatch Iter-252's R0 shift slipped through.
+    #[test]
+    fn golden_replay_crisis_vs_baseline() {
+        use mindstrata_sim::scenario::Scenario;
+        let sc = Scenario::collapse();
+        assert_matches_scenario_baseline("collapse", sc.seed, sc.ticks);
+    }
+
+    /// Shared enforcement: compare a run against its stored baseline,
+    /// self-generating the baseline on first run (commit the generated
+    /// json immediately — an uncommitted baseline pins nothing).
+    fn assert_matches_baseline(scenario: &str, seed: u64, ticks: u64, num_agents: u32) {
+        let path = golden_path(scenario, seed);
         if !path.exists() {
-            let b = run_golden(TEST_SEED, TEST_TICKS);
+            let b = run_golden_configured(seed, ticks, num_agents);
             let stored = StoredBaseline {
-                scenario: "riverford_minor".into(),
-                seed: TEST_SEED,
-                ticks: TEST_TICKS,
+                scenario: scenario.into(),
+                seed,
+                ticks,
                 metric_hash: b.metric_hash,
                 event_hash: b.event_hash,
                 agent_hash: b.agent_hash,
@@ -159,12 +186,110 @@ mod tests {
             std::fs::write(&path, &json).unwrap();
             eprintln!("Golden baseline generated at {path:?}");
             eprintln!("  metric_hash: {:016x}", b.metric_hash);
+            eprintln!("  agent_count: {} (crisis mortality check)", b.agent_count);
             return;
         }
 
         let json = std::fs::read_to_string(&path).unwrap();
         let baseline: StoredBaseline = serde_json::from_str(&json).unwrap();
-        let b = run_golden(baseline.seed, baseline.ticks);
+        let b = run_golden_configured(baseline.seed, baseline.ticks, num_agents);
+
+        assert_eq!(b.metric_hash, baseline.metric_hash,
+            "\n⚠️  Golden baseline changed!\n  Scenario: {}\n  Seed: {}\n  Old: {:016x}\n  New: {:016x}\n  Update: {:?}",
+            baseline.scenario, baseline.seed, baseline.metric_hash, b.metric_hash, path);
+        assert_eq!(
+            b.agent_count, baseline.agent_count,
+            "Agent count changed! Old: {}, New: {}",
+            baseline.agent_count, b.agent_count
+        );
+    }
+
+    /// Scenario-driven variant of [`assert_matches_baseline`] — runs a
+    /// named shock battery via `Simulation::from_scenario` so crisis
+    /// dynamics (shocks, seeded epidemics) are exercised.
+    fn assert_matches_scenario_baseline(scenario: &str, seed: u64, ticks: u64) {
+        use mindstrata_sim::scenario::Scenario;
+        let path = golden_path(scenario, seed);
+        let run = |seed: u64| -> GoldenBaseline {
+            let mut sc = Scenario::collapse();
+            sc.seed = seed;
+            sc.ticks = ticks;
+            let mut sim = Simulation::from_scenario(sc);
+            sim.populate();
+            sim.run(ticks);
+            let ms = sim.metrics_snapshot();
+            let metrics = vec![
+                ms.avg_hunger,
+                ms.avg_thirst,
+                ms.avg_fatigue,
+                ms.avg_valence,
+                ms.avg_joy,
+                ms.avg_fear,
+                ms.total_grain,
+                ms.total_water,
+                ms.event_count as f64,
+                ms.journal_len as f64,
+                ms.agent_count as f64,
+            ];
+            let summaries = sim.agent_summaries();
+            let agent_data: Vec<(f64, f64, f64, f64)> = summaries
+                .iter()
+                .map(|s| {
+                    (
+                        s.hunger.to_f64(),
+                        s.thirst.to_f64(),
+                        s.fatigue.to_f64(),
+                        s.valence.to_f64(),
+                    )
+                })
+                .collect();
+            let event_count_hash = {
+                let mut h = DefaultHasher::new();
+                ms.event_count.hash(&mut h);
+                h.finish()
+            };
+            GoldenBaseline {
+                metric_hash: hash_metrics(&metrics),
+                event_hash: event_count_hash,
+                agent_hash: hash_metrics(
+                    &agent_data
+                        .iter()
+                        .flat_map(|(a, b, c, d)| [*a, *b, *c, *d])
+                        .collect::<Vec<_>>(),
+                ),
+                agent_count: ms.agent_count,
+                total_grain: ms.total_grain,
+                total_water: ms.total_water,
+            }
+        };
+
+        if !path.exists() {
+            let b = run(seed);
+            let stored = StoredBaseline {
+                scenario: scenario.into(),
+                seed,
+                ticks,
+                metric_hash: b.metric_hash,
+                event_hash: b.event_hash,
+                agent_hash: b.agent_hash,
+                agent_count: b.agent_count,
+                total_grain: b.total_grain,
+                total_water: b.total_water,
+            };
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let json = serde_json::to_string_pretty(&stored).unwrap();
+            std::fs::write(&path, &json).unwrap();
+            eprintln!("Golden baseline generated at {path:?}");
+            eprintln!("  metric_hash: {:016x}", b.metric_hash);
+            eprintln!("  agent_count: {}", b.agent_count);
+            return;
+        }
+
+        let json = std::fs::read_to_string(&path).unwrap();
+        let baseline: StoredBaseline = serde_json::from_str(&json).unwrap();
+        let b = run(baseline.seed);
 
         assert_eq!(b.metric_hash, baseline.metric_hash,
             "\n⚠️  Golden baseline changed!\n  Scenario: {}\n  Seed: {}\n  Old: {:016x}\n  New: {:016x}\n  Update: {:?}",
