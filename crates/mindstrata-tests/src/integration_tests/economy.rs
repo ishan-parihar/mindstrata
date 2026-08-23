@@ -1252,3 +1252,27 @@ fn storage_overflow_bleeds_excess_grain_back_to_capacity() {
     );
     assert!(grain >= 0.0, "grain stock must stay non-negative");
 }
+
+/// Iteration 261 (audit E6 counterforce): the council operates a poor-relief
+/// program — a budget-capped, poorest-first top-up of village members below
+/// 10% of the median holding, funded from the tax treasury each quincenntial
+/// cycle. Probe evidence (i261_relief_scan, release): first payout lands at
+/// tick 500-2500 on seeds {5,7,13,42} with 36-38 payouts per 20K ticks; the
+/// pre-fix audit finding was that NO institutional redistribution reached
+/// non-member destitute agents at all. Liveness pin: the relief channel must
+/// fire within 6K ticks on seed 13 (measured first-fire margin: 8x).
+#[test]
+fn council_poor_relief_channel_is_live() {
+    let sim = run_sim(13, 6000);
+    let reliefs: Vec<_> = sim
+        .provenance()
+        .institutional_for("council")
+        .into_iter()
+        .filter(|t| t.decision_kind == "poor_relief")
+        .collect();
+    assert!(
+        !reliefs.is_empty(),
+        "council poor relief never fired by tick 6000 — the E6 redistribution \
+         counterforce went dead"
+    );
+}
