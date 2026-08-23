@@ -157,10 +157,8 @@ impl Simulation {
                 .iter()
                 .any(|sh| matches!(sh.kind, ShockKind::Drought | ShockKind::Famine))
         });
-        let world_has_hard_times = self
-            .scenario
-            .as_ref()
-            .is_some_and(|sc| !sc.shocks.is_empty());
+        let world_has_hard_times =
+            self.scenario.as_ref().is_some_and(|sc| !sc.shocks.is_empty());
         for (i, (desc, content, emotional, identity, mutation)) in seeds.iter().enumerate() {
             // Skip unearned-grievance seeds in comfortable worlds.
             let is_grievance_seed = desc.contains("hoarding") || desc.contains("famine");

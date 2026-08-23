@@ -633,6 +633,7 @@ pub use snapshot_metrics::{AgentSummary, MetricsSnapshot};
 
 mod api;
 mod births_deaths;
+pub mod chronicle;
 mod clans;
 mod core;
 mod cults_noosphere;

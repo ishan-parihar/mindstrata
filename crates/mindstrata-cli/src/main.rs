@@ -64,6 +64,14 @@ enum Commands {
         #[arg(long)]
         inspect_agent: Option<usize>,
 
+        /// Print the village chronicle (year-by-year annals) after simulation.
+        #[arg(long)]
+        chronicle: bool,
+
+        /// Print a dossier for a specific agent index after simulation.
+        #[arg(long, value_name = "IDX")]
+        dossier: Option<usize>,
+
         /// Show relationship between two agents (format: from,to).
         #[arg(long)]
         show_relationships: Option<String>,
@@ -153,6 +161,8 @@ fn main() {
             render_replay,
             replay_every,
             inspect_agent,
+            chronicle,
+            dossier,
             show_relationships,
             market,
             beliefs,
@@ -389,6 +399,19 @@ fn main() {
                 } else {
                     eprintln!("Agent {id} not found.");
                 }
+            }
+
+            // Iteration 259 (Phase 6): village chronicle + agent dossiers.
+            if chronicle {
+                println!();
+                print!("{}", mindstrata_sim::sim::chronicle::render_chronicle(&sim));
+            }
+            if let Some(idx) = dossier {
+                println!();
+                println!(
+                    "{}",
+                    mindstrata_sim::sim::chronicle::render_dossier(&sim, idx)
+                );
             }
 
             // §17.1: Relationship view

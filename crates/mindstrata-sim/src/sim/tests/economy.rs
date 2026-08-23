@@ -103,7 +103,13 @@ fn storage_overflow_rots_exposed_grain_only() {
         after > Fixed::from_f64(500.0),
         "only the exposed overflow rots, never the stored grain"
     );
-    assert_eq!(stored, Fixed::from_f64(100.0), "farm seeds 100 grain");
+    // Iteration 257 (Phase-5 world variance): the founding granary scales
+    // with local soil fertility, so the seeded stock is no longer a fixed
+    // 100 — the invariant is that `stored` captured the pre-pump level.
+    assert!(
+        stored >= Fixed::from_f64(80.0) && stored <= Fixed::from_f64(150.0),
+        "farm seeds within the fertility-multiplied band: {stored}"
+    );
 }
 
 #[test]
