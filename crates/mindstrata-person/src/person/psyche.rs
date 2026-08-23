@@ -473,6 +473,11 @@ impl Personality {
 pub struct Affect {
     /// Valence. (doc added at S2 extraction)
     pub valence: Fixed,
+    /// Iteration 254 (audit Phase 2): slow-moving hedonic setpoint
+    /// [0,1] — drifts toward the agent's comfort level and biases
+    /// valence positively when life has been sustainably good
+    /// (hedonic adaptation). Default 0.5 = neutral.
+    pub hedonic_setpoint: Fixed,
     /// Arousal. (doc added at S2 extraction)
     pub arousal: Fixed,
     /// Control. (doc added at S2 extraction)

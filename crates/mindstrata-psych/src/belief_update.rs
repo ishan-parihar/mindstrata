@@ -5,8 +5,8 @@
 //! reinforced beliefs resist change.  This produces ideology,
 //! propaganda, rumor, and polarization.
 
-use crate::person::Belief;
 use mindstrata_core::fixed::Fixed;
+use mindstrata_person::person::Belief;
 
 /// Update a single belief based on new evidence.
 ///
@@ -29,7 +29,7 @@ pub fn update_belief(
     emotional_reinforcement: Fixed,
     social_reinforcement_delta: Fixed,
     current_tick: u64,
-    params: &crate::parameters::SimParameters,
+    params: &mindstrata_core::parameters::SimParameters,
     rigidity_factor: Fixed,
 ) {
     let resistance = belief.resistance;
@@ -104,7 +104,7 @@ pub fn update_beliefs(
     emotional_reinforcement: Fixed,
     social_reinforcement: Fixed,
     current_tick: u64,
-    params: &crate::parameters::SimParameters,
+    params: &mindstrata_core::parameters::SimParameters,
     rigidity_factor: Fixed,
     cultural_dampening: Fixed,
 ) {
@@ -128,7 +128,7 @@ pub fn update_beliefs(
 pub fn decay_belief_resistance(
     beliefs: &mut [Belief],
     decay_rate: Fixed,
-    params: &crate::parameters::SimParameters,
+    params: &mindstrata_core::parameters::SimParameters,
 ) {
     for belief in beliefs.iter_mut() {
         let baseline = params.belief_resistance_baseline;
@@ -151,7 +151,7 @@ mod tests {
             identity_linkage: Fixed::ZERO,
             resistance: Fixed::from_f64(0.5),
             last_reinforced_tick: 0,
-            source: crate::person::EvidenceSource::PersonalExperience,
+            source: mindstrata_person::person::EvidenceSource::PersonalExperience,
             social_reinforcement: 0,
             is_accurate: true,
         };
@@ -163,7 +163,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             100,
-            &crate::parameters::SimParameters::default(),
+            &mindstrata_core::parameters::SimParameters::default(),
             // §10.1.3 (Iteration 109): identity factor — legacy tests keep
             // rigidity 1.0 so the pre-consumer expectations hold exactly.
             Fixed::ONE,
@@ -184,7 +184,7 @@ mod tests {
             identity_linkage: Fixed::from_f64(0.9),
             resistance: Fixed::from_f64(0.7),
             last_reinforced_tick: 0,
-            source: crate::person::EvidenceSource::PersonalExperience,
+            source: mindstrata_person::person::EvidenceSource::PersonalExperience,
             social_reinforcement: 0,
             is_accurate: true,
         };
@@ -196,7 +196,7 @@ mod tests {
             Fixed::ZERO,
             Fixed::ZERO,
             100,
-            &crate::parameters::SimParameters::default(),
+            &mindstrata_core::parameters::SimParameters::default(),
             // §10.1.3 (Iteration 109): identity factor — legacy tests keep
             // rigidity 1.0 so the pre-consumer expectations hold exactly.
             Fixed::ONE,
@@ -215,7 +215,7 @@ mod tests {
         // §10.1.3 (Iteration 109): the dogmatism factor scales update
         // resistance — under the same evidence, a belief updated with a
         // rigidity factor > 1.0 must move strictly less than with 1.0.
-        let params = crate::parameters::SimParameters::default();
+        let params = mindstrata_core::parameters::SimParameters::default();
         let make = |confidence: f64| Belief {
             proposition_id: 0,
             confidence: Fixed::from_f64(confidence),
@@ -223,7 +223,7 @@ mod tests {
             identity_linkage: Fixed::ZERO,
             resistance: Fixed::from_f64(0.5),
             last_reinforced_tick: 0,
-            source: crate::person::EvidenceSource::PersonalExperience,
+            source: mindstrata_person::person::EvidenceSource::PersonalExperience,
             social_reinforcement: 0,
             is_accurate: true,
         };
@@ -273,7 +273,7 @@ mod tests {
         // identity (1.0), and the direction never flips (ONE-SIDED: a
         // dampening factor is always ≤ 1.0, so it can only shrink evidence
         // magnitude, never flip its sign).
-        let params = crate::parameters::SimParameters::default();
+        let params = mindstrata_core::parameters::SimParameters::default();
         let make = || Belief {
             proposition_id: 2,
             confidence: Fixed::from_f64(0.5),
@@ -281,7 +281,7 @@ mod tests {
             identity_linkage: Fixed::ZERO,
             resistance: Fixed::from_f64(0.5),
             last_reinforced_tick: 0,
-            source: crate::person::EvidenceSource::PersonalExperience,
+            source: mindstrata_person::person::EvidenceSource::PersonalExperience,
             social_reinforcement: 0,
             is_accurate: true,
         };

@@ -821,6 +821,7 @@ dependencies = [
  "rand",
  "rand_chacha",
  "serde",
+ "tracing",
 ]
 
 [[package]]
@@ -833,6 +834,7 @@ dependencies = [
  "rand_chacha",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -875,6 +877,7 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]

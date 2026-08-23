@@ -7,3 +7,11 @@
 
 pub mod appraisal;
 pub mod psychology;
+
+pub mod memory;
+
+pub mod attention;
+
+pub mod belief_update;
+
+pub mod journal;

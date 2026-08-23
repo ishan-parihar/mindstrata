@@ -67,12 +67,16 @@ impl DiseaseKind {
 /// Active disease on an agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActiveDisease {
+    /// Kind. (doc added at module migration)
     pub kind: DiseaseKind,
+    /// Ticks infected. (doc added at module migration)
     pub ticks_infected: u64,
+    /// Severity modifier. (doc added at module migration)
     pub severity_modifier: Fixed, // 0..1, modifies base severity
 }
 
 impl ActiveDisease {
+    /// Fn. (doc added at module migration)
     pub fn new(kind: DiseaseKind) -> Self {
         Self {
             kind,

@@ -8,3 +8,7 @@
 pub mod culture;
 pub mod noosphere;
 pub mod social;
+
+pub mod gossip;
+
+pub mod conflict;

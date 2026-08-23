@@ -20,8 +20,8 @@
 //! - scapegoating
 //! - factional myths
 
-use crate::person::{Belief, DiscreteEmotions, Personality};
 use mindstrata_core::fixed::Fixed;
+use mindstrata_person::person::{Belief, DiscreteEmotions, Personality};
 use serde::{Deserialize, Serialize};
 
 /// A rumor that has been shared through the gossip network.
@@ -261,7 +261,7 @@ pub fn apply_gossip(listener_beliefs: &mut Vec<Belief>, result: &GossipResult, t
             identity_linkage: Fixed::from_f64(0.2), // rumors start with low identity linkage
             resistance: inherited_resistance,       // inherits the source's conviction
             last_reinforced_tick: tick,
-            source: crate::person::EvidenceSource::Hearsay,
+            source: mindstrata_person::person::EvidenceSource::Hearsay,
             social_reinforcement: 0,
             is_accurate,
         });
@@ -367,7 +367,7 @@ mod tests {
             identity_linkage: Fixed::from_f64(0.4),
             resistance: Fixed::from_f64(0.5),
             last_reinforced_tick: 0,
-            source: crate::person::EvidenceSource::PersonalExperience,
+            source: mindstrata_person::person::EvidenceSource::PersonalExperience,
             social_reinforcement: 0,
             is_accurate: true,
         }
@@ -388,7 +388,7 @@ mod tests {
             dominance: Fixed::from_f64(0.5),
             impulsivity: Fixed::from_f64(0.5),
             constitution: None,
-            temperament: crate::person::Temperament::default(),
+            temperament: mindstrata_person::person::Temperament::default(),
         }
     }
 
@@ -613,7 +613,7 @@ mod tests {
             identity_linkage: Fixed::from_f64(0.8),
             resistance: Fixed::from_f64(0.9), // very resistant
             last_reinforced_tick: 0,
-            source: crate::person::EvidenceSource::PersonalExperience,
+            source: mindstrata_person::person::EvidenceSource::PersonalExperience,
             social_reinforcement: 0,
             is_accurate: true,
         };

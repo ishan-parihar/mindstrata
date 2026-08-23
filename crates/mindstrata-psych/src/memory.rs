@@ -150,14 +150,23 @@ pub struct MemoryTrace {
 /// Simple tags for memory classification.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MemoryTag {
+    /// AteFood.
     AteFood,
+    /// DrankWater.
     DrankWater,
+    /// Rested.
     Rested,
+    /// TalkedTo.
     TalkedTo,
+    /// HelpedBy.
     HelpedBy,
+    /// ThreatenedBy.
     ThreatenedBy,
+    /// InsultedBy.
     InsultedBy,
+    /// GossipedAbout.
     GossipedAbout,
+    /// TradedWith.
     TradedWith,
     /// §8.1.3: Skill practice crossed a proficiency milestone (Procedural).
     SkillMastered,
@@ -189,11 +198,17 @@ impl MemoryTrace {
 /// recalled strength and accuracy differ from the stored values.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RetrievedMemory {
+    /// Id.
     pub id: MemoryId,
+    /// Kind.
     pub kind: MemoryKind,
+    /// Tag.
     pub tag: MemoryTag,
+    /// Tick.
     pub tick: u64,
+    /// Valence.
     pub valence: Fixed,
+    /// Other agent.
     pub other_agent: Option<u32>,
     /// Stored strength amplified by emotional charge, mood congruence, and
     /// current arousal (charged traces recall as stronger than they are).

@@ -10,15 +10,21 @@ pub mod agent_tier;
 pub mod appraisal {
     pub use mindstrata_psych::appraisal::*;
 }
-pub mod attention;
-pub mod belief_update;
+pub mod attention {
+    pub use mindstrata_psych::attention::*;
+}
+pub mod belief_update {
+    pub use mindstrata_psych::belief_update::*;
+}
 pub mod biology {
     pub use mindstrata_person::biology::*;
 }
 pub mod black_market {
     pub use mindstrata_world::black_market::*;
 }
-pub mod conflict;
+pub mod conflict {
+    pub use mindstrata_social::conflict::*;
+}
 pub mod culture {
     pub use mindstrata_social::culture::*;
 }
@@ -34,12 +40,18 @@ pub mod ecology {
 pub mod factions {
     pub use mindstrata_institutions::factions::*;
 }
-pub mod gossip;
-pub mod health;
+pub mod gossip {
+    pub use mindstrata_social::gossip::*;
+}
+pub mod health {
+    pub use mindstrata_person::health::*;
+}
 pub mod institutions {
     pub use mindstrata_institutions::institutions::*;
 }
-pub mod journal;
+pub mod journal {
+    pub use mindstrata_psych::journal::*;
+}
 pub mod legal {
     pub use mindstrata_institutions::legal::*;
 }
@@ -49,7 +61,9 @@ pub mod logistics {
 pub mod market {
     pub use mindstrata_world::market::*;
 }
-pub mod memory;
+pub mod memory {
+    pub use mindstrata_psych::memory::*;
+}
 pub mod military {
     pub use mindstrata_institutions::military::*;
 }

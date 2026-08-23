@@ -9,10 +9,10 @@
 //!
 //! §22.5 of the architecture spec.
 
-use crate::person::{Affect, NeedState};
 use mindstrata_core::event::{InteractionKind, SimEvent};
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::id::AgentId;
+use mindstrata_person::person::{Affect, NeedState};
 use serde::{Deserialize, Serialize};
 
 /// An agent's attention state.

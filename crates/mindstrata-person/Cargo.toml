@@ -9,5 +9,7 @@ rand = { workspace = true }
 rand_chacha = { workspace = true }
 serde = { workspace = true }
 
+tracing = { workspace = true }
+
 [lints]
 workspace = true

@@ -6,8 +6,8 @@
 //! §19.5.H: "Threats, intimidation, violence, combat, casualties,
 //! trauma, occupation, repression, rebellion, feuds."
 
-use crate::person::{DiscreteEmotions, Personality};
 use mindstrata_core::fixed::Fixed;
+use mindstrata_person::person::{DiscreteEmotions, Personality};
 use serde::{Deserialize, Serialize};
 
 // ConflictKind is now defined in mindstrata-core and re-exported here for backwards compatibility.
@@ -45,7 +45,7 @@ impl Default for ConflictState {
 
 impl ConflictState {
     /// Update conflict state each tick.
-    pub fn update(&mut self, params: &crate::parameters::SimParameters) {
+    pub fn update(&mut self, params: &mindstrata_core::parameters::SimParameters) {
         // Combat fatigue decays when not in combat
         if !self.in_combat {
             self.combat_fatigue =
@@ -59,7 +59,7 @@ impl ConflictState {
     pub fn record_conflict(
         &mut self,
         kind: ConflictKind,
-        params: &crate::parameters::SimParameters,
+        params: &mindstrata_core::parameters::SimParameters,
     ) {
         self.conflict_count += 1;
         self.trauma = (self.trauma + kind.trauma_rate()).clamp_01();
@@ -108,7 +108,7 @@ pub fn resolve_conflict(
     target_health: Fixed,
     target_conflict_state: &ConflictState,
     rng_value: Fixed,
-    params: &crate::parameters::SimParameters,
+    params: &mindstrata_core::parameters::SimParameters,
 ) -> ConflictResult {
     let base_injury = kind.injury_severity();
 
@@ -146,7 +146,7 @@ pub fn resolve_conflict(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parameters::SimParameters;
+    use mindstrata_core::parameters::SimParameters;
 
     fn make_personality() -> Personality {
         Personality {
@@ -163,7 +163,7 @@ mod tests {
             dominance: Fixed::from_f64(0.5),
             impulsivity: Fixed::from_f64(0.5),
             constitution: None,
-            temperament: crate::person::Temperament::default(),
+            temperament: mindstrata_person::person::Temperament::default(),
         }
     }
 

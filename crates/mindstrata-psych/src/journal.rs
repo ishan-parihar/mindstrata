@@ -9,86 +9,122 @@ use serde::{Deserialize, Serialize};
 /// Kinds of events worth recording in the journal.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum JournalEntryKind {
+    /// Consumed.
     Consumed {
+        /// String.
         resource: String,
+        /// F64.
         amount: f64,
     },
+    /// Worked.
     Worked {
+        /// F64.
         productivity: f64,
     },
+    /// Worshiped.
     Worshiped,
+    /// Rested.
     Rested,
+    /// TheftDetected.
     TheftDetected {
+        /// String.
         resource: String,
+        /// F64.
         amount: f64,
+        /// F64.
         fine: f64,
     },
+    /// CommittedViolence.
     CommittedViolence {
+        /// U64.
         target: u64,
+        /// F64.
         injury: f64,
     },
     /// §19.5.F: Wealth inherited from a deceased agent.
     Inheritance {
+        /// U64.
         heir_count: u64,
+        /// F64.
         amount: f64,
     },
     /// §31: An agent died (generational replacement fills the slot).
     Died {
+        /// F64.
         age: f64,
+        /// String.
         cause: String,
     },
     /// §19.5.I: Knowledge discovered through work or exploration.
     KnowledgeDiscovered {
+        /// U64.
         knowledge_id: u64,
+        /// String.
         name: String,
     },
     /// §19.5.F: Knowledge learned from parent through childhood socialization.
     KnowledgeSocialized {
+        /// U64.
         knowledge_id: u64,
     },
     /// §5 (Iteration 149): A court returned a verdict on a prosecuted
     /// violation — the supplemental court fine on a Guilty verdict.
     LegalVerdict {
+        /// U64.
         case_id: u64,
+        /// Bool.
         guilty: bool,
+        /// F64.
         sentence: f64,
     },
     /// §5 (Iteration 150): A hostile neighboring settlement raided the
     /// village granary.
     TradeRaid {
+        /// String.
         settlement: String,
+        /// F64.
         grain_lost: f64,
     },
     /// §5 (Iteration 150): A caravan arrived from a neighboring settlement.
     TradeCaravan {
+        /// String.
         settlement: String,
+        /// F64.
         grain_gained: f64,
     },
     /// §5 (Iteration 151): A formal school term convened — the teacher,
     /// cohort size, and graduates of the term.
     SchoolTerm {
+        /// U64.
         teacher: u64,
+        /// U64.
         cohort: u64,
+        /// U64.
         graduates: u64,
     },
     /// §5 (Iteration 152): A religion's yearly conversion pass recorded a
     /// number of new converts.
     TheologyConversion {
+        /// U64.
         converts: u64,
     },
     /// §5 (Iteration 152): A mid-year religious festival was held, with the
     /// attending believer count.
     TheologyFestival {
+        /// U64.
         attenders: u64,
     },
     /// §5 (Iteration 153): A military drill pass — the militia trained,
     /// building collective readiness.
     MilitaryDrill {
+        /// U64.
         attenders: u64,
+        /// F64.
         readiness: f64,
     },
     /// §5 (Iteration 153): A muster pass conscripted new adults.
     MilitaryMuster {
+        /// U64.
         conscripts: u64,
     },
 }
@@ -96,8 +132,11 @@ pub enum JournalEntryKind {
 /// A single journal entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JournalEntry {
+    /// Tick.
     pub tick: u64,
+    /// Agent.
     pub agent: AgentId,
+    /// Kind.
     pub kind: JournalEntryKind,
 }
 
