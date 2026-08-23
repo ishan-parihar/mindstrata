@@ -26,10 +26,12 @@ audit roadmap's Phase 1 into a full bio↔psych↔social coupling program.*
 >   still take hardcoded axis defaults (`family.rs` both sites); folded into
 >   Iter 247 prep below as a small carry-over item.
 > - Verification probes run: value-band contracts, sole-parent path, surname
->   three-generation lineage test, six-draw RNG contract. STILL OPEN from the
->   original Arc A exit criteria: end-to-end sibling-vs-stranger correlation
->   probe and parent-child regression slope in [0.3, 0.7] (needs population
->   stats over a long horizon — fold into Iter 251 metrics).
+>   three-generation lineage test, six-draw RNG contract. ~~STILL OPEN~~
+>   CLOSED (i259_audit, commit `6542614`): parent-child CONSTITUTION
+>   r=0.53–0.66 across runs — inside the [0.3, 0.7] slope contract; sibling >
+>   stranger holds. Note: expressed-trait correlation is the WRONG metric
+>   here (life-course plasticity pulls traits toward the birth anchor);
+>   constitution-vs-constitution is the heredity surface.
 >
 > Suite: 298 passed / 6 failed (unchanged failure set through Arc A).
 
@@ -252,3 +254,30 @@ All arcs delivered. Suite 305 passed / 0 failed; clippy workspace clean.
 
 Leftovers queued: propaganda emergence post-institution; pop-cap lift;
 chronicle-in-TUI polish.
+
+---
+
+## 5. PRE-NEXT-PHASE AUDIT (Iteration 260)
+
+Full plan re-audit before resuming development. Findings:
+
+- **Carry-over item closed (Iter-247 item 0)**: ideology-axis inheritance was
+  landed at Iteration 247 (births_deaths.rs both paths) but FOUNDATIONAL-
+  BELIEF/SACRED-VALUE transmission had silently stayed open — founders hold
+  seeded sacred values (`population.rs`), newborns started EMPTY. Fixed:
+  maternal-line verbatim clone on the real-birth path, deceased-household
+  clone on the replacement path (deterministic, zero RNG draws — noise
+  deferred until evidence demands). Probe evidence (i260_sacred_probe,
+  deleted per discipline): seed 42, marker strengthened on all founders,
+  conception x4, 40K ticks -> 5/5 children carry the full maternal set.
+  Suite 305/0 with no snapshot drift (births absent from pinned windows).
+- **Documented deferrals confirmed still-deferred (acceptable)**:
+  physical_potential injury-susceptibility & labor-output wiring (ceilings
+  only, per Iter-244 deviation); sensory_acuity genome field has zero
+  consumers (micro-debt; family-level exit criterion already satisfied via
+  strength/endurance ceilings).
+- **G5/G6 status**: G6 closed by Iteration 243. G5 superseded by the crate
+  ladder + doctrine correction `9c53812` (<15K target retired); remaining
+  systems/ pass extraction stays queued infrastructure, not a blocker.
+
+Verdict: nothing blocks the next phases. Queued leftovers stand.

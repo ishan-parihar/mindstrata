@@ -158,7 +158,13 @@ impl Simulation {
                     .clone()
                     .inherit(None, &mut ideo_rng)
             },
-            sacred_values: crate::culture::sacred::SacredValues::default(),
+            // Iteration 260 (Arc-A carry-over closure): the replacement
+            // newborn inherits the deceased household's earned sacred
+            // values verbatim (sole-parent pattern, mirroring the ideology
+            // inheritance above). Deterministic clone - cultural fidelity
+            // needs no noise draw; jitter can be added when evidence
+            // demands it.
+            sacred_values: self.agents[idx].sacred_values.clone(),
             legitimacy_field: crate::noosphere::LegitimacyField::new(Fixed::from_f64(0.5)),
             education: crate::culture::education::EducationState {
                 learning_aptitude: Fixed::from_f64(0.6),
@@ -728,7 +734,13 @@ impl Simulation {
                         let father_ideo = parent_b.map(|p| self.agents[p].ideology.clone());
                         mother_ideo.inherit(father_ideo.as_ref(), &mut ideo_rng)
                     },
-                    sacred_values: crate::culture::sacred::SacredValues::default(),
+                    // Iteration 260 (Arc-A carry-over closure): maternal
+                    // vertical transmission of the community's earned
+                    // sacred values - children no longer start
+                    // sacred-less while every founder holds seeded ones.
+                    // Maternal line matches the surname convention;
+                    // deterministic clone, no RNG draws.
+                    sacred_values: self.agents[parent_a].sacred_values.clone(),
                     legitimacy_field: crate::noosphere::LegitimacyField::new(Fixed::from_f64(0.5)),
                     education: crate::culture::education::EducationState {
                         learning_aptitude: Fixed::from_f64(0.6),
