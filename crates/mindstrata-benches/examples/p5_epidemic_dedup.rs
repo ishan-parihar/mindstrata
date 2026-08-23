@@ -51,7 +51,7 @@ fn main() {
 
     let mut sc = Scenario::pestilence();
     sc.seed = seed;
-    sc.num_agents = agents.min(mindstrata_sim::population_cap::MAX_POPULATION as u32);
+    sc.num_agents = agents.min(mindstrata_sim::population_cap::STRESS_POPULATION as u32);
     sc.ticks = horizon;
 
     let start = std::time::Instant::now();

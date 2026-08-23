@@ -429,6 +429,26 @@ pub fn render_metric_charts(history: &[mindstrata_sim::sim::MetricsSnapshot]) ->
     out
 }
 
+/// Iteration 261: the village chronicle as a TUI pane — the annals text
+/// (already rendered by `sim::chronicle`) framed with a header and trimmed
+/// to the most recent `max_lines` lines so long histories stay scroll-free.
+pub fn render_chronicle_view(chronicle_text: &str, max_lines: usize) -> String {
+    let mut out = String::from("── Village Chronicle ──\n");
+    let lines: Vec<&str> = chronicle_text.lines().collect();
+    let skip = lines.len().saturating_sub(max_lines);
+    for line in &lines[skip..] {
+        out.push_str(line);
+        out.push('\n');
+    }
+    if skip > 0 {
+        out.push_str(&format!("… {} earlier year headers elided …\n", {
+            // count only "Year" headers among the skipped lines for honesty
+            lines[..skip].iter().filter(|l| l.contains("Year ")).count()
+        }));
+    }
+    out
+}
+
 /// Render the main dashboard: agent summaries, events, tick, metrics.
 pub fn render_dashboard(
     agents: &[AgentSummary],

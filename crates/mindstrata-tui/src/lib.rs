@@ -8,12 +8,13 @@ mod render;
 mod session;
 
 pub use render::{
-    render_agent_inspector, render_agent_list, render_belief_inspector, render_clan_dashboard,
-    render_dashboard, render_decision_traces, render_event_log, render_event_log_detailed,
-    render_faction_dashboard, render_institutional_records, render_market_dashboard,
-    render_metric_charts, render_military_dashboard, render_noosphere_inspector,
-    render_patronage_dashboard, render_psychology_inspector, render_relationship_view,
-    render_theology_dashboard, render_world_map, AgentMarker, DashboardConfig,
+    render_agent_inspector, render_agent_list, render_belief_inspector, render_chronicle_view,
+    render_clan_dashboard, render_dashboard, render_decision_traces, render_event_log,
+    render_event_log_detailed, render_faction_dashboard, render_institutional_records,
+    render_market_dashboard, render_metric_charts, render_military_dashboard,
+    render_noosphere_inspector, render_patronage_dashboard, render_psychology_inspector,
+    render_relationship_view, render_theology_dashboard, render_world_map, AgentMarker,
+    DashboardConfig,
 };
 pub use session::{key_to_command, mark_selected_agent_row, UiState, View};
 
@@ -130,6 +131,9 @@ mod tests {
         ui.cycle_view();
         // Iteration 251: the Trends view joins the cycle before wrap.
         assert_eq!(ui.view, View::Trends);
+        ui.cycle_view();
+        // Iteration 261: the chronicle annals close the cycle.
+        assert_eq!(ui.view, View::Chronicle);
         ui.cycle_view();
         assert_eq!(ui.view, View::Dashboard);
     }

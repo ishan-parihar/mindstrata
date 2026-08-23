@@ -24,6 +24,8 @@ pub enum View {
     Map,
     /// Longitudinal metric trends (Iteration 251).
     Trends,
+    /// The village chronicle annals (Iteration 261).
+    Chronicle,
 }
 
 impl View {
@@ -36,6 +38,7 @@ impl View {
             View::Events => "Events",
             View::Map => "Map",
             View::Trends => "Trends",
+            View::Chronicle => "Chronicle",
         }
     }
 }
@@ -96,7 +99,8 @@ impl UiState {
             View::Inspector => View::Events,
             View::Events => View::Map,
             View::Map => View::Trends,
-            View::Trends => View::Dashboard,
+            View::Trends => View::Chronicle,
+            View::Chronicle => View::Dashboard,
         };
     }
 

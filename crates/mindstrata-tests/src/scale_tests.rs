@@ -13,18 +13,19 @@ fn full_capacity_config(seed: u64, ticks: u64) -> SimConfig {
         max_ticks: ticks,
         world_width: 32,
         world_height: 32,
-        num_agents: mindstrata_sim::population_cap::MAX_POPULATION as u32,
+        num_agents: mindstrata_sim::population_cap::STRESS_POPULATION as u32,
         snapshot_interval: None,
     }
 }
 
 /// §19.5.F: the population cap is enforced at populate — over-requesting is
-/// clamped to MAX_POPULATION, and requests at/below it pass through intact.
+/// clamped to the ceiling, and requests at/below it pass through intact.
 #[test]
 fn population_cap_enforced_at_populate() {
-    let cap = mindstrata_sim::population_cap::MAX_POPULATION;
-    // Over-request (100, 200) → clamped to exactly the cap.
-    for requested in [100u32, 200] {
+    let ceiling = mindstrata_sim::population_cap::MAX_POPULATION;
+    // Over-request (300, 500) -> clamped to exactly the ceiling.
+    // (Iteration 261: 100/200 now pass through — the ceiling is 256.)
+    for requested in [300u32, 500] {
         let mut sim = Simulation::new(SimConfig {
             seed: 42,
             max_ticks: 100,
@@ -36,8 +37,8 @@ fn population_cap_enforced_at_populate() {
         sim.populate();
         assert_eq!(
             sim.agent_count(),
-            cap,
-            "requested {requested} agents must clamp to the cap {cap}"
+            ceiling,
+            "requested {requested} agents must clamp to the ceiling {ceiling}"
         );
     }
     // At-cap and below-cap requests pass through intact.
@@ -45,7 +46,7 @@ fn population_cap_enforced_at_populate() {
     at_cap.populate();
     assert_eq!(
         at_cap.agent_count(),
-        cap,
+        mindstrata_sim::population_cap::STRESS_POPULATION,
         "at-cap request must pass through"
     );
     let mut small = Simulation::new(SimConfig {
@@ -79,6 +80,8 @@ fn population_cap_enforced_at_populate() {
 #[test]
 fn full_capacity_population_stays_capped_and_invariant_clean() {
     let cap = mindstrata_sim::population_cap::MAX_POPULATION;
+    // Collapse floor stays relative to the §19.5.F stress-size seeding.
+    let seeded = mindstrata_sim::population_cap::STRESS_POPULATION;
     let mut sim = Simulation::new(full_capacity_config(42, 600));
     sim.populate();
     for tick in 0..600 {
@@ -94,7 +97,7 @@ fn full_capacity_population_stays_capped_and_invariant_clean() {
             // die-off would crater toward 0; the floor just catches that
             // (cap/4 is well below any plausible churn trough on seed 42).
             assert!(
-                alive > cap / 4,
+                alive > seeded / 4,
                 "tick {t}: population collapsed to {alive} — mass death at full capacity"
             );
             assert!(
@@ -173,7 +176,7 @@ fn full_capacity_run_is_deterministic_and_healthy() {
     );
     // End-state health at the cap.
     assert!(
-        a.agent_count >= mindstrata_sim::population_cap::MAX_POPULATION as u64 / 2,
+        a.agent_count >= mindstrata_sim::population_cap::STRESS_POPULATION as u64 / 2,
         "population must survive to a healthy size at the cap, got {}",
         a.agent_count
     );

@@ -68,9 +68,9 @@ enum Commands {
         #[arg(long)]
         chronicle: bool,
 
-        /// Print a dossier for a specific agent index after simulation.
-        #[arg(long, value_name = "IDX")]
-        dossier: Option<usize>,
+        /// Print a dossier for an agent given by index or exact/prefix name.
+        #[arg(long, value_name = "IDX_OR_NAME")]
+        dossier: Option<String>,
 
         /// Show relationship between two agents (format: from,to).
         #[arg(long)]
@@ -406,12 +406,34 @@ fn main() {
                 println!();
                 print!("{}", mindstrata_sim::sim::chronicle::render_chronicle(&sim));
             }
-            if let Some(idx) = dossier {
+            if let Some(ref spec) = dossier {
+                // Iteration 261: accept either a numeric index or an agent
+                // name (exact match first, then unique prefix).
+                let resolved: Option<usize> = spec.parse::<usize>().ok().or_else(|| {
+                    let exact = sim.agents.iter().position(|a| a.name == *spec);
+                    exact.or_else(|| {
+                        let prefix_hits: Vec<usize> = sim
+                            .agents
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, a)| a.name.starts_with(spec.as_str()))
+                            .map(|(i, _)| i)
+                            .collect();
+                        if prefix_hits.len() == 1 {
+                            Some(prefix_hits[0])
+                        } else {
+                            None
+                        }
+                    })
+                });
                 println!();
-                println!(
-                    "{}",
-                    mindstrata_sim::sim::chronicle::render_dossier(&sim, idx)
-                );
+                match resolved {
+                    Some(idx) => println!(
+                        "{}",
+                        mindstrata_sim::sim::chronicle::render_dossier(&sim, idx)
+                    ),
+                    None => eprintln!("No agent matches '{spec}'."),
+                }
             }
 
             // §17.1: Relationship view
