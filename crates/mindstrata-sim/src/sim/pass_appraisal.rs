@@ -778,6 +778,24 @@ impl Simulation {
                     (affects[i].valence + reg_vd * reg_scale).clamp(-Fixed::ONE, Fixed::ONE);
                 affects[i].arousal = (affects[i].arousal + reg_ad * reg_scale).clamp_01();
             }
+            // Iteration 254 (audit Phase 2 — hedonic setpoint): the
+            // setpoint drifts slowly toward the body's comfort level and
+            // biases valence by up to +0.15 at full sustained comfort /
+            // −0.15 at full sustained deprivation. This is the classic
+            // adaptation curve: prolonged good conditions make the
+            // baseline mildly positive (calm worlds are no longer pinned
+            // dysphoric), while crises starve the setpoint back down and
+            // let raw fear dominate again. Comfort in f64 then quantized
+            // once per update (Fixed-4 truncation disease).
+            let comfort_f = (1.0 - needs[i].hunger.to_f64())
+                * (1.0 - needs[i].thirst.to_f64())
+                * (1.0 - needs[i].fatigue.to_f64().min(0.9));
+            let sp = affects[i].hedonic_setpoint.to_f64();
+            let new_sp = sp + (comfort_f - sp) * 0.002;
+            affects[i].hedonic_setpoint = Fixed::from_f64(new_sp.clamp(0.0, 1.0));
+            affects[i].valence = (affects[i].valence
+                + (affects[i].hedonic_setpoint - Fixed::from_f64(0.5)) * Fixed::from_f64(0.3))
+            .clamp(-Fixed::ONE, Fixed::ONE);
         }
     }
 }
