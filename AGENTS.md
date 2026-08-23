@@ -181,25 +181,37 @@ by parallel agents or reviewed precisely. The pattern established by the sim.rs 
    during migration but is cleanup debt — settle to explicit imports once the module
    stabilizes.
 
-### Current layout (post-segregation, commit `e5cb5a9`)
+### Current layout (post crate-ladder, `f66b988`+`3ad212b`; refresh me when structure moves)
 
 ```
-crates/mindstrata-sim/src/
-  sim/mod.rs        # Simulation struct, AgentBundle, config, wiring (hub root)
-  sim/core.rs       # main tick() pipeline orchestration (1,234 lines)
-  sim/pass_{biology,cognitive,action,social,appraisal,decay}.rs  # verbatim tick passes
-  sim/{population,api}.rs            # constructors/seeding; command channel + accessors
-  sim/{marriage,births_deaths,household,economy,norms_impl,factions_impl,
-       institutions_impl,legal_impl,diplomacy_impl,education,cults_noosphere,
-       memory_ops,social_cluster,clans,snapshot_metrics}.rs
-  person/{mod,body,psyche,mind,social_self}.rs   # re-export shim keeps crate::person paths
-  biology/          # genome, metabolism, immune, thermal, nervous, … (EmbodiedState)
-  psychology/       # emotions, theory_of_mind, moral_cognition, interoception, …
-  systems/          # future home for extracted pass modules
-crates/mindstrata-tests/src/integration_tests/
-  {biology,psychology,social,culture,governance,economy,legal,infra}.rs
+crates/
+  mindstrata-core/          # Fixed, ids, clock, events, rng, parameters, propositions
+  mindstrata-person/        # person/ aggregate + biology/ + health        [leaf]
+  mindstrata-psych/         # psychology/ + appraisal + memory/attention/
+                            # belief_update/journal                        [leaf]
+  mindstrata-institutions/  # institutions/legal/diplomacy/military/theology/
+                            # schools/norms/factions types (pure domain)   [leaf]
+  mindstrata-social/        # social/ culture/ noosphere/ + gossip/conflict
+  mindstrata-world/         # world/world_gen/ecology/market/logistics/
+                            # demography/black_market
+  mindstrata-sim/           # ORCHESTRATION ONLY (target <15K):
+    sim/mod.rs              #   Simulation struct, AgentBundle, wiring
+    sim/core.rs             #   tick() pipeline order
+    sim/pass_*.rs           #   six verbatim tick passes
+    sim/{population,api}.rs #   constructors/seeding; command channel
+    sim/*_impl.rs + {household,economy,births_deaths,...}.rs
+                            #   impl-Simulation glue (Arc-D detangle target)
+    actions/{mod,tests}.rs  #   action-selection engine (sits above domains)
+    {routines,scheduler,snapshot,scenario,spec_lint,agent_tier,
+     provenance,population_cap,mods}.rs  # infra
+    legacy shims in lib.rs preserve pre-extraction crate:: paths
+crates/mindstrata-tests/src/integration_tests/{biology,psychology,social,
+  culture,governance,economy,legal,infra}.rs
 crates/mindstrata-tui/src/{lib,render,session}.rs
 ```
+
+DAG (cargo-enforced): core ← person ← psych ← social; person ← institutions;
+person/institutions ← world; all five ← sim ← tui/cli/render/tests/benches.
 
 ### The module → crate ladder (scaling to 200K+ LOC)
 
