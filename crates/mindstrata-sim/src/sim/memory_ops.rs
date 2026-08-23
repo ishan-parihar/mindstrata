@@ -1,9 +1,9 @@
 //! Trauma/founding memory recording and memory encoding.
 
-use super::skill_milestone_crossed;
+use super::skill_gain_next;
 use super::{
-    AgentId, Fixed, MemoryKind, MemoryTag, PerceptKind, RngStream, SimEvent, Simulation,
-    SKILL_GAIN_PER_TICK,
+    skill_milestone_crossed, AgentId, Fixed, MemoryKind, MemoryTag, PerceptKind, RngStream,
+    SimEvent, Simulation,
 };
 
 impl Simulation {
@@ -349,9 +349,9 @@ impl Simulation {
                 script.next_step();
             }
 
-            // §4.2: Skill improvement — agents improve skills through repeated practice.
-            // Small increments per tick; skills cap at 1.0.
-            let skill_gain = SKILL_GAIN_PER_TICK;
+            // §4.2: Skill improvement — agents improve skills through repeated
+            // practice (Iteration 260: power-law curve at the practice site
+            // below; the flat SKILL_GAIN_PER_TICK increment is retired).
             // §8.1.3: Procedural memory — practice crossing a 0.1-proficiency
             // milestone encodes the mastered routine (sparse by design: with a
             // 0.001 gain a milestone needs ~100 practice ticks, keeping the
@@ -422,6 +422,12 @@ impl Simulation {
                     let cognitive_scale = Fixed::ONE
                         + (agent.developmental.cognitive_development - Fixed::from_f64(0.7))
                             * Fixed::from_f64(0.5);
+                    // Iteration 260: capture pre-practice proficiency for the
+                    // milestone gate — psych proficiency and the person-level
+                    // skill now follow different curves, so the old
+                    // `prof - skill_gain` proxy no longer tracks this tick's
+                    // own increment.
+                    let prof_before = agent.psych_skills.proficiency(skill_id);
                     agent.psych_skills.practice(
                         skill_id,
                         tick_u64,
@@ -433,7 +439,7 @@ impl Simulation {
                     // practice ticks). Deterministic, no RNG.
                     let prof = agent.psych_skills.proficiency(skill_id);
                     let crossed =
-                        prof >= Fixed::from_f64(0.1) && prof - skill_gain < Fixed::from_f64(0.1);
+                        prof >= Fixed::from_f64(0.1) && prof_before < Fixed::from_f64(0.1);
                     if crossed {
                         agent.psych_skills.form_habit(
                             action_name.to_string(),
@@ -455,8 +461,17 @@ impl Simulation {
                 }
             }
             if let Some(skill) = practiced {
+                // Iteration 260 (audit E8): power-law learning curve — the
+                // gain scales with remaining headroom, so mastery asymptotes
+                // below the clamp instead of pinning population-wide at
+                // exactly 1.0. Probe evidence (i260_skills, pre-change,
+                // 20K ticks ×3 seeds): farming mean=1.000 sd=0.000 for
+                // every agent — the flat increment carried zero information
+                // about practice frequency. Quantized sequence saturates
+                // ≈0.988; differentiation now tracks practice share.
+                // f64 core + single quantize per §5 (sub-resolution rates).
                 let before = *skill;
-                *skill = (before + skill_gain).clamp_01();
+                *skill = skill_gain_next(before);
                 if skill_milestone_crossed(before, *skill)
                     && agent.agent_tier.budget_tracker.can_memory_op()
                 {

@@ -88,6 +88,47 @@ fn skill_milestone_crossed(before: Fixed, after: Fixed) -> bool {
     before < after && before.to_raw() / TENTH != after.to_raw() / TENTH
 }
 
+/// Iteration 260 (audit E8): power-law learning — next proficiency after one
+/// practice tick. The gain scales with remaining headroom so mastery
+/// asymptotes below the 1.0 clamp instead of pinning population-wide at
+/// exactly 1.0, and levels carry practice-frequency information. Probe
+/// evidence (`i260_skills`, pre-change, 20K ticks ×3 seeds): farming
+/// mean=1.000 sd=0.000 for every agent under the flat increment. The
+/// quantized sequence saturates at ≈0.988.
+///
+/// ```rust
+/// use mindstrata_sim::sim::{skill_gain_next, SKILL_GAIN_PER_TICK};
+/// assert_eq!(skill_gain_next(mindstrata_sim::sim::Fixed::ZERO), SKILL_GAIN_PER_TICK);
+/// assert!(skill_gain_next(mindstrata_sim::sim::Fixed::from_f64(0.9))
+///     < skill_gain_next(mindstrata_sim::sim::Fixed::HALF));
+/// ```
+pub fn skill_gain_next(before: Fixed) -> Fixed {
+    let b = before.to_f64();
+    Fixed::from_f64(b + SKILL_GAIN_PER_TICK.to_f64() * (1.0 - b))
+}
+
+#[cfg(test)]
+mod skill_curve_tests {
+    use super::*;
+
+    #[test]
+    fn mastery_saturates_below_clamp() {
+        let mut s = Fixed::ZERO;
+        for _ in 0..100_000 {
+            s = skill_gain_next(s);
+        }
+        assert!(s < Fixed::ONE);
+        assert!(s > Fixed::from_f64(0.98));
+    }
+
+    #[test]
+    fn increments_shrink_as_mastery_rises() {
+        let low = skill_gain_next(Fixed::from_f64(0.2)) - Fixed::from_f64(0.2);
+        let high = skill_gain_next(Fixed::from_f64(0.8)) - Fixed::from_f64(0.8);
+        assert!(low > high);
+    }
+}
+
 /// §8.1.3: Integrated-life-event count that closes an Episodic chapter.
 const EPISODIC_CHAPTER_EVENTS: u32 = 100;
 
