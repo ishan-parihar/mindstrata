@@ -265,10 +265,10 @@ Queue, in order:
    `systems/`, lineage/emotion metrics + TUI longitudinal charts (Iter-251 landed
    lineage/tail observability + chart scaffolding). Cross-crate work now follows the
    crate-ladder discipline above.
-2. **Sim slimming toward <15K orchestration**: migrate remaining root mind/social
-   modules (actions, memory, attention, belief_update, conflict, gossip, health,
-   journal, interaction glue) into the appropriate domain crates as their impl-glue
-   detangles — one module per iteration, coupling-map-checked each time.
+2. **Sim slimming toward <15K orchestration**: root mind/social modules are DONE
+   (`3ad212b` — memory/attention/belief_update/journal -> psych, gossip/conflict ->
+   social, health -> person; shims kept). Remaining: `sim/*_impl` glue detangling +
+   Arc-D pass extraction into `systems/`; actions.rs waits until arcs move off it.
 3. **Arc C continuation / behavioral arcs**: resume audit Phases 2–6 in
    `docs/AUDIT_2026-08-22_EMERGENT_REALISM.md`; interoception (Iter-247), Whitehall +
    sleep-debt (Iter-248), ToM-steering (Iter-249) already landed.

@@ -196,3 +196,10 @@ Behavioral work concentrates in `psychology/ social/ actions.rs` right now
      Golden replay still passes (no epidemic ignites in the riverford_minor seed-42
      window), so the shift escaped its gate. Per §4.2 these re-anchors need probe
      evidence naming measured value, old band, and mechanism — do not batch-accept.
+- **SLIMMING MIGRATION DONE** (`3ad212b`): root mind/social modules moved to domain
+  crates per the end-state clause — psych += memory/attention/belief_update/journal
+  (+45 tests), social += gossip/conflict (+21), person += health (+12). Pure renames;
+  shims preserve all paths; golden byte-identical on detached snapshot; failure set
+  exactly equals HEAD's documented Iter-252 pins (zero new reds). sim now 25,582 LOC.
+- **Remaining toward <15K**: ~10K is `sim/*_impl` glue + passes awaiting Arc-D systems
+  extraction; actions.rs (2,416) stays put while behavioral arcs hold it hot (§5).
