@@ -990,3 +990,38 @@ fn relief_escalation_amplifier_is_live_and_deterministic() {
         );
     }
 }
+
+/// Iteration 260 (audit Phase-2 contract pin): the calm-world hedonic
+/// equilibrium must stay OUT of the chronic dysphoria plateau the original
+/// audit measured (mean valence −0.25…−0.30 permanently across every
+/// seed). Measured landscape after the 253/254 affect stack plus the
+/// Iter-260 skill curve (i253_affect probe, release, 5K ticks):
+/// seed 7 median +0.023, seed 13 +0.025, seed 42 −0.073 (mildly negative
+/// tail — historically −0.011 before the curve; the graded distribution,
+/// not the sign of any single seed, is the contract). This pins a
+/// majority-of-seeds positive median: the old plateau failed it on all
+/// three seeds, so any return of the dysphoria attractor trips here.
+/// Median (not mean) so one catastrophically-miserable agent cannot mask
+/// population health.
+#[test]
+fn calm_world_valence_equilibrium_avoids_dysphoria_plateau() {
+    let mut positive_medians = 0u32;
+    for seed in [42u64, 7, 13] {
+        let sim = run_sim(seed, 5000);
+        let mut valences: Vec<f64> = sim
+            .agents
+            .iter()
+            .map(|a| a.affect.valence.to_f64())
+            .collect();
+        valences.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        if valences[valences.len() / 2] > 0.0 {
+            positive_medians += 1;
+        }
+    }
+    assert!(
+        positive_medians >= 2,
+        "calm-world valence equilibrium regressed toward the dysphoria \
+         plateau: only {positive_medians}/3 seeds hold a positive median \
+         (audit-E1 baseline had zero)",
+    );
+}
