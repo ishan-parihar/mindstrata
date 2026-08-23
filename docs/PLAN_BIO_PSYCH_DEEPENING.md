@@ -233,8 +233,12 @@ All arcs delivered. Suite 305 passed / 0 failed; clippy workspace clean.
 - **Arc C (mind→social)**: deception detection via speech-intent mismatch;
   modeled-reliability partner choice.
 - **Phase 2 affect realism**: piecewise graded fear shoulder, hedonic joy
-  baseline, hedonic setpoint drift — calm-world medians now positive and
-  seed-differentiated (the E1 dysphoria plateau is dead).
+  baseline, hedonic setpoint drift — the E1 dysphoria plateau is dead.
+  Audit correction (i259_audit probe): median valence is positive on calm
+  seeds (7/13: +0.02/+0.03) but mildly negative where feud storms ran
+  (42/5: −0.07) — mechanism contracts (joy floor 0.011 uniform, fear
+  medians differentiated) are the pinned surface, not universal-seed
+  positivity.
 - **Phase 3**: survival-integrity reflexes beneath utility AI.
 - **Phase 4**: earned traumas replace fabricated history; world-conditional
   grievance memes; clans derive from settlement clustering.
