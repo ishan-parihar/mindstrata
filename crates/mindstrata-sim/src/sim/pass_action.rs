@@ -158,7 +158,34 @@ impl Simulation {
                         Fixed::from_f64(0.5) // normal agents need stronger routine signal
                     };
 
-                let mut action = if let Some((cmd_action, cmd_kind)) =
+                // Iteration 255 (audit Phase 3 — survival-integrity
+                // reflexes): the physiological override layer BENEATH the
+                // utility AI. Critical deficits force the relief action
+                // directly — no utility contest, no habit substitution, no
+                // command override can outrank a body at its limits. This
+                // makes the audit's E3 inversion (agent starving while
+                // working) impossible BY CONSTRUCTION rather than by
+                // calibration. Health-critical agents restrict to
+                // rest/recovery instead. Deterministic, RNG-free, and
+                // unreachable in calibrated calm windows (thirst tops out
+                // ~0.62 there), so golden stays byte-identical.
+                let reflex_override = if needs[i].thirst > Fixed::from_f64(0.9)
+                    && needs[i].thirst >= needs[i].hunger
+                {
+                    Some(ActionKind::Drink)
+                } else if needs[i].hunger > Fixed::from_f64(0.9) {
+                    Some(ActionKind::Eat)
+                } else if needs[i].fatigue > Fixed::from_f64(0.95) {
+                    Some(ActionKind::Rest)
+                } else if agents[i].body.health < Fixed::from_f64(0.25) {
+                    // Health-critical: restrict to recovery actions only.
+                    Some(ActionKind::Rest)
+                } else {
+                    None
+                };
+                let mut action = if let Some(forced) = reflex_override {
+                    forced
+                } else if let Some((cmd_action, cmd_kind)) =
                     command_goal_action(&goals[i], &needs[i])
                 {
                     // §5 (Iteration 155): an external directive takes
