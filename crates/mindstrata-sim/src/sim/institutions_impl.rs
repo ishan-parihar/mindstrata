@@ -331,58 +331,86 @@ impl Simulation {
                 }
                 // Iteration 261 (audit E6): council poor relief — the
                 // council recirculates a capped slice of its treasury to
-                // destitute members each quincenntial cycle. Probe evidence
-                // (i261_gini): Gini still climbs monotonically
-                // (~0.15→0.6+ by 20K across seeds) because tax flow nets
-                // coin from members while the Market dividend and wages
-                // miss non-role holders who have already sunk below
-                // subsistence. Sized as a small deterministic drip (≤0.5
-                // coins per destitute member per cycle, treasury reserve
-                // preserved) to stay inside the calibrated
-                // grievance/legitimacy envelope — same discipline as the
-                // §10.9 patronage rate.
+                // relatively destitute members each quincenntial cycle.
+                // Probe evidence (i261_gini): Gini climbs monotonically
+                // toward an oligarchic asymptote (seed 7: 0.68 @20K → 0.81
+                // @35K → 0.82 @50K) because trade/market returns compound
+                // for the wealthy while the existing counterforces
+                // (progressive market dividend, role wages, patronage)
+                // miss members whose coin share collapsed — nobody sits
+                // below the ABSOLUTE 1-coin floor anymore (population mean
+                // 400-1700 coins), so relief keys off relative poverty:
+                // below 10% of the membership's median coin. Sized as a
+                // small deterministic drip (≤0.5 coins per recipient per
+                // cycle, treasury reserve preserved) to stay inside the
+                // calibrated grievance/legitimacy envelope — same
+                // discipline as the §10.9 patronage rate.
                 if institution.kind == institutions::InstitutionKind::Council {
-                    /// ponytail: mirrors PATRONAGE_DESTITUTION_FLOOR;
-                    /// unify when sim/mod.rs settles
-                    const POOR_RELIEF_FLOOR_COINS: f64 = 1.0;
                     let reserve = Fixed::from_f64(20.0);
                     let budget = (institution.treasury - reserve).max(Fixed::ZERO);
-                    if budget > Fixed::ZERO && !institution.members.is_empty() {
-                        let mut destitute: Vec<(AgentId, Fixed)> = institution
-                            .members
+                    if budget > Fixed::ZERO && !self.agents.is_empty() {
+                        // Relief is a COUNCIL mandate — it covers the whole
+                        // village, not just council members (probe: the
+                        // member roster held 3 of 12 agents, none poor).
+                        let mut coins: Vec<(AgentId, Fixed)> = self
+                            .agents
                             .iter()
-                            .filter_map(|m| {
-                                let idx = m.as_u64() as usize;
-                                (idx < self.agents.len()
-                                    && self.agents[idx].wealth.coin.to_f64()
-                                        < POOR_RELIEF_FLOOR_COINS)
-                                    .then_some((*m, self.agents[idx].wealth.coin))
-                            })
+                            .enumerate()
+                            .map(|(idx, a)| (AgentId::new(idx as u64), a.wealth.coin))
                             .collect();
-                        if !destitute.is_empty() {
-                            let per_head = (budget / Fixed::from_int(destitute.len() as i64))
-                                .min(Fixed::from_f64(0.5));
+                        // Relative destitution floor: 10% of the median
+                        // member holding (deterministic; sorted-copy
+                        // median at even count averages the middle pair).
+                        let mut sorted_coins: Vec<f64> =
+                            coins.iter().map(|(_, c)| c.to_f64()).collect();
+                        sorted_coins.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                        let mid = sorted_coins.len() / 2;
+                        let median = if sorted_coins.len() % 2 == 1 {
+                            sorted_coins[mid]
+                        } else {
+                            f64::midpoint(sorted_coins[mid - 1], sorted_coins[mid])
+                        };
+                        /// ponytail: single-site constant; promote to a
+                        /// named sim parameter when a second consumer exists
+                        const RELIEF_FLOOR_MEDIAN_SHARE: f64 = 0.10;
+                        let floor = median * RELIEF_FLOOR_MEDIAN_SHARE;
+                        coins.retain(|(_, c)| c.to_f64() < floor);
+                        if !coins.is_empty() {
+                            // Poorest-first top-up toward the floor, capped
+                            // at a quarter of the treasury surplus per
+                            // cycle so relief equalizes without draining
+                            // the council's operating capacity (and the
+                            // legitimacy trajectory it feeds).
+                            coins.sort_by(|a, b| a.1.to_f64().partial_cmp(&b.1.to_f64()).unwrap());
+                            let mut cycle_budget = ((institution.treasury - reserve)
+                                .max(Fixed::ZERO))
+                                * Fixed::from_f64(0.25);
                             let mut paid_total = Fixed::ZERO;
-                            for (agent_id, coin) in &mut destitute {
-                                let idx = agent_id.as_u64() as usize;
-                                if institution.treasury - paid_total < reserve + per_head {
+                            for (agent_id, coin) in &mut coins {
+                                if cycle_budget <= Fixed::ZERO {
                                     break;
                                 }
-                                self.agents[idx].wealth.coin = *coin + per_head;
+                                let idx = agent_id.as_u64() as usize;
+                                let need = Fixed::from_f64(floor - coin.to_f64()).max(Fixed::ZERO);
+                                let pay = need.min(cycle_budget);
+                                self.agents[idx].wealth.coin = *coin + pay;
                                 *coin = self.agents[idx].wealth.coin;
-                                paid_total += per_head;
+                                cycle_budget -= pay;
+                                paid_total += pay;
                             }
                             if paid_total > Fixed::ZERO {
                                 institution.treasury -= paid_total;
-                                let members = institution.members.clone();
+                                let recipients: Vec<AgentId> =
+                                    coins.iter().map(|(id, _)| *id).collect();
                                 let msg = format!(
-                                    "Council poor relief: {:.1} coins to {} destitute members",
+                                    "Council poor relief: {:.1} coins to {} members below \
+                                     the relative-subsistence floor",
                                     paid_total.to_f64(),
-                                    destitute.len()
+                                    recipients.len()
                                 );
                                 let trace_msg = msg.clone();
-                                let trace_affected = members.clone();
-                                institution.record_action(tick_u64, msg, members, true);
+                                let trace_affected = recipients.clone();
+                                institution.record_action(tick_u64, msg, recipients, true);
                                 self.provenance.record_institutional(
                                     crate::provenance::InstitutionalTrace {
                                         institution_name: "council".into(),

@@ -695,6 +695,7 @@ mod pass_cognitive;
 mod pass_decay;
 mod pass_ecology;
 mod pass_health;
+mod pass_scenario;
 mod pass_social;
 mod pass_weather;
 mod population;
