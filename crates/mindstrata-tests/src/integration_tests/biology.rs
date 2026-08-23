@@ -1906,3 +1906,55 @@ fn attachment_separation_distress_coupling_is_live_after_tuning() {
         "coupling must not pin: partnered distress max {distress_max}"
     );
 }
+
+#[test]
+fn sickness_depresses_work_output() {
+    // Iter 37: a sick workforce must record lower Work productivity than a
+    // healthy one over an identical horizon — proving the work_impairment
+    // wiring reaches the production path (a plague hurts the food economy,
+    // not just the population). Same seed 42 ⇒ identical agents, so the only
+    // difference between the runs is the Fever multiplier on each Worked
+    // journal entry (no grain-stock or consumption confounds).
+    use mindstrata_sim::health::{ActiveDisease, DiseaseKind};
+    use mindstrata_sim::journal::JournalEntryKind;
+    let avg_worked = |sim: &mindstrata_sim::Simulation| -> f64 {
+        let worked: Vec<f64> = sim
+            .journal()
+            .entries_in_range(0, u64::MAX)
+            .iter()
+            .filter_map(|e| match e.kind {
+                JournalEntryKind::Worked { productivity } => Some(productivity),
+                _ => None,
+            })
+            .collect();
+        assert!(!worked.is_empty(), "expected Work actions during the run");
+        worked.iter().sum::<f64>() / worked.len() as f64
+    };
+
+    // Healthy control.
+    let riverford = mindstrata_sim::scenario::Scenario::riverford();
+    let mut sim = mindstrata_sim::Simulation::from_scenario(riverford);
+    sim.populate();
+    sim.run(300);
+    let healthy_avg = avg_worked(&sim);
+
+    // Identical run, but every agent starts with a Fever (severity 0.3):
+    // work_impairment scales productivity by 1 − severity×0.5 as the fever
+    // ramps, so the recorded Work productivity must average lower. NOTE: the
+    // margin (measured ~4.8% at seed 42) is coupled to Fever's severity-ramp
+    // curve — if disease tuning changes, re-probe this test before trusting it.
+    let riverford = mindstrata_sim::scenario::Scenario::riverford();
+    let mut sick = mindstrata_sim::Simulation::from_scenario(riverford);
+    sick.populate();
+    for diseases in &mut sick.agent_diseases {
+        diseases.push(ActiveDisease::new(DiseaseKind::Fever));
+    }
+    sick.run(300);
+    let sick_avg = avg_worked(&sick);
+
+    assert!(
+        healthy_avg > sick_avg,
+        "a sick workforce must record lower work productivity \
+         (healthy {healthy_avg:.4} vs sick {sick_avg:.4})"
+    );
+}
