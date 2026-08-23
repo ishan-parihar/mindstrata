@@ -218,3 +218,33 @@ Arc A makes Phase 6 agent dossiers (lineage trees) immediately possible.
 Roughly eight working iterations before audit Phase 2 resumes. Each is an
 independent commit point; the program degrades gracefully if paused at any
 boundary.
+
+---
+
+## 4. PROGRAM CLOSE (Iteration 259, commit e55d32c)
+
+All arcs delivered. Suite 305 passed / 0 failed; clippy workspace clean.
+
+- **Arc A (heredity)**: genome blending, personality quantitative genetics,
+  surnames, moral-values + ideology transmission. Verified end-to-end
+  (parent-child r=0.81, sibling r=0.92).
+- **Arc B (embodiment→mind)**: interoception filters in the decision
+  pipeline; Whitehall status→stress→health loop; sleep-debt withdrawal.
+- **Arc C (mind→social)**: deception detection via speech-intent mismatch;
+  modeled-reliability partner choice.
+- **Phase 2 affect realism**: piecewise graded fear shoulder, hedonic joy
+  baseline, hedonic setpoint drift — calm-world medians now positive and
+  seed-differentiated (the E1 dysphoria plateau is dead).
+- **Phase 3**: survival-integrity reflexes beneath utility AI.
+- **Phase 4**: earned traumas replace fabricated history; world-conditional
+  grievance memes; clans derive from settlement clustering.
+- **Phase 5**: meandering rivers, fertility fields, jittered site grammar,
+  soil-scaled founding stocks — every seed is a different village.
+- **Phase 6 core**: village chronicle annals + agent dossiers with lineage,
+  inherited-vs-expressed drift, genome highlights, life timelines
+  (--chronicle / --dossier IDX).
+- **Knife-edge resolved**: hazard-accumulated epidemic immunity ended the
+  12-flip TRANSIENT↔ENDEMIC oscillation structurally.
+
+Leftovers queued: propaganda emergence post-institution; pop-cap lift;
+chronicle-in-TUI polish.
