@@ -1,0 +1,14 @@
+#!/bin/sh
+# AGENTS.md §3 made mechanical: staged content must fmt+clippy clean.
+# Skips behavioral tests (suite runs separately per §3); blocks red landings.
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$STAGED" ] && exit 0
+case "$STAGED" in
+  *.rs) ;;
+  *) exit 0 ;;  # pure-docs commits pass
+esac
+cargo fmt --all --check || {
+  echo "pre-commit: cargo fmt --check failed (run: cargo fmt --all)" >&2; exit 1; }
+cargo clippy --workspace --quiet 2>&1 | grep -qE "^warning|^error" && {
+  echo "pre-commit: clippy warnings/errors present (fix or justify via #[expect])" >&2; exit 1; }
+exit 0
