@@ -407,25 +407,10 @@ fn main() {
                 print!("{}", mindstrata_sim::sim::chronicle::render_chronicle(&sim));
             }
             if let Some(ref spec) = dossier {
-                // Iteration 261: accept either a numeric index or an agent
-                // name (exact match first, then unique prefix).
-                let resolved: Option<usize> = spec.parse::<usize>().ok().or_else(|| {
-                    let exact = sim.agents.iter().position(|a| a.name == *spec);
-                    exact.or_else(|| {
-                        let prefix_hits: Vec<usize> = sim
-                            .agents
-                            .iter()
-                            .enumerate()
-                            .filter(|(_, a)| a.name.starts_with(spec.as_str()))
-                            .map(|(i, _)| i)
-                            .collect();
-                        if prefix_hits.len() == 1 {
-                            Some(prefix_hits[0])
-                        } else {
-                            None
-                        }
-                    })
-                });
+                // Iteration 264: resolution moved into
+                // `chronicle::resolve_agent_spec` so the TUI `/` search shares
+                // the exact same index-or-exact-or-unique-prefix contract.
+                let resolved = mindstrata_sim::sim::chronicle::resolve_agent_spec(&sim, spec);
                 println!();
                 match resolved {
                     Some(idx) => println!(

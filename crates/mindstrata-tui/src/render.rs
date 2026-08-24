@@ -457,6 +457,24 @@ pub fn render_chronicle_view(chronicle_text: &str, max_lines: usize) -> String {
     out
 }
 
+/// Iteration 264: the selected agent's dossier as a TUI pane. Dossiers are
+/// short (identity + lineage + drift + genome + timeline), but a long-lived
+/// elder can accumulate a tall timeline — trim from the TOP (keep the most
+/// recent lines) exactly like the chronicle pane so the pane stays fixed.
+pub fn render_dossier_view(dossier_text: &str, max_lines: usize) -> String {
+    let mut out = String::from("── Agent Dossier ──\n");
+    let lines: Vec<&str> = dossier_text.lines().collect();
+    let skip = lines.len().saturating_sub(max_lines);
+    for line in &lines[skip..] {
+        out.push_str(line);
+        out.push('\n');
+    }
+    if skip > 0 {
+        out.push_str(&format!("… {skip} earlier dossier lines elided …\n"));
+    }
+    out
+}
+
 /// Render the main dashboard: agent summaries, events, tick, metrics.
 pub fn render_dashboard(
     agents: &[AgentSummary],

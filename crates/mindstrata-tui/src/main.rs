@@ -6,11 +6,13 @@
 //! high-priority directive goals through [`Simulation::command_agent`].
 //!
 //! Controls:
-//! - `q` / `Esc` / `Ctrl+C`  quit
+//! - `q` / `Esc` / `Ctrl+C`  quit (Esc cancels an active `/` search first)
 //! - `Space`      toggle auto-run (pause/play)
 //! - `n`          step one tick while paused
 //! - `Tab` / `t`  cycle views
 //! - `↑`/`↓`      select agent (also `j`/`k`)
+//! - `/`          find agent by index/name — type, then Enter jumps
+//! - `v`          open the selected agent's dossier pane
 //! - `w`/`e`/`d`/`r`/`s`/`p`  command: Work / Eat / Drink / Rest / Socialize / Worship
 //! - `x`          cancel all directives on the selected agent
 //!
@@ -28,8 +30,9 @@ use mindstrata_sim::institutions::InstitutionKind;
 use mindstrata_sim::sim::{SimConfig, Simulation};
 use mindstrata_tui::{
     key_to_command, mark_selected_agent_row, render_agent_inspector, render_agent_list,
-    render_chronicle_view, render_dashboard, render_event_log, render_metric_charts,
-    render_world_map, AgentMarker, DashboardConfig, UiState, View,
+    render_chronicle_view, render_dashboard, render_dossier_view, render_event_log,
+    render_metric_charts, render_world_map, AgentMarker, DashboardConfig, SearchFailure, UiState,
+    View,
 };
 use ratatui::layout::{Constraint, Layout};
 use ratatui::text::Line;
@@ -131,6 +134,33 @@ fn run_loop(
 /// Handle one key press — returns `Break` to quit the loop.
 fn handle_key(sim: &mut Simulation, ui: &mut UiState, key: &KeyEvent) -> ControlFlow<()> {
     let agent_count = sim.agents.len();
+    // Iteration 264: while a `/` search is active the keyboard types into the
+    // query — only Enter/Esc/Backspace retain control meaning. Ctrl+C still
+    // quits (matched below before this branch).
+    if ui.name_query.is_some() {
+        match key.code {
+            KeyCode::Esc => ui.cancel_search(),
+            KeyCode::Backspace => ui.search_pop(),
+            KeyCode::Enter => {
+                let names: Vec<String> = sim.agents.iter().map(|a| a.name.clone()).collect();
+                match ui.resolve_search(&names) {
+                    Ok(idx) => {
+                        let name = sim.agents[idx].name.clone();
+                        ui.last_command = Some(format!("jumped to {idx} ({name})"));
+                    }
+                    Err(SearchFailure::Ambiguous) => {
+                        ui.last_command = Some("ambiguous prefix — narrow it".into());
+                    }
+                    Err(SearchFailure::NoMatch) => {
+                        ui.last_command = Some("no agent matches".into());
+                    }
+                }
+            }
+            KeyCode::Char(c) => ui.search_push(c),
+            _ => {}
+        }
+        return ControlFlow::Continue(());
+    }
     match key.code {
         // Raw mode disables ISIG, so Ctrl+C arrives as a key event — treat it
         // as quit alongside q/Esc.
@@ -151,6 +181,10 @@ fn handle_key(sim: &mut Simulation, ui: &mut UiState, key: &KeyEvent) -> Control
                 ui.last_command = Some("directives cleared".into());
             }
         }
+        // Iteration 264: `/` opens the by-name finder; `v` opens the
+        // selected agent's dossier without leaving the current selection.
+        KeyCode::Char('/') => ui.begin_search(),
+        KeyCode::Char('v') => ui.view = View::Dossier,
         other => {
             if let Some(kind) = key_to_command(other) {
                 let name = sim
@@ -179,11 +213,17 @@ fn draw(frame: &mut Frame, sim: &Simulation, ui: &UiState) {
     } else {
         "⏸ PAUSED"
     };
+    // Iteration 264: an active name-search replaces the view label so the
+    // typed buffer is always visible where the operator is looking.
+    let mode = match &ui.name_query {
+        Some(q) => format!("find: {q}_"),
+        None => format!("view: {}", ui.view.label()),
+    };
     let header = format!(
-        " Mindstrata Interactive  |  Tick {:>6}  |  {}  |  view: {}  |  [q] quit",
+        " Mindstrata Interactive  |  Tick {:>6}  |  {}  |  {}  |  [q] quit",
         sim.current_tick().as_u64(),
         run_state,
-        ui.view.label(),
+        mode,
     );
     frame.render_widget(
         Paragraph::new(Line::from(header)).block(Block::bordered()),
@@ -210,7 +250,7 @@ fn draw(frame: &mut Frame, sim: &Simulation, ui: &UiState) {
     let command = ui.last_command.as_deref().unwrap_or("—");
     let footer = format!(
         " selected: {selected} ({sel_name})  |  steps: {}  |  ↑↓ select · space run · n step · \
-         t view · w/e/d/r/s/p command · x clear  |  last: {command}",
+         t view · / find · v dossier · w/e/d/r/s/p command · x clear  |  last: {command}",
         ui.manual_steps,
     );
     frame.render_widget(
@@ -257,6 +297,13 @@ fn render_view(sim: &Simulation, ui: &UiState) -> String {
         View::Trends => render_metric_charts(&sim.metric_history),
         View::Chronicle => {
             render_chronicle_view(&mindstrata_sim::sim::chronicle::render_chronicle(sim), 200)
+        }
+        View::Dossier => {
+            let idx = ui.selected_agent.min(sim.agents.len().saturating_sub(1));
+            render_dossier_view(
+                &mindstrata_sim::sim::chronicle::render_dossier(sim, idx),
+                200,
+            )
         }
         View::Map => {
             let markers: Vec<AgentMarker> = sim

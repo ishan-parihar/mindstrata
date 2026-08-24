@@ -9,14 +9,14 @@ mod session;
 
 pub use render::{
     render_agent_inspector, render_agent_list, render_belief_inspector, render_chronicle_view,
-    render_clan_dashboard, render_dashboard, render_decision_traces, render_event_log,
-    render_event_log_detailed, render_faction_dashboard, render_institutional_records,
-    render_market_dashboard, render_metric_charts, render_military_dashboard,
-    render_noosphere_inspector, render_patronage_dashboard, render_psychology_inspector,
-    render_relationship_view, render_theology_dashboard, render_world_map, AgentMarker,
-    DashboardConfig,
+    render_clan_dashboard, render_dashboard, render_decision_traces, render_dossier_view,
+    render_event_log, render_event_log_detailed, render_faction_dashboard,
+    render_institutional_records, render_market_dashboard, render_metric_charts,
+    render_military_dashboard, render_noosphere_inspector, render_patronage_dashboard,
+    render_psychology_inspector, render_relationship_view, render_theology_dashboard,
+    render_world_map, AgentMarker, DashboardConfig,
 };
-pub use session::{key_to_command, mark_selected_agent_row, UiState, View};
+pub use session::{key_to_command, mark_selected_agent_row, SearchFailure, UiState, View};
 
 #[cfg(test)]
 mod tests {
@@ -135,7 +135,60 @@ mod tests {
         // Iteration 261: the chronicle annals close the cycle.
         assert_eq!(ui.view, View::Chronicle);
         ui.cycle_view();
+        // Iteration 264: the dossier pane closes the cycle.
+        assert_eq!(ui.view, View::Dossier);
+        ui.cycle_view();
         assert_eq!(ui.view, View::Dashboard);
+    }
+
+    #[test]
+    fn name_search_resolves_exact_unique_prefix_and_index() {
+        // Iteration 264: `/` search shares the CLI --dossier contract —
+        // numeric index in range, exact name first, then UNIQUE prefix;
+        // ambiguous prefixes and misses leave the query on screen.
+        let names: Vec<String> = vec!["Anna".into(), "Bran".into(), "Beatrice".into()];
+        let mut ui = UiState::new(names.len());
+        ui.begin_search();
+        for c in "Bran".chars() {
+            ui.search_push(c);
+        }
+        assert_eq!(ui.resolve_search(&names), Ok(1));
+        assert_eq!(ui.selected_agent, 1);
+        assert!(ui.name_query.is_none(), "success ends search mode");
+
+        // Exact beats unique-prefix semantics: 'Anna' is exact at 0.
+        ui.begin_search();
+        for c in "Anna".chars() {
+            ui.search_push(c);
+        }
+        assert_eq!(ui.resolve_search(&names), Ok(0));
+
+        // Numeric buffer jumps by index; out-of-range is a miss.
+        ui.begin_search();
+        ui.search_push('2');
+        assert_eq!(ui.resolve_search(&names), Ok(2));
+        ui.begin_search();
+        ui.search_push('9');
+        assert_eq!(ui.resolve_search(&names), Err(SearchFailure::NoMatch));
+        assert!(ui.name_query.is_some(), "failure keeps the query visible");
+
+        // Ambiguous prefix ('B' hits Bran + Beatrice) fails without guessing.
+        ui.begin_search();
+        ui.search_push('B');
+        assert_eq!(ui.resolve_search(&names), Err(SearchFailure::Ambiguous));
+        ui.cancel_search();
+
+        // Backspace erases one character at a time and never underflows.
+        ui.begin_search();
+        for c in "Annx".chars() {
+            ui.search_push(c);
+        }
+        ui.search_pop();
+        assert_eq!(ui.name_query.as_deref(), Some("Ann"));
+        for _ in 0..5 {
+            ui.search_pop();
+        }
+        assert_eq!(ui.name_query.as_deref(), Some(""));
     }
 
     #[test]

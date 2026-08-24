@@ -26,6 +26,8 @@ pub enum View {
     Trends,
     /// The village chronicle annals (Iteration 261).
     Chronicle,
+    /// The selected agent's full dossier (Iteration 264).
+    Dossier,
 }
 
 impl View {
@@ -39,6 +41,7 @@ impl View {
             View::Map => "Map",
             View::Trends => "Trends",
             View::Chronicle => "Chronicle",
+            View::Dossier => "Dossier",
         }
     }
 }
@@ -57,6 +60,9 @@ pub struct UiState {
     pub last_command: Option<String>,
     /// Ticks stepped manually via the 'n' key.
     pub manual_steps: u64,
+    /// Iteration 264: active name-search buffer (`/`). `None` = idle; the
+    /// binary's event loop routes printable input here while set.
+    pub name_query: Option<String>,
 }
 
 impl UiState {
@@ -68,6 +74,7 @@ impl UiState {
             auto_play: false,
             last_command: None,
             manual_steps: 0,
+            name_query: None,
         };
         state.clamp_selection(agent_count);
         state
@@ -100,7 +107,8 @@ impl UiState {
             View::Events => View::Map,
             View::Map => View::Trends,
             View::Trends => View::Chronicle,
-            View::Chronicle => View::Dashboard,
+            View::Chronicle => View::Dossier,
+            View::Dossier => View::Dashboard,
         };
     }
 
@@ -115,7 +123,6 @@ impl UiState {
 }
 
 /// §5 (Iteration 155): Map a command key to the goal it issues.
-///
 /// The six bound keys map to `GoalKind`s that `select_action` can steer via
 /// the goal-alignment bonus. `SeekSafety` is deliberately NOT bound: it is
 /// retained by goal generation but has no action-alignment arm in
@@ -129,6 +136,94 @@ pub fn key_to_command(key: KeyCode) -> Option<GoalKind> {
         KeyCode::Char('s') => Some(GoalKind::Socialize),
         KeyCode::Char('p') => Some(GoalKind::Worship),
         _ => None,
+    }
+}
+
+/// Iteration 264: why a `/` name-search failed to resolve. Surfaced in the
+/// footer so the operator knows whether to extend the prefix or pick another
+/// name (CLI parity: exact match first, then UNIQUE prefix — ambiguous
+/// prefixes deliberately do not guess).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SearchFailure {
+    /// No agent name starts with the query.
+    NoMatch,
+    /// Several agents share the prefix — narrow it.
+    Ambiguous,
+}
+
+impl UiState {
+    /// Enter name-search mode with an empty buffer (`/`).
+    pub fn begin_search(&mut self) {
+        self.name_query = Some(String::new());
+    }
+
+    /// Append one typed character to the active search buffer.
+    pub fn search_push(&mut self, c: char) {
+        if let Some(q) = &mut self.name_query {
+            q.push(c);
+        }
+    }
+
+    /// Erase the last typed character (Backspace); empty buffer stays valid
+    /// so the operator can see they are still in search mode.
+    pub fn search_pop(&mut self) {
+        if let Some(q) = &mut self.name_query {
+            q.pop();
+        }
+    }
+
+    /// Leave search mode without jumping (Esc).
+    pub fn cancel_search(&mut self) {
+        self.name_query = None;
+    }
+
+    /// Resolve the active query against agent names — numeric buffers jump
+    /// by index, otherwise exact match first then unique prefix (the same
+    /// contract as the CLI `--dossier NAME` flag). On success the selection
+    /// moves to the match and search mode ends; on failure the query stays
+    /// on screen so it can be corrected.
+    pub fn resolve_search(&mut self, names: &[String]) -> Result<usize, SearchFailure> {
+        let Some(query) = &self.name_query else {
+            return Err(SearchFailure::NoMatch);
+        };
+        let resolved = if let Ok(idx) = query.parse::<usize>() {
+            if idx < names.len() {
+                Some(idx)
+            } else {
+                None
+            }
+        } else {
+            let exact = names.iter().position(|n| n == query);
+            exact.or_else(|| {
+                let hits: Vec<usize> = names
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, n)| n.starts_with(query.as_str()))
+                    .map(|(i, _)| i)
+                    .collect();
+                if hits.len() == 1 {
+                    Some(hits[0])
+                } else {
+                    None
+                }
+            })
+        };
+        match resolved {
+            Some(idx) => {
+                self.selected_agent = idx;
+                self.name_query = None;
+                Ok(idx)
+            }
+            None if names
+                .iter()
+                .filter(|n| n.starts_with(query.as_str()))
+                .count()
+                > 1 =>
+            {
+                Err(SearchFailure::Ambiguous)
+            }
+            None => Err(SearchFailure::NoMatch),
+        }
     }
 }
 

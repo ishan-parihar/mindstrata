@@ -236,11 +236,51 @@ pub fn render_dossier(sim: &Simulation, idx: usize) -> String {
     out
 }
 
+/// Iteration 264: shared index-or-name resolution for every dossier surface
+/// (CLI `--dossier NAME`, TUI `/` search). A numeric spec selects by index
+/// when in range; otherwise exact name match first, then a UNIQUE prefix.
+/// Ambiguous prefixes return `None` — callers surface their own message.
+pub fn resolve_agent_spec(sim: &Simulation, spec: &str) -> Option<usize> {
+    if let Ok(idx) = spec.parse::<usize>() {
+        return (idx < sim.agents.len()).then_some(idx);
+    }
+    let exact = sim.agents.iter().position(|a| a.name == spec);
+    exact.or_else(|| {
+        let prefix_hits: Vec<usize> = sim
+            .agents
+            .iter()
+            .enumerate()
+            .filter(|(_, a)| a.name.starts_with(spec))
+            .map(|(i, _)| i)
+            .collect();
+        if prefix_hits.len() == 1 {
+            Some(prefix_hits[0])
+        } else {
+            None
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{render_chronicle, render_dossier};
+    use super::{render_chronicle, render_dossier, resolve_agent_spec};
     use crate::sim::SimConfig;
     use crate::Simulation;
+
+    fn seeded_sim() -> Simulation {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 100,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(100);
+        sim
+    }
 
     #[test]
     fn chronicle_renders_founding_year_and_determinism() {
@@ -280,5 +320,49 @@ mod tests {
         assert!(d.contains("genome:"), "{d}");
         let oob = render_dossier(&sim, 9999);
         assert!(oob.contains("No agent"));
+    }
+
+    #[test]
+    fn agent_spec_resolves_index_exact_and_unique_prefix() {
+        // Iteration 264: the shared resolver backs CLI `--dossier` and the TUI
+        // `/` search — one contract: numeric index in range, exact name, then
+        // unique prefix; ambiguous/missing specs resolve to None.
+        let sim = seeded_sim();
+        let name0 = sim.agents[0].name.clone();
+        assert_eq!(resolve_agent_spec(&sim, "0"), Some(0));
+        assert_eq!(resolve_agent_spec(&sim, &name0), Some(0));
+        let prefix = name0[..1].to_string();
+        let hits: Vec<usize> = sim
+            .agents
+            .iter()
+            .enumerate()
+            .filter(|(_, a)| a.name.starts_with(prefix.as_str()))
+            .map(|(i, _)| i)
+            .collect();
+        if hits.len() == 1 {
+            assert_eq!(resolve_agent_spec(&sim, &prefix), Some(hits[0]));
+        } else {
+            assert_eq!(resolve_agent_spec(&sim, &prefix), None);
+        }
+        // Ambiguous prefix: every founder pool has at least one shared first
+        // letter (24 names over 12 agents) — assert the contract, not luck.
+        for letter in 'a'..='z' {
+            let count = sim
+                .agents
+                .iter()
+                .filter(|a| a.name.starts_with(letter))
+                .count();
+            if count > 1 {
+                assert_eq!(
+                    resolve_agent_spec(&sim, &letter.to_string()),
+                    None,
+                    "{count} agents share prefix {letter}"
+                );
+                break;
+            }
+        }
+        // Out-of-range index and unknown names miss cleanly.
+        assert_eq!(resolve_agent_spec(&sim, "9999"), None);
+        assert_eq!(resolve_agent_spec(&sim, "Zaphod"), None);
     }
 }
