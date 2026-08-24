@@ -38,43 +38,37 @@ pub fn process_interaction(
     conflict_escalation_rate: Fixed, // §5.1: from SimParameters
     params: &mindstrata_core::parameters::SimParameters,
 ) {
-    let trust_delta;
-    let affection_delta;
-
-    match interaction.kind {
-        InteractionKind::Talk => {
-            trust_delta = Fixed::from_f64(0.01) * bonding_rate;
-            affection_delta = Fixed::from_f64(0.005) * bonding_rate;
-        }
-        InteractionKind::Help => {
-            trust_delta = Fixed::from_f64(0.05) * bonding_rate;
-            affection_delta = Fixed::from_f64(0.03) * bonding_rate;
-        }
-        InteractionKind::Threaten => {
-            trust_delta = Fixed::from_f64(-0.1) * conflict_escalation_rate;
-            affection_delta = Fixed::from_f64(-0.05) * conflict_escalation_rate;
-        }
-        InteractionKind::Trade => {
-            trust_delta = Fixed::from_f64(0.02) * bonding_rate;
-            affection_delta = Fixed::ZERO;
-        }
-        InteractionKind::Gossip => {
-            trust_delta = Fixed::from_f64(0.005) * bonding_rate;
-            affection_delta = Fixed::from_f64(0.01) * bonding_rate;
-        }
-        InteractionKind::Comfort => {
-            trust_delta = Fixed::from_f64(0.03) * bonding_rate;
-            affection_delta = Fixed::from_f64(0.05) * bonding_rate;
-        }
-        InteractionKind::Insult => {
-            trust_delta = Fixed::from_f64(-0.08) * conflict_escalation_rate;
-            affection_delta = Fixed::from_f64(-0.1) * conflict_escalation_rate;
-        }
-        InteractionKind::Teach => {
-            trust_delta = Fixed::from_f64(0.04) * bonding_rate;
-            affection_delta = Fixed::from_f64(0.02) * bonding_rate;
-        }
-    }
+    let (trust_delta, affection_delta) = match interaction.kind {
+        InteractionKind::Talk => (
+            Fixed::from_f64(0.01) * bonding_rate,
+            Fixed::from_f64(0.005) * bonding_rate,
+        ),
+        InteractionKind::Help => (
+            Fixed::from_f64(0.05) * bonding_rate,
+            Fixed::from_f64(0.03) * bonding_rate,
+        ),
+        InteractionKind::Threaten => (
+            Fixed::from_f64(-0.1) * conflict_escalation_rate,
+            Fixed::from_f64(-0.05) * conflict_escalation_rate,
+        ),
+        InteractionKind::Trade => (Fixed::from_f64(0.02) * bonding_rate, Fixed::ZERO),
+        InteractionKind::Gossip => (
+            Fixed::from_f64(0.005) * bonding_rate,
+            Fixed::from_f64(0.01) * bonding_rate,
+        ),
+        InteractionKind::Comfort => (
+            Fixed::from_f64(0.03) * bonding_rate,
+            Fixed::from_f64(0.05) * bonding_rate,
+        ),
+        InteractionKind::Insult => (
+            Fixed::from_f64(-0.08) * conflict_escalation_rate,
+            Fixed::from_f64(-0.1) * conflict_escalation_rate,
+        ),
+        InteractionKind::Teach => (
+            Fixed::from_f64(0.04) * bonding_rate,
+            Fixed::from_f64(0.02) * bonding_rate,
+        ),
+    };
 
     // §5.4: In-group/out-group bias — faction membership modifies trust delta
     // In-group: positive interactions get a trust bonus
@@ -337,7 +331,7 @@ pub fn choose_interaction(
         // Clamped to [0.5, 1.0]: the prescriptive norm can amplify but never
         // suppress the Help window, even for a degenerate out-of-range
         // strength (mirrors the Iter-87 hypocrisy-factor clamp rationale).
-        let help_bound = (0.5 * (1.0 + help_neighbors_propensity.to_f64())).clamp(0.5, 1.0);
+        let help_bound = f64::midpoint(1.0, help_neighbors_propensity.to_f64()).clamp(0.5, 1.0);
         if roll < 0.2 {
             InteractionKind::Comfort
         } else if roll < help_bound {

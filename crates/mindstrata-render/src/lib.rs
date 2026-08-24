@@ -210,7 +210,7 @@ pub fn render_world_rgba(world: &World, agents: &[RenderAgent], cell_pixels: u32
     let image_width = (world.width * cell).max(1);
     let image_height = (world.height * cell).max(1);
     let mut rgba = vec![0x26u8; (image_width * image_height * 4) as usize];
-    for px in rgba.chunks_exact_mut(4) {
+    for px in rgba.as_chunks_mut::<4>().0 {
         px[3] = 255;
     }
 

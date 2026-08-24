@@ -316,6 +316,88 @@ impl Simulation {
             // Architecture-plan-2 §13.4: Tick propaganda campaigns daily.
             self.propaganda_registry
                 .tick_all(self.params.propaganda_resistance_growth);
+            // §13.4 emergent (Iteration 263): institution-owned runtime producer.
+            // Prior to this, only the two founding campaigns (seeded at tick 0)
+            // existed — the registry's daily loop was live but its input was
+            // static, so propaganda died after ~360 ticks and never re-emerged.
+            // Each institution with sufficient legitimacy now spawns a fresh
+            // campaign when its prior one expires, keeping the live loop fed
+            // without perturbing the calibrated window (first spawn at tick 600,
+            // after both founders expire, with legitimacy-gated intensity and
+            // deterministic narrative selection — no RNG, no stream drift).
+            if tick_u64 != 0 && tick_u64.is_multiple_of(600) {
+                let n = self.agents.len();
+                if n > 0 {
+                    let all_targets: Vec<usize> = (0..n).collect();
+                    // Council: legitimacy-gated, one active at a time.
+                    let council_legit = self
+                        .institutions
+                        .iter()
+                        .find(|i| i.kind == InstitutionKind::Council)
+                        .map_or(Fixed::ZERO, |i| i.legitimacy);
+                    let council_active = self
+                        .propaganda_registry
+                        .campaigns
+                        .iter()
+                        .filter(|c| c.active && c.sponsor == 0)
+                        .count();
+                    if council_legit > Fixed::from_f64(0.55) && council_active == 0 {
+                        let narratives = [
+                            "The council secures the harvest",
+                            "Trust the council's well decree",
+                            "The council feeds the hungry",
+                        ];
+                        let idx = ((tick_u64 / 600) as usize) % narratives.len();
+                        let intensity = (council_legit * Fixed::from_f64(0.6)
+                            + Fixed::from_f64(0.2))
+                        .clamp_01();
+                        self.propaganda_registry
+                            .register(crate::culture::PropagandaCampaign::new(
+                                0,
+                                0,
+                                all_targets.clone(),
+                                narratives[idx].into(),
+                                intensity,
+                                vec![crate::culture::PropagandaChannel::Edict],
+                                300,
+                                tick_u64,
+                            ));
+                    }
+                    // Temple: same gate, slightly lower intensity.
+                    let temple_legit = self
+                        .institutions
+                        .iter()
+                        .find(|i| i.kind == InstitutionKind::Temple)
+                        .map_or(Fixed::ZERO, |i| i.legitimacy);
+                    let temple_active = self
+                        .propaganda_registry
+                        .campaigns
+                        .iter()
+                        .filter(|c| c.active && c.sponsor == 1)
+                        .count();
+                    if temple_legit > Fixed::from_f64(0.55) && temple_active == 0 {
+                        let narratives = [
+                            "Honor the spirits for rain",
+                            "The ancestors watch over the fields",
+                            "Piety brings the harvest",
+                        ];
+                        let idx = ((tick_u64 / 600 + 1) as usize) % narratives.len();
+                        let intensity =
+                            (temple_legit * Fixed::from_f64(0.5) + Fixed::from_f64(0.2)).clamp_01();
+                        self.propaganda_registry
+                            .register(crate::culture::PropagandaCampaign::new(
+                                0,
+                                1,
+                                all_targets,
+                                narratives[idx].into(),
+                                intensity,
+                                vec![crate::culture::PropagandaChannel::Sermon],
+                                240,
+                                tick_u64,
+                            ));
+                    }
+                }
+            }
             // Architecture-plan-2 §13.4: Apply propaganda effects to target agents.
             // For each active campaign, compute effectiveness using institutional legitimacy
             // and audience fear, then nudge target agents' emotional state.

@@ -59,9 +59,7 @@ impl Simulation {
             self.tick_military(tick_u64);
         }
         // Reset work ticks tracker for this tick
-        for tick in &mut self.site_work_ticks {
-            *tick = 0;
-        }
+        self.site_work_ticks.fill(0);
         // Count work actions per site this tick
         for (_agent_idx, action) in &self.tick_action_starts {
             if let ActionKind::Work = action {

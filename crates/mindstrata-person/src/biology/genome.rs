@@ -338,7 +338,7 @@ const MUTATION_NOISE: f64 = 0.06;
 /// one final quantization — same determinism discipline as every other
 /// sub-resolution rate in this workspace (Fixed::mul truncates).
 fn blend_gene(a: Fixed, b: Fixed, rng: &mut impl Rng) -> Fixed {
-    let mid = (a.to_f64() + b.to_f64()) * 0.5;
+    let mid = f64::midpoint(a.to_f64(), b.to_f64());
     let noise = rng.random_range(-MUTATION_NOISE..MUTATION_NOISE);
     Fixed::from_f64((mid + noise).clamp(0.0, 1.0))
 }

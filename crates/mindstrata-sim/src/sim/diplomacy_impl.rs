@@ -96,7 +96,7 @@ impl Simulation {
         }
         let name = self.diplomacy.neighbors[idx].name.clone();
         let relation = self.diplomacy.neighbors[idx].relation.to_f64();
-        let scale = Fixed::from_f64(1.0 + (relation + 1.0) * 0.5);
+        let scale = Fixed::from_f64(1.0 + f64::midpoint(relation, 1.0));
         let amount = Fixed::from_f64(CARAVAN_GRAIN_BASE) * scale;
         if let Some(market_idx) = self
             .world

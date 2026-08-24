@@ -158,7 +158,7 @@ impl Personality {
     /// noise, keeping seeded streams stable and short).
     pub fn inherit(parent: &Personality, other: Option<&Personality>, rng: &mut impl Rng) -> Self {
         let mut blend_trait = |a: Fixed, b: Fixed| -> Fixed {
-            let mid = (a.to_f64() + b.to_f64()) * 0.5;
+            let mid = f64::midpoint(a.to_f64(), b.to_f64());
             let shrunk = mid * 0.8 + 0.5 * 0.2;
             let noise = rng.random_range(-0.06f64..0.06);
             Fixed::from_f64((shrunk + noise).clamp(0.0, 1.0))
