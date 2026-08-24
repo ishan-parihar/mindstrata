@@ -77,6 +77,18 @@ Emergence cannot produce alternative histories when every run begins with the sa
 - MAX_POPULATION = 48 hard cap; population freezes at the cap with no overshoot/collapse dynamics.
 - 24-name pool cycles above 24 agents (guaranteed duplicate names); children remain `Child_{idx}` for life.
 
+> **Resolution note (Iteration 263 arc, closed as documented ceiling):** trait-draw
+> shaping was attempted twice — triangular/bell first, then a variance-preserving
+> trapezoid (tails <0.05/>0.95 clipped 8%→1%, mid-band ~35%). Both broke 13
+> liveness pins suite-wide: at N=12 founders, **uniform draws are load-bearing** —
+> founder tail mass feeds every extreme-driven producer (fear contagion
+> 0.33→0.24, motivation context, violence window, prediction-error seeds).
+> Reverted; recorded as systemic debt in AGENTS.md §5 ("founder variance IS the
+> behavioral budget at small N") — realistic shaping requires a larger founding
+> population plus a coordinated re-anchor sweep. Cap-lift sub-item already done
+> by `4c4245d` (LOD tiers); wealth-uniform founding remains open (lives in hot
+> `population.rs`, shared with the Phase-4 item below).
+
 ### H6 — Real-birth path missing regulation init (small, mechanical)
 The P3-4 personality-driven emotion-regulation initialization was applied to the initial population and `build_replacement_newborn`, but **not** to the real birth path in `tick_birth_mechanics` (still `EmotionRegulationState::default()` → permanent Reappraisal bias in death-heavy worlds — the exact failure mode P3-4 documents).
 
@@ -163,11 +175,11 @@ Physiological override layer beneath utility AI: thirst/hunger above critical th
 ### Phase 4 — De-script the initial state
 1. Founding culture generated from world/scenario context (water-stressed worlds grow water myths; stable ones don't start with grievance memes). Memes/rituals/memory drawn from RNG + world parameters, registered as data-driven RON content with spec_lint coverage.
 2. Collective memory starts with only a founding myth derived from actual world gen; traumas must be earned by events.
-3. Rituals/propaganda emerge after institution formation ticks, not pre-seeded.
+3. Rituals/propaganda emerge after institution formation ticks, not pre-seeded. *(Propaganda half DONE — Iteration 263 `ab35af8` added an institution-owned runtime producer; ritual post-formation emergence still open, also in hot `population.rs`.)*
 4. Clan count derived from settlement clustering; variable per seed.
 
 ### Phase 5 — World variance
-Parametric village generation: meandering river course, site-layout grammar with jittered placement, terrain-quality fields, resource-richness multipliers, village scale tied to population cap raise (48 is a ceiling that freezes demography; lift with LOD tiers already in place). Every seed becomes a different village worth reading about.
+Parametric village generation: meandering river course, site-layout grammar with jittered placement, terrain-quality fields, resource-richness multipliers, village scale tied to population cap raise (48 is a ceiling that freezes demography; lift with LOD tiers already in place). Every seed becomes a different village worth reading about. *(Cap-lift sub-item DONE — `4c4245d`; remaining items owned by the neighbor session's variance arc, their Iter-257 landed houses/river/fertility jitter.)*
 
 ### Phase 6 — Observability UX *(make the emergence legible — the payoff layer)*
 1. Village chronicle: auto-generated annals from collective memory + provenance traces ("Year 2: the harvest failed; the Council's legitimacy cracked; Ana's faction marched"). The emergent-history product made human-readable.
