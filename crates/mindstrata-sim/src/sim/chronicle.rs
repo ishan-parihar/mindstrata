@@ -27,8 +27,11 @@ fn event_year(e: &SimEvent, ticks_per_year: u64) -> Option<u64> {
 
 /// Village annals: the emergent history made human-readable. One block per
 /// simulated year carrying that year's notable events (deaths, births,
-/// marriages, revolutions, feuds), plus any collective-memory entry the
-/// village recorded in it.
+/// marriages, revolutions, feuds), any collective-memory entry the village
+/// recorded in it, and its curated institutional decisions (policy
+/// enactments, poor-relief grants) surfaced from the provenance ledger
+/// (Iteration 265). Routine bookkeeping traces (taxes, wages) are
+/// deliberately not annal-worthy.
 pub fn render_chronicle(sim: &Simulation) -> String {
     let tpy = sim.demography_config.ticks_per_year.max(1);
     let total = sim.current_tick().as_u64();
@@ -49,6 +52,22 @@ pub fn render_chronicle(sim: &Simulation) -> String {
                 .entry(m.event_tick / tpy)
                 .or_default()
                 .push(m.description.clone());
+        }
+    }
+    // Iteration 265: curated decision-trace provenance by year. The trace
+    // vec is insertion-ordered (= tick order), so per-year phrase order is
+    // deterministic; identical phrases dedup so a repeated grant reads once.
+    let mut decisions_by_year: std::collections::BTreeMap<u64, Vec<String>> =
+        std::collections::BTreeMap::new();
+    for tr in sim.provenance.institutional_traces() {
+        let inst = tr.institution_name.to_lowercase();
+        let phrase = match tr.decision_kind.as_str() {
+            "policy_enacted" => Some(format!("the {inst} enacted a new policy")),
+            "poor_relief" => Some(format!("the {inst} granted relief to the destitute")),
+            _ => None,
+        };
+        if let Some(p) = phrase {
+            decisions_by_year.entry(tr.tick / tpy).or_default().push(p);
         }
     }
 
@@ -93,6 +112,12 @@ pub fn render_chronicle(sim: &Simulation) -> String {
             for m in memories {
                 lines.push(format!("the village remembers: {m}"));
             }
+        }
+        if let Some(decisions) = decisions_by_year.get(&year) {
+            let mut phrases: Vec<String> = decisions.clone();
+            phrases.sort();
+            phrases.dedup();
+            lines.append(&mut phrases);
         }
         if !lines.is_empty() {
             out.push_str(&format!("\nYear {}\n", year + 1));
@@ -299,6 +324,27 @@ mod tests {
         let b = render_chronicle(&sim);
         assert_eq!(a, b, "chronicle must be deterministic");
         assert!(a.contains("Village Chronicle"));
+    }
+
+    #[test]
+    fn chronicle_annals_surface_institutional_decisions() {
+        // Iteration 265: policy enactments from the provenance ledger become
+        // year lines; routine tax/wage traces stay out of the narrative.
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 2000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(2000);
+        let a = render_chronicle(&sim);
+        assert!(a.contains("enacted a new policy"), "{a}");
+        assert!(!a.contains("wage payment"), "wages are not annal-worthy");
+        assert_eq!(a, render_chronicle(&sim), "annals stay deterministic");
     }
 
     #[test]

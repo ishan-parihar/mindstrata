@@ -243,6 +243,13 @@ impl CausalProvenance {
         self.institutional.push(trace);
     }
 
+    /// Iteration 265: read access to every institutional trace (annals
+    /// rendering). Registry order == insertion order == tick order, so
+    /// consumers stay deterministic without sorting.
+    pub fn institutional_traces(&self) -> &[InstitutionalTrace] {
+        &self.institutional
+    }
+
     /// §19.5.J: Record a relationship change trace.
     pub fn record_relationship(&mut self, trace: RelationshipTrace) {
         self.relationships.push(trace);
