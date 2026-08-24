@@ -80,6 +80,16 @@ These rules exist because we repeatedly paid for violating them:
 - **RNG stream discipline**: birth-path constructors consume draws in field order;
   `Personality::inherit` consumes exactly one draw per trait to preserve alignment.
   Different range widths consume different byte counts — count-alignment ≠ byte-alignment.
+- **Founder variance IS the behavioral budget at small N (Iteration 263, audit
+  H5)**: reshaping founder trait draws away from U(0,1) starves every
+  extreme-driven producer. A triangular/bell draw killed the stress axis (max 0),
+  plasticity deltas (0.000), fear contagion, courtships, and faction formation;
+  even a variance-preserving trapezoid (tails <0.05/>0.95 clipped 8%→1%) broke 13
+  liveness pins (fear contagion 0.33→0.24, motivation context, violence window,
+  prediction-error seeds). **Rule:** uniform founder draws are load-bearing at
+  N=12; realistic distribution shaping requires a larger founding population AND
+  a coordinated re-anchor sweep across all extreme-driven producers. Recorded as
+  systemic debt — do not attempt piecemeal.
 
 ## 6. Rust Craft Standards (rust-best-practices handbook)
 
