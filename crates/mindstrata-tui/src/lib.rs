@@ -28,6 +28,7 @@ mod tests {
     //! consumed by the `mindstrata-tui` binary's event loop.
 
     use super::*;
+    use crate::render::{metric_series, MetricKey};
     use crossterm::event::KeyCode;
     use mindstrata_core::fixed::Fixed;
     use mindstrata_sim::culture::{
@@ -209,6 +210,87 @@ mod tests {
         assert!(rendered.contains("stress"));
         assert!(rendered.contains("families"));
         assert!(rendered.contains("samples 10"));
+    }
+
+    // ── DC-1 chart-library integration fixtures (task: session/render tests) ──
+
+    /// Deterministic fixture: `n` snapshots with a monotonic stress ramp and
+    /// flat other metrics, tick stride 100.
+    fn fixture_history(n: usize) -> Vec<mindstrata_sim::sim::MetricsSnapshot> {
+        (0..n)
+            .map(|t| {
+                let mut m = mindstrata_sim::sim::MetricsSnapshot::default();
+                m.tick = (t * 100) as u64;
+                m.avg_stress = t as f64 / n.max(1) as f64;
+                m.avg_health = 1.0 - t as f64 / n.max(1) as f64;
+                m.family_count = (t / 10) as u64;
+                m
+            })
+            .collect()
+    }
+
+    #[test]
+    fn metric_series_adapter_extracts_all_nine_keys() {
+        let history = fixture_history(30);
+        const KEYS: [MetricKey; 9] = [
+            MetricKey::Stress,
+            MetricKey::Health,
+            MetricKey::FearP90,
+            MetricKey::JoyP90,
+            MetricKey::Gini,
+            MetricKey::BestSkill,
+            MetricKey::Families,
+            MetricKey::TraitVariance,
+            MetricKey::MeanKinship,
+        ];
+        for key in KEYS {
+            let s = metric_series(&history, key);
+            assert_eq!(s.samples.len(), 30, "key {key:?}");
+        }
+        // Spot-check semantic mapping, not just lengths.
+        let stress = metric_series(&history, MetricKey::Stress);
+        assert!((stress.samples[29] - 29.0 / 30.0).abs() < 1e-12);
+        let fam = metric_series(&history, MetricKey::Families);
+        assert!((fam.samples[20] - 2.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn trends_lane_window_respects_sixty_sample_cap() {
+        // 120 samples > WINDOW 60: sparkline must render exactly 60 bars.
+        let history = fixture_history(120);
+        let rendered = render_metric_charts(&history);
+        let stress_row = rendered
+            .lines()
+            .find(|l| l.starts_with("stress"))
+            .expect("stress lane present");
+        let bars = stress_row
+            .chars()
+            .filter(|c| "▁▂▃▄▅▆▇█".contains(*c))
+            .count();
+        assert_eq!(bars, 60, "lane output: {stress_row}");
+        // Footer reports the full history, not the window.
+        assert!(rendered.contains("samples 120"));
+    }
+
+    #[test]
+    fn trends_rising_stress_renders_up_arrow_and_health_falls() {
+        let history = fixture_history(40);
+        let rendered = render_metric_charts(&history);
+        let stress_row = rendered.lines().find(|l| l.starts_with("stress")).unwrap();
+        assert!(stress_row.contains('↑'), "{stress_row}");
+        let health_row = rendered.lines().find(|l| l.starts_with("health")).unwrap();
+        assert!(health_row.contains('↓'), "{health_row}");
+    }
+
+    #[test]
+    fn line_chart_grid_dims_match_requested_width_height() {
+        let history = fixture_history(80);
+        let s = metric_series(&history, MetricKey::Stress);
+        let grid = charts::line_chart(&s, 40, 8);
+        assert_eq!(grid.lines().count(), 8);
+        for line in grid.lines() {
+            assert_eq!(line.chars().count(), 40);
+        }
     }
 
     #[test]

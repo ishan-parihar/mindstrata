@@ -1,11 +1,12 @@
 //! Pure rendering functions: world map, dashboards and inspectors.
-
+//!
 //! Mindstrata TUI — debug instrument for observing simulations.
 //!
 //! Provides ASCII world map, agent list, event log, and system dashboard,
 //! plus the interactive session state (view tabs, selection, command keys)
 //! consumed by the `mindstrata-tui` binary's event loop.
 
+use crate::charts;
 use mindstrata_core::event::SimEvent;
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::id::AgentId;
@@ -348,86 +349,38 @@ pub struct DashboardConfig {
 
 /// §17.1: Enhanced system dashboard with season, institutions, factions.
 /// Iteration 251: ASCII longitudinal charts over the metric history.
-///
-/// Each tracked series renders as a one-row block-character sparkline
-/// over the most recent `width` samples, scaled to its own observed
-/// range (bounded [0,1] series use that range directly). Deterministic,
-/// allocation-light, no external deps.
-fn sparkline(values: &[f64], lo: f64, hi: f64) -> String {
-    const BARS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
-    if values.is_empty() {
-        return String::new();
-    }
-    let span = (hi - lo).max(1e-9);
-    values
-        .iter()
-        .map(|v| {
-            let t = ((v - lo) / span).clamp(0.0, 1.0);
-            let idx = ((t * 7.0).round() as usize).min(7);
-            BARS[idx]
-        })
-        .collect()
-}
-
-fn series_chart(name: &str, values: &[f64], lo: f64, hi: f64, unit: &str) -> String {
-    if values.is_empty() {
-        return format!("{name:<14} (no history)");
-    }
-    let first = values[0];
-    let last = values[values.len() - 1];
-    let delta = last - first;
-    let arrow = if delta > 1e-6 {
-        "↑"
-    } else if delta < -1e-6 {
-        "↓"
-    } else {
-        "→"
-    };
-    format!(
-        "{name:<14} {spark} {arrow} {last:.3}{unit:>2} (was {first:.3})",
-        spark = sparkline(values, lo, hi),
-    )
-}
-
+/// DC-1: migrated to the charts component library (lane/sparkline over
+/// plain-data Series); sim types stop at the metric_series adapter.
+/// Legacy sparkline/series_chart helpers retired on migration (see
+/// docs/chart-component-api.md migration map).
 /// Longitudinal trends view: the village's vital signs over time.
 pub fn render_metric_charts(history: &[mindstrata_sim::sim::MetricsSnapshot]) -> String {
+    use crate::charts;
+    use crate::charts::Band;
     if history.is_empty() {
         return "No metric history yet — run the simulation.".into();
     }
     const WINDOW: usize = 60;
-    let tail = |pick: &dyn Fn(&mindstrata_sim::sim::MetricsSnapshot) -> f64| -> Vec<f64> {
-        let start = history.len().saturating_sub(WINDOW);
-        history[start..].iter().map(pick).collect()
-    };
     let mut out = String::from("── Village Trends (most recent 60 samples) ──\n");
-    // Bounded [0,1] series chart against their natural range.
-    type Pick = Box<dyn Fn(&mindstrata_sim::sim::MetricsSnapshot) -> f64>;
-    let bounded: Vec<(&str, Pick, &str)> = vec![
-        ("stress", Box::new(|m: &_| m.avg_stress), ""),
-        ("health", Box::new(|m: &_| m.avg_health), ""),
-        ("fear p90", Box::new(|m: &_| m.fear_p90), ""),
-        ("joy p90", Box::new(|m: &_| m.joy_p90), ""),
-        ("gini", Box::new(|m: &_| m.gini), ""),
-        ("best skill", Box::new(|m: &_| m.avg_best_skill), ""),
+    const KEYS: [(MetricKey, Band); 9] = [
+        (MetricKey::Stress, Band::UnitInterval),
+        (MetricKey::Health, Band::UnitInterval),
+        (MetricKey::FearP90, Band::UnitInterval),
+        (MetricKey::JoyP90, Band::UnitInterval),
+        (MetricKey::Gini, Band::UnitInterval),
+        (MetricKey::BestSkill, Band::UnitInterval),
+        (MetricKey::Families, Band::ObservedMax),
+        // Iteration 262: trait variance — heredity-stationarity monitor;
+        // variance of 0-1 traits tops out at 0.25, flat-at-zero = collapse.
+        (MetricKey::TraitVariance, Band::Fixed(0.0, 0.25)),
+        (MetricKey::MeanKinship, Band::Fixed(0.0, 0.5)),
     ];
-    for (name, picker, unit) in &bounded {
-        let v = tail(picker.as_ref());
-        out.push_str(&series_chart(name, &v, 0.0, 1.0, unit));
+    for (key, band) in &KEYS {
+        let mut s = metric_series(history, *key);
+        s.band = *band;
+        out.push_str(&charts::lane(&s, WINDOW));
         out.push('\n');
     }
-    // Unbounded count series scale to their own observed range.
-    let fam = tail(&|m: &mindstrata_sim::sim::MetricsSnapshot| m.family_count as f64);
-    let fam_hi = fam.iter().copied().fold(0.0f64, f64::max);
-    out.push_str(&series_chart("families", &fam, 0.0, fam_hi.max(1.0), ""));
-    out.push('\n');
-    // Iteration 262: trait variance — the heredity-stationarity monitor.
-    // Unbounded (variance of 0-1 traits tops out at 0.25) so scale to a
-    // fixed [0, 0.25] band: flat-at-zero would mean genetic collapse.
-    let tv = tail(&|m: &mindstrata_sim::sim::MetricsSnapshot| m.trait_variance);
-    out.push_str(&series_chart("trait var", &tv, 0.0, 0.25, ""));
-    let mk = tail(&|m: &mindstrata_sim::sim::MetricsSnapshot| m.mean_kinship);
-    out.push_str(&series_chart("kinship", &mk, 0.0, 0.5, ""));
-    out.push('\n');
     out.push_str(&format!(
         "samples {} · ticks {}..{}\n",
         history.len(),
@@ -435,6 +388,48 @@ pub fn render_metric_charts(history: &[mindstrata_sim::sim::MetricsSnapshot]) ->
         history[history.len() - 1].tick
     ));
     out
+}
+
+/// Semantic slot for a charted metric (never a raw sim field name).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MetricKey {
+    Stress,
+    Health,
+    FearP90,
+    JoyP90,
+    Gini,
+    BestSkill,
+    Families,
+    TraitVariance,
+    MeanKinship,
+}
+
+/// Adapter: sim metric history → chart-library [`charts::Series`].
+/// This is the ONLY place sim snapshot fields are named for charting.
+pub fn metric_series(
+    history: &[mindstrata_sim::sim::MetricsSnapshot],
+    key: MetricKey,
+) -> charts::Series {
+    use mindstrata_sim::sim::MetricsSnapshot;
+    type Pick = fn(&MetricsSnapshot) -> f64;
+    let (name, pick): (&'static str, Pick) = match key {
+        MetricKey::Stress => ("stress", |m| m.avg_stress),
+        MetricKey::Health => ("health", |m| m.avg_health),
+        MetricKey::FearP90 => ("fear p90", |m| m.fear_p90),
+        MetricKey::JoyP90 => ("joy p90", |m| m.joy_p90),
+        MetricKey::Gini => ("gini", |m| m.gini),
+        MetricKey::BestSkill => ("best skill", |m| m.avg_best_skill),
+        MetricKey::Families => ("families", |m| m.family_count as f64),
+        MetricKey::TraitVariance => ("trait var", |m| m.trait_variance),
+        MetricKey::MeanKinship => ("kinship", |m| m.mean_kinship),
+    };
+    charts::Series {
+        name,
+        unit: "",
+        // Bands are assigned by the view (KEYS table); neutral default here.
+        band: charts::Band::UnitInterval,
+        samples: history.iter().map(pick).collect(),
+    }
 }
 
 /// Iteration 261: the village chronicle as a TUI pane — the annals text
