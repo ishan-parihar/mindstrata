@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "description": "AP4 DC-1 golden replay custody registry — append-only. Rows record referee-input hashes at a verified-green HEAD; never edit history, add rows.",
+  "entries": [
+    {
+      "recorded_at": "2026-08-25",
+      "head_commit": "c071a3e",
+      "suite_evidence": "release lib suite 307 passed / 0 failed / 1 ignored verified at baseline commit 1ad76c4 (identical sim tree: wave-1 additions touch docs/scripts/vendor only, nothing wired into crates)",
+      "baselines": {
+        "golden/collapse/seed_42/baseline.json": "de7610462339fa8b2ef6fce8d4abb99e7f82db9320746fdfeb919f9d745d7bde",
+        "golden/riverford_minor/seed_42/baseline.json": "ad253a7941e689d2874642018c844ef9f27d82d72437bc3a3db1a6daf2be1750"
+      },
+      "note": "Replay output hashes are produced by golden_replay tests at run time against these baseline files; custody here covers the referee INPUTS so silent baseline edits are detectable."
+    }
+  ]
+}

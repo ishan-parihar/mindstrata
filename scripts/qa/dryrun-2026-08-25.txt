@@ -1,0 +1,20 @@
+Golden replay custody — dry-run ceremony record
+=================================================
+date: 2026-08-25
+head: c071a3e (tree adds uncommitted wave-2 docs/scripts only; sim crates untouched)
+
+Step 1 — referee-input hashes vs registry:
+  de7610462339fa8b2ef6fce8d4abb99e7f82db9320746fdfeb919f9d745d7bde  golden/collapse/seed_42/baseline.json
+  ad253a7941e689d2874642018c844ef9f27d82d72437bc3a3db1a6daf2be1750  golden/riverford_minor/seed_42/baseline.json
+  → MATCH scripts/qa/golden_registry.json entry[0].baselines ✓
+
+Step 2 — full release suite at this tree:
+  cargo test -p mindstrata-tests --lib --release
+  test result: ok. 307 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 163.85s
+  → GREEN ✓ (golden tests included; zero baseline regeneration)
+
+Step 3 — drift-bisect path: not exercised (no drift observed). Pristine-archive recipe
+  documented in golden-replay-custody.md step 2; precedent Iter-263 toolchain transition.
+
+Result: ceremony dry-run PASS. Registry row[0] head_commit c071a3e now cites suite
+evidence executed AT that commit.
