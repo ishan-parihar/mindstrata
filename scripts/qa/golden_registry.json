@@ -11,6 +11,16 @@
         "golden/riverford_minor/seed_42/baseline.json": "ad253a7941e689d2874642018c844ef9f27d82d72437bc3a3db1a6daf2be1750"
       },
       "note": "Replay output hashes are produced by golden_replay tests at run time against these baseline files; custody here covers the referee INPUTS so silent baseline edits are detectable."
+    },
+    {
+      "recorded_at": "2026-08-25",
+      "head_commit": "937d930",
+      "suite_evidence": "full release suite at this exact commit: 307 passed / 0 failed / 1 ignored (163.32s) after Arc-D verbatim move batch 1 (biology+health passes to systems/) — byte-identical, zero baseline regeneration",
+      "baselines": {
+        "golden/collapse/seed_42/baseline.json": "de7610462339fa8b2ef6fce8d4abb99e7f82db9320746fdfeb919f9d745d7bde",
+        "golden/riverford_minor/seed_42/baseline.json": "ad253a7941e689d2874642018c844ef9f27d82d72437bc3a3db1a6daf2be1750"
+      },
+      "note": "Post-move custody row: baseline hashes UNCHANGED vs entry[0], proving the structural move behaviorally neutral per AGENTS.md §7 rule 3."
     }
   ]
 }
