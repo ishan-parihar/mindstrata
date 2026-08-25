@@ -1,0 +1,10 @@
+[package]
+name = "mindstrata-development"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+mindstrata-core = { path = "../mindstrata-core" }
+
+[lints.rust]
+missing_docs = "deny"

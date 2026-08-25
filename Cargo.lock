@@ -805,6 +805,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "mindstrata-development"
+version = "0.1.0"
+dependencies = [
+ "mindstrata-core",
+]
+
+[[package]]
 name = "mindstrata-institutions"
 version = "0.1.0"
 dependencies = [

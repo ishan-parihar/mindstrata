@@ -17,7 +17,7 @@ python3 vendor/afa/extract.py /home/ishanp/Documents/knowledge-base/KosmOS/_Onto
 |---|---|---|---|
 | `ladder.csv` | `_Ontology/stages.md` §"The Canonical 17-Stage Ladder" markdown table | 17 stages (+header = 18 lines) | row count equals the canonical table's 17 stage rows |
 | `lines.csv` | `_Ontology/lines/*.md` YAML frontmatter (`line`, `kind`, `quadrant`, `status`, `matrix_cells_required`, `matrix_depth`) | 49 lines (+header = 50 lines) | equals count of non-underscore `.md` files in `lines/` carrying a `line:` frontmatter key |
-| `couplings.csv` | `_Ontology/stages/by-line/<line>/<NN-slug>/_index.md` frontmatter per cell | 851 couplings (+header = 852 lines) | source has 852 stage-cell directories; 851 carry `_index.md` — the single gap is `religion-statistical/12-formal-landmark` (directory exists, no `_index.md` in vault), so it is ABSENT here rather than invented |
+| `couplings.csv` | `_Ontology/stages/by-line/<line>/<NN-slug>/_index.md` frontmatter per cell | 851 couplings (+header = 852 lines) | source has 852 stage-cell directories; 851 carry `_index.md`. The single file-less directory is `religion-statistical/12-formal-landmark` (only `_tree.yaml`), but that line ALSO has a legacy duplicate cell `12-formal-mind` providing stage-12 data — so the coupling table is complete for that line despite the gap; no row was invented |
 | `cells/<line>/<NN>-<slug>.md` | verbatim copies of each cell `_index.md` | 851 files | one per couplings.csv row |
 
 Note: the AP3 doctrine speaks of **19 curated lines**; the vault carries **49 line
