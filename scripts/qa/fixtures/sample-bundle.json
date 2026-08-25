@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "phase": 1,
+  "verdict": "pass",
+  "summary": "Sample phase bundle demonstrating the v1 evidence shape for validator fixtures.",
+  "produced_at": "2026-08-25T00:00:00Z",
+  "producer": "qa-fixture",
+  "gates": [
+    {
+      "type": "suite",
+      "status": "pass",
+      "summary": "Release lib suite green: 307 passed, 0 failed, 1 ignored.",
+      "artifacts": ["fixtures/sample-run.txt"]
+    },
+    {
+      "type": "golden-policy",
+      "status": "pass",
+      "summary": "Golden hashes match registry entries.",
+      "artifacts": []
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "scripts/qa/fixtures/sample-run.txt",
+      "sha256": "6f8ef0c00d5f60b7699428fde8500ce72c7e7e81f836d3a52f47060afbcd70c4"
+    }
+  ]
+}

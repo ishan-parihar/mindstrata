@@ -1,0 +1,18 @@
+stage,slug,canonical_name,altitude,identity_band,mhc_order,mhc_name,kegan
+1,prehension,Prehension,infrared,Pre-egocentric,0,Calculatory,—
+2,irritability,Irritability,infrared,Pre-egocentric,1,Automatic,—
+3,basic-impulse,Basic Impulse,magenta,Egocentric,2,Sensory & Motor,0→1
+4,emotion-complex,Emotion Complex,red,Egocentric,3,Circular Sensory-Motor,1
+5,sensory-motor,Sensory-motor,red,Egocentric,4,Sensory-motor,1→2
+6,nominal-rule,Nominal & Rule,amber,Ethnocentric,5,Nominal,2
+7,sentential-faith,Sentential & Faith,amber,Ethnocentric,6,Sentential,2
+8,preoperational,Preoperational,amber,Ethnocentric,7,Preoperational,2→3
+9,primary-modern,Primary / Modern,amber,Ethnocentric,8,Primary,3
+10,concrete-peak,Concrete Peak,amber,Ethnocentric,9,Concrete,3
+11,abstract-emerge,Abstract Emerge,orange,Ethnocentric→Worldcentric,10,Abstract,3→4
+12,formal-landmark,Formal Landmark,orange,Worldcentric emerging,11,Formal,4
+13,systematic-green,Systematic Green,green,Worldcentric (Pluralistic),12,Systematic,4
+14,metasystematic-teal,Metasystematic Teal,teal,Worldcentric mature,13,Metasystematic,4→5
+15,paradigmatic-turq,Paradigmatic Turquoise,turquoise,Worldcentric stabilized,14,Paradigmatic,5
+16,cross-paradigmatic,Cross-paradigmatic,indigo,Kosmocentric,15,Cross-paradigmatic,5
+17,meta-cross-violet,Meta-cross Violet,violet,Unity/Nondual,16,Meta-cross-paradigmatic,5+
