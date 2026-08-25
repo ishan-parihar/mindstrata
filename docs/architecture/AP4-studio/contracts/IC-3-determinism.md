@@ -4,7 +4,7 @@
 provider: PLATFORM
 consumer: ALL
 owners: [SIM, PLATFORM]
-frozen_at: groundwork-c071a3e (ratifying commit stamps final sha per follow-up-stamp mechanism)
+frozen_at: frozen_at commit 80e1a3f (groundwork c071a3e)
 version: 1.0.0
 status: RATIFIED-P0
 change_orders: []
