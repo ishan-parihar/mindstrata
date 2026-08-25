@@ -99,12 +99,17 @@ PLATFORM@5&9, QA@5&8. Beat artifact = metrics JSON + branch state note in charte
 
 ## Status tables (PROD updates)
 
+Execution note (2026-08-25): DC-1 executes via architect-driven task batches with
+oversight review; per-task completion stamps in .swarm/plan.json remain blocked by the
+documented Stage-A environment defect (see session memory #13), so progress is tracked
+here + git. Wave-1/2 of the plan's phase 1 landed through commit b56164a.
+
 | Dept | Ladder | Done | Current phase | Beats |
 |---|---|---|---|---|
-| SIM | 14 | 0 | — | — |
-| STORY | 13 | 0 | — | — |
-| CLIENT | 24 | 0 | — | — |
-| TOOLS | 22 | 0 | — | — |
-| QA | 10 | 0 | — | — |
-| DESIGN | 12 | 0 | — | — |
-| PLATFORM | 11 | 0 | — | — |
+| SIM | 14 | 1 (Arc-D prep + move batch 1 golden-proven) | P1 | — |
+| STORY | 13 | 1 (vendor extracts @sha868b2239) | P1 | — |
+| CLIENT | 24 | 3 (chart API note, component library, integration migration) | P1 | — |
+| TOOLS | 22 | 3 (probe generator, bench index, afa codegen idempotent) | P1 | — |
+| QA | 10 | 2 (evidence schema+validator, golden custody dry-run PASS) | P1 | — |
+| DESIGN | 12 | 2 (canon inventory, balance skeletons) | P1 | — |
+| PLATFORM | 11 | 3 (IC-3 ratified v1.0.0 @80e1a3f, RNG census, stamp mechanism) | P1 | — |
