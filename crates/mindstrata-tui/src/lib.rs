@@ -4,6 +4,7 @@
 //! ([`View`], [`UiState`]) in [`session`]. Glob re-exports preserve the
 //! original single-module API.
 
+pub mod charts;
 mod render;
 mod session;
 
