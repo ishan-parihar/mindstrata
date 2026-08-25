@@ -1,9 +1,13 @@
 //! Tick pass 0: biological substrate update.
+//! Arc-D verbatim move from sim/pass_biology.rs (golden-referee pure refactor).
 
-use super::{ActionKind, AgentBundle, AgentId, Fixed, Simulation, HORMONAL_TRACE_THRESHOLD};
+use crate::actions::ActionKind;
+use crate::sim::{AgentBundle, Simulation, HORMONAL_TRACE_THRESHOLD};
+use mindstrata_core::fixed::Fixed;
+use mindstrata_core::id::AgentId;
 
 impl Simulation {
-    pub(super) fn tick_biology_pass(
+    pub(crate) fn tick_biology_pass(
         agents: &mut [AgentBundle],
         emotions: &[crate::person::DiscreteEmotions],
         params: &crate::parameters::SimParameters,

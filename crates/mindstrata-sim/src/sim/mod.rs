@@ -213,11 +213,11 @@ const FAMINE_GRAIN_DRAIN: Fixed = Fixed::from_raw(50); // 0.005/tick
 /// honest seasonal burden, not an epidemic. A Cold escalates to Fever at
 /// `FEVER_ESCALATION_RATE` per day (~17%/season) — untreated colds
 /// occasionally worsen.
-const COLD_SEASON_TEMP: f64 = 0.4;
+pub(crate) const COLD_SEASON_TEMP: f64 = 0.4;
 /// Per-day Cold contraction rate at the seasonal temperature floor.
-const COLD_SEASON_RATE: Fixed = Fixed::from_raw(100); // 0.01
+pub(crate) const COLD_SEASON_RATE: Fixed = Fixed::from_raw(100); // 0.01
 /// Per-day Cold→Fever escalation rate.
-const FEVER_ESCALATION_RATE: Fixed = Fixed::from_raw(20); // 0.002
+pub(crate) const FEVER_ESCALATION_RATE: Fixed = Fixed::from_raw(20); // 0.002
 /// §29 (Iteration 187): market price-trend consumption — a buyer facing a
 /// FALLING price holds out for a better deal (bids lower) and a buyer
 /// facing a RISING price pays up (scarcity urgency). Modifier = 1 + trend ×
@@ -328,7 +328,7 @@ const GROUP_SUPPRESSION_SCALE: Fixed = Fixed::from_raw(4000); // 0.4
 
 // ── SystemTrace provenance thresholds (§16.2) ─────────────────────
 /// Cortisol level above which we record Hormonal provenance (0.6).
-const HORMONAL_TRACE_THRESHOLD: Fixed = Fixed::from_raw(6000); // 0.6
+pub(crate) const HORMONAL_TRACE_THRESHOLD: Fixed = Fixed::from_raw(6000); // 0.6
 /// Social support below which we record Attachment provenance (0.3).
 const ATTACHMENT_LOW_SUPPORT_THRESHOLD: Fixed = Fixed::from_raw(3000); // 0.3
 /// Iteration 191: the active-comfort reduction is damped to ~1–2 days of
@@ -533,7 +533,8 @@ pub struct Simulation {
     /// §5.1 / Phase 5: Configurable simulation parameters.
     pub params: crate::parameters::SimParameters,
     clock: Clock,
-    rng: RngStreams,
+    // Arc-D: pub(crate) since systems/health.rs (verbatim-moved pass) draws via self.rng.
+    pub(crate) rng: RngStreams,
     pub world: World,
     pub agents: Vec<AgentBundle>,
     pub relationships: Vec<Relationship>,
@@ -690,11 +691,9 @@ mod memory_ops;
 mod norms_impl;
 mod pass_action;
 mod pass_appraisal;
-mod pass_biology;
 mod pass_cognitive;
 mod pass_decay;
 mod pass_ecology;
-mod pass_health;
 mod pass_scenario;
 mod pass_social;
 mod pass_weather;

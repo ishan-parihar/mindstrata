@@ -5,14 +5,15 @@
 //! proximity contagion with same-kind dedup, and the seasonal Cold/Fever
 //! vector, unchanged.
 
-use super::{
-    health, Fixed, RngStream, Simulation, COLD_SEASON_RATE, COLD_SEASON_TEMP, FEVER_ESCALATION_RATE,
-};
+use crate::health;
 use crate::scheduler::TickPhases;
+use crate::sim::{Simulation, COLD_SEASON_RATE, COLD_SEASON_TEMP, FEVER_ESCALATION_RATE};
+use mindstrata_core::fixed::Fixed;
+use mindstrata_core::rng::RngStream;
 use rand::Rng;
 
 impl Simulation {
-    pub(super) fn health_disease_pass(&mut self, tick_u64: u64, phases: TickPhases) {
+    pub(crate) fn health_disease_pass(&mut self, tick_u64: u64, phases: TickPhases) {
         // ── 17. Health: disease effects on agents ──
         {
             let n = self.agents.len();
