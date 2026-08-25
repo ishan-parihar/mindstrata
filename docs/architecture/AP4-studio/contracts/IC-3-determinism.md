@@ -4,9 +4,9 @@
 provider: PLATFORM
 consumer: ALL
 owners: [SIM, PLATFORM]
-frozen_at: PENDING-P0 (draft below freezes as-is unless amended at P0)
-version: 1.0.0-draft
-status: DRAFT
+frozen_at: groundwork-c071a3e (ratifying commit stamps final sha per follow-up-stamp mechanism)
+version: 1.0.0
+status: RATIFIED-P0
 change_orders: []
 ```
 
@@ -93,9 +93,49 @@ property golden replay certifies and every department depends on.
    pristine-archive before pins are touched.
 6. Release-mode suite green (`scripts/gate --full` for behavioral folds).
 
-<!-- TODO(follow-up audit): per-site RNG draw inventory + pass-purity sweep completes the
-     enforcement detail for Rules 2 and 4 (plan task 1.2); findings attach to this file's
-     working notes until ratification stamps frozen_at. -->
+## Working notes — RNG draw-site inventory & pass-purity audit (task-complete)
+
+Stream registry (`crates/mindstrata-core/src/rng.rs:17–76`): six ChaCha8 streams
+`World/Behavior/Social/Economy/Ecology/Narrative`, master-seed offsets `+1,+3,+4,+5,+6,+7`;
+streams are **not serialized** — replay always re-seeds from the master seed, so save
+artifacts must never carry stream state.
+
+Draw-site inventory across sim + social + world crates (verified by grep at audit time):
+
+| Stream | Sites |
+|---|---|
+| `World` | `crates/mindstrata-world/src/world_gen.rs:25` only (init-time generation) |
+| `Behavior` | actions/mod.rs:647; core.rs:309–310 (spatial wander pair); memory_ops.rs:211 (rehearse); norms_impl.rs:176; pass_scenario.rs:133,188; social_cluster.rs:405 |
+| `Social` | core.rs:457,542; clans.rs:436; marriage.rs:141; legal_impl.rs:121; births_deaths.rs:413; pass_health.rs:125,174,182; social_cluster.rs:259,332,644,719,744,815; norms_impl.rs:56; **mindstrata-social** social/interaction.rs:192,222,548 (reached from tick via pass_social.rs:202–213 handing `ctx.rng` to `system_social_interactions`) |
+| `Economy` | diplomacy_impl.rs:24 |
+| `Ecology` | pass_weather.rs:23 (season advance) |
+| `Narrative` | institutions_impl.rs:934 |
+
+Documented exceptions to the stream-per-subsystem rule — four ad-hoc ChaCha instances
+plus the birth-path child RNG, all replay-stable by construction:
+
+1. **Birth-path child RNG** (`sim/births_deaths.rs:~29`, replacement-newborn path; the
+   newborn path at :576–618 seeds per-child) constructs its own ChaCha instance seeded
+   `config.seed + tick + child_idx` rather than drawing from a registered stream —
+   deliberate isolation so birth-order changes cannot shift other subsystems.
+2. **Ideology inheritance RNG** (`births_deaths.rs:153` and `:730`):
+   `ChaCha8Rng::seed_from_u64(seed ^ tick.wrapping_mul(0xA1) ^ idx)` — code-commented as
+   deliberate derived streams for ideo inheritance on household death / newborn paths.
+3. **Population seeding RNG** (`sim/population.rs:362`): `populate_rng` seeded
+   `config.seed.wrapping_add(1000)` — founder generation only.
+4. **Cross-stream borrowings**: social_cluster.rs:405 and norms_impl.rs:176 draw
+   `Behavior` from social-context code. Legal (any site may use any stream) but each is
+   pinned here as intentional.
+
+New-site rule remains: append at the target stream's end with an order/count comment;
+census above is the baseline any future append is measured against.
+
+Pass purity spot-check: `tick_biology_pass` (`sim/pass_biology.rs:6–192`) contains zero
+RNG draws — pure function of bodies/needs/emotions/weather/params. The remaining passes
+consume `ctx.rng` strictly at their fixed position in the core.rs sequence (:171–270),
+which preserves byte-identical replay.
+
+No ordering violations found at audit time.
 
 ## Tests guarding this contract
 
@@ -108,3 +148,4 @@ property golden replay certifies and every department depends on.
 |---|---|---|
 | 1.0.0-draft | initial from AP3 doctrine §2 + AGENTS.md §5 | P0 pending |
 | 1.0.0-draft | grounding evidence added: Fixed API, thermal shadow precedent, RNG law sites, mem::take trap narrative; enforcement checklist; owners SIM+PLATFORM | P0 pending |
+| 1.0.0 | RNG draw-site census (six streams, four ad-hoc ChaCha exceptions + birth-path isolation, biology-pass purity pin), pass-purity audit complete → ratified for DC-1 at the P0 window; frozen against groundwork c071a3e, ratifying commit sha stamped on top | P0 window |
