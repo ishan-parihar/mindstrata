@@ -23,6 +23,13 @@ impl StageCoord {
         (1..=17).contains(&stage).then_some(Self(stage))
     }
 
+    /// Crate-internal constructor for pre-clamped indices; callers within
+    /// this crate must guarantee 1..=17 before calling.
+    pub(crate) const fn new_clamped(stage: u8) -> Self {
+        debug_assert!(stage >= 1 && stage <= 17);
+        Self(stage)
+    }
+
     /// Raw index (1-based).
     #[must_use]
     pub const fn get(self) -> u8 {
