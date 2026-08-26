@@ -303,6 +303,11 @@ impl Simulation {
                             somatic_marker: agents[i]
                                 .interoception
                                 .somatic_risk_bias(needs[i].fatigue, agents[i].embodied.injury),
+                            // AP3 DC-1 (task 3.4): development gating —
+                            // fulfillment thresholds via needs bands.
+                            // Zero at neutral (task 3.1 newborn/3.2 virgin)
+                            // so goldens stay byte-identical until field moves.
+                            development: &agents[i].development,
                         },
                         ctx.rng,
                     )
