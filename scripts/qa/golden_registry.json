@@ -44,6 +44,17 @@
         "identity_law": "zero-at-zero bit-identity pinned at dynamics level; quantum guard floors phantom admissions"
       },
       "note": "SECOND CONTRACT FREEZE (WP-D): pure field engine API locked before any person-side wiring (task 3.1). Downstream consumers quote this row."
+    },
+    {
+      "recorded_at": "2026-08-26",
+      "head_commit": "52a94f0",
+      "suite_evidence": "full release lib suite 307 passed / 0 failed / 1 ignored (233.59s); workspace fmt+clippy clean; zero golden regeneration",
+      "baselines": {
+        "golden/collapse/seed_42/baseline.json": "de7610462339fa8b2ef6fce8d4abb99e7f82db9320746fdfeb919f9d745d7bde",
+        "golden/riverford_minor/seed_42/baseline.json": "ad253a7941e689d2874642018c844ef9f27d82d72437bc3a3db1a6daf2be1750"
+      },
+      "ceremony_archive": "scripts/qa/custody-2026-08-26.txt",
+      "note": "Task 2.16 CUSTODY LIVE: full ceremony executed end-to-end on HEAD 52a94f0. Referee inputs byte-match entry[0]; suite green with zero drift; behavioral-fold work (3.x) unblocked."
     }
   ]
 }

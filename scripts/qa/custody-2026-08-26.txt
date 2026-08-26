@@ -1,0 +1,20 @@
+Golden Replay Custody Ceremony — LIVE execution (DC-1 task 2.16)
+Date: 2026-08-26
+HEAD at ceremony start: 52a94f0 (IC-1 freeze doc landing)
+
+Step 1 — Referee-input integrity:
+  golden/collapse/seed_42/baseline.json       de7610462339fa8b2ef6fce8d4abb99e7f82db9320746fdfeb919f9d745d7bde
+  golden/riverford_minor/seed_42/baseline.json ad253a7941e689d2874642018c844ef9f27d82d72437bc3a3db1a6daf2be1750
+  → Both UNCHANGED vs registry entry[0] (c071a3e) and entry[1] post-move row.
+
+Step 3 — Full release suite:
+  command: cargo test -p mindstrata-tests --lib --release
+  result:  307 passed / 0 failed / 1 ignored  (233.59s)
+  workspace fmt + clippy: clean (verified same day, pre-ceremony landings)
+
+Step 4 — Golden regeneration:
+  ZERO baseline regeneration required; all golden replay tests green against
+  untouched baseline files.
+
+Verdict: CUSTODY_LIVE — referee inputs verified, suite green, no drift,
+no bisect needed. Behavioral-fold work downstream (tasks 3.x) is unblocked.
