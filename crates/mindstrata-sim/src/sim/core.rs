@@ -615,6 +615,16 @@ impl Simulation {
             self.tick_birth_mechanics(tick_u64, tick);
         }
 
+        // ── AP3 DC-1 (task 3.2): daily development pass — consumes catalysts
+        // via frozen IC-1 types and pure field engine (zero-at-zero identity
+        // when window empty). Hooked after birth mechanics so all demographic
+        // events of the tick are visible, before kinship rebuild.
+        // Window is pre_tick_events captured at tick start (read-only slice).
+        crate::systems::development::system_development(
+            &mut self.agents,
+            &self.events[pre_tick_events..],
+        );
+
         // ── §6 + §10.6/§10.7: Kinship & Household daily update ──
         self.tick_kinship_household_daily(tick_u64, phases);
 

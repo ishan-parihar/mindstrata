@@ -49,6 +49,7 @@ impl<'a> SystemContext<'a> {
 
 // ── Arc-D verbatim-moved passes (golden-referee pure refactor) ──────────
 pub(crate) mod biology;
+pub mod development;
 pub(crate) mod health;
 
 // ── Need decay system ────────────────────────────────────────────────────
