@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 mindstrata-core = { path = "../mindstrata-core" }
+serde = { workspace = true }
 
 [lints.rust]
 missing_docs = "deny"

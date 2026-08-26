@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 mindstrata-core = { workspace = true }
 mindstrata-person = { workspace = true }
+mindstrata-development = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }

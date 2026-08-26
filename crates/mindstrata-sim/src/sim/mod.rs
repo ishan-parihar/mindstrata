@@ -518,6 +518,15 @@ pub struct AgentBundle {
     /// actually moves with ritual/scandal events.
     #[serde(default)]
     pub legitimacy_field: crate::noosphere::LegitimacyField,
+    /// AP3 DC-1 (task 3.1): attractor-field state — per-line altitude
+    /// shadows plus the ratified 4-fold pathology field. Inert until the
+    /// development pass consumes it (task 3.2); zero-at-zero law keeps
+    /// goldens byte-identical pre-consumption.
+    /// `#[serde(default)]` + the SNAPSHOT_VERSION bump follow the bundle-
+    /// field law (postcard does no default-fill; v12 saves load with an
+    /// empty inert field).
+    #[serde(default)]
+    pub development: crate::psychology::DevelopmentFieldState,
 }
 
 /// §4.2: Skill levels that improve through repeated practice.

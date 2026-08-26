@@ -810,6 +810,7 @@ name = "mindstrata-development"
 version = "0.1.0"
 dependencies = [
  "mindstrata-core",
+ "serde",
 ]
 
 [[package]]
@@ -837,6 +838,7 @@ name = "mindstrata-psych"
 version = "0.1.0"
 dependencies = [
  "mindstrata-core",
+ "mindstrata-development",
  "mindstrata-person",
  "rand",
  "rand_chacha",
@@ -859,6 +861,7 @@ name = "mindstrata-sim"
 version = "0.1.0"
 dependencies = [
  "mindstrata-core",
+ "mindstrata-development",
  "mindstrata-institutions",
  "mindstrata-person",
  "mindstrata-psych",

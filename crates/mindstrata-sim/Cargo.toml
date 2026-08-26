@@ -7,6 +7,7 @@ license.workspace = true
 
 [dependencies]
 mindstrata-core = { workspace = true }
+mindstrata-development = { workspace = true }
 mindstrata-person = { workspace = true }
 mindstrata-psych = { workspace = true }
 mindstrata-institutions = { workspace = true }

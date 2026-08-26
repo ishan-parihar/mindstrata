@@ -170,6 +170,11 @@ impl Simulation {
                 learning_aptitude: Fixed::from_f64(0.6),
                 ..crate::culture::education::EducationState::default()
             },
+            // AP3 DC-1 (task 3.1): newborns start fully neutral — heredity
+            // of altitudes lands with the 3.x wiring.
+            development: crate::psychology::DevelopmentFieldState::neutral(
+                mindstrata_development::line::all_lines().count(),
+            ),
         }
     }
 
@@ -746,6 +751,11 @@ impl Simulation {
                         learning_aptitude: Fixed::from_f64(0.6),
                         ..crate::culture::education::EducationState::default()
                     },
+                    // AP3 DC-1 (task 3.1): newborns start fully neutral —
+                    // altitude heredity lands with the 3.x wiring.
+                    development: crate::psychology::DevelopmentFieldState::neutral(
+                        mindstrata_development::line::all_lines().count(),
+                    ),
                 });
                 // §10.2 (Iteration 92): keep the O(1) relationship_v2s matrix
                 // complete — the newborn must appear in every agent's vec and

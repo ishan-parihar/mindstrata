@@ -27,7 +27,7 @@ pub fn resonance_weight(catalyst_line: LineId, reading_line: LineId, magnitude: 
 }
 
 /// Pathology polarity axis of the ratified operator.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Polarity {
     /// Dark pole — contraction under deficit/threat.
     Dark,
@@ -36,7 +36,7 @@ pub enum Polarity {
 }
 
 /// Metabolism axis: how the polarity processes exposure.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Metabolism {
     /// Addiction — intensity GROWS with repeated exposure.
     Addiction,
@@ -46,7 +46,7 @@ pub enum Metabolism {
 }
 
 /// One quadrant's curve parameters (all CALIBRATION-PENDING(AP3)).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct OperatorParams {
     /// Per-tick growth fraction applied to remaining headroom.
     pub growth: f64,
@@ -69,7 +69,7 @@ impl OperatorParams {
 }
 
 /// One quadrant of a person's pathology state.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct QuadrantState {
     /// Current intensity in [0, ceiling].
     pub intensity: f64,
@@ -113,7 +113,7 @@ impl QuadrantState {
 }
 
 /// The full 4-fold pathology state for one person.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PathologyField {
     /// Dark-addiction quadrant.
     pub dark_addiction: QuadrantState,
@@ -123,6 +123,12 @@ pub struct PathologyField {
     pub golden_addiction: QuadrantState,
     /// Golden-allergy quadrant.
     pub golden_allergy: QuadrantState,
+}
+
+impl Default for PathologyField {
+    fn default() -> Self {
+        Self::neutral()
+    }
 }
 
 impl PathologyField {

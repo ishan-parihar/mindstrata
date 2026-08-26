@@ -67,6 +67,7 @@ cast_possible_wrap = "allow"
 [workspace.dependencies]
 # Internal crates
 mindstrata-core = { path = "crates/mindstrata-core" }
+mindstrata-development = { path = "crates/mindstrata-development" }
 mindstrata-person = { path = "crates/mindstrata-person" }
 mindstrata-psych = { path = "crates/mindstrata-psych" }
 mindstrata-institutions = { path = "crates/mindstrata-institutions" }

@@ -582,6 +582,10 @@ impl Simulation {
                     teaching_patience: Fixed::from_f64(0.5),
                     ..crate::culture::education::EducationState::default()
                 },
+                // AP3 DC-1 (task 3.1): placeholder neutral field; the founder
+                // endowment is drawn in the post-loop pass below, at the very
+                // end of the populate draw sequence (order contract).
+                development: crate::psychology::DevelopmentFieldState::neutral(0),
             });
         }
 
@@ -606,6 +610,22 @@ impl Simulation {
                     });
                 }
             }
+        }
+
+        // ── AP3 DC-1 (task 3.1): founder development-field endowment ──
+        // Draw-order contract (AGENTS.md §5 RNG discipline): appended at the
+        // VERY END of the populate sequence — after every draw above — one
+        // U(0,1) per registered line in stable registry order, per agent in
+        // index order. The local populate generator is dropped at function
+        // exit (never shared with the tick loop), so no pre-existing draw
+        // sequence moves and goldens stay byte-identical until first
+        // consumption by the development pass (task 3.2).
+        let line_count = mindstrata_development::line::all_lines().count();
+        for agent in &mut self.agents {
+            agent.development = crate::psychology::DevelopmentFieldState::founder_drawn(
+                &mut populate_rng,
+                line_count,
+            );
         }
 
         // Architecture-plan-2 §10.2: Initialize RelationshipV2 for each directed pair.
