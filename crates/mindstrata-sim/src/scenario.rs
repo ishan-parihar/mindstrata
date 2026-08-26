@@ -262,14 +262,80 @@ impl Scenario {
 
     /// Deserialize from RON format.
     pub fn from_ron(s: &str) -> Result<Self, String> {
-        ron::from_str(s).map_err(|e| e.to_string())
+        let s: Self = ron::from_str(s).map_err(|e| e.to_string())?;
+        s.validate()?;
+        Ok(s)
     }
 
-    /// Load a scenario from a RON file.
+    /// Serialize to JSON (DC-1 scenario-editor interchange; serde field order
+    /// is declaration-stable so presets diff cleanly across versions).
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(self).unwrap_or_else(|_| format!("{self:#?}"))
+    }
+
+    /// Deserialize from JSON format.
+    pub fn from_json(s: &str) -> Result<Self, String> {
+        let s: Self = serde_json::from_str(s).map_err(|e| e.to_string())?;
+        s.validate()?;
+        Ok(s)
+    }
+
+    /// Structural validation gate applied by every loader.
+    ///
+    /// Catches the silent dead-producer class at load time: out-of-range
+    /// magnitudes truncate silently through Fixed, post-horizon shocks can
+    /// never fire (`shock_at` dispatches on exact tick equality), duplicate
+    /// shock ticks silently drop later entries, and over-cap populations get
+    /// clamped mid-run instead of rejected.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.ticks == 0 {
+            return Err("ticks must be positive".into());
+        }
+        if self.world_width == 0 || self.world_height == 0 {
+            return Err("world dimensions must be positive".into());
+        }
+        if self.num_agents == 0 {
+            return Err("num_agents must be positive".into());
+        }
+        if self.num_agents as usize > crate::population_cap::MAX_POPULATION {
+            return Err(format!(
+                "num_agents {} exceeds population cap {}",
+                self.num_agents,
+                crate::population_cap::MAX_POPULATION
+            ));
+        }
+        let mut seen: Vec<u64> = Vec::new();
+        for s in &self.shocks {
+            if s.at_tick >= self.ticks {
+                return Err(format!(
+                    "shock at tick {} can never fire (horizon is {})",
+                    s.at_tick, self.ticks
+                ));
+            }
+            if seen.contains(&s.at_tick) {
+                return Err(format!("duplicate shock tick {}", s.at_tick));
+            }
+            seen.push(s.at_tick);
+            if s.magnitude > Fixed::ONE || s.magnitude < Fixed::ZERO {
+                return Err(format!(
+                    "shock magnitude {} outside [0,1]",
+                    s.magnitude.to_f64()
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Load a scenario file, sniffing format by content:
+    /// leading `{` = JSON, otherwise RON.
     pub fn from_file(path: impl AsRef<std::path::Path>) -> Result<Self, String> {
         let content = std::fs::read_to_string(path.as_ref())
             .map_err(|e| format!("Failed to read {}: {}", path.as_ref().display(), e))?;
-        Self::from_ron(&content)
+        if content.trim_start().starts_with('{') {
+            Self::from_json(&content)
+        } else {
+            Self::from_ron(&content)
+        }
     }
 }
 
@@ -310,5 +376,59 @@ mod tests {
         assert!(calm.shock_at(200).is_none(), "calm must not shock at 200");
         assert!(calm.shock_at(500).is_none(), "calm must not shock at 500");
         assert!(calm.shock_at(4320).is_none(), "calm must not shock at 4320");
+    }
+
+    // ── DC-1 scenario editor: JSON interchange + validation gate ──
+
+    #[test]
+    fn json_roundtrip_preserves_shocks() {
+        let scenario = Scenario::collapse();
+        let json = scenario.to_json();
+        let back = Scenario::from_json(&json).expect("valid preset round-trips");
+        assert_eq!(back.name, "Collapse");
+        assert_eq!(back.shocks.len(), 4);
+        assert_eq!(back.shocks[3].kind, ShockKind::Pestilence);
+    }
+
+    #[test]
+    fn validate_rejects_post_horizon_and_duplicate_shocks() {
+        let mut s = Scenario::riverford();
+        s.shocks.push(Shock {
+            at_tick: s.ticks + 5,
+            kind: ShockKind::Drought,
+            magnitude: Fixed::from_f64(0.2),
+        });
+        assert!(s.validate().is_err(), "post-horizon shock must reject");
+
+        let mut s = Scenario::riverford();
+        s.shocks.push(Shock {
+            at_tick: 200,
+            kind: ShockKind::Famine,
+            magnitude: Fixed::from_f64(0.2),
+        });
+        assert!(s.validate().is_err(), "duplicate tick must reject");
+    }
+
+    #[test]
+    fn validate_rejects_out_of_range_magnitude_and_population() {
+        let mut s = Scenario::riverford();
+        s.shocks[0].magnitude = Fixed::from_f64(1.5);
+        assert!(s.validate().is_err(), "magnitude >1 must reject");
+
+        let mut s = Scenario::riverford();
+        s.num_agents = crate::population_cap::MAX_POPULATION as u32 + 1;
+        assert!(s.validate().is_err(), "over-cap population must reject");
+        s.num_agents = 0;
+        assert!(s.validate().is_err(), "zero population must reject");
+    }
+
+    #[test]
+    fn from_file_sniffs_json_by_leading_brace() {
+        let dir = std::env::temp_dir();
+        let path = dir.join("dc1_scenario_sniff_test.json");
+        std::fs::write(&path, Scenario::drought().to_json()).expect("write preset");
+        let loaded = Scenario::from_file(&path).expect("json preset loads via sniffing");
+        assert_eq!(loaded.name, "Drought");
+        std::fs::remove_file(&path).ok();
     }
 }
