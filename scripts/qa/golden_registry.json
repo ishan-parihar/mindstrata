@@ -33,6 +33,17 @@
         "in_code_pin": "crates/mindstrata-development/src/canon_gen.rs CANON_TABLES_SHA256"
       },
       "note": "FR-022 custody row for the WP-A contract freeze: vendored canon tables pinned byte-level in-code and mirrored here."
+    },
+    {
+      "recorded_at": "2026-08-25",
+      "head_commit": "WP-D freeze commit (this landing)",
+      "suite_evidence": "mindstrata-development crate tests 35/35 under deny(missing_docs); workspace fmt+clippy clean",
+      "engine_freeze": {
+        "modules": ["stage", "line", "field", "dynamics", "lambda"],
+        "api_surface": "StageCoord/Altitude; LineId/Scope/DepthStatus/StageLinesMap; LineReading/dominant_rung/band_progress/place/field_coverage; resonance_weight/QuadrantState/PathologyField; Gate/admit/admit_quantized",
+        "identity_law": "zero-at-zero bit-identity pinned at dynamics level; quantum guard floors phantom admissions"
+      },
+      "note": "SECOND CONTRACT FREEZE (WP-D): pure field engine API locked before any person-side wiring (task 3.1). Downstream consumers quote this row."
     }
   ]
 }
