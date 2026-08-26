@@ -679,6 +679,7 @@ pub use snapshot_metrics::{AgentSummary, MetricsSnapshot};
 
 mod api;
 mod births_deaths;
+pub mod catalyst_observers;
 pub mod chronicle;
 mod clans;
 mod core;
