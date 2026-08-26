@@ -97,10 +97,14 @@ fn skill_milestone_crossed(before: Fixed, after: Fixed) -> bool {
 /// quantized sequence saturates at ≈0.988.
 ///
 /// ```rust
+/// use mindstrata_core::fixed::Fixed;
 /// use mindstrata_sim::sim::{skill_gain_next, SKILL_GAIN_PER_TICK};
-/// assert_eq!(skill_gain_next(mindstrata_sim::sim::Fixed::ZERO), SKILL_GAIN_PER_TICK);
-/// assert!(skill_gain_next(mindstrata_sim::sim::Fixed::from_f64(0.9))
-///     < skill_gain_next(mindstrata_sim::sim::Fixed::HALF));
+/// assert_eq!(skill_gain_next(Fixed::ZERO), SKILL_GAIN_PER_TICK);
+/// // Gain shrinks as headroom closes: higher starting proficiency,
+/// // smaller next-tick increment — mastery asymptotes below the clamp.
+/// assert!(skill_gain_next(Fixed::from_f64(0.9))
+///     > skill_gain_next(Fixed::HALF));
+/// assert!(skill_gain_next(Fixed::from_f64(0.9)) < Fixed::ONE);
 /// ```
 pub fn skill_gain_next(before: Fixed) -> Fixed {
     let b = before.to_f64();

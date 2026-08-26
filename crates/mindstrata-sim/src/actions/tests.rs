@@ -1,8 +1,13 @@
-use super::*;
+use super::{
+    apply_action_tick, compute_utility, noise_amplitude, select_action, ActionKind,
+    DecisionContext, APPROACH_WANDER_BONUS, PERSISTENCE_NOISE_FLOOR,
+};
 use crate::person::{BodyState, IdentityKind, IdentityState, NeedState, Personality, Temperament};
 use crate::psychology::decision_policy::DecisionPolicy;
 use crate::psychology::motivation::MotiveCategory;
 use crate::psychology::neural_like::ActionValues;
+use mindstrata_core::fixed::Fixed;
+use mindstrata_core::rng::RngStreams;
 
 #[test]
 fn eat_reduces_hunger() {

@@ -1,6 +1,9 @@
 //! Command-channel unit tests.
 
-use super::*;
+use super::{command_goal_action, SimConfig, Simulation};
+use crate::actions::ActionKind;
+use crate::person::{Goal, GoalKind, GoalSource, NeedState};
+use mindstrata_core::fixed::Fixed;
 
 fn build_sim(n: u32) -> Simulation {
     let mut sim = Simulation::new(SimConfig {
