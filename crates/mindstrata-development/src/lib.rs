@@ -13,3 +13,5 @@
 
 pub mod canon;
 pub mod canon_gen;
+pub mod line;
+pub mod stage;

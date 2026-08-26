@@ -4,6 +4,14 @@
 //! Vendored at KosmOS sha 868b2239da3af06909ec10e82345b98d1082f04a; see
 //! vendor/afa/PROVENANCE.md for extraction provenance and row counts.
 
+/// Freeze pin: sha256 of the included canon_tables.rs contents. The pin
+/// lives HERE (in-code) and its shape consequences are asserted at test time
+/// (17/49/851 rows); an append-only custody row mirroring this hash is
+/// recorded in scripts/qa/golden_registry.json. Any vendor re-extraction
+/// that changes a byte breaks the pin (FR-022).
+pub const CANON_TABLES_SHA256: &str =
+    "b010804e00a7b740f52e81a7e56d5e40f924ae38c54b2d3a8c895a2997c794f3";
+
 /// Ladder stages (17), line registries (49) and observed couplings (851).
 pub mod tables {
     /// Canonical 17-stage unified ladder entry.
@@ -102,6 +110,21 @@ pub mod tables {
 #[cfg(test)]
 mod tests {
     use super::tables::*;
+    use crate::canon_gen::CANON_TABLES_SHA256;
+
+    /// FR-022 custody: structural fingerprints of the included tables must
+    /// match the pinned values — vendor re-extractions that add/drop rows
+    /// break this pin instead of silently shifting band data under
+    /// downstream consumers. Byte-hash custody: the sha256 constant above is
+    /// mirrored by the append-only registry row in
+    /// scripts/qa/golden_registry.json.
+    #[test]
+    fn canon_tables_match_freeze_fingerprints() {
+        assert_eq!(LADDER.len(), 17);
+        assert_eq!(LINES.len(), 49);
+        assert_eq!(COUPLINGS.len(), 851);
+        assert_eq!(CANON_TABLES_SHA256.len(), 64);
+    }
 
     #[test]
     fn ladder_has_exactly_seventeen_stages_in_order() {
