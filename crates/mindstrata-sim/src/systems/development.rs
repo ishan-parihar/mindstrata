@@ -12,7 +12,7 @@
 use mindstrata_core::event::SimEvent;
 use mindstrata_core::id::AgentId;
 use mindstrata_development::catalyst::{kind_drive_map, CatalystKind};
-use mindstrata_development::dynamics::{Metabolism, OperatorParams};
+use mindstrata_development::dynamics::{Metabolism, OperatorParams, Polarity};
 use mindstrata_development::lambda::Gate;
 
 use crate::sim::AgentBundle;
@@ -154,12 +154,33 @@ pub fn system_development(agents: &mut [AgentBundle], events: &[SimEvent]) {
         let alt = &mut agents[idx].development.altitudes[line_idx];
         *alt = (*alt + uptake).clamp(0.0, 1.0);
 
-        // ── Pathology update (v1 uniform routing) ────────────────────────
-        // All pressures currently route to Dark Addiction; per-drive fan-out
-        // deferred to change-order (CALIBRATION-PENDING). Identity at zero.
-        let q = &agents[idx].development.pathology.dark_addiction;
-        let stepped = q.step(Metabolism::Addiction, admitted, &params);
-        agents[idx].development.pathology.dark_addiction = stepped;
+        // ── Pathology update (v1 4-quadrant fan-out, SIM 12-13) ─────────
+        // Re-contract per AGENTS.md §4.4 / IC-5: the v1 single-quadrant pin
+        // (dark_addiction only) is the *old* contract; the canon-ratified
+        // 4-quadrant fan-out is the *new* contract. The measured mechanism is
+        // per-kind pressure routing per `pathology-curves.md`:
+        //   Threat        → Dark Addiction   (deficit fixation)
+        //   Transgression → Dark Allergy      (recoil from contradiction)
+        //   Bond          → Golden Addiction  (grasping the golden path)
+        //   Grief         → Golden Allergy    (refusal of opening)
+        // Zero-at-zero identity law holds per `QuadrantState::step`, so the
+        // empty-window and real-catalyst liveness pins stay green. Goldens
+        // for `snapshot_tests/*` regenerate under `IC-5 CO-2026-001`
+        // (CALIBRATION-PENDING(AP3) → RATIFIED v1.0.0).
+        let path = &mut agents[idx].development.pathology;
+        let (polarity, metabolism) = match kind {
+            CatalystKind::Threat => (Polarity::Dark, Metabolism::Addiction),
+            CatalystKind::Transgression => (Polarity::Dark, Metabolism::Allergy),
+            CatalystKind::Bond => (Polarity::Golden, Metabolism::Addiction),
+            CatalystKind::Grief => (Polarity::Golden, Metabolism::Allergy),
+        };
+        let slot = match (polarity, metabolism) {
+            (Polarity::Dark, Metabolism::Addiction) => &mut path.dark_addiction,
+            (Polarity::Dark, Metabolism::Allergy) => &mut path.dark_allergy,
+            (Polarity::Golden, Metabolism::Addiction) => &mut path.golden_addiction,
+            (Polarity::Golden, Metabolism::Allergy) => &mut path.golden_allergy,
+        };
+        *slot = slot.step(metabolism, admitted, &params);
     }
 }
 

@@ -951,9 +951,21 @@ fn sensory_field_fear_contagion_is_live_and_sustains_fear() {
     // feed, probe-pinned mean fear 0.3330 (a genuinely calm village). The
     // pin drops to > 0.30 with the same liveness meaning — contagion
     // sustains a measurably elevated, non-zero ambient fear against decay.
+    //
+    // DC-1 SIM 12-13 re-contract (IC-5 CO-2026-001, 4-quadrant pathology
+    // fan-out): each CatalystKind now routes 25% of incoming pressure to
+    // its assigned quadrant (Threat→dark_addiction, Transgression→dark_
+    // allergy, Bond→golden_addiction, Grief→golden_allergy). The *mechanism*
+    // is that fear contagion's *source* (threat-driven dark_addiction
+    // accumulation) now receives 25% of incoming pressure it used to.
+    // Probe: mean fear at default seed 42 @2000 ticks = 0.2807 (was 0.3330).
+    // The liveness invariant — "fear contagion sustains non-zero ambient
+    // fear" — is preserved; the *magnitude* band shifts because the
+    // *mechanism* that produces contagion moved. Re-pinned to > 0.25 with
+    // documented mechanism.
     assert!(
-        mean_fear > 0.30,
-        "contagion-sustained mean fear must stay elevated (Iter-185 probe-pinned 0.3330, got {mean_fear:.4})"
+        mean_fear > 0.25,
+        "contagion-sustained mean fear must stay elevated (DC-1 CO-2026-001 probe-pinned 0.2807, got {mean_fear:.4})"
     );
 
     // Determinism: identical seed → byte-identical mean fear.

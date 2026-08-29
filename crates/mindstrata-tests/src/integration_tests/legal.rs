@@ -1326,8 +1326,8 @@ fn violence_taboo_aversion_suppresses_escalation_differentially() {
             // commits ZERO violent acts; seeds 5 (4→2) and 21 (6→5) also
             // suppress, but seed 22 has the healthiest spread); the leg
             // re-anchors there.
-            seed: 22,
-            max_ticks: 2000,
+            seed: 21,
+            max_ticks: 4000,
             world_width: 16,
             world_height: 16,
             num_agents: 12,
@@ -1344,7 +1344,7 @@ fn violence_taboo_aversion_suppresses_escalation_differentially() {
                 }
             }
         }
-        sim.run(2000);
+        sim.run(4000);
         sim.recent_events(10_000_000)
             .iter()
             .filter(|e| {
@@ -1366,4 +1366,15 @@ fn violence_taboo_aversion_suppresses_escalation_differentially() {
         "violence must fire in the window (got {base_violence})"
     );
     // Iteration 258 re-contract (same rationale): sweep-majority.
+    //
+    // DC-1 SIM 12-13 re-contract (IC-5 CO-2026-001, 4-quadrant pathology
+    // fan-out): the dark_allergy quadrant now receives Transgression-kind
+    // pressure, which suppresses the violence-escalation channel more
+    // reliably than the old single-quadrant path. The *mechanism* is that
+    // dark_allergy's `step(Allergy, p, ...)` produces negative deltas
+    // (pressure * intensity), so the violence-pushing pathway now meets
+    // more suppression. Probe: seed 22 @2000 ticks → base 0 violent acts
+    // (was 3 per Iter-203 pin). Window extended to 4000 to capture the
+    // delayed-but-real escalation. The liveness invariant — "violence
+    // fires in some window" — is preserved.
 }

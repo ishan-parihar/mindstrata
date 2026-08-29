@@ -1012,7 +1012,7 @@ impl Simulation {
     ///   agents. Durations are in *days* (tick_all runs on the daily phase):
     ///   360 ≈ one year, so the §13.4 loop is observable for a full-year run
     ///   and expires afterward (institutions would relaunch; out of scope).
-    fn seed_initial_rituals_and_campaigns(&mut self) {
+    pub fn seed_initial_rituals_and_campaigns(&mut self) {
         use crate::culture::{PropagandaCampaign, PropagandaChannel, Ritual, RitualKind};
         let n = self.agents.len();
         // Campaign targets = everyone; propaganda touches affect only and
