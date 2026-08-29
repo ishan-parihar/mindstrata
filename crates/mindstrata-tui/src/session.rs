@@ -9,6 +9,26 @@
 use crossterm::event::KeyCode;
 use mindstrata_sim::person::GoalKind;
 
+/// Canonical keybind map for the interactive TUI (task 3.7).
+///
+/// Single source-of-truth for help text, footer hint, and `main.rs` doc
+/// comment so bound keys cannot drift. Every key in `handle_key` and
+/// `key_to_command` is listed; navigation pairs (↑/k, ↓/j) are explicit
+/// for consistency across all lanes (Dashboard/Agents/Inspector/Events/
+/// Map/Trends/Chronicle/Dossier).
+///
+/// ```text
+/// quit:      q / Esc / Ctrl+C  (Esc cancels `/` search first)
+/// run/pause: Space  toggle auto-run
+/// step:      n      one tick while paused
+/// views:     Tab / t cycle · v dossier
+/// select:    ↑ / k  prev  ·  ↓ / j  next  (wraps, clamped)
+/// find:      / open · Enter jump · Esc cancel · Backspace erase
+/// command:   w Work · e Eat · d Drink · r Rest · s Socialize · p Worship
+/// clear:     x      cancel directives on selected agent
+/// ```
+pub const KEYBIND_HELP: &str = "quit: q/Esc/Ctrl+C \u{00B7} run: Space \u{00B7} step: n \u{00B7} views: Tab/t/v \u{00B7} select: \u{2191}/k \u{2193}/j \u{00B7} find: / Enter Esc Backspace \u{00B7} command: w/e/d/r/s/p \u{00B7} clear: x";
+
 /// §5 (Iteration 155): The interactive-TUI view tabs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {

@@ -17,7 +17,9 @@ pub use render::{
     render_psychology_inspector, render_relationship_view, render_theology_dashboard,
     render_world_map, AgentMarker, DashboardConfig,
 };
-pub use session::{key_to_command, mark_selected_agent_row, SearchFailure, UiState, View};
+pub use session::{
+    key_to_command, mark_selected_agent_row, SearchFailure, UiState, View, KEYBIND_HELP,
+};
 
 #[cfg(test)]
 mod tests {
@@ -603,5 +605,54 @@ mod tests {
         assert!(out.contains("\"The well is poisoned\""), "{out}");
         assert!(out.contains("Symbolic nodes: 1   Edges: 0"), "{out}");
         assert!(out.contains("node #0 activation 0.300"), "{out}");
+    }
+
+    #[test]
+    fn keybind_help_documents_every_bound_key() {
+        // Task 3.7: the canonical map must list every key that handle_key
+        // and key_to_command actually bind, plus the navigation pairs — so
+        // the help text cannot drift from the code (the failure mode this
+        // task closes is a stale footer/doc comment after a new binding).
+        let help = crate::KEYBIND_HELP;
+        for token in [
+            "q",
+            "Esc",
+            "Space",
+            "n",
+            "Tab",
+            "v",
+            "w",
+            "e",
+            "d",
+            "r",
+            "s",
+            "p",
+            "x",
+            "/",
+            "Enter",
+            "Backspace",
+        ] {
+            assert!(
+                help.contains(token),
+                "KEYBIND_HELP missing {token:?}: {help}"
+            );
+        }
+        // Navigation pairs are explicit (both arrows and hj/kj).
+        assert!(
+            help.contains("\u{2191}") || help.contains("↑"),
+            "help must show ↑"
+        );
+        assert!(
+            help.contains("\u{2193}") || help.contains("↓"),
+            "help must show ↓"
+        );
+        assert!(
+            help.contains("/k") || help.contains("k"),
+            "help must show k"
+        );
+        assert!(
+            help.contains("/j") || help.contains("j"),
+            "help must show j"
+        );
     }
 }
