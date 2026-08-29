@@ -170,11 +170,21 @@ impl Simulation {
                 learning_aptitude: Fixed::from_f64(0.6),
                 ..crate::culture::education::EducationState::default()
             },
-            // AP3 DC-1 (task 3.1): newborns start fully neutral — heredity
-            // of altitudes lands with the 3.x wiring.
-            development: crate::psychology::DevelopmentFieldState::neutral(
-                mindstrata_development::line::all_lines().count(),
-            ),
+            // AP3 DC-1 (task 3.6): replacement heredity — sole-parent
+            // vertical transmission with one draw per line (stream
+            // discipline §5); pathology resets to neutral. Derived RNG
+            // with 0xB2 domain separation from the ideology 0xA1 stream
+            // so the two inheritances do not share draws.
+            development: {
+                let mut dev_rng = rand_chacha::ChaCha8Rng::seed_from_u64(
+                    self.config.seed ^ tick_u64.wrapping_mul(0xB2) ^ (idx as u64),
+                );
+                crate::psychology::DevelopmentFieldState::inherited(
+                    &self.agents[idx].development,
+                    None,
+                    &mut dev_rng,
+                )
+            },
         }
     }
 
@@ -751,11 +761,23 @@ impl Simulation {
                         learning_aptitude: Fixed::from_f64(0.6),
                         ..crate::culture::education::EducationState::default()
                     },
-                    // AP3 DC-1 (task 3.1): newborns start fully neutral —
-                    // altitude heredity lands with the 3.x wiring.
-                    development: crate::psychology::DevelopmentFieldState::neutral(
-                        mindstrata_development::line::all_lines().count(),
-                    ),
+                    // AP3 DC-1 (task 3.6): vertical transmission — blended
+                    // mid-parent altitudes plus per-line noise, one draw per
+                    // line (stream discipline §5, matching ideology). Separate
+                    // 0xB2 RNG domain from ideology's 0xA1 so streams do not
+                    // share draws; pathology resets to neutral at birth.
+                    development: {
+                        let mut dev_rng = rand_chacha::ChaCha8Rng::seed_from_u64(
+                            self.config.seed ^ tick_u64.wrapping_mul(0xB2) ^ (child_idx as u64),
+                        );
+                        let mother_dev = &self.agents[parent_a].development;
+                        let father_dev = parent_b.map(|p| &self.agents[p].development);
+                        crate::psychology::DevelopmentFieldState::inherited(
+                            mother_dev,
+                            father_dev,
+                            &mut dev_rng,
+                        )
+                    },
                 });
                 // §10.2 (Iteration 92): keep the O(1) relationship_v2s matrix
                 // complete — the newborn must appear in every agent's vec and

@@ -171,14 +171,17 @@ fn tick_level_development_is_deterministic_across_same_seed() {
     }
 }
 
-/// Newborns enter the world fully neutral (pathology + altitudes), per the
-/// heredity-neutral control required before 3.x wiring.
+/// Newborns inherit via vertical transmission (task 3.6): blended
+/// mid-parent altitudes plus per-line noise, one draw per trait.
+/// Pathology resets to neutral; single-parent replacement inherits from the
+/// deceased with the same stream discipline.
 #[test]
-fn replacement_newborn_field_starts_fully_neutral() {
+fn replacement_newborn_field_is_vertically_inherited() {
     let mut sim = make_sim(99);
     let line_count = mindstrata_development::line::all_lines().count();
+    let parent = sim.agents[0].development.clone();
     assert!(
-        !sim.agents[0].development.is_fully_neutral(),
+        !parent.is_fully_neutral(),
         "founder should carry an endowment"
     );
 
@@ -190,11 +193,38 @@ fn replacement_newborn_field_starts_fully_neutral() {
         DeathCause::OldAge,
     );
 
-    // The replacement newborn occupies the freed slot with a fully
-    // neutral field — no inherited altitudes until heredity lands.
-    assert_eq!(sim.agents[0].development.altitudes.len(), line_count);
+    // Replacement inherits from the deceased (single-parent) with noise
+    // ±0.05 — child should be near parent, not neutral, and pathology
+    // stays neutral.
+    let child = &sim.agents[0].development;
+    assert_eq!(child.altitudes.len(), line_count);
     assert!(
-        sim.agents[0].development.is_fully_neutral(),
-        "replacement newborn must start fully neutral"
+        !child.is_fully_neutral(),
+        "inherited child from endowed parent must not be neutral"
+    );
+    assert!(
+        child.pathology.is_neutral(),
+        "pathology resets to neutral at birth"
+    );
+    for (c, p) in child.altitudes.iter().zip(parent.altitudes.iter()) {
+        assert!(
+            (c - p).abs() <= 0.06,
+            "child {c:.3} far from parent {p:.3} — heredity noise should be ≤0.05"
+        );
+    }
+    // Determinism: same seed + same parent → identical child.
+    let mut sim2 = make_sim(99);
+    let parent2 = sim2.agents[0].development.clone();
+    assert_eq!(parent, parent2, "founder endowment must be deterministic");
+    sim2.handle_agent_death(
+        0,
+        &[],
+        sim2.current_tick().as_u64(),
+        sim2.current_tick(),
+        DeathCause::OldAge,
+    );
+    assert_eq!(
+        sim2.agents[0].development, sim.agents[0].development,
+        "same-seed replacement must be byte-identical"
     );
 }
