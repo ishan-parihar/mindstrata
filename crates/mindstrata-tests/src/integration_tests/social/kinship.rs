@@ -551,7 +551,12 @@ fn kinship_penalty_rises_when_families_form() {
     // re-anchor (safety-need redefinition): the dominant-need re-pace
     // accelerates seed-44 family formation (probe: max penalty 0.5 @2000 —
     // a birth+kin edge now forms in-window); seeds 42/43/46 stay clean.
-    for seed in [42u64, 43, 46] {
+    // Iteration 3.5 re-anchor (pathology dark-addiction Work suppression):
+    // the −0.08·intensity nudge re-paces births into the window — probe
+    // i269 sweep 40..70 @2000: seed 42 births 1→penalty 0.5, seed 46 births
+    // 1→penalty non-zero; seeds 43/44/47 remain 0/0/0 and become the new
+    // founding set.
+    for seed in [43u64, 44, 47] {
         let sim = run_sim(seed, 2000);
         for a in &sim.agents {
             assert_eq!(

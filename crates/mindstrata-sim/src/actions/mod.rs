@@ -876,25 +876,20 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
         };
         utility += age_nudge;
 
-        // AP3 DC-1 (task 3.4): development gating — fulfillment thresholds
-        // via `needs` band map (docs/balance/needs-bands.md). Wiring is
-        // COMPLETE (DevelopmentFieldState passed via DecisionContext and
-        // read here), but the nudge is GATED OFF until probe-measured
-        // calibration lands (see needs-bands probe plans). At neutral
-        // (founder pathology 0.0) the gate is zero by construction, so
-        // goldens stay byte-identical; the live nudge below is commented
-        // until `i<iter>_needs_gate_delta` measures the first delta.
-        //
-        // Live nudge (CALIBRATION-PENDING, keep for probe activation):
-        // let pathology_dark = ctx.development.pathology.dark_addiction.intensity;
-        // let dev_nudge = match kind {
-        //     ActionKind::Work => -Fixed::from_f64(pathology_dark * 0.08),
-        //     ActionKind::Rest => Fixed::from_f64(pathology_dark * 0.02),
-        //     _ => Fixed::ZERO,
-        // };
-        // utility += dev_nudge;
-        let _ = ctx.development; // wiring liveness pin — field is read
-        let dev_nudge = Fixed::ZERO;
+        // AP3 DC-1 (tasks 3.4/3.5): development gating — fulfillment thresholds
+        // via `needs` band map (docs/balance/needs-bands.md) + pathology
+        // signature #1 (docs/balance/pathology-curves.md Q1 dark-addiction).
+        // Wiring via `DevelopmentFieldState` is COMPLETE; signature #1 is
+        // LIVE at CALIBRATION-PENDING coefficients (Q1 growth/decay still
+        // pending, nudge 0.08/0.02 pending — probe i269 measures the trajectory).
+        // Zero-at-zero: founder pathology 0.0 ⇒ gate 0, so goldens stay
+        // byte-identical until a catalyst actually steps pathology (FR-023).
+        let pathology_dark = ctx.development.pathology.dark_addiction.intensity;
+        let dev_nudge = match kind {
+            ActionKind::Work => -Fixed::from_f64(pathology_dark * 0.08),
+            ActionKind::Rest => Fixed::from_f64(pathology_dark * 0.02),
+            _ => Fixed::ZERO,
+        };
         utility += dev_nudge;
 
         if utility > best_utility {
