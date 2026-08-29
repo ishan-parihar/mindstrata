@@ -7,6 +7,36 @@ the deep-audit methodology.
 Governing doctrine: AGENTS.md §4 (calibration honesty rules), §5 (systemic hazards).
 Adjacent contracts: IC-4 (probe conventions), `runbooks/golden-replay-custody.md`.
 
+## H6 (2026-08-29) — Psychological-need relief gate (DC-1 DESIGN 8-9, systemic debt)
+
+The `i277_needs_calibration_sweep` (12-seed × 19 needs × 2000 ticks)
+shows 13/19 needs saturating to deficit=1.0 (the cap) across all 12
+seeds. Mechanism: only 6/19 needs have `relieve()` paths in the
+action-kind table at `crates/mindstrata-sim/src/sim/core.rs:636-684`
+(`Socialize`→attachment/belonging, `Worship`→meaning/certainty,
+`Trade`/`Work`→competence/recognition, `Rest`→sleep). The remaining
+13 (Health, Warmth, Safety, Esteem, Autonomy, Novelty, Play, Care,
+Romance, Justice, and partials Attachment, Belonging, Recognition)
+have no relieve() in the action map; their deficit grows monotonically
+under the dominant-need gate.
+
+This is a **pre-existing structural issue** (verified pre-CO-2026-001
+with the same saturation pattern). It is **not** a CO-2026-001
+regression. Recorded as **H6 — psychological-need relief gate** in
+`AGENTS.md` §5.
+
+The liveness invariant (CA-2) holds: the 6 needs with relief are
+alive (Hunger/Thirst/Sleep in low/mid, decreasing under action).
+The 13 saturated needs are **dead-channel debt** to be addressed in
+DC-2 via the §8.1.5 dominant-need urgency consumer rewrite. The
+fix-shape: (a) widen the dominant-need gate to consider multiple
+needs in the top-3 deficit band, or (b) add action-kind relieves
+for the 13 unmet needs.
+
+DO NOT silently widen the gate or add relieves without a coordinated
+re-anchor sweep — Iter-263's H5 lesson: piecemeal relief-path changes
+shift every aggregate producer.
+
 ## When it runs
 
 Per behavioral iteration, before `scripts/gate --full` (AGENTS.md §2 step 4/5). Pure

@@ -775,6 +775,7 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "mindstrata-core",
+ "mindstrata-development",
  "mindstrata-sim",
  "mindstrata-tui",
  "serde_json",
