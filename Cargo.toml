@@ -74,6 +74,9 @@ mindstrata-institutions = { path = "crates/mindstrata-institutions" }
 mindstrata-social = { path = "crates/mindstrata-social" }
 mindstrata-world = { path = "crates/mindstrata-world" }
 mindstrata-sim = { path = "crates/mindstrata-sim" }
+mindstrata-tui = { path = "crates/mindstrata-tui" }
+mindstrata-cli = { path = "crates/mindstrata-cli" }
+mindstrata-render = { path = "crates/mindstrata-render" }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }

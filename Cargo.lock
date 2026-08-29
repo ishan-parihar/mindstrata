@@ -776,6 +776,7 @@ dependencies = [
  "criterion",
  "mindstrata-core",
  "mindstrata-sim",
+ "mindstrata-tui",
  "serde_json",
 ]
 
