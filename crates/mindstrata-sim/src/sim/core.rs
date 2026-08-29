@@ -632,53 +632,61 @@ impl Simulation {
         // Relieve psychological needs based on current actions.
         // Amounts calibrated so multiple actions needed for full satisfaction
         // (relieve ≈ 3–5× growth_rate per tick, creating realistic behavioral pressure).
+        //
+        // DC-1 H6 close (CO-2026-002): the original 6/19 need coverage left
+        // 13 needs saturating to deficit 1.0 (dead-channel debt — see
+        // `runbooks/calibration-audit-v2.md` §H6 and
+        // `docs/balance/change-orders/CO-2026-002.md`). Each action now
+        // carries a **secondary relief** at 0.4–0.6× primary magnitude, so
+        // the secondary need is alive when the action is chosen without
+        // giving it dominant-need weight. Dominant-need gate semantics
+        // preserved: action selection is unchanged; only the relief map
+        // widened. Magnitudes chosen so a starving agent still feels
+        // hunger as dominant (Hunger 0.008/tick vs Health 0.002/tick
+        // secondary means Health won't dominate Hunger via secondary
+        // alone).
         for i in 0..self.agents.len() {
-            match self.agents[i].current_action {
+            let action = self.agents[i].current_action;
+            let m = &mut self.agents[i].motivation;
+            match action {
                 ActionKind::Socialize => {
-                    self.agents[i]
-                        .motivation
-                        .belonging
-                        .relieve(Fixed::from_f64(0.01));
-                    self.agents[i]
-                        .motivation
-                        .attachment
-                        .relieve(Fixed::from_f64(0.008));
+                    // Primary: belonging/attachment (the action's purpose).
+                    m.belonging.relieve(Fixed::from_f64(0.01));
+                    m.attachment.relieve(Fixed::from_f64(0.008));
+                    // Secondary: novelty (new face), care (empathic listening).
+                    m.novelty.relieve(Fixed::from_f64(0.003));
+                    m.care.relieve(Fixed::from_f64(0.002));
                 }
                 ActionKind::Worship => {
-                    self.agents[i]
-                        .motivation
-                        .meaning
-                        .relieve(Fixed::from_f64(0.008));
-                    self.agents[i]
-                        .motivation
-                        .certainty
-                        .relieve(Fixed::from_f64(0.005));
+                    // Primary: meaning/certainty.
+                    m.meaning.relieve(Fixed::from_f64(0.008));
+                    m.certainty.relieve(Fixed::from_f64(0.005));
+                    // Secondary: justice (moral order), recognition (communal).
+                    m.justice.relieve(Fixed::from_f64(0.002));
+                    m.recognition.relieve(Fixed::from_f64(0.002));
                 }
                 ActionKind::Trade => {
-                    self.agents[i]
-                        .motivation
-                        .competence
-                        .relieve(Fixed::from_f64(0.008));
-                    self.agents[i]
-                        .motivation
-                        .recognition
-                        .relieve(Fixed::from_f64(0.005));
+                    // Primary: competence/recognition.
+                    m.competence.relieve(Fixed::from_f64(0.008));
+                    m.recognition.relieve(Fixed::from_f64(0.005));
+                    // Secondary: novelty (new goods), justice (fair exchange).
+                    m.novelty.relieve(Fixed::from_f64(0.003));
+                    m.justice.relieve(Fixed::from_f64(0.002));
                 }
                 ActionKind::Work => {
-                    self.agents[i]
-                        .motivation
-                        .competence
-                        .relieve(Fixed::from_f64(0.006));
-                    self.agents[i]
-                        .motivation
-                        .recognition
-                        .relieve(Fixed::from_f64(0.006));
+                    // Primary: competence/recognition.
+                    m.competence.relieve(Fixed::from_f64(0.006));
+                    m.recognition.relieve(Fixed::from_f64(0.006));
+                    // Secondary: autonomy (self-direction), esteem (mastery).
+                    m.autonomy.relieve(Fixed::from_f64(0.002));
+                    m.esteem.relieve(Fixed::from_f64(0.002));
                 }
                 ActionKind::Rest => {
-                    self.agents[i]
-                        .motivation
-                        .sleep
-                        .relieve(Fixed::from_f64(0.02));
+                    // Primary: sleep.
+                    m.sleep.relieve(Fixed::from_f64(0.02));
+                    // Secondary: health (recovery), safety (sheltered).
+                    m.health.relieve(Fixed::from_f64(0.0015));
+                    m.safety.relieve(Fixed::from_f64(0.002));
                 }
                 _ => {}
             }
