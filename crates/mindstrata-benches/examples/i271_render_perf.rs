@@ -74,7 +74,10 @@ fn main() {
         faction_count: 0,
     };
 
-    println!("render_hot_path perf (release, iters={} unless noted)", iters);
+    println!(
+        "render_hot_path perf (release, iters={} unless noted)",
+        iters
+    );
     time_render(
         "metric_charts_2k",
         || render_metric_charts(&history_2k),
@@ -166,7 +169,10 @@ fn main() {
             start.elapsed().as_secs_f64() * 1e6 / heavy_iters as f64
         };
         if heavy_us > 1000.0 {
-            eprintln!("perf_budget_violation: metric_charts_10k_heavy {:.1}us > 1000us (IC-8)", heavy_us);
+            eprintln!(
+                "perf_budget_violation: metric_charts_10k_heavy {:.1}us > 1000us (IC-8)",
+                heavy_us
+            );
             std::process::exit(1);
         }
     }
