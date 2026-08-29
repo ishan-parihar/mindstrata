@@ -2,6 +2,12 @@
 //!
 //! Deterministic, allocation-light ASCII rendering over plain data — no
 //! sim-crate types in this module's signatures (see docs/chart-component-api.md).
+//!
+//! DC-1 tasks 2.10–2.12 add lineage, emotion, and village data plumbing:
+//! each lane reads only `&[MetricsSnapshot]` (the session history fixture),
+//! never `Simulation`, so the TUI stays decoupled from the tick loop.
+
+use mindstrata_sim::sim::MetricsSnapshot;
 
 /// Display band a series is scaled into.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -90,6 +96,49 @@ pub fn lane(series: &Series, width: usize) -> String {
         series.unit,
         first
     )
+}
+
+/// Lineage lane — family-count proliferation over generational time
+/// (DC-1 task 2.10). Reads only the metric history fixture; no `Simulation`
+/// coupling. Band is `ObservedMax` so the spark scales to the village's
+/// observed lineage diversity.
+pub fn lineage_lane(history: &[MetricsSnapshot], width: usize) -> String {
+    let samples: Vec<f64> = history.iter().map(|m| m.family_count as f64).collect();
+    let s = Series {
+        name: "families",
+        unit: "",
+        band: Band::ObservedMax,
+        samples,
+    };
+    lane(&s, width)
+}
+
+/// Emotion lane — joy/fear valence proxy (DC-1 task 2.11). Single-series
+/// `avg_joy` lane using the shared `Band::UnitInterval` interface; gaps
+/// (empty history) render as the standard `(no history)` sentinel and the
+/// same `lane` contract as the lineage lane.
+pub fn emotion_lane(history: &[MetricsSnapshot], width: usize) -> String {
+    let samples: Vec<f64> = history.iter().map(|m| m.avg_joy).collect();
+    let s = Series {
+        name: "joy",
+        unit: "",
+        band: Band::UnitInterval,
+        samples,
+    };
+    lane(&s, width)
+}
+
+/// Village panel — aggregated metrics view (DC-1 task 2.12). Composes the
+/// two lanes plus headline aggregates (agent_count, grain) as a deterministic
+/// multi-line widget. Data source is the same `&[MetricsSnapshot]` fixture;
+/// refresh path is caller-owned: pass the latest `history` slice each frame.
+pub fn village_panel(history: &[MetricsSnapshot], width: usize) -> String {
+    let lineage = lineage_lane(history, width);
+    let emotion = emotion_lane(history, width);
+    let (agents, grain) = history
+        .last()
+        .map_or((0, 0.0), |m| (m.agent_count, m.total_grain));
+    format!("{lineage}\n{emotion}\nagents {agents}  grain {grain:.1}")
 }
 
 /// Multi-row line chart: `height` rows × `width` cols raster of the series
@@ -221,5 +270,72 @@ mod tests {
         let s = series("k", Band::UnitInterval, vec![0.2, 0.8, 0.4, 0.6]);
         assert_eq!(lane(&s, 8), lane(&s, 8));
         assert_eq!(line_chart(&s, 12, 5), line_chart(&s, 12, 5));
+    }
+
+    fn fixture_history() -> Vec<MetricsSnapshot> {
+        (0..5)
+            .map(|i| {
+                let mut m = MetricsSnapshot::default();
+                m.family_count = i + 1;
+                m.avg_joy = 0.2 + i as f64 * 0.1;
+                m.agent_count = 12 + i;
+                m.total_grain = 10.0 * i as f64;
+                m.tick = i * 100;
+                m
+            })
+            .collect()
+    }
+
+    #[test]
+    fn lineage_lane_renders_from_fixture() {
+        // 2.10 acceptance: lane renders from session metrics fixture; no direct sim-state reads.
+        let hist = fixture_history();
+        let out = lineage_lane(&hist, 10);
+        assert!(out.contains("families"), "{out}");
+        assert!(out.contains('↑'), "rising families should show ↑: {out}");
+        // Shared interface unchanged — deterministic across calls.
+        assert_eq!(out, lineage_lane(&hist, 10));
+        // Empty fixture renders the sentinel, not a crash.
+        assert!(lineage_lane(&[], 10).contains("(no history)"));
+    }
+
+    #[test]
+    fn emotion_lane_renders_correctly_on_fixtures_incl_gaps() {
+        // 2.11 acceptance: emotion series render correctly on fixtures incl. gaps; shared interface unchanged.
+        let hist = fixture_history();
+        let out = emotion_lane(&hist, 10);
+        assert!(out.contains("joy"), "{out}");
+        assert!(out.contains('↑'), "rising joy should show ↑: {out}");
+        // Gaps: empty history still renders sentinel via the same lane contract.
+        assert!(emotion_lane(&[], 10).contains("(no history)"));
+        // Single-point fixture — no panic, deterministic.
+        let mut one = MetricsSnapshot::default();
+        one.avg_joy = 0.5;
+        let out_one = emotion_lane(&[one.clone()], 10);
+        assert!(out_one.contains("joy"));
+        assert_eq!(out_one, emotion_lane(&[one], 10));
+    }
+
+    #[test]
+    fn village_panel_renders_aggregate_fixture_data() {
+        // 2.12 acceptance: panel renders aggregate fixture data; refresh path documented.
+        let hist = fixture_history();
+        let panel = village_panel(&hist, 10);
+        assert!(panel.contains("families"), "{panel}");
+        assert!(panel.contains("joy"), "{panel}");
+        assert!(
+            panel.contains("agents 16"),
+            "last fixture has 16 agents: {panel}"
+        );
+        assert!(
+            panel.contains("grain 40.0"),
+            "last fixture grain 40: {panel}"
+        );
+        // Empty panel still renders lanes’ sentinels + zero aggregates.
+        let empty = village_panel(&[], 10);
+        assert!(empty.contains("(no history)"));
+        assert!(empty.contains("agents 0"));
+        // Deterministic across calls — refresh path is pure.
+        assert_eq!(panel, village_panel(&hist, 10));
     }
 }
