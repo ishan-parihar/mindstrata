@@ -184,6 +184,34 @@ pub fn system_development(agents: &mut [AgentBundle], events: &[SimEvent]) {
     }
 }
 
+/// DC-1 STORY 9-10: polarity data-path wire. For each catalyst observed
+/// in the daily window, project a `ThreeRealmClaim` via
+/// `mindstrata_development::polarity::project_catalyst` and append to
+/// the agent's `polarity_claims` list.
+///
+/// Read-side append only — no reconciliation (DC-2). Identity-at-zero:
+/// empty window yields zero appends. The dev crate's projection is pure
+/// (no RNG, no state), so byte-identical inputs yield byte-identical
+/// appends. Bounded by the per-tick event volume; safe against growth
+/// explosion.
+pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent]) {
+    if events.is_empty() {
+        return;
+    }
+    let catalysts = collect_catalysts(events);
+    if catalysts.is_empty() {
+        return;
+    }
+    for (agent_id, kind, _magnitude) in catalysts {
+        let agent_idx = agent_id.as_u64() as usize;
+        if agent_idx >= agents.len() {
+            continue;
+        }
+        let claim = mindstrata_development::polarity::project_catalyst(kind);
+        agents[agent_idx].polarity_claims.push(claim);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,6 +249,14 @@ mod tests {
         assert_eq!(cats.len(), 4);
         assert_eq!(cats[0].1, CatalystKind::Bond);
         assert_eq!(cats[2].1, CatalystKind::Threat);
+    }
+
+    #[test]
+    fn polarity_claim_emit_empty_window_is_identity() {
+        // No events → no claims appended (zero-at-zero identity).
+        let mut agents: Vec<crate::sim::AgentBundle> = Vec::new();
+        system_polarity_claim_emit(&mut agents, &[]);
+        assert!(agents.is_empty());
     }
 
     #[test]

@@ -38,6 +38,26 @@ fn main() {
     println!("events_total={event_count}");
     println!("events_with_content={events_with_content}");
 
+    // DC-1 STORY 9-10 wire: count live claims accumulated per agent.
+    let mut total_claims = 0usize;
+    let mut agents_with_claims = 0usize;
+    let mut max_claims = 0usize;
+    for agent in &sim.agents {
+        total_claims += agent.polarity_claims.len();
+        if !agent.polarity_claims.is_empty() {
+            agents_with_claims += 1;
+        }
+        if agent.polarity_claims.len() > max_claims {
+            max_claims = agent.polarity_claims.len();
+        }
+    }
+    println!("polarity_claims_total={total_claims}");
+    println!(
+        "polarity_agents_with_claims={agents_with_claims}/{}",
+        sim.agents.len()
+    );
+    println!("polarity_max_per_agent={max_claims}");
+
     // v1 surface: 4 synthetic claim pairs covering the legal reconcile axes.
     let mut reconciled = 0usize;
     let mut active_tension = 0usize;

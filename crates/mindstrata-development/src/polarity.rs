@@ -12,9 +12,10 @@
 //! This engine just models the transition — the passes will emit it.
 
 use crate::line::LineId;
+use serde::{Deserialize, Serialize};
 
 /// Causal explanatory domain of a claim (the `why` layer).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CausalDomain {
     /// Material/physical causation (sites, resources).
     Material,
@@ -25,7 +26,7 @@ pub enum CausalDomain {
 }
 
 /// Gross empirical referent the claim cites (the `what` is observed).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum GrossReferent {
     /// A place or territory cell.
     Site,
@@ -38,7 +39,7 @@ pub enum GrossReferent {
 }
 
 /// Subtle interpretive claim layered over the referent (the `so what`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SubtleClaim {
     /// Factual assertion.
     Fact,
@@ -51,7 +52,7 @@ pub enum SubtleClaim {
 }
 
 /// Polarity graph state of a claim in the belief network.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PolarityState {
     /// Never encountered by this agent.
     Undiscovered,
@@ -62,7 +63,7 @@ pub enum PolarityState {
 }
 
 /// A three-realm belief claim (FR-030) — the unit the polarity engine observes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ThreeRealmClaim {
     /// Causal domain the claim appeals to.
     pub domain: CausalDomain,
@@ -151,6 +152,60 @@ pub fn is_active_tension(a: &ThreeRealmClaim, b: &ThreeRealmClaim) -> bool {
         && a.domain != b.domain
         && a.polarity == PolarityState::ActiveTension
         && b.polarity == PolarityState::ActiveTension
+}
+
+/// Pure projection: which `(domain, referent, claim, line)` quartet a
+/// catalyst kind produces. FR-031 data-path wire — the sim crate
+/// applies this per `CatalystEvent` and appends the resulting claim
+/// to the agent's `polarity_claims` list. Deterministic and pure: no
+/// RNG, no state.
+///
+/// Mapping (DC-1, kept minimal — STORY 9-10 expands with agent-line
+/// resonance):
+/// - `Threat`    → Material / Event / Fact / safety
+/// - `Bond`      → Relational / Institution / Value / attachment
+/// - `Transgression` → Symbolic / Event / Norm / justice
+/// - `Grief`     → Material / Event / Identity / safety
+///
+/// All emitted claims start in `Undiscovered` polarity — the agent
+/// has encountered the catalyst but has not yet formed a polarized
+/// position. Subsequent exposures (same line × same referent) can
+/// trigger reconciliation.
+#[must_use]
+pub fn project_catalyst(kind: crate::catalyst::CatalystKind) -> ThreeRealmClaim {
+    use crate::catalyst::CatalystKind;
+    let (domain, referent, claim, line_slug) = match kind {
+        CatalystKind::Threat => (
+            CausalDomain::Material,
+            GrossReferent::Event,
+            SubtleClaim::Fact,
+            "safety",
+        ),
+        CatalystKind::Bond => (
+            CausalDomain::Relational,
+            GrossReferent::Institution,
+            SubtleClaim::Value,
+            "attachment",
+        ),
+        CatalystKind::Transgression => (
+            CausalDomain::Symbolic,
+            GrossReferent::Event,
+            SubtleClaim::Norm,
+            "justice",
+        ),
+        CatalystKind::Grief => (
+            CausalDomain::Material,
+            GrossReferent::Event,
+            SubtleClaim::Identity,
+            "safety",
+        ),
+    };
+    let line = LineId::new(line_slug).unwrap_or_else(|| {
+        // safety/attachment/justice are all in the vendored registry;
+        // if a future addition drops one, fall back to a known stable line.
+        LineId::new("cognitive").expect("cognitive line is in registry")
+    });
+    ThreeRealmClaim::new(domain, referent, claim, line)
 }
 
 #[cfg(test)]

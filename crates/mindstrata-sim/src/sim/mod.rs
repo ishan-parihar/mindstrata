@@ -527,6 +527,16 @@ pub struct AgentBundle {
     /// empty inert field).
     #[serde(default)]
     pub development: crate::psychology::DevelopmentFieldState,
+    /// Three-realm belief claims accumulated by the polarity engine
+    /// (DC-1 STORY 9-10, FR-030/FR-031/FR-032). Each catalyst observed
+    /// in the daily pass projects a claim via
+    /// `mindstrata_development::polarity::project_catalyst` and appends
+    /// it here. Inert storage: reconciliation runs in
+    /// `system_polarity_reconcile` (DC-2), not the daily pass. The
+    /// `#[serde(default)]` + SNAPSHOT_VERSION bump (v12→v13) follow the
+    /// bundle-field law.
+    #[serde(default)]
+    pub polarity_claims: Vec<crate::development::ThreeRealmClaim>,
 }
 
 /// §4.2: Skill levels that improve through repeated practice.

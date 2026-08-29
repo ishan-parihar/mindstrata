@@ -25,6 +25,9 @@ pub mod black_market {
 pub mod conflict {
     pub use mindstrata_social::conflict::*;
 }
+pub mod development {
+    pub use mindstrata_development::polarity::*;
+}
 pub mod culture {
     pub use mindstrata_social::culture::*;
 }

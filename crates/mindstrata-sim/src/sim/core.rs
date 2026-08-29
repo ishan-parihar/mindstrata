@@ -625,6 +625,19 @@ impl Simulation {
             &self.events[pre_tick_events..],
         );
 
+        // ── DC-1 STORY 9-10: polarity data-path wire. Reuse the same
+        // window that the development pass just consumed, so the wiring
+        // cost is one extra walk over the same slice. For each catalyst
+        // observed in the window, project the claim via the pure
+        // `project_catalyst` function and append to the agent's
+        // `polarity_claims` list. Read-side append only — no
+        // reconciliation yet (DC-2; pure `reconcile_claims` is in the
+        // dev crate, but emitting reconciled transitions requires a
+        // policy decision that needs a contract-freeze first). The list
+        // is bounded by the per-tick event volume; no growth explosion.
+        let polarity_window = &self.events[pre_tick_events..];
+        crate::systems::development::system_polarity_claim_emit(&mut self.agents, polarity_window);
+
         // ── §6 + §10.6/§10.7: Kinship & Household daily update ──
         self.tick_kinship_household_daily(tick_u64, phases);
 

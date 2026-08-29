@@ -586,6 +586,10 @@ impl Simulation {
                 // endowment is drawn in the post-loop pass below, at the very
                 // end of the populate draw sequence (order contract).
                 development: crate::psychology::DevelopmentFieldState::neutral(0),
+                // DC-1 STORY 9-10: founders start with empty polarity_claims
+                // (no catalysts encountered yet); `project_catalyst` fills in
+                // the daily pass.
+                polarity_claims: Vec::new(),
             });
         }
 

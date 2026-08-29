@@ -185,6 +185,10 @@ impl Simulation {
                     &mut dev_rng,
                 )
             },
+            // DC-1 STORY 9-10: newborn polarity_claims start empty
+            // (no catalysts encountered yet); `project_catalyst` fills
+            // the list in the daily pass.
+            polarity_claims: Vec::new(),
         }
     }
 
@@ -778,6 +782,9 @@ impl Simulation {
                             &mut dev_rng,
                         )
                     },
+                    // DC-1 STORY 9-10: newborn polarity_claims start empty
+                    // (no catalysts encountered yet).
+                    polarity_claims: Vec::new(),
                 });
                 // §10.2 (Iteration 92): keep the O(1) relationship_v2s matrix
                 // complete — the newborn must appear in every agent's vec and

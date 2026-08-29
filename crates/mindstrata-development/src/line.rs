@@ -6,6 +6,8 @@
 
 use crate::canon_gen::tables::{line as lookup_line, COUPLINGS, LINES};
 use core::fmt;
+use serde::de::Error as _;
+use serde::{Deserialize, Serialize};
 
 /// Whether a line develops individual holons or collective ones.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -19,6 +21,29 @@ pub enum Scope {
 /// A validated line identifier backed by the vendor registry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LineId(&'static str);
+
+impl Serialize for LineId {
+    fn serialize<S: serde::Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
+        ser.serialize_str(self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for LineId {
+    fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+        let s: String = String::deserialize(de)?;
+        // Must reconstruct as &'static str: only valid if the slug is in the
+        // vendored registry. This is enforced at construction time; at
+        // deserialize time we leak the String to obtain a 'static lifetime
+        // so subsequent lookups succeed (DC-1 only persists vendored slugs).
+        let static_str: &'static str = Box::leak(s.into_boxed_str());
+        if lookup_line(static_str).is_none() {
+            return Err(D::Error::custom(format!(
+                "LineId deserialize: unknown line slug `{static_str}`"
+            )));
+        }
+        Ok(Self(static_str))
+    }
+}
 
 impl LineId {
     /// Construct from a registry slug; rejects slugs absent from `LINES`.
