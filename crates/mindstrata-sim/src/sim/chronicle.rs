@@ -258,6 +258,52 @@ pub fn render_dossier(sim: &Simulation, idx: usize) -> String {
             out.push_str(&format!("  - {line}\n"));
         }
     }
+
+    // DC-1 CLIENT 19-22 polish: surface the polarity wire.
+    // `i278` probe shows 13/13 agents accumulate claims in 2000 ticks; the
+    // dossier now lists the per-line claim count and the top-3 dominant
+    // polarity-state distribution. Read-only summary — no reconciliation
+    // counter (that requires a contract freeze on integration policy).
+    if !a.polarity_claims.is_empty() {
+        use std::collections::HashMap;
+        let mut by_line: HashMap<&'static str, usize> = HashMap::new();
+        let mut by_state: HashMap<mindstrata_development::polarity::PolarityState, usize> =
+            HashMap::new();
+        for claim in &a.polarity_claims {
+            *by_line.entry(claim.line.slug()).or_insert(0) += 1;
+            *by_state.entry(claim.polarity).or_insert(0) += 1;
+        }
+        out.push_str(&format!(
+            "\npolarity claims: {} total across {} lines\n",
+            a.polarity_claims.len(),
+            by_line.len()
+        ));
+        let mut line_vec: Vec<(&&'static str, &usize)> = by_line.iter().collect();
+        line_vec.sort_by(|x, y| y.1.cmp(x.1));
+        for (line, count) in line_vec.iter().take(3) {
+            out.push_str(&format!("  {line} × {count}\n"));
+        }
+        // Polarity-state tally (Undiscovered/ActiveTension/Integrated).
+        let states: [&str; 3] = ["Undiscovered", "ActiveTension", "Integrated"];
+        let summary: Vec<String> = states
+            .iter()
+            .filter_map(|s| {
+                let key = match *s {
+                    "Undiscovered" => mindstrata_development::polarity::PolarityState::Undiscovered,
+                    "ActiveTension" => {
+                        mindstrata_development::polarity::PolarityState::ActiveTension
+                    }
+                    "Integrated" => mindstrata_development::polarity::PolarityState::Integrated,
+                    _ => return None,
+                };
+                by_state.get(&key).map(|c| format!("{s}={c}"))
+            })
+            .collect();
+        if !summary.is_empty() {
+            out.push_str(&format!("  state: {}\n", summary.join(" · ")));
+        }
+    }
+
     out
 }
 
@@ -410,5 +456,37 @@ mod tests {
         // Out-of-range index and unknown names miss cleanly.
         assert_eq!(resolve_agent_spec(&sim, "9999"), None);
         assert_eq!(resolve_agent_spec(&sim, "Zaphod"), None);
+    }
+
+    /// DC-1 CLIENT 19-22 polish: dossier surfaces the polarity wire
+    /// (i278: 13/13 agents accumulate claims in 2000 ticks). The
+    /// dossier prints `polarity claims: N total across M lines` plus
+    /// the top-3 line tally and the polarity-state distribution. This
+    /// test runs the simulation long enough to accumulate claims and
+    /// asserts the section appears.
+    #[test]
+    fn dossier_polarity_section_appears_after_run() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 2000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(2000);
+        let mut found = false;
+        for i in 0..sim.agents.len() {
+            let d = render_dossier(&sim, i);
+            if d.contains("polarity claims:") {
+                found = true;
+                assert!(d.contains("total across"), "{d}");
+                assert!(d.contains("state:"), "{d}");
+                break;
+            }
+        }
+        assert!(found, "no agent had polarity claims in dossier");
     }
 }
