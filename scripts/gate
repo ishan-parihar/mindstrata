@@ -15,6 +15,10 @@ echo "[gate 2/3] clippy --workspace"
 cargo clippy --workspace --quiet 2>&1 | grep -E "^warning|^error" && {
     echo "CLIPPY NOT CLEAN"; exit 1; } || true
 
+echo "[gate 2.5/3] bench naming law (IC-4)"
+python3 scripts/bench_index.py --strict 2>&1 | tail -5
+python3 scripts/bench_index.py --strict
+
 if [ "$FULL" -eq 1 ]; then
     echo "[gate 3/3] tests-crate release suite (+ golden baselines)"
     cargo test -p mindstrata-tests --lib --release
