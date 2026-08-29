@@ -16,10 +16,7 @@ use mindstrata_sim::Simulation;
 const SEEDS: [u64; 12] = [1, 2, 7, 13, 21, 42, 46, 55, 77, 99, 123, 12345];
 const TICKS: u64 = 2000;
 
-fn avg_deficit(
-    agents: &[mindstrata_sim::sim::AgentBundle],
-    cat: MotiveCategory,
-) -> f64 {
+fn avg_deficit(agents: &[mindstrata_sim::sim::AgentBundle], cat: MotiveCategory) -> f64 {
     let n = agents.len() as f64;
     agents
         .iter()
@@ -72,10 +69,7 @@ fn main() {
             } else {
                 "sat"
             };
-            println!(
-                "seed={seed} need={:?} value={v:.4} band={band}",
-                cat
-            );
+            println!("seed={seed} need={:?} value={v:.4} band={band}", cat);
         }
     }
 }

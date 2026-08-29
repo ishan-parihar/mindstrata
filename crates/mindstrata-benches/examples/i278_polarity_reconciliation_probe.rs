@@ -11,8 +11,8 @@
 
 use mindstrata_development::line::LineId;
 use mindstrata_development::polarity::{
-    is_active_tension, reconcile_claims, CausalDomain, GrossReferent, PolarityState,
-    SubtleClaim, ThreeRealmClaim,
+    is_active_tension, reconcile_claims, CausalDomain, GrossReferent, PolarityState, SubtleClaim,
+    ThreeRealmClaim,
 };
 use mindstrata_sim::sim::SimConfig;
 use mindstrata_sim::Simulation;
@@ -31,7 +31,10 @@ fn main() {
 
     let events = sim.recent_events(10_000_000);
     let event_count = events.len();
-    let events_with_content = events.iter().filter(|e| !format!("{e:?}").is_empty()).count();
+    let events_with_content = events
+        .iter()
+        .filter(|e| !format!("{e:?}").is_empty())
+        .count();
     println!("events_total={event_count}");
     println!("events_with_content={events_with_content}");
 
@@ -44,7 +47,7 @@ fn main() {
     let a = ThreeRealmClaim::new(
         CausalDomain::Material,
         GrossReferent::Event,
-            SubtleClaim::Fact,
+        SubtleClaim::Fact,
         LineId::new("cognitive").expect("cognitive line"),
     );
     let mut a = a;
@@ -68,7 +71,7 @@ fn main() {
     let mut c = ThreeRealmClaim::new(
         CausalDomain::Material,
         GrossReferent::Event,
-            SubtleClaim::Fact,
+        SubtleClaim::Fact,
         LineId::new("cognitive").expect("cognitive line"),
     );
     c.polarity = PolarityState::ActiveTension;
@@ -88,7 +91,7 @@ fn main() {
     let e = ThreeRealmClaim::new(
         CausalDomain::Material,
         GrossReferent::Event,
-            SubtleClaim::Fact,
+        SubtleClaim::Fact,
         LineId::new("cognitive").expect("cognitive line"),
     );
     let f = b;
