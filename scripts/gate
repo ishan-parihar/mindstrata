@@ -20,6 +20,12 @@ python3 scripts/bench_index.py --strict 2>&1 | tail -5
 python3 scripts/bench_index.py --strict
 
 if [ "$FULL" -eq 1 ]; then
+    echo "[gate 2.6/3] perf budgets --quick (IC-8 + perf-budget.md floor)"
+    cargo run --release -p mindstrata-benches --example i271_render_perf -- --quick
+    cargo run --release -p mindstrata-benches --example i270_perf_snapshot -- --quick
+fi
+
+if [ "$FULL" -eq 1 ]; then
     echo "[gate 3/3] tests-crate release suite (+ golden baselines)"
     cargo test -p mindstrata-tests --lib --release
 else

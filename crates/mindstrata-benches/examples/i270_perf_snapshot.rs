@@ -30,30 +30,40 @@ fn measure(num_agents: u32, ticks: u64, seed: u64) -> (f64, f64) {
 }
 
 fn main() {
+    let quick = std::env::args().any(|a| a == "--quick");
     // Three runs per configuration to show noise envelope (criterion does
     // the rigorous version; this is the budget-table's "measured basis" seed).
-    for n in [12u32, 48] {
-        for horizon in [2000u64, 10_000] {
-            let mut tps_vals = Vec::new();
-            for seed in [42u64, 123, 999] {
-                let (elapsed, tps) = measure(n, horizon, seed);
-                tps_vals.push(tps);
-                println!(
-                    "n={} horizon={} seed={} elapsed_s={:.3} tps={:.0}",
-                    n, horizon, seed, elapsed, tps
-                );
-            }
-            let mean = tps_vals.iter().sum::<f64>() / tps_vals.len() as f64;
-            let min = tps_vals.iter().cloned().fold(f64::INFINITY, f64::min);
-            let max = tps_vals.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let configs: Vec<(u32, u64)> = if quick {
+        vec![(12, 2000)]
+    } else {
+        vec![(12, 2000), (12, 10_000), (48, 2000), (48, 10_000)]
+    };
+    let seeds: Vec<u64> = if quick { vec![42] } else { vec![42, 123, 999] };
+    for (n, horizon) in configs {
+        let mut tps_vals = Vec::new();
+        for &seed in &seeds {
+            let (elapsed, tps) = measure(n, horizon, seed);
+            tps_vals.push(tps);
             println!(
-                "summary n={} horizon={} mean_tps={:.0} min_tps={:.0} max_tps={:.0}",
-                n, horizon, mean, min, max
+                "n={} horizon={} seed={} elapsed_s={:.3} tps={:.0}",
+                n, horizon, seed, elapsed, tps
             );
+        }
+        let mean = tps_vals.iter().sum::<f64>() / tps_vals.len() as f64;
+        let min = tps_vals.iter().cloned().fold(f64::INFINITY, f64::min);
+        let max = tps_vals.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        println!(
+            "summary n={} horizon={} mean_tps={:.0} min_tps={:.0} max_tps={:.0}",
+            n, horizon, mean, min, max
+        );
+        if quick && tps_vals[0] < 8000.0 {
+            eprintln!("perf_budget_violation: tps {:.0} < floor 8000", tps_vals[0]);
+            std::process::exit(1);
         }
     }
     // Memory proxy: snapshot size at each population (serde_json length).
-    for n in [12u32, 24, 48] {
+    let snap_ns: Vec<u32> = if quick { vec![12] } else { vec![12, 24, 48] };
+    for n in snap_ns {
         let config = SimConfig {
             seed: 42,
             max_ticks: 2000,

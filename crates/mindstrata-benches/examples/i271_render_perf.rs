@@ -46,6 +46,9 @@ fn time_render<F: Fn() -> String>(label: &str, f: F, iters: usize) {
 }
 
 fn main() {
+    let quick = std::env::args().any(|a| a == "--quick");
+    let iters = if quick { 200 } else { 1000 };
+    let heavy_iters = if quick { 100 } else { 500 };
     // Build a representative sim for dashboard/agent/world fixtures.
     let config = SimConfig {
         seed: 42,
@@ -71,28 +74,28 @@ fn main() {
         faction_count: 0,
     };
 
-    println!("render_hot_path perf (release, iters=1000 unless noted)");
+    println!("render_hot_path perf (release, iters={} unless noted)", iters);
     time_render(
         "metric_charts_2k",
         || render_metric_charts(&history_2k),
-        1000,
+        iters,
     );
     time_render(
         "metric_charts_10k",
         || render_metric_charts(&history_10k),
-        1000,
+        iters,
     );
     time_render(
         "metric_charts_10k_heavy",
         || render_metric_charts(&history_heavy),
-        500,
+        heavy_iters,
     );
     time_render(
         "dashboard_12",
         || render_dashboard(&summaries, 42, sim.current_tick().as_u64(), &dashboard_cfg),
-        1000,
+        iters,
     );
-    time_render("agent_list_12", || render_agent_list(&summaries), 1000);
+    time_render("agent_list_12", || render_agent_list(&summaries), iters);
 
     // 48-agent dashboard/list
     let config48 = SimConfig {
@@ -116,9 +119,9 @@ fn main() {
     time_render(
         "dashboard_48",
         || render_dashboard(&summaries48, 42, sim48.current_tick().as_u64(), &cfg48),
-        1000,
+        iters,
     );
-    time_render("agent_list_48", || render_agent_list(&summaries48), 1000);
+    time_render("agent_list_48", || render_agent_list(&summaries48), iters);
 
     // World map (fixed 16x16, markers scale with agents)
     let markers12: Vec<AgentMarker> = sim
@@ -146,11 +149,25 @@ fn main() {
     time_render(
         "world_map_12",
         || render_world_map(sim.world(), &markers12),
-        1000,
+        iters,
     );
     time_render(
         "world_map_48",
         || render_world_map(sim48.world(), &markers48),
-        1000,
+        iters,
     );
+    if quick {
+        // Gate threshold: Trends heavy must stay ≤1 ms (1000 µs) — IC-8.
+        let heavy_us = {
+            let start = Instant::now();
+            for _ in 0..heavy_iters {
+                let _ = render_metric_charts(&history_heavy);
+            }
+            start.elapsed().as_secs_f64() * 1e6 / heavy_iters as f64
+        };
+        if heavy_us > 1000.0 {
+            eprintln!("perf_budget_violation: metric_charts_10k_heavy {:.1}us > 1000us (IC-8)", heavy_us);
+            std::process::exit(1);
+        }
+    }
 }
