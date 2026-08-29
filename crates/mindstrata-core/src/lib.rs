@@ -17,6 +17,7 @@ pub mod error;
 pub mod event;
 pub mod fixed;
 pub mod id;
+pub mod migration;
 pub mod parameters;
 pub mod proposition;
 pub mod rng;

@@ -122,7 +122,33 @@ pub struct Snapshot {
 /// Iteration 240: bumped 11 → 12 — `Institution` gained `formed_tick`
 /// (faction mobilization/entrenchment window), changing the postcard wire
 /// layout of the institutions slice.
+/// Iteration DC-1 task 3.1: bumped 12 → 13 — `AgentBundle` gained
+/// `development: DevelopmentFieldState` (AP3 attractor field + pathology).
+/// `#[serde(default)]` on the bundle field keeps v12 bytes loadable; the
+/// v12→v13 migration is the no-op example in `mindstrata_core::migration`.
 pub const SNAPSHOT_VERSION: u32 = 13;
+
+/// Save-schema framework v0 (task 2.17) — version header + migration trait.
+///
+/// The header is `Snapshot.version` (first serialized field via postcard).
+/// `"migration"` in this context means the pure chain `vN -> v(N+1)`
+/// defined by `mindstrata_core::migration::SnapshotMigration`. v0 ships only
+/// the `MigrateV12ToV13` no-op example; real migrations chain through
+/// `migrate_if_needed` below once they exist. Round-trip harness: see
+/// `snapshot_version_header_round_trips_and_migration_is_noop`.
+#[must_use]
+pub fn migrate_if_needed(mut snapshot: Snapshot) -> Snapshot {
+    // v0: serde(default) already yields the neutral development field for
+    // pre-v13 snapshots, so the 12→13 step is identity. Future steps will
+    // match on `snapshot.version` and apply their `SnapshotMigration` impl,
+    // bumping `snapshot.version` each hop until `SNAPSHOT_VERSION`.
+    if snapshot.version < SNAPSHOT_VERSION {
+        // Explicitly mark that we traversed the known no-op edge; keeps the
+        // version header honest without mutating other fields.
+        snapshot.version = SNAPSHOT_VERSION;
+    }
+    snapshot
+}
 
 /// Bundles all simulation state references needed to capture a snapshot.
 /// Replaces the 21-parameter `capture()` signature with a single struct.
@@ -529,5 +555,32 @@ mod tests {
     fn snapshot_event_count() {
         let snapshot = make_test_snapshot();
         assert_eq!(snapshot.event_count(), 0);
+    }
+
+    /// Task 2.17 harness: version header round-trips and the v12→v13
+    /// no-op migration is identity (modulo the version bump).
+    #[test]
+    fn snapshot_version_header_round_trips_and_migration_is_noop() {
+        // Current version round-trips bit-identically.
+        let original = make_test_snapshot();
+        assert_eq!(original.version, SNAPSHOT_VERSION);
+        let bytes = original.to_bytes().expect("serialize");
+        let restored = Snapshot::from_bytes(&bytes).expect("deserialize");
+        assert_eq!(restored.version, SNAPSHOT_VERSION);
+        // migrate_if_needed is identity at current version.
+        let migrated = migrate_if_needed(restored);
+        assert_eq!(migrated.version, SNAPSHOT_VERSION);
+        assert_eq!(migrated.tick, original.tick);
+        // Old version bumps to current via the no-op edge.
+        let mut old = make_test_snapshot();
+        old.version = 12;
+        let bumped = migrate_if_needed(old);
+        assert_eq!(bumped.version, SNAPSHOT_VERSION);
+        // Trait shape compiles and versions are consecutive.
+        use mindstrata_core::migration::{MigrateV12ToV13, SnapshotMigration};
+        assert_eq!(
+            MigrateV12ToV13::to_version(),
+            MigrateV12ToV13::from_version() + 1
+        );
     }
 }
