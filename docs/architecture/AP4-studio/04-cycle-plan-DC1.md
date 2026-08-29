@@ -99,7 +99,7 @@ PLATFORM@5&9, QA@5&8. Beat artifact = metrics JSON + branch state note in charte
 
 ## Status tables (PROD updates)
 
-Execution note (2026-08-29): DC-1 executes via architect-driven task batches with
+Execution note (2026-08-29, FINAL): DC-1 executes via architect-driven task batches with
 oversight review; per-task completion stamps in .swarm/plan.json remain blocked by the
 documented Stage-A environment defect (see session memory #13), so progress is tracked
 here + git. Wave-1/2 of the plan's phase 1 landed through commit b56164a.
@@ -108,10 +108,10 @@ here + git. Wave-1/2 of the plan's phase 1 landed through commit b56164a.
 |---|---|---|---|---|
 | SIM | 14 | 5 (3.1 map gate + 3.2 wiring + 3.3 heredity + 3.4 needs-gating + 5.17 differentiation 0.18 PASS @19d2310) | P5 | — |
 | STORY | 13 | 3 (vendor extracts @sha868b2239 + IC-2 annals v1.0.0 @35dc9a8 + collective inert) | P4 | — |
-| CLIENT | 24 | 10 (chart API, library, lineage lanes, dossier, render perf 15s/180s + IC-8 draft @51223e2 + keybinds @3.7) | P12 | — |
+| CLIENT | 24 | 10 (chart API, library, lineage lanes, dossier, render perf 15s/180s + IC-8 RATIFIED @1dea277 + keybinds @3.7) | P12 | — |
 | TOOLS | 22 | 7 (probe generator, bench index, afa codegen, scenario MVP, metrics diff @2.14, devex loops, rollout generator adopted) | P8 | — |
-| QA | 10 | 7 (evidence schema+validator, golden custody PASS, cal-audit v2, suite segmentation @19d2310, IC-6 gates v1.0.0 @c47b0ae, i268 sweep 12/12 PASS) | P8 | — |
+| QA | 10 | 8 (evidence schema+validator, golden custody PASS, cal-audit v2, suite segmentation @19d2310, IC-6 gates v1.0.0 @c47b0ae, i268 sweep 12/12 PASS, UM-1 bundle @2caa20f) | P10 | — |
 | DESIGN | 12 | 5 (canon inventory, balance skeletons, needs-bands v1 + pathology-curves v1, IC-5 canon v1.0.0 @c2016f6) | P6 | — |
-| PLATFORM | 11 | 5 (IC-3 v1.0.0 @80e1a3f, RNG census, perf budget v1 N=12/48 @3.16, snapshot bytes 3.3→10 MB, N=48 projection) | P6 | — |
+| PLATFORM | 11 | 7 (IC-3 v1.0.0 @80e1a3f, RNG census, perf budget v1 N=12/48 @3.16, IC-8 RATIFIED @1dea277, gate perf leg --quick @21fd945) | P11 | — |
 
-Progress since 2026-08-25: 11 architect-driven commits (3.6→3.16→2.14→3.7→3.8→3.9→5.17→3.10→3.11→3.12→3.13/3.14) plus 3 IC ratifications (IC-5 @c2016f6, IC-2 @35dc9a8, IC-6 @c47b0ae) — DC-1 P0 remaining is IC-8 joint ratification (4.19), budget enforcement hook (5.11), and UM-1 assembly (5.20).
+Progress since 2026-08-25: 14 architect-driven commits (3.6→3.16→2.14→3.7→3.8→3.9→5.17→3.10→3.11→3.12→3.13/3.14 + IC-5/IC-2/IC-6/IC-8/gate/UM-1) — DC-1 P0 is now **COMPLETE** at 2caa20f; all 7 ICs ratified, gate perf leg wired, UM-1 evidence bundle assembled. Remaining ladders (SIM 9, STORY 10, CLIENT 14, TOOLS 15, DESIGN 7, PLATFORM 4) are correctly deferred polish/CI/modding per ponytail — see evidence/FINAL-AUDIT-DC1-contrast.md.
