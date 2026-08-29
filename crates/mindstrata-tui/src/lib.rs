@@ -608,6 +608,49 @@ mod tests {
     }
 
     #[test]
+    fn dossier_integration_flow_selects_agent_and_renders_dossier() {
+        // Task 3.8: dossier is a view over the selected agent — selection
+        // must propagate to the inspector and dossier panes, and the chart
+        // lane pipeline must stay fixture-driven (no sim coupling). This pins
+        // the end-to-end flow: select → inspect → dossier → trends.
+        let config = mindstrata_sim::sim::SimConfig {
+            seed: 42,
+            max_ticks: 200,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 4,
+            snapshot_interval: None,
+        };
+        let mut sim = mindstrata_sim::Simulation::new(config);
+        sim.populate();
+        sim.run(200);
+        let mut ui = UiState::new(sim.agents.len());
+        ui.select_next(sim.agents.len()); // → agent 1
+        assert_eq!(ui.selected_agent, 1);
+        let summaries = sim.agent_summaries();
+        let summary = &summaries[ui.selected_agent];
+        // Inspector renders the selected agent's name and action.
+        let inspector = render_agent_inspector(summary, sim.relationships());
+        assert!(
+            inspector.contains(&summary.name),
+            "inspector must show selected {summary:?}"
+        );
+        // Dossier renders the same selected agent (via chronicle API) and is
+        // trimmable — the integration is that selection chooses the dossier.
+        let dossier_text = mindstrata_sim::sim::chronicle::render_dossier(&sim, ui.selected_agent);
+        assert!(
+            dossier_text.contains(&summary.name),
+            "dossier must contain selected name"
+        );
+        let dossier_view = render_dossier_view(&dossier_text, 200);
+        assert!(dossier_view.contains("Agent Dossier"));
+        // Chart lanes stay fixture-driven: render from metric_history, not
+        // per-agent state, so the dossier selection does not break trends.
+        let trends = render_metric_charts(&sim.metric_history);
+        assert!(trends.contains("Village Trends") || trends.contains("No metric"));
+    }
+
+    #[test]
     fn keybind_help_documents_every_bound_key() {
         // Task 3.7: the canonical map must list every key that handle_key
         // and key_to_command actually bind, plus the navigation pairs — so
