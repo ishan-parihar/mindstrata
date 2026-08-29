@@ -14,6 +14,7 @@
 pub mod canon;
 pub mod canon_gen;
 pub mod catalyst;
+pub mod collective;
 pub mod dynamics;
 pub mod field;
 pub mod lambda;
