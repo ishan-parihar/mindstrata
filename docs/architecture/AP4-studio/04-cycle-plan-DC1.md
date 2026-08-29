@@ -109,9 +109,9 @@ here + git. Wave-1/2 of the plan's phase 1 landed through commit b56164a.
 | SIM | 14 | 5 (3.1 map gate + 3.2 wiring + 3.3 heredity + 3.4 needs-gating + 5.17 differentiation 0.18 PASS @19d2310) | P5 | — |
 | STORY | 13 | 3 (vendor extracts @sha868b2239 + IC-2 annals v1.0.0 @35dc9a8 + collective inert) | P4 | — |
 | CLIENT | 24 | 10 (chart API, library, lineage lanes, dossier, render perf 15s/180s + IC-8 RATIFIED @1dea277 + keybinds @3.7) | P12 | — |
-| TOOLS | 22 | 7 (probe generator, bench index, afa codegen, scenario MVP, metrics diff @2.14, devex loops, rollout generator adopted) | P8 | — |
+| TOOLS | 22 | 8 (probe gen, bench_index, afa codegen, scenario MVP, metrics diff @2.14, devex loops, rollout @3.11, beat dashboards @fd2dd66) | P16 | — |
 | QA | 10 | 8 (evidence schema+validator, golden custody PASS, cal-audit v2, suite segmentation @19d2310, IC-6 gates v1.0.0 @c47b0ae, i268 sweep 12/12 PASS, UM-1 bundle @2caa20f) | P10 | — |
-| DESIGN | 12 | 5 (canon inventory, balance skeletons, needs-bands v1 + pathology-curves v1, IC-5 canon v1.0.0 @c2016f6) | P6 | — |
-| PLATFORM | 11 | 7 (IC-3 v1.0.0 @80e1a3f, RNG census, perf budget v1 N=12/48 @3.16, IC-8 RATIFIED @1dea277, gate perf leg --quick @21fd945) | P11 | — |
+| DESIGN | 12 | 7 (canon inventory, balance skeletons, needs-bands v1 + pathology-curves v1, IC-5 @c2016f6, pacing v1 + difficulty levers DRAFT @8a11747) | P10 | — |
+| PLATFORM | 11 | 9 (IC-3 @80e1a3f, RNG census, perf-budget v1, IC-8 @1dea277, gate --quick @21fd945, CI AA-mode + modding survey @c5baa9e) | P11 | — |
 
-Progress since 2026-08-25: 14 architect-driven commits (3.6→3.16→2.14→3.7→3.8→3.9→5.17→3.10→3.11→3.12→3.13/3.14 + IC-5/IC-2/IC-6/IC-8/gate/UM-1) — DC-1 P0 is now **COMPLETE** at 2caa20f; all 7 ICs ratified, gate perf leg wired, UM-1 evidence bundle assembled. Remaining ladders (SIM 9, STORY 10, CLIENT 14, TOOLS 15, DESIGN 7, PLATFORM 4) are correctly deferred polish/CI/modding per ponytail — see evidence/FINAL-AUDIT-DC1-contrast.md.
+Progress since 2026-08-25: 17 architect-driven commits (3.6→3.16→2.14→3.7→3.8→3.9→5.17→3.10→3.11→3.12→3.13/3.14 + IC-5/IC-2/IC-6/IC-8/gate/UM-1 + pacing/difficulty/CI/modding/beat-dashboards) — DC-1 P0 **COMPLETE** at 2caa20f and tail closing: 48/106 phases delivered (SIM 5 STORY 3 CLIENT 10 TOOLS 8 QA 8 DESIGN 7 PLATFORM 9). Remaining tail 58 phases (SIM 9 STORY 10 CLIENT 14 TOOLS 14 DESIGN 5 PLATFORM 2) is CLIENT polish + STORY polarity/collective wiring — see evidence/FINAL-AUDIT-DC1-contrast.md (audit at 48/106).
