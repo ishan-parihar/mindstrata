@@ -12,7 +12,7 @@
 use mindstrata_core::event::SimEvent;
 use mindstrata_core::id::AgentId;
 use mindstrata_development::catalyst::{kind_drive_map, CatalystKind};
-use mindstrata_development::dynamics::{Metabolism, OperatorParams, Polarity};
+use mindstrata_development::dynamics::{Metabolism, OperatorParams};
 use mindstrata_development::lambda::Gate;
 
 use crate::sim::AgentBundle;
@@ -154,28 +154,12 @@ pub fn system_development(agents: &mut [AgentBundle], events: &[SimEvent]) {
         let alt = &mut agents[idx].development.altitudes[line_idx];
         *alt = (*alt + uptake).clamp(0.0, 1.0);
 
-        // ── Pathology update (v1 4-quadrant fan-out, SIM 12-13) ─────────
-        // Per-drive routing is CALIBRATION-PENDING in canon; this v1 fan-out
-        // is the shape that the change-order ratifies: Threat → Dark Addiction
-        // (sustained deficit fixation), Transgression → Dark Allergy (recoil
-        // from contradictory exposure), Bond → Golden Addiction (grasping the
-        // golden path), Grief → Golden Allergy (refusal of opening). All four
-        // quadrants step under their respective metabolism; zero-at-zero
-        // identity law holds per `QuadrantState::step` (dynamics.rs:96).
-        let path = &mut agents[idx].development.pathology;
-        let (polarity, metabolism) = match kind {
-            CatalystKind::Threat => (Polarity::Dark, Metabolism::Addiction),
-            CatalystKind::Transgression => (Polarity::Dark, Metabolism::Allergy),
-            CatalystKind::Bond => (Polarity::Golden, Metabolism::Addiction),
-            CatalystKind::Grief => (Polarity::Golden, Metabolism::Allergy),
-        };
-        let slot = match (polarity, metabolism) {
-            (Polarity::Dark, Metabolism::Addiction) => &mut path.dark_addiction,
-            (Polarity::Dark, Metabolism::Allergy) => &mut path.dark_allergy,
-            (Polarity::Golden, Metabolism::Addiction) => &mut path.golden_addiction,
-            (Polarity::Golden, Metabolism::Allergy) => &mut path.golden_allergy,
-        };
-        *slot = slot.step(metabolism, admitted, &params);
+        // ── Pathology update (v1 uniform routing) ────────────────────────
+        // All pressures currently route to Dark Addiction; per-drive fan-out
+        // deferred to change-order (CALIBRATION-PENDING). Identity at zero.
+        let q = &agents[idx].development.pathology.dark_addiction;
+        let stepped = q.step(Metabolism::Addiction, admitted, &params);
+        agents[idx].development.pathology.dark_addiction = stepped;
     }
 }
 
@@ -241,16 +225,5 @@ mod tests {
         ] {
             let _ = kind_drive_map(k);
         }
-    }
-
-    #[test]
-    fn pathology_4quadrant_fanout_stays_identity_at_zero() {
-        // Zero admitted catalysts → all four quadrants must stay untouched.
-        // Build two agents (one with a non-zero path, one virgin) and prove
-        // the no-catalyst path keeps them bit-identical.
-        let mut agents: Vec<AgentBundle> = Vec::new();
-        // (skipped — AgentBundle requires full construction; unit pin lives
-        //  in `sim/tests/development.rs::development_pass_is_live_on_real_catalysts`.)
-        let _ = agents; // silence unused
     }
 }
