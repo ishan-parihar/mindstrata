@@ -106,9 +106,9 @@ here + git. Wave-1/2 of the plan's phase 1 landed through commit b56164a.
 
 | Dept | Ladder | Done | Current phase | Beats |
 |---|---|---|---|---|
-| SIM | 14 | 6 (3.1 map gate + 3.2 wiring + 3.3 heredity + 3.4 needs-gating + 5.17 differentiation 0.18 PASS @19d2310 + 12-13 pathology 4-quadrant fan-out CO-2026-001 @7773a88) | P12 | — |
-| STORY | 13 | 3 (vendor extracts @sha868b2239 + IC-2 annals v1.0.0 @35dc9a8 + collective inert) | P4 | — |
-| CLIENT | 24 | 10 (chart API, library, lineage lanes, dossier, render perf 15s/180s + IC-8 RATIFIED @1dea277 + keybinds @3.7) | P12 | — |
+| SIM | 14 | 7 (3.1 map gate + 3.2 wiring + 3.3 heredity + 3.4 needs-gating + 5.17 differentiation 0.18 PASS @19d2310 + 12-13 pathology 4-quadrant fan-out CO-2026-001 @7773a88 + H6 close secondary relief CO-2026-002 @a916901) | P12 | — |
+| STORY | 13 | 4 (vendor extracts @sha868b2239 + IC-2 annals v1.0.0 @35dc9a8 + 8-9 polarity type engine + 9-10 polarity data-path wire @6fd22d2) | P4 | — |
+| CLIENT | 24 | 11 (chart API, library, lineage lanes, dossier, render perf 15s/180s + IC-8 RATIFIED @1dea277 + keybinds @3.7 + 19-22 dossier polarity section @1034984) | P12 | — |
 | TOOLS | 22 | 8 (probe gen, bench_index, afa codegen, scenario MVP, metrics diff @2.14, devex loops, rollout @3.11, beat dashboards @fd2dd66) | P16 | — |
 | QA | 10 | 8 (evidence schema+validator, golden custody PASS, cal-audit v2, suite segmentation @19d2310, IC-6 gates v1.0.0 @c47b0ae, i268 sweep 12/12 PASS, UM-1 bundle @2caa20f) | P10 | — |
 | DESIGN | 12 | 7 (canon inventory, balance skeletons, needs-bands v1 + pathology-curves v1, IC-5 @c2016f6, pacing v1 + difficulty levers DRAFT @8a11747) | P10 | — |
