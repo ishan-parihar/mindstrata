@@ -4,9 +4,9 @@
 provider: CLIENT + PLATFORM
 consumer: CLIENT (TUI) + PLATFORM (gate scripts)
 owners: [CLIENT, PLATFORM]
-frozen_at: DRAFT — pending ratification from 3.9 + 3.16 measurements (task 4.19)
-version: 0.9.0-draft
-status: DRAFT
+frozen_at: commit 94525aa (3.9 render i271 1000 iters + 3.16 perf i270 3×2 horizons, both release)
+version: 1.0.0
+status: RATIFIED-P0 (CLIENT+PLATFORM joint sign-off 2026-08-29; co-signs perf-budget.md v1)
 change_orders: []
 ```
 
@@ -27,7 +27,7 @@ the render pipeline becoming the bottleneck (FR-043).
 `world_map 3.9µs@12 8.3µs@48`; total `tick+render ≈118µs@12/1.23ms@48` (see
 `docs/balance/render-perf.md` for methodology and raw rows; `docs/balance/perf-budget.md` for tick methodology).
 
-## Draft budget (for 4.19 ratification)
+## Budget (RATIFIED v1.0.0 — joint CLIENT+PLATFORM)
 
 | View | Budget | Rationale |
 |---|---|---|
@@ -37,17 +37,17 @@ the render pipeline becoming the bottleneck (FR-043).
 
 ## Negotiation hand-off
 
-CLIENT (3.9) publishes this draft with methodology; PLATFORM (4.19) ratifies
-jointly with the tick budget table and adds the gate enforcement hook
-(`scripts/gate` perf leg, PLATFORM 5.11) that fails on `render >1 ms` in the
-`i271` quick mode and on `tick < floor` in the `i270` quick mode (QA 4.21).
+Ratified jointly at 4.19: tick table from perf-budget.md v1 and render table
+from render-perf.md are the UM-1 perf gate. Enforcement hook lands in
+`scripts/gate` (PLATFORM 5.11) — fails on `Trends >1 ms` in `i271 --quick`
+and on `tick < floor` in `i270 --quick` (QA 4.21).
 
 ## Enforcement (preview)
 
 * `cargo run --release -p mindstrata-benches --example i271_render_perf -- --quick` (single seed, 2K) — assert `Trends ≤1 ms`.
 * `cargo run --release -p mindstrata-benches --example i270_perf_snapshot -- --quick` — assert `tps ≥ floor`.
 
-Until ratified, this draft is the provisional UM-1 gate for render (CLIENT 3.10).
+Supersedes draft 0.9.0 @51223e2 as the UM-1 gate for render (G3).
 
 ## References
 
