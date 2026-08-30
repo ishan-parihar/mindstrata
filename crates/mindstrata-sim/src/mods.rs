@@ -545,4 +545,43 @@ mod tests {
         assert!(!in_01(Fixed::from_f64(1.1)));
         assert!(!in_01(Fixed::from_f64(-0.1)));
     }
+
+    // DC-1 PLATFORM 11 / IC-7 v1.0.0 ratification: the modding write
+    // surface is exactly 4 fields (manifest, scenario, knowledge, norms).
+    // The type system enforces the read-only invariant for per-tick
+    // emergent fields (development, polarity_claims, collective_field)
+    // because they are not part of `ContentPack`. This test pins the
+    // public-field count as a structural invariant; if anyone adds a
+    // new writable field to ContentPack without ratifying a CO-, the
+    // count test will fail and surface the regression.
+    #[test]
+    fn content_pack_writable_field_count_is_four() {
+        let pack = ContentPack {
+            manifest: ModManifest {
+                name: String::new(),
+                description: String::new(),
+                version: String::new(),
+            },
+            scenario: None,
+            knowledge: Vec::new(),
+            norms: Vec::new(),
+        };
+        // Exactly 4 public fields; any new one breaks IC-7 v1.0.0.
+        let _fields = (&pack.manifest, &pack.scenario, &pack.knowledge, &pack.norms);
+    }
+
+    #[test]
+    fn applied_content_describes_what_was_written() {
+        // Per IC-7 v1.0.0: `AppliedContent` is the only read side
+        // returned from a mod application. It reports what was
+        // applied (knowledge, norms) but never the internal state
+        // of per-tick emergent fields. This test pins the 2-field
+        // structure (a contract test, not a behavioral one).
+        let applied = AppliedContent {
+            knowledge_added: 0,
+            norms_added: 0,
+        };
+        assert_eq!(applied.knowledge_added, 0);
+        assert_eq!(applied.norms_added, 0);
+    }
 }

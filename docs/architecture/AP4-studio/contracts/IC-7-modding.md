@@ -1,6 +1,7 @@
 # IC-7 — Modding Surface Contract (PLATFORM 8-10, DC-1)
 
-Status: **DRAFT v0.5.0** (2026-08-29, awaiting joint PLATFORM+DESIGN ratification).
+Status: **RATIFIED v1.0.0** (2026-08-30, joint PLATFORM+DESIGN ratification).
+Effective: 2026-08-30, DC-1 close.
 Owner: PLATFORM. Implements DC-1 PLATFORM 8-10.
 
 ## Purpose
@@ -89,9 +90,15 @@ defense in depth.
   tick-pipeline-aware modding hooks (after ActionKind add tests
   land — the v1 surface is too narrow to add hooks without
   breaking the write-list)
-* **IC-7 v0.5.0** (this draft): documents the v1 surface as
+* **IC-7 v1.0.0** (ratified 2026-08-30): documents the v1 surface as
   closed. No code change required — the write-list is already
-  enforced by the modding module's structural invariants.
+  enforced by the modding module's structural invariants. Two
+  unit tests pin the contract:
+  - `content_pack_writable_field_count_is_four` — 4 public fields,
+    any new one breaks the contract
+  - `applied_content_describes_what_was_written` — read-side has
+    2 fields (`knowledge_added`, `norms_added`), no leak of
+    emergent state
 
 ## Tests
 
