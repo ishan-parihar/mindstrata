@@ -110,6 +110,41 @@ are their own referee).
 
 ---
 
+## DC-2 Era III prep (2026-08-30, STORY 13-14) — Polarity-bias safe-coefficient range
+
+The `i282_action_distribution_baseline` probe (12 seeds × 12 agents ×
+2000 ticks) measures the per-action frequency distribution. The
+key aggregate for Era III wiring is the **social-action rate**
+(Talk + Console + Mourn + Greet + Trade + Worship + Socialize +
+Romance + Play + Care + TellStory + Ritual):
+
+- `mean = 0.2361` (1.4 social-actions per agent per 1000 ticks)
+- `stddev = 0.1265`
+- `CV = 0.536` (high natural variance across seeds)
+
+**Iter-263 H5 lesson applied**: any polarity-bias coefficient that
+shifts the social-action rate by more than `0.5 × stddev = 0.063`
+breaks the calibrated windows. A coefficient of `0.01` on
+`polarity_active_tension_count × social_value` gives an expected
+shift of ~0.025 (within `1σ`); a coefficient of `0.02` gives
+~0.050 (borderline `0.4σ`); a coefficient of `0.05` gives ~0.125
+(≈`1σ` — likely visible in golden baselines).
+
+**DC-2 Era III implementation recipe**: start with coefficient
+`0.01`, run the `i268_seed_family_sweep` (12 seeds, 4000 ticks),
+verify all 12 seeds still pass `FAMILY_PASS`, then promote to
+`0.02` and re-run. If `0.02` breaks any seed, retreat to `0.01`
+and document the ceiling. Per H5, do NOT ship `0.05+` without
+a coordinated re-anchor sweep.
+
+**Why the bias is bounded**: `polarity_active_tension_count` is
+the count of claims with `polarity == PolarityState::ActiveTension`.
+Per i281, the v1 surface is projection-bound (0/702 collisions
+reconcile), so the count is structurally low (most claims stay
+`Undiscovered` until reconcile fires). The 0.01 coefficient is
+safe because the typical `polarity_active_tension_count` per
+agent per tick is in the single digits.
+
 ## CA-1 — No lucky-seed re-pins
 
 **Statement.** A pin that passes only on its anchor seed after a sweep indicates a broken
