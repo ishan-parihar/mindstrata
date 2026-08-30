@@ -56,8 +56,18 @@ fn main() {
     // to measure natural variance. A polarity bias must shift this
     // rate by less than the stddev across seeds.
     let social_labels: Vec<&str> = vec![
-        "Talk", "Console", "Mourn", "Greet", "Trade", "Worship",
-        "Socialize", "Romance", "Play", "Care", "TellStory", "Ritual",
+        "Talk",
+        "Console",
+        "Mourn",
+        "Greet",
+        "Trade",
+        "Worship",
+        "Socialize",
+        "Romance",
+        "Play",
+        "Care",
+        "TellStory",
+        "Ritual",
     ];
     let social_rates: Vec<f64> = per_seed_counts
         .iter()
@@ -70,11 +80,8 @@ fn main() {
         })
         .collect();
     let mean: f64 = social_rates.iter().sum::<f64>() / social_rates.len() as f64;
-    let var: f64 = social_rates
-        .iter()
-        .map(|x| (x - mean).powi(2))
-        .sum::<f64>()
-        / social_rates.len() as f64;
+    let var: f64 =
+        social_rates.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / social_rates.len() as f64;
     let stddev = var.sqrt();
     println!(
         "social_action_rate mean={mean:.4} stddev={stddev:.4} cv={:.3}",

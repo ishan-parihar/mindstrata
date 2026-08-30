@@ -308,6 +308,11 @@ impl Simulation {
                             // Zero at neutral (task 3.1 newborn/3.2 virgin)
                             // so goldens stay byte-identical until field moves.
                             development: &agents[i].development,
+                            // DC-2 Era III lite: polarity_claims list
+                            // (read-only; the action selector applies the
+                            // i282 safe-coefficient 0.01 bias to social
+                            // actions based on ActiveTension count).
+                            polarity_claims: &agents[i].polarity_claims,
                         },
                         ctx.rng,
                     )

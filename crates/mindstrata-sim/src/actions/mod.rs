@@ -147,6 +147,14 @@ pub struct DecisionContext<'a> {
     // until the field moves.
     /// Per-agent attractor-field state — altitudes + pathology.
     pub development: &'a crate::psychology::DevelopmentFieldState,
+    // DC-2 Era III lite: per-agent polarity_claims list (read-only).
+    // The action selector counts `ActiveTension` claims and applies
+    // a small bias `+0.01 × action.social_value × count` to social
+    // actions. Coefficient 0.01 is the i282 safe-range start
+    // (expected shift ~0.025, within 1σ of natural variance 0.1265).
+    /// Per-agent three-realm polarity claims (read-only; derived
+    /// deterministically from the catalyst stream by the daily pass).
+    pub polarity_claims: &'a [crate::development::ThreeRealmClaim],
 }
 
 /// An action that an agent can take.
@@ -782,6 +790,25 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
             is_disobedient,
             is_harmful,
         );
+        // DC-2 Era III lite (FR-030/FR-032 wiring): bias social actions
+        // by the agent's ActiveTension polarity count. Coefficient 0.01
+        // is the i282 safe-range start (see calibration-audit-v2.md
+        // "DC-2 Era III prep"); expected shift ~0.025 within 1σ of
+        // natural variance 0.1265. Only social actions are biased
+        // (`is_social` is true) so the bias is scoped to the social
+        // action family and doesn't shift production/social-value
+        // balance for non-social actions. Identity-at-zero preserved:
+        // an agent with no ActiveTension claims contributes 0 to the
+        // bias (post-DC-2.1 fix, ActiveTension is bounded by tension
+        // siblings, not by claim count).
+        if is_social {
+            let active_tension_count = ctx
+                .polarity_claims
+                .iter()
+                .filter(|c| c.polarity == crate::development::PolarityState::ActiveTension)
+                .count();
+            utility += Fixed::from_f64(0.01 * active_tension_count as f64) * def.social_value;
+        }
         // Habit modifier: routine actions get a boost under stress
         let is_routine = matches!(
             kind,

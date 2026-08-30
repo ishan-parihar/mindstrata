@@ -177,9 +177,39 @@ pub fn is_active_tension(a: &ThreeRealmClaim, b: &ThreeRealmClaim) -> bool {
 /// `a.domain != b.domain`) would still return `None`; instead, the
 /// sim calls `reconcile_subtle` which only requires
 /// `a.claim != b.claim`.
+///
+/// **DC-2.1 fix (2026-08-30):** the previous single-arg version
+/// advanced every `Undiscovered` claim unconditionally, which caused
+/// the polarity-claim count to grow unboundedly over ticks
+/// (every catalyst → new claim → all advance). This made the
+/// `0.01 × active_tension_count` bias shift social-action utility
+/// by `~1.0` over 2000 ticks — dominating selection. The new
+/// signature requires a `siblings: &[ThreeRealmClaim]` slice; the
+/// claim is only advanced when at least one sibling has a
+/// different `subtle_claim` (or different `domain`) on the same
+/// `(referent, line)`. Zero-at-zero preserved: an agent with no
+/// claims, or all claims on unique `(referent, line)` keys,
+/// contributes 0 active-tension claims to the bias.
 #[must_use]
-pub fn advance_to_active_tension(claim: ThreeRealmClaim) -> Option<ThreeRealmClaim> {
-    if claim.polarity == PolarityState::Undiscovered {
+pub fn advance_to_active_tension(
+    claim: ThreeRealmClaim,
+    siblings: &[ThreeRealmClaim],
+) -> Option<ThreeRealmClaim> {
+    if claim.polarity != PolarityState::Undiscovered {
+        return None;
+    }
+    // A claim is "in tension" only if a sibling exists with
+    // a different subtle_claim or different domain on the same
+    // (referent, line). The v1 projection is mono-subtle (Value)
+    // and mono-domain per catalyst kind, so the tension gate is
+    // typically false. This is the correct semantics: a claim
+    // stands alone until a contradicting observation arrives.
+    let has_tension = siblings.iter().any(|s| {
+        s.referent == claim.referent
+            && s.line == claim.line
+            && (s.claim != claim.claim || s.domain != claim.domain)
+    });
+    if has_tension {
         Some(ThreeRealmClaim {
             polarity: PolarityState::ActiveTension,
             ..claim
@@ -468,7 +498,7 @@ mod tests {
     // subtle claim, marked `Integrated`.
 
     #[test]
-    fn advance_undiscovered_to_active_tension() {
+    fn advance_undiscovered_to_active_tension_with_tension_sibling() {
         let c = claim(
             CausalDomain::Material,
             GrossReferent::Event,
@@ -476,13 +506,36 @@ mod tests {
             "cognitive",
             PolarityState::Undiscovered,
         );
-        let advanced = advance_to_active_tension(c).expect("undiscovered should advance");
+        // Tension sibling: same (referent, line) but different subtle_claim.
+        let sibling = claim(
+            CausalDomain::Material,
+            GrossReferent::Event,
+            SubtleClaim::Value,
+            "cognitive",
+            PolarityState::Undiscovered,
+        );
+        let advanced = advance_to_active_tension(c, &[sibling])
+            .expect("undiscovered with tension sibling should advance");
         assert_eq!(advanced.polarity, PolarityState::ActiveTension);
         // Quartet preserved.
         assert_eq!(advanced.domain, CausalDomain::Material);
         assert_eq!(advanced.referent, GrossReferent::Event);
         assert_eq!(advanced.claim, SubtleClaim::Fact);
         assert_eq!(advanced.line.slug(), "cognitive");
+    }
+
+    #[test]
+    fn advance_undiscovered_without_sibling_stays_undiscovered() {
+        // DC-2.1 fix: an Undiscovered claim with no contradicting
+        // sibling stays Undiscovered (zero-at-zero invariant).
+        let c = claim(
+            CausalDomain::Material,
+            GrossReferent::Event,
+            SubtleClaim::Fact,
+            "cognitive",
+            PolarityState::Undiscovered,
+        );
+        assert!(advance_to_active_tension(c, &[]).is_none());
     }
 
     #[test]
@@ -494,7 +547,7 @@ mod tests {
             "cognitive",
             PolarityState::ActiveTension,
         );
-        assert!(advance_to_active_tension(c).is_none());
+        assert!(advance_to_active_tension(c, &[]).is_none());
     }
 
     #[test]

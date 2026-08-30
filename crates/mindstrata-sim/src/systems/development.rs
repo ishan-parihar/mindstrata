@@ -222,9 +222,16 @@ pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent
         advance_to_active_tension, is_active_tension, reconcile_subtle, PolarityState,
     };
     for agent in agents.iter_mut() {
+        // DC-2.1 fix: snapshot the claim list before the inner loop
+        // so `advance_to_active_tension` can read siblings without
+        // conflicting with the mutable borrow on `c`. The snapshot
+        // is a shallow `Vec<ThreeRealmClaim>` clone (`Copy` type),
+        // so the cost is bounded by the per-agent claim count
+        // (max ~33 per i278 over 2000 ticks).
+        let snapshot = agent.polarity_claims.clone();
         for c in &mut agent.polarity_claims {
             if c.polarity == PolarityState::Undiscovered {
-                if let Some(advanced) = advance_to_active_tension(*c) {
+                if let Some(advanced) = advance_to_active_tension(*c, &snapshot) {
                     *c = advanced;
                 }
             }
