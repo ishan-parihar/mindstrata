@@ -31,6 +31,12 @@ pub fn update_belief(
     current_tick: u64,
     params: &mindstrata_core::parameters::SimParameters,
     rigidity_factor: Fixed,
+    // DC-2.5 polarity → belief data path: per-line ActiveTension
+    // count biases the evidence term. Default 0 = identity-at-zero,
+    // so existing callers are unchanged. The coupling is small
+    // (`0.1 × count` bounded by the DC-2.1 advance-semantics fix
+    // that bounds the count to claims with contradicting siblings).
+    polarity_active_tension_count: usize,
 ) {
     let resistance = belief.resistance;
 
@@ -45,7 +51,12 @@ pub fn update_belief(
     // the honest closed-mindedness direction. Multiplication (not
     // division) keeps the dampening exact fixed-point. The raw evidence
     // still gates reinforcement decay.
-    let effective_evidence = evidence_strength * (Fixed::from_f64(2.0) - rigidity_factor);
+    // DC-2.5: polarity boost — `0.1 × count` added to evidence
+    // (identity-at-zero: count=0 → boost=0). Bounded by the count
+    // being small (siblings gate, per DC-2.1 fix).
+    let polarity_boost = Fixed::from_f64(0.1 * polarity_active_tension_count as f64);
+    let effective_evidence =
+        (evidence_strength + polarity_boost) * (Fixed::from_f64(2.0) - rigidity_factor);
 
     // §19.5.A: Blend explicit source_trust with belief's source base_trust.
     // This means the evidence source of the belief itself modulates trust.
@@ -98,7 +109,7 @@ pub fn update_belief(
 /// byte-identical to the pre-Iteration-168 behavior. ONE-SIDED: a dampening
 /// factor is always ≤ 1.0 and can only shrink the evidence magnitude,
 /// never flip its sign.
-pub fn update_beliefs(
+pub fn update_beliefs_with_polarity(
     beliefs: &mut [Belief],
     evidence: &[(u64, Fixed, Fixed)], // (proposition_id, evidence_strength, source_trust)
     emotional_reinforcement: Fixed,
@@ -107,6 +118,7 @@ pub fn update_beliefs(
     params: &mindstrata_core::parameters::SimParameters,
     rigidity_factor: Fixed,
     cultural_dampening: Fixed,
+    polarity_active_tension_count: usize,
 ) {
     for (prop_id, strength, trust) in evidence {
         if let Some(belief) = beliefs.iter_mut().find(|b| b.proposition_id == *prop_id) {
@@ -119,6 +131,7 @@ pub fn update_beliefs(
                 current_tick,
                 params,
                 rigidity_factor,
+                polarity_active_tension_count,
             );
         }
     }

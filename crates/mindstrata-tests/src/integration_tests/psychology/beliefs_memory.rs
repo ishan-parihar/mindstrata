@@ -418,6 +418,7 @@ fn noospheric_belief_confidence_sustains_conviction() {
             100,
             &params,
             Fixed::ONE,
+            0,
         );
         let mut rigid = make(0.5);
         update_belief(
@@ -429,6 +430,7 @@ fn noospheric_belief_confidence_sustains_conviction() {
             100,
             &params,
             factor,
+            0,
         );
         assert!(
             rigid.confidence < loose.confidence,

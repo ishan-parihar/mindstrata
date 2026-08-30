@@ -934,7 +934,19 @@ impl Simulation {
                         Fixed::ZERO
                     };
 
-                    belief_update::update_beliefs(
+                    // DC-2.5 polarity → belief data path:
+                    // supply the per-agent ActiveTension count
+                    // from the polarity_claims list. Bounded by
+                    // the DC-2.1 advance-semantics fix.
+                    let polarity_active_tension_count = self.agents[from_idx]
+                        .polarity_claims
+                        .iter()
+                        .filter(|c| {
+                            c.polarity
+                                == mindstrata_development::polarity::PolarityState::ActiveTension
+                        })
+                        .count();
+                    belief_update::update_beliefs_with_polarity(
                         &mut self.agents[from_idx].beliefs,
                         &[(2, evidence_strength, source_trust)],
                         emotional_reinforcement,
@@ -943,6 +955,7 @@ impl Simulation {
                         &self.params,
                         rigidity_factor,
                         cultural_dampening,
+                        polarity_active_tension_count,
                     );
                 }
             }
