@@ -807,7 +807,7 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
                 .iter()
                 .filter(|c| c.polarity == crate::development::PolarityState::ActiveTension)
                 .count();
-            utility += Fixed::from_f64(0.02 * active_tension_count as f64) * def.social_value;
+            utility += Fixed::from_f64(0.05 * active_tension_count as f64) * def.social_value;
         }
         // Habit modifier: routine actions get a boost under stress
         let is_routine = matches!(
