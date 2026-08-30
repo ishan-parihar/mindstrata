@@ -638,6 +638,21 @@ impl Simulation {
         let polarity_window = &self.events[pre_tick_events..];
         crate::systems::development::system_polarity_claim_emit(&mut self.agents, polarity_window);
 
+        // ── DC-1 STORY 11: collective-field step. Reuses the same
+        // pre_tick_events window that the dev + polarity passes just
+        // consumed — zero extra allocation, one extra walk. The village
+        // `CollectiveField` lives on `Simulation` (per-village, not
+        // per-agent); pressure derivation is the v1 simple
+        // catalyst-bucketed distribution (see system_collective_field_step
+        // for the mapping). The current `step_collective` impl is
+        // inert (returns self; WP-I ponytail), so the v1 wire is the
+        // input to the future WP-I implementation.
+        crate::systems::development::system_collective_field_step(
+            &mut self.collective_field,
+            polarity_window,
+            self.agents.len(),
+        );
+
         // ── §6 + §10.6/§10.7: Kinship & Household daily update ──
         self.tick_kinship_household_daily(tick_u64, phases);
 

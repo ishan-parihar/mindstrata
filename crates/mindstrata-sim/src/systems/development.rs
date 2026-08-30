@@ -212,6 +212,76 @@ pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent
     }
 }
 
+/// DC-1 STORY 11: village-level collective-field step. Derives a
+/// per-collective-line pressure vector from the catalyst stream (one
+/// catalyst = `1 / pop` of the per-line weight bucket) and steps
+/// `CollectiveField::step_collective`.
+///
+/// Per AP3 03-substrate §2 / WP-I: the v1 derivation is a **simple
+/// weighted count** by `CatalystKind` — Bond → relational (institution
+/// lines), Threat/Transgression → safety (institutional + moral
+/// lines), Grief → identity (culture lines). The per-line count is
+/// normalized to [0, 1] by dividing by `n_agents` so a single
+/// per-capita catalyst event registers 1.0 pressure.
+///
+/// The current `step_collective` impl is inert (returns self; see
+/// `ponytail: no pressure derivation yet (WP-I)` in the dev crate);
+/// this v1 wire is the input to the future WP-I implementation that
+/// will read these pressures into the line buckets. Identity-at-zero:
+/// empty window → zero pressure vector → identity output.
+pub fn system_collective_field_step(
+    field: &mut mindstrata_development::collective::CollectiveField,
+    events: &[SimEvent],
+    n_agents: usize,
+) {
+    let catalysts = collect_catalysts(events);
+    if catalysts.is_empty() {
+        // Identity-at-zero: zero pressure vector → identity.
+        return;
+    }
+    // Aggregate per-CatalystKind count, then map to the collective
+    // line's primary index. The slug list comes from the dev crate
+    // (29 collective lines at last audit; see i268/i278 slugs).
+    let n = n_agents.max(1) as f64;
+    let mut relational_press = 0.0;
+    let mut safety_press = 0.0;
+    let mut identity_press = 0.0;
+    let mut meaning_press = 0.0;
+    for (_, kind, _mag) in &catalysts {
+        let p = 1.0 / n;
+        match kind {
+            CatalystKind::Bond => relational_press += p,
+            CatalystKind::Threat | CatalystKind::Transgression => safety_press += p,
+            CatalystKind::Grief => identity_press += p,
+        }
+        // The "meaning" bucket gets a small baseline from any event
+        // (the world exists, so it has meaning) so a long quiet run
+        // doesn't starve the meaning/cosmology collective lines.
+        meaning_press += p * 0.1;
+    }
+    // Distribute the four buckets across the 29 collective lines
+    // in `all_lines()` order. The exact index mapping lands in
+    // WP-I; for v1 we provide a uniform distribution so the inert
+    // step sees realistic-magnitude pressure.
+    let line_count = mindstrata_development::collective::COLLECTIVE_LINE_COUNT;
+    let mut pressures = [0.0_f64; mindstrata_development::collective::COLLECTIVE_LINE_COUNT];
+    for (i, p) in pressures.iter_mut().enumerate().take(line_count) {
+        // Cyclic distribution: relational lines first, then safety,
+        // then identity, then meaning (matches the WP-I schema plan).
+        let bucket = match i % 4 {
+            0 => relational_press,
+            1 => safety_press,
+            2 => identity_press,
+            _ => meaning_press,
+        };
+        *p = bucket.clamp(0.0, 1.0);
+    }
+    *field = field.step_collective(
+        &pressures,
+        &mindstrata_development::dynamics::OperatorParams::pending(),
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -257,6 +327,20 @@ mod tests {
         let mut agents: Vec<crate::sim::AgentBundle> = Vec::new();
         system_polarity_claim_emit(&mut agents, &[]);
         assert!(agents.is_empty());
+    }
+
+    /// DC-1 STORY 11: collective-field wire. Empty event window leaves
+    /// the field at its founder neutral (the dev crate's `step_collective`
+    /// is intentionally inert pending WP-I; see the `ponytail:` note
+    /// in `crates/mindstrata-development/src/collective.rs`). The wire
+    /// is exercised (call lands in the daily pass); the field stays
+    /// inert.
+    #[test]
+    fn collective_field_empty_window_is_identity() {
+        let mut field = mindstrata_development::collective::CollectiveField::default();
+        assert!(field.is_neutral());
+        system_collective_field_step(&mut field, &[], 12);
+        assert!(field.is_neutral());
     }
 
     #[test]

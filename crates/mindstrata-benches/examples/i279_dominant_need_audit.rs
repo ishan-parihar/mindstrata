@@ -82,7 +82,11 @@ fn main() {
     }
     let mut sorted: Vec<(&&str, &usize)> = total.iter().collect();
     sorted.sort_by(|x, y| y.1.cmp(x.1));
-    println!("\n--- aggregate saturation across {} seeds × 12 agents = {} agent-ticks ---", SEEDS.len(), SEEDS.len() * 12);
+    println!(
+        "\n--- aggregate saturation across {} seeds × 12 agents = {} agent-ticks ---",
+        SEEDS.len(),
+        SEEDS.len() * 12
+    );
     for (need, count) in sorted {
         let rate = *count as f64 / (SEEDS.len() as f64 * 12.0);
         println!("need={need} sat_count={count} rate={rate:.3}");

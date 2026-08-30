@@ -72,6 +72,7 @@ impl Simulation {
             ritual_registry: crate::culture::RitualRegistry::default(),
             rumor_registry: crate::culture::RumorRegistry::default(),
             collective_memory_registry: crate::culture::CollectiveMemoryRegistry::default(),
+            collective_field: mindstrata_development::collective::CollectiveField::default(),
             echo_chamber: crate::culture::EchoChamberState::new(),
             clan_registry: crate::social::clan::ClanRegistry::new(),
             marriage_registry: crate::social::marriage::MarriageRegistry::new(),
@@ -295,6 +296,10 @@ impl Simulation {
             ritual_registry: crate::culture::RitualRegistry::default(),
             rumor_registry: crate::culture::RumorRegistry::default(),
             collective_memory_registry: snapshot.collective_memory_registry,
+            // DC-1 STORY 11: collective field is fresh on restore (the
+            // field is per-tick emergent, not serialized); the daily pass
+            // recomputes it deterministically from the catalyst stream.
+            collective_field: mindstrata_development::collective::CollectiveField::default(),
             echo_chamber: crate::culture::EchoChamberState::new(),
             clan_registry: crate::social::clan::ClanRegistry::new(),
             marriage_registry: crate::social::marriage::MarriageRegistry::new(),

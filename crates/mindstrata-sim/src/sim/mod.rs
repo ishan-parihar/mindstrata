@@ -658,6 +658,12 @@ pub struct Simulation {
     pub rumor_registry: crate::culture::RumorRegistry,
     /// Architecture-plan-2 §13.5: Collective memory registry — shared group memories.
     pub collective_memory_registry: crate::culture::CollectiveMemoryRegistry,
+    /// DC-1 STORY 11: Village-level development field — the
+    /// emergent-field over collective lines (per AP3 03-substrate
+    /// §2 / WP-I). Inert by default (`step_collective` returns self);
+    /// the v1 wire is wired in via the daily pass (see
+    /// `systems/development.rs::system_collective_field_step`).
+    pub collective_field: mindstrata_development::collective::CollectiveField,
     /// Architecture-plan-2 §13.6: Echo chamber state — belief clusters and polarization.
     pub echo_chamber: crate::culture::EchoChamberState,
     /// Architecture-plan-2 §10.8: Clan registry — emergent kinship-plus-alliance groups.
