@@ -19,6 +19,19 @@ echo "[gate 2.5/3] bench naming law (IC-4)"
 python3 scripts/bench_index.py --strict 2>&1 | tail -5
 python3 scripts/bench_index.py --strict
 
+# DC-1 TOOLS 19-22: seed-family sweep is the calibration-audit-v2
+# CA-1/CA-2/CA-4 instrument. Run it in --quick (12 seeds, 4000 ticks)
+# on every non-full gate so a single broken seed is caught before
+# commit. Full gate skips this (the i268 output is informational;
+# the i268 results are pinned in golden baselines via the golden
+# custody contract).
+SweepOutput=$(cargo run --release -p mindstrata-benches --example i268_seed_family_sweep 2>&1)
+echo "$SweepOutput" | tail -3
+if ! echo "$SweepOutput" | grep -q "verdict=FAMILY_PASS"; then
+    echo "SEED FAMILY SWEEP FAILED"
+    exit 1
+fi
+
 if [ "$FULL" -eq 1 ]; then
     echo "[gate 2.6/3] perf budgets --quick (IC-8 + perf-budget.md floor)"
     cargo run --release -p mindstrata-benches --example i271_render_perf -- --quick
