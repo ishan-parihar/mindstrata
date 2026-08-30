@@ -112,6 +112,6 @@ here + git. Wave-1/2 of the plan's phase 1 landed through commit b56164a.
 | TOOLS | 22 | 8 (probe gen, bench_index, afa codegen, scenario MVP, metrics diff @2.14, devex loops, rollout @3.11, beat dashboards @fd2dd66) | P16 | — |
 | QA | 10 | 8 (evidence schema+validator, golden custody PASS, cal-audit v2, suite segmentation @19d2310, IC-6 gates v1.0.0 @c47b0ae, i268 sweep 12/12 PASS, UM-1 bundle @2caa20f) | P10 | — |
 | DESIGN | 12 | 7 (canon inventory, balance skeletons, needs-bands v1 + pathology-curves v1, IC-5 @c2016f6, pacing v1 + difficulty levers DRAFT @8a11747) | P10 | — |
-| PLATFORM | 11 | 10 (IC-3 @80e1a3f, RNG census, perf-budget v1, IC-8 @1dea277, gate --quick @21fd945, CI AA-mode + modding survey @c5baa9e, IC-7 modding v0.5.0 DRAFT @8b329c9) | P11 | — |
+| PLATFORM | 11 | 11 (IC-3 @80e1a3f, RNG census, perf-budget v1, IC-8 @1dea277, gate --quick @21fd945, CI AA-mode + modding survey @c5baa9e, IC-7 modding v0.5.0 DRAFT @8b329c9, IC-7 v1.0.0 RATIFIED @aea8878) | P11 | — |
 
 Progress since 2026-08-25: 18 architect-driven commits (3.6→3.16→2.14→3.7→3.8→3.9→5.17→3.10→3.11→3.12→3.13/3.14 + IC-5/IC-2/IC-6/IC-8/gate/UM-1 + pacing/difficulty/CI/modding/beat-dashboards + SIM 12-13 CO-2026-001) — DC-1 P0 **COMPLETE** and tail closing: 49/106 phases delivered (SIM 6 STORY 3 CLIENT 10 TOOLS 8 QA 8 DESIGN 7 PLATFORM 9). Remaining tail 57 phases (SIM 8 STORY 10 CLIENT 14 TOOLS 14 DESIGN 5 PLATFORM 2) is CLIENT polish + STORY polarity/collective wiring — see evidence/FINAL-AUDIT-DC1-contrast.md (audit at 49/106).
