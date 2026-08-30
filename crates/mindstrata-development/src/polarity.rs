@@ -154,6 +154,86 @@ pub fn is_active_tension(a: &ThreeRealmClaim, b: &ThreeRealmClaim) -> bool {
         && b.polarity == PolarityState::ActiveTension
 }
 
+/// Advance a claim to `ActiveTension` if it is currently `Undiscovered`.
+/// This is the integration policy hook: when a new catalyst arrives
+/// that collides with an existing claim on (referent, line), the
+/// existing claim is promoted to `ActiveTension` so the pair is eligible
+/// for reconciliation.
+///
+/// `Undiscovered → ActiveTension` is identity-preserving on the
+/// (domain, referent, claim, line) quartet; only the polarity flips.
+/// Returns `None` if the claim is already past `Undiscovered` (no
+/// re-promotion of `Integrated` or `ActiveTension`).
+///
+/// DC-1 STORY 12-13 (subtle-claim reconciliation path): this is the
+/// low-impact alternative to the opposite-domain path (see
+/// `reconcile_claims`). The v1 projection is same-domain for any
+/// given `CatalystKind`, so collisions on (referent, line) are
+/// same-domain by default — but two claims with **different
+/// `subtle_claim`** (e.g., `Fact` vs `Value`, both `Undiscovered` then
+/// `ActiveTension`) can still be reconciled. The simulator's
+/// `system_polarity_reconcile` calls `advance_to_active_tension` on
+/// the older claim, then `reconcile_claims` (which requires
+/// `a.domain != b.domain`) would still return `None`; instead, the
+/// sim calls `reconcile_subtle` which only requires
+/// `a.claim != b.claim`.
+#[must_use]
+pub fn advance_to_active_tension(claim: ThreeRealmClaim) -> Option<ThreeRealmClaim> {
+    if claim.polarity == PolarityState::Undiscovered {
+        Some(ThreeRealmClaim {
+            polarity: PolarityState::ActiveTension,
+            ..claim
+        })
+    } else {
+        None
+    }
+}
+
+/// Subtle-claim-based reconciliation (DC-1 STORY 12-13, option a).
+/// Two claims on the same `(domain, referent, line)` with
+/// different `subtle_claim` (e.g., `Fact` vs `Norm` on the same
+/// Material/Event/safety issue) reconcile to the more encompassing
+/// subtle claim (Norm > Value > Identity > Fact), marked
+/// `Integrated`. Same domain is fine here — the polarity is in the
+/// subtle layer, not the causal layer.
+///
+/// Zero-at-zero: if either claim is `Undiscovered`, no reconciliation
+/// (the caller is responsible for advancing them to `ActiveTension`
+/// first via `advance_to_active_tension`).
+///
+/// Returns `Some(synthesized)` when reconciliation is type-legal,
+/// `None` when claims share the same subtle claim (no polarity to
+/// resolve), are already `Integrated`, or are on different
+/// (domain, referent, line).
+#[must_use]
+pub fn reconcile_subtle(a: &ThreeRealmClaim, b: &ThreeRealmClaim) -> Option<ThreeRealmClaim> {
+    if a.polarity == PolarityState::Undiscovered || b.polarity == PolarityState::Undiscovered {
+        return None;
+    }
+    if a.polarity == PolarityState::Integrated || b.polarity == PolarityState::Integrated {
+        return None;
+    }
+    if a.domain != b.domain || a.referent != b.referent || a.line != b.line {
+        return None;
+    }
+    if a.claim == b.claim {
+        return None;
+    }
+    let synthesized_claim = match (a.claim, b.claim) {
+        (SubtleClaim::Norm, _) | (_, SubtleClaim::Norm) => SubtleClaim::Norm,
+        (SubtleClaim::Value, _) | (_, SubtleClaim::Value) => SubtleClaim::Value,
+        (SubtleClaim::Identity, _) | (_, SubtleClaim::Identity) => SubtleClaim::Identity,
+        _ => SubtleClaim::Fact,
+    };
+    Some(ThreeRealmClaim {
+        domain: a.domain,
+        referent: a.referent,
+        claim: synthesized_claim,
+        line: a.line,
+        polarity: PolarityState::Integrated,
+    })
+}
+
 /// Pure projection: which `(domain, referent, claim, line)` quartet a
 /// catalyst kind produces. FR-031 data-path wire — the sim crate
 /// applies this per `CatalystEvent` and appends the resulting claim
@@ -179,7 +259,7 @@ pub fn project_catalyst(kind: crate::catalyst::CatalystKind) -> ThreeRealmClaim 
             CausalDomain::Material,
             GrossReferent::Event,
             SubtleClaim::Fact,
-            "safety",
+            "cognitive",
         ),
         CatalystKind::Bond => (
             CausalDomain::Relational,
@@ -197,7 +277,7 @@ pub fn project_catalyst(kind: crate::catalyst::CatalystKind) -> ThreeRealmClaim 
             CausalDomain::Material,
             GrossReferent::Event,
             SubtleClaim::Identity,
-            "safety",
+            "cognitive",
         ),
     };
     let line = LineId::new(line_slug).unwrap_or_else(|| {
@@ -380,5 +460,120 @@ mod tests {
             PolarityState::ActiveTension,
         );
         assert!(reconcile_claims(&a, &b).is_none());
+    }
+
+    // DC-1 STORY 12-13: subtle-claim-based reconciliation (option a).
+    // Same (domain, referent, line), different `subtle_claim`,
+    // both `ActiveTension` → reconcile to the more encompassing
+    // subtle claim, marked `Integrated`.
+
+    #[test]
+    fn advance_undiscovered_to_active_tension() {
+        let c = claim(
+            CausalDomain::Material,
+            GrossReferent::Event,
+            SubtleClaim::Fact,
+            "cognitive",
+            PolarityState::Undiscovered,
+        );
+        let advanced = advance_to_active_tension(c).expect("undiscovered should advance");
+        assert_eq!(advanced.polarity, PolarityState::ActiveTension);
+        // Quartet preserved.
+        assert_eq!(advanced.domain, CausalDomain::Material);
+        assert_eq!(advanced.referent, GrossReferent::Event);
+        assert_eq!(advanced.claim, SubtleClaim::Fact);
+        assert_eq!(advanced.line.slug(), "cognitive");
+    }
+
+    #[test]
+    fn advance_does_not_re_advance_active_tension() {
+        let c = claim(
+            CausalDomain::Material,
+            GrossReferent::Event,
+            SubtleClaim::Fact,
+            "cognitive",
+            PolarityState::ActiveTension,
+        );
+        assert!(advance_to_active_tension(c).is_none());
+    }
+
+    #[test]
+    fn reconcile_subtle_fact_and_norm_yields_norm_integrated() {
+        let a = claim(
+            CausalDomain::Material,
+            GrossReferent::Event,
+            SubtleClaim::Fact,
+            "cognitive",
+            PolarityState::ActiveTension,
+        );
+        let b = claim(
+            CausalDomain::Material,
+            GrossReferent::Event,
+            SubtleClaim::Norm,
+            "cognitive",
+            PolarityState::ActiveTension,
+        );
+        let synth = reconcile_subtle(&a, &b)
+            .expect("fact+norm same-domain same-referent same-line should reconcile");
+        assert_eq!(synth.claim, SubtleClaim::Norm);
+        assert_eq!(synth.domain, CausalDomain::Material);
+        assert_eq!(synth.polarity, PolarityState::Integrated);
+    }
+
+    #[test]
+    fn reconcile_subtle_rejects_same_claim() {
+        let a = claim(
+            CausalDomain::Material,
+            GrossReferent::Event,
+            SubtleClaim::Fact,
+            "cognitive",
+            PolarityState::ActiveTension,
+        );
+        let b = claim(
+            CausalDomain::Material,
+            GrossReferent::Event,
+            SubtleClaim::Fact,
+            "cognitive",
+            PolarityState::ActiveTension,
+        );
+        assert!(reconcile_subtle(&a, &b).is_none());
+    }
+
+    #[test]
+    fn reconcile_subtle_rejects_undiscovered() {
+        let a = claim(
+            CausalDomain::Material,
+            GrossReferent::Event,
+            SubtleClaim::Fact,
+            "cognitive",
+            PolarityState::Undiscovered,
+        );
+        let b = claim(
+            CausalDomain::Material,
+            GrossReferent::Event,
+            SubtleClaim::Norm,
+            "cognitive",
+            PolarityState::ActiveTension,
+        );
+        assert!(reconcile_subtle(&a, &b).is_none());
+    }
+
+    #[test]
+    fn reconcile_subtle_rejects_different_line() {
+        let a = claim(
+            CausalDomain::Material,
+            GrossReferent::Event,
+            SubtleClaim::Fact,
+            "cognitive",
+            PolarityState::ActiveTension,
+        );
+        let b = claim(
+            CausalDomain::Material,
+            GrossReferent::Event,
+            SubtleClaim::Norm,
+            "religion-statistical",
+            PolarityState::ActiveTension,
+        );
+        assert!(reconcile_subtle(&a, &b).is_none());
     }
 }

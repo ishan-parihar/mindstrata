@@ -210,6 +210,48 @@ pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent
         let claim = mindstrata_development::polarity::project_catalyst(kind);
         agents[agent_idx].polarity_claims.push(claim);
     }
+
+    // DC-1 STORY 12-13: subtle-claim-based reconciliation pass.
+    // For each agent, advance Undiscovered→ActiveTension, then for every
+    // (ActiveTension, ActiveTension) same-(domain, referent, line) pair
+    // with different `subtle_claim`, reconcile to the more encompassing
+    // subtle claim (fact<norm<value) marked Integrated. The
+    // reconciliation is pure: it modifies the agent's `polarity_claims`
+    // in-place. No RNG, no state outside the agent's claim list.
+    use mindstrata_development::polarity::{
+        advance_to_active_tension, is_active_tension, reconcile_subtle, PolarityState,
+    };
+    for agent in agents.iter_mut() {
+        for c in &mut agent.polarity_claims {
+            if c.polarity == PolarityState::Undiscovered {
+                if let Some(advanced) = advance_to_active_tension(*c) {
+                    *c = advanced;
+                }
+            }
+        }
+        // Reconciliation scan: for each pair of ActiveTension claims with
+        // matching (domain, referent, line) but different `subtle_claim`,
+        // produce the synthesized Integrated claim. Dedupe is implicit
+        // (one synth replaces both, so no double-count).
+        let mut synths: Vec<usize> = Vec::new();
+        let n = agent.polarity_claims.len();
+        for i in 0..n {
+            for j in (i + 1)..n {
+                if is_active_tension(&agent.polarity_claims[i], &agent.polarity_claims[j]) {
+                    if let Some(synth) =
+                        reconcile_subtle(&agent.polarity_claims[i], &agent.polarity_claims[j])
+                    {
+                        agent.polarity_claims[i] = synth;
+                        synths.push(j);
+                    }
+                }
+            }
+        }
+        // Remove reconciled claims in reverse order to preserve indices.
+        for &j in synths.iter().rev() {
+            agent.polarity_claims.remove(j);
+        }
+    }
 }
 
 /// DC-1 STORY 11: village-level collective-field step. Derives a

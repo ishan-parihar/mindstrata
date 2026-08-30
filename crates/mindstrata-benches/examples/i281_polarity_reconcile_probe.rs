@@ -81,6 +81,56 @@ fn main() {
     } else {
         println!("verdict=POLARITY_RECONCILE_INERT (no opposite-domain collisions)");
     }
+
+    // DC-1 STORY 12-13: also measure the subtle-claim reconciliation path
+    // (same-domain, different `subtle_claim` on same (referent, line)).
+    // Per the i281 v1 finding the opposite-domain path is projection-bound
+    // (every catalyst projects to a fixed domain); the subtle-claim path
+    // is the lowest-impact alternative.
+    let seeds2 = [1u64, 7, 42, 99, 123, 12345];
+    let mut total_subtle = 0usize;
+    for &seed in &seeds2 {
+        let config = SimConfig {
+            seed,
+            max_ticks: 2000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(2000);
+        let mut seed_subtle = 0usize;
+        for agent in &sim.agents {
+            let n = agent.polarity_claims.len();
+            for i in 0..n {
+                for j in (i + 1)..n {
+                    if mindstrata_development::polarity::is_active_tension(
+                        &agent.polarity_claims[i],
+                        &agent.polarity_claims[j],
+                    ) {
+                        if mindstrata_development::polarity::reconcile_subtle(
+                            &agent.polarity_claims[i],
+                            &agent.polarity_claims[j],
+                        )
+                        .is_some()
+                        {
+                            seed_subtle += 1;
+                        }
+                    }
+                }
+            }
+        }
+        total_subtle += seed_subtle;
+        println!("subtle_seed={seed} reconcile_eligible={seed_subtle}");
+    }
+    println!("subtle_reconcile_total={total_subtle}");
+    if total_subtle > 0 {
+        println!("subtle_verdict=POLARITY_RECONCILE_SUBTLE_LIVE");
+    } else {
+        println!("subtle_verdict=POLARITY_RECONCILE_SUBTLE_INERT (no (ActiveTension, ActiveTension) same-quartet with different subtle_claim)");
+    }
 }
 
 fn referent_label(r: mindstrata_development::polarity::GrossReferent) -> &'static str {
