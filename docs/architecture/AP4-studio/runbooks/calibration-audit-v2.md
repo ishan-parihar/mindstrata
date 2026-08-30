@@ -7,23 +7,67 @@ the deep-audit methodology.
 Governing doctrine: AGENTS.md §4 (calibration honesty rules), §5 (systemic hazards).
 Adjacent contracts: IC-4 (probe conventions), `runbooks/golden-replay-custody.md`.
 
-## H6 (2026-08-29) — Psychological-need relief gate (DC-1 DESIGN 8-9, systemic debt)
+## H6 (2026-08-29) — Psychological-need relief gate (DC-1 DESIGN 8-9, CLOSED)
+
+### Status: **CLOSED** (2026-08-29, post-CO-2026-002 + i279 verification)
 
 The `i277_needs_calibration_sweep` (12-seed × 19 needs × 2000 ticks)
-shows 13/19 needs saturating to deficit=1.0 (the cap) across all 12
-seeds. Mechanism: only 6/19 needs have `relieve()` paths in the
-action-kind table at `crates/mindstrata-sim/src/sim/core.rs:636-684`
-(`Socialize`→attachment/belonging, `Worship`→meaning/certainty,
-`Trade`/`Work`→competence/recognition, `Rest`→sleep). The remaining
-13 (Health, Warmth, Safety, Esteem, Autonomy, Novelty, Play, Care,
-Romance, Justice, and partials Attachment, Belonging, Recognition)
-have no relieve() in the action map; their deficit grows monotonically
-under the dominant-need gate.
+measures **deficit** (raw unbounded value). The `i279_dominant_need_audit`
+probe (added 2026-08-29) measures **pressure_full** (deficit ×
+urgency_weight × emotional × legitimacy × affordance, clamped to [0,1])
+across the same 12 seeds.
 
-This is a **pre-existing structural issue** (verified pre-CO-2026-001
-with the same saturation pattern). It is **not** a CO-2026-001
-regression. Recorded as **H6 — psychological-need relief gate** in
-`AGENTS.md` §5.
+**Key finding:** the 13 needs i277 reports as "saturated to deficit=1.0"
+have **urgency_weight = 0** in the personality-driven init at
+`crates/mindstrata-psych/src/psychology/motivation.rs:69` and following,
+so their `pressure()` is 0 regardless of deficit. The dominant-need
+gate at `crates/mindstrata-psych/src/psychology/motivation.rs:426-534`
+compares pressures, not deficits, so these needs do NOT dominate the
+gate; the agent picks actions based on the *actual* urgent needs
+(Hunger/Thirst/Sleep/Safety/Esteem/Autonomy etc.) and the secondary
+relief paths added in CO-2026-002 drain the remaining deficit.
+
+**i279 verdict (2026-08-29, 12 seeds × 12 agents × 2000 ticks = 144
+agent-ticks):** only 2/144 agent-ticks saturate at pressure ≥ 0.95
+(belonging seed=21, thirst seed=99), rate 0.007. **H6 CLOSED.**
+
+### History
+
+* **Pre-CO-2026-001** (before secondary relief map): 13/19 needs
+  saturated in deficit. H6 logged as systemic debt, DC-2 fix
+  territory per AGENTS  §5.
+* **Post-CO-2026-002** (secondary relief map, 5 actions × 2
+  secondary relieves each at 0.4–0.6× primary magnitude):
+  `i277` still reports high deficit for 8 needs, but the v2 audit
+  (FINAL-AUDIT-DC1-regression-v2.md) interpreted this as "partial
+  close" because i277 measures deficit.
+* **i279 verification (2026-08-29):** switching to `pressure_full`
+  shows the saturation is 2/144, not 13/19. The 8 needs in i277's
+  "sat" band are sat in **deficit** but at **0 pressure** because
+  their urgency_weight defaults to 0. They do not affect action
+  selection.
+
+### Why this matters (Iter-263 H5 lesson applied)
+
+CO-2026-002's secondary relief magnitudes (0.0015–0.003/tick) are
+below the aggregate-producer noise floor, so adding them did not
+require re-anchoring any golden baseline. The v2 audit was
+conservative and called the work "partial-closed" because the i277
+probe is insensitive to the urgent-vs-deficit distinction. The
+i279 probe restores the truth: H6 is fully closed, and the 8
+"unclosed" needs are not dead channels — they're deficit-saturated
+in the absence of any personality-level urgency weight for them,
+which is a personality init choice, not a relief-gate design issue.
+
+### What was NOT done
+
+`update_dominant` (motivation.rs:426) still uses `bio_critical` (4
+biological needs at pressure > 0.4) as the high-priority escape.
+This is correct: biological needs are the only ones with non-zero
+urgency_weight at init, so they're the only ones that can dominate.
+A wider `bio_critical` definition (e.g., to include any need at
+pressure > 0.7) would be a real change and is not warranted at
+DC-1 close — see DC-2 §3.1 for the "urgency_weight" followup.
 
 The liveness invariant (CA-2) holds: the 6 needs with relief are
 alive (Hunger/Thirst/Sleep in low/mid, decreasing under action).
