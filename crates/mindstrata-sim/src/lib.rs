@@ -26,6 +26,7 @@ pub mod conflict {
     pub use mindstrata_social::conflict::*;
 }
 pub mod development {
+    pub use mindstrata_development::lore::*;
     pub use mindstrata_development::polarity::*;
 }
 pub mod culture {

@@ -69,6 +69,7 @@ fn broke_hungry_agent_prefers_eat_over_trade() {
             life_stage: 4,
             somatic_marker: Fixed::ZERO,
             development: &crate::psychology::DevelopmentFieldState::default(),
+            polarity_claims: &[],
         },
         &mut rng,
     );
@@ -126,6 +127,7 @@ fn wealthy_hungry_agent_can_prefer_trade() {
             life_stage: 4,
             somatic_marker: Fixed::ZERO,
             development: &crate::psychology::DevelopmentFieldState::default(),
+            polarity_claims: &[],
         },
         &mut rng,
     );
@@ -180,6 +182,7 @@ fn utility_prefers_food_when_hungry() {
             life_stage: 4,
             somatic_marker: Fixed::ZERO,
             development: &crate::psychology::DevelopmentFieldState::default(),
+            polarity_claims: &[],
         },
         &mut rng,
     );
@@ -291,6 +294,7 @@ fn scarcity_increases_food_utility() {
             life_stage: 4,
             somatic_marker: Fixed::ZERO,
             development: &crate::psychology::DevelopmentFieldState::default(),
+            polarity_claims: &[],
         },
         &mut rng,
     );
@@ -344,6 +348,7 @@ fn scarcity_increases_water_utility() {
             life_stage: 4,
             somatic_marker: Fixed::ZERO,
             development: &crate::psychology::DevelopmentFieldState::default(),
+            polarity_claims: &[],
         },
         &mut rng,
     );
@@ -1103,6 +1108,7 @@ fn dread_shifts_selection_toward_provisioning() {
                     life_stage: 4,
                     somatic_marker: Fixed::ZERO,
                     development: &crate::psychology::DevelopmentFieldState::default(),
+                    polarity_claims: &[],
                 },
                 &mut rng,
             );

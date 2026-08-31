@@ -537,6 +537,14 @@ pub struct AgentBundle {
     /// bundle-field law.
     #[serde(default)]
     pub polarity_claims: Vec<crate::development::ThreeRealmClaim>,
+    /// Lore archetype framing for each emitted claim (DC-2.7, STORY lore).
+    /// Parallel to `polarity_claims`: `lore_archetypes[i]` is the
+    /// `archetype_for_claim(&polarity_claims[i])` at emission time.
+    /// Pure, deterministic, append-only; `#[serde(default)]` keeps v13
+    /// saves loadable with an empty history (the v13→v14 migration is
+    /// the no-op bump in `SNAPSHOT_VERSION`).
+    #[serde(default)]
+    pub lore_archetypes: Vec<crate::development::LoreArchetype>,
 }
 
 /// §4.2: Skill levels that improve through repeated practice.

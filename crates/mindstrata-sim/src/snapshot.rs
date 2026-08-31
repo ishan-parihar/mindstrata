@@ -126,7 +126,11 @@ pub struct Snapshot {
 /// `development: DevelopmentFieldState` (AP3 attractor field + pathology).
 /// `#[serde(default)]` on the bundle field keeps v12 bytes loadable; the
 /// v12→v13 migration is the no-op example in `mindstrata_core::migration`.
-pub const SNAPSHOT_VERSION: u32 = 13;
+/// Iteration DC-2.7: bumped 13 → 14 — `AgentBundle` gained
+/// `lore_archetypes: Vec<LoreArchetype>` (parallel to `polarity_claims`,
+/// pure `archetype_for_claim` at emission). `#[serde(default)]` keeps v13
+/// saves loadable with an empty history.
+pub const SNAPSHOT_VERSION: u32 = 14;
 
 /// Save-schema framework v0 (task 2.17) — version header + migration trait.
 ///

@@ -189,6 +189,8 @@ impl Simulation {
             // (no catalysts encountered yet); `project_catalyst` fills
             // the list in the daily pass.
             polarity_claims: Vec::new(),
+            // DC-2.7: lore archetype history, parallel to polarity_claims.
+            lore_archetypes: Vec::new(),
         }
     }
 
@@ -785,6 +787,8 @@ impl Simulation {
                     // DC-1 STORY 9-10: newborn polarity_claims start empty
                     // (no catalysts encountered yet).
                     polarity_claims: Vec::new(),
+                    // DC-2.7: lore archetype history, parallel.
+                    lore_archetypes: Vec::new(),
                 });
                 // §10.2 (Iteration 92): keep the O(1) relationship_v2s matrix
                 // complete — the newborn must appear in every agent's vec and

@@ -208,7 +208,9 @@ pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent
             continue;
         }
         let claim = mindstrata_development::polarity::project_catalyst(kind);
+        let archetype = mindstrata_development::lore::archetype_for_claim(&claim);
         agents[agent_idx].polarity_claims.push(claim);
+        agents[agent_idx].lore_archetypes.push(archetype);
     }
 
     // DC-1 STORY 12-13: subtle-claim-based reconciliation pass.
@@ -222,6 +224,15 @@ pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent
         advance_to_active_tension, is_active_tension, reconcile_subtle, PolarityState,
     };
     for agent in agents.iter_mut() {
+        // DC-2.7 backfill for v13→v14 migration: old saves have empty
+        // lore history; rebuild deterministically from current claims.
+        if agent.lore_archetypes.len() != agent.polarity_claims.len() {
+            agent.lore_archetypes = agent
+                .polarity_claims
+                .iter()
+                .map(mindstrata_development::lore::archetype_for_claim)
+                .collect();
+        }
         // DC-2.1 fix: snapshot the claim list before the inner loop
         // so `advance_to_active_tension` can read siblings without
         // conflicting with the mutable borrow on `c`. The snapshot
@@ -249,6 +260,12 @@ pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent
                         reconcile_subtle(&agent.polarity_claims[i], &agent.polarity_claims[j])
                     {
                         agent.polarity_claims[i] = synth;
+                        // DC-2.7: keep lore archetype history parallel to claims.
+                        let synth_arch = mindstrata_development::lore::archetype_for_claim(&synth);
+                        // Keep parallel lore history sized (v13 saves have empty vec).
+                        if agent.lore_archetypes.len() > i {
+                            agent.lore_archetypes[i] = synth_arch;
+                        }
                         synths.push(j);
                     }
                 }
@@ -257,6 +274,9 @@ pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent
         // Remove reconciled claims in reverse order to preserve indices.
         for &j in synths.iter().rev() {
             agent.polarity_claims.remove(j);
+            if j < agent.lore_archetypes.len() {
+                agent.lore_archetypes.remove(j);
+            }
         }
     }
 }

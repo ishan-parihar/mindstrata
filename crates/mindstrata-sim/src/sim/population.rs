@@ -595,6 +595,8 @@ impl Simulation {
                 // (no catalysts encountered yet); `project_catalyst` fills in
                 // the daily pass.
                 polarity_claims: Vec::new(),
+                // DC-2.7: lore archetype history, parallel to polarity_claims.
+                lore_archetypes: Vec::new(),
             });
         }
 
