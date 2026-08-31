@@ -36,6 +36,7 @@ A content pack MUST NOT write to:
 * `self.collective_field` (STORY 11) — dev-crate owned, per-tick
   emergent
 * `self.polarity_claims` (per-agent) — per-tick emergent
+* `self.lore_archetypes` (per-agent, derived deterministically from `archetype_for_claim` in `crates/mindstrata-psych/src/psychology/lore.rs:9-46`) — per-tick emergent, read-only (DC-2.7 @61e78b1, surfaced in dossier @c032ae3)
 * `self.development` (per-agent `DevelopmentFieldState`) — per-tick
   emergent
 * `self.echo_chamber`, `self.noospheric_field`, `self.diplomacy`,
