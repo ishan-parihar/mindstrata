@@ -304,6 +304,29 @@ pub fn render_dossier(sim: &Simulation, idx: usize) -> String {
         }
     }
 
+    // DC-2.7 lore dossier surface: parallel to polarity_claims.
+    // `system_polarity_claim_emit` keeps `lore_archetypes` in lock-step
+    // with `polarity_claims`, so any agent with claims now has a lore
+    // framing history. Show total, distinct frames, and top-3 archetype
+    // tally (deterministic, read-only, no CLIENT coupling).
+    if !a.lore_archetypes.is_empty() {
+        use std::collections::HashMap;
+        let mut by_arch: HashMap<&'static str, usize> = HashMap::new();
+        for arch in &a.lore_archetypes {
+            *by_arch.entry(arch.slug()).or_insert(0) += 1;
+        }
+        out.push_str(&format!(
+            "\nlore archetypes: {} total across {} frames\n",
+            a.lore_archetypes.len(),
+            by_arch.len()
+        ));
+        let mut arch_vec: Vec<(&&'static str, &usize)> = by_arch.iter().collect();
+        arch_vec.sort_by(|x, y| y.1.cmp(x.1));
+        for (slug, count) in arch_vec.iter().take(3) {
+            out.push_str(&format!("  {slug} × {count}\n"));
+        }
+    }
+
     out
 }
 
@@ -488,5 +511,34 @@ mod tests {
             }
         }
         assert!(found, "no agent had polarity claims in dossier");
+    }
+
+    /// DC-2.7 lore dossier surface: `lore_archetypes` is kept in
+    /// lock-step with `polarity_claims`, so the same 2000-tick run
+    /// that surfaces polarity must also surface lore frames.
+    #[test]
+    fn dossier_lore_section_appears_after_run() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 2000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(2000);
+        let mut found = false;
+        for i in 0..sim.agents.len() {
+            let d = render_dossier(&sim, i);
+            if d.contains("lore archetypes:") {
+                found = true;
+                assert!(d.contains("total across"), "{d}");
+                assert!(d.contains("frames"), "{d}");
+                break;
+            }
+        }
+        assert!(found, "no agent had lore archetypes in dossier");
     }
 }
