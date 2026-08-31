@@ -5,6 +5,7 @@
 //! original single-module API.
 
 pub mod charts;
+pub mod export;
 mod render;
 mod session;
 
