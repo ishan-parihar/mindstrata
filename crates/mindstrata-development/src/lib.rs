@@ -23,3 +23,4 @@ pub mod lore;
 pub mod polarity;
 pub mod realm;
 pub mod stage;
+pub mod template;
