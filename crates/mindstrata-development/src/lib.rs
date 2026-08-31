@@ -19,5 +19,6 @@ pub mod dynamics;
 pub mod field;
 pub mod lambda;
 pub mod line;
+pub mod lore;
 pub mod polarity;
 pub mod stage;
