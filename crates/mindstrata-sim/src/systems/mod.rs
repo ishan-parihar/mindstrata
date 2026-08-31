@@ -51,6 +51,7 @@ impl<'a> SystemContext<'a> {
 pub(crate) mod biology;
 pub mod development;
 pub(crate) mod health;
+pub mod institutions_multiplier;
 
 // ── Need decay system ────────────────────────────────────────────────────
 
