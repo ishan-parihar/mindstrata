@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-08-31T05:13:35.897127+00:00",
+  "commit": "3d6d580aa6eb6acac4517312a7cd939ddc9a9ff1",
+  "commit_short": "3d6d580",
+  "bench_index": {
+    "rc": 0,
+    "ok": true,
+    "summary": "total=63 ok=27 legacy=36 violations=0"
+  },
+  "golden": {
+    "count": 5,
+    "last_head": "52a94f0",
+    "baselines": {
+      "golden/collapse/seed_42/baseline.json": "de7610462339fa8b2ef6fce8d4abb99e7f82db9320746fdfeb919f9d745d7bde",
+      "golden/riverford_minor/seed_42/baseline.json": "ad253a7941e689d2874642018c844ef9f27d82d72437bc3a3db1a6daf2be1750"
+    }
+  },
+  "perf_budget_exists": true,
+  "suite": {
+    "passed": 307,
+    "failed": 0,
+    "ignored": 1,
+    "note": "documented at v5 audit c032ae3; run scripts/gate --full for live verification",
+    "dev_list_lines": 73
+  },
+  "um1_evidence_exists": true,
+  "dossier": {
+    "dossier_tests": 13
+  },
+  "dc1_phases_delivered": "60/106 (at snapshot time; see 04-cycle-plan-DC1.md)"
+}
