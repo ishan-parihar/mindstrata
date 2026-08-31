@@ -6,6 +6,7 @@
 
 pub mod charts;
 pub mod export;
+pub mod feature_flag;
 mod render;
 mod session;
 
