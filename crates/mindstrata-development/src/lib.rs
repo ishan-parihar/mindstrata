@@ -22,5 +22,6 @@ pub mod line;
 pub mod lore;
 pub mod polarity;
 pub mod realm;
+pub mod referent;
 pub mod stage;
 pub mod template;
