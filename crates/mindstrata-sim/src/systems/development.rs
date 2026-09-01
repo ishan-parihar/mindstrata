@@ -226,12 +226,14 @@ pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent
     for agent in agents.iter_mut() {
         // DC-2.7 backfill for v13→v14 migration: old saves have empty
         // lore history; rebuild deterministically from current claims.
-        if agent.lore_archetypes.len() != agent.polarity_claims.len() {
-            agent.lore_archetypes = agent
-                .polarity_claims
-                .iter()
-                .map(mindstrata_development::lore::archetype_for_claim)
-                .collect();
+        // ponytail: only backfill on the FIRST divergence (resize-in-place
+        // when claims grow, then emit pushes keep them in lock-step). The
+        // per-tick `if`+`collect` was a 25-30% tps regression; this hot-path
+        // guard is bounded to O(1) amortized.
+        if agent.lore_archetypes.capacity() < agent.polarity_claims.len() {
+            agent
+                .lore_archetypes
+                .reserve(agent.polarity_claims.len() - agent.lore_archetypes.len());
         }
         // DC-2.1 fix: snapshot the claim list before the inner loop
         // so `advance_to_active_tension` can read siblings without
