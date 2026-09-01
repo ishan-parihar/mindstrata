@@ -92,8 +92,13 @@ impl QuadrantState {
     #[must_use]
     pub fn step(&self, metabolism: Metabolism, pressure: f64, p: &OperatorParams) -> Self {
         let pressure = pressure.clamp(0.0, 1.0);
-        // Zero-at-zero identity: untouched fields never move.
-        if pressure == 0.0 && self.intensity == 0.0 {
+        // Zero-at-zero identity for Addiction only — Addiction needs
+        // pressure to leave neutral.  Allergy uses `1−pressure` so
+        // absence (pressure 0) must still accumulate from neutral;
+        // the early return would pin Q2/Q4 at 0.0000 forever (i293
+        // 20-seed sweep, i294 N=48/20K).  See development.rs
+        // absence-driven growth for the per-tick stepping.
+        if metabolism == Metabolism::Addiction && pressure == 0.0 && self.intensity == 0.0 {
             return *self;
         }
         let headroom = (p.ceiling - self.intensity).max(0.0);
@@ -102,7 +107,14 @@ impl QuadrantState {
                 self.intensity + p.growth * headroom * pressure - p.decay * self.intensity
             }
             Metabolism::Allergy => {
-                self.intensity + p.growth * headroom * (1.0 - pressure)
+                // Ponytail: Allergy growth is slower than Addiction —
+                // pathology-curves.md Q4 0.02–0.04 vs Q1 0.04–0.08, and
+                // the always-step absence-driven accumulation in
+                // development.rs would saturate in 20 ticks at 0.05.
+                // Use 0.1× the pending growth for Allergy so the
+                // 5000-tick horizon shows ~0.4 mean not 1.0, preserving
+                // dynamic range for differentiation.  CALIBRATION-PENDING.
+                self.intensity + p.growth * 0.1 * headroom * (1.0 - pressure)
                     - p.decay * pressure * self.intensity
             }
         };

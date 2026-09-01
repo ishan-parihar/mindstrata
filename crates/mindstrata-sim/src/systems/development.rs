@@ -193,19 +193,22 @@ pub fn system_development(agents: &mut [AgentBundle], events: &[SimEvent]) {
         }
     }
     // ── Allergy absence-driven growth ──────────────────────────────────
-    // Allergy quadrants that are already active (intensity > 0) but got
-    // no trigger this tick still step with pressure 0, so `1−pressure`
-    // drives recoil accumulation. From neutral with zero pressure they
-    // stay dormant (zero-at-zero via the early return in `step`). This
-    // fixes i293's Q2/Q4 pinned-at-zero: the old fan-out only stepped
-    // Allergy on its trigger tick, never on absence ticks, so Q2/Q4
-    // never accumulated after the first Transgression/Grief.
+    // Allergy quadrants step EVERY tick, even from neutral with zero
+    // pressure — their growth law `g·headroom·(1−pressure)` means
+    // absence (pressure 0) drives recoil accumulation from zero.
+    // The old fan-out only stepped Allergy on its trigger tick
+    // (Transgression/Grief), never on absence ticks, so Q2/Q4 were
+    // pinned at 0.0000 at all 20 seeds in i293 (5K/12) and all 6
+    // conditions in i294 (20K/48).  With always-step, Q2/Q4 will
+    // correctly show recoil even without a trigger.  The pending
+    // growth 0.05 is the placeholder; per-quadrant tuning (open #3)
+    // will slow Allergy if needed (pathology-curves.md Q4 0.02–0.04).
     for idx in 0..agents.len() {
         let path = &mut agents[idx].development.pathology;
-        if !triggered_q2[idx] && path.dark_allergy.intensity != 0.0 {
+        if !triggered_q2[idx] {
             path.dark_allergy = path.dark_allergy.step(Metabolism::Allergy, 0.0, &params);
         }
-        if !triggered_q4[idx] && path.golden_allergy.intensity != 0.0 {
+        if !triggered_q4[idx] {
             path.golden_allergy = path.golden_allergy.step(Metabolism::Allergy, 0.0, &params);
         }
     }
