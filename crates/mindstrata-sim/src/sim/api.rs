@@ -66,9 +66,12 @@ impl Simulation {
         self.agents.len()
     }
 
-    /// Total events generated.
+    /// Total events generated (cumulative across the run).
+    /// ponytail: reads `total_event_count` (incremented in core::tick)
+    /// so the per-tick `self.events` ring buffer can be trimmed without
+    /// changing this public reading or the golden `metric_hash`.
     pub fn event_count(&self) -> usize {
-        self.events.len()
+        self.total_event_count as usize
     }
 
     /// Get a reference to the world.

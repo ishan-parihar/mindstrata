@@ -570,6 +570,13 @@ pub struct Simulation {
     pub agents: Vec<AgentBundle>,
     pub relationships: Vec<Relationship>,
     events: Vec<SimEvent>,
+    /// Cumulative event count — incremented after the events pass each tick.
+    /// Used by `metrics_snapshot.event_count` and the API. The on-buffer
+    /// `self.events.len()` is the per-tick residual; the cumulative is
+    /// tracked here so the per-tick buffer can be ring-trimmed without
+    /// changing the public `event_count` reading or the golden
+    /// `metric_hash`. Ponytail: zero init, deterministic increment.
+    total_event_count: u64,
     journal: EventJournal,
     /// §12: Social norms — mod norms are registered post-populate through
     /// the modding API (`apply_content_pack`), so the registry is pub.

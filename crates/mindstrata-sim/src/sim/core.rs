@@ -734,21 +734,28 @@ impl Simulation {
                 self.metric_history.drain(..drop_n);
             }
         }
-        // NOTE: `self.events` is intentionally NOT trimmed here. The
-        // per-tick event bus is a rolling history; the in-tick consumers
-        // (development, polarity, collective, social_cluster, memory_ops)
-        // bound their reads via `pre_tick_events..self.events.len()` and
-        // downstream callers (api.rs::recent_events, catalyst_observers)
-        // depend on the buffer being non-empty. The `metric_hash` for
-        // golden replay includes `ms.event_count` (the residual
-        // post-tick length) and the `journal_len` separately.
-        // ponytail: long-horizon N=48 10K tps regresses to 621/700
-        // (below the IC-8 floor) because the buffer is unbounded and
-        // metrics_snapshot's `ms.event_count` reads the residual length.
-        // The proper fix is to make `ms.event_count` cumulative and
-        // trim the buffer ring-fashion; that requires a metrics_snapshot
-        // API change and a golden re-anchor, both of which are out of
-        // scope for this iteration. Recorded as DC-2 perf work.
+        // ── End-of-tick: bump the cumulative event counter. The
+        // counter is read by `event_count()` and the metrics
+        // snapshot's `event_count` field; the per-tick buffer is
+        // intentionally not trimmed here (drain() shifts the entire
+        // tail and at 10K×100 events it's a 1M-element shift per
+        // tick — 30% perf regression measured at 96ea2c6+perf).
+        // The buffer remains a growing rolling history; downstream
+        // `recent_events()` and catalyst observers depend on the
+        // rolling content. The cumulative counter preserves the
+        // public reading even as the buffer grows.
+        //
+        // ponytail: ring-trim (`drain(..drop_n)`) regressed
+        // N=48 10K 742→524 tps because of the O(n) shift on a
+        // large buffer. The proper fix is `VecDeque<SimEvent>` for
+        // O(1) front pop, but that's a data-structure refactor
+        // (touching every `self.events.push/get` site). Recorded
+        // as DC-2 perf work. Until then, the buffer grows but the
+        // counter is correct.
+        let events_pushed_this_tick = self.events.len().saturating_sub(pre_tick_events);
+        self.total_event_count = self
+            .total_event_count
+            .saturating_add(events_pushed_this_tick as u64);
     }
 
     // ── Tick subsystem methods ──────────────────────────────────────
