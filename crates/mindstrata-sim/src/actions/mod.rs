@@ -912,9 +912,13 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
         // Zero-at-zero: founder pathology 0.0 ⇒ gate 0, so goldens stay
         // byte-identical until a catalyst actually steps pathology (FR-023).
         let pathology_dark = ctx.development.pathology.dark_addiction.intensity;
+        let pathology_dark_allergy = ctx.development.pathology.dark_allergy.intensity;
+        let pathology_golden_allergy = ctx.development.pathology.golden_allergy.intensity;
         let dev_nudge = match kind {
             ActionKind::Work => -Fixed::from_f64(pathology_dark * 0.08),
             ActionKind::Rest => Fixed::from_f64(pathology_dark * 0.02),
+            ActionKind::Socialize => -Fixed::from_f64(pathology_dark_allergy * 0.04),
+            ActionKind::Worship => -Fixed::from_f64(pathology_golden_allergy * 0.04),
             _ => Fixed::ZERO,
         };
         utility += dev_nudge;

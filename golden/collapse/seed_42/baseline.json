@@ -2,11 +2,10 @@
   "scenario": "collapse",
   "seed": 42,
   "ticks": 4320,
-  "metric_hash": 12156883638501240487,
-  "_metric_hash_note": "Cumulative event_count re-contract 2026-08-31: from residual to total_event_count. Riverford 1000 ticks cumulative=15633; collapse 4320 ticks cumulative=175372 (test path: from_scenario(Scenario::collapse())).",
-  "event_hash": 1304882180952726237,
-  "agent_hash": 1423581667073198989,
+  "metric_hash": 3217782170619704285,
+  "event_hash": 2492007230237225117,
+  "agent_hash": 17089321763010858404,
   "agent_count": 12,
-  "total_grain": 0.8601,
-  "total_water": 1142.4490
+  "total_grain": 1.0298,
+  "total_water": 1140.003
 }
