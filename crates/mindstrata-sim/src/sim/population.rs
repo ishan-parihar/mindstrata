@@ -89,6 +89,8 @@ impl Simulation {
             tick_agent_ages: Vec::new(),
             tick_rel_snapshot: Vec::new(),
             tick_action_starts: Vec::new(),
+            tick_socialization_updates: Vec::new(),
+            tick_innovations: Vec::new(),
         };
         // Meme seeding moved to `populate()` (Iteration 174): seeding here
         // would read `params.meme_virality_scaling` before the caller's
@@ -317,6 +319,8 @@ impl Simulation {
             tick_agent_ages: Vec::new(),
             tick_rel_snapshot: Vec::new(),
             tick_action_starts: Vec::new(),
+            tick_socialization_updates: Vec::new(),
+            tick_innovations: Vec::new(),
         };
         // Rebuild the GroupRegistry membership cache (skipped by serde).
         sim.group_registry.rebuild_cache();

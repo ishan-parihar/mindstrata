@@ -442,7 +442,7 @@ impl Simulation {
 
         // ── 11d. §19.5.F Childhood socialization — children learn from parents ──
         {
-            let mut socialization_updates: Vec<(usize, u64)> = Vec::new();
+            self.tick_socialization_updates.clear();
             for i in 0..self.agents.len() {
                 let a = &self.agents[i];
                 if a.age >= Fixed::from_f64(18.0) {
@@ -484,26 +484,28 @@ impl Simulation {
                             .clamp_01()
                                 * resistance;
                             if acceptance > Fixed::from_f64(0.3) {
-                                socialization_updates.push((i, knowledge_id));
+                                self.tick_socialization_updates.push((i, knowledge_id));
                             }
                         }
                     }
                 }
             }
-            for (ci, knowledge_id) in socialization_updates {
-                self.agents[ci].cultural.knowledge.push(knowledge_id);
+            for (ci, knowledge_id) in &self.tick_socialization_updates {
+                self.agents[*ci].cultural.knowledge.push(*knowledge_id);
                 if let Some(k) = self
                     .knowledge_store
                     .iter_mut()
-                    .find(|k| k.id == knowledge_id)
+                    .find(|k| k.id == *knowledge_id)
                 {
                     k.holders += 1;
                 }
                 // §19.5.F: Record socialization in journal for observability
                 self.journal.record(
                     tick_u64,
-                    AgentId::new(ci as u64),
-                    JournalEntryKind::KnowledgeSocialized { knowledge_id },
+                    AgentId::new(*ci as u64),
+                    JournalEntryKind::KnowledgeSocialized {
+                        knowledge_id: *knowledge_id,
+                    },
                 );
             }
         }
@@ -517,7 +519,7 @@ impl Simulation {
                 .filter(|(_, a)| matches!(a.current_action, crate::actions::ActionKind::Work))
                 .map(|(i, _)| i)
                 .collect();
-            let mut innovations: Vec<(usize, u64, String)> = Vec::new();
+            self.tick_innovations.clear();
             for idx in work_agents {
                 // Discovery chance based on openness and conscientiousness
                 let mut discovery_chance = (self.agents[idx].personality.openness
@@ -552,30 +554,36 @@ impl Simulation {
                                 .technology
                                 .can_learn(&self.agents[idx].cultural.knowledge, k.id)
                         {
-                            innovations.push((idx, k.id, k.name.clone()));
+                            self.tick_innovations.push((idx, k.id, k.name.clone()));
                             break; // one discovery per tick per agent
                         }
                     }
                 }
             }
-            for (agent_idx, knowledge_id, name) in innovations {
-                self.agents[agent_idx].cultural.knowledge.push(knowledge_id);
+            for (agent_idx, knowledge_id, name) in &self.tick_innovations {
+                self.agents[*agent_idx]
+                    .cultural
+                    .knowledge
+                    .push(*knowledge_id);
                 if let Some(ks) = self
                     .knowledge_store
                     .iter_mut()
-                    .find(|ks| ks.id == knowledge_id)
+                    .find(|ks| ks.id == *knowledge_id)
                 {
                     ks.holders += 1;
                 }
                 self.journal.record(
                     tick_u64,
-                    AgentId::new(agent_idx as u64),
-                    JournalEntryKind::KnowledgeDiscovered { knowledge_id, name },
+                    AgentId::new(*agent_idx as u64),
+                    JournalEntryKind::KnowledgeDiscovered {
+                        knowledge_id: *knowledge_id,
+                        name: name.clone(),
+                    },
                 );
                 self.events.push(SimEvent::KnowledgeTransferred {
-                    source: AgentId::new(agent_idx as u64),
-                    target: AgentId::new(agent_idx as u64),
-                    knowledge_id,
+                    source: AgentId::new(*agent_idx as u64),
+                    target: AgentId::new(*agent_idx as u64),
+                    knowledge_id: *knowledge_id,
                     tick,
                 });
             }

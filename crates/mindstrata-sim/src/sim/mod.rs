@@ -713,6 +713,13 @@ pub struct Simulation {
     tick_agent_ages: Vec<Fixed>,
     tick_rel_snapshot: Vec<(AgentId, AgentId, Fixed, Fixed)>,
     tick_action_starts: Vec<(usize, ActionKind)>,
+    /// Pre-allocated per-tick socialization buffer; reused via `clear()`.
+    /// ponytail: at 10K ticks a fresh `Vec::new()` per tick costs ~10K
+    /// allocations; the saved allocs are ~80 bytes each (12 agents ×
+    /// occasional child). Small win on N=48 + 10K.
+    tick_socialization_updates: Vec<(usize, u64)>,
+    /// Pre-allocated per-tick innovations buffer; reused via `clear()`.
+    tick_innovations: Vec<(usize, u64, String)>,
 }
 
 pub use snapshot_metrics::{AgentSummary, MetricsSnapshot};
