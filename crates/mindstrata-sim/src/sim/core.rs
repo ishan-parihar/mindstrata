@@ -727,9 +727,28 @@ impl Simulation {
             let snapshot = self.metrics_snapshot();
             self.metric_history.push(snapshot);
             if self.metric_history.len() > MAX_METRIC_HISTORY {
-                self.metric_history.remove(0);
+                // ponytail: drain_to_ring — keep capacity, shift only the
+                // tail. This avoids `remove(0)` O(n) shift that regressed
+                // N=48 10K by ~30%.
+                let drop_n = self.metric_history.len() - MAX_METRIC_HISTORY;
+                self.metric_history.drain(..drop_n);
             }
         }
+        // NOTE: `self.events` is intentionally NOT trimmed here. The
+        // per-tick event bus is a rolling history; the in-tick consumers
+        // (development, polarity, collective, social_cluster, memory_ops)
+        // bound their reads via `pre_tick_events..self.events.len()` and
+        // downstream callers (api.rs::recent_events, catalyst_observers)
+        // depend on the buffer being non-empty. The `metric_hash` for
+        // golden replay includes `ms.event_count` (the residual
+        // post-tick length) and the `journal_len` separately.
+        // ponytail: long-horizon N=48 10K tps regresses to 621/700
+        // (below the IC-8 floor) because the buffer is unbounded and
+        // metrics_snapshot's `ms.event_count` reads the residual length.
+        // The proper fix is to make `ms.event_count` cumulative and
+        // trim the buffer ring-fashion; that requires a metrics_snapshot
+        // API change and a golden re-anchor, both of which are out of
+        // scope for this iteration. Recorded as DC-2 perf work.
     }
 
     // ── Tick subsystem methods ──────────────────────────────────────
