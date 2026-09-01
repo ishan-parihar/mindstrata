@@ -128,6 +128,11 @@ pub fn system_development(agents: &mut [AgentBundle], events: &[SimEvent]) {
     }
 
     // Per-subject accumulation: gate then apply in event order (deterministic).
+    // Track which Allergy quadrants received their trigger this tick, so
+    // the absence-driven growth pass below can step the ones that are
+    // already active but got no trigger this tick.
+    let mut triggered_q2 = vec![false; agents.len()];
+    let mut triggered_q4 = vec![false; agents.len()];
     for (subject, kind, magnitude) in catalysts {
         let idx = subject.as_u64() as usize;
         if idx >= agents.len() {
@@ -181,6 +186,28 @@ pub fn system_development(agents: &mut [AgentBundle], events: &[SimEvent]) {
             (Polarity::Golden, Metabolism::Allergy) => &mut path.golden_allergy,
         };
         *slot = slot.step(metabolism, admitted, &params);
+        match kind {
+            CatalystKind::Transgression => triggered_q2[idx] = true,
+            CatalystKind::Grief => triggered_q4[idx] = true,
+            _ => {}
+        }
+    }
+    // ── Allergy absence-driven growth ──────────────────────────────────
+    // Allergy quadrants that are already active (intensity > 0) but got
+    // no trigger this tick still step with pressure 0, so `1−pressure`
+    // drives recoil accumulation. From neutral with zero pressure they
+    // stay dormant (zero-at-zero via the early return in `step`). This
+    // fixes i293's Q2/Q4 pinned-at-zero: the old fan-out only stepped
+    // Allergy on its trigger tick, never on absence ticks, so Q2/Q4
+    // never accumulated after the first Transgression/Grief.
+    for idx in 0..agents.len() {
+        let path = &mut agents[idx].development.pathology;
+        if !triggered_q2[idx] && path.dark_allergy.intensity != 0.0 {
+            path.dark_allergy = path.dark_allergy.step(Metabolism::Allergy, 0.0, &params);
+        }
+        if !triggered_q4[idx] && path.golden_allergy.intensity != 0.0 {
+            path.golden_allergy = path.golden_allergy.step(Metabolism::Allergy, 0.0, &params);
+        }
     }
 }
 
