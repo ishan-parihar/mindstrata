@@ -115,7 +115,27 @@ pub fn system_development(agents: &mut [AgentBundle], events: &[SimEvent]) {
 
     // Frozen engine components — CALIBRATION-PENDING values via pending().
     let gate = Gate::pending();
-    let params = OperatorParams::pending();
+    // Per-quadrant params (IC-5 #3, spec midpoints; Allergy 0.1x scaled in dynamics.rs for absence)
+    let params_q1 = OperatorParams {
+        growth: 0.06,
+        decay: 0.015,
+        ceiling: 0.80,
+    };
+    let params_q2 = OperatorParams {
+        growth: 0.045,
+        decay: 0.022,
+        ceiling: 0.80,
+    };
+    let params_q3 = OperatorParams {
+        growth: 0.07,
+        decay: 0.015,
+        ceiling: 0.85,
+    };
+    let params_q4 = OperatorParams {
+        growth: 0.03,
+        decay: 0.025,
+        ceiling: 0.75,
+    };
 
     // Stable line order for altitude indexing.
     let line_count = mindstrata_development::line::all_lines().count();
@@ -179,13 +199,13 @@ pub fn system_development(agents: &mut [AgentBundle], events: &[SimEvent]) {
             CatalystKind::Bond => (Polarity::Golden, Metabolism::Addiction),
             CatalystKind::Grief => (Polarity::Golden, Metabolism::Allergy),
         };
-        let slot = match (polarity, metabolism) {
-            (Polarity::Dark, Metabolism::Addiction) => &mut path.dark_addiction,
-            (Polarity::Dark, Metabolism::Allergy) => &mut path.dark_allergy,
-            (Polarity::Golden, Metabolism::Addiction) => &mut path.golden_addiction,
-            (Polarity::Golden, Metabolism::Allergy) => &mut path.golden_allergy,
+        let (slot, params_for_slot) = match (polarity, metabolism) {
+            (Polarity::Dark, Metabolism::Addiction) => (&mut path.dark_addiction, &params_q1),
+            (Polarity::Dark, Metabolism::Allergy) => (&mut path.dark_allergy, &params_q2),
+            (Polarity::Golden, Metabolism::Addiction) => (&mut path.golden_addiction, &params_q3),
+            (Polarity::Golden, Metabolism::Allergy) => (&mut path.golden_allergy, &params_q4),
         };
-        *slot = slot.step(metabolism, admitted, &params);
+        *slot = slot.step(metabolism, admitted, params_for_slot);
         match kind {
             CatalystKind::Transgression => triggered_q2[idx] = true,
             CatalystKind::Grief => triggered_q4[idx] = true,
@@ -206,10 +226,12 @@ pub fn system_development(agents: &mut [AgentBundle], events: &[SimEvent]) {
     for idx in 0..agents.len() {
         let path = &mut agents[idx].development.pathology;
         if !triggered_q2[idx] {
-            path.dark_allergy = path.dark_allergy.step(Metabolism::Allergy, 0.0, &params);
+            path.dark_allergy = path.dark_allergy.step(Metabolism::Allergy, 0.0, &params_q2);
         }
         if !triggered_q4[idx] {
-            path.golden_allergy = path.golden_allergy.step(Metabolism::Allergy, 0.0, &params);
+            path.golden_allergy = path
+                .golden_allergy
+                .step(Metabolism::Allergy, 0.0, &params_q4);
         }
     }
 }
