@@ -1536,3 +1536,70 @@ fn approach_deviation_leaves_non_wander_actions_untouched() {
         "approach deviation must not touch non-Wander utility"
     );
 }
+
+// ── Iteration-268: Q3 golden_addiction nudge (i268 forced-Bond probe) ────
+
+mod pathology_nudge {
+    use super::super::{development_pathology_nudge, ActionKind};
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_development::dynamics::{PathologyField, QuadrantState};
+
+    fn field_with(golden_addiction: f64) -> PathologyField {
+        let mut f = PathologyField::neutral();
+        f.golden_addiction = QuadrantState {
+            intensity: golden_addiction,
+        };
+        f
+    }
+
+    #[test]
+    fn golden_addiction_biases_toward_connection() {
+        // Grasping reaches for connection/transcendence: the only positive
+        // pathology channel. At the measured per-subject equilibrium ≈0.75
+        // (i268 forced-Bond), the Socialize bias is +0.03.
+        let f = field_with(0.75);
+        let social = development_pathology_nudge(ActionKind::Socialize, &f);
+        let worship = development_pathology_nudge(ActionKind::Worship, &f);
+        assert!(social > Fixed::ZERO, "Q3 must bias Socialize positive");
+        assert!(worship > Fixed::ZERO, "Q3 must bias Worship positive");
+        assert_eq!(
+            social,
+            Fixed::from_f64(0.75 * 0.04),
+            "coefficient 0.04 (allergy-channel magnitude)"
+        );
+    }
+
+    #[test]
+    fn natural_q3_mean_yields_genuine_nudge_not_reordering() {
+        // Natural-regime mean 0.038–0.046 (i268/i293): shift ≤0.0019 —
+        // far below the smallest between-action utility gap in the
+        // i282 safe range, so selection order cannot flip on it.
+        let f = field_with(0.046);
+        let social = development_pathology_nudge(ActionKind::Socialize, &f);
+        assert!(social <= Fixed::from_f64(0.0019));
+        assert!(social > Fixed::ZERO);
+    }
+
+    #[test]
+    fn neutral_field_is_zero_for_every_kind() {
+        // Zero-at-zero law (FR-023): neutral pathology ⇒ exact 0 nudge.
+        let f = PathologyField::neutral();
+        for kind in [
+            ActionKind::Eat,
+            ActionKind::Drink,
+            ActionKind::Rest,
+            ActionKind::Work,
+            ActionKind::Socialize,
+            ActionKind::Worship,
+            ActionKind::Trade,
+            ActionKind::Wander,
+            ActionKind::Idle,
+        ] {
+            assert_eq!(
+                development_pathology_nudge(kind, &f),
+                Fixed::ZERO,
+                "{kind:?} must be zero-at-zero"
+            );
+        }
+    }
+}

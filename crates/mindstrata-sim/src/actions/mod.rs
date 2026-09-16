@@ -37,6 +37,41 @@ const PERSISTENCE_NOISE_FLOOR: f64 = 0.02;
 /// (pure utility term — no RNG).
 const APPROACH_WANDER_BONUS: Fixed = Fixed::from_raw(500); // 0.05
 
+/// AP3 DC-1 signature #1 + Iteration-268 (i268 forced-Bond probe):
+/// pathology → action nudges, extracted as a pure helper so the pin can
+/// test all four quadrants without a full `DecisionContext`.
+///
+/// Q1 dark_addiction (deficit fixation): suppresses Work, mild Rest bias —
+/// the agent stops provisioning for a future it is fixated on. Q2
+/// dark_allergy (recoil from contradiction): suppresses Socialize —/// withdrawal from the line that delivered contradiction. Q3
+/// golden_addiction (grasping): POSITIVE Socialize/Worship bias — the
+/// grasping signature reaches for connection/transcendence; the only
+/// positive pathology channel. Q4 golden_allergy (refusal of opening):
+/// suppresses Worship — avoiding the genuine opening.
+///
+/// Per-subject Q3 equilibrium measured ≈0.75 at forced Bond rates, inside
+/// the ratified ceiling band [0.70,0.90] (growth 0.07 / decay 0.015 /
+/// ceiling 0.85 need no re-pin). Coefficient 0.04 matches the allergy
+/// channels; at natural Q3 mean 0.038–0.046 the shift is ≤0.0019 — a
+/// genuine nudge, not a reordering lever. Zero-at-zero: neutral field ⇒
+/// 0 for every kind. Deterministic (pure function, no RNG).
+pub fn development_pathology_nudge(
+    kind: ActionKind,
+    pathology: &mindstrata_development::dynamics::PathologyField,
+) -> Fixed {
+    let dark = pathology.dark_addiction.intensity;
+    let dark_allergy = pathology.dark_allergy.intensity;
+    let golden_addiction = pathology.golden_addiction.intensity;
+    let golden_allergy = pathology.golden_allergy.intensity;
+    match kind {
+        ActionKind::Work => -Fixed::from_f64(dark * 0.08),
+        ActionKind::Rest => Fixed::from_f64(dark * 0.02),
+        ActionKind::Socialize => Fixed::from_f64(golden_addiction * 0.04 - dark_allergy * 0.04),
+        ActionKind::Worship => Fixed::from_f64(golden_addiction * 0.04 - golden_allergy * 0.04),
+        _ => Fixed::ZERO,
+    }
+}
+
 /// Bundled context for action selection — replaces the 18-parameter signature.
 ///
 /// All fields are either references (borrowed from agent/world state) or
@@ -905,22 +940,10 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
 
         // AP3 DC-1 (tasks 3.4/3.5): development gating — fulfillment thresholds
         // via `needs` band map (docs/balance/needs-bands.md) + pathology
-        // signature #1 (docs/balance/pathology-curves.md Q1 dark-addiction).
-        // Wiring via `DevelopmentFieldState` is COMPLETE; signature #1 is
-        // LIVE at CALIBRATION-PENDING coefficients (Q1 growth/decay still
-        // pending, nudge 0.08/0.02 pending — probe i269 measures the trajectory).
-        // Zero-at-zero: founder pathology 0.0 ⇒ gate 0, so goldens stay
-        // byte-identical until a catalyst actually steps pathology (FR-023).
-        let pathology_dark = ctx.development.pathology.dark_addiction.intensity;
-        let pathology_dark_allergy = ctx.development.pathology.dark_allergy.intensity;
-        let pathology_golden_allergy = ctx.development.pathology.golden_allergy.intensity;
-        let dev_nudge = match kind {
-            ActionKind::Work => -Fixed::from_f64(pathology_dark * 0.08),
-            ActionKind::Rest => Fixed::from_f64(pathology_dark * 0.02),
-            ActionKind::Socialize => -Fixed::from_f64(pathology_dark_allergy * 0.04),
-            ActionKind::Worship => -Fixed::from_f64(pathology_golden_allergy * 0.04),
-            _ => Fixed::ZERO,
-        };
+        // signatures (docs/balance/pathology-curves.md). Zero-at-zero:
+        // neutral pathology ⇒ 0, so goldens stay byte-identical until a
+        // catalyst actually steps pathology (FR-023).
+        let dev_nudge = development_pathology_nudge(*kind, &ctx.development.pathology);
         utility += dev_nudge;
 
         if utility > best_utility {
