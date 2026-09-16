@@ -214,6 +214,30 @@ mod tests {
         let q = QuadrantState::neutral();
         let stepped = q.step(Metabolism::Addiction, 0.0, &OperatorParams::pending());
         assert_eq!(stepped.intensity, q.intensity);
+    }
+
+    /// RE-CONTRACT per AGENTS.md §4.4 (Iter-266 audit finding): the old bulk
+    /// pin asserted `PathologyField::step` at all-zero pressures returns the
+    /// field bit-identical. Commit 34e4ca7 (Allergy Q2/Q4 always-step) made
+    /// absence-driven growth the LAW — `QuadrantState::step` for Allergy
+    /// deliberately grows from neutral under zero pressure (0.05 × 0.1 ×
+    /// headroom = 0.005/tick), because the alternative (early return) pinned
+    /// Q2/Q4 at 0.0000 forever (i293 20-seed, i294 N=48/20K). The old
+    /// assertion therefore tests something the always-step semantics
+    /// legitimately invalidate — this is a re-contract, not a magnitude
+    /// re-pin. The REAL invariants, guarded below: (1) Addiction quadrants
+    /// are bit-identical at zero pressure (the zero-at-zero law for Q1/Q3);
+    /// (2) Allergy quadrants move by EXACTLY the documented absence rate
+    /// (deterministic, monotone, bounded by the ceiling); (3) the field's
+    /// `is_neutral()` still marks the founder default that golden windows
+    /// relied on (observability, not dynamics). The calm-world byte-identity
+    /// contract was never carried by this unit pin — it is enforced by the
+    /// fact that the person-level pass (`system_development`) only steps
+    /// Allergy quadrants on real-catalyst ticks (triggered_q2/triggered_q4
+    /// guards), so golden windows with zero catalysts stay untouched.
+    #[test]
+    fn pathology_step_respects_addiction_zero_at_zero_and_allergy_absence_law() {
+        let p = OperatorParams::pending();
         let field = PathologyField::neutral();
         assert!(field.is_neutral());
         let stepped_field = field.step(
@@ -223,9 +247,24 @@ mod tests {
                 (Polarity::Golden, Metabolism::Addiction, 0.0),
                 (Polarity::Golden, Metabolism::Allergy, 0.0),
             ],
-            &OperatorParams::pending(),
+            &p,
         );
-        assert_eq!(stepped_field, field);
+        // (1) Addiction zero-at-zero: Q1/Q3 bit-identical under zero pressure.
+        assert_eq!(stepped_field.dark_addiction.intensity, 0.0);
+        assert_eq!(stepped_field.golden_addiction.intensity, 0.0);
+        // (2) Allergy absence law: exact documented increment per untouched
+        // tick — 0.05 growth × 0.1 Allergy scale × headroom (1.0) = 0.005.
+        let expected = 0.05 * 0.1;
+        assert_eq!(stepped_field.dark_allergy.intensity, expected);
+        assert_eq!(stepped_field.golden_allergy.intensity, expected);
+        // Monotone + bounded: repeated absence ticks accumulate toward the
+        // ceiling without exceeding it.
+        let mut q = QuadrantState::neutral();
+        for _ in 0..500 {
+            q = q.step(Metabolism::Allergy, 0.0, &p);
+        }
+        assert!(q.intensity > 0.5, "absence must accumulate Allergy");
+        assert!(q.intensity <= p.ceiling, "ceiling clamp holds");
     }
 
     #[test]

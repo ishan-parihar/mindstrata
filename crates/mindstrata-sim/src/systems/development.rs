@@ -347,11 +347,10 @@ pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent
 /// normalized to [0, 1] by dividing by `n_agents` so a single
 /// per-capita catalyst event registers 1.0 pressure.
 ///
-/// The current `step_collective` impl is inert (returns self; see
-/// `ponytail: no pressure derivation yet (WP-I)` in the dev crate);
-/// this v1 wire is the input to the future WP-I implementation that
-/// will read these pressures into the line buckets. Identity-at-zero:
-/// empty window → zero pressure vector → identity output.
+/// WP-I (Iter-266): `step_collective` is live — it integrates the per-line
+/// press, advances shadow stages on saturation, and tracks fulfillment EMAs
+/// (see the dev crate). Identity-at-zero is preserved: empty window → zero
+/// pressure vector → identity output, so the empty-window pin stays green.
 pub fn system_collective_field_step(
     field: &mut mindstrata_development::collective::CollectiveField,
     events: &[SimEvent],
@@ -363,7 +362,7 @@ pub fn system_collective_field_step(
         return;
     }
     // Aggregate per-CatalystKind count, then map to the collective
-    // line's primary index. The slug list comes from the dev crate
+    // line's bucket. The slug list comes from the dev crate
     // (29 collective lines at last audit; see i268/i278 slugs).
     let n = n_agents.max(1) as f64;
     let mut relational_press = 0.0;
@@ -382,26 +381,20 @@ pub fn system_collective_field_step(
         // doesn't starve the meaning/cosmology collective lines.
         meaning_press += p * 0.1;
     }
-    // Distribute the four buckets across the 29 collective lines
-    // in `all_lines()` order. The exact index mapping lands in
-    // WP-I; for v1 we provide a uniform distribution so the inert
-    // step sees realistic-magnitude pressure.
-    let line_count = mindstrata_development::collective::COLLECTIVE_LINE_COUNT;
-    let mut pressures = [0.0_f64; mindstrata_development::collective::COLLECTIVE_LINE_COUNT];
-    for (i, p) in pressures.iter_mut().enumerate().take(line_count) {
-        // Cyclic distribution: relational lines first, then safety,
-        // then identity, then meaning (matches the WP-I schema plan).
-        let bucket = match i % 4 {
-            0 => relational_press,
-            1 => safety_press,
-            2 => identity_press,
-            _ => meaning_press,
-        };
-        *p = bucket.clamp(0.0, 1.0);
-    }
+    // WP-I (Iter-266): the dev crate's vendored-`kind` bucket mapping owns
+    // the affinity (culture→relational, system→safety, collective-system→
+    // identity, consciousness→meaning), replacing the DC-1 v1 cyclic
+    // `i % 4` distribution. CALIBRATION-PENDING(AP3): i266 measures the
+    // per-bucket differentiation across the 12-seed family.
+    let pressures = mindstrata_development::collective::pressure_vector(
+        relational_press,
+        safety_press,
+        identity_press,
+        meaning_press,
+    );
     *field = field.step_collective(
         &pressures,
-        &mindstrata_development::dynamics::OperatorParams::pending(),
+        &mindstrata_development::collective::CollectiveParams::pending(),
     );
 }
 
@@ -464,6 +457,53 @@ mod tests {
         assert!(field.is_neutral());
         system_collective_field_step(&mut field, &[], 12);
         assert!(field.is_neutral());
+    }
+
+    /// WP-I (Iter-266): the step is LIVE — real catalyst events move the
+    /// field off neutral. Threat catalysts press the Safety bucket (system
+    /// lines) only; culture/meaning lines stay at founder neutral.
+    #[test]
+    fn collective_field_catalyst_liveness_safety_bucket() {
+        let tick = mindstrata_core::clock::Tick::new(1);
+        let evs = vec![SimEvent::ConflictOccurred {
+            aggressor: AgentId::new(0),
+            target: AgentId::new(1),
+            kind: mindstrata_core::conflict::ConflictKind::Threat,
+            injury: mindstrata_core::fixed::Fixed::ZERO,
+            fear_induced: mindstrata_core::fixed::Fixed::ZERO,
+            tick,
+        }];
+        let mut field = mindstrata_development::collective::CollectiveField::default();
+        system_collective_field_step(&mut field, &evs, 12);
+        assert!(
+            !field.is_neutral(),
+            "catalysts must move the field off neutral"
+        );
+        let slugs = mindstrata_development::collective::CollectiveField::line_slugs();
+        let mut safety_moved = 0;
+        let mut other_moved = 0;
+        for (i, l) in slugs.iter().enumerate() {
+            if field.lines[i].press > 0.0 {
+                match l.kind() {
+                    "system" => safety_moved += 1,
+                    _ => other_moved += 1,
+                }
+            }
+        }
+        assert!(
+            safety_moved > 0,
+            "threat catalysts must press system (safety-bucket) lines"
+        );
+        // Meaning baseline: every catalyst contributes 0.1× per-capita, so
+        // consciousness lines also accumulate press.
+        assert!(
+            other_moved > 0,
+            "meaning-bucket baseline must press consciousness lines too"
+        );
+        // Determinism: identical inputs, identical field.
+        let mut again = mindstrata_development::collective::CollectiveField::default();
+        system_collective_field_step(&mut again, &evs, 12);
+        assert_eq!(field, again);
     }
 
     #[test]

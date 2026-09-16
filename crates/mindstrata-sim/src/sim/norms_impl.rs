@@ -742,6 +742,31 @@ impl Simulation {
             Fixed::ZERO
         };
         let panics = &mut self.moral_panic_registry.panics;
+        // WP-I (Iter-266): the village's Safety-bucket collective fulfillment
+        // — its shared sense of security — pacifies panic escalation. The
+        // collective field's fulfillment EMAs track sustained catalyst
+        // pressure; the Safety bucket (system lines: governance, justice,
+        // security, health…) integrates Threat/Transgression catalysts that
+        // co-occur with panic regimes.
+        //
+        // Calibration (i266_catalyst_census, seed 42/2000): calm-window
+        // Safety fulfillment peaks at 0.19 (catalysts arrive in 70/2000
+        // ticks; the EMA rate 0.02 tracks burst structure). The pacify anchor
+        // 0.25 sits ABOVE every calm observation — identity in golden (1000)
+        // and snapshot (≤2000) horizons — while crisis worlds that sustain
+        // catalyst pressure for weeks push fulfillment past the anchor and
+        // genuinely damp escalation. One-sided: fulfillment below the anchor
+        // is identity; rate 0.2 bounds the damp at −20% at fulfillment 1.0.
+        // CALIBRATION-PENDING(AP3): crisis-window sweep (i<iter>_panic_*)
+        // measures the equilibrium shift before the rate is ratified.
+        let safety_fulfillment = self.collective_field.mean_fulfillment_for_bucket(
+            mindstrata_development::collective::CollectiveBucket::Safety,
+        );
+        let collective_pacify = if safety_fulfillment > 0.25 {
+            Fixed::from_f64(1.0 - (safety_fulfillment - 0.25) * 0.2)
+        } else {
+            Fixed::ONE
+        };
         for panic in panics {
             if !panic.active || panic.start_tick == tick_u64 {
                 continue;
@@ -751,7 +776,7 @@ impl Simulation {
             let pressure = panic.escalation_pressure(mean_legitimacy, community_fear);
             if panic.should_resolve(Fixed::ZERO, fatigue) {
                 panic.deescalate();
-            } else if pressure > Fixed::from_f64(PANIC_ESCALATION_THRESHOLD) {
+            } else if pressure * collective_pacify > Fixed::from_f64(PANIC_ESCALATION_THRESHOLD) {
                 panic.escalate(tick_u64);
             } else {
                 panic.daily_update();

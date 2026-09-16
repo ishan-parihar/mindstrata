@@ -106,6 +106,16 @@ pub struct Snapshot {
     /// future behavioral consumer must not inherit a divergent restore path).
     #[serde(default)]
     pub kinship_graph: crate::social::kinship::KinshipGraph,
+    /// WP-I (Iter-266): village `CollectiveField` — serialized since v15 so
+    /// resumed runs restore the integrated per-line press / shadow stages /
+    /// fulfillment EMAs instead of resetting to founder neutral. The field
+    /// gained a behavioral consumer (Safety-bucket fulfillment pacifies
+    /// moral-panic escalation), so the v10 `kinship_graph` precedent applies:
+    /// behavioral state on the Simulation root must round-trip. Serde default
+    /// keeps pre-v15 snapshots loadable (neutral field = pre-WP-I restore
+    /// semantics exactly).
+    #[serde(default)]
+    pub collective_field: mindstrata_development::collective::CollectiveField,
 }
 
 /// Version of the snapshot format.
@@ -130,7 +140,12 @@ pub struct Snapshot {
 /// `lore_archetypes: Vec<LoreArchetype>` (parallel to `polarity_claims`,
 /// pure `archetype_for_claim` at emission). `#[serde(default)]` keeps v13
 /// saves loadable with an empty history.
-pub const SNAPSHOT_VERSION: u32 = 14;
+/// Iteration 266 (WP-I): bumped 14 → 15 — `Snapshot` gained
+/// `collective_field` (village holon state, behavioral since the
+/// Safety-bucket pacify consumer). `#[serde(default)]` keeps v14 saves
+/// loadable: they restore the neutral field, which is exactly the pre-WP-I
+/// restore semantics (the kinship_graph v10 precedent).
+pub const SNAPSHOT_VERSION: u32 = 15;
 
 /// Save-schema framework v0 (task 2.17) — version header + migration trait.
 ///
@@ -187,6 +202,8 @@ pub struct CaptureContext<'a> {
     pub collective_memory_registry: &'a crate::culture::CollectiveMemoryRegistry,
     pub meme_registry: &'a crate::culture::MemeRegistry,
     pub kinship_graph: &'a crate::social::kinship::KinshipGraph,
+    /// WP-I (Iter-266): the village collective field participates in capture.
+    pub collective_field: &'a mindstrata_development::collective::CollectiveField,
 }
 
 impl Snapshot {
@@ -224,6 +241,7 @@ impl Snapshot {
             collective_memory_registry: ctx.collective_memory_registry.clone(),
             meme_registry: ctx.meme_registry.clone(),
             kinship_graph: ctx.kinship_graph.clone(),
+            collective_field: *ctx.collective_field,
         }
     }
 
@@ -442,6 +460,7 @@ mod tests {
             collective_memory_registry: crate::culture::CollectiveMemoryRegistry::default(),
             meme_registry: crate::culture::MemeRegistry::default(),
             kinship_graph: crate::social::kinship::KinshipGraph::default(),
+            collective_field: mindstrata_development::collective::CollectiveField::neutral(),
         }
     }
 
@@ -475,6 +494,29 @@ mod tests {
         assert_eq!(original.tick, restored.tick);
         assert_eq!(original.config.seed, restored.config.seed);
         assert_eq!(original.agents.len(), restored.agents.len());
+    }
+
+    /// WP-I (Iter-266): the village collective field round-trips through
+    /// postcard byte-identically. The field is Copy with plain f64 fields,
+    /// so serde preserves the exact bits; this pin guards the v15 wire
+    /// shape (a future field-layout change that breaks postcard
+    /// compatibility fails here instead of silently diverging resumes).
+    #[test]
+    fn snapshot_roundtrip_preserves_collective_field() {
+        let mut original = make_test_snapshot();
+        // Step a non-trivial field state: press some Safety lines.
+        let pressures = mindstrata_development::collective::pressure_vector(0.0, 0.8, 0.1, 0.05);
+        let params = mindstrata_development::collective::CollectiveParams::pending();
+        let mut field = mindstrata_development::collective::CollectiveField::neutral();
+        for _ in 0..30 {
+            field = field.step_collective(&pressures, &params);
+        }
+        assert!(!field.is_neutral());
+        original.collective_field = field;
+
+        let bytes = original.to_bytes().expect("postcard serialize");
+        let restored = Snapshot::from_bytes(&bytes).expect("postcard deserialize");
+        assert_eq!(restored.collective_field, field);
     }
 
     /// §12.2 / §16.1: Verify postcard roundtrip preserves GroupRegistry data.

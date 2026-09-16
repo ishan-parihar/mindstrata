@@ -300,10 +300,15 @@ impl Simulation {
             ritual_registry: crate::culture::RitualRegistry::default(),
             rumor_registry: crate::culture::RumorRegistry::default(),
             collective_memory_registry: snapshot.collective_memory_registry,
-            // DC-1 STORY 11: collective field is fresh on restore (the
-            // field is per-tick emergent, not serialized); the daily pass
-            // recomputes it deterministically from the catalyst stream.
-            collective_field: mindstrata_development::collective::CollectiveField::default(),
+            // DC-1 STORY 11 / WP-I (Iter-266): the collective field is
+            // serialized since v15 — restore the captured state so resumed
+            // runs continue from the village's actual integrated press /
+            // fulfillment (the field carries a behavioral consumer since
+            // WP-I, so resetting to neutral would break resume-vs-straight
+            // equivalence for any run whose field moved). `#[serde(default)]`
+            // keeps pre-v15 saves loading at neutral, exactly the old
+            // semantics.
+            collective_field: snapshot.collective_field,
             echo_chamber: crate::culture::EchoChamberState::new(),
             clan_registry: crate::social::clan::ClanRegistry::new(),
             marriage_registry: crate::social::marriage::MarriageRegistry::new(),

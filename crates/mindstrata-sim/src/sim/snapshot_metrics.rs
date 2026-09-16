@@ -220,6 +220,7 @@ impl Simulation {
             collective_memory_registry: &self.collective_memory_registry,
             meme_registry: &self.meme_registry,
             kinship_graph: &self.kinship_graph,
+            collective_field: &self.collective_field,
         })
     }
 
