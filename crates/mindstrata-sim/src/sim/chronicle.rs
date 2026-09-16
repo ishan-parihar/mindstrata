@@ -129,6 +129,25 @@ pub fn render_chronicle(sim: &Simulation) -> String {
     if out == "-- Village Chronicle --\n" {
         out.push_str("\n(an unremarkable stretch of years)\n");
     }
+
+    // Iteration 269 (PLAN_DC2): Era III content rendering — the village
+    // tells its stories. Claims accumulated by the live polarity path are
+    // projected into the Era III template grammar and rendered as the
+    // closing annal. Deterministic: agents in index order, claims in
+    // emission order, dedup + cap inside `render_lore_section`. Read-only
+    // over existing state; chronicle is TUI/legibility-only (unpinned by
+    // goldens), so this cannot shift any hash surface.
+    let all_claims: Vec<mindstrata_development::polarity::ThreeRealmClaim> = sim
+        .agents
+        .iter()
+        .flat_map(|a| a.polarity_claims.iter().copied())
+        .collect();
+    let lore = mindstrata_development::render::render_lore_section(&all_claims, 12);
+    if !lore.is_empty() {
+        out.push_str("\nThe lore of the village\n");
+        out.push_str(&lore);
+    }
+
     out
 }
 
@@ -479,6 +498,35 @@ mod tests {
         // Out-of-range index and unknown names miss cleanly.
         assert_eq!(resolve_agent_spec(&sim, "9999"), None);
         assert_eq!(resolve_agent_spec(&sim, "Zaphod"), None);
+    }
+
+    /// Iteration 269: the village tells its stories — claims held by live
+    /// agents render as the chronicle's closing lore annal. Deterministic
+    /// and read-only (render_claim is a pure function of the claim).
+    #[test]
+    fn chronicle_lore_section_appears_after_run() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 2000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(2000);
+        let a = render_chronicle(&sim);
+        let b = render_chronicle(&sim);
+        assert_eq!(a, b, "lore annal stays deterministic");
+        assert!(
+            a.contains("The lore of the village"),
+            "lore section present\n{a}"
+        );
+        assert!(a.contains("the lore says:"), "rendered lines present\n{a}");
+        // Cite-first law is pinned at the render layer (template_id/source_cell);
+        // the annal carries the rendered text with provenance available on
+        // LoreLine.
     }
 
     /// DC-1 CLIENT 19-22 polish: dossier surfaces the polarity wire
