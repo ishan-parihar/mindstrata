@@ -12,17 +12,18 @@ use crate::realm::GrossReferent;
 ///
 /// Keyword rules (case-insensitive, first match wins):
 /// - `person`, `self`, `identity` → `Person`
-/// - `family`, `kin`, `household` → `Family`
+/// - `family`, `kin`, `household`, `group` → `Group`
 /// - `institution`, `law`, `governance` → `Institution`
-/// - `culture`, `myth`, `ritual` → `Culture`
-/// - `ecology`, `land`, `resource` → `Ecology`
+/// - `culture`, `myth`, `ritual`, `ecology`, `land`, `resource`, `world` →
+///   `World`
 /// - otherwise → `Institution` (neutral fallback)
 ///
 /// ```
 /// use mindstrata_development::referent::extract_referent;
 /// use mindstrata_development::realm::GrossReferent;
 /// assert_eq!(extract_referent("the person holds value"), GrossReferent::Person);
-/// assert_eq!(extract_referent("family kinship"), GrossReferent::Family);
+/// assert_eq!(extract_referent("family kinship"), GrossReferent::Group);
+/// assert_eq!(extract_referent("culture myth"), GrossReferent::World);
 /// assert_eq!(extract_referent("unknown text"), GrossReferent::Institution);
 /// assert_eq!(extract_referent("PERSON"), extract_referent("person")); // case-insensitive, deterministic
 /// ```

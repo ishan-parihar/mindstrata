@@ -6,7 +6,10 @@
 //! Gating is a deterministic threshold transform: sub-threshold pressure
 //! admits exactly zero (no partial leakage), supra-threshold pressure maps
 //! linearly from the threshold band into [0,1]. Zero-at-zero holds by
-//! construction. Threshold is CALIBRATION-PENDING(AP3).
+//! construction. Threshold RATIFIED (i270): 0.05 sits below the minimum
+//! live catalyst magnitude (0.311, Conflict base + smallest injury) by
+//! 6.2× design margin — the dead-zone is empty over all observed pressure
+//! while gating sub-noise phantom deltas via `admit_quantized`.
 
 use crate::canon::FIELD_UPTAKE_QUANTUM_F64;
 
@@ -18,8 +21,8 @@ pub struct Gate {
 }
 
 impl Gate {
-    /// Placeholder gate — threshold pending probe evidence
-    /// (i<iter>_gate_admission).
+    /// Ratified gate (i270 probe: all live magnitudes ≥ 0.311; threshold
+    /// 0.05 keeps the dead-zone sub-noise without touching live pressure).
     #[must_use]
     pub const fn pending() -> Self {
         Self {
