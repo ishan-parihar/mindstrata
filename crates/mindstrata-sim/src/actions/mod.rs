@@ -943,6 +943,27 @@ pub fn apply_action_tick(action: ActionKind, body: &mut BodyState, needs: &mut N
     body.energy = (body.energy - fx.energy_cost + fx.bonus_energy_recovery).clamp_01();
     needs.social = (needs.social - fx.bonus_social_relief).clamp_01();
     needs.meaning = (needs.meaning - fx.bonus_meaning_relief).clamp_01();
+
+    // Iteration-267 (i275 needs-band calibration): esteem/autonomy relief
+    // paths, the missing half of the revived decay. The decay revive
+    // (systems/mod.rs) is an unconditional ratchet +1e-4/tick (Fixed-4
+    // truncation disease, §5) — with no relief channel the band would pin
+    // at 1.0 everywhere within 8K ticks (§4.3 dead-producer hazard). The
+    // design-cited relieve path (needs-bands.md Esteem row: "Work/Trade
+    // relieve paths") uses competence-action relief sized so a full-time
+    // worker (ρ≈0.65) equilibria mid-band: relief 0.0002/tick balances
+    // decay at ρ = decay/relief = 0.5, well inside the draft [0.38,0.58]
+    // pacing band. Zero-at-zero: an idle agent accumulates deficit as
+    // designed; equilibrium position is workload-dependent, which IS the
+    // competence signal.
+    let competence_relief = Fixed::from_f64(0.0002);
+    match action {
+        ActionKind::Work | ActionKind::Trade => {
+            needs.esteem = (needs.esteem - competence_relief).clamp_01();
+            needs.autonomy = (needs.autonomy - competence_relief).clamp_01();
+        }
+        _ => {}
+    }
 }
 
 #[cfg(test)]

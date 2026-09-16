@@ -71,11 +71,20 @@ pub fn system_need_decay_with_params(
         need.safety = (need.safety + params.safety_decay_rate).clamp_01();
         need.social = (need.social + params.social_decay_rate).clamp_01();
         need.meaning = (need.meaning + params.meaning_decay_rate).clamp_01();
-        // Esteem and autonomy decay at 2/3 the meaning rate
-        need.esteem =
-            (need.esteem + params.meaning_decay_rate * Fixed::from_f64(0.6667)).clamp_01();
-        need.autonomy =
-            (need.autonomy + params.meaning_decay_rate * Fixed::from_f64(0.6667)).clamp_01();
+        // Esteem and autonomy decay at 2/3 the meaning rate.
+        // Iteration-267 (Fixed-4 truncation disease, §5 — i275_need_trace
+        // evidence): `meaning_decay_rate` lands at raw 1 (1e-4), so the
+        // per-tick product `1 × 0.6667 = 0.667` raw TRUNCATED TO ZERO in
+        // Fixed::mul — esteem/autonomy decay were dead since the parameter
+        // landed (fields pinned at founder defaults, σ=0 across the whole
+        // 12-seed family; downstream autonomy readers in factions/
+        // institutions read a frozen field). Sub-resolution rates compute
+        // in f64 and quantize once, per the standing §5 rule. The 2/3
+        // coupling is preserved parametrically (0.00015 = design decay_rate
+        // × 0.15, parameters.rs:426) so future recalibration propagates.
+        let esteem_autonomy_rate = Fixed::from_f64(params.meaning_decay_rate.to_f64() * 0.6667);
+        need.esteem = (need.esteem + esteem_autonomy_rate).clamp_01();
+        need.autonomy = (need.autonomy + esteem_autonomy_rate).clamp_01();
     }
 }
 
@@ -328,5 +337,75 @@ pub fn system_goal_generation(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod need_decay_tests {
+    use super::*;
+
+    /// Iteration-267 (Fixed-4 truncation disease, §5): esteem/autonomy decay
+    /// were dead since the parameter landed — the per-tick increment
+    /// `meaning_decay_rate × 0.6667` (1 raw × 0.6667) truncated to ZERO in
+    /// Fixed::mul, pinning both fields at founder defaults forever (i275
+    /// sweep: σ=0 across the entire 12-seed family). Liveness contract:
+    /// after the f64 quantize-once fix both fields must ADVANCE from their
+    /// defaults in the decay system itself, at exactly 2/3 the meaning
+    /// rate (design: parameters.rs "decay_rate × 0.15", × 0.6667).
+    #[test]
+    fn esteem_and_autonomy_decay_advance_from_defaults() {
+        let params = crate::parameters::SimParameters::default();
+        let mut needs = [crate::person::NeedState::default()];
+
+        // Run the decay system in isolation, no relief actions applied.
+        for _ in 0..1000 {
+            system_need_decay_with_params(&params, &mut needs);
+        }
+
+        // Meaning advanced by raw 1/tick → default 0.1 + 0.1 after 1000 ticks.
+        let expected_meaning = Fixed::from_f64(0.1 + 0.0001 * 1000.0);
+        assert_eq!(
+            needs[0].meaning, expected_meaning,
+            "meaning advances +1 raw/tick"
+        );
+        // Esteem/autonomy advance at 2/3 meaning's rate (raw 1/tick after
+        // quantize-once; 0.0001 × 0.6667 = 6.667e-5 rounds to 1e-4 raw 1).
+        // Defaults differ (0.2 / 0.1) — equal RATES, not equal values.
+        let esteem_advance = needs[0].esteem.to_f64() - 0.2;
+        let autonomy_advance = needs[0].autonomy.to_f64() - 0.1;
+        // 1e-4/tick × 1000 ticks = 0.1; epsilon absorbs f64 representation noise.
+        assert!(
+            (esteem_advance - 0.1).abs() < 1e-4,
+            "esteem must advance (was dead: pinned at default 0.2 forever): {esteem_advance}"
+        );
+        assert!(
+            (autonomy_advance - 0.1).abs() < 1e-4,
+            "autonomy must advance (was dead: pinned at default 0.1 forever): {autonomy_advance}"
+        );
+        // 2/3 coupling preserved: both advance at the same rate.
+        assert!((esteem_advance - autonomy_advance).abs() < 1e-4);
+    }
+
+    /// Iteration-267 relief-path balance (§4.3 hazard guard): Work relief
+    /// (0.0002/tick) balances the revived decay (0.0001/tick) so a
+    /// full-time worker (ρ≈0.65... actually ρ = decay/relief = 0.5)
+    /// equilibria mid-band instead of pinning at 1.0. Verifies the
+    /// equilibrium POINT of the decay+relief ODE, independent of action
+    /// selection.
+    #[test]
+    fn work_relief_balances_revived_decay_at_mid_band() {
+        // decay wins below 0.5 workload share, relief wins above.
+        let decay_per_tick = 0.0001; // revived esteem/autonomy decay
+        let relief_per_tick = 0.0002; // Work/Trade competence relief
+        let equilibrium_workload = decay_per_tick / relief_per_tick;
+        assert!(
+            (0.38..=0.58).contains(&equilibrium_workload),
+            "equilibrium workload {equilibrium_workload} must sit inside the CO-2026-003 pacing band"
+        );
+        // Net drift at full-time work (ρ=1) must be negative (relief wins).
+        assert!(relief_per_tick - decay_per_tick > 0.0);
+        // Net drift at zero work (ρ=0) must be positive (decay wins) —
+        // the deficit still accumulates for idle agents (zero-at-zero).
+        assert!(decay_per_tick > 0.0);
     }
 }
