@@ -184,6 +184,25 @@ The plan below follows AP4's loop: P0 contract freeze → parallel execution →
   knife-edge pins recorded as debt, not flip-flopped.
 - Check `git log --oneline -3 && git status` before every session (shared-clone hazard).
 
+### §4 EXECUTION LEDGER — DC-2 landed (2026-09-16)
+
+All five planned iterations executed per doctrine, each ending in a full green gate
++ push:
+
+| Iter | Commit | What landed | Evidence |
+|---|---|---|---|
+| 266 | `92352fb` | **WP-I collective field alive**: real `step_collective` (press integration, stage advance, fulfillment EMA), vault-`kind` slug-bucket mapping replacing cyclic `i%4`, Safety-fulfillment panic-pacify consumer (anchor 0.25 > calm-window peak 0.19), snapshot v15 + roundtrip pin | `i266_collective_wp_i.md` |
+| 267 | `c09543d` | **Dead-producer revival** (§5 Fixed-4 truncation class, Iter-242 family): esteem/autonomy decay computed in f64 + quantize once; Work/Trade relief paths wired; CO-2026-003 landed (0.3695 ± 0.026, CV 0.070) | snapshot re-anchor +0.0002 legitimacy, mechanism named (autonomy → grievance → faction pressure) |
+| 268 | `bd6977c` | **Q3 golden-addiction**: forced-Bond probe shows per-subject equilibrium ≈0.75 inside ratified band (no re-pin needed); grasping nudge wired (+0.04 Socialize/Worship) | goldens re-anchored — social memories +65, Friend 0→2, grain 1.81→0.91 (the grasping cost) |
+| 269 | `9bcdeb7` | **Era III lore rendering** (UM-2): `render.rs` bridge (legality-gated, cite-first, FNV-stable template selection), chronicle "The lore of the village" annal | `i269_era3_lore_rendering.md` |
+| 270 | `989bfca` | **Lambda gate ratified** t=0.05 (probe: all live magnitudes ≥0.311, threshold-invariant across 15× band); catalyst magnitudes censused + ratified; referent doc-test rot fixed | `i270_lambda_catalyst.md` |
+
+**Residual debt (recorded, honest):** full Era III legality mapping blocked at vendor
+source (`realms.md` not vendored — WP-I vendor coupling); Grief/Transgression catalyst
+magnitudes remain spec-midpoint pins until a mortality-horizon probe can observe them;
+`admit(0.35)` is the future pacing knob (would gate 40% of Threat pressure — not pulled
+without evidence); `referent.rs`/`line.rs` doc-example classes now green (3/3).
+
 ---
 
 ## 5. Summary assessment
@@ -194,9 +213,14 @@ calibrated and behaviorally wired, the complete crate-ladder scaling program, an
 entire DC-1 106-phase studio cycle. Every verification gate is green at HEAD with zero
 violations.
 
-**What remains is calibration, not construction:** IC-5 canon values (needs bands,
-per-quadrant pathology fine-tuning, lambda threshold, catalyst magnitudes), activation of
-the deliberately-inert collective layer (WP-I), Era III content generation, and the Q3
-event-rate calibration. The project's own evidence trail is honest about every one of
-these — there is no hidden debt; the DC-2 plan in §4 converts the inert layers and
-closes the canon in five probe-evidenced iterations.
+**DC-2 is now EXECUTED (see §4 ledger):** the deliberately-inert collective layer is
+alive (WP-I), the last two dead producers found are revived (esteem/autonomy decay), Q3
+is calibrated and behaviorally wired, the village tells its stories (Era III rendering,
+UM-2), and the lambda gate + catalyst magnitudes are probe-ratified. The canon's
+remaining open items are blocked at the vendor boundary, not at construction —
+external inputs (full ontology mapping, mortality-horizon observations) are the only
+path to the rest.
+
+**Next horizon (per roadmap):** DC-2 P0 contract freeze for the full 106-phase cycle,
+DC-3 planning (N≥48 scale, asset pipeline v0), Era IV collective activation, and the
+VecDeque perf ponytail if N≥48 probes bind.
