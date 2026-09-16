@@ -184,7 +184,8 @@ pub struct AgentSummary {
 /// §8.1: Regulation-capacity support contributed by self-esteem (deviation
 /// from the 0.5 baseline × gain). Zero at baseline; positive for healthy
 /// self-models, negative for eroded ones. Pure and deterministic.
-pub(super) fn self_esteem_support(self_esteem: Fixed) -> Fixed {
+// Arc-D: pub(crate) — the verbatim-moved cognitive pass (systems/) consumes it.
+pub(crate) fn self_esteem_support(self_esteem: Fixed) -> Fixed {
     (self_esteem - Fixed::from_f64(0.5)) * SELF_MODEL_REGULATION_GAIN
 }
 

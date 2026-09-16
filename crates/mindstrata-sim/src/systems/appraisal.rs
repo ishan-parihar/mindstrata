@@ -1,12 +1,15 @@
 //! Tick pass 6: appraisal and ambient emotion producers.
+//! Arc-D verbatim move from sim/pass_appraisal.rs (golden-referee pure refactor).
 
-use super::{
-    Agency, AgentBundle, AgentId, Appraisal, Fixed, InteractionKind, SimEvent, Simulation, Tick,
-};
-use crate::appraisal;
+use crate::appraisal::{self, Agency, Appraisal};
+use crate::sim::{AgentBundle, Simulation};
+use mindstrata_core::clock::Tick;
+use mindstrata_core::event::{InteractionKind, SimEvent};
+use mindstrata_core::fixed::Fixed;
+use mindstrata_core::id::AgentId;
 
 impl Simulation {
-    pub(super) fn tick_appraisal_pass(
+    pub(crate) fn tick_appraisal_pass(
         ctx: &mut crate::systems::SystemContext,
         agents: &mut [AgentBundle],
         _tick_u64: u64,

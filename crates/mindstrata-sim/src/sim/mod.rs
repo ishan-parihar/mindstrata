@@ -1,7 +1,6 @@
 //! Simulation orchestrator — the fixed-tick loop.
 
 use crate::actions::ActionKind;
-use crate::appraisal::{Agency, Appraisal};
 pub use crate::attention;
 use crate::attention::{AttentionState, PerceptKind};
 use crate::biology::EmbodiedState;
@@ -141,7 +140,7 @@ const EPISODIC_CHAPTER_EVENTS: u32 = 100;
 /// milestone that warrants an Episodic memory. The narrative block fires every
 /// tick in riverford runs (probe: ~3600 events per agent over 2000 ticks), so
 /// the chapter gate keeps encodes sparse without a stateful cooldown.
-fn life_chapter_crossed(before: u32, after: u32) -> bool {
+pub(super) fn life_chapter_crossed(before: u32, after: u32) -> bool {
     before / EPISODIC_CHAPTER_EVENTS != after / EPISODIC_CHAPTER_EVENTS
 }
 /// §5 (Iteration 155): If the agent holds an external directive (a
@@ -334,7 +333,8 @@ const GROUP_SUPPRESSION_SCALE: Fixed = Fixed::from_raw(4000); // 0.4
 /// Cortisol level above which we record Hormonal provenance (0.6).
 pub(crate) const HORMONAL_TRACE_THRESHOLD: Fixed = Fixed::from_raw(6000); // 0.6
 /// Social support below which we record Attachment provenance (0.3).
-const ATTACHMENT_LOW_SUPPORT_THRESHOLD: Fixed = Fixed::from_raw(3000); // 0.3
+// Arc-D: const moved with the cognitive pass (systems/cognitive.rs is its only consumer).
+pub(super) const ATTACHMENT_LOW_SUPPORT_THRESHOLD: Fixed = Fixed::from_raw(3000); // 0.3
 /// Iteration 191: the active-comfort reduction is damped to ~1–2 days of
 /// separation per comfort event (see the Comfort-interaction wiring) so the
 /// coupling stays visible while supported partners sit genuinely lower.
@@ -742,15 +742,12 @@ mod marriage;
 mod memory_ops;
 mod norms_impl;
 mod pass_action;
-mod pass_appraisal;
-mod pass_cognitive;
-mod pass_decay;
 mod pass_ecology;
 mod pass_scenario;
 mod pass_social;
 mod pass_weather;
 mod population;
-mod snapshot_metrics;
+pub(super) mod snapshot_metrics;
 mod social_cluster;
 
 #[cfg(test)]

@@ -1,10 +1,12 @@
 //! Tick passes 7-9: emotion/belief decay and trait plasticity.
+//! Arc-D verbatim move from sim/pass_decay.rs (golden-referee pure refactor).
 
-use super::{AgentBundle, Fixed, Simulation};
 use crate::belief_update;
+use crate::sim::{AgentBundle, Simulation};
+use mindstrata_core::fixed::Fixed;
 
 impl Simulation {
-    pub(super) fn tick_decay_pass(
+    pub(crate) fn tick_decay_pass(
         agents: &mut [AgentBundle],
         _tick_u64: u64,
         affects: &mut [crate::person::Affect],

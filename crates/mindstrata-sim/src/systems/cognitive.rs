@@ -1,15 +1,16 @@
 //! Tick pass 0b: cognitive state update.
+//! Arc-D verbatim move from sim/pass_cognitive.rs (golden-referee pure refactor).
 
-use super::life_chapter_crossed;
-use super::{
-    AgentBundle, AgentId, Fixed, MemoryKind, MemoryTag, Simulation,
-    ATTACHMENT_LOW_SUPPORT_THRESHOLD,
-};
+use crate::memory::{MemoryKind, MemoryTag};
+use crate::sim::life_chapter_crossed;
+use crate::sim::{AgentBundle, Simulation, ATTACHMENT_LOW_SUPPORT_THRESHOLD};
+use mindstrata_core::fixed::Fixed;
+use mindstrata_core::id::AgentId;
 
-use super::snapshot_metrics::self_esteem_support;
+use crate::sim::snapshot_metrics::self_esteem_support;
 
 impl Simulation {
-    pub(super) fn tick_cognitive_pass(
+    pub(crate) fn tick_cognitive_pass(
         agents: &mut [AgentBundle],
         emotions: &mut [crate::person::DiscreteEmotions],
         needs: &mut [crate::person::NeedState],

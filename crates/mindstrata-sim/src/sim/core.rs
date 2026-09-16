@@ -34,7 +34,8 @@ impl Simulation {
     /// [`Self::relationship_v2_index`], which indexes the legacy flat
     /// `self.relationships` matrix of `n·(n−1)` entries.
     #[inline]
-    pub(super) fn relationship_v2_pos(a: usize, b: usize) -> usize {
+    // Arc-D: pub(crate) — the verbatim-moved cognitive pass (systems/) also reads it.
+    pub(crate) fn relationship_v2_pos(a: usize, b: usize) -> usize {
         debug_assert!(a != b, "self-relationship position requested");
         if b > a {
             b - 1

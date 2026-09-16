@@ -48,7 +48,10 @@ impl<'a> SystemContext<'a> {
 }
 
 // ── Arc-D verbatim-moved passes (golden-referee pure refactor) ──────────
+pub(crate) mod appraisal;
 pub(crate) mod biology;
+pub(crate) mod cognitive;
+pub(crate) mod decay;
 pub mod development;
 pub(crate) mod health;
 pub mod institutions_multiplier;
