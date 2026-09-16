@@ -271,6 +271,42 @@ impl Simulation {
             tick,
         });
 
+        // ── Iteration-272 (§4.3): capture grief targets NOW, while the
+        // deceased's references are still live. The in-place replacement at
+        // the end of this fn overwrites `self.agents[idx]` with a newborn and
+        // clears every partner/parent reference, so any read-side observer
+        // (post-tick) sees the surviving partner as `partner: None` and can
+        // no longer attribute the loss. The widow heuristic in
+        // `catalyst_observers` documented this exact hazard. Targets are
+        // re-emitted as `SimEvent::GriefStruck` in the same tick (social
+        // cluster pass owns the deaths loop), so the development pass's
+        // event window delivers Grief to a *surviving* subject.
+        {
+            let mut targets: Vec<usize> = Vec::new();
+            // Partner first (the spouse loses the most).
+            if let Some(spouse_idx) = self.agents[idx].partner {
+                if spouse_idx < self.agents.len() && !deaths.contains(&spouse_idx) {
+                    targets.push(spouse_idx);
+                }
+            }
+            // Co-resident kin: children and parents of the deceased.
+            for other in 0..self.agents.len() {
+                if other == idx || deaths.contains(&other) || targets.contains(&other) {
+                    continue;
+                }
+                let is_child = self.agents[other].parent_a == Some(idx)
+                    || self.agents[other].parent_b == Some(idx);
+                let is_parent = self.agents[idx].parent_a == Some(other)
+                    || self.agents[idx].parent_b == Some(other);
+                if is_child || is_parent {
+                    targets.push(other);
+                }
+            }
+            for t in targets {
+                self.pending_grief_targets.push((t, tick_u64));
+            }
+        }
+
         // ── Dissolve marriages and pair bonds involving the deceased ──
         for marriage in &mut self.marriage_registry.marriages {
             if marriage.active && (marriage.partner_a == idx || marriage.partner_b == idx) {

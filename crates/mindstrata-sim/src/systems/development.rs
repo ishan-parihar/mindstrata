@@ -21,7 +21,17 @@ use crate::sim::AgentBundle;
 
 fn map_event(ev: &SimEvent) -> Option<(AgentId, CatalystKind, f64)> {
     match *ev {
-        SimEvent::AgentDied { agent, .. } => Some((agent, CatalystKind::Grief, 1.0)),
+        // Iteration-272 (§4.3 root-cause fix): Grief routes to the *surviving*
+        // mourner via `GriefStruck` (emitted by the deaths pass with still-live
+        // references). The old `AgentDied → Grief(subject)` mapping landed the
+        // catalyst on the deceased's slot — which the same-tick in-place
+        // generational replacement had already overwritten with a newborn, so
+        // every Grief catalyst ever produced soaked into the wrong agent (and
+        // at calibration horizons, zero deaths fire at all). Magnitude 1.0
+        // stands: the loss of a spouse/co-resident kin is the maximal-loss
+        // exemplar; the widow-heuristic emission discipline bounds it to
+        // genuinely-tied survivors.
+        SimEvent::GriefStruck { mourner, .. } => Some((mourner, CatalystKind::Grief, 1.0)),
         SimEvent::MarriageFormed {
             spouse_a, spouse_b, ..
         } => {

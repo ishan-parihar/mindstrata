@@ -49,6 +49,19 @@ pub enum SimEvent {
         cause: DeathCause,
         tick: Tick,
     },
+    /// Iteration-272 (§4.3 dead-producer fix): a surviving agent suffers the
+    /// loss of a close tie (spouse/co-resident kin). Emitted by the deaths
+    /// pass in the same tick it captured the target — BEFORE the in-place
+    /// generational replacement clears partner/parent references — so the
+    /// development pass's catalyst mapping routes Grief to a *surviving*
+    /// subject instead of the deceased's replacement newborn (the old
+    /// `AgentDied → Grief(subject)` mapping landed on the replaced slot).
+    /// `deceased` is recorded for provenance/appraisal context.
+    GriefStruck {
+        mourner: AgentId,
+        deceased: AgentId,
+        tick: Tick,
+    },
 
     // ── Biological / needs ───────────────────────────────────────────
     AgentAte {

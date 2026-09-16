@@ -720,6 +720,16 @@ pub struct Simulation {
     tick_socialization_updates: Vec<(usize, u64)>,
     /// Pre-allocated per-tick innovations buffer; reused via `clear()`.
     tick_innovations: Vec<(usize, u64, String)>,
+    /// Iteration-272 (§4.3 dead-producer fix): grief targets captured inside
+    /// the deaths pass BEFORE the in-place generational replacement clears
+    /// partner/kin references. Each entry: (mourner_idx, tick). Consumed and
+    /// re-emitted as `SimEvent::GriefStruck` in the same tick's social-cluster
+    /// pass (which owns the deaths loop), so `system_development` (next tick's
+    /// window) sees a *surviving* subject. This is the fix the
+    /// `catalyst_observers` module docs prescribed ("record grief targets into
+    /// an inert side-buffer inside the deaths pass"). Not serialized: the
+    /// buffer is same-tick transient by construction.
+    pending_grief_targets: Vec<(usize, u64)>,
 }
 
 pub use snapshot_metrics::{AgentSummary, MetricsSnapshot};

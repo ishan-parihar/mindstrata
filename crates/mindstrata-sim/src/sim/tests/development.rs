@@ -228,3 +228,70 @@ fn replacement_newborn_field_is_vertically_inherited() {
         "same-seed replacement must be byte-identical"
     );
 }
+
+/// Iteration-272 (§4.3 dead-producer fix): Grief routes to the SURVIVING
+/// mourner via `GriefStruck`, not to the deceased's slot. The old
+/// `AgentDied → Grief(subject)` mapping landed the catalyst on the
+/// in-place replacement newborn (dead agents are replaced in the same
+/// tick to preserve the id==index invariant). Probe evidence (i272):
+/// Grief was structurally unobservable at calibration horizons — zero
+/// deaths in 5 seeds × 20K ticks (first natural death ≈ 2.3M ticks at
+/// 35040 tpy) AND any death that did fire would have soaked the catalyst
+/// into the wrong agent.
+#[test]
+fn grief_routes_to_surviving_mourner_not_replacement() {
+    let mut sim = make_sim(777);
+    let tick = sim.current_tick();
+    let tick_u64 = tick.as_u64();
+
+    // Marry agents 0 and 1 (active partnership), then kill agent 1.
+    // Agent 0 must receive the Grief catalyst; agent 1's slot is replaced.
+    sim.agents[0].partner = Some(1);
+    sim.agents[1].partner = Some(0);
+    let mourner_before = sim.agents[0].development.altitudes.clone();
+    let deceased_pathology_before = sim.agents[1].development.pathology.golden_allergy.intensity;
+
+    sim.handle_agent_death(
+        1,
+        &[],
+        tick_u64,
+        tick,
+        mindstrata_core::event::DeathCause::Disease,
+    );
+
+    // The deaths pass captured the grief target; the flush in the owning
+    // pass emits GriefStruck. Handle the flush here (the test calls the
+    // deaths pass directly, outside the social-cluster loop).
+    let grief_batch: Vec<(usize, u64)> = sim.pending_grief_targets.drain(..).collect();
+    assert!(
+        grief_batch.iter().any(|(m, _)| *m == 0),
+        "mourner 0 must be captured as a grief target"
+    );
+    let evs: Vec<mindstrata_core::event::SimEvent> = grief_batch
+        .into_iter()
+        .map(|(m, t)| mindstrata_core::event::SimEvent::GriefStruck {
+            mourner: mindstrata_core::id::AgentId::new(m as u64),
+            deceased: mindstrata_core::id::AgentId::new(1),
+            tick: mindstrata_core::clock::Tick::new(t),
+        })
+        .collect();
+    crate::systems::development::system_development(&mut sim.agents, &evs);
+
+    // The mourner's field must have received the Grief catalyst; the
+    // deceased's slot (now a newborn) must NOT. Live observable: altitude
+    // line 0 (the Grief-indexed line, mapping Grief ⇒ 0) advances by
+    // admitted × 0.02. Note Q4 (the Grief-indexed pathology quadrant)
+    // moves DOWN under pressure=1.0 by design: Allergy metabolism resolves
+    // recoil under sustained pressure (`1−pressure` growth law) — the
+    // mourning-resolution law — so pathology is NOT the arrival observable.
+    let mourner_after = sim.agents[0].development.altitudes.clone();
+    assert_ne!(
+        mourner_after, mourner_before,
+        "surviving spouse must receive the Grief catalyst (altitude moved)"
+    );
+    assert!(
+        mourner_after[0] > mourner_before[0],
+        "Grief-indexed line 0 must advance on the mourner"
+    );
+    let _ = deceased_pathology_before;
+}

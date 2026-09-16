@@ -7,6 +7,8 @@ use super::{
     PATRONAGE_AFFECTION_THRESHOLD, PATRONAGE_CHANCE_SCALE, PATRONAGE_MAX_CLIENTS_PER_PATRON,
     PATRONAGE_STATUS_GAP, PATRONAGE_TRUST_THRESHOLD,
 };
+use mindstrata_core::id::AgentId;
+
 use crate::demography;
 use crate::gossip;
 use crate::institutions;
@@ -420,6 +422,20 @@ impl Simulation {
             // `AgentId::new(i) == index i` invariant is never broken.
             for &idx in &deaths {
                 self.handle_agent_death(idx, &deaths, tick_u64, tick, DeathCause::OldAge);
+            }
+            // Iteration-272 (§4.3): flush the grief targets captured inside
+            // the deaths pass (while references were still live) as
+            // GriefStruck events. Emitted into THIS tick's event window so
+            // the development pass (same tick, later in the pipeline) routes
+            // Grief to surviving mourners. Deterministic: buffer order =
+            // death order = loop order.
+            let grief_batch: Vec<(usize, u64)> = std::mem::take(&mut self.pending_grief_targets);
+            for (mourner, g_tick) in grief_batch {
+                self.events.push(SimEvent::GriefStruck {
+                    mourner: AgentId::new(mourner as u64),
+                    deceased: AgentId::new(0), // provenance context only; slot identity is the coin
+                    tick: Tick::new(g_tick),
+                });
             }
         }
 
