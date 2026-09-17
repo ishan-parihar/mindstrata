@@ -657,7 +657,11 @@ impl Simulation {
         // policy decision that needs a contract-freeze first). The list
         // is bounded by the per-tick event volume; no growth explosion.
         let polarity_window = &self.events[pre_tick_events..];
-        crate::systems::development::system_polarity_claim_emit(&mut self.agents, polarity_window);
+        crate::systems::development::system_polarity_claim_emit(
+            &mut self.agents,
+            polarity_window,
+            tick_u64,
+        );
 
         // ── DC-1 STORY 11 + WP-I (Iter-266): collective-field step.
         // Reuses the same pre_tick_events window that the dev + polarity

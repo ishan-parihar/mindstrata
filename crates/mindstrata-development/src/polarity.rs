@@ -75,6 +75,12 @@ pub struct ThreeRealmClaim {
     pub line: LineId,
     /// Current polarity state of this claim for the observing agent.
     pub polarity: PolarityState,
+    /// Tick the claim was emitted (i281 salience-recency window).
+    /// `#[serde(default)]` per the bundle-field law: v15 saves (pre-i281)
+    /// load with 0, which reads as "ancient" — claims from long restored
+    /// runs stay outside the salience window, matching their aged semantics.
+    #[serde(default)]
+    pub created_tick: u64,
 }
 
 impl ThreeRealmClaim {
@@ -92,6 +98,30 @@ impl ThreeRealmClaim {
             claim,
             line,
             polarity: PolarityState::Undiscovered,
+            created_tick: 0,
+        }
+    }
+
+    /// Construct a claim stamped with its emission tick (i281: the action
+    /// selector's salience-recency window reads this to keep the social
+    /// bias a bounded recency integral instead of an unbounded run
+    /// integral — measured i281: 0.017→0.82 × social_value over 1K→20K
+    /// without it).
+    #[must_use]
+    pub const fn new_at(
+        domain: CausalDomain,
+        referent: GrossReferent,
+        claim: SubtleClaim,
+        line: LineId,
+        created_tick: u64,
+    ) -> Self {
+        Self {
+            domain,
+            referent,
+            claim,
+            line,
+            polarity: PolarityState::Undiscovered,
+            created_tick,
         }
     }
 }
@@ -141,6 +171,9 @@ pub fn reconcile_claims(a: &ThreeRealmClaim, b: &ThreeRealmClaim) -> Option<Thre
         claim: synthesized_claim,
         line: a.line,
         polarity: PolarityState::Integrated,
+        // Synthesis inherits the older claim's stamp (i281): the insight
+        // is as old as the material it synthesized.
+        created_tick: a.created_tick.min(b.created_tick),
     })
 }
 
@@ -261,6 +294,8 @@ pub fn reconcile_subtle(a: &ThreeRealmClaim, b: &ThreeRealmClaim) -> Option<Thre
         claim: synthesized_claim,
         line: a.line,
         polarity: PolarityState::Integrated,
+        // Synthesis inherits the older claim's stamp (i281).
+        created_tick: a.created_tick.min(b.created_tick),
     })
 }
 
@@ -384,6 +419,7 @@ mod tests {
             claim: subtle,
             line: lid(line),
             polarity,
+            created_tick: 0,
         }
     }
 

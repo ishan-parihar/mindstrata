@@ -37,6 +37,14 @@ const PERSISTENCE_NOISE_FLOOR: f64 = 0.02;
 /// (pure utility term — no RNG).
 const APPROACH_WANDER_BONUS: Fixed = Fixed::from_raw(500); // 0.05
 
+/// i281: salience-recency window for the polarity-claim social bias, in
+/// ticks — one in-sim year (`ticks_per_year = 1000`). The 0.01 coefficient
+/// was ratified (i275) against the claim integral a 1–2K horizon produces;
+/// the window makes that calibration horizon-invariant instead of letting
+/// the bias grow as an unbounded run integral (measured: 0.017 → 0.82 ×
+/// social_value over 1K→20K without it).
+pub(crate) const CLAIM_SALIENCE_TICKS: u64 = 1000;
+
 /// AP3 DC-1 signature #1 + Iteration-268 (i268 forced-Bond probe):
 /// pathology → action nudges, extracted as a pure helper so the pin can
 /// test all four quadrants without a full `DecisionContext`.
@@ -190,6 +198,9 @@ pub struct DecisionContext<'a> {
     /// Per-agent three-realm polarity claims (read-only; derived
     /// deterministically from the catalyst stream by the daily pass).
     pub polarity_claims: &'a [crate::development::ThreeRealmClaim],
+    /// Current simulation tick (i281: anchors the polarity-claim
+    /// salience-recency window at the social-bias site).
+    pub current_tick: u64,
     // ── WP-J (Iteration 280): institution-membership work bonus ────
     /// Aggregate Work-utility bonus from the agent's institution
     /// memberships (Σ over live institutions of `member_work_bonus(morale,
@@ -850,10 +861,26 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
         // action family. Identity-at-zero preserved: an agent with no
         // ActiveTension claims contributes 0 to the bias.
         if is_social {
+            // i281 salience-recency window: only claims emitted within the
+            // last CLAIM_SALIENCE_TICKS count. The original coefficient
+            // (0.10, DC-2.4) and its re-derivation (0.01, i275) were both
+            // ratified against 1–2K-horizon claim integrals; i281 measured
+            // the count as an unbounded run integral (bias 0.017 → 0.82 ×
+            // social_value over 1K→20K, 27× the audited 0–0.03 band). A
+            // 1000-tick window (ticks_per_year) makes the count a bounded
+            // RECENCY integral whose equilibrium matches exactly the diet
+            // the coefficient was ratified against — the honest §4.2
+            // re-contract: the 0.01 coefficient stands; the integral it
+            // multiplies is restored to its calibrated horizon. Zero-at-
+            // zero unchanged: no recent ActiveTension claims → no bias.
+            let now = ctx.current_tick.saturating_sub(CLAIM_SALIENCE_TICKS);
             let active_tension_count = ctx
                 .polarity_claims
                 .iter()
-                .filter(|c| c.polarity == crate::development::PolarityState::ActiveTension)
+                .filter(|c| {
+                    c.polarity == crate::development::PolarityState::ActiveTension
+                        && c.created_tick >= now
+                })
                 .count();
             utility += Fixed::from_f64(0.01 * active_tension_count as f64) * def.social_value;
         }

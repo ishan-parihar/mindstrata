@@ -287,7 +287,7 @@ pub fn system_development(agents: &mut [AgentBundle], events: &[SimEvent]) {
 /// (no RNG, no state), so byte-identical inputs yield byte-identical
 /// appends. Bounded by the per-tick event volume; safe against growth
 /// explosion.
-pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent]) {
+pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent], tick: u64) {
     if events.is_empty() {
         return;
     }
@@ -305,7 +305,12 @@ pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent
         // minor conflicts' Fact claims, making the tension gate reachable
         // from real event diversity (probe: 1,292 claims, zero tension under
         // the v1 mono-quartet mapping).
-        let claim = mindstrata_development::polarity::project_catalyst_severity(kind, major);
+        let mut claim = mindstrata_development::polarity::project_catalyst_severity(kind, major);
+        // i281: stamp emission tick — the action selector's salience-
+        // recency window reads this so the social bias stays a bounded
+        // recency integral (measured unbounded-run integral: bias 0.017 →
+        // 0.82 × social_value over 1K→20K without the stamp).
+        claim.created_tick = tick;
         let archetype = mindstrata_development::lore::archetype_for_claim(&claim);
         agents[agent_idx].polarity_claims.push(claim);
         agents[agent_idx].lore_archetypes.push(archetype);
@@ -522,7 +527,7 @@ mod tests {
     fn polarity_claim_emit_empty_window_is_identity() {
         // No events → no claims appended (zero-at-zero identity).
         let mut agents: Vec<crate::sim::AgentBundle> = Vec::new();
-        system_polarity_claim_emit(&mut agents, &[]);
+        system_polarity_claim_emit(&mut agents, &[], 0);
         assert!(agents.is_empty());
     }
 

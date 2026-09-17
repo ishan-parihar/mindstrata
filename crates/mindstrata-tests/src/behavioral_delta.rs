@@ -332,7 +332,9 @@ fn scenario_delta_is_live_and_contexts_differ() {
     // Iteration 221 re-anchor: sweep for positive-ordered seeds.
     let mut best_seed2 = 42u64;
     let mut best_min2 = f64::NEG_INFINITY;
-    for &seed in &[1, 2, 5, 7, 11, 12, 13, 17, 42, 44, 46, 55, 99] {
+    for &seed in &[
+        1, 2, 5, 7, 11, 12, 13, 17, 42, 44, 46, 55, 99, 3, 21, 64, 77, 88, 101,
+    ] {
         let v = behavioral_delta(
             seed,
             3000,
@@ -863,7 +865,9 @@ fn calm_scenario_baseline_differs_from_drought() {
     // Iteration 221 re-anchor: sweep for positive-ordered seeds.
     let mut best_seed = 42u64;
     let mut best_min_delta = f64::NEG_INFINITY;
-    for &seed in &[1, 2, 5, 7, 11, 12, 13, 17, 42, 44, 46, 55, 99] {
+    for &seed in &[
+        1, 2, 5, 7, 11, 12, 13, 17, 42, 44, 46, 55, 99, 3, 21, 64, 77, 88, 101,
+    ] {
         let mut cs = Scenario::calm();
         cs.seed = seed;
         let mut ds = Scenario::drought();

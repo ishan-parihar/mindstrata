@@ -71,6 +71,7 @@ fn broke_hungry_agent_prefers_eat_over_trade() {
             development: &crate::psychology::DevelopmentFieldState::default(),
             polarity_claims: &[],
             institution_work_bonus: Fixed::ZERO,
+            current_tick: 0,
         },
         &mut rng,
     );
@@ -130,6 +131,7 @@ fn wealthy_hungry_agent_can_prefer_trade() {
             development: &crate::psychology::DevelopmentFieldState::default(),
             polarity_claims: &[],
             institution_work_bonus: Fixed::ZERO,
+            current_tick: 0,
         },
         &mut rng,
     );
@@ -186,6 +188,7 @@ fn utility_prefers_food_when_hungry() {
             development: &crate::psychology::DevelopmentFieldState::default(),
             polarity_claims: &[],
             institution_work_bonus: Fixed::ZERO,
+            current_tick: 0,
         },
         &mut rng,
     );
@@ -299,6 +302,7 @@ fn scarcity_increases_food_utility() {
             development: &crate::psychology::DevelopmentFieldState::default(),
             polarity_claims: &[],
             institution_work_bonus: Fixed::ZERO,
+            current_tick: 0,
         },
         &mut rng,
     );
@@ -354,6 +358,7 @@ fn scarcity_increases_water_utility() {
             development: &crate::psychology::DevelopmentFieldState::default(),
             polarity_claims: &[],
             institution_work_bonus: Fixed::ZERO,
+            current_tick: 0,
         },
         &mut rng,
     );
@@ -1115,6 +1120,7 @@ fn dread_shifts_selection_toward_provisioning() {
                     development: &crate::psychology::DevelopmentFieldState::default(),
                     polarity_claims: &[],
                     institution_work_bonus: Fixed::ZERO,
+                    current_tick: 0,
                 },
                 &mut rng,
             );
@@ -1668,6 +1674,7 @@ fn institution_work_bonus_shifts_selection_toward_work() {
                     development: &crate::psychology::DevelopmentFieldState::default(),
                     polarity_claims: &[],
                     institution_work_bonus: bonus,
+                    current_tick: 0,
                 },
                 &mut rng,
             );
@@ -1691,5 +1698,44 @@ fn institution_work_bonus_shifts_selection_toward_work() {
     assert!(
         work_forced > work_live,
         "bonus must be monotone: {work_forced} vs {work_live}"
+    );
+}
+
+/// i281: the polarity-claim social bias uses a 1000-tick salience-recency
+/// window — claims older than the window contribute zero. Re-contract
+/// (§4.2/§4.4): the 0.01 coefficient was ratified against the 1–2K-horizon
+/// claim integral (i275: mean 1.25–2.75 ActiveTension/agent); i281 measured
+/// the original count as an unbounded run integral (bias 0.017 → 0.82 ×
+/// social_value over 1K→20K, 27× the audited 0–0.03 band). The window
+/// restores the calibrated integral's horizon-invariance; the measured
+/// post-fix plateau is bias 0.0417 (i281_claim_recency probe, seed 42).
+#[test]
+fn polarity_bias_counts_only_recent_claims() {
+    let make = |created_tick: u64| crate::development::ThreeRealmClaim {
+        domain: mindstrata_development::polarity::CausalDomain::Material,
+        referent: mindstrata_development::polarity::GrossReferent::Event,
+        claim: mindstrata_development::polarity::SubtleClaim::Norm,
+        line: mindstrata_development::line::LineId::new("cognitive").unwrap(),
+        polarity: crate::development::PolarityState::ActiveTension,
+        created_tick,
+    };
+    let recent = [make(950), make(700)];
+    let ancient = [make(100), make(0)];
+    let count = |claims: &[crate::development::ThreeRealmClaim]| -> usize {
+        // Current tick 1200 → cutoff 200: claims stamped ≥ 200 count.
+        let now = 1200_u64.saturating_sub(crate::actions::CLAIM_SALIENCE_TICKS);
+        claims
+            .iter()
+            .filter(|c| {
+                c.polarity == crate::development::PolarityState::ActiveTension
+                    && c.created_tick >= now
+            })
+            .count()
+    };
+    assert_eq!(count(&recent), 2, "in-window claims count");
+    assert_eq!(
+        count(&ancient),
+        0,
+        "claims older than the salience window contribute zero bias"
     );
 }

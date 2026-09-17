@@ -359,6 +359,9 @@ impl Simulation {
                             // WP-J (i280): institution-membership work
                             // bonus (zero below the band-III gate).
                             institution_work_bonus,
+                            // i281: anchors the polarity-claim salience
+                            // window (1000-tick recency integral).
+                            current_tick: tick_u64,
                         },
                         ctx.rng,
                     )

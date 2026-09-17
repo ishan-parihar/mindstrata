@@ -436,14 +436,22 @@ fn polarity_tension_reconciles_to_integrated() {
         tick,
     }];
 
-    crate::systems::development::system_polarity_claim_emit(&mut sim.agents[0..2], &minor);
+    crate::systems::development::system_polarity_claim_emit(
+        &mut sim.agents[0..2],
+        &minor,
+        tick.as_u64(),
+    );
     let agent0_after_minor = &sim.agents[0];
     assert!(agent0_after_minor
         .polarity_claims
         .iter()
         .any(|c| c.claim == mindstrata_development::polarity::SubtleClaim::Fact));
 
-    crate::systems::development::system_polarity_claim_emit(&mut sim.agents[0..2], &major);
+    crate::systems::development::system_polarity_claim_emit(
+        &mut sim.agents[0..2],
+        &major,
+        tick.as_u64(),
+    );
     let claims = &sim.agents[0].polarity_claims;
     assert!(
         claims
@@ -457,7 +465,11 @@ fn polarity_tension_reconciles_to_integrated() {
     // agent pair and verify synthesis fires.
     let mut sim2 = make_sim(778);
     let both: Vec<_> = minor.into_iter().chain(major).collect();
-    crate::systems::development::system_polarity_claim_emit(&mut sim2.agents[0..2], &both);
+    crate::systems::development::system_polarity_claim_emit(
+        &mut sim2.agents[0..2],
+        &both,
+        tick.as_u64(),
+    );
     let integrated = sim2.agents[0]
         .polarity_claims
         .iter()
