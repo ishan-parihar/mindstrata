@@ -337,7 +337,7 @@ session start (shared-clone hazard).
 
 **New debt recorded this session:** bias reads a horizon-integral (recency window deferred until a 5K+ behavioral pin exists); identity-bucket feed remains the one dead collective producer (mortality-blocked; i280 options listed in §6.3).
 
-### §6.7 DC-2 REMAINING PLAN (2026-09-17, session 3 — post-i278 audit)
+### 6.5 DC-2 REMAINING PLAN (2026-09-17, session 3 — post-i278 audit)
 
 **Live verification at HEAD `c09486b`:** fmt clean, clippy 0, release suite
 **307/0/1**, sim lib **226/226**, dev lib **80/80**, golden 5/5, bench law
@@ -369,7 +369,7 @@ Probe `i279_institution_shift`: forced-stage crossing amber→green on the
 governance line shows pluralistic institution deltas; golden byte-identical
 below the crossing band.
 
-**i281 — bias recency window (the §6.4 debt, scheduled).**
+**i281 — bias recency window (the session-2 ledger debt, scheduled).**
 The action bias reads a horizon-integral of tension claims (5K+ mean 17–76
 per agent). Before any 5K+ behavioral pin lands on that integral, switch the
 consumer to a bounded recent-claims window; re-derive the coefficient against
@@ -390,7 +390,7 @@ universal"), file UM-2 evidence, open the DC-2 unify review per AP4.
 928 → 5696 µs/tick, superlinear), VecDeque ponytail decision, asset pipeline
 v0 charter (ROADMAP: UM-3 "the world scales").
 
-### 6.8 Known boundaries (not plannable until inputs land)
+### 6.6 Known boundaries (not plannable until inputs land)
 
 - Full Era III legality mapping — blocked: vendor `realms.md` not vendored.
 - Grief/Transgression catalyst magnitude ratification — blocked: mortality horizon.
