@@ -326,6 +326,17 @@ Probe before touching; one root cause per iteration; full gate before every comm
 results recorded as debt, not flip-flopped; `git log --oneline -3 && git status` at every
 session start (shared-clone hazard).
 
+### §6 EXECUTION LEDGER — continuation arcs landed (2026-09-17, session 2)
+
+| Iter | Commit | What landed | Evidence |
+|---|---|---|---|
+| 275 | `587970c` + `b747479` | **Polarity graph live**: probe overturned the plan (reconcile pass WAS wired; projection starved it). Fixed TWO dead edges — severity-grounded Threat projection (minor→Fact / major→Identity on one slot) + the mutually-exclusive gate mismatch (`is_active_tension` ≠-domain vs `reconcile_subtle` =-domain — the pair scan could NEVER fire). Action bias re-derived 0.10→0.01 (the DC-2.4 ramp tuned a dead diet; live-diet bias was 10× the audited band). Tension 15/33/206/910, integrated 4/4/40/82 at 1K/2K/5K/20K | `i275_reconciliation_fix.md` + probes |
+| 276 | `b84b8e1` | **Referent-grounded genesis** (WP-G2): generated culture cites real sites/institutions, domain-scoped (institution buckets cite institutions; communal buckets cite non-House sites), epoch-rotation binding, zero-blast gate | `i276_referent_grounding.md` |
+| 277 | `d90ea77` | **Tetra-arising band gate** (WP-I): stage bands gate content classes (band II ≡ pre-277, III unlocks Political/Song at 4.0, IV Prophecy at 6.0); dedup tag corrected to carry the class | `i277_tetra_arising_gate.md` |
+| 278 | `32a6c83` | **UM-2 gate probe: PARTIAL PASS** — seeded control 1.000, generated mean jaccard 0.402, 11/15 pairs disjoint; diversity confined to the Safety bucket = recorded diet debt (i272/i274), not construction. Roster retirement deferred until ≥3 buckets generate | `i278_culture_disjoint.md` |
+
+**New debt recorded this session:** bias reads a horizon-integral (recency window deferred until a 5K+ behavioral pin exists); identity-bucket feed remains the one dead collective producer (mortality-blocked; i280 options listed in §6.3).
+
 ### 6.5 Known boundaries (not plannable until inputs land)
 
 - Full Era III legality mapping — blocked: vendor `realms.md` not vendored.
