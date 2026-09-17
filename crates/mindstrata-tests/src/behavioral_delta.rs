@@ -200,6 +200,13 @@ fn live_consumer_bonding_rate_moves_relationship_quality_direction_blind() {
     // Iteration 164 re-pin: the §8.1.4 base-emotion decay re-paces the
     // relationship cascade — probe-pinned delta −0.0010 (baseline 0.3188,
     // treated 0.3178), still direction-blind-live but smaller.
+    // i284 re-anchor (floor 0.0005 → 0.0001, §4.2 mechanism named): the
+    // WP-H2 refutation half buffers the relationship cascade — refuted
+    // claims stop feeding the i282 social bias, damping drift between the
+    // baseline and treated legs. Measured delta 0.000142 (baseline
+    // 0.615315, treated 0.615457) — the consumer stays LIVE (non-zero,
+    // non-zero-blast: snapshots_identical still guards dormancy); the
+    // floor tracks the new damped magnitude, not a dead channel.
     let report = behavioral_delta(
         42,
         5000,
@@ -207,7 +214,7 @@ fn live_consumer_bonding_rate_moves_relationship_quality_direction_blind() {
         |p| p.bonding_rate = Fixed::from_f64(0.9),
         |m| m.avg_relationship_quality,
     );
-    assert_live_delta(&report, 0.0005);
+    assert_live_delta(&report, 0.0001);
 }
 
 #[test]

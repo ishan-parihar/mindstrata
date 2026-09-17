@@ -295,6 +295,16 @@ pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent
     if catalysts.is_empty() {
         return;
     }
+    // i284: threat slots for the refutation scan (collected before the
+    // emit loop consumes `catalysts`).
+    let mut threat_slots: Vec<(GrossReferent, LineId)> = Vec::new();
+    for (_, kind, _, _) in &catalysts {
+        if matches!(kind, CatalystKind::Threat) {
+            let projected =
+                mindstrata_development::polarity::project_catalyst_severity(*kind, false);
+            threat_slots.push((projected.referent, projected.line));
+        }
+    }
     for (agent_id, kind, _magnitude, major) in catalysts {
         let agent_idx = agent_id.as_u64() as usize;
         if agent_idx >= agents.len() {
@@ -323,9 +333,21 @@ pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent
     // subtle claim (fact<norm<value) marked Integrated. The
     // reconciliation is pure: it modifies the agent's `polarity_claims`
     // in-place. No RNG, no state outside the agent's claim list.
+    use mindstrata_development::line::LineId;
+    use mindstrata_development::polarity::GrossReferent;
     use mindstrata_development::polarity::{
-        advance_to_active_tension, reconcile_subtle, PolarityState,
+        advance_to_active_tension, reconcile_subtle, refute_claim, PolarityState,
     };
+    // i284 (WP-H2 refutation half): collect the (referent, line) slots of
+    // THIS window's Threat catalysts — fresh contradictory evidence. Any
+    // of the agent's living claims (Integrated/ActiveTension) on a refuted
+    // slot is knocked to `Refuted`, excluded from the social bias until a
+    // new synthesis recovers it. This is the moral-panic mechanism: a
+    // refutation storm strips the village's norm claims at the contested
+    // referent, norm churn follows, re-crystallization comes from renewed
+    // reconciliation pressure. Refutation events carry no state beyond the
+    // claim's polarity flip — pure, deterministic, no RNG.
+    // (threat_slots collected above, before the emit loop)
     for agent in agents.iter_mut() {
         // DC-2.7 backfill for v13→v14 migration: old saves have empty
         // lore history; rebuild deterministically from current claims.
@@ -394,6 +416,28 @@ pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent
             agent.polarity_claims.remove(j);
             if j < agent.lore_archetypes.len() {
                 agent.lore_archetypes.remove(j);
+            }
+        }
+        // i284: refutation scan — fresh Threat evidence on a slot where the
+        // agent holds a living claim knocks it to Refuted. The threat slots
+        // are (referent, line) pairs from THIS window's Threat catalysts
+        // (the same events that just pushed new claims above). Only claims
+        // with an OLDER stamp than the newest window threat refute: evidence
+        // must POSTDATE the belief it contradicts (a same-tick claim is the
+        // claim forming from that very event, not a belief being tested).
+        for c in &mut agent.polarity_claims {
+            // i284 scope: only crystallized (Integrated) belief refutes —
+            // tension claims ARE the contested state, not settled belief.
+            if c.polarity != PolarityState::Integrated {
+                continue;
+            }
+            let contradicted = threat_slots.iter().any(|&(tr, ref line)| {
+                tr == c.referent && line == &c.line && c.created_tick < tick
+            });
+            if contradicted {
+                if let Some(refuted) = refute_claim(c) {
+                    *c = refuted;
+                }
             }
         }
     }

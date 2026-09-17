@@ -60,6 +60,13 @@ pub enum PolarityState {
     ActiveTension,
     /// Claims reconciled into a higher synthesis (transcend-and-include).
     Integrated,
+    /// Contradictory evidence knocked a synthesized claim back down
+    /// (i284, WP-H2 refutation half: "contradictory evidence refutes
+    /// (Reconciled→ActiveTension)"). A Refuted claim is excluded from
+    /// the social bias until it re-advances — a refutation storm leaves
+    /// the village norm-free at the affected referent, the measurable
+    /// norm-churn signature the panic-cascade probe tests.
+    Refuted,
 }
 
 /// A three-realm belief claim (FR-030) — the unit the polarity engine observes.
@@ -247,6 +254,39 @@ pub fn advance_to_active_tension(
             polarity: PolarityState::ActiveTension,
             ..claim
         })
+    } else {
+        None
+    }
+}
+
+/// WP-H2 refutation half (i284): contradictory evidence knocks a claim
+/// back down. A synthesized (`Integrated`) or living-tension claim whose
+/// referent keeps producing Threat catalysts is refuted → `Refuted` —
+/// the world keeps contradicting the prescription, so the prescription
+/// loses its hold. Pure and deterministic; the sim calls this from the
+/// polarity pass when the same `(referent, line)` slot accumulated
+/// fresh Threat catalysts after the claim advanced.
+///
+/// Zero-at-zero: an `Undiscovered` claim has nothing to refute; a
+/// `Refuted` claim stays refuted (re-advance goes through the normal
+/// sibling-evidence gate in `advance_to_active_tension`… which excludes
+/// `Refuted` — re-advance requires a NEW synthesis pairing, so refuted
+/// norms only recover through renewed reconciliation pressure).
+#[must_use]
+pub fn refute_claim(claim: &ThreeRealmClaim) -> Option<ThreeRealmClaim> {
+    // i284 scope fix (probe evidence): only SYNTHESIZED claims refute.
+    // The first probe pass also refuted ActiveTension claims, which
+    // saturated the contested slot to 100% Refuted in every regime
+    // (integrated 0, tension 0, refuted 110–126 at 20K) — refuting an
+    // in-question claim is semantically a no-op and mechanically
+    // destroys the tension substrate the panic builds on. Refutation
+    // targets crystallized belief ("Reconciled→ActiveTension" per the
+    // wave brief); tension claims resolve through reconciliation or the
+    // i281 salience window, not refutation.
+    if claim.polarity == PolarityState::Integrated {
+        let mut refuted = *claim;
+        refuted.polarity = PolarityState::Refuted;
+        Some(refuted)
     } else {
         None
     }

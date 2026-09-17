@@ -480,3 +480,74 @@ fn polarity_tension_reconciles_to_integrated() {
         "Fact+Identity on the same (domain, referent, line) must synthesize to Integrated"
     );
 }
+
+/// i284 (WP-H2 refutation half): contradictory evidence (a Threat catalyst
+/// on the same (referent, line) slot, POSTDATING the claim) knocks a
+/// crystallized (Integrated) claim to Refuted; Refuted is excluded from
+/// the social bias (panic = village norm-free at the contested referent).
+/// Scope is Integrated-only (i284 probe evidence: refuting ActiveTension
+/// too saturated the slot to 100% Refuted and destroyed the tension
+/// substrate). Evidence predating the claim does NOT refute (the claim
+/// formed from that very event). Zero-at-zero: no threat → no refutation.
+#[test]
+fn contradictory_evidence_refutes_living_claims() {
+    let mut sim = make_sim(42);
+    // Advance the clock so strict tick ordering (claim < evidence) is
+    // expressible: at tick 0 saturating_sub collapses to 0 < 0 = false.
+    sim.run(5);
+    let tick = sim.clock.tick();
+    let t64 = tick.as_u64();
+
+    // Seed an Integrated norm claim on the Threat slot (Event, cognitive)
+    // stamped BEFORE the contradiction arrives.
+    let mut claim = mindstrata_development::polarity::project_catalyst_severity(
+        mindstrata_development::catalyst::CatalystKind::Threat,
+        false,
+    );
+    claim.claim = mindstrata_development::polarity::SubtleClaim::Norm;
+    claim.polarity = mindstrata_development::polarity::PolarityState::Integrated;
+    claim.created_tick = t64.saturating_sub(1);
+    sim.agents[0].polarity_claims.push(claim);
+
+    // Window 1: a Threat catalyst NOW (postdates the claim) → refute.
+    let threat = [mindstrata_core::event::SimEvent::ConflictOccurred {
+        aggressor: mindstrata_core::id::AgentId::new(1),
+        target: mindstrata_core::id::AgentId::new(0),
+        kind: mindstrata_core::conflict::ConflictKind::Threat,
+        injury: mindstrata_core::fixed::Fixed::ZERO,
+        fear_induced: mindstrata_core::fixed::Fixed::from_f64(0.2),
+        tick,
+    }];
+    crate::systems::development::system_polarity_claim_emit(&mut sim.agents[0..2], &threat, t64);
+    assert!(
+        sim.agents[0]
+            .polarity_claims
+            .iter()
+            .any(|c| c.polarity == mindstrata_development::polarity::PolarityState::Refuted),
+        "a postdating Threat on the same slot must refute the living claim"
+    );
+
+    // Control: an agent whose claim is stamped AFTER the threat (formed
+    // from the event itself) must NOT be refuted by the same window.
+    let mut claim2 = claim;
+    claim2.created_tick = t64 + 1;
+    claim2.polarity = mindstrata_development::polarity::PolarityState::Integrated;
+    sim.agents[1].polarity_claims.clear();
+    sim.agents[1].polarity_claims.push(claim2);
+    let threat2 = [mindstrata_core::event::SimEvent::ConflictOccurred {
+        aggressor: mindstrata_core::id::AgentId::new(1),
+        target: mindstrata_core::id::AgentId::new(1),
+        kind: mindstrata_core::conflict::ConflictKind::Threat,
+        injury: mindstrata_core::fixed::Fixed::ZERO,
+        fear_induced: mindstrata_core::fixed::Fixed::ZERO,
+        tick,
+    }];
+    crate::systems::development::system_polarity_claim_emit(&mut sim.agents[1..2], &threat2, t64);
+    assert!(
+        !sim.agents[1]
+            .polarity_claims
+            .iter()
+            .any(|c| c.polarity == mindstrata_development::polarity::PolarityState::Refuted),
+        "same-tick evidence is the claim's own origin, not a contradiction"
+    );
+}

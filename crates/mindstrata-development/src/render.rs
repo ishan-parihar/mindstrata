@@ -60,6 +60,8 @@ pub enum PolarityTag {
     ActiveTension,
     /// Claim has been reconciled into synthesis.
     Integrated,
+    /// Contradictory evidence knocked the claim back down (i284).
+    Refuted,
 }
 
 impl From<crate::polarity::PolarityState> for PolarityTag {
@@ -68,6 +70,7 @@ impl From<crate::polarity::PolarityState> for PolarityTag {
             crate::polarity::PolarityState::Undiscovered => Self::Undiscovered,
             crate::polarity::PolarityState::ActiveTension => Self::ActiveTension,
             crate::polarity::PolarityState::Integrated => Self::Integrated,
+            crate::polarity::PolarityState::Refuted => Self::Refuted,
         }
     }
 }
@@ -163,6 +166,9 @@ pub fn render_lore_section(claims: &[ThreeRealmClaim], max_lines: usize) -> Stri
         let tagged = match line.polarity {
             PolarityTag::ActiveTension => format!("{} (a matter of tension)", line.text),
             PolarityTag::Integrated => format!("{} (a synthesis reached)", line.text),
+            // i284: refuted claims render as contested — the chronicle
+            // shows the village arguing with itself (the panic signature).
+            PolarityTag::Refuted => format!("{} (now called into question)", line.text),
             PolarityTag::Undiscovered => line.text.clone(),
         };
         if seen.insert(tagged.clone()) {
