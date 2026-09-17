@@ -666,6 +666,21 @@ impl Simulation {
             self.agents.len(),
         );
 
+        // ── Era IV (i273): collective-line meme genesis. The first consumer
+        // that GENERATES culture from collective development instead of
+        // modulating an existing channel (substrate §5: replaces the
+        // seed_initial_memes fixed roster over time). Inert while every line
+        // sits at its founding stage — golden/snapshot horizons have all
+        // lines at exactly 1.0 (probe i273, CV 0.000) — so zero blast on
+        // calibrated windows; fires when a bucket's deepest line crosses
+        // stage 2.0 (first observed at ~5-8K ticks in the probe).
+        crate::systems::genesis::system_collective_genesis(
+            &self.collective_field,
+            &mut self.meme_registry,
+            self.params.meme_virality_scaling,
+            tick,
+        );
+
         // ── §6 + §10.6/§10.7: Kinship & Household daily update ──
         self.tick_kinship_household_daily(tick_u64, phases);
 

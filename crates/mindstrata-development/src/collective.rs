@@ -72,7 +72,12 @@ pub enum CollectiveBucket {
     Meaning,
 }
 
-fn bucket_for_line(line: LineId) -> CollectiveBucket {
+/// Public read side of the vendored-`kind` bucket affinity (Era IV, i273):
+/// which catalyst bucket a collective line listens to. The sim-side genesis
+/// consumer uses this to key generated content on the *advanced* lines
+/// without duplicating the vault-kind mapping.
+#[must_use]
+pub fn bucket_for_line(line: LineId) -> CollectiveBucket {
     match line.kind() {
         "culture" => CollectiveBucket::Relational,
         "system" => CollectiveBucket::Safety,
