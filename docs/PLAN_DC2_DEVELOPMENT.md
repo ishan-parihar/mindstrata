@@ -224,3 +224,111 @@ path to the rest.
 **Next horizon (per roadmap):** DC-2 P0 contract freeze for the full 106-phase cycle,
 DC-3 planning (N≥48 scale, asset pipeline v0), Era IV collective activation, and the
 VecDeque perf ponytail if N≥48 probes bind.
+
+---
+
+## 6. DC-2 CONTINUATION PLAN — Era III completion → UM-2 gate (post-i274)
+
+**Date:** 2026-09-17 · **Baseline:** HEAD `0e7c93e` (i274 Relational feed revival), main.
+
+### 6.1 Live verification at audit time (2026-09-17)
+
+| Gate | Result |
+|---|---|
+| `cargo fmt --all --check` | clean |
+| `cargo clippy --workspace --quiet` | 0 warnings |
+| `cargo test -p mindstrata-tests --lib --release` | **307/0/1** (147.8 s) |
+| `mindstrata-development` lib | 80/80 |
+| `mindstrata-sim` lib | 221/221 |
+| `scripts/gate` (quick, golden 5/5) | GATE GREEN |
+| `scripts/bench_index.py --strict` | 48 ok / 36 legacy / 0 violations |
+
+### 6.2 Where DC-2 actually stands (honest vs the UM-2 gate)
+
+The §4/§5 ledger records Iters 266–270. Since then (this session's arcs):
+
+| Iter | Commit | Landed |
+|---|---|---|
+| 271 | `b2163ad` | Arc-D batches 2+3: appraisal/decay/cognitive passes verbatim into `systems/` |
+| 272 | `734b14b` | GriefStruck: grief routes to surviving kin, not replacement newborns |
+| 273 | `1dc7e9b` | Era IV activation: stage-gated collective meme genesis (`systems/genesis.rs`) |
+| 274 | `0e7c93e` | Relational feed revival: `RitualPerformed` → per-participant Bond catalysts |
+
+**UM-2 exit gate status (AP3 04-waves Era III): "seed-disjoint cultures in 20K-tick
+probe; old roster retired."** Not yet met: `seed_initial_memes` still seeds the pool
+(population.rs:112), genesis only *appends* bucket-stage memes, and the polarity graph
+never reconciles (`reconcile_claims` is pure with zero sim call sites — a dead producer
+of the claims graph). The remaining DC-2 work is therefore exactly WP-G2 + WP-H2 + the
+tetra-arising half of WP-I, then the i284-style disjointness probe as the gate.
+
+### 6.3 Iteration ladder (one root cause each, doctrine §2)
+
+**i275 — WP-H2: wire polarity reconciliation (the claims-graph dead producer).**
+`reconcile_claims`/`in_active_tension`/promotion helpers sit in the dev crate unused;
+claims accumulate per-agent but never synthesize or refute. Probe first
+(`i275_polarity_reconciliation.rs`): measure claim inventory, same-line collision rate,
+and what a minimal reconciliation pass (per-agent same-line pairs, gated by the ratified
+lambda admission) would cascade. Wire the smallest consumer that makes
+Undiscovered→ActiveTension→Integrated transitions *observable*; pin zero-at-zero.
+Probe target: refutation storms produce measurable norm churn then re-crystallization
+(the i288 panic-cascade shape, at whatever horizon N=12 supports).
+
+**i276 — WP-G2: compositional content generation (retire the fixed roster's primacy).**
+Extend `systems/genesis.rs` from bucket-stage memes to the substrate §5 shape:
+domain selection weighted by live collective-line stages × gross referents (existing
+sites/institutions/events) × stance from the (now reconciling, post-i275) polarity
+state. Every generated item type-checks: cites ≥1 gross entity within exactly one
+domain (the legality gate already in `render.rs`). Probe: generated items appear,
+are seed-deterministic, cite-valid; roster composition shifts vs the seeded baseline.
+Zero-blast discipline: golden horizons keep all lines at 1.0 → generation inert there.
+
+**i277 — WP-I tetra-arising gate: collective stages gate content classes.**
+The substrate's collective-activation rule: stage bands on collective lines determine
+WHICH content classes the generator may emit; the individual line distribution gates
+UPTAKE weight. Wire the read-side gate (midpoint-neutral, zero-blast below stage 2 —
+i273's identity floor does most of this already). Probe: forcing a stage band upward
+(forced-stage scenario, i295 pattern) opens exactly the gated content class.
+
+**i278 — UM-2 GATE: seed-disjoint cultures probe (`i278_culture_disjoint.rs`).**
+Two+ seeds, same founder bands (per audit H5 the founder budget is uniform draws at
+N=12), 20K ticks: meme rosters diverge (jaccard < threshold — set it from the measured
+cross-seed overlap of the SEEDED pool first, so the gate measures generated divergence,
+not seed vocabulary). If pass → UM-2 evidence file + DC-2 unify review. If fail → the
+probe names which feed starved (Safety dominance is the known risk; i274 pacing math
+says Relational reaches stage 2 only at ~80K).
+
+**i279 — WP-J: institutional altitude coupling.**
+Institution behavior parameters become read-side functions of governance/economic-systems
+line stages (midpoint-neutral per §5). Probe `i279_institution_shift`: village crossing
+amber→green on the governance line (forced-stage) shows pluralistic institution deltas.
+Golden stays byte-identical below the crossing band.
+
+**i280 — Identity-bucket feed (the last dead collective producer).**
+Grief is mortality-blocked (i272: first natural death ~2.3M ticks). Options, probe-gated:
+(a) festival/collective-participation events carry Identity press (substrate table maps
+ritual participation to culture-line catalysts — Relational got this in i274; Identity
+could take a fraction), (b) grief-proxy events (separation/betrayal at N=12 horizons).
+Probe measures which feed produces Identity press without breaking the i274 pins; pick
+one, record the other as debt.
+
+**i281 — perf/DC-3 entry.** VecDeque events buffer (~20 sites, +5–8% N=48 headroom)
+if the Era III probes bind; else DC-3 P0: N≥48 perf budget doc (i274 baseline: 102 µs/tick
+@ N=12 → 928 @ N=48 → 5696 @ N=96, superlinear) + asset pipeline v0 charter.
+
+**i282 — needs-band transcendence sweep (now unblocked).** The self-transcendence band
+was deferred "until CollectiveField lands" (needs-bands.md) — it landed at i266. Run the
+named sweep; promote or record honestly.
+
+### 6.4 Standing discipline (unchanged)
+
+Probe before touching; one root cause per iteration; full gate before every commit;
+`gate --full` before push; re-anchors carry measured/old/mechanism (§4.2); knife-edge
+results recorded as debt, not flip-flopped; `git log --oneline -3 && git status` at every
+session start (shared-clone hazard).
+
+### 6.5 Known boundaries (not plannable until inputs land)
+
+- Full Era III legality mapping — blocked: vendor `realms.md` not vendored.
+- Grief/Transgression catalyst magnitude ratification — blocked: mortality horizon.
+- Cross-line resonance matrix — blocked: vendor coupling attestation.
+- VecDeque refactor cost/benefit — re-decide at i281 with fresh N=48 headroom numbers.
