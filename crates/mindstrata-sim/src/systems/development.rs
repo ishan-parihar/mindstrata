@@ -9,6 +9,7 @@
 //! zero field deltas. The virgin field (neutral altitudes + neutral
 //! pathology) is a fixed point until first consumption.
 
+use mindstrata_core::conflict::ConflictKind;
 use mindstrata_core::event::SimEvent;
 use mindstrata_core::id::AgentId;
 use mindstrata_development::catalyst::{kind_drive_map, CatalystKind};
@@ -19,7 +20,7 @@ use crate::sim::AgentBundle;
 
 // ── Event → CatalystKind mapping (frozen producer set v1.0.0) ─────────────
 
-fn map_event(ev: &SimEvent) -> Option<(AgentId, CatalystKind, f64)> {
+fn map_event(ev: &SimEvent) -> Option<(AgentId, CatalystKind, f64, bool)> {
     match *ev {
         // Iteration-272 (§4.3 root-cause fix): Grief routes to the *surviving*
         // mourner via `GriefStruck` (emitted by the deaths pass with still-live
@@ -31,7 +32,7 @@ fn map_event(ev: &SimEvent) -> Option<(AgentId, CatalystKind, f64)> {
         // stands: the loss of a spouse/co-resident kin is the maximal-loss
         // exemplar; the widow-heuristic emission discipline bounds it to
         // genuinely-tied survivors.
-        SimEvent::GriefStruck { mourner, .. } => Some((mourner, CatalystKind::Grief, 1.0)),
+        SimEvent::GriefStruck { mourner, .. } => Some((mourner, CatalystKind::Grief, 1.0, false)),
         SimEvent::MarriageFormed {
             spouse_a, spouse_b, ..
         } => {
@@ -41,42 +42,50 @@ fn map_event(ev: &SimEvent) -> Option<(AgentId, CatalystKind, f64)> {
             // This helper is not used for Marriage/ChildBorn/Feud bulk
             // cases — see `collect_catalysts`.
             let _ = spouse_b;
-            Some((spouse_a, CatalystKind::Bond, 0.8))
+            Some((spouse_a, CatalystKind::Bond, 0.8, false))
         }
-        SimEvent::ChildBorn { parent_a, .. } => Some((parent_a, CatalystKind::Bond, 0.7)),
-        SimEvent::FeudFormed { party_a, .. } => Some((party_a, CatalystKind::Threat, 0.4)),
+        SimEvent::ChildBorn { parent_a, .. } => Some((parent_a, CatalystKind::Bond, 0.7, false)),
+        SimEvent::FeudFormed { party_a, .. } => Some((party_a, CatalystKind::Threat, 0.4, true)),
         SimEvent::ConflictOccurred {
             aggressor,
+            kind,
             injury,
             fear_induced,
             ..
         } => {
             let base = 0.3 + injury.to_f64().clamp(0.0, 0.5);
             let mag = (base + fear_induced.to_f64().clamp(0.0, 0.2)).min(1.0);
-            Some((aggressor, CatalystKind::Threat, mag))
+            let major = !matches!(kind, ConflictKind::Threat | ConflictKind::Intimidation);
+            Some((aggressor, CatalystKind::Threat, mag, major))
         }
-        SimEvent::NormViolated { agent, .. } => Some((agent, CatalystKind::Transgression, 0.5)),
+        SimEvent::NormViolated { agent, .. } => {
+            Some((agent, CatalystKind::Transgression, 0.5, false))
+        }
         _ => None,
     }
 }
 
 /// Expand one `SimEvent` into 0..N per-subject catalysts (marriage/child/feud
-/// produce two subjects; others produce one).
-fn collect_catalysts(events: &[SimEvent]) -> Vec<(AgentId, CatalystKind, f64)> {
+/// produce two subjects; others produce one). The trailing `bool` is the
+/// Threat-severity discriminator (i275): `true` = MAJOR conflict (Violence/
+/// Combat/Revolution/MoralPanic — bodily or structural harm), `false` = MINOR
+/// (verbal Threat/Intimidation, or a non-Threat catalyst). Only consumed by
+/// `project_catalyst_severity` for Threat claims.
+fn collect_catalysts(events: &[SimEvent]) -> Vec<(AgentId, CatalystKind, f64, bool)> {
     let mut out = Vec::new();
     for ev in events {
         match *ev {
             SimEvent::MarriageFormed {
                 spouse_a, spouse_b, ..
             } => {
-                out.push((spouse_a, CatalystKind::Bond, 0.8));
-                out.push((spouse_b, CatalystKind::Bond, 0.8));
+                out.push((spouse_a, CatalystKind::Bond, 0.8, false));
+                out.push((spouse_b, CatalystKind::Bond, 0.8, false));
             }
             SimEvent::ChildBorn {
                 parent_a, parent_b, ..
             } => {
-                out.push((parent_a, CatalystKind::Bond, 0.7));
-                out.push((parent_b, CatalystKind::Bond, 0.7));
+                out.push((parent_a, CatalystKind::Bond, 0.7, false));
+                out.push((parent_b, CatalystKind::Bond, 0.7, false));
             }
             SimEvent::RitualPerformed {
                 ref participants,
@@ -91,18 +100,19 @@ fn collect_catalysts(events: &[SimEvent]) -> Vec<(AgentId, CatalystKind, f64)> {
                 // MarriageFormed precedent).
                 let mag = (bonding.to_f64() * 2.0).clamp(0.2, 0.8);
                 for p in participants {
-                    out.push((*p, CatalystKind::Bond, mag));
+                    out.push((*p, CatalystKind::Bond, mag, false));
                 }
             }
             SimEvent::FeudFormed {
                 party_a, party_b, ..
             } => {
-                out.push((party_a, CatalystKind::Threat, 0.4));
-                out.push((party_b, CatalystKind::Threat, 0.4));
+                out.push((party_a, CatalystKind::Threat, 0.4, true));
+                out.push((party_b, CatalystKind::Threat, 0.4, true));
             }
             SimEvent::ConflictOccurred {
                 aggressor,
                 target,
+                kind,
                 injury,
                 fear_induced,
                 ..
@@ -110,8 +120,13 @@ fn collect_catalysts(events: &[SimEvent]) -> Vec<(AgentId, CatalystKind, f64)> {
                 let base = 0.3 + injury.to_f64().clamp(0.0, 0.5);
                 let mag_a = base.min(1.0);
                 let mag_t = (base + fear_induced.to_f64().clamp(0.0, 0.2)).min(1.0);
-                out.push((aggressor, CatalystKind::Threat, mag_a));
-                out.push((target, CatalystKind::Threat, mag_t));
+                // i275 severity discriminator: bodily/structural conflict
+                // (Violence/Combat/Revolution/MoralPanic) is MAJOR; verbal
+                // Threat/Intimidation is MINOR. Drives the Fact-vs-Identity
+                // claim split in `project_catalyst_severity`.
+                let major = !matches!(kind, ConflictKind::Threat | ConflictKind::Intimidation);
+                out.push((aggressor, CatalystKind::Threat, mag_a, major));
+                out.push((target, CatalystKind::Threat, mag_t, major));
             }
             _ => {
                 if let Some(one) = map_event(ev) {
@@ -179,7 +194,7 @@ pub fn system_development(agents: &mut [AgentBundle], events: &[SimEvent]) {
     // already active but got no trigger this tick.
     let mut triggered_q2 = vec![false; agents.len()];
     let mut triggered_q4 = vec![false; agents.len()];
-    for (subject, kind, magnitude) in catalysts {
+    for (subject, kind, magnitude, _major) in catalysts {
         let idx = subject.as_u64() as usize;
         if idx >= agents.len() {
             continue;
@@ -280,12 +295,17 @@ pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent
     if catalysts.is_empty() {
         return;
     }
-    for (agent_id, kind, _magnitude) in catalysts {
+    for (agent_id, kind, _magnitude, major) in catalysts {
         let agent_idx = agent_id.as_u64() as usize;
         if agent_idx >= agents.len() {
             continue;
         }
-        let claim = mindstrata_development::polarity::project_catalyst(kind);
+        // i275: severity-grounded Threat projection — major conflicts
+        // project Identity claims on the same (Event, cognitive) slot as
+        // minor conflicts' Fact claims, making the tension gate reachable
+        // from real event diversity (probe: 1,292 claims, zero tension under
+        // the v1 mono-quartet mapping).
+        let claim = mindstrata_development::polarity::project_catalyst_severity(kind, major);
         let archetype = mindstrata_development::lore::archetype_for_claim(&claim);
         agents[agent_idx].polarity_claims.push(claim);
         agents[agent_idx].lore_archetypes.push(archetype);
@@ -299,7 +319,7 @@ pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent
     // reconciliation is pure: it modifies the agent's `polarity_claims`
     // in-place. No RNG, no state outside the agent's claim list.
     use mindstrata_development::polarity::{
-        advance_to_active_tension, is_active_tension, reconcile_subtle, PolarityState,
+        advance_to_active_tension, reconcile_subtle, PolarityState,
     };
     for agent in agents.iter_mut() {
         // DC-2.7 backfill for v13→v14 migration: old saves have empty
@@ -331,23 +351,36 @@ pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent
         // matching (domain, referent, line) but different `subtle_claim`,
         // produce the synthesized Integrated claim. Dedupe is implicit
         // (one synth replaces both, so no double-count).
+        // i275 fix: the old gate called `is_active_tension`, which requires
+        // a.domain != b.domain — but `reconcile_subtle` requires a.domain ==
+        // b.domain (the polarity lives in the subtle layer). The two
+        // predicates are mutually exclusive: the pair scan could NEVER fire
+        // (probe i275: 1,171 ActiveTension claims at 20K, zero Integrated).
+        // Gate directly on reconcile_subtle's contract instead.
         let mut synths: Vec<usize> = Vec::new();
         let n = agent.polarity_claims.len();
         for i in 0..n {
+            // i275: skip indices already scheduled for removal (a claim can
+            // be the `j` of an earlier pair; reconciling it again would
+            // double-push the index and corrupt the reversed removal).
+            if synths.contains(&i) {
+                continue;
+            }
             for j in (i + 1)..n {
-                if is_active_tension(&agent.polarity_claims[i], &agent.polarity_claims[j]) {
-                    if let Some(synth) =
-                        reconcile_subtle(&agent.polarity_claims[i], &agent.polarity_claims[j])
-                    {
-                        agent.polarity_claims[i] = synth;
-                        // DC-2.7: keep lore archetype history parallel to claims.
-                        let synth_arch = mindstrata_development::lore::archetype_for_claim(&synth);
-                        // Keep parallel lore history sized (v13 saves have empty vec).
-                        if agent.lore_archetypes.len() > i {
-                            agent.lore_archetypes[i] = synth_arch;
-                        }
-                        synths.push(j);
+                if synths.contains(&j) {
+                    continue;
+                }
+                if let Some(synth) =
+                    reconcile_subtle(&agent.polarity_claims[i], &agent.polarity_claims[j])
+                {
+                    agent.polarity_claims[i] = synth;
+                    // DC-2.7: keep lore archetype history parallel to claims.
+                    let synth_arch = mindstrata_development::lore::archetype_for_claim(&synth);
+                    // Keep parallel lore history sized (v13 saves have empty vec).
+                    if agent.lore_archetypes.len() > i {
+                        agent.lore_archetypes[i] = synth_arch;
                     }
+                    synths.push(j);
                 }
             }
         }
@@ -395,7 +428,7 @@ pub fn system_collective_field_step(
     let mut safety_press = 0.0;
     let mut identity_press = 0.0;
     let mut meaning_press = 0.0;
-    for (_, kind, _mag) in &catalysts {
+    for (_, kind, _mag, _major) in &catalysts {
         let p = 1.0 / n;
         match kind {
             CatalystKind::Bond => relational_press += p,

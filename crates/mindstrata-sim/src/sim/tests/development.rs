@@ -341,3 +341,66 @@ fn ritual_performed_presses_relational_bucket() {
         sim.agents.len(),
     );
 }
+
+/// i275 (WP-H2 root-cause fix): severity-grounded Threat projections collide
+/// on (Event, cognitive) — Fact (minor) vs Identity (major) — promoting to
+/// ActiveTension, and the reconciliation scan (gated on reconcile_subtle's
+/// own contract, not the domain-difference gate) synthesizes an Integrated
+/// claim. Probes: natural 20K had 1,292 claims / 0 tension / 0 integrated
+/// before; 910 tension / 82 integrated after the loop closure.
+#[test]
+fn polarity_tension_reconciles_to_integrated() {
+    let mut sim = make_sim(777);
+    let tick = sim.current_tick();
+
+    // Minor conflict → Fact claim; major conflict → Identity claim, both on
+    // (Material, Event, cognitive) — the in-vivo collision pair.
+    let minor = vec![mindstrata_core::event::SimEvent::ConflictOccurred {
+        aggressor: mindstrata_core::id::AgentId::new(0),
+        target: mindstrata_core::id::AgentId::new(1),
+        kind: mindstrata_core::conflict::ConflictKind::Threat,
+        injury: mindstrata_core::fixed::Fixed::ZERO,
+        fear_induced: mindstrata_core::fixed::Fixed::from_f64(0.1),
+        tick,
+    }];
+    let major = vec![mindstrata_core::event::SimEvent::ConflictOccurred {
+        aggressor: mindstrata_core::id::AgentId::new(0),
+        target: mindstrata_core::id::AgentId::new(1),
+        kind: mindstrata_core::conflict::ConflictKind::Violence,
+        injury: mindstrata_core::fixed::Fixed::from_f64(0.2),
+        fear_induced: mindstrata_core::fixed::Fixed::from_f64(0.2),
+        tick,
+    }];
+
+    crate::systems::development::system_polarity_claim_emit(&mut sim.agents[0..2], &minor);
+    let agent0_after_minor = &sim.agents[0];
+    assert!(agent0_after_minor
+        .polarity_claims
+        .iter()
+        .any(|c| c.claim == mindstrata_development::polarity::SubtleClaim::Fact));
+
+    crate::systems::development::system_polarity_claim_emit(&mut sim.agents[0..2], &major);
+    let claims = &sim.agents[0].polarity_claims;
+    assert!(
+        claims
+            .iter()
+            .any(|c| c.claim == mindstrata_development::polarity::SubtleClaim::Identity),
+        "major conflict must project an Identity claim on the same (referent, line)"
+    );
+
+    // The full pass (emit → advance → reconcile) runs inside
+    // system_polarity_claim_emit; feed both windows together to a fresh
+    // agent pair and verify synthesis fires.
+    let mut sim2 = make_sim(778);
+    let both: Vec<_> = minor.into_iter().chain(major).collect();
+    crate::systems::development::system_polarity_claim_emit(&mut sim2.agents[0..2], &both);
+    let integrated = sim2.agents[0]
+        .polarity_claims
+        .iter()
+        .filter(|c| c.polarity == mindstrata_development::polarity::PolarityState::Integrated)
+        .count();
+    assert!(
+        integrated > 0,
+        "Fact+Identity on the same (domain, referent, line) must synthesize to Integrated"
+    );
+}

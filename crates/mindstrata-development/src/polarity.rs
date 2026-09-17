@@ -318,6 +318,51 @@ pub fn project_catalyst(kind: crate::catalyst::CatalystKind) -> ThreeRealmClaim 
     ThreeRealmClaim::new(domain, referent, claim, line)
 }
 
+/// Severity-grounded projection (Iteration-275, WP-H2 root-cause fix).
+///
+/// `project_catalyst`'s one-quartet-per-kind mapping made the tension gate
+/// structurally unreachable: an agent's claims are mono-subtle per
+/// (referent, line), so `advance_to_active_tension` never sees a sibling with
+/// a different claim — probe i275 measured 1,292 claims at 20K with ZERO
+/// ActiveTension. The only in-vivo collision was Threat+Grief, and Grief is
+/// mortality-blocked at N=12 (i272).
+///
+/// This variant grounds the Threat projection in *conflict severity*: the
+/// same world event stream that carries minor conflicts (verbal threats —
+/// "something bad happened") also carries major ones (violence, revolution —
+/// "we are the kind of people who live under threat"). Both land on the
+/// SAME (Event, cognitive) referent-line, so an agent exposed to BOTH
+/// severities holds a Fact and an Identity claim on the same issue — the
+/// polarity pair the reconciliation graph exists to synthesize. All other
+/// kinds delegate to `project_catalyst` unchanged (one root cause at a
+/// time: the Threat channel is the only one with in-vivo volume variance).
+///
+/// Zero-at-zero: an agent exposed only to minor threats still projects
+/// exactly what v1 projected (Material/Event/Fact/cognitive) — the golden
+/// horizon's claim stream is unchanged unless a major conflict occurs.
+#[must_use]
+pub fn project_catalyst_severity(
+    kind: crate::catalyst::CatalystKind,
+    major_conflict: bool,
+) -> ThreeRealmClaim {
+    use crate::catalyst::CatalystKind;
+    if matches!(kind, CatalystKind::Threat) && major_conflict {
+        let line = LineId::new("cognitive").expect("cognitive line is in registry");
+        // MAJOR conflict → Identity claim, same (Event, cognitive) slot as
+        // the Fact claim from minor conflicts. Identity is the honest reading:
+        // surviving violence/revolution reshapes "who we are", not just
+        // "what happened". Reconciles with the Fact claim to Integrated
+        // Identity (the more encompassing subtle claim).
+        return ThreeRealmClaim::new(
+            CausalDomain::Material,
+            GrossReferent::Event,
+            SubtleClaim::Identity,
+            line,
+        );
+    }
+    project_catalyst(kind)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

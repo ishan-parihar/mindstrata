@@ -826,23 +826,28 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
             is_harmful,
         );
         // DC-2 Era III lite (FR-030/FR-032 wiring): bias social actions
-        // by the agent's ActiveTension polarity count. Coefficient 0.01
-        // is the i282 safe-range start (see calibration-audit-v2.md
-        // "DC-2 Era III prep"); expected shift ~0.025 within 1σ of
-        // natural variance 0.1265. Only social actions are biased
+        // by the agent's ActiveTension polarity count. Coefficient RE-
+        // DERIVED 0.10 → 0.01 (Iteration-275, §4.2): the 0.05/0.10 ramp
+        // (DC-2.4) was ratified against a DEAD tension diet (v1 mono-subtle
+        // projection: 0–3 sporadic counts per i282). i275 made the diet
+        // live (severity-grounded Threat: mean 1.25–2.75/agent at 1–2K,
+        // probe i275_tension_regime), so 0.10 produced bias ~0.13–0.28 ×
+        // social_value — 10× the audited 0–0.03 magnitude band, re-timing
+        // seed-46 demographic schedules (births [2890] → [240, 280]) and
+        // inverting the interoception pin pre-loop-closure. 0.01 at the
+        // live diet's counts lands the bias at ≤0.0275 × social_value —
+        // inside the audited band, restoring the ratified "5–20% of the
+        // social driver" contract. Only social actions are biased
         // (`is_social` is true) so the bias is scoped to the social
-        // action family and doesn't shift production/social-value
-        // balance for non-social actions. Identity-at-zero preserved:
-        // an agent with no ActiveTension claims contributes 0 to the
-        // bias (post-DC-2.1 fix, ActiveTension is bounded by tension
-        // siblings, not by claim count).
+        // action family. Identity-at-zero preserved: an agent with no
+        // ActiveTension claims contributes 0 to the bias.
         if is_social {
             let active_tension_count = ctx
                 .polarity_claims
                 .iter()
                 .filter(|c| c.polarity == crate::development::PolarityState::ActiveTension)
                 .count();
-            utility += Fixed::from_f64(0.10 * active_tension_count as f64) * def.social_value;
+            utility += Fixed::from_f64(0.01 * active_tension_count as f64) * def.social_value;
         }
         // Habit modifier: routine actions get a boost under stress
         let is_routine = matches!(

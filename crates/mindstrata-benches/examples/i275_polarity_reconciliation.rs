@@ -53,9 +53,13 @@ fn main() {
     let (total, u, t, i) = claim_stats(&sim);
     println!("NATURAL N=12 20K  claims: total={total} undiscovered={u} active_tension={t} integrated={i}");
     if t == 0 && i == 0 {
-        println!("VERDICT: reconciliation structurally dead in vivo (zero tension, zero integrated)");
+        println!(
+            "VERDICT: reconciliation structurally dead in vivo (zero tension, zero integrated)"
+        );
     } else {
-        println!("VERDICT: reconciliation LIVE in natural runs — static analysis wrong, no fix needed");
+        println!(
+            "VERDICT: reconciliation LIVE in natural runs — static analysis wrong, no fix needed"
+        );
     }
 
     // Part 2 — upper bound: inject GriefStruck windows (Threat's collision
@@ -77,10 +81,7 @@ fn main() {
                 tick,
             })
             .collect();
-        mindstrata_sim::systems::development::system_polarity_claim_emit(
-            &mut sim2.agents,
-            &evs,
-        );
+        mindstrata_sim::systems::development::system_polarity_claim_emit(&mut sim2.agents, &evs);
         let _ = day;
     }
     let (total2, u2, t2, i2) = claim_stats(&sim2);
@@ -88,7 +89,9 @@ fn main() {
         "FORCED-GRIEF      claims: total={total2} undiscovered={u2} active_tension={t2} integrated={i2}"
     );
     if t2 > 0 || i2 > 0 {
-        println!("UPPER-BOUND: collision-rich diet DOES drive tension→reconciliation (mechanism viable)");
+        println!(
+            "UPPER-BOUND: collision-rich diet DOES drive tension→reconciliation (mechanism viable)"
+        );
     } else {
         println!("UPPER-BOUND: even collisions fail — inspect advance_to_active_tension gating");
     }

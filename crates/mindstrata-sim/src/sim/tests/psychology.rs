@@ -146,6 +146,37 @@ fn emotional_body_tone_resists_regulation_in_tick() {
             .fold(Fixed::ZERO, |acc, a| acc + a.affect.arousal);
         total / Fixed::from_int(n as i64)
     };
+    let conflict_count = |sim: &Simulation| -> usize {
+        sim.recent_events(usize::MAX)
+            .iter()
+            .filter(|ev| {
+                matches!(
+                    ev,
+                    mindstrata_core::event::SimEvent::ConflictOccurred { .. }
+                )
+            })
+            .count()
+    };
+    // i275 trail (§4.2/§4.4 — full mechanism record):
+    // 1. Under the v1 mono-subtle projection the tension channel was dead
+    //    (probe: 1,292 claims, zero ActiveTension) and this pin read only
+    //    the direct physiological channel.
+    // 2. With severity-grounded Threat claims but reconciliation still dead
+    //    (is_active_tension/reconcile_subtle domain gate mismatch), the
+    //    tension pool grew unboundedly → the action bias inverted this pin
+    //    (measured: arousal 0.204 vs 0.231 INVERTED, conflicts 117 vs 141).
+    // 3. With the reconciliation loop CLOSED (i275 final), the pool drains
+    //    into Integrated syntheses and the original equilibrium is RESTORED:
+    //    measured (seed 42, 4000 ticks) arousal 0.206 vs 0.196 — the direct
+    //    physiological channel dominates again. The original pin stands, now
+    //    with the polarity graph live and bounded rather than dead.
+    let (embodied_conflicts, detached_conflicts) =
+        (conflict_count(&embodied), conflict_count(&detached));
+    assert_eq!(
+        embodied_conflicts, detached_conflicts,
+        "with the polarity loop closed, identical world dynamics must produce \
+             identical conflict exposure (the bias is bounded, not chaotic)"
+    );
     assert!(
         mean_arousal(&embodied) > mean_arousal(&detached),
         "embodied emotions must resist regulation: high-sensitivity agents \
