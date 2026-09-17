@@ -690,6 +690,8 @@ impl Simulation {
             &mut self.meme_registry,
             self.params.meme_virality_scaling,
             tick,
+            &self.institutions,
+            &self.world.sites,
         );
 
         // ── §6 + §10.6/§10.7: Kinship & Household daily update ──
