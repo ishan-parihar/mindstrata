@@ -21,10 +21,32 @@ impl Simulation {
         tick: Tick,
         institutions_reg: &[crate::institutions::Institution],
         norms: &crate::norms::NormRegistry,
+        collective_field: &mindstrata_development::collective::CollectiveField,
         provenance_x: &mut crate::provenance::CausalProvenance,
         season: &crate::ecology::SeasonTracker,
         tick_action_starts: &mut Vec<(usize, crate::actions::ActionKind)>,
     ) {
+        // WP-J (Iteration-280): governance/economic-systems stages are
+        // tick-constant — resolve the slug lookup once per pass, not per
+        // agent (hot path; §6 no-allocation-in-per-tick-passes).
+        let (wpj_gov_stage, wpj_eco_stage) = {
+            let slugs = mindstrata_development::collective::CollectiveField::line_slugs();
+            let mut gov = 1.0_f64;
+            let mut eco = 1.0_f64;
+            for (line, s) in collective_field.lines.iter().zip(slugs) {
+                match s.slug() {
+                    "governance" => gov = line.stage,
+                    "economic-systems" => eco = line.stage,
+                    _ => {}
+                }
+            }
+            (gov, eco)
+        };
+        let wpj_compliance_mult = crate::systems::institutions_multiplier::compliance_multiplier(
+            wpj_gov_stage,
+            wpj_eco_stage,
+        );
+
         // ── 4. Action execution (per-tick effects) ────────────────
         for i in 0..agents.len() {
             // Track causal provenance_x flags per agent per tick
@@ -218,12 +240,33 @@ impl Simulation {
                     // §12.3: Institution collective morale modulates norm compliance.
                     // Members of institutions_reg with high morale are more norm-compliant.
                     // Note: norm_pressure is negative = compliant, positive = violating.
+                    // WP-J (Iteration-280): the morale→compliance transmission
+                    // depth scales with the village's governance/economic-
+                    // systems collective stage (band-III gated, identity at
+                    // all pinned horizons — see systems/institutions_multiplier).
+                    let wpj_mult = wpj_compliance_mult;
+                    // WP-J (i280): channel #2 — the live read-side
+                    // surface. Σ member_work_bonus over the agent's
+                    // institutions (zero below the band-III gate, dread-
+                    // class nudge above). Channel #1 (morale→compliance
+                    // below) is retained: its surface is provably dead
+                    // at N=12 (i280 violations sweep) but is the honest
+                    // §12.3 semantics and revives at violation-positive
+                    // regimes.
+                    let mut institution_work_bonus = Fixed::ZERO;
                     let mut adjusted_pressure = norm_pressure;
                     for inst in institutions_reg {
                         if inst.has_member(AgentId::new(i as u64)) {
-                            // High morale → more compliant (pressure becomes more negative)
-                            let morale_bonus = inst.collective.morale * Fixed::from_f64(0.1);
+                            // High morale → more compliant (pressure becomes more negative);
+                            // WP-J: transmission scaled by the governance band.
+                            let morale_bonus =
+                                inst.collective.morale * Fixed::from_f64(0.1) * wpj_mult;
                             adjusted_pressure -= morale_bonus;
+                            institution_work_bonus +=
+                                crate::systems::institutions_multiplier::member_work_bonus(
+                                    inst.collective.morale,
+                                    wpj_mult,
+                                );
                         }
                     }
                     actions::select_action(
@@ -313,6 +356,9 @@ impl Simulation {
                             // i282 safe-coefficient 0.01 bias to social
                             // actions based on ActiveTension count).
                             polarity_claims: &agents[i].polarity_claims,
+                            // WP-J (i280): institution-membership work
+                            // bonus (zero below the band-III gate).
+                            institution_work_bonus,
                         },
                         ctx.rng,
                     )

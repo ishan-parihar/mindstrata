@@ -190,6 +190,14 @@ pub struct DecisionContext<'a> {
     /// Per-agent three-realm polarity claims (read-only; derived
     /// deterministically from the catalyst stream by the daily pass).
     pub polarity_claims: &'a [crate::development::ThreeRealmClaim],
+    // ── WP-J (Iteration 280): institution-membership work bonus ────
+    /// Aggregate Work-utility bonus from the agent's institution
+    /// memberships (Σ over live institutions of `member_work_bonus(morale,
+    /// mult)`). Zero below the WP-J band-III gate — pinned horizons are
+    /// byte-identical; above the gate a functioning institution makes
+    /// provisioning more attractive to its members (dread-class nudge).
+    /// Zero-at-zero: no memberships or all-dead institutions → 0.
+    pub institution_work_bonus: Fixed,
 }
 
 /// An action that an agent can take.
@@ -916,6 +924,15 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
             _ => Fixed::ZERO, // Spring/Autumn: neutral
         };
         utility += season_nudge;
+
+        // WP-J (Iteration 280): institution-membership work bonus — a
+        // functioning institution (positive morale) makes provisioning
+        // more attractive to its members, scaled by the governance/
+        // economic-systems collective band. Zero below the band-III gate
+        // (all pinned horizons), so calm worlds are byte-identical.
+        if ctx.institution_work_bonus > Fixed::ZERO && matches!(kind, ActionKind::Work) {
+            utility += ctx.institution_work_bonus;
+        }
 
         // Iteration 236: age-related behavioral modulation.
         // Youth (Adolescent/YoungAdult) boost exploration (Wander).

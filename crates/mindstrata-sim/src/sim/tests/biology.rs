@@ -57,6 +57,7 @@ fn survival_reflex_forces_relief_over_utility() {
         somatic_marker: Fixed::ZERO,
         development: &crate::psychology::DevelopmentFieldState::default(),
         polarity_claims: &[],
+        institution_work_bonus: Fixed::ZERO,
     };
     // The utility AI alone might pick anything; the REFLEX layer forces Eat.
     // Simulate the pass_action gate directly: hunger > 0.9 → forced relief.
@@ -108,6 +109,7 @@ fn survival_reflex_forces_relief_over_utility() {
         somatic_marker: Fixed::ZERO,
         development: &crate::psychology::DevelopmentFieldState::default(),
         polarity_claims: &[],
+        institution_work_bonus: Fixed::ZERO,
     };
     // Non-critical body: no reflex fires — full utility autonomy.
     let no_reflex = ok_needs.thirst > Fixed::from_f64(0.9)

@@ -70,6 +70,7 @@ fn broke_hungry_agent_prefers_eat_over_trade() {
             somatic_marker: Fixed::ZERO,
             development: &crate::psychology::DevelopmentFieldState::default(),
             polarity_claims: &[],
+            institution_work_bonus: Fixed::ZERO,
         },
         &mut rng,
     );
@@ -128,6 +129,7 @@ fn wealthy_hungry_agent_can_prefer_trade() {
             somatic_marker: Fixed::ZERO,
             development: &crate::psychology::DevelopmentFieldState::default(),
             polarity_claims: &[],
+            institution_work_bonus: Fixed::ZERO,
         },
         &mut rng,
     );
@@ -183,6 +185,7 @@ fn utility_prefers_food_when_hungry() {
             somatic_marker: Fixed::ZERO,
             development: &crate::psychology::DevelopmentFieldState::default(),
             polarity_claims: &[],
+            institution_work_bonus: Fixed::ZERO,
         },
         &mut rng,
     );
@@ -295,6 +298,7 @@ fn scarcity_increases_food_utility() {
             somatic_marker: Fixed::ZERO,
             development: &crate::psychology::DevelopmentFieldState::default(),
             polarity_claims: &[],
+            institution_work_bonus: Fixed::ZERO,
         },
         &mut rng,
     );
@@ -349,6 +353,7 @@ fn scarcity_increases_water_utility() {
             somatic_marker: Fixed::ZERO,
             development: &crate::psychology::DevelopmentFieldState::default(),
             polarity_claims: &[],
+            institution_work_bonus: Fixed::ZERO,
         },
         &mut rng,
     );
@@ -1109,6 +1114,7 @@ fn dread_shifts_selection_toward_provisioning() {
                     somatic_marker: Fixed::ZERO,
                     development: &crate::psychology::DevelopmentFieldState::default(),
                     polarity_claims: &[],
+                    institution_work_bonus: Fixed::ZERO,
                 },
                 &mut rng,
             );
@@ -1602,4 +1608,88 @@ mod pathology_nudge {
             );
         }
     }
+}
+
+/// WP-J (Iteration 280): institution-membership work bonus — a member of a
+/// functioning institution (positive morale) selects Work strictly more
+/// often than a bonus-free twin on identical RNG streams (every noise draw
+/// matches, so the differential is deterministic). Liveness pin for the
+/// WP-J read-side channel #2: the §12.3 compliance surface is dead at
+/// N=12 (i280 violations sweep — zero NormViolated in 6 seeds × 5K/20K),
+/// so the Work axis carries the coupling's observable behavior. Zero-at-
+/// zero: bonus 0 → identical legacy selections (the control leg IS the
+/// zero-blast leg).
+#[test]
+fn institution_work_bonus_shifts_selection_toward_work() {
+    let needs = NeedState {
+        hunger: Fixed::from_f64(0.15),
+        thirst: Fixed::from_f64(0.1),
+        fatigue: Fixed::from_f64(0.25),
+        ..Default::default()
+    };
+    let personality = make_personality();
+    let identity = IdentityState::default();
+    let dp = make_decision_policy();
+    let count_selection = |bonus: Fixed| -> u64 {
+        let mut rng = RngStreams::new(42);
+        let mut work = 0u64;
+        for _ in 0..500 {
+            let chosen = select_action(
+                &DecisionContext {
+                    needs: &needs,
+                    personality: &personality,
+                    active_goals: &[],
+                    identity: &identity,
+                    decision_policy: &dp,
+                    total_grain: Fixed::from_f64(0.5),
+                    total_water: Fixed::from_f64(0.5),
+                    coin: Fixed::ZERO,
+                    norm_pressure: Fixed::ZERO,
+                    anger: Fixed::ZERO,
+                    fear: Fixed::ZERO,
+                    joy: Fixed::ZERO,
+                    sadness: Fixed::ZERO,
+                    stress: Fixed::ZERO,
+                    social_withdrawal: Fixed::ZERO,
+                    fairness: Fixed::ZERO,
+                    authority: Fixed::ZERO,
+                    care: Fixed::ZERO,
+                    loyalty: Fixed::ZERO,
+                    action_values: ActionValues::default(),
+                    dominant_need: MotiveCategory::Hunger,
+                    dominant_pressure: Fixed::ZERO,
+                    dread: Fixed::ZERO,
+                    hope: Fixed::ZERO,
+                    planning_confidence: Fixed::from_f64(0.5),
+                    mood_valence: Fixed::ZERO,
+                    season: 0,
+                    life_stage: 4,
+                    somatic_marker: Fixed::ZERO,
+                    development: &crate::psychology::DevelopmentFieldState::default(),
+                    polarity_claims: &[],
+                    institution_work_bonus: bonus,
+                },
+                &mut rng,
+            );
+            if chosen == ActionKind::Work {
+                work += 1;
+            }
+        }
+        work
+    };
+    // Live-regime magnitude: morale ~0.11, mult 1.10 → 0.0121 (i280 20K);
+    // forced-stage ceiling for the liveness proof: mult 1.40, morale 0.5.
+    let (work_live, work_calm) = (
+        count_selection(Fixed::from_f64(0.0121)),
+        count_selection(Fixed::ZERO),
+    );
+    assert!(
+        work_live > work_calm,
+        "institution work bonus must push selections toward Work: {work_live} vs {work_calm}"
+    );
+    let work_forced = count_selection(Fixed::from_f64(0.07));
+    assert!(
+        work_forced > work_live,
+        "bonus must be monotone: {work_forced} vs {work_live}"
+    );
 }

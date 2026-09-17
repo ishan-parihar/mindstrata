@@ -229,6 +229,7 @@ impl Simulation {
                 tick,
                 &self.institutions,
                 &self.norms,
+                &self.collective_field,
                 &mut self.provenance,
                 &self.season,
                 &mut self.tick_action_starts,
