@@ -29,15 +29,22 @@ use mindstrata_world::world::{Site, SiteKind};
 /// Stage at which a bucket's collective depth first births culture.
 pub const GENESIS_STAGE_GATE: f64 = 2.0;
 
-/// Genesis templates per bucket — deterministic STRUCTURE (substrate §5:
-/// "grammar templates are canon-frozen STRUCTURE; referent bindings are
-/// runtime VARIABLE"). i276: TWO runtime variables now — the line slug
-/// (individual line-signature) and the GROSS REFERENT (a real site or
-/// institution name, substrate §5's "cites ≥1 gross entity within exactly
-/// one domain"). {ref} is the gross citation; {line} is the signature.
-const GENESIS_TEMPLATES: &[(CollectiveBucket, MemeContent, &str, f64, f64)] = &[
+/// Genesis templates per bucket, laddered by collective stage band
+/// (Iteration-277, WP-I tetra-arising gate: "collective stage bands gate
+/// WHICH content classes the generator may emit"). Each row is
+/// (bucket, min_band, content, template, emotional, identity) where min_band
+/// is the stage the bucket's deepest line must reach before THIS class
+/// unlocks. Band semantics: band II (2 ≤ s < 4) = foundational founding-
+/// memory classes only; band III (4 ≤ s < 6) adds institutional-political /
+/// communal-celebration classes; band IV (s ≥ 6) adds reflective classes.
+/// Midpoint-neutral by construction: below stage 2 nothing is emitted at
+/// all (i273 identity floor), and the pre-277 behavior is exactly band II.
+/// {ref} = gross citation; {line} = individual line signature.
+const GENESIS_TEMPLATES: &[(CollectiveBucket, f64, MemeContent, &str, f64, f64)] = &[
+    // ── Band II: foundational (unlock at 2.0) ──
     (
         CollectiveBucket::Relational,
+        2.0,
         MemeContent::Historical,
         "We remember when the {ref} first bound us together through the {line}",
         0.5,
@@ -45,6 +52,7 @@ const GENESIS_TEMPLATES: &[(CollectiveBucket, MemeContent, &str, f64, f64)] = &[
     ),
     (
         CollectiveBucket::Safety,
+        2.0,
         MemeContent::Moral,
         "The {ref} and the {line} keep the peace our elders won",
         0.4,
@@ -52,6 +60,7 @@ const GENESIS_TEMPLATES: &[(CollectiveBucket, MemeContent, &str, f64, f64)] = &[
     ),
     (
         CollectiveBucket::Identity,
+        2.0,
         MemeContent::Historical,
         "The {ref} is what our people have suffered and kept — the {line} remembers",
         0.6,
@@ -59,10 +68,37 @@ const GENESIS_TEMPLATES: &[(CollectiveBucket, MemeContent, &str, f64, f64)] = &[
     ),
     (
         CollectiveBucket::Meaning,
+        2.0,
         MemeContent::Theological,
         "Through the {ref} the {line} glimpses what endures",
         0.7,
         0.6,
+    ),
+    // ── Band III: institutional-political / communal celebration (4.0) ──
+    (
+        CollectiveBucket::Safety,
+        4.0,
+        MemeContent::Political,
+        "The {ref} must answer to the {line} of this village",
+        0.6,
+        0.7,
+    ),
+    (
+        CollectiveBucket::Identity,
+        4.0,
+        MemeContent::Song,
+        "Sing of the {ref}, where the {line} of our people is kept",
+        0.6,
+        0.9,
+    ),
+    // ── Band IV: reflective (6.0) ──
+    (
+        CollectiveBucket::Meaning,
+        6.0,
+        MemeContent::Prophecy,
+        "From the {ref} the {line} speaks: what endures is not yet seen",
+        0.8,
+        0.7,
     ),
 ];
 
@@ -109,26 +145,33 @@ pub fn system_collective_genesis(
     sites: &[Site],
 ) {
     let slugs = CollectiveField::line_slugs();
-    for (bucket, content, template, emotional, identity) in GENESIS_TEMPLATES {
-        // The bucket's max line stage = its deepest collective development.
-        let mut max_stage = 0.0_f64;
-        for (i, line) in field.lines.iter().enumerate() {
-            if i >= slugs.len() {
-                break;
-            }
-            if bucket_for_line(slugs[i]) == *bucket && line.stage > max_stage {
-                max_stage = line.stage;
-            }
+    // Precompute each bucket's deepest line stage once (O(buckets × lines)).
+    let mut bucket_stage = [0.0_f64; 4];
+    for (i, line) in field.lines.iter().enumerate() {
+        if i >= slugs.len() {
+            break;
         }
-        // Identity below the gate: founding-stage lines birth nothing.
-        if max_stage < GENESIS_STAGE_GATE {
+        let b = bucket_for_line(slugs[i]) as usize;
+        if line.stage > bucket_stage[b] {
+            bucket_stage[b] = line.stage;
+        }
+    }
+    for (bucket, min_band, content, template, emotional, identity) in GENESIS_TEMPLATES {
+        // Tetra-arising gate (i277): this content class emits only when the
+        // bucket's deepest collective line has reached the class's band.
+        let max_stage = bucket_stage[*bucket as usize];
+        if max_stage < *min_band {
             continue;
         }
         // Stage epoch: which integer stage crossing this meme commemorates.
         // epoch 1 = first advance past founding (stage 2.x), etc. Cap at 9
         // keeps tags bounded; stages 11+ would need a new epoch anyway.
         let epoch = (max_stage as usize).min(9);
-        let tag = format!("{GENESIS_TAG}{bucket:?}:{epoch}]");
+        // i277: tag carries the content class so band-II and band-III/IV
+        // classes dedup independently (a Moral epoch-4 meme must not block
+        // the Political epoch-4 unlock).
+        let class_tag = format!("{content:?}");
+        let tag = format!("{GENESIS_TAG}{bucket:?}:{class_tag}:{epoch}]");
         if registry.memes.iter().any(|m| m.description.contains(&tag)) {
             continue; // already commemorated this advance
         }
@@ -263,7 +306,7 @@ mod tests {
         );
         assert!(registry.memes[0]
             .description
-            .contains("[genesis:Relational:2]"));
+            .contains("[genesis:Relational:Historical:2]"));
 
         // Re-run: dedup by tag — no second registration.
         system_collective_genesis(
@@ -293,7 +336,7 @@ mod tests {
         );
         assert!(registry.memes[1]
             .description
-            .contains("[genesis:Relational:3]"));
+            .contains("[genesis:Relational:Historical:3]"));
     }
 
     #[test]
@@ -428,9 +471,107 @@ mod tests {
         assert!(registry.memes[1].description.contains("Village Well"));
         assert!(registry.memes[0]
             .description
-            .contains("[genesis:Identity:2]"));
+            .contains("[genesis:Identity:Historical:2]"));
         assert!(registry.memes[1]
             .description
-            .contains("[genesis:Identity:3]"));
+            .contains("[genesis:Identity:Historical:3]"));
+    }
+
+    #[test]
+    fn tetra_arising_band_gate_blocks_and_unlocks_classes() {
+        // i277: the Political (Safety) class unlocks at stage 4; below the
+        // band it must not emit, at the band it must.
+        let mut field = CollectiveField::default();
+        let slugs = CollectiveField::line_slugs();
+        let safety_idx = (0..slugs.len())
+            .find(|&i| bucket_for_line(slugs[i]) == CollectiveBucket::Safety)
+            .unwrap();
+        let inst = fixture_institutions();
+        let sites = fixture_sites();
+
+        // Stage 3.x: band II only — the Moral founding class emits per
+        // stage epoch, but NO Political meme may exist.
+        field.lines[safety_idx].stage = 3.5;
+        let mut registry = MemeRegistry::default();
+        system_collective_genesis(
+            &field,
+            &mut registry,
+            virality(),
+            Tick::new(10),
+            &inst,
+            &sites,
+        );
+        assert!(
+            !registry
+                .memes
+                .iter()
+                .any(|m| m.content_type == MemeContent::Political),
+            "Political class must stay gated below stage 4"
+        );
+
+        // Stage 4.1: band III unlocks — Political may now emit.
+        field.lines[safety_idx].stage = 4.1;
+        system_collective_genesis(
+            &field,
+            &mut registry,
+            virality(),
+            Tick::new(20),
+            &inst,
+            &sites,
+        );
+        assert!(
+            registry
+                .memes
+                .iter()
+                .any(|m| m.content_type == MemeContent::Political),
+            "crossing stage 4 must unlock the Political class"
+        );
+    }
+
+    #[test]
+    fn tetra_arising_band_iv_reflective_class_unlocks_at_six() {
+        // Meaning's Prophecy class unlocks at stage 6 (band IV).
+        let mut field = CollectiveField::default();
+        let slugs = CollectiveField::line_slugs();
+        let meaning_idx = (0..slugs.len())
+            .find(|&i| bucket_for_line(slugs[i]) == CollectiveBucket::Meaning)
+            .unwrap();
+        let inst = fixture_institutions();
+        let sites = fixture_sites();
+
+        field.lines[meaning_idx].stage = 5.9;
+        let mut registry = MemeRegistry::default();
+        system_collective_genesis(
+            &field,
+            &mut registry,
+            virality(),
+            Tick::new(10),
+            &inst,
+            &sites,
+        );
+        assert!(
+            !registry
+                .memes
+                .iter()
+                .any(|m| m.content_type == MemeContent::Prophecy),
+            "Prophecy must stay gated below stage 6"
+        );
+
+        field.lines[meaning_idx].stage = 6.1;
+        system_collective_genesis(
+            &field,
+            &mut registry,
+            virality(),
+            Tick::new(20),
+            &inst,
+            &sites,
+        );
+        assert!(
+            registry
+                .memes
+                .iter()
+                .any(|m| m.content_type == MemeContent::Prophecy),
+            "crossing stage 6 must unlock the Prophecy class"
+        );
     }
 }
