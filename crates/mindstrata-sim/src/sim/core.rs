@@ -624,6 +624,17 @@ impl Simulation {
             self.tick_birth_mechanics(tick_u64, tick);
         }
 
+        // ── Architecture-plan-2 §12.5 (moved, Iteration-274): ritual
+        // executions. Previously ran inside tick_kinship_household_daily at
+        // the tick tail — AFTER system_development / polarity / collective
+        // passes had consumed the same tick's catalyst window, so a ritual
+        // event pushed there would never be observed. Called BEFORE the
+        // development pass so `RitualPerformed` events are inside the window
+        // and route as per-participant Bond catalysts. Ritual cadence is
+        // monthly (4320), beyond all golden/snapshot horizons → zero blast on
+        // calibrated runs.
+        self.tick_ritual_executions(tick_u64, tick);
+
         // ── AP3 DC-1 (task 3.2): daily development pass — consumes catalysts
         // via frozen IC-1 types and pure field engine (zero-at-zero identity
         // when window empty). Hooked after birth mechanics so all demographic

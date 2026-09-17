@@ -5,6 +5,8 @@ use super::{
     GROUP_COUNCIL_LEGITIMACY_DEFAULT, GROUP_SOCIAL_COST_SCALE, GROUP_SUPPRESSION_SCALE,
 };
 use crate::institutions;
+use mindstrata_core::event::SimEvent;
+use mindstrata_core::id::AgentId;
 
 impl Simulation {
     /// §10.7 (AP2): Household food pooling — the plan's "resource pooling"
@@ -1222,189 +1224,11 @@ impl Simulation {
             self.run_apprenticeship_pass(tick_u64, Tick::new(tick_u64));
         }
 
-        // Architecture-plan-2 §12.5: Execute due rituals every 12 ticks (~2 hours).
-        // Apply bonding effect to participating agents' relationship_v2s.
+        // Architecture-plan-2 §12.2: Evaluate group formation pressure.
+        // (Ritual execution moved to `tick_ritual_executions` in Iteration-274
+        // so its events land inside the same-tick catalyst window; this block
+        // keeps the original duodeca gate it shared with that code.)
         if phases.is_duodeca {
-            let due: Vec<usize> = self
-                .ritual_registry
-                .due_rituals(tick_u64)
-                .into_iter()
-                .map(|r| r.id)
-                .collect();
-            let ritual_fired = !due.is_empty();
-            for ritual_id in due {
-                if let Some(ritual) = self
-                    .ritual_registry
-                    .rituals
-                    .iter_mut()
-                    .find(|r| r.id == ritual_id)
-                {
-                    let bonding = ritual.execute(tick_u64);
-                    // §11.1: Ritual participation builds perceived legitimacy —
-                    // communal ritual rehearses the rightfulness of the order.
-                    // Zero-at-zero anchor: no ritual -> no boost.
-                    let ritual_legitimacy = bonding;
-                    // Apply bonding to all participant pairs
-                    for i in 0..ritual.participants.len() {
-                        // Boost each participant's perceived legitimacy once.
-                        let p = ritual.participants[i];
-                        if p < self.agents.len() {
-                            self.agents[p]
-                                .legitimacy_field
-                                .ritual_boost(ritual_legitimacy);
-                            // §7.2.2 (S2-2-2 fix): ritual participation feeds
-                            // the endocrine bonding axis — the plan's "ritual
-                            // increases bonding" channel. Previously
-                            // write-once: `bonding.update` had zero call sites
-                            // (the axis sat frozen at birth values in every
-                            // probe window). Input scaled by 0.5 (mirroring
-                            // the trust channel's `bonding × 0.3` in this
-                            // loop): the seasonal effect 0.225 × 0.5 ×
-                            // receptivity (mean ~0.5) with the 0.02 recovery
-                            // moves the axis ≈ +0.04/fire — differentiated
-                            // across pro/anti congregations. Saturation is
-                            // bounded by the axis's own logistic (1 − level)
-                            // gain (equilibrium ≈ 0.78 at max receptivity,
-                            // probe-verified across 5K/20K/50K horizons).
-                            // Rituals fire only at monthly intervals (4320),
-                            // beyond every golden (1000) / snapshot (≤2000)
-                            // horizon, so calibrated runs stay byte-identical.
-                            self.agents[p].embodied.endocrine.bonding.update(
-                                bonding * Fixed::from_f64(0.5),
-                                self.params.endocrine_bonding_recovery,
-                            );
-                            // §8.1.3: Cultural memory — shared ritual
-                            // participation is the canonical cultural episode
-                            // (sparse: rituals fire on their interval; salience
-                            // follows the ritual's intensity and sacredness).
-                            let participant = &mut self.agents[p];
-                            if participant.agent_tier.tier.runs_memory_encoding()
-                                && participant.agent_tier.budget_tracker.can_memory_op()
-                            {
-                                let _ = participant.agent_tier.budget_tracker.consume_memory_op();
-                                let salience = ((ritual.emotional_intensity + ritual.sacredness)
-                                    * Fixed::from_f64(0.8))
-                                .clamp_01();
-                                let emotional = participant.affect.arousal * Fixed::from_f64(0.6)
-                                    + Fixed::from_f64(0.1);
-                                participant.memory.encode(
-                                    MemoryKind::Cultural,
-                                    tick_u64,
-                                    salience,
-                                    emotional,
-                                    None,
-                                    MemoryTag::RitualParticipated,
-                                );
-                            }
-                            // §12.5: Rituals "reinforce norms" — each
-                            // participant internalizes (or strengthens) the
-                            // community's registry norms, scaled by the norm's
-                            // community internalization. Deterministic (no RNG)
-                            // and observationally isolated (norm_resistance has
-                            // no production consumer), so the golden baseline
-                            // stays byte-identical: rituals fire only at
-                            // monthly intervals (4320 ticks) while every
-                            // snapshot/golden horizon is ≤ 2000.
-                            //
-                            // §19.5.D (Iteration 90): the sponsor
-                            // institution's declared norms (`Institution.
-                            // norm_ids` — the temple declares "Obey Ruler" = 3)
-                            // are reinforced preferentially at its ritual; the
-                            // field's documented purpose ("Obey Ruler norm
-                            // reinforced by temple") is now honored. A missing
-                            // sponsor or empty declaration keeps the legacy
-                            // all-equal reinforcement. The declared norm has no
-                            // behavioral consumer, so this only changes the
-                            // growth rate of observational strength.
-                            let sponsor_norms: std::collections::BTreeSet<u64> = self
-                                .institutions
-                                .get(ritual.sponsor)
-                                .map_or_else(std::collections::BTreeSet::new, |inst| {
-                                    inst.norm_ids.iter().copied().collect()
-                                });
-                            // §8.1.10 (P3-11): per-agent internalization
-                            // scaling. The norm count was UNIFORM (5.000 for
-                            // 12/12 at 10K, zero spread) because every
-                            // participant internalized every community norm at
-                            // the identical rate — conformity had no seat at
-                            // the ritual. Scale the reinforcement by the
-                            // agent's conformity (0.5 + conformity × 0.5, so
-                            // a maximally conformist agent internalizes at
-                            // full strength and a maximally independent one at
-                            // half): the collective ritual still internalizes
-                            // norms, but per-agent strength (and the
-                            // 0.1-strength first-exposure threshold in
-                            // `reinforce_norm`'s internalize path) now
-                            // differentiates the population.
-                            let conformity = self.agents[p].personality.conformity;
-                            let internalize_scale =
-                                Fixed::from_f64(0.5) + conformity * Fixed::from_f64(0.5);
-                            for norm in self.norms.norms() {
-                                let reinforcement = ritual.norm_reinforcement_for_institutional(
-                                    norm.internalization,
-                                    sponsor_norms.contains(&norm.id),
-                                );
-                                let scaled = (reinforcement * internalize_scale).clamp_01();
-                                if scaled > Fixed::ZERO {
-                                    self.agents[p]
-                                        .moral_cognition
-                                        .reinforce_norm(&norm.name, scaled);
-                                }
-                            }
-                        }
-                        for j in (i + 1)..ritual.participants.len() {
-                            let a = ritual.participants[i];
-                            let b = ritual.participants[j];
-                            if a < self.agents.len() && b < self.agents.len() {
-                                // Increase trust and affection between participants
-                                let idx_a = Self::relationship_v2_pos(a, b);
-                                if idx_a < self.agents[a].relationship_v2s.len() {
-                                    self.agents[a].relationship_v2s[idx_a].trust =
-                                        (self.agents[a].relationship_v2s[idx_a].trust
-                                            + bonding * Fixed::from_f64(0.3))
-                                        .clamp_01();
-                                    self.agents[a].relationship_v2s[idx_a].affection =
-                                        (self.agents[a].relationship_v2s[idx_a].affection
-                                            + bonding * Fixed::from_f64(0.2))
-                                        .clamp_01();
-                                }
-                                let idx_b = Self::relationship_v2_pos(b, a);
-                                if idx_b < self.agents[b].relationship_v2s.len() {
-                                    self.agents[b].relationship_v2s[idx_b].trust =
-                                        (self.agents[b].relationship_v2s[idx_b].trust
-                                            + bonding * Fixed::from_f64(0.3))
-                                        .clamp_01();
-                                    self.agents[b].relationship_v2s[idx_b].affection =
-                                        (self.agents[b].relationship_v2s[idx_b].affection
-                                            + bonding * Fixed::from_f64(0.2))
-                                        .clamp_01();
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // §13.5: Rituals rehearse the village's collective memory — ritual
-            // repetition is the memory-maintenance mechanism. Without this the
-            // seeded memories only ever decayed (salience → 0 within ~2 weeks;
-            // the daily decay previously accumulated quadratically, fixed in
-            // Iteration 12). Monthly rehearsal (+0.05) outpaces daily decay
-            // (0.001/day), so memories stay vivid while rituals are held.
-            if ritual_fired {
-                self.collective_memory_registry
-                    .get_or_create(0)
-                    .rehearse_all(tick_u64);
-            }
-
-            // §13.5 (AP2): Refresh the derived plan fields (traumas,
-            // sacred_events) from the shared-memory log. Deterministic — reads
-            // only memories, writes only the new fields, so the golden baseline
-            // stays byte-identical.
-            for cm in &mut self.collective_memory_registry.entries {
-                cm.refresh_derived_views();
-            }
-
             // Architecture-plan-2 §12.2: Evaluate group formation pressure.
             // After ritual bonding, check if any agent clusters have sufficient
             // shared identity, repeated interaction, or external threat to form a
@@ -1570,6 +1394,226 @@ impl Simulation {
                         "Peer group formed and registered"
                     );
                 }
+            }
+        }
+    }
+    /// Architecture-plan-2 §12.5: Execute due rituals every 12 ticks (~2 hours)
+    /// and apply the bonding effect to participating agents' relationship_v2s.
+    ///
+    /// Iteration-274 (§4.3 dead-producer fix): this block previously ran inside
+    /// `tick_kinship_household_daily` AFTER the development/polarity/collective
+    /// passes had already consumed the tick's catalyst window (core.rs order:
+    /// window read at `system_development`, ritual pass at the tail). An event
+    /// emitted there would land in no window at all — each tick slices
+    /// `&self.events[pre_tick_events..]` at pass time. Moved to its own pass
+    /// called BEFORE `system_development` so same-tick ritual events are
+    /// visible to the catalyst mapping. Behavior inside the block is verbatim;
+    /// the only addition is the `RitualPerformed` event push (per-participant
+    /// Bond catalysts — the substrate's ritual→culture-line channel). Rituals
+    /// fire monthly (interval 4320), beyond every golden/snapshot horizon, so
+    /// calibrated windows stay byte-identical.
+    pub(super) fn tick_ritual_executions(&mut self, tick_u64: u64, tick: Tick) {
+        let phases = crate::scheduler::TickPhases::compute(tick_u64);
+        if phases.is_duodeca {
+            let due: Vec<usize> = self
+                .ritual_registry
+                .due_rituals(tick_u64)
+                .into_iter()
+                .map(|r| r.id)
+                .collect();
+            let ritual_fired = !due.is_empty();
+            for ritual_id in due {
+                if let Some(ritual) = self
+                    .ritual_registry
+                    .rituals
+                    .iter_mut()
+                    .find(|r| r.id == ritual_id)
+                {
+                    let bonding = ritual.execute(tick_u64);
+                    // Iteration-274: ritual → event-bus emission. Per-
+                    // participant Bond catalysts for the collective field's
+                    // Relational bucket (the substrate's ritual/festival →
+                    // culture-line channel). Pushed on self.events —
+                    // available to the same tick's development window
+                    // because this pass now runs before it.
+                    let participants: Vec<AgentId> = ritual
+                        .participants
+                        .iter()
+                        .filter(|&&p| p < self.agents.len())
+                        .map(|&p| AgentId::new(p as u64))
+                        .collect();
+                    if !participants.is_empty() {
+                        self.events.push(SimEvent::RitualPerformed {
+                            participants,
+                            sponsor: ritual.sponsor,
+                            ritual_id: ritual.id as u64,
+                            bonding,
+                            tick,
+                        });
+                    }
+                    // §11.1: Ritual participation builds perceived legitimacy —
+                    // communal ritual rehearses the rightfulness of the order.
+                    // Zero-at-zero anchor: no ritual -> no boost.
+                    let ritual_legitimacy = bonding;
+                    // Apply bonding to all participant pairs
+                    for i in 0..ritual.participants.len() {
+                        // Boost each participant's perceived legitimacy once.
+                        let p = ritual.participants[i];
+                        if p < self.agents.len() {
+                            self.agents[p]
+                                .legitimacy_field
+                                .ritual_boost(ritual_legitimacy);
+                            // §7.2.2 (S2-2-2 fix): ritual participation feeds
+                            // the endocrine bonding axis — the plan's "ritual
+                            // increases bonding" channel. Previously
+                            // write-once: `bonding.update` had zero call sites
+                            // (the axis sat frozen at birth values in every
+                            // probe window). Input scaled by 0.5 (mirroring
+                            // the trust channel's `bonding × 0.3` in this
+                            // loop): the seasonal effect 0.225 × 0.5 ×
+                            // receptivity (mean ~0.5) with the 0.02 recovery
+                            // moves the axis ≈ +0.04/fire — differentiated
+                            // across pro/anti congregations. Saturation is
+                            // bounded by the axis's own logistic (1 − level)
+                            // gain (equilibrium ≈ 0.78 at max receptivity,
+                            // probe-verified across 5K/20K/50K horizons).
+                            // Rituals fire only at monthly intervals (4320),
+                            // beyond every golden (1000) / snapshot (≤2000)
+                            // horizon, so calibrated runs stay byte-identical.
+                            self.agents[p].embodied.endocrine.bonding.update(
+                                bonding * Fixed::from_f64(0.5),
+                                self.params.endocrine_bonding_recovery,
+                            );
+                            // §8.1.3: Cultural memory — shared ritual
+                            // participation is the canonical cultural episode
+                            // (sparse: rituals fire on their interval; salience
+                            // follows the ritual's intensity and sacredness).
+                            let participant = &mut self.agents[p];
+                            if participant.agent_tier.tier.runs_memory_encoding()
+                                && participant.agent_tier.budget_tracker.can_memory_op()
+                            {
+                                let _ = participant.agent_tier.budget_tracker.consume_memory_op();
+                                let salience = ((ritual.emotional_intensity + ritual.sacredness)
+                                    * Fixed::from_f64(0.8))
+                                .clamp_01();
+                                let emotional = participant.affect.arousal * Fixed::from_f64(0.6)
+                                    + Fixed::from_f64(0.1);
+                                participant.memory.encode(
+                                    MemoryKind::Cultural,
+                                    tick_u64,
+                                    salience,
+                                    emotional,
+                                    None,
+                                    MemoryTag::RitualParticipated,
+                                );
+                            }
+                            // §12.5: Rituals "reinforce norms" — each
+                            // participant internalizes (or strengthens) the
+                            // community's registry norms, scaled by the norm's
+                            // community internalization. Deterministic (no RNG)
+                            // and observationally isolated (norm_resistance has
+                            // no production consumer), so the golden baseline
+                            // stays byte-identical: rituals fire only at
+                            // monthly intervals (4320 ticks) while every
+                            // snapshot/golden horizon is ≤ 2000.
+                            //
+                            // §19.5.D (Iteration 90): the sponsor
+                            // institution's declared norms (`Institution.
+                            // norm_ids` — the temple declares "Obey Ruler" = 3)
+                            // are reinforced preferentially at its ritual; the
+                            // field's documented purpose ("Obey Ruler norm
+                            // reinforced by temple") is now honored. A missing
+                            // sponsor or empty declaration keeps the legacy
+                            // all-equal reinforcement. The declared norm has no
+                            // behavioral consumer, so this only changes the
+                            // growth rate of observational strength.
+                            let sponsor_norms: std::collections::BTreeSet<u64> = self
+                                .institutions
+                                .get(ritual.sponsor)
+                                .map_or_else(std::collections::BTreeSet::new, |inst| {
+                                    inst.norm_ids.iter().copied().collect()
+                                });
+                            // §8.1.10 (P3-11): per-agent internalization
+                            // scaling. The norm count was UNIFORM (5.000 for
+                            // 12/12 at 10K, zero spread) because every
+                            // participant internalized every community norm at
+                            // the identical rate — conformity had no seat at
+                            // the ritual. Scale the reinforcement by the
+                            // agent's conformity (0.5 + conformity × 0.5, so
+                            // a maximally conformist agent internalizes at
+                            // full strength and a maximally independent one at
+                            // half): the collective ritual still internalizes
+                            // norms, but per-agent strength (and the
+                            // 0.1-strength first-exposure threshold in
+                            // `reinforce_norm`'s internalize path) now
+                            // differentiates the population.
+                            let conformity = self.agents[p].personality.conformity;
+                            let internalize_scale =
+                                Fixed::from_f64(0.5) + conformity * Fixed::from_f64(0.5);
+                            for norm in self.norms.norms() {
+                                let reinforcement = ritual.norm_reinforcement_for_institutional(
+                                    norm.internalization,
+                                    sponsor_norms.contains(&norm.id),
+                                );
+                                let scaled = (reinforcement * internalize_scale).clamp_01();
+                                if scaled > Fixed::ZERO {
+                                    self.agents[p]
+                                        .moral_cognition
+                                        .reinforce_norm(&norm.name, scaled);
+                                }
+                            }
+                        }
+                        for j in (i + 1)..ritual.participants.len() {
+                            let a = ritual.participants[i];
+                            let b = ritual.participants[j];
+                            if a < self.agents.len() && b < self.agents.len() {
+                                // Increase trust and affection between participants
+                                let idx_a = Self::relationship_v2_pos(a, b);
+                                if idx_a < self.agents[a].relationship_v2s.len() {
+                                    self.agents[a].relationship_v2s[idx_a].trust =
+                                        (self.agents[a].relationship_v2s[idx_a].trust
+                                            + bonding * Fixed::from_f64(0.3))
+                                        .clamp_01();
+                                    self.agents[a].relationship_v2s[idx_a].affection =
+                                        (self.agents[a].relationship_v2s[idx_a].affection
+                                            + bonding * Fixed::from_f64(0.2))
+                                        .clamp_01();
+                                }
+                                let idx_b = Self::relationship_v2_pos(b, a);
+                                if idx_b < self.agents[b].relationship_v2s.len() {
+                                    self.agents[b].relationship_v2s[idx_b].trust =
+                                        (self.agents[b].relationship_v2s[idx_b].trust
+                                            + bonding * Fixed::from_f64(0.3))
+                                        .clamp_01();
+                                    self.agents[b].relationship_v2s[idx_b].affection =
+                                        (self.agents[b].relationship_v2s[idx_b].affection
+                                            + bonding * Fixed::from_f64(0.2))
+                                        .clamp_01();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // §13.5: Rituals rehearse the village's collective memory — ritual
+            // repetition is the memory-maintenance mechanism. Without this the
+            // seeded memories only ever decayed (salience → 0 within ~2 weeks;
+            // the daily decay previously accumulated quadratically, fixed in
+            // Iteration 12). Monthly rehearsal (+0.05) outpaces daily decay
+            // (0.001/day), so memories stay vivid while rituals are held.
+            if ritual_fired {
+                self.collective_memory_registry
+                    .get_or_create(0)
+                    .rehearse_all(tick_u64);
+            }
+
+            // §13.5 (AP2): Refresh the derived plan fields (traumas,
+            // sacred_events) from the shared-memory log. Deterministic — reads
+            // only memories, writes only the new fields, so the golden baseline
+            // stays byte-identical.
+            for cm in &mut self.collective_memory_registry.entries {
+                cm.refresh_derived_views();
             }
         }
     }

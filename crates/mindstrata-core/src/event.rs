@@ -62,6 +62,23 @@ pub enum SimEvent {
         deceased: AgentId,
         tick: Tick,
     },
+    /// Iteration-274 (§4.3 dead-producer fix): a communal ritual was executed.
+    /// Rituals previously bonded endocrine axes and memories without ever
+    /// emitting an event, so the collective field's Relational bucket — whose
+    /// only other feed is the once-per-pair MarriageFormed/ChildBorn — was a
+    /// dead producer (i274 probe: Relational max_stage pinned at 1.000 even at
+    /// N=96). Emitted per executed ritual from the ritual pass; the catalyst
+    /// mapping expands it to one Bond catalyst per participant (the substrate's
+    /// "ritual/festival participation → culture-line collective catalysts"
+    /// channel). `bonding` is the ritual's bonding_effect for magnitude
+    /// scaling; `sponsor` and `kind` are provenance context.
+    RitualPerformed {
+        participants: Vec<AgentId>,
+        sponsor: usize,
+        ritual_id: u64,
+        bonding: Fixed,
+        tick: Tick,
+    },
 
     // ── Biological / needs ───────────────────────────────────────────
     AgentAte {

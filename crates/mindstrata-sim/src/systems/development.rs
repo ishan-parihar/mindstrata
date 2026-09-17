@@ -78,6 +78,22 @@ fn collect_catalysts(events: &[SimEvent]) -> Vec<(AgentId, CatalystKind, f64)> {
                 out.push((parent_a, CatalystKind::Bond, 0.7));
                 out.push((parent_b, CatalystKind::Bond, 0.7));
             }
+            SimEvent::RitualPerformed {
+                ref participants,
+                bonding,
+                ..
+            } => {
+                // Iteration-274: per-participant Bond catalysts — the
+                // substrate's "ritual/festival participation → culture-line
+                // collective catalysts" channel (03-substrate §5). Magnitude
+                // scales with the ritual's bonding_effect (seeded rituals
+                // carry ~0.1–0.15 bonding; a marriage-level 0.8 caps at the
+                // MarriageFormed precedent).
+                let mag = (bonding.to_f64() * 2.0).clamp(0.2, 0.8);
+                for p in participants {
+                    out.push((*p, CatalystKind::Bond, mag));
+                }
+            }
             SimEvent::FeudFormed {
                 party_a, party_b, ..
             } => {

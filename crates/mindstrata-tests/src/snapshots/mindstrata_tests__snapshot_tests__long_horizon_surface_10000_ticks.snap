@@ -6,7 +6,7 @@ expression: "LongHorizonSurface10000\n{\n    tick: ms.tick, agent_count: ms.agen
 LongHorizonSurface10000 {
     tick: 10000,
     agent_count: 13,
-    event_count: 147935,
+    event_count: 147939,
     avg_stress: 0.34671538461538465,
     avg_health: 0.7901846153846154,
     avg_relationship_trust: 0.7196737179487178,

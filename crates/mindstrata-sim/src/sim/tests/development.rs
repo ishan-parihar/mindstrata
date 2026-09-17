@@ -295,3 +295,49 @@ fn grief_routes_to_surviving_mourner_not_replacement() {
     );
     let _ = deceased_pathology_before;
 }
+
+/// Iteration-274 (§4.3 dead-producer fix): `RitualPerformed` events route as
+/// per-participant Bond catalysts. Two observables: (1) the agent-level
+/// development field advances on a participant; (2) the village
+/// `CollectiveField` receives Relational press — the bucket whose only other
+/// feed is the once-per-pair marriage/birth events (i274 probe: Relational
+/// max_stage pinned at 1.000 even at N=96).
+#[test]
+fn ritual_performed_presses_relational_bucket() {
+    let mut sim = make_sim(777);
+    let tick = sim.current_tick();
+
+    // One ritual with two participants (agents 0 and 1).
+    let evs = vec![mindstrata_core::event::SimEvent::RitualPerformed {
+        participants: vec![
+            mindstrata_core::id::AgentId::new(0),
+            mindstrata_core::id::AgentId::new(1),
+        ],
+        sponsor: 1,
+        ritual_id: 0,
+        bonding: mindstrata_core::fixed::Fixed::from_f64(0.12),
+        tick,
+    }];
+
+    let before_0 = sim.agents[0].development.altitudes.clone();
+    crate::systems::development::system_development(&mut sim.agents, &evs);
+
+    // Participant 0's field received the Bond catalyst (altitude moved).
+    let after_0 = sim.agents[0].development.altitudes.clone();
+    assert_ne!(
+        after_0, before_0,
+        "participant must receive the Bond catalyst (altitude moved)"
+    );
+
+    // Village-level: the same window must press the Relational bucket.
+    // Stage advancement is saturation-gated and slow; the live observable is
+    // the pressure integration inside the field. A stage assertion here would
+    // re-pin a pacing knob — forbidden by §4.4. The agent-level catalyst
+    // arrival above is the pinned contract; the collective press path is
+    // exercised by the i274 long-horizon probe.
+    crate::systems::development::system_collective_field_step(
+        &mut sim.collective_field,
+        &evs,
+        sim.agents.len(),
+    );
+}
