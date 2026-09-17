@@ -400,6 +400,16 @@ remains open (UM-3).
 
 ### 6.6 Known boundaries (not plannable until inputs land)
 
+**Session-4 meta-review & gap closure (2026-09-18, commits `e3b0987`→`b05648d`):**
+a docs-vs-implementation audit of the Era III–V wave briefs found: WP-H2
+half-built (refutation missing — closed i284), WP-H3 not started (ritual &
+norm generation — next), Era V WP-K partial / WP-L not started. UM-2
+**PASSED** at the corrected cultural horizon (~100K @ N=12; all four buckets
+generate, jaccard 0.158). DC-3 P0 perf budget ratified
+(`charters/DC3-P0-perf-budget.md`), VecDeque ponytail decided (defer with
+triggers). The 04-waves Era III exit-gate wording ("20K-tick probe") carries
+the i283 pacing caveat.
+
 - Full Era III legality mapping — blocked: vendor `realms.md` not vendored.
 - Grief/Transgression catalyst magnitude ratification — blocked: mortality horizon.
 - Cross-line resonance matrix — blocked: vendor coupling attestation.
