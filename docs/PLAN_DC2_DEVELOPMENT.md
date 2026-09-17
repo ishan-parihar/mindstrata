@@ -380,15 +380,23 @@ after.
 Self-transcendence band was deferred "until CollectiveField lands" — it
 landed at i266. Run the named sweep; promote the band or record honestly.
 
-**i283 — UM-2 unify review + roster retirement decision.**
-Re-run `i278_culture_disjoint` post-i279: if ≥3 buckets generate and mean
-generated jaccard falls further, retire `seed_initial_memes` to a
-minimal-cosmology seed set (substrate: "theological/moral seeds stay
-universal"), file UM-2 evidence, open the DC-2 unify review per AP4.
+**i283 — UM-2 unify review + roster retirement decision. DONE (`e3b0987`).**
+Verdict: **UM-2 PASS at the designed cultural horizon (~100K @ N=12)** —
+all four buckets generate (census Safety 30 / Relational 2 / Meaning 2 /
+Identity 1), generated mean jaccard 0.158 (20K: 0.369, control 1.000).
+The i274/i279 horizon predictions were corrected: per-catalyst pressure is
+1/n_agents, so per-event press is (1/12)×0.05 — Relational stage-2 ~54K,
+Identity ~74K (measured residuals, i283_bucket_stages). `seed_initial_memes`
+retirement DEFERRED: generated rosters are the divergence signal; revisit
+when generated > seeded counts at typical operator horizons.
 
-**Then DC-3 P0:** perf budget doc from the i274 N=12/48/96 baseline (102 →
-928 → 5696 µs/tick, superlinear), VecDeque ponytail decision, asset pipeline
-v0 charter (ROADMAP: UM-3 "the world scales").
+**Then DC-3 P0: DONE (same session).** Perf budget ratified
+(`charters/DC3-P0-perf-budget.md`): fresh baseline 122/1088/5961 µs/tick at
+N=12/48/96 (+5–20% vs i274 from the i280/i281 wirings — inside budget);
+N=12 golden budget ≤150 µs/tick binding; VecDeque ponytail **DEFERRED**
+(SimEvent=56B, append-only has no shift cost, memory binds only >250K
+ticks at ~780MB @1M; recorded revisit triggers). Asset pipeline v0 charter
+remains open (UM-3).
 
 ### 6.6 Known boundaries (not plannable until inputs land)
 
