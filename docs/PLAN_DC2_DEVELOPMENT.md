@@ -337,7 +337,60 @@ session start (shared-clone hazard).
 
 **New debt recorded this session:** bias reads a horizon-integral (recency window deferred until a 5K+ behavioral pin exists); identity-bucket feed remains the one dead collective producer (mortality-blocked; i280 options listed in §6.3).
 
-### 6.5 Known boundaries (not plannable until inputs land)
+### §6.7 DC-2 REMAINING PLAN (2026-09-17, session 3 — post-i278 audit)
+
+**Live verification at HEAD `c09486b`:** fmt clean, clippy 0, release suite
+**307/0/1**, sim lib **226/226**, dev lib **80/80**, golden 5/5, bench law
+**89 indexed / 53 ok / 0 violations**. No debt masked by a red gate.
+
+**State vs the UM-2 gate after the i275–i278 arc:** the Era III machinery is
+END-TO-END LIVE (collective stages → tetra-arising class gate → gross-referent
+grounded generation → meme pool → transmission → polarity synthesis → chronicle
+lore), and the disjointness probe shows the mechanism diverges cultures
+(11/15 pairs disjoint, control 1.000). What keeps UM-2 at PARTIAL is not
+construction — it is that only ONE bucket (Safety) generates, because three
+collective feeds are diet-blocked at N=12. The remaining plan is therefore
+calibration-first, construction-second.
+
+**i279 — Identity-bucket feed (was i280; promoted — it now gates UM-2).**
+The last dead collective producer. Options from §6.3, probe-gated:
+(a) ritual participation carries a fractional Identity press alongside the
+i274 Relational press (substrate table already names this dual mapping);
+(b) separation/betrayal grief-proxy events at N=12 horizons. Probe measures
+which lifts Identity max_stage past 2.0 by 20K WITHOUT breaking the i274
+Relational pins or the golden identity floors. Then re-run `i278` —
+**the UM-2 gate closes when ≥3 buckets generate.**
+
+**i280 — WP-J institutional altitude coupling.**
+`systems/institutions_multiplier.rs` is the pre-built inert anchor (SIM 4.25):
+extend it from a stub to a real read-side mapping — governance/economic-systems
+line stages modulate institution behavior parameters (midpoint-neutral).
+Probe `i279_institution_shift`: forced-stage crossing amber→green on the
+governance line shows pluralistic institution deltas; golden byte-identical
+below the crossing band.
+
+**i281 — bias recency window (the §6.4 debt, scheduled).**
+The action bias reads a horizon-integral of tension claims (5K+ mean 17–76
+per agent). Before any 5K+ behavioral pin lands on that integral, switch the
+consumer to a bounded recent-claims window; re-derive the coefficient against
+the audited 0–0.03 magnitude band. Probe: bias magnitude vs horizon before/
+after.
+
+**i282 — needs-band transcendence sweep (still unblocked).**
+Self-transcendence band was deferred "until CollectiveField lands" — it
+landed at i266. Run the named sweep; promote the band or record honestly.
+
+**i283 — UM-2 unify review + roster retirement decision.**
+Re-run `i278_culture_disjoint` post-i279: if ≥3 buckets generate and mean
+generated jaccard falls further, retire `seed_initial_memes` to a
+minimal-cosmology seed set (substrate: "theological/moral seeds stay
+universal"), file UM-2 evidence, open the DC-2 unify review per AP4.
+
+**Then DC-3 P0:** perf budget doc from the i274 N=12/48/96 baseline (102 →
+928 → 5696 µs/tick, superlinear), VecDeque ponytail decision, asset pipeline
+v0 charter (ROADMAP: UM-3 "the world scales").
+
+### 6.8 Known boundaries (not plannable until inputs land)
 
 - Full Era III legality mapping — blocked: vendor `realms.md` not vendored.
 - Grief/Transgression catalyst magnitude ratification — blocked: mortality horizon.
