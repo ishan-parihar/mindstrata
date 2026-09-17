@@ -342,6 +342,70 @@ fn ritual_performed_presses_relational_bucket() {
     );
 }
 
+/// i279: MAJOR conflicts press the Identity bucket (sweep-ratified f=1.0,
+/// see IDENTITY_PRESS_FRACTION). The pinned contract: a Violence event in
+/// the catalyst window yields a strictly positive Identity pressure vector
+/// entry on the collective field's identity-bucket lines, while MINOR
+/// conflicts (Threat/Intimidation) press Safety only. Identity-at-zero is
+/// preserved for empty windows by the existing pin.
+#[test]
+fn major_conflict_presses_identity_bucket_minor_does_not() {
+    use crate::systems::development::{collect_catalysts, system_collective_field_step};
+    use mindstrata_core::clock::Tick;
+    use mindstrata_core::conflict::ConflictKind;
+    use mindstrata_core::event::SimEvent;
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_core::id::AgentId;
+    use mindstrata_development::catalyst::CatalystKind;
+    use mindstrata_development::collective::{bucket_for_line, CollectiveBucket, CollectiveField};
+
+    let make_ev = |kind: ConflictKind| SimEvent::ConflictOccurred {
+        aggressor: AgentId::new(0),
+        target: AgentId::new(1),
+        kind,
+        injury: Fixed::from_f64(0.2),
+        fear_induced: Fixed::from_f64(0.1),
+        tick: Tick::new(0),
+    };
+
+    // Catalyst-level: Violence (major) → Threat catalyst with major=true.
+    let cats = collect_catalysts(&[make_ev(ConflictKind::Violence)]);
+    assert!(
+        cats.iter()
+            .any(|(_, k, _, major)| matches!(k, CatalystKind::Threat) && *major),
+        "violence must flag major"
+    );
+    let cats_minor = collect_catalysts(&[make_ev(ConflictKind::Threat)]);
+    assert!(
+        cats_minor.iter().all(|(_, _, _, major)| !*major),
+        "verbal threat must not flag major"
+    );
+
+    // Field-level: a major conflict moves identity-bucket lines off press 0;
+    // a minor one does not (Safety-only press).
+    let mut f_major = CollectiveField::neutral();
+    system_collective_field_step(&mut f_major, &[make_ev(ConflictKind::Violence)], 12);
+    let mut f_minor = CollectiveField::neutral();
+    system_collective_field_step(&mut f_minor, &[make_ev(ConflictKind::Threat)], 12);
+
+    let slugs = CollectiveField::line_slugs();
+    let identity_moved = slugs.iter().enumerate().any(|(i, s)| {
+        bucket_for_line(*s) == CollectiveBucket::Identity && f_major.lines[i].press > 0.0
+    });
+    assert!(
+        identity_moved,
+        "major conflict must press identity-bucket lines"
+    );
+
+    let minor_identity_clean = slugs.iter().enumerate().all(|(i, s)| {
+        bucket_for_line(*s) != CollectiveBucket::Identity || f_minor.lines[i].press == 0.0
+    });
+    assert!(
+        minor_identity_clean,
+        "minor conflict must not press identity-bucket lines"
+    );
+}
+
 /// i275 (WP-H2 root-cause fix): severity-grounded Threat projections collide
 /// on (Event, cognitive) — Fact (minor) vs Identity (major) — promoting to
 /// ActiveTension, and the reconciliation scan (gated on reconcile_subtle's

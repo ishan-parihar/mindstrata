@@ -71,7 +71,7 @@ fn map_event(ev: &SimEvent) -> Option<(AgentId, CatalystKind, f64, bool)> {
 /// Combat/Revolution/MoralPanic — bodily or structural harm), `false` = MINOR
 /// (verbal Threat/Intimidation, or a non-Threat catalyst). Only consumed by
 /// `project_catalyst_severity` for Threat claims.
-fn collect_catalysts(events: &[SimEvent]) -> Vec<(AgentId, CatalystKind, f64, bool)> {
+pub(crate) fn collect_catalysts(events: &[SimEvent]) -> Vec<(AgentId, CatalystKind, f64, bool)> {
     let mut out = Vec::new();
     for ev in events {
         match *ev {
@@ -410,6 +410,19 @@ pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent
 /// press, advances shadow stages on saturation, and tracks fulfillment EMAs
 /// (see the dev crate). Identity-at-zero is preserved: empty window → zero
 /// pressure vector → identity output, so the empty-window pin stays green.
+/// i279 (sweep-ratified): MAJOR conflicts press the Identity bucket at f=1.0
+/// — full catalyst parity with Grief (i272), Identity's canonical feed. The
+/// sweep (i279_identity_fraction_sweep, seed 42, 20K) measured the diet:
+/// 55 major events × 2 catalysts / 12 agents = 9.167 raw press → 0.458
+/// accumulated at press_growth 0.05 — HALF the 1.0 needed for stage 2, so
+/// the fraction is not the binding constraint (the diet is; identical
+/// verdict to i274 Relational). f=1.0 is chosen because it is the
+/// theoretically honest weight (each major event genuinely reshapes the
+/// village's self-image) and yields stage 2 at ~44K ticks — the same
+/// real-cultural-timescale pacing class as Relational. No magnitude knob
+/// was pulled to pass a probe; the diet constraint is recorded debt.
+const IDENTITY_PRESS_FRACTION: f64 = 1.0;
+
 pub fn system_collective_field_step(
     field: &mut mindstrata_development::collective::CollectiveField,
     events: &[SimEvent],
@@ -428,11 +441,20 @@ pub fn system_collective_field_step(
     let mut safety_press = 0.0;
     let mut identity_press = 0.0;
     let mut meaning_press = 0.0;
-    for (_, kind, _mag, _major) in &catalysts {
+    for (_, kind, _mag, major) in &catalysts {
         let p = 1.0 / n;
         match kind {
             CatalystKind::Bond => relational_press += p,
-            CatalystKind::Threat | CatalystKind::Transgression => safety_press += p,
+            CatalystKind::Threat | CatalystKind::Transgression => {
+                safety_press += p;
+                // i279 (sweep-ratified at f=1.0): MAJOR conflicts also
+                // press the Identity bucket — violence/revolution reshapes
+                // who a community thinks it is (the collective reading of
+                // the same i275 individual-level Identity claim).
+                if *major {
+                    identity_press += p * IDENTITY_PRESS_FRACTION;
+                }
+            }
             CatalystKind::Grief => identity_press += p,
         }
         // The "meaning" bucket gets a small baseline from any event
