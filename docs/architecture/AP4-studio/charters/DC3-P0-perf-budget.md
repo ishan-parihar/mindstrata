@@ -42,6 +42,6 @@ Scaling remains **superlinear** (≈N¹·⁴ at N=48, ≈N⁰·⁷ additional to
 
 ## 5. DC-3 Phase-1 checklist (next iterations)
 
-1. [ ] `i284_*` perf regression probe: assert the N=12 budget in CI-adjacent benches (warn-only; release variance ±8%).
-2. [ ] Superlinearity probe at N=192 to separate interaction-volume growth from algorithmic accidents (i274 design, never run).
+1. [x] `i284_*` perf regression probe: assert the N=12 budget in CI-adjacent benches (warn-only; release variance ±8%). — **LANDED i295** (`i295_perf_budget_gate`, warn-only step in `scripts/gate` 2.55; hard floors remain in i270/i271 gate 2.6).
+2. [x] Superlinearity probe at N=192 to separate interaction-volume growth from algorithmic accidents (i274 design, never run). — **LANDED i294** (α_total=2.115; volume linear α=0.975; O(N³) social-support scan fixed golden-identical, uniform −20%; see `evidence/i294_superlinearity.md`).
 3. [ ] Asset pipeline v0 charter (ROADMAP UM-3 "the world scales") — separate doc; this budget sets its perf envelope.

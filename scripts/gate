@@ -19,6 +19,13 @@ echo "[gate 2.5/3] bench naming law (IC-4)"
 python3 scripts/bench_index.py --strict 2>&1 | tail -5
 python3 scripts/bench_index.py --strict
 
+# DC3-P0 §5.1 (i295): golden-budget envelopes as WARN-ONLY drift visibility —
+# N=12 ≤150 µs/tick (golden-suite wall budget), N=96 ≤6500 (Phase-1 target).
+# Release noise (±8%) on shared hosts must not block commits, but drift must
+# be visible every gate run. Hard floors stay with i270/i271 (gate 2.6).
+echo "[gate 2.55/3] perf budgets warn-only (charter DC3-P0 §2)"
+cargo run --release -q -p mindstrata-benches --example i295_perf_budget_gate
+
 # DC-1 TOOLS 19-22: seed-family sweep is the calibration-audit-v2
 # CA-1/CA-2/CA-4 instrument. Run it in --quick (12 seeds, 4000 ticks)
 # on every non-full gate so a single broken seed is caught before
