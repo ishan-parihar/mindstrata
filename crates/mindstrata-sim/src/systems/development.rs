@@ -32,6 +32,9 @@ fn map_event(ev: &SimEvent) -> Option<(AgentId, CatalystKind, f64, bool)> {
         // stands: the loss of a spouse/co-resident kin is the maximal-loss
         // exemplar; the widow-heuristic emission discipline bounds it to
         // genuinely-tied survivors.
+        // Magnitude 1.0 RATIFIED (i289): observed constant at the mortality
+        // horizon (pestilence 20K, all seeds) — spouse/kin loss is a one-shot
+        // maximal event by semantics, no distribution to re-contract.
         SimEvent::GriefStruck { mourner, .. } => Some((mourner, CatalystKind::Grief, 1.0, false)),
         // NOTE (Iter-285, WP-H3): `MourningObserved` is deliberately NOT a
         // catalyst here. It is the Agape-METABOLIZER read-side handled by a
@@ -66,6 +69,10 @@ fn map_event(ev: &SimEvent) -> Option<(AgentId, CatalystKind, f64, bool)> {
             Some((aggressor, CatalystKind::Threat, mag, major))
         }
         SimEvent::NormViolated { agent, .. } => {
+            // Magnitude 0.5 RATIFIED (i289): spec midpoint confirmed in vivo —
+            // Q2 dark-allergy equilibrium 0.69–0.72 at 20K against ceiling 0.80
+            // (in-band) with the i285 mourning-rite Agape decay as the working
+            // consumption channel. See evidence/i289_catalyst_magnitudes.md.
             Some((agent, CatalystKind::Transgression, 0.5, false))
         }
         _ => None,

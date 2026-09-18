@@ -157,6 +157,8 @@ impl Simulation {
                         tick,
                         subject: idx(agent),
                         drive: Drive::Transgression,
+                        // RATIFIED (i289): spec midpoint observed in vivo —
+                        // Q2 equilibrium in-band at the mortality horizon.
                         magnitude: 0.5,
                     });
                 }
