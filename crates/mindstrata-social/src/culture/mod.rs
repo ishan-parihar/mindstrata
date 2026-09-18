@@ -51,7 +51,7 @@ pub use meme::{Meme, MemeContent, MemeRegistry};
 pub use meme_aggregator::{AggregatedMemeMetrics, MemeAggregator};
 pub use narrative_frame::{NarrativeFrame, NarrativeFrameSet};
 pub use propaganda::{PropagandaCampaign, PropagandaChannel, PropagandaRegistry};
-pub use ritual::{Ritual, RitualKind, RitualRegistry};
+pub use ritual::{MourningRecord, Ritual, RitualKind, RitualRegistry};
 pub use rumor_v2::{RumorRegistry, RumorV2};
 pub use sacred::{SacredValue, SacredValues};
 pub use technology::TechnologyTree;

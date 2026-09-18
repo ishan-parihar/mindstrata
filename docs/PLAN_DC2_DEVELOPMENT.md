@@ -398,6 +398,20 @@ N=12 golden budget ≤150 µs/tick binding; VecDeque ponytail **DEFERRED**
 ticks at ~780MB @1M; recorded revisit triggers). Asset pipeline v0 charter
 remains open (UM-3).
 
+### 6.6b Session-5 continuation (2026-09-18, post-i284)
+
+**i285 — WP-H3 ritual generation (mourning rites). DONE (`e285xxxx`).**
+`RitualKind::Funeral` now constructed: deaths generate one-shot communal
+mourning rites (pending queue → duodeca executor → `MourningObserved`), and the
+development pass reads them as Agape pressure — the ONLY consumption channel on
+the Allergy decay law, applied to the Grief-routed Q4 (Golden Allergy). Unit
+pins 2 (decay + zero-at-zero), A/B probe calm byte-identical ON/OFF,
+pestilence 5 deaths → 1 rite (kin-bound coverage at N=12). One re-anchor:
+collapse golden@4320 (pestilence shock @1100 now generates a rite; grain
+33.15→28.89 second-order, agent_count unchanged). Dose 0.6 CALIBRATION-PENDING.
+**Next: i286 — WP-H3 second half (norm proposals from reconciled polarity
+clusters).**
+
 ### 6.6 Known boundaries (not plannable until inputs land)
 
 **Session-4 meta-review & gap closure (2026-09-18, commits `e3b0987`→`b05648d`):**

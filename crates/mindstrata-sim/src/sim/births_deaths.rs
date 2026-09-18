@@ -302,8 +302,31 @@ impl Simulation {
                     targets.push(other);
                 }
             }
-            for t in targets {
-                self.pending_grief_targets.push((t, tick_u64));
+            for t in &targets {
+                self.pending_grief_targets.push((*t, tick_u64));
+            }
+
+            // ── Iter-285 (WP-H3): the death also GENERATES a mourning rite —
+            // content production, not just catalyst production. One communal
+            // Funeral rite per death binding the full grief-target set; the
+            // executor fires it at the next duodeca boundary and the
+            // development pass reads it as Agape pressure (the metabolizer
+            // dose for the Q4 Golden-Allergy decay law). No-op when there
+            // are no surviving mourners. Deterministic: queue order =
+            // death order.
+            if !targets.is_empty() {
+                // Production gate (probe A/B): MINDSTRATA_MOURNING_RITES=0
+                // disables generation. Default ON.
+                let rites_on =
+                    std::env::var("MINDSTRATA_MOURNING_RITES").map_or(true, |v| v != "0");
+                if rites_on {
+                    self.ritual_registry
+                        .generate_mourning_rite(crate::culture::MourningRecord {
+                            mourners: targets.clone(),
+                            deceased: idx,
+                            death_tick: tick_u64,
+                        });
+                }
             }
         }
 

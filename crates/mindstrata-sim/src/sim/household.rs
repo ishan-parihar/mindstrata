@@ -1615,6 +1615,44 @@ impl Simulation {
             for cm in &mut self.collective_memory_registry.entries {
                 cm.refresh_derived_views();
             }
+
+            // ── Iter-285 (WP-H3): execute pending mourning rites ──────────
+            // The death pass GENERATES the rite; this is the execution half.
+            // Drained at the same duodeca boundary as recurring rituals so a
+            // generated rite fires at most 12 ticks after its death. Each
+            // execution emits `MourningObserved` — the Agape-metabolizer
+            // channel the development pass reads. Zero-at-zero: empty queue
+            // → no events → no development delta (empty-window identity).
+            // Deterministic: FIFO drain, no RNG.
+            let funerals = self.ritual_registry.drain_pending_funerals(tick_u64);
+            for (_ritual_id, record) in funerals {
+                // Participants: the captured grief-target set, still-live at
+                // execution time (in-place replacement keeps slots valid).
+                let participants: Vec<AgentId> = record
+                    .mourners
+                    .iter()
+                    .filter(|&&m| m < self.agents.len())
+                    .map(|&m| AgentId::new(m as u64))
+                    .collect();
+                if participants.is_empty() {
+                    continue;
+                }
+                // Agape dose: fixed 0.6 per mourner — the metabolizer
+                // strength (CALIBRATION-PENDING(AP3), first estimate from
+                // the CatalystEvent magnitude precedent: Grief carries 1.0;
+                // the communal re-presentation carries 0.6 — strong enough
+                // that one rite halves an allergy quadrant's ~500-tick
+                // natural accumulation, weak enough to not clip at the
+                // 0.75 ceiling).
+                let agape = Fixed::from_f64(0.6);
+                let deceased = AgentId::new(record.deceased as u64);
+                self.events.push(SimEvent::MourningObserved {
+                    participants,
+                    deceased,
+                    agape,
+                    tick,
+                });
+            }
         }
     }
 }

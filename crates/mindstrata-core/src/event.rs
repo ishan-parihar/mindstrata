@@ -80,6 +80,24 @@ pub enum SimEvent {
         tick: Tick,
     },
 
+    /// Iter-285 (WP-H3): a generated mourning rite was executed for a
+    /// specific deceased. The Agape-metabolizer channel: ritualized grief
+    /// re-presents the Grief catalyst communally, driving Q4 (Golden
+    /// Allergy) pressure UP so the Allergy decay law
+    /// (`− decay × pressure × intensity`) consumes pathology faster.
+    /// Emitted by `tick_ritual_executions` when a pending funeral fires.
+    /// Agape pressure per mourner is the ritual's `agape` magnitude.
+    MourningObserved {
+        /// Agents participating in the rite (the grief targets).
+        participants: Vec<AgentId>,
+        /// The death being mourned (slot identity; deceased agent slot is
+        /// replaced in-place by a newborn at death time).
+        deceased: AgentId,
+        /// Agape pressure magnitude in [0,1] — the metabolizer dose.
+        agape: Fixed,
+        tick: Tick,
+    },
+
     // ── Biological / needs ───────────────────────────────────────────
     AgentAte {
         agent: AgentId,

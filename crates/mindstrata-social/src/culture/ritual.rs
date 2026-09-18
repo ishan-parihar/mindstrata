@@ -188,6 +188,26 @@ pub struct RitualRegistry {
     pub rituals: Vec<Ritual>,
     /// Next available ritual id.
     next_id: usize,
+    /// Iter-285 (WP-H3): deaths enqueue one-shot Funeral rites here; the
+    /// executor fires them on the next duodeca boundary. Pure data +
+    /// deterministic order (enqueued in death order, drained FIFO).
+    pending_funerals: Vec<MourningRecord>,
+}
+
+/// Iter-285 (WP-H3): one pending mourning rite — the ritual FORMS at death
+/// (content generation) and is EXECUTED at the next communal gathering
+/// (duodeca boundary). `mourners` are the grief targets captured while the
+/// deceased's references were still live (spouse + co-resident kin, same
+/// set the GriefStruck re-emission uses); the deceased slot is provenance
+/// only (replaced in-place by a newborn at death time).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MourningRecord {
+    /// Grief targets who will attend the rite.
+    pub mourners: Vec<usize>,
+    /// Deceased agent slot (provenance context).
+    pub deceased: usize,
+    /// Tick the death occurred.
+    pub death_tick: u64,
 }
 
 impl RitualRegistry {
@@ -217,6 +237,49 @@ impl RitualRegistry {
     /// Number of active rituals.
     pub fn active_count(&self) -> usize {
         self.rituals.iter().filter(|r| r.active).count()
+    }
+
+    /// Iter-285 (WP-H3): a death generates a mourning rite — the ritual
+    /// forms as an Agape-metabolizer vehicle binding the grief referent
+    /// (the deceased). One-shot (`interval 0`), `last_occurrence = tick`
+    /// so `is_due` (interval-0 → false) never double-fires it from the
+    /// registry path; execution goes through the pending queue instead.
+    /// Deterministic: no RNG. The rite binds the FULL grief-target set
+    /// (one communal rite per death, not one per mourner).
+    pub fn generate_mourning_rite(&mut self, record: MourningRecord) {
+        self.pending_funerals.push(record);
+    }
+
+    /// Iter-285: drain all pending mourning rites — the executor's FIFO
+    /// intake at a duodeca boundary. Each record becomes a one-shot Funeral
+    /// ritual with `last_occurrence = tick` (so the registry's `is_due`
+    /// path — interval-0 → false — can never double-fire it). Returns the
+    /// execution records `(ritual_id, record)`; the caller emits
+    /// `MourningObserved` per rite.
+    pub fn drain_pending_funerals(&mut self, tick: u64) -> Vec<(usize, MourningRecord)> {
+        std::mem::take(&mut self.pending_funerals)
+            .into_iter()
+            .map(|record| {
+                let ritual = Ritual::new(
+                    0,
+                    RitualKind::Funeral,
+                    "Mourning Rite".to_string(),
+                    record.mourners.first().copied().unwrap_or(record.deceased),
+                    Fixed::from_f64(0.7),
+                    Fixed::from_f64(0.8),
+                    Fixed::from_f64(0.0),
+                    0,
+                    tick,
+                );
+                let id = self.register(ritual);
+                (id, record)
+            })
+            .collect()
+    }
+
+    /// Iter-285: pending queue length (observability / probes).
+    pub fn pending_funerals(&self) -> usize {
+        self.pending_funerals.len()
     }
 }
 

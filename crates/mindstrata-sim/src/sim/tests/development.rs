@@ -551,3 +551,95 @@ fn contradictory_evidence_refutes_living_claims() {
         "same-tick evidence is the claim's own origin, not a contradiction"
     );
 }
+
+// ── Iter-285 (WP-H3): mourning rites as Agape-metabolizer vehicles ─────
+
+/// The metabolizer channel: a `MourningObserved` event in the window drives
+/// Q4 (Golden Allergy — the Grief-routed quadrant) DOWN via the Allergy
+/// decay law (`− decay × pressure × intensity`), while an identical agent
+/// without the rite keeps its absence-driven accumulation. Identical RNG
+/// (none — the sweep is pure), only the event differs. Zero-at-zero:
+/// an rite with `agape = 0` must be a no-op.
+#[test]
+fn mourning_rite_decays_golden_allergy() {
+    let mut sim = make_sim(42);
+    let tick = sim.clock.tick();
+    // Prime Q4 on two agents identically (same step history → same state).
+    let mut prime = mindstrata_development::dynamics::QuadrantState::neutral();
+    // ~80 absence-growth ticks toward a visible intensity.
+    for _ in 0..80 {
+        prime = prime.step(
+            mindstrata_development::dynamics::Metabolism::Allergy,
+            0.0,
+            &mindstrata_development::dynamics::OperatorParams {
+                growth: 0.03,
+                decay: 0.025,
+                ceiling: 0.75,
+            },
+        );
+    }
+    let primed = prime.intensity;
+    assert!(
+        primed > 0.05,
+        "priming must produce measurable intensity, got {primed}"
+    );
+    for idx in 0..2 {
+        sim.agents[idx].development.pathology.golden_allergy = prime;
+    }
+
+    // Agent 0 attends the rite; agent 1 does not (control).
+    let rite = [mindstrata_core::event::SimEvent::MourningObserved {
+        participants: vec![mindstrata_core::id::AgentId::new(0)],
+        deceased: mindstrata_core::id::AgentId::new(9),
+        agape: mindstrata_core::fixed::Fixed::from_f64(0.6),
+        tick,
+    }];
+    crate::systems::development::system_development(&mut sim.agents, &rite);
+
+    let treated = sim.agents[0].development.pathology.golden_allergy.intensity;
+    let control = sim.agents[1].development.pathology.golden_allergy.intensity;
+    assert!(
+        treated < primed,
+        "rite must decay Q4: treated {treated} < primed {primed}"
+    );
+    assert!(
+        control > primed,
+        "control keeps absence-growth: {control} > {primed}"
+    );
+}
+
+/// Zero-at-zero on the new channel: a rite with agape = 0 leaves the
+/// attendee in the SAME state as an agent with no rite at all (the
+/// absence-driven always-step still runs — that is the quadrant's own
+/// law, not the rite's doing). The rite also must not press the grief
+/// altitude line (a rite is not an appraisal — no uptake, no claim).
+#[test]
+fn mourning_rite_zero_agape_is_noop() {
+    let mut sim = make_sim(42);
+    let tick = sim.clock.tick();
+    let alt_before = sim.agents[3].development.altitudes[0];
+    let rite = [mindstrata_core::event::SimEvent::MourningObserved {
+        participants: vec![mindstrata_core::id::AgentId::new(3)],
+        deceased: mindstrata_core::id::AgentId::new(9),
+        agape: mindstrata_core::fixed::Fixed::ZERO,
+        tick,
+    }];
+    crate::systems::development::system_development(&mut sim.agents, &rite);
+    let attended = sim.agents[3].development.pathology.golden_allergy.intensity;
+    let control = sim.agents[4].development.pathology.golden_allergy.intensity;
+    assert_eq!(
+        attended, control,
+        "zero-agape rite ≡ no rite (absence step is the quadrant's own law)"
+    );
+    // And the rite must not press the grief altitude line (a rite is not
+    // an appraisal — no altitude uptake, no polarity claim).
+    let alt = sim.agents[3].development.altitudes[0];
+    assert_eq!(
+        alt, alt_before,
+        "rite must not press the grief altitude line"
+    );
+    assert!(
+        sim.agents[3].polarity_claims.is_empty(),
+        "rite must not project a polarity claim"
+    );
+}

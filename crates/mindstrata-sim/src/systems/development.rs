@@ -33,6 +33,13 @@ fn map_event(ev: &SimEvent) -> Option<(AgentId, CatalystKind, f64, bool)> {
         // exemplar; the widow-heuristic emission discipline bounds it to
         // genuinely-tied survivors.
         SimEvent::GriefStruck { mourner, .. } => Some((mourner, CatalystKind::Grief, 1.0, false)),
+        // NOTE (Iter-285, WP-H3): `MourningObserved` is deliberately NOT a
+        // catalyst here. It is the Agape-METABOLIZER read-side handled by a
+        // dedicated sweep in `system_development` — pressure that DECAYS the
+        // Grief-routed quadrant (Q4) rather than growing it, with no
+        // altitude press and no polarity-claim projection (a rite is not an
+        // appraisal). Routing it through the catalyst fan-out would
+        // re-raise the grief altitude line and re-emit a claim per mourner.
         SimEvent::MarriageFormed {
             spouse_a, spouse_b, ..
         } => {
@@ -151,8 +158,23 @@ pub fn system_development(agents: &mut [AgentBundle], events: &[SimEvent]) {
     }
     let catalysts = collect_catalysts(events);
     if catalysts.is_empty() {
-        return;
+        // Iter-285 (WP-H3): no catalysts, but a mourning rite in the window
+        // still drives the Agape-metabolizer sweep below — fall through
+        // instead of returning (zero-at-zero holds: no rites → no sweep).
+        if !events
+            .iter()
+            .any(|ev| matches!(ev, SimEvent::MourningObserved { .. }))
+        {
+            return;
+        }
     }
+
+    // Per-subject accumulation: gate then apply in event order (deterministic).
+    // Track which Allergy quadrants received their trigger this tick, so
+    // the absence-driven growth pass below can step the ones that are
+    // already active but got no trigger this tick.
+    let mut triggered_q2 = vec![false; agents.len()];
+    let mut triggered_q4 = vec![false; agents.len()];
 
     // Frozen engine components — CALIBRATION-PENDING values via pending().
     let gate = Gate::pending();
@@ -178,6 +200,45 @@ pub fn system_development(agents: &mut [AgentBundle], events: &[SimEvent]) {
         ceiling: 0.75,
     };
 
+    // ── Iter-285 (WP-H3): Agape-metabolizer sweep ──────────────────────
+    // Mourning rites are the wave brief's "ritual forms generated as
+    // Agape-metabolizer vehicles (mourning rites bind grief referents)".
+    // The Allergy step law is
+    //     next = intensity + growth·0.1·headroom·(1−pressure)
+    //                        − decay·pressure·intensity
+    // so pressure is the ONLY consumption channel on an Allergy quadrant:
+    // absence GROWS it. A rite re-presents the Grief catalyst communally
+    // with pressure `agape ∈ [0,1]` — one dose at 0.6 drives decay
+    // −0.025·0.6·I = −0.015·I on Q4 while suppressing the same tick's
+    // absence-growth. The rite does NOT press the grief altitude line and
+    // does NOT project a polarity claim (a rite is not an appraisal).
+    // Deterministic: per-participant in event order; no RNG. Zero-at-zero:
+    // no MourningObserved events → this sweep is a no-op.
+    for ev in events {
+        if let SimEvent::MourningObserved {
+            participants,
+            agape,
+            ..
+        } = ev
+        {
+            let p = agape.to_f64().clamp(0.0, 1.0);
+            if p == 0.0 {
+                continue;
+            }
+            for subject in participants {
+                let idx = subject.as_u64() as usize;
+                if idx >= agents.len() {
+                    continue;
+                }
+                let path = &mut agents[idx].development.pathology;
+                path.golden_allergy = path.golden_allergy.step(Metabolism::Allergy, p, &params_q4);
+                // Mark the Q4 trigger so the absence-driven pass below
+                // does not double-step the quadrant on rite ticks.
+                triggered_q4[idx] = true;
+            }
+        }
+    }
+
     // Stable line order for altitude indexing.
     let line_count = mindstrata_development::line::all_lines().count();
     // Ensure every agent's altitude vec is sized (v12 compat path yields
@@ -188,12 +249,6 @@ pub fn system_development(agents: &mut [AgentBundle], events: &[SimEvent]) {
         }
     }
 
-    // Per-subject accumulation: gate then apply in event order (deterministic).
-    // Track which Allergy quadrants received their trigger this tick, so
-    // the absence-driven growth pass below can step the ones that are
-    // already active but got no trigger this tick.
-    let mut triggered_q2 = vec![false; agents.len()];
-    let mut triggered_q4 = vec![false; agents.len()];
     for (subject, kind, magnitude, _major) in catalysts {
         let idx = subject.as_u64() as usize;
         if idx >= agents.len() {
