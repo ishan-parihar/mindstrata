@@ -386,6 +386,75 @@ impl Snapshot {
     }
 }
 
+/// WP-K (Era V, i290): KosmOS-frontmatter export of the village holon's
+/// `stage_lines` map. Doctrine R7: "altitude claims cite the scale — any
+/// stage coordinate in snapshots/chronicles resolves to ladder slugs; no
+/// ad-hoc stage names." Every collective line's shadow stage is therefore
+/// exported with BOTH the numeric stage and the vendored canon stage slug
+/// (`canon_gen::tables::coupling`), plus the observed cell's depth status so
+/// consumers can distinguish ratified cells from vault drafts. Read-only:
+/// derived on demand from the live `CollectiveField`, serialized to nothing
+/// (postcard snapshot bytes untouched — golden/snapshot suites unaffected).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct StageLineEntry {
+    /// Vendored line slug (the map key in KosmOS frontmatter).
+    pub line: String,
+    /// Vault `kind` of the line (bucket-resolution context).
+    pub kind: String,
+    /// Quadrant tag (UL/UR/LL/LR) — the tetra-quadrantic trace (R6).
+    pub quadrant: String,
+    /// Shadow stage (continuous; integer part is the ladder rung).
+    pub stage: f64,
+    /// Canon stage slug at `ceil(stage)` (R7 citation); None above the
+    /// observed cells (draft-stage lines cap at the vault's observed cells).
+    pub stage_slug: Option<String>,
+    /// Canonical altitude color of that rung.
+    pub altitude: Option<String>,
+    /// Vault depth status of the cited cell.
+    pub depth_status: Option<String>,
+    /// Integrated press (the line's current pressure integral).
+    pub press: f64,
+    /// Fulfillment EMA (the line's satisfaction signal).
+    pub fulfillment: f64,
+}
+
+/// Export the village holon's full `stage_lines` map in registry order.
+#[must_use]
+pub fn export_stage_lines(
+    field: &mindstrata_development::collective::CollectiveField,
+) -> Vec<StageLineEntry> {
+    use mindstrata_development::canon_gen::tables;
+    field
+        .lines
+        .iter()
+        .enumerate()
+        .filter_map(|(i, l)| {
+            let slug = field_line_slug(i)?;
+            let entry = tables::line(slug);
+            let rung = (l.stage.ceil() as u8).clamp(1, 17);
+            let cell = tables::coupling(slug, rung);
+            Some(StageLineEntry {
+                line: slug.to_string(),
+                kind: entry.map_or("unknown", |e| e.kind).to_string(),
+                quadrant: entry.map_or("?", |e| e.quadrant).to_string(),
+                stage: l.stage,
+                stage_slug: cell.map(|c| c.stage_slug.to_string()),
+                altitude: cell.map(|c| c.altitude.to_string()),
+                depth_status: cell.map(|c| c.depth_status.to_string()),
+                press: l.press,
+                fulfillment: l.fulfillment,
+            })
+        })
+        .collect()
+}
+
+/// The vendored slug for the field's `i`-th line (registry order contract).
+fn field_line_slug(i: usize) -> Option<&'static str> {
+    mindstrata_development::collective::CollectiveField::line_slugs()
+        .get(i)
+        .map(|id| id.slug())
+}
+
 /// A summary of a snapshot for display purposes.
 #[derive(Debug, Clone)]
 pub struct SnapshotSummary {
@@ -628,5 +697,47 @@ mod tests {
             MigrateV12ToV13::to_version(),
             MigrateV12ToV13::from_version() + 1
         );
+    }
+}
+
+#[cfg(test)]
+mod wpk_tests {
+    use super::*;
+
+    /// WP-K (i290, R7): the stage_lines export cites the canon scale — every
+    /// entry's stage_slug/altitude resolve through the vendored coupling
+    /// table at ceil(stage), kind/quadrant come from the line registry, and
+    /// the line set is exactly the 29 collective lines in registry order.
+    /// Read-only: golden/snapshot suites are unaffected (nothing serialized).
+    #[test]
+    fn stage_lines_export_cites_canon_scale() {
+        let field = mindstrata_development::collective::CollectiveField::neutral();
+        let entries = export_stage_lines(&field);
+        assert_eq!(
+            entries.len(),
+            mindstrata_development::collective::COLLECTIVE_LINE_COUNT,
+            "one entry per collective line"
+        );
+        // Registry-order determinism: the first line is the same slug the
+        // field's own slug list reports.
+        let slugs = mindstrata_development::collective::CollectiveField::line_slugs();
+        assert_eq!(entries[0].line, slugs[0].slug());
+        // Every entry at the founder neutral cites stage-1 canon data.
+        for e in &entries {
+            assert!((e.stage - 1.0).abs() < 1e-9, "founder stage is 1.0");
+            assert!(
+                e.stage_slug.is_some(),
+                "stage-1 cell must exist in the vault for line {}",
+                e.line
+            );
+            assert!(!e.kind.is_empty());
+            assert!(!e.quadrant.is_empty());
+            assert_eq!(e.press, 0.0);
+            assert_eq!(e.fulfillment, 0.0);
+        }
+        // JSON frontmatter round-trip (the export format).
+        let json = serde_json::to_string(&entries).expect("serialize");
+        assert!(json.contains("\"line\""));
+        assert!(json.contains("\"stage_slug\""));
     }
 }

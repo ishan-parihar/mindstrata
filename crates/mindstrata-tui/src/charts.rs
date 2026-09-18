@@ -141,6 +141,37 @@ pub fn village_panel(history: &[MetricsSnapshot], width: usize) -> String {
     format!("{lineage}\n{emotion}\nagents {agents}  grain {grain:.1}")
 }
 
+/// WP-K (i290, R6): the four pathology-quadrant lanes — one per dark/golden
+/// × addiction/allergy quadrant — over the metric history. Each lane uses
+/// `Band::UnitInterval` (intensities are clamped [0, ceiling ≤ 1]).
+/// Empty history renders the standard `(no history)` sentinel per lane.
+/// Deterministic pure read; caller owns the refresh slice.
+pub fn pathology_panel(history: &[MetricsSnapshot], width: usize) -> String {
+    type QuadGetter = fn(&MetricsSnapshot) -> f64;
+    let quad: [(&str, QuadGetter); 4] = [
+        ("Q1 dark-add", |m: &MetricsSnapshot| m.q1_dark_addiction),
+        ("Q2 dark-all", |m: &MetricsSnapshot| m.q2_dark_allergy),
+        ("Q3 gold-add", |m: &MetricsSnapshot| m.q3_golden_addiction),
+        ("Q4 gold-all", |m: &MetricsSnapshot| m.q4_golden_allergy),
+    ];
+    let lanes: Vec<String> = quad
+        .iter()
+        .map(|(name, get)| {
+            lane(
+                &Series {
+                    name,
+                    unit: "",
+                    band: Band::UnitInterval,
+                    samples: history.iter().map(get).collect(),
+                },
+                width,
+            )
+        })
+        .collect();
+    let stage = history.last().map_or(0.0, |m| m.collective_stage_max);
+    format!("{}\nholon max stage {stage:.1}", lanes.join("\n"))
+}
+
 /// Multi-row line chart: `height` rows × `width` cols raster of the series
 /// shape (tail window, column-strided when dense). Deterministic pure
 /// f64 → chars; one marker per column (pure line semantics).
@@ -337,5 +368,37 @@ mod tests {
         assert!(empty.contains("agents 0"));
         // Deterministic across calls — refresh path is pure.
         assert_eq!(panel, village_panel(&hist, 10));
+    }
+}
+
+#[cfg(test)]
+mod wpk_tests {
+    use super::*;
+
+    /// WP-K (i290, R6): the pathology panel renders four lanes + the holon
+    /// stage line, deterministic over a synthetic history; empty history
+    /// renders the no-history sentinel per lane without panicking.
+    #[test]
+    fn pathology_panel_renders_four_quadrant_lanes_and_stage() {
+        let history: Vec<MetricsSnapshot> = (0..5)
+            .map(|i| MetricsSnapshot {
+                tick: i,
+                q1_dark_addiction: 0.1 + i as f64 * 0.01,
+                q2_dark_allergy: 0.2,
+                q3_golden_addiction: 0.03,
+                q4_golden_allergy: 0.3,
+                collective_stage_max: 2.0,
+                ..Default::default()
+            })
+            .collect();
+        let panel = pathology_panel(&history, 24);
+        assert!(panel.contains("Q1 dark-add"), "lane 1 present");
+        assert!(panel.contains("Q2 dark-all"), "lane 2 present");
+        assert!(panel.contains("Q3 gold-add"), "lane 3 present");
+        assert!(panel.contains("Q4 gold-all"), "lane 4 present");
+        assert!(panel.contains("holon max stage 2.0"));
+        // Empty history: sentinel, not a panic.
+        let empty = pathology_panel(&[], 24);
+        assert!(empty.contains("no history"));
     }
 }

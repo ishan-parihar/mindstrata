@@ -106,18 +106,35 @@ pub struct MetricsSnapshot {
     pub trait_variance: f64,
     /// Mean genetic relatedness over active kinship edges (Iteration 262).
     pub mean_kinship: f64,
+    /// WP-K (i290, R6 per-quadrant trace): population-mean Q1 dark-addiction
+    /// (Threat-routed deficit fixation) intensity.
+    #[serde(default)]
+    pub q1_dark_addiction: f64,
+    /// WP-K: population-mean Q2 dark-allergy (Transgression-routed recoil).
+    #[serde(default)]
+    pub q2_dark_allergy: f64,
+    /// WP-K: population-mean Q3 golden-addiction (Bond-routed grasping).
+    #[serde(default)]
+    pub q3_golden_addiction: f64,
+    /// WP-K: population-mean Q4 golden-allergy (Grief-routed, rite-moderated).
+    #[serde(default)]
+    pub q4_golden_allergy: f64,
+    /// WP-K: population-mean deepest collective-line stage — the village
+    /// holon's one-number development trace (longitudinal chart lane).
+    #[serde(default)]
+    pub collective_stage_max: f64,
 }
 
 impl MetricsSnapshot {
     /// §5.1/§19: CSV header for exporting metrics for analysis.
     pub fn csv_header() -> &'static str {
-        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_trauma_load,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,gini,avg_wealth,median_wealth,total_trades,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds,clan_count,clan_relation_count,cult_count,noosphere_nodes,noosphere_zeitgeist,collective_memory_count,patronage_relation_count,family_count,avg_best_skill,fear_p90,joy_p90,trait_variance,mean_kinship"
+        "tick,avg_hunger,avg_thirst,avg_fatigue,avg_valence,avg_joy,avg_fear,total_grain,total_water,event_count,journal_len,agent_count,avg_stress,avg_health,avg_trauma_load,avg_relationship_trust,avg_relationship_quality,active_meme_count,polarization_index,gini,avg_wealth,median_wealth,total_trades,household_count,kinship_edge_count,avg_agent_tier,total_active_feuds,clan_count,clan_relation_count,cult_count,noosphere_nodes,noosphere_zeitgeist,collective_memory_count,patronage_relation_count,family_count,avg_best_skill,fear_p90,joy_p90,trait_variance,mean_kinship,q1_dark_addiction,q2_dark_allergy,q3_golden_addiction,q4_golden_allergy,collective_stage_max"
     }
 
     /// §5.1/§19: One CSV line for this snapshot.
     pub fn to_csv_line(&self) -> String {
         format!(
-            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             self.tick,
             self.avg_hunger, self.avg_thirst, self.avg_fatigue,
             self.avg_valence, self.avg_joy, self.avg_fear,
@@ -139,6 +156,9 @@ impl MetricsSnapshot {
             self.joy_p90,
             self.trait_variance,
             self.mean_kinship,
+            self.q1_dark_addiction, self.q2_dark_allergy,
+            self.q3_golden_addiction, self.q4_golden_allergy,
+            self.collective_stage_max,
         )
     }
 }
@@ -433,6 +453,24 @@ impl Simulation {
                 act.iter().map(|e| e.coefficient.to_f64()).sum::<f64>() / act.len() as f64
             }
         };
+        // WP-K (i290, R6): per-quadrant pathology means + holon stage.
+        let q_acc = |get: fn(&crate::sim::AgentBundle) -> f64| {
+            if self.agents.is_empty() {
+                0.0
+            } else {
+                self.agents.iter().map(get).sum::<f64>() / self.agents.len() as f64
+            }
+        };
+        let q1_dark_addiction = q_acc(|a| a.development.pathology.dark_addiction.intensity);
+        let q2_dark_allergy = q_acc(|a| a.development.pathology.dark_allergy.intensity);
+        let q3_golden_addiction = q_acc(|a| a.development.pathology.golden_addiction.intensity);
+        let q4_golden_allergy = q_acc(|a| a.development.pathology.golden_allergy.intensity);
+        let collective_stage_max = self
+            .collective_field
+            .lines
+            .iter()
+            .map(|l| l.stage)
+            .fold(0.0_f64, f64::max);
 
         MetricsSnapshot {
             tick: self.current_tick().as_u64(),
@@ -479,6 +517,11 @@ impl Simulation {
             joy_p90,
             trait_variance,
             mean_kinship,
+            q1_dark_addiction,
+            q2_dark_allergy,
+            q3_golden_addiction,
+            q4_golden_allergy,
+            collective_stage_max,
         }
     }
 }
