@@ -159,6 +159,42 @@ pub(crate) fn collect_catalysts(events: &[SimEvent]) -> Vec<(AgentId, CatalystKi
 /// start (read-only); only `agents[*].development` is mutated.
 /// Zero-at-zero: empty `events` or empty catalysts produce zero deltas.
 /// Hooked after birth mechanics so all demographic events are visible.
+/// Production per-quadrant operator params (IC-5 #3 spec midpoints),
+/// exposed for calibration probes and pins: (Q1 dark-add, Q2 dark-all,
+/// Q3 golden-add, Q4 golden-all). Keep in lock-step with the locals in
+/// [`system_development`] — the Q4 local reads its tuple slot directly.
+pub const PROD_QUADRANT_PARAMS: (
+    OperatorParams,
+    OperatorParams,
+    OperatorParams,
+    OperatorParams,
+) = (
+    OperatorParams {
+        growth: 0.06,
+        decay: 0.015,
+        ceiling: 0.80,
+    },
+    OperatorParams {
+        growth: 0.045,
+        decay: 0.022,
+        ceiling: 0.80,
+    },
+    OperatorParams {
+        growth: 0.07,
+        decay: 0.015,
+        ceiling: 0.85,
+    },
+    OperatorParams {
+        growth: 0.03,
+        decay: 0.025,
+        ceiling: 0.75,
+    },
+);
+
+/// The ratified mourning-rite Agape metabolizer dose (i292 sweep; see the
+/// emitter comment in `household.rs` for the measured/old/mechanism record).
+pub const MOURNING_AGAPE_DOSE: f64 = 0.6;
+
 pub fn system_development(agents: &mut [AgentBundle], events: &[SimEvent]) {
     if events.is_empty() {
         return;
@@ -185,7 +221,9 @@ pub fn system_development(agents: &mut [AgentBundle], events: &[SimEvent]) {
 
     // Frozen engine components — CALIBRATION-PENDING values via pending().
     let gate = Gate::pending();
-    // Per-quadrant params (IC-5 #3, spec midpoints; Allergy 0.1x scaled in dynamics.rs for absence)
+    // Per-quadrant params (IC-5 #3, spec midpoints; Allergy 0.1x scaled in dynamics.rs for absence).
+    // Values mirrored into the pub `PROD_QUADRANT_PARAMS` consts below so
+    // calibration probes/pins read the live production numbers.
     let params_q1 = OperatorParams {
         growth: 0.06,
         decay: 0.015,
@@ -202,9 +240,9 @@ pub fn system_development(agents: &mut [AgentBundle], events: &[SimEvent]) {
         ceiling: 0.85,
     };
     let params_q4 = OperatorParams {
-        growth: 0.03,
-        decay: 0.025,
-        ceiling: 0.75,
+        growth: PROD_QUADRANT_PARAMS.3.growth,
+        decay: PROD_QUADRANT_PARAMS.3.decay,
+        ceiling: PROD_QUADRANT_PARAMS.3.ceiling,
     };
 
     // ── Iter-285 (WP-H3): Agape-metabolizer sweep ──────────────────────
@@ -619,8 +657,15 @@ pub fn system_norm_proposal(
             continue;
         }
         // Strength scales with consensus breadth (quorum/n_agents),
-        // bounded modest — a proposal starts weak and grows through the
+        // bounded — a proposal starts weak and grows through the
         // SAME reinforcement channel as every other norm (§12.5).
+        // i292 RATIFIED: cap 0.6 measured binding in vivo — the sole
+        // natural proposal in the 50K drought census carried quorum 8/12
+        // and pinned exactly at 0.6 (the cap, not consensus, set its
+        // strength; i292_dose_calibration A4). Kept: caps the founding
+        // dose of a brand-new norm at majority breadth, leaving headroom
+        // for the reinforcement channel to grow it — one-norm-per-slot
+        // dedup means an over-strong founder can never be re-scaled down.
         let strength = (quorum as f64 / n_agents.max(1) as f64).min(0.6);
         norms.register(mindstrata_institutions::norms::Norm {
             id: norms.norms().iter().map(|n| n.id).max().unwrap_or(0) + 1,

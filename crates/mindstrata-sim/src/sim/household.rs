@@ -1638,13 +1638,17 @@ impl Simulation {
                     continue;
                 }
                 // Agape dose: fixed 0.6 per mourner — the metabolizer
-                // strength (CALIBRATION-PENDING(AP3), first estimate from
-                // the CatalystEvent magnitude precedent: Grief carries 1.0;
-                // the communal re-presentation carries 0.6 — strong enough
-                // that one rite halves an allergy quadrant's ~500-tick
-                // natural accumulation, weak enough to not clip at the
-                // 0.75 ceiling).
-                let agape = Fixed::from_f64(0.6);
+                // strength. i292 RATIFIED (was CALIBRATION-PENDING(AP3)
+                // first estimate since i285): closed-law sweep over the
+                // production Q4 params (growth 0.03 / decay 0.025 /
+                // ceiling 0.75) at the i285-measured quadrant levels —
+                // per-rite decay −0.002…−0.010 (0.5–1.5% of I) at 0.6,
+                // inside the designed 0.5–3% metabolizer band; matches
+                // i285's in-vivo village-level −0.019. Dose 0.9 exceeds
+                // the band's upper guard (single-rite override risk);
+                // dose 0.3 halves the effect to −0.0004…−0.005, drifting
+                // toward the fixed-4 truncation floor. 0.6 stays.
+                let agape = Fixed::from_f64(crate::systems::development::MOURNING_AGAPE_DOSE);
                 let deceased = AgentId::new(record.deceased as u64);
                 self.events.push(SimEvent::MourningObserved {
                     participants,

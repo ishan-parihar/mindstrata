@@ -856,3 +856,89 @@ fn norm_violated_projects_justice_norm_claim() {
         "Transgression must project a (Symbolic, Event) Norm claim on the justice line"
     );
 }
+
+// ── i292: dose-calibration ratification pins ──────────────────────────────
+
+/// A3 ratification pin: the production Agape dose consumes a measurable
+/// share of the attendee's Q4 per rite (designed metabolizer band
+/// 0.5–3% of I, i292 closed-law sweep) while staying strictly below the
+/// single-rite override guard (5%). Reads the live production params —
+/// if either the dose or Q4 params drift, the measured fraction moves
+/// and this pin names the mechanism.
+#[test]
+fn mourning_rite_agape_dose_measures_in_metabolizer_band() {
+    use crate::systems::development::{MOURNING_AGAPE_DOSE, PROD_QUADRANT_PARAMS};
+    let q4 = &PROD_QUADRANT_PARAMS.3;
+    for i0 in [0.2_f64, 0.3, 0.5, 0.7] {
+        let q = mindstrata_development::dynamics::QuadrantState { intensity: i0 };
+        let stepped = q.step(
+            mindstrata_development::dynamics::Metabolism::Allergy,
+            MOURNING_AGAPE_DOSE,
+            q4,
+        );
+        let frac = (stepped.intensity - i0) / i0;
+        assert!(
+            (-0.03..=-0.005).contains(&frac),
+            "per-rite decay fraction {frac:.5} at I={i0} outside the 0.5–3% band \
+             (dose {MOURNING_AGAPE_DOSE} vs Q4 params growth={} decay={} ceiling={})",
+            q4.growth,
+            q4.decay,
+            q4.ceiling
+        );
+    }
+}
+
+/// A4 ratification pin: the proposed-norm strength cap 0.6 binds at
+/// majority breadth (8/12 = 0.67 > 0.6 caps to exactly 0.6) and leaves
+/// sub-cap consensus untouched (5/12 ≈ 0.417 < 0.6 passes through raw).
+#[test]
+fn norm_proposal_cap_binds_above_and_passes_below_majority_breadth() {
+    use mindstrata_development::polarity::{GrossReferent, PolarityState, SubtleClaim};
+    let build = |quorum: usize| -> (
+        Simulation,
+        Vec<mindstrata_development::polarity::ThreeRealmClaim>,
+    ) {
+        let mut sim = make_sim(42);
+        for line in sim.collective_field.lines.iter_mut() {
+            line.stage = 4.5;
+        }
+        let cog = mindstrata_development::line::LineId::new("cognitive").expect("registered");
+        let synthesis = mindstrata_development::polarity::ThreeRealmClaim {
+            domain: mindstrata_development::polarity::CausalDomain::Material,
+            referent: GrossReferent::Event,
+            claim: SubtleClaim::Value,
+            line: cog,
+            polarity: PolarityState::Integrated,
+            created_tick: 100,
+        };
+        let mut tension = synthesis;
+        tension.claim = SubtleClaim::Fact;
+        tension.polarity = PolarityState::ActiveTension;
+        sim.agents[0].polarity_claims.push(synthesis);
+        for a in sim.agents.iter_mut().take(quorum).skip(1) {
+            a.polarity_claims.push(tension);
+        }
+        (sim, Vec::new())
+    };
+    // 8/12 above the cap: capped exactly at 0.6.
+    let (mut sim, _) = build(8);
+    let proposed = crate::systems::development::system_norm_proposal(
+        &sim.agents,
+        &sim.collective_field,
+        &mut sim.norms,
+        sim.agents.len(),
+    );
+    assert_eq!(proposed, 1, "majority consensus must propose");
+    let capped = sim
+        .norms
+        .norms()
+        .iter()
+        .find(|n| n.name.contains("[proposed:cognitive/r2]"))
+        .expect("norm present")
+        .strength
+        .to_f64();
+    assert_eq!(
+        capped, 0.6,
+        "quorum 8/12 must cap at exactly 0.6, got {capped}"
+    );
+}
