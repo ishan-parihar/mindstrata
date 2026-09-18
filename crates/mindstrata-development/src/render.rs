@@ -48,6 +48,9 @@ pub struct LoreLine {
     pub line_slug: String,
     /// The polarity stage of the generating claim (the narrative weight).
     pub polarity: PolarityTag,
+    /// WP-L (i291): ray-density attribution from the D5 lens — altitude
+    /// flavor for the chronicle tint, never a mechanism input.
+    pub ray: &'static str,
 }
 
 /// Chronicle-facing polarity tag — mirrors [`crate::polarity::PolarityState`]
@@ -118,6 +121,70 @@ fn line_fnv(slug: &str) -> u64 {
     h
 }
 
+/// WP-L (i291): altitude→ray density lens, chronicle rendering ONLY.
+///
+/// Doctrine D5 (`KOSMOS/lenses/rays.md`, via AP3 02-theory-map §1): "a lens,
+/// never a place — diagnosis runs on the neutral altitude scale." This table
+/// is flavor attribution for rendered text; it is never read by any sim
+/// mechanism, gate, or multiplier.
+///
+/// Source: the vendored vault's own per-cell `ray:` frontmatter, tallied by
+/// stage rung (50 cells per rung × 17 rungs). Consensus per rung:
+/// 1–3 Red, 4 Green-plural, 5–7 Blue, 8–11 Indigo, 12–15 Violet, 16 Kosmic,
+/// 17 Unity. Ties at rungs 3/4 resolve by the density ladder's own climb
+/// order (3→Red as the closing egocentric rung, 4→Green as the first
+/// plural rung). Provisional until `lenses/rays.md` itself is vendored —
+/// the tallies above are the in-repo evidence.
+const RAY_DENSITY_BY_STAGE: [&str; 17] = [
+    "Red-Ray (1st)",
+    "Red-Ray (1st)",
+    "Red-Ray (1st)",
+    "Green-Ray (4th)",
+    "Blue-Ray (5th-In)",
+    "Blue-Ray (5th-Out)",
+    "Blue-Ray (5th-Ext)",
+    "Indigo-Ray (6th-Teal)",
+    "Indigo-Ray (6th-Turq)",
+    "Indigo-Ray (6th-Ext)",
+    "Indigo-Ray (6th-Master)",
+    "Violet-Ray (7th)",
+    "Violet-Ray+ (Post-Harvest)",
+    "Violet-Ray (Teal)",
+    "Violet-Ray (Turquoise)",
+    "Kosmic-Ray (Indigo)",
+    "Unity-Ray (Violet)",
+];
+
+/// The unattuned reading: altitude-shadow 0.0 means the line has not yet
+/// produced any live development signal. The lens renders nothing — D5
+/// honesty (a neutral field must not claim a ray attribution).
+const RAY_DENSITY_UNATTUNED: &str = "(unattuned)";
+
+/// Lens lookup: stage rung 1..=17 → ray density string.
+/// Stages outside 1..=17 clamp to the nearest rung.
+#[must_use]
+pub fn ray_density_for_stage(stage: u8) -> &'static str {
+    RAY_DENSITY_BY_STAGE[usize::from(stage.clamp(1, 17)) - 1]
+}
+
+/// Map one agent's line altitude shadow to the stage rung the lens reads.
+///
+/// The per-agent shadows are continuous [0,1] development accumulators
+/// (`DevelopmentFieldState::altitudes`), not rung units — a shadow of 0.0 is
+/// the unattuned reading and maps to rung 0; any positive progress reads as
+/// rung 1. Full-scale conversion (shadow × 17) awaits an attested cross-scale
+/// contract between personal shadows and the 17-rung ladder; the lens stays
+/// honest in the meantime (the mapping is rendering-only, so the conversion
+/// is a flavor upgrade path, not a mechanical debt).
+#[must_use]
+pub fn stage_of_agent_altitude(shadow: f64) -> u8 {
+    if shadow <= 0.0 {
+        0
+    } else {
+        1
+    }
+}
+
 /// Render one claim as lore: legality-gated, cite-first, deterministic.
 ///
 /// Template selection: `SAMPLE_TEMPLATES[(line_fnv(slug) % 2) as usize]` —
@@ -125,10 +192,29 @@ fn line_fnv(slug: &str) -> u64 {
 /// same cited template (a village's telling of a claim is stable across
 /// renders; two claims on different lines may tell differently).
 ///
+/// `ray_of` is the WP-L D5 lens hook: given the claim's line slug it returns
+/// the ray-density attribution for the tint, or `None` to render untinted
+/// (callers without altitude state pass `None` here — see
+/// [`render_lore_section`]). The lens never changes template selection, tag
+/// wording, dedup, or the cap; it only colors.
+///
 /// Returns `None` when the Era III projection is illegal (unreachable
 /// over the live grammar today; the gate exists for the WP-I mapping).
 #[must_use]
 pub fn render_claim(claim: &ThreeRealmClaim) -> Option<LoreLine> {
+    render_claim_tinted(claim, None)
+}
+
+/// The WP-L lens hook: line slug → ray-density attribution (`None` =
+/// untinted). A type alias keeps the signature readable.
+type RayResolver<'a> = &'a dyn Fn(&str) -> Option<&'static str>;
+
+/// [`render_claim`] with the ray lens attached.
+#[must_use]
+pub fn render_claim_tinted(
+    claim: &ThreeRealmClaim,
+    ray_of: Option<RayResolver<'_>>,
+) -> Option<LoreLine> {
     let triple = project_to_era3(claim);
     if !triple.is_legal() {
         return None;
@@ -144,6 +230,9 @@ pub fn render_claim(claim: &ThreeRealmClaim) -> Option<LoreLine> {
         source_cell: t.source_cell,
         line_slug: claim.line.slug().to_owned(),
         polarity: claim.polarity.into(),
+        ray: ray_of
+            .and_then(|f| f(claim.line.slug()))
+            .unwrap_or(RAY_DENSITY_UNATTUNED),
     })
 }
 
@@ -152,13 +241,26 @@ pub fn render_claim(claim: &ThreeRealmClaim) -> Option<LoreLine> {
 /// capped at `max_lines` so the annals stay legible. Zero-at-zero.
 #[must_use]
 pub fn render_lore_section(claims: &[ThreeRealmClaim], max_lines: usize) -> String {
+    render_lore_section_tinted(claims, max_lines, None)
+}
+
+/// [`render_lore_section`] with the WP-L D5 ray lens attached: claims whose
+/// line carries live altitude state are tinted `(ray text)`; lines without
+/// altitude render untinted. Tinting is flavor-only — text selection, tags,
+/// dedup, and cap are identical to the untinted path.
+#[must_use]
+pub fn render_lore_section_tinted(
+    claims: &[ThreeRealmClaim],
+    max_lines: usize,
+    ray_of: Option<RayResolver<'_>>,
+) -> String {
     let mut seen = std::collections::HashSet::new();
     let mut out = String::new();
     for c in claims {
         if out.lines().count() >= max_lines {
             break;
         }
-        let Some(line) = render_claim(c) else {
+        let Some(line) = render_claim_tinted(c, ray_of) else {
             continue;
         };
         // Tension claims are annal-worthy above all: the village speaks
@@ -169,7 +271,13 @@ pub fn render_lore_section(claims: &[ThreeRealmClaim], max_lines: usize) -> Stri
             // i284: refuted claims render as contested — the chronicle
             // shows the village arguing with itself (the panic signature).
             PolarityTag::Refuted => format!("{} (now called into question)", line.text),
-            PolarityTag::Undiscovered => line.text.clone(),
+            PolarityTag::Undiscovered => {
+                if line.ray == RAY_DENSITY_UNATTUNED {
+                    line.text.clone()
+                } else {
+                    format!("{} ({} tint)", line.text, line.ray)
+                }
+            }
         };
         if seen.insert(tagged.clone()) {
             out.push_str("  - the lore says: ");
@@ -343,6 +451,12 @@ mod tests {
         );
         let section = render_lore_section(&claims, 3);
         assert_eq!(section.lines().count(), 3, "cap respected");
+        // Untinted path (no lens) carries no ray suffix — byte-stable with
+        // the pre-WP-L rendering.
+        assert!(
+            !uncapped.contains("tint)"),
+            "untinted lore has no ray\n{uncapped}"
+        );
     }
 
     #[test]
@@ -355,5 +469,49 @@ mod tests {
         );
         let section = render_lore_section(&[c, c, c], 8);
         assert_eq!(section.lines().count(), 1, "dedup");
+    }
+
+    #[test]
+    fn ray_lens_is_render_only_and_tints_live_lines() {
+        // The tinted path: a resolver that reports a stage for one line only.
+        let c = claim(
+            CausalDomain::Material,
+            GrossReferent::Event,
+            SubtleClaim::Fact,
+            "cognitive",
+        );
+        let resolve = |slug: &str| -> Option<&'static str> {
+            if slug == "cognitive" {
+                Some(ray_density_for_stage(9))
+            } else {
+                None
+            }
+        };
+        let section = render_lore_section_tinted(&[c.clone()], 8, Some(&resolve));
+        assert!(
+            section.contains("Indigo-Ray (6th-Turq) tint"),
+            "live line tints through the lens\n{section}"
+        );
+        // Untinted path unchanged (mechanical-effect pin = zero by identity).
+        let plain = render_lore_section(&[c], 8);
+        assert!(!plain.contains("tint)"), "no lens, no tint\n{plain}");
+    }
+
+    #[test]
+    fn ray_lens_covers_all_rungs_and_zero_is_unattuned() {
+        assert_eq!(ray_density_for_stage(0), "Red-Ray (1st)", "clamp low");
+        assert_eq!(
+            ray_density_for_stage(18),
+            "Unity-Ray (Violet)",
+            "clamp high"
+        );
+        assert_eq!(
+            RAY_DENSITY_BY_STAGE.len(),
+            17,
+            "one lens cell per ladder rung"
+        );
+        // Shadow 0.0 → rung 0 → the unattuned reading; positive shadow → rung 1.
+        assert_eq!(stage_of_agent_altitude(0.0), 0);
+        assert_eq!(stage_of_agent_altitude(0.5), 1);
     }
 }

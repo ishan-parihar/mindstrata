@@ -142,10 +142,48 @@ pub fn render_chronicle(sim: &Simulation) -> String {
         .iter()
         .flat_map(|a| a.polarity_claims.iter().copied())
         .collect();
-    let lore = mindstrata_development::render::render_lore_section(&all_claims, 12);
+    // WP-L (i291): the D5 ray lens. One resolver over both altitude surfaces —
+    // collective field stages (rung units, authoritative for village lines;
+    // every line sits at stage ≥ 1 = prehension baseline, so village lines
+    // always tint) and personal altitude shadows (0..1 accumulators → the
+    // unattuned/rung-1 reading until the cross-scale contract lands).
+    // Rendering-only: a missing tint or a changed tint cannot touch any
+    // mechanical surface.
+    let stage_lines = crate::snapshot::export_stage_lines(&sim.collective_field);
+    let lens = |slug: &str| -> Option<&'static str> {
+        if let Some(e) = stage_lines.iter().find(|e| e.line == slug) {
+            return Some(mindstrata_development::render::ray_density_for_stage(
+                e.stage.ceil().clamp(1.0, 17.0) as u8,
+            ));
+        }
+        // Claim line outside the collective registry: tint from personal
+        // altitude shadows (any live signal on the line → rung 1).
+        let idx = mindstrata_development::line::all_lines().position(|l| l.slug() == slug)?;
+        let any_live = sim
+            .agents
+            .iter()
+            .any(|a| a.development.altitudes.get(idx).is_some_and(|v| *v > 0.0));
+        any_live.then(|| mindstrata_development::render::ray_density_for_stage(1))
+    };
+    let lore =
+        mindstrata_development::render::render_lore_section_tinted(&all_claims, 12, Some(&lens));
     if !lore.is_empty() {
         out.push_str("\nThe lore of the village\n");
         out.push_str(&lore);
+        // Attunement header — the lens's own scale citation (D5: diagnosis
+        // runs on the neutral altitude scale; the tint names its source).
+        let deepest = sim
+            .collective_field
+            .lines
+            .iter()
+            .map(|l| l.stage)
+            .fold(0.0_f64, f64::max);
+        let max_rung = deepest.ceil().clamp(1.0, 17.0) as u8;
+        out.push_str(&format!(
+            "\nSeen through the lens of {} (village stage {:.1})\n",
+            mindstrata_development::render::ray_density_for_stage(max_rung),
+            deepest
+        ));
     }
 
     out
@@ -527,6 +565,51 @@ mod tests {
         // Cite-first law is pinned at the render layer (template_id/source_cell);
         // the annal carries the rendered text with provenance available on
         // LoreLine.
+    }
+
+    /// WP-L (i291): the D5 ray lens tints the lore annal. Mechanical-effect
+    /// pin = zero by construction: the lens reads state through an immutable
+    /// borrow, and the tint is append-only flavor — every untinted line must
+    /// still appear verbatim in the tinted render (text selection, tags,
+    /// dedup, and cap are lens-independent), plus the lens header names the
+    /// altitude scale it cites.
+    #[test]
+    fn chronicle_lore_ray_lens_tints_without_rewriting() {
+        let config = SimConfig {
+            seed: 42,
+            max_ticks: 2000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        };
+        let mut sim = Simulation::new(config);
+        sim.populate();
+        sim.run(2000);
+        let tinted = render_chronicle(&sim);
+        assert!(
+            tinted.contains("Seen through the lens of"),
+            "lens header present\n{tinted}"
+        );
+        assert!(
+            tinted.contains("tint)"),
+            "at least one line tints (village lines sit at stage >= 1)\n{tinted}"
+        );
+        // Text-selection identity: stripping nothing, the untinted rendering
+        // of the same claims must be a substring set of the tinted output —
+        // the lens only appends `(… tint)` after otherwise-identical lines.
+        let all_claims: Vec<mindstrata_development::polarity::ThreeRealmClaim> = sim
+            .agents
+            .iter()
+            .flat_map(|a| a.polarity_claims.iter().copied())
+            .collect();
+        let untinted = mindstrata_development::render::render_lore_section(&all_claims, 12);
+        for line in untinted.lines() {
+            assert!(
+                tinted.contains(line),
+                "untinted line must survive verbatim under the lens\nline: {line}\n{tinted}"
+            );
+        }
     }
 
     /// DC-1 CLIENT 19-22 polish: dossier surfaces the polarity wire
