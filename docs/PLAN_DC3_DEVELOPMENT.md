@@ -108,3 +108,20 @@ unblocked; (b) two Era V work packages (observability + chronicle lens) — the 
 surfaces; (c) the DC-3 scale program (multi-village holons, N=192 scaling proof, asset
 pipeline v0); and (d) three vendor-blocked items that stay parked. The ladder above turns
 that into ten probe-first iterations, each with a named exit test.
+
+## 7. Execution ledger (updated as iterations land)
+
+| Iter | Status | Landing | Verdict recorded |
+|---|---|---|---|
+| i287 | **DONE** | evidence/i287_institution_shift.md | Era IV exit gate CLOSED — 20K natural reaches stage 6.0, WP-J opens, 8 genesis memes; end-to-end 2-line forcing is structurally confounded with the i276/i277 Safety readers (unit pins remain the WP-J liveness proof) |
+| i288 | **DONE** | evidence/i288_transgression_revival.md | A1 root cause one layer deeper than the diet: violence recorded as a violation but never emitted `NormViolated`; emission revived at the violence site (55 majors/20K). **Natural norm proposals became reachable** (confirmed in i292 census) |
+| i289 | **DONE** | evidence/i289_catalyst_magnitudes.md | A2 ratified — Grief/Threat magnitudes carry measured/old/mechanism comments; observer census over mortality windows |
+| i290 | **DONE** | evidence/i290_observability.md | WP-K CLOSED — `export_stage_lines` canon-cited frontmatter, q1–q4 pathology means + `collective_stage_max` on MetricsSnapshot, TUI pathology panel; in-vivo quadrants diverge (Q2 0.732 dominant @20K) |
+| i291 | **DONE** | evidence/i291_chronicle_lens.md | WP-L CLOSED — **Era V exit gate CLOSED**; ray lens extracted from vault per-cell frontmatter (provisional until rays.md vendors); mechanical-effect pin = zero (untinted lines survive verbatim) |
+| i292 | **DONE** | evidence/i292_dose_calibration.md | A3+A4 RATIFIED at existing values with sweep evidence (agape 0.6 in the 0.5–3% metabolizer band; cap 0.6 measured binding in vivo). Both CALIBRATION-PENDING markers closed |
+| i293 | **DONE** | evidence/i293_festival_regime.md | A5 closed: i278 PARTIAL → diet-pacing (≥3 buckets by 5K under festival press, zero production edits); **N=12/~100K ratified as the designed cultural horizon**; uniform press homogenizes rosters (jaccard 0.822) — recorded for UM-3 |
+
+**Next up:** i294 (N=192 superlinearity probe + hot-path table) → i295 (perf-envelope
+warn-only bench) → i296+ (multi-village holons, UM-3 "the world scales" — the ledger
+notes press-timing and per-village naming as the two levers for cultural
+differentiation).
