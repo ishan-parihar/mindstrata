@@ -719,15 +719,78 @@ pub fn system_collective_field_step(
         // Identity-at-zero: zero pressure vector → identity.
         return;
     }
-    // Aggregate per-CatalystKind count, then map to the collective
-    // line's bucket. The slug list comes from the dev crate
-    // (29 collective lines at last audit; see i268/i278 slugs).
-    let n = n_agents.max(1) as f64;
+    let (relational_press, safety_press, identity_press, meaning_press) =
+        accumulate_bucket_presses(&catalysts, n_agents.max(1) as f64);
+    // WP-I (Iter-266): the dev crate's vendored-`kind` bucket mapping owns
+    // the affinity (culture→relational, system→safety, collective-system→
+    // identity, consciousness→meaning), replacing the DC-1 v1 cyclic
+    // `i % 4` distribution. CALIBRATION-PENDING(AP3): i266 measures the
+    // per-bucket differentiation across the 12-seed family.
+    let pressures = mindstrata_development::collective::pressure_vector(
+        relational_press,
+        safety_press,
+        identity_press,
+        meaning_press,
+    );
+    *field = field.step_collective(
+        &pressures,
+        &mindstrata_development::collective::CollectiveParams::pending(),
+    );
+}
+
+/// Iter-296 (UM-3 core): per-polity collective holon step. Identical press
+/// law to `system_collective_field_step`, restricted to catalysts whose
+/// subject is a member of the polity, normalized per-capita WITHIN the
+/// polity (n = members.len(), not the global population).
+///
+/// Additive by construction: the legacy whole-village field is untouched;
+/// an unassigned polity map never reaches this fn (identity-at-isolation —
+/// a single assigned polity covering all agents reproduces the legacy field
+/// bit-for-bit, pinned in `sim/tests/development.rs`).
+pub fn system_polity_collective_field_step(
+    field: &mut mindstrata_development::collective::CollectiveField,
+    events: &[SimEvent],
+    members: &[usize],
+) {
+    if members.is_empty() {
+        return;
+    }
+    let catalysts = collect_catalysts(events);
+    // Member filter first (AgentId wraps the agent index; the catalyst
+    // tuple's first element is the subject).
+    let member_catalysts: Vec<_> = catalysts
+        .into_iter()
+        .filter(|(subject, _, _, _)| members.contains(&(subject.as_u64() as usize)))
+        .collect();
+    if member_catalysts.is_empty() {
+        return;
+    }
+    let (relational_press, safety_press, identity_press, meaning_press) =
+        accumulate_bucket_presses(&member_catalysts, members.len() as f64);
+    let pressures = mindstrata_development::collective::pressure_vector(
+        relational_press,
+        safety_press,
+        identity_press,
+        meaning_press,
+    );
+    *field = field.step_collective(
+        &pressures,
+        &mindstrata_development::collective::CollectiveParams::pending(),
+    );
+}
+
+/// Shared press accumulation (Iter-296 extraction): identical math to the
+/// pre-split inline body so the whole-village path stays bit-identical.
+/// Returns (relational, safety, identity, meaning) bucket presses.
+fn accumulate_bucket_presses(
+    catalysts: &[(AgentId, CatalystKind, f64, bool)],
+    n: f64,
+) -> (f64, f64, f64, f64) {
     let mut relational_press = 0.0;
     let mut safety_press = 0.0;
     let mut identity_press = 0.0;
     let mut meaning_press = 0.0;
-    for (_, kind, _mag, major) in &catalysts {
+    for (_, kind, _mag, major) in catalysts {
         let p = 1.0 / n;
         match kind {
             CatalystKind::Bond => relational_press += p,
@@ -748,21 +811,12 @@ pub fn system_collective_field_step(
         // doesn't starve the meaning/cosmology collective lines.
         meaning_press += p * 0.1;
     }
-    // WP-I (Iter-266): the dev crate's vendored-`kind` bucket mapping owns
-    // the affinity (culture→relational, system→safety, collective-system→
-    // identity, consciousness→meaning), replacing the DC-1 v1 cyclic
-    // `i % 4` distribution. CALIBRATION-PENDING(AP3): i266 measures the
-    // per-bucket differentiation across the 12-seed family.
-    let pressures = mindstrata_development::collective::pressure_vector(
+    (
         relational_press,
         safety_press,
         identity_press,
         meaning_press,
-    );
-    *field = field.step_collective(
-        &pressures,
-        &mindstrata_development::collective::CollectiveParams::pending(),
-    );
+    )
 }
 
 #[cfg(test)]

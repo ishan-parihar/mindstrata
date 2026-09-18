@@ -942,3 +942,107 @@ fn norm_proposal_cap_binds_above_and_passes_below_majority_breadth() {
         "quorum 8/12 must cap at exactly 0.6, got {capped}"
     );
 }
+
+/// Iter-296 (UM-3 core): the press law is agent-partitioned — two disjoint
+/// polities each produce exactly the same field step they would have gotten
+/// alone at their own population, and the members-only filter keeps foreign
+/// catalysts out. Pairs with `system_collective_field_step`'s
+/// `collective_field_presses_safety_bucket`: same event diet, same press law,
+/// so any drift here is a partition bug, not a calibration drift.
+#[test]
+fn polity_partition_matches_solo_population() {
+    use crate::systems::development::{collect_catalysts, system_polity_collective_field_step};
+    use mindstrata_core::clock::Tick;
+    use mindstrata_core::event::SimEvent;
+    use mindstrata_core::id::AgentId;
+
+    let tick = Tick::new(1);
+    // 2 Bond catalysts (marriages): one wholly within polity A (agents 0,1),
+    // one wholly within polity B (agents 4,5). Agent indices 6.. are
+    // unassigned (no holon) — their events must reach no field.
+    let evs = vec![
+        SimEvent::MarriageFormed {
+            spouse_a: AgentId::new(0),
+            spouse_b: AgentId::new(1),
+            tick,
+        },
+        SimEvent::MarriageFormed {
+            spouse_a: AgentId::new(4),
+            spouse_b: AgentId::new(5),
+            tick,
+        },
+    ];
+
+    let mut field_a = mindstrata_development::collective::CollectiveField::default();
+    system_polity_collective_field_step(&mut field_a, &evs, &[1, 0]);
+    let mut field_b = mindstrata_development::collective::CollectiveField::default();
+    system_polity_collective_field_step(&mut field_b, &evs, &[5, 4]);
+    // Input order must not matter (sorted-membership contract upstream).
+    assert_eq!(
+        field_a, field_b,
+        "identical member sets must produce identical fields"
+    );
+
+    // Solo reference: the same marriage stepped against a 2-agent population.
+    let mut solo = mindstrata_development::collective::CollectiveField::default();
+    let solo_events = vec![SimEvent::MarriageFormed {
+        spouse_a: AgentId::new(0),
+        spouse_b: AgentId::new(1),
+        tick,
+    }];
+    system_polity_collective_field_step(&mut solo, &solo_events, &[0, 1]);
+    assert_eq!(
+        field_a, solo,
+        "partition press must equal solo press at equal membership"
+    );
+
+    // Cross-membership exclusion: a polity that does NOT contain agents 4,5
+    // must not see their marriage at all.
+    let mut foreign = mindstrata_development::collective::CollectiveField::default();
+    system_polity_collective_field_step(&mut foreign, &evs, &[2, 3]);
+    assert!(
+        foreign.is_neutral(),
+        "foreign catalysts must not press another polity's holon"
+    );
+}
+
+/// Identity-at-isolation (UM-3 exit-contract, single-village pin): one polity
+/// covering ALL agents reproduces the whole-village field bit-for-bit over
+/// the same window — the per-polity machinery is purely additive.
+#[test]
+fn single_all_agent_polity_equals_whole_village_field() {
+    use crate::systems::development::system_collective_field_step;
+    use crate::systems::development::system_polity_collective_field_step;
+    use mindstrata_core::clock::Tick;
+    use mindstrata_core::event::SimEvent;
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_core::id::AgentId;
+
+    let tick = Tick::new(1);
+    let evs = vec![
+        SimEvent::MarriageFormed {
+            spouse_a: AgentId::new(0),
+            spouse_b: AgentId::new(1),
+            tick,
+        },
+        SimEvent::ConflictOccurred {
+            aggressor: AgentId::new(2),
+            target: AgentId::new(3),
+            kind: mindstrata_core::conflict::ConflictKind::Threat,
+            injury: Fixed::from_f64(0.5),
+            fear_induced: Fixed::from_f64(0.2),
+            tick,
+        },
+    ];
+    let n = 4;
+    let mut whole = mindstrata_development::collective::CollectiveField::default();
+    system_collective_field_step(&mut whole, &evs, n);
+
+    let mut polity = mindstrata_development::collective::CollectiveField::default();
+    let all: Vec<usize> = (0..n).collect();
+    system_polity_collective_field_step(&mut polity, &evs, &all);
+    assert_eq!(
+        whole, polity,
+        "one all-agent polity must reproduce the whole-village field exactly"
+    );
+}

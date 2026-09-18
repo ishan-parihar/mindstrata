@@ -679,6 +679,19 @@ pub struct Simulation {
     /// the v1 wire is wired in via the daily pass (see
     /// `systems/development.rs::system_collective_field_step`).
     pub collective_field: mindstrata_development::collective::CollectiveField,
+    /// Iter-296 (UM-3 core): per-polity collective holons. One field per
+    /// polity (village/culture), stepped per-capita WITHIN the polity by the
+    /// same catalyst press law as the whole-village field. Additive by
+    /// construction: empty by default (`assign_polities` populates it), the
+    /// legacy whole-village field is untouched, and every consumer below
+    /// keeps reading the legacy field — per-polity consumers are opt-in
+    /// (probe/evidence-first per doctrine). See
+    /// `systems/development.rs::system_polity_collective_field_step`.
+    pub polity_fields: Vec<mindstrata_development::collective::CollectiveField>,
+    /// Iter-296: membership map parallel to `polity_fields` — sorted agent
+    /// indices per polity (partition contract: disjoint cover of assigned
+    /// agents; agents absent from every polity simply have no holon).
+    pub polity_members: Vec<Vec<usize>>,
     /// Architecture-plan-2 §13.6: Echo chamber state — belief clusters and polarization.
     pub echo_chamber: crate::culture::EchoChamberState,
     /// Architecture-plan-2 §10.8: Clan registry — emergent kinship-plus-alliance groups.

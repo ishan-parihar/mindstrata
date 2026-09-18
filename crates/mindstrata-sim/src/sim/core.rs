@@ -682,6 +682,24 @@ impl Simulation {
             self.agents.len(),
         );
 
+        // ── Iter-296 (UM-3 core): per-polity collective holons. Same press
+        // law, same window, per-capita WITHIN each polity. Additive by
+        // construction: `polity_fields` is empty unless `assign_polities`
+        // populated it, and the legacy whole-village field above stays the
+        // sole consumer-facing field (zero blast on golden/calibrated runs —
+        // identity-at-isolation pin in `sim/tests/development.rs`).
+        for (field, members) in self
+            .polity_fields
+            .iter_mut()
+            .zip(self.polity_members.iter())
+        {
+            crate::systems::development::system_polity_collective_field_step(
+                field,
+                polarity_window,
+                members,
+            );
+        }
+
         // ── Era IV (i273): collective-line meme genesis. The first consumer
         // that GENERATES culture from collective development instead of
         // modulating an existing channel (substrate §5: replaces the

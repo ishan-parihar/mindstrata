@@ -74,6 +74,10 @@ impl Simulation {
             rumor_registry: crate::culture::RumorRegistry::default(),
             collective_memory_registry: crate::culture::CollectiveMemoryRegistry::default(),
             collective_field: mindstrata_development::collective::CollectiveField::default(),
+            // Iter-296 (UM-3): no polities assigned by default —
+            // identity-at-isolation (single-village default = today's behavior).
+            polity_fields: Vec::new(),
+            polity_members: Vec::new(),
             echo_chamber: crate::culture::EchoChamberState::new(),
             clan_registry: crate::social::clan::ClanRegistry::new(),
             marriage_registry: crate::social::marriage::MarriageRegistry::new(),
@@ -310,6 +314,11 @@ impl Simulation {
             // keeps pre-v15 saves loading at neutral, exactly the old
             // semantics.
             collective_field: snapshot.collective_field,
+            // Iter-296: polities are a probe/scenario-level construct (no
+            // saved-world assignment rule yet); restored runs restart without
+            // them, matching the identity-at-isolation default.
+            polity_fields: Vec::new(),
+            polity_members: Vec::new(),
             echo_chamber: crate::culture::EchoChamberState::new(),
             clan_registry: crate::social::clan::ClanRegistry::new(),
             marriage_registry: crate::social::marriage::MarriageRegistry::new(),
@@ -349,6 +358,28 @@ impl Simulation {
         sim.seed_initial_collective_memory();
         sim.seed_initial_noosphere();
         sim
+    }
+
+    /// Iter-296 (UM-3 core): partition the agents into polities. Each inner
+    /// `Vec<usize>` is one polity's member agent indices; the polities get
+    /// one collective holon each (`polity_fields`), stepped per-capita
+    /// within the polity by the same catalyst press law as the whole-village
+    /// field. Idempotent — calling again replaces the partition. Members
+    /// not listed in any polity simply have no holon. Sorted order inside
+    /// each polity is enforced so the membership filter is deterministic.
+    pub fn assign_polities(&mut self, polities: Vec<Vec<usize>>) {
+        self.polity_members = polities
+            .into_iter()
+            .map(|mut members| {
+                members.sort_unstable();
+                members
+            })
+            .collect();
+        self.polity_fields = self
+            .polity_members
+            .iter()
+            .map(|_| mindstrata_development::collective::CollectiveField::default())
+            .collect();
     }
 
     /// Populate the world with terrain, sites, and agents.
