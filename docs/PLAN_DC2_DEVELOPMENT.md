@@ -410,7 +410,19 @@ pestilence 5 deaths → 1 rite (kin-bound coverage at N=12). One re-anchor:
 collapse golden@4320 (pestilence shock @1100 now generates a rite; grain
 33.15→28.89 second-order, agent_count unchanged). Dose 0.6 CALIBRATION-PENDING.
 **Next: i286 — WP-H3 second half (norm proposals from reconciled polarity
-clusters).**
+clusters). DONE (`286xxxx`).**
+
+**i286 — norm proposals from reconciled clusters. `system_norm_proposal`
+wired after genesis: surviving Integrated syntheses + majority tension-cluster
+quorum + i277 band-III Safety gate (4.0) → registry append (slot-named dedup,
+consensus-scaled strength ≤0.6, grows via §12.5 only). The in-vivo probe
+VERDICT reshaped the gate: Value/Norm syntheses are structurally unreachable
+(only (Event, cognitive) collides → Identity syntheses; Transgression feed is
+dead per i280), so the gate accepts Identity codifications — the
+panic-crystallization arc. Measured: natural-run proposal fires @50K
+(registry 5→6); band gate holds all pinned horizons → ZERO re-anchors
+(307/0/1 first-run green, clippy 0). 3 unit pins, sim lib 239/239.
+WP-H3 CLOSED (ritual generation i285 + proposals i286).
 
 ### 6.6 Known boundaries (not plannable until inputs land)
 

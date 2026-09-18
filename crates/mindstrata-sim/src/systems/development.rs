@@ -498,6 +498,136 @@ pub fn system_polarity_claim_emit(agents: &mut [AgentBundle], events: &[SimEvent
     }
 }
 
+/// Iter-286 (WP-H3 second half): norm proposals from reconciled polarity
+/// clusters — the wave brief's "norm proposals generated from reconciled
+/// polarity clusters". The reconciliation scan (above) synthesizes
+/// Integrated claims; the ones that SURVIVE the pass (not refuted) are
+/// crystallized communal prescriptions. When a synthesis is Integrated on a
+/// slot with village-wide reach (≥ majority distinct tension-holders at the
+/// slot — the cluster's contested consensus) AND the collective Safety
+/// stage has crossed the band-III institutional gate (4.0 — the i277
+/// tetra-arising law: stage bands gate WHICH content classes the generator
+/// may emit; a registry norm is institutional-political content), the
+/// village proposes a norm. The proposal is a REGISTRY APPEND (id = next
+/// free id, modest strength from the synthesis's consensus breadth) — it
+/// then flows through the EXISTING consumers: monthly-ritual
+/// reinforcement (§12.5) iterates ALL registry norms, and §12.3 compliance
+/// pressure reads the registry. Deterministic: BTreeMap ordering, no RNG.
+/// Zero-at-zero: no surviving syntheses → no proposals; the band gate
+/// keeps every pinned horizon inert by construction (probe i273: max
+/// collective stage at 2K = 1.0 exactly).
+pub fn system_norm_proposal(
+    agents: &[AgentBundle],
+    field: &mindstrata_development::collective::CollectiveField,
+    norms: &mut mindstrata_institutions::norms::NormRegistry,
+    n_agents: usize,
+) -> usize {
+    use mindstrata_development::collective::{bucket_for_line, CollectiveBucket};
+    use mindstrata_development::polarity::{PolarityState, SubtleClaim};
+    use std::collections::BTreeMap;
+
+    // Band-III gate (i277): institutional-political content unlocks at
+    // stage 4.0. Below it, norm proposals cannot fire — the pinned
+    // horizons (all stages 1.0) stay byte-identical.
+    const BAND_III_GATE: f64 = 4.0;
+    let slugs = mindstrata_development::collective::CollectiveField::line_slugs();
+    let safety_stage = field
+        .lines
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| {
+            slugs.get(*i).map(|s| bucket_for_line(*s)) == Some(CollectiveBucket::Safety)
+        })
+        .map(|(_, l)| l.stage)
+        .fold(0.0_f64, f64::max);
+    if safety_stage < BAND_III_GATE {
+        return 0;
+    }
+
+    // Count surviving Integrated syntheses per (referent, line, subtle)
+    // slot and the distinct holders of the underlying tension cluster.
+    let mut synths: BTreeMap<(u8, String, u8), usize> = BTreeMap::new();
+    let mut cluster: BTreeMap<(u8, String), std::collections::BTreeSet<usize>> = BTreeMap::new();
+    for (i, a) in agents.iter().enumerate() {
+        for c in &a.polarity_claims {
+            match c.polarity {
+                PolarityState::Integrated => {
+                    *synths
+                        .entry((c.referent as u8, c.line.slug().to_string(), c.claim as u8))
+                        .or_default() += 1;
+                    // The synthesis holder engaged the slot too — the
+                    // cluster counts every holder that ever contested it
+                    // (tension, its synthesis, or its refutation).
+                    cluster
+                        .entry((c.referent as u8, c.line.slug().to_string()))
+                        .or_default()
+                        .insert(i);
+                }
+                PolarityState::ActiveTension | PolarityState::Refuted => {
+                    cluster
+                        .entry((c.referent as u8, c.line.slug().to_string()))
+                        .or_default()
+                        .insert(i);
+                }
+                PolarityState::Undiscovered => {}
+            }
+        }
+    }
+    if synths.is_empty() {
+        return 0;
+    }
+
+    // Majority quorum over the engaged cluster.
+    let half = n_agents.max(1) / 2;
+    let mut proposed = 0usize;
+    for ((referent, line_slug, subtle), _n) in synths {
+        // i286 in-vivo probe verdict (i286_diag + i286_norm_proposal_vivo):
+        // Value/Norm syntheses are STRUCTURALLY UNREACHABLE — reconciliation
+        // needs two subtle claims on one slot, and only (Event, cognitive)
+        // collides in vivo (Threat-Fact × Grief/major-Identity → IDENTITY
+        // synthesis; Bond/Transgression slots are mono-claim per agent).
+        // The honest proposal source is therefore the Identity synthesis:
+        // a village that reconciles "we are the kind of people who survive
+        // threats" codifies it — the panic-crystallization arc the wave
+        // brief describes (norm churn → re-crystallization INTO the
+        // registry). Fact syntheses remain lore, not law. ponytail: when a
+        // Transgression feed exists at N=12 (i280 debt), Value/Norm
+        // syntheses become reachable and this gate widens to them.
+        if !(subtle == SubtleClaim::Identity as u8
+            || subtle == SubtleClaim::Value as u8
+            || subtle == SubtleClaim::Norm as u8)
+        {
+            continue;
+        }
+        let quorum = cluster
+            .get(&(referent, line_slug.clone()))
+            .map_or(0, std::collections::BTreeSet::len);
+        if quorum <= half {
+            continue;
+        }
+        // Dedup: one norm per (line, referent) slot, ever. The registry
+        // names encode the slot — deterministic, scan-based, restore-safe.
+        let name = format!("[proposed:{line_slug}/r{referent}]");
+        if norms.norms().iter().any(|n| n.name == name) {
+            continue;
+        }
+        // Strength scales with consensus breadth (quorum/n_agents),
+        // bounded modest — a proposal starts weak and grows through the
+        // SAME reinforcement channel as every other norm (§12.5).
+        let strength = (quorum as f64 / n_agents.max(1) as f64).min(0.6);
+        norms.register(mindstrata_institutions::norms::Norm {
+            id: norms.norms().iter().map(|n| n.id).max().unwrap_or(0) + 1,
+            name,
+            strength: mindstrata_core::fixed::Fixed::from_f64(strength),
+            internalization: mindstrata_core::fixed::Fixed::from_f64(strength * 0.5),
+            punishment: mindstrata_core::fixed::Fixed::from_f64(0.1),
+            reinforcing_identity: None,
+        });
+        proposed += 1;
+    }
+    proposed
+}
+
 /// DC-1 STORY 11: village-level collective-field step. Derives a
 /// per-collective-line pressure vector from the catalyst stream (one
 /// catalyst = `1 / pop` of the per-line weight bucket) and steps

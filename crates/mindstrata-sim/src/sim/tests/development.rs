@@ -643,3 +643,127 @@ fn mourning_rite_zero_agape_is_noop() {
         "rite must not project a polarity claim"
     );
 }
+
+// ── Iter-286 (WP-H3 second half): norm proposals from reconciled clusters ──
+
+/// Majority-consensus Integrated Value synthesis + Safety stage past the
+/// band-III gate (4.0) → exactly one registry norm for the slot, with
+/// consensus-scaled strength. Idempotent: a second call proposes nothing.
+#[test]
+fn norm_proposal_fires_on_majority_synthesis_past_band_gate() {
+    use mindstrata_development::polarity::{GrossReferent, PolarityState, SubtleClaim};
+    let mut sim = make_sim(42);
+    // Force the Safety band-III gate.
+    for line in sim.collective_field.lines.iter_mut() {
+        line.stage = 4.5;
+    }
+    // 7 of 12 agents (majority) engage the (Event, cognitive) slot: one
+    // holds the surviving Integrated Value synthesis, six hold tension.
+    let cog = mindstrata_development::line::LineId::new("cognitive").expect("registered");
+    let synthesis = mindstrata_development::polarity::ThreeRealmClaim {
+        domain: mindstrata_development::polarity::CausalDomain::Material,
+        referent: GrossReferent::Event,
+        claim: SubtleClaim::Value,
+        line: cog,
+        polarity: PolarityState::Integrated,
+        created_tick: 100,
+    };
+    let mut tension = synthesis;
+    tension.claim = SubtleClaim::Fact;
+    tension.polarity = PolarityState::ActiveTension;
+    sim.agents[0].polarity_claims.push(synthesis);
+    for a in sim.agents.iter_mut().take(7).skip(1) {
+        a.polarity_claims.push(tension);
+    }
+    let before = sim.norms.norms().len();
+    let proposed = crate::systems::development::system_norm_proposal(
+        &sim.agents,
+        &sim.collective_field,
+        &mut sim.norms,
+        sim.agents.len(),
+    );
+    assert_eq!(
+        proposed, 1,
+        "majority consensus + band III must propose one norm"
+    );
+    let norm = sim
+        .norms
+        .norms()
+        .iter()
+        .find(|n| n.name.contains("[proposed:cognitive/r2]"))
+        .expect("proposed norm must carry the slot name");
+    assert!(
+        norm.strength.to_f64() > 0.5 && norm.strength.to_f64() <= 0.6,
+        "strength scales with consensus breadth (7/12 ≈ 0.58), got {}",
+        norm.strength.to_f64()
+    );
+    // Idempotent: same state again → no new norm.
+    let again = crate::systems::development::system_norm_proposal(
+        &sim.agents,
+        &sim.collective_field,
+        &mut sim.norms,
+        sim.agents.len(),
+    );
+    assert_eq!(again, 0, "proposal must dedup on the slot name");
+    assert_eq!(sim.norms.norms().len(), before + 1);
+}
+
+/// The band gate: identical consensus BELOW stage 4.0 proposes nothing —
+/// institutional-political content is band-III-gated (i277 tetra-arising).
+#[test]
+fn norm_proposal_is_band_gated_below_stage_four() {
+    use mindstrata_development::polarity::{GrossReferent, PolarityState, SubtleClaim};
+    let mut sim = make_sim(42);
+    for line in sim.collective_field.lines.iter_mut() {
+        line.stage = 3.9; // just below the gate
+    }
+    let cog = mindstrata_development::line::LineId::new("cognitive").expect("registered");
+    for a in sim.agents.iter_mut().take(8) {
+        a.polarity_claims
+            .push(mindstrata_development::polarity::ThreeRealmClaim {
+                domain: mindstrata_development::polarity::CausalDomain::Material,
+                referent: GrossReferent::Event,
+                claim: SubtleClaim::Value,
+                line: cog,
+                polarity: PolarityState::Integrated,
+                created_tick: 100,
+            });
+    }
+    let proposed = crate::systems::development::system_norm_proposal(
+        &sim.agents,
+        &sim.collective_field,
+        &mut sim.norms,
+        sim.agents.len(),
+    );
+    assert_eq!(proposed, 0, "band gate must hold below stage 4.0");
+}
+
+/// A Fact synthesis is a description, not a prescription — never proposes,
+/// even with full consensus and an open band.
+#[test]
+fn norm_proposal_skips_fact_syntheses() {
+    use mindstrata_development::polarity::{GrossReferent, PolarityState, SubtleClaim};
+    let mut sim = make_sim(42);
+    for line in sim.collective_field.lines.iter_mut() {
+        line.stage = 4.5;
+    }
+    let cog = mindstrata_development::line::LineId::new("cognitive").expect("registered");
+    for a in sim.agents.iter_mut().take(8) {
+        a.polarity_claims
+            .push(mindstrata_development::polarity::ThreeRealmClaim {
+                domain: mindstrata_development::polarity::CausalDomain::Material,
+                referent: GrossReferent::Event,
+                claim: SubtleClaim::Fact,
+                line: cog,
+                polarity: PolarityState::Integrated,
+                created_tick: 100,
+            });
+    }
+    let proposed = crate::systems::development::system_norm_proposal(
+        &sim.agents,
+        &sim.collective_field,
+        &mut sim.norms,
+        sim.agents.len(),
+    );
+    assert_eq!(proposed, 0, "Fact syntheses are lore, not law");
+}

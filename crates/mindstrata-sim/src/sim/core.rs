@@ -699,6 +699,22 @@ impl Simulation {
             &self.world.sites,
         );
 
+        // ── Iter-286 (WP-H3 second half): norm proposals from reconciled
+        // polarity clusters. Reads the claim state the polarity pass just
+        // advanced; proposes registry norms when a surviving Integrated
+        // synthesis holds majority consensus AND the collective Safety
+        // stage has crossed the i277 band-III gate (4.0). Inert at every
+        // pinned horizon by construction (max stage at 2K = 1.0 exactly,
+        // probe i273) and gated again by the synthesis+quorum scan — the
+        // only consumers are the monthly-ritual reinforcement loop (§12.5,
+        // iterates all registry norms; first fires at 4320) and §12.3.
+        let _proposed = crate::systems::development::system_norm_proposal(
+            &self.agents,
+            &self.collective_field,
+            &mut self.norms,
+            self.agents.len(),
+        );
+
         // ── §6 + §10.6/§10.7: Kinship & Household daily update ──
         self.tick_kinship_household_daily(tick_u64, phases);
 

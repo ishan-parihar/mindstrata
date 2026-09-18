@@ -40,6 +40,7 @@ fn claim_stats(sim: &Simulation) -> (usize, usize, usize, usize) {
                 PolarityState::Undiscovered => undiscovered += 1,
                 PolarityState::ActiveTension => tension += 1,
                 PolarityState::Integrated => integrated += 1,
+                PolarityState::Refuted => {}
             }
         }
     }
@@ -81,7 +82,11 @@ fn main() {
                 tick,
             })
             .collect();
-        mindstrata_sim::systems::development::system_polarity_claim_emit(&mut sim2.agents, &evs);
+        mindstrata_sim::systems::development::system_polarity_claim_emit(
+            &mut sim2.agents,
+            &evs,
+            day as u64,
+        );
         let _ = day;
     }
     let (total2, u2, t2, i2) = claim_stats(&sim2);
