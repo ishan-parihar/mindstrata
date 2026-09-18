@@ -1,0 +1,110 @@
+# Mindstrata — DC-3 Development Plan (Era V harvest → "the world scales")
+
+**Date:** 2026-09-18 · **Baseline:** HEAD `5ee3c1c` (i286, WP-H3 closed), main, 819 commits,
+118,569 LOC across 13 crates, tree clean.
+
+---
+
+## 1. Live verification at audit time (all measured, not cited)
+
+| Gate | Command | Result | Verdict |
+|---|---|---|---|
+| Format | `cargo fmt --all --check` | clean | PASS |
+| Lints | `cargo clippy --workspace --quiet` | 0 warnings | PASS |
+| Full suite | `cargo test -p mindstrata-tests --lib --release` | **307 passed / 0 failed / 1 ignored**, 202 s | PASS (documented signature) |
+| Quick gate | `scripts/gate` | GATE GREEN, golden 5/5 byte-identical (0.46 s) | PASS |
+| Probe law | `scripts/bench_index.py --strict` | 104 indexed / 68 ok / 36 legacy / **0 violations** | PASS |
+
+No development debt is masked by a red gate. The one ignored test remains the documented
+long-horizon trace harness (`--ignored` by design).
+
+## 2. What is complete (evidence-backed, git-history arc AP1 → AP4)
+
+| Program | Status | Proof |
+|---|---|---|
+| **AP1** core village sim | DONE | `archive/AP1-implemented.md` |
+| **AP2** deepening (~170 iters) | DONE 100% — every write-only state, dead producer, unwired consumer closed (Iters 22–186; final dead-producer kills i267/i272) | AP2 final audit + Iter-186 exhaustive audit |
+| **AP3 Era I–II** attractor-field engine | DONE — all 4 pathology quadrants live + behaviorally wired, per-quadrant params ratified (`66f753b`), 20-seed sweep (i293), N=48 check (i294) | `i293`/`i294` evidence |
+| **AP3 Era III** content emergence | DONE (i273–i286): WP-G2 referent-grounded genesis, WP-H2 reconciliation + refutation (panic cascade), WP-H3 mourning rites + norm proposals. **UM-2 PASSED** at the corrected ~100K cultural horizon (all 4 buckets generate, jaccard 0.158 vs control 1.000) | `i283_um2_unify_review.md` |
+| **AP3 Era IV** collective holon | LANDED (i266 step_collective, i273 stage-gated genesis, i274/i279 feeds, i280 WP-J coupling) — **exit probe `i300_institution_shift` end-to-end still recorded as a gap** | §6.6 meta-review |
+| **DC-1** studio cycle | DONE 106/106 CLOSED (v18 audit) | `FINAL-AUDIT-DC1-regression-v18.md` |
+| **DC-2** | DONE (§4/§6 ledgers; WP-H3 closed at i286) | `PLAN_DC2_DEVELOPMENT.md` §4–§6 |
+| **Scale/structure** | DONE — crate ladder S1–S3 (`core ← person ← psych ← {social, institutions, world} ← sim`), Arc-D pass extraction batches 1–3 verbatim, golden-proven | `f66b988`, `3ad212b`, `b2163ad` |
+| **DC-3 P0** | Ratified — perf budget 122/1088/5961 µs/tick @ N=12/48/96, golden budget ≤150 µs/tick binding | `charters/DC3-P0-perf-budget.md` |
+
+## 3. The honest calibration-debt ledger (what is left)
+
+Every item is documented debt with a named probe plan; none is hidden.
+
+### 3.1 Actionable (probe + sweep, no external blocker)
+
+| # | Item | Site | Current | Path |
+|---|---|---|---|---|
+| A1 | **Transgression catalyst feed dead at N=12** — NormViolated ≈ 0 ⇒ Value/Norm syntheses structurally unreachable; norm registry can only widen via Identity codifications (i286 verdict) | sim catalyst diet | dead producer | Probe small-N transgression diet (seeded scenario violations / minor-crime regime) → revive feed → i286 Value/Norm gate widens without touching quorum/band machinery |
+| A2 | **Grief/Threat catalyst magnitude ratification** — blocked by mortality horizon per i270, but i285 proved pestilence scenarios DO generate deaths (5 deaths → 1 rite) | `catalyst_observers.rs` | spec-midpoint pins | Observer-harness sweep over pestilence/collapse scenarios at 20–50K; ratify or re-contract per §4.4 |
+| A3 | **Mourning-rite Agape dose 0.6** CALIBRATION-PENDING (i285) | `systems/development.rs` | first estimate | Sweep dose vs Dark-pathology decay differential (the WP-H3 i291_agape_metabolism probe shape) |
+| A4 | **Norm-proposal strength cap 0.6** CALIBRATION-PENDING (i286) | `system_norm_proposal` | first estimate | Sweep consensus-scaled strength vs §12.5 ritual-reinforcement equilibrium |
+| A5 | **UM-2 diet debt** — only Safety generates inside 20K; Relational ~54K, Identity ~44K (i283 corrected pacing) | collective feeds | diet-gated | Festival-dense regime probe (recurring Relational+Identity press): does ≥3-bucket generation close by 20K without a magnitude-knob violation of §4.4? If yes, close the i278 PARTIAL; if no, record N=12 as the honest horizon |
+| A6 | **Era IV exit probe `i300_institution_shift`** — WP-J coupling landed (i280) but the end-to-end forced-stage amber→green pluralism probe never ran | `institutions_multiplier` | wired, unproven end-to-end | Probe per §6.3 i279 design; golden byte-identical below the crossing band |
+
+### 3.2 Blocked at external inputs (recorded, not plannable until inputs land)
+
+- Full Era III legality mapping — vendor `realms.md` not vendored.
+- Cross-line resonance matrix — vendor coupling attestation pending (`dynamics.rs:23`).
+- Golden-addiction cult dynamics × institution legitimacy interplay — needs a cult-liveliness regime (backlog).
+
+### 3.3 Deferred with recorded triggers (do NOT pull early)
+
+- VecDeque events buffer — revisit at >250K-tick operator horizons / memory-capped hosts / annals export (SimEvent 56 B; 780 MB @1M ticks).
+- Per-agent recent-claims index — revisit when runs exceed 250K ticks (O(claims)² salience filter).
+- H5 founder-variance shaping — systemic debt, requires larger N AND coordinated re-anchor sweep; never piecemeal.
+
+### 3.4 DC-3 checklist items still open (from the perf charter §5)
+
+- [ ] Perf regression probe wired as CI-adjacent bench (warn-only, N=12 ≤150 µs/tick).
+- [ ] Superlinearity probe at N=192 (interaction-volume vs algorithmic growth; never run).
+- [ ] Asset pipeline v0 charter (sets the UM-3 envelope).
+
+## 4. The iteration ladder (one root cause each, doctrine §2)
+
+**Theme:** close Era IV, harvest Era V, then scale the world (UM-3). Construction is no
+longer the bottleneck — diet realism and observability are; each iteration is
+probe-first, full-gate, and ends in commit + push.
+
+| Iter | Root cause owned | Deliverable | Exit evidence |
+|---|---|---|---|
+| **i287** | Era IV exit unproven | Run `i287_institution_shift` end-to-end: forced-stage governance amber→green crossing; measure pluralistic institution deltas through the live WP-J channel (A6) | Deltas measured, sign-correct, golden byte-identical below the crossing band → **Era IV exit gate CLOSED** |
+| **i288** | Transgression feed dead (A1) | Probe small-N transgression diet; if a scenario-seeded violation regime lifts NormViolated > 0 without reshaping founder draws (H5 rule), wire it as scenario-level seeding, not a magnitude knob | i286 Value/Norm synthesis path fires in the seeded regime; natural runs untouched (zero-blast outside scenario) |
+| **i289** | Grief/Threat magnitudes unratified (A2) | Observer-harness sweep across pestilence/collapse scenarios (the i285 mortality workaround); ratify magnitudes or re-contract with measured values | `CALIBRATION-PENDING` removed from catalyst_observers for Grief/Threat or honestly re-scoped |
+| **i290** | Era V WP-K observability incomplete | Per-quadrant transition traces (R6), per-agent longitudinal TUI lane + village panel, KosmOS-frontmatter `stage_lines` export in snapshot.rs | Traces render; export schema pinned; read-only → golden untouched |
+| **i291** | Era V WP-L chronicle lens missing | Ray/density lens rendering for chronicles ONLY (doctrine D5: lens never place) — altitude→ray mapping colors narrative text, zero mechanical effect | Chronicle renders tinted; mechanical-effect pin = zero; **Era V exit gate CLOSED** |
+| **i292** | Agape/norm doses first-estimate (A3+A4) | Two sweeps in one dose-calibration iteration (same subsystem family, one root cause: first-estimate constants); promote or record | Both sites carry measured/old/mechanism comments; no lucky-pin sweeps |
+| **i293** | UM-2 diet realism at operator horizons (A5) | Festival-dense regime probe (the named i283 accelerator): recurring Relational+Identity press at 20K. If ≥3 buckets generate → close the i278 PARTIAL properly; else ratify N=12/~100K as the designed cultural horizon and stop chasing 20K | Disjointness probe re-run with verdict + honest pacing statement |
+| **i294** | N≥96 scaling unproven | Superlinearity probe N=192 (charter checklist); separate interaction-volume growth from algorithmic accidents; hot-path list updated | Measured table @ N=12/48/96/192; any pass exceeding +10% N=96 with <10% yield lands on the hot-path list |
+| **i295** | Perf envelope unenforced | Perf regression probe as warn-only bench (N=12 ≤150 µs/tick budget); plus VecDeque/claims-index trigger review against any new horizon evidence | Charter §5 items 1+2 checked; budget drift visible in gate output |
+| **i296+** | Multi-village worlds (UM-3 core) | Collective holon per polity: `CollectiveField` per village, cross-village cultural diffusion via trade partners (backlog items), civilization-axioms line activation probe | Two-village scenario shows seed-disjoint collective trajectories; identity-at-isolation pin (single village = today's behavior) |
+
+**Standing discipline (unchanged):** check `git log --oneline -3 && git status` every
+session (shared-clone hazard); probe before touching; one root cause per iteration;
+fmt+clippy+release suite before every commit; `scripts/gate --full` before push;
+re-anchors carry measured/old/mechanism (§4.2); knife-edge results recorded as debt,
+never flip-flopped; no magnitude-knob compensation for diet problems (§4.4, i279 verdict).
+
+## 5. Risk register
+
+| Risk | Mitigation |
+|---|---|
+| i287 forced-stage probe breaks goldens | Zero-blast gate: golden horizons keep governance line at 1.0; crossing probe runs in scenario mode only |
+| i288 transgression seeding re-paces the shared interaction stream (the Iter-164/180 pattern) | Scenario-scoped seeding (zero blast in natural runs); sweep before any standing-rate change |
+| Vendor-blocked items stall morale | They are recorded with unblock conditions; the ladder above needs none of them |
+| Perf budget erosion from Era V TUI work | Read-only rendering discipline (i294/i295 before i296); charter rules 1–4 binding |
+| H5 founder-variance temptation at N=12 | Standing prohibition (§5); diet realism via scenario regimes, not draw reshaping |
+
+## 6. Summary
+
+The project is **structurally complete through Era IV and DC-2** with every gate green at
+HEAD. What remains is: (a) six actionable calibration items (§3.1), all probe-shaped and
+unblocked; (b) two Era V work packages (observability + chronicle lens) — the last unbuilt
+surfaces; (c) the DC-3 scale program (multi-village holons, N=192 scaling proof, asset
+pipeline v0); and (d) three vendor-blocked items that stay parked. The ladder above turns
+that into ten probe-first iterations, each with a named exit test.

@@ -767,3 +767,92 @@ fn norm_proposal_skips_fact_syntheses() {
     );
     assert_eq!(proposed, 0, "Fact syntheses are lore, not law");
 }
+
+/// i288 (A1 dead-producer fix): a `NormViolated` event projects the
+/// Transgression catalyst — Q2 dark-allergy receives real pressure, the
+/// justice line altitude advances, and a (Symbolic, Event) Norm polarity
+/// claim is appended. This is the restored producer chain: the only
+/// pre-i288 emission site (caught theft) is unreachable at the seeded
+/// topology (all stocks `AccessRight::Public`, i288 probe), so these
+/// pathways were structurally dead in every regime.
+#[test]
+fn norm_violated_event_drives_transgression_catalyst_pathways() {
+    use crate::systems::development::{collect_catalysts, system_development};
+    use mindstrata_core::clock::Tick;
+    use mindstrata_core::event::SimEvent;
+    use mindstrata_core::id::AgentId;
+    use mindstrata_development::catalyst::CatalystKind;
+
+    let ev = SimEvent::NormViolated {
+        agent: AgentId::new(3),
+        norm_id: 0,
+        witnesses: Vec::new(),
+        tick: Tick::new(7),
+    };
+
+    // Catalyst-level: NormViolated → Transgression, magnitude 0.5, subject = violator.
+    let cats = collect_catalysts(&[ev.clone()]);
+    assert_eq!(cats.len(), 1, "exactly one per-subject catalyst");
+    let (subject, kind, mag, major) = cats[0];
+    assert_eq!(subject, AgentId::new(3));
+    assert!(matches!(kind, CatalystKind::Transgression));
+    assert!(
+        (mag - 0.5).abs() < 1e-9,
+        "spec-midpoint Transgression magnitude"
+    );
+    assert!(!major, "Transgression is not a Threat severity case");
+
+    // System-level: the pass must move Q2 (dark allergy) beyond its
+    // absence-only growth in the same tick, proving real-pressure routing.
+    let mut sim = make_sim(42);
+    // One catalyst tick vs one absence tick, identical starting state.
+    let q2_start = sim.agents[3].development.pathology.dark_allergy.intensity;
+    let mut with_ev = [ev.clone()];
+    system_development(&mut sim.agents, &mut with_ev);
+    let q2_after_real = sim.agents[3].development.pathology.dark_allergy.intensity;
+    let mut absence = Vec::new();
+    let mut sim2 = make_sim(42);
+    system_development(&mut sim2.agents, &mut absence);
+    let q2_after_absence = sim2.agents[3].development.pathology.dark_allergy.intensity;
+    assert!(
+        q2_after_real > q2_after_absence + 0.001,
+        "real Transgression pressure must exceed absence growth: {q2_after_real} vs {q2_after_absence}"
+    );
+    assert!(
+        q2_after_real > q2_start,
+        "Q2 must advance from its pre-tick state"
+    );
+}
+
+/// i288: the justice polarity claim — a (Symbolic, Event, justice) Norm
+/// claim — is projected from the Transgression catalyst, distinct from the
+/// Threat slots. This is the stream the i286 Value/Norm synthesis gate has
+/// been waiting on.
+#[test]
+fn norm_violated_projects_justice_norm_claim() {
+    use crate::systems::development::system_polarity_claim_emit;
+    use mindstrata_core::clock::Tick;
+    use mindstrata_core::event::SimEvent;
+    use mindstrata_core::id::AgentId;
+    use mindstrata_development::polarity::{CausalDomain, GrossReferent, SubtleClaim};
+
+    let mut sim = make_sim(42);
+    let ev = SimEvent::NormViolated {
+        agent: AgentId::new(2),
+        norm_id: 0,
+        witnesses: Vec::new(),
+        tick: Tick::new(9),
+    };
+    let events = vec![ev];
+    system_polarity_claim_emit(&mut sim.agents, &events, 9);
+    let claims = &sim.agents[2].polarity_claims;
+    assert!(
+        claims.iter().any(|c| {
+            matches!(c.domain, CausalDomain::Symbolic)
+                && matches!(c.referent, GrossReferent::Event)
+                && matches!(c.claim, SubtleClaim::Norm)
+                && c.line.slug() == "justice"
+        }),
+        "Transgression must project a (Symbolic, Event) Norm claim on the justice line"
+    );
+}

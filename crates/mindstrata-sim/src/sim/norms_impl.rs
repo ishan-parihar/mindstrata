@@ -303,6 +303,38 @@ impl Simulation {
                                         from_id,
                                         tick_u64,
                                     );
+                                    // i288 (§4.3 dead-producer fix): the
+                                    // Transgression catalyst producer. The ONLY
+                                    // other `SimEvent::NormViolated` emission site
+                                    // was the caught-theft path in legal_impl.rs,
+                                    // which is unreachable by construction at the
+                                    // seeded topology (every stock is
+                                    // `AccessRight::Public`, so
+                                    // `inaccessible_farm_with_grain_amount` can
+                                    // never match — i288 probe), leaving the
+                                    // Transgression catalyst dead in every regime:
+                                    // Q2 dark-allergy had no real-pressure tick
+                                    // (always-step absence growth only), the
+                                    // justice line altitude never advanced, no
+                                    // (Symbolic, Event) Norm claim ever projected,
+                                    // and `check_violation`'s registry record had
+                                    // no observer-visible counterpart. Violence
+                                    // IS public (the Iter-88 audit's own semantic:
+                                    // no detection roll is drawn here), so the
+                                    // event fires on the same public-by-nature
+                                    // basis. Magnitude 0.5 = the spec-midpoint
+                                    // Transgression pressure (CALIBRATION-PENDING
+                                    // per the A2 sweep, PLAN_DC3 §3.1). The
+                                    // witnesses list stays empty: per-subject
+                                    // expansion is the aggressor only — targets
+                                    // already receive their Threat catalyst from
+                                    // the ConflictOccurred event above.
+                                    self.events.push(SimEvent::NormViolated {
+                                        agent: from_id,
+                                        norm_id: crate::norms::NO_VIOLENCE_NORM_ID,
+                                        witnesses: Vec::new(),
+                                        tick,
+                                    });
                                     // §8.1.10/§19.5.D (Iteration 88): the
                                     // no-violence witnessed-enforcement audit —
                                     // unlike sneaky theft (which needs a
