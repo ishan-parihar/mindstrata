@@ -35,6 +35,43 @@ impl Simulation {
         let mut reg_strategies: Vec<crate::psychology::emotion_regulation::RegulationStrategy> =
             Vec::with_capacity(num_agents);
 
+        // i294 hot-path fix: social support used to scan the ENTIRE legacy
+        // relationship matrix inside the per-agent loop (O(N·R) = O(N³) per
+        // tick — the α_cost≈1.18 accident measured by i294_superlinearity).
+        // The trust-sync block above it (core.rs tick loop) already uses the
+        // O(R) prepass pattern; this does the same: one pass over R collects
+        // each agent's top-3 relationship trusts, the per-agent block then
+        // reads the precomputed value. Bit-identical by construction: the
+        // top-3 insertion below processes rows in the SAME matrix order the
+        // old inner scan did for every agent (multiset argument — equal
+        // values never re-insert, higher values shift past smaller — so row
+        // order is irrelevant to the top-3 SET), and the baseline/default
+        // branch is value-for-value identical. No RNG. No allocation: the
+        // buffer is a stack-array row reused per matrix entry.
+        let mut top3s: Vec<[Fixed; 3]> = vec![[Fixed::ZERO; 3]; num_agents];
+        let mut top3_counts: Vec<u32> = vec![0_u32; num_agents];
+        let mut social_support_pre: Vec<Fixed> = vec![Fixed::from_f64(0.3); num_agents];
+        for r in relationships.iter() {
+            let from_idx = r.from.as_u64() as usize;
+            if from_idx >= num_agents {
+                continue;
+            }
+            // Insert into sorted top-3 (descending) — the identical logic the
+            // old per-agent inner scan applied to this agent's rows.
+            let top3 = &mut top3s[from_idx];
+            let pos = top3.iter().position(|t| r.trust > *t);
+            if let Some(p) = pos {
+                for j in (p + 1..3).rev() {
+                    top3[j] = top3[j - 1];
+                }
+                top3[p] = r.trust;
+            }
+            top3_counts[from_idx] += 1;
+            let n = (top3_counts[from_idx] as usize).min(3);
+            let sum = top3.iter().take(n).fold(Fixed::ZERO, |acc, t| acc + *t);
+            social_support_pre[from_idx] = sum / Fixed::from_int(n as i64);
+        }
+
         // ── 0b. Cognitive state update (§22.1) ────────────────────
         // §22.1: Stress reduces planning horizon, increases heuristic bias.
         // This must happen before action selection to affect decision-making.
@@ -242,32 +279,13 @@ impl Simulation {
 
             // Architecture-plan-2 §8.1.4: Emotion regulation
             // Compute social support from relationships (average trust of top-3 closest agents)
-            // Uses a fixed-size stack array to avoid heap allocation per agent per tick.
-            let social_support = {
-                let mut top3: [Fixed; 3] = [Fixed::ZERO; 3];
-                let mut count: usize = 0;
-                for r in relationships.iter() {
-                    if r.from == AgentId::new(i as u64) {
-                        // Insert into sorted top-3 (descending)
-                        let pos = top3.iter().position(|t| r.trust > *t);
-                        if let Some(p) = pos {
-                            // Shift smaller values right, insert at p
-                            for j in (p + 1..3).rev() {
-                                top3[j] = top3[j - 1];
-                            }
-                            top3[p] = r.trust;
-                        }
-                        count += 1;
-                    }
-                }
-                if count > 0 {
-                    let n = count.min(3);
-                    let sum: Fixed = top3[..n].iter().fold(Fixed::ZERO, |acc, t| acc + *t);
-                    sum / Fixed::from_int(n as i64)
-                } else {
-                    Fixed::from_f64(0.3) // baseline when no relationships
-                }
-            };
+            // i294 hot-path fix: read the O(R)-prepass value — this was a full
+            // relationship-matrix scan per agent per tick (O(N·R) = O(N³)/tick,
+            // the measured α_cost≈1.18 superlinearity accident). Value path is
+            // bit-identical: same top-3 insertion order (matrix order), same
+            // baseline (0.3) when an agent has no qualifying rows.
+            let social_support = social_support_pre[i];
+
             // §17: Only focal agents run full emotion regulation
             if agents[i].agent_tier.tier.runs_full_psychology() {
                 let regulation_strategy = agents[i].emotion_regulation.select_strategy(
