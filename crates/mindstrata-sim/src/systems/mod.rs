@@ -121,6 +121,67 @@ pub fn system_body_update(_ctx: &mut SystemContext, bodies: &mut [BodyState], ne
 
 // ── Goal generation system ───────────────────────────────────────────────
 
+/// The five fulfillment thresholds of `system_goal_generation`, resolved for a
+/// run (difficulty-levers row 2, threshold half — i305).
+///
+/// These were inline consts (0.5 Eat/Drink, 0.6 Rest, 0.7 Socialize/Worship,
+/// 0.3 retain) with no executable surface: the row-2 catalog row could not
+/// reach them, so the "fulfillment thresholds" half of the lever was
+/// documentation only. A LOWER gate makes the village respond earlier (the
+/// standing deficit stays small, the abundant feel); a higher one makes it
+/// tolerate more before acting (scarcity feel). The spec for these values is
+/// `docs/balance/needs-bands.md` (all bands CALIBRATION-PENDING there).
+///
+/// Resolved ONCE per tick from `SimParameters::goal_gate_scale` (§5
+/// quantize-once): the canon gates and the 0.6×/1.0×/1.4× multipliers are all
+/// exactly representable at Fixed-4, so no band lands on a rounding edge.
+/// Standard returns the canon gates bit-for-bit.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GoalGates {
+    /// Gate on the hunger deficit that generates an `Eat` goal.
+    pub eat: Fixed,
+    /// Gate on the thirst deficit that generates a `Drink` goal.
+    pub drink: Fixed,
+    /// Gate on the fatigue deficit that generates a `Rest` goal.
+    pub rest: Fixed,
+    /// Gate on the social deficit that generates a `Socialize` goal.
+    pub socialize: Fixed,
+    /// Gate on the meaning deficit that generates a `Worship` goal.
+    pub worship: Fixed,
+    /// Gate below which an existing goal is dropped (the retain half).
+    /// Scales with the same multiplier — a village that acts early also lets
+    /// goals go early, so the gate and its retain bound stay in proportion.
+    pub retain: Fixed,
+}
+
+impl GoalGates {
+    /// Canon gates — the values every pre-i305 run was calibrated with
+    /// (raw units: 1 raw = 1e-4).
+    pub const CANON: Self = Self {
+        eat: Fixed::from_raw(5_000),
+        drink: Fixed::from_raw(5_000),
+        rest: Fixed::from_raw(6_000),
+        socialize: Fixed::from_raw(7_000),
+        worship: Fixed::from_raw(7_000),
+        retain: Fixed::from_raw(3_000),
+    };
+
+    /// Resolve the run's gates from the difficulty band multiplier.
+    #[must_use]
+    pub fn for_params(params: &crate::parameters::SimParameters) -> Self {
+        let scale = params.goal_gate_scale;
+        let c = Self::CANON;
+        Self {
+            eat: c.eat * scale,
+            drink: c.drink * scale,
+            rest: c.rest * scale,
+            socialize: c.socialize * scale,
+            worship: c.worship * scale,
+            retain: c.retain * scale,
+        }
+    }
+}
+
 /// Generate goals based on need pressure, emotional state, and identity.
 /// §24: Goals now carry source tracking and support emotional/identity modulation.
 /// §3.4: Emotional goal modulation — anger, fear, and joy drive goal generation.
@@ -130,8 +191,10 @@ pub fn system_goal_generation(
     needs: &[NeedState],
     goals: &mut [Vec<crate::person::Goal>],
     emotions: &[crate::person::DiscreteEmotions],
+    params: &crate::parameters::SimParameters,
 ) {
     let tick = ctx.tick;
+    let gates = GoalGates::for_params(params);
     for (i, (need, agent_goals)) in needs.iter().zip(goals.iter_mut()).enumerate() {
         // ── Goal decay: reduce priority of old goals over time ──
         // §24: Goals that aren't addressed gradually lose priority.
@@ -157,7 +220,9 @@ pub fn system_goal_generation(
             if g.source == crate::person::GoalSource::Command {
                 return true;
             }
-            let threshold = Fixed::from_f64(0.3);
+            // i305: the retain gate rides the same band multiplier (canon
+            // 0.3, so a Standard run keeps its exact pre-i305 value).
+            let threshold = gates.retain;
             match g.kind {
                 crate::person::GoalKind::Eat => need.hunger > threshold,
                 crate::person::GoalKind::Drink => need.thirst > threshold,
@@ -171,31 +236,21 @@ pub fn system_goal_generation(
 
         // ── Need-driven goals (§24 primary source) ──
         // §24: Only one goal per GoalKind — update priority if goal already exists
+        // i305 (row 2, threshold half): the fulfillment thresholds are the
+        // run's resolved band gates, not inline consts.
         let need_goals: &[(crate::person::GoalKind, Fixed, Fixed)] = &[
-            (
-                crate::person::GoalKind::Eat,
-                need.hunger,
-                Fixed::from_f64(0.5),
-            ),
-            (
-                crate::person::GoalKind::Drink,
-                need.thirst,
-                Fixed::from_f64(0.5),
-            ),
-            (
-                crate::person::GoalKind::Rest,
-                need.fatigue,
-                Fixed::from_f64(0.6),
-            ),
+            (crate::person::GoalKind::Eat, need.hunger, gates.eat),
+            (crate::person::GoalKind::Drink, need.thirst, gates.drink),
+            (crate::person::GoalKind::Rest, need.fatigue, gates.rest),
             (
                 crate::person::GoalKind::Socialize,
                 need.social,
-                Fixed::from_f64(0.7),
+                gates.socialize,
             ),
             (
                 crate::person::GoalKind::Worship,
                 need.meaning,
-                Fixed::from_f64(0.7),
+                gates.worship,
             ),
         ];
         for (kind, pressure, threshold) in need_goals {

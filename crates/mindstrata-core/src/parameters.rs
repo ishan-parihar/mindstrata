@@ -51,6 +51,14 @@ pub struct SimParameters {
     /// 1.0 = canon; the Resilient band is 1.2, the Brittle band 0.7.
     #[serde(default = "scale_identity")]
     pub pathology_decay_scale: Fixed,
+    /// Multiplier on the five goal-generation fulfillment thresholds
+    /// (`docs/balance/difficulty-levers.md` row 2's threshold half, the
+    /// companion of the need-decay rates above; i305). 1.0 = canon. A LOWER
+    /// multiplier makes the village respond to deficits earlier (standing
+    /// deficits stay small — the abundant feel); a higher one makes it tolerate
+    /// more deficit before acting (scarcity feel).
+    #[serde(default = "scale_identity")]
+    pub goal_gate_scale: Fixed,
 
     // ── Psychological ─────────────────────────────────────────
     /// Stress smoothing factor (lower = slower adaptation).
@@ -455,6 +463,7 @@ impl Default for SimParameters {
             // Identity multipliers — the canon band (see `with_difficulty`).
             pathology_growth_scale: Fixed::from_f64(1.0),
             pathology_decay_scale: Fixed::from_f64(1.0),
+            goal_gate_scale: Fixed::from_f64(1.0),
 
             // Psychological
             stress_smoothing: Fixed::from_f64(0.1),
@@ -681,6 +690,8 @@ impl SimParameters {
                                                                 // Row 3, Resilient band: slow accumulation, fast recovery.
                 p.pathology_growth_scale = Fixed::from_f64(0.5);
                 p.pathology_decay_scale = Fixed::from_f64(1.2);
+                // Row 2 threshold half: respond to deficits earlier (i305).
+                p.goal_gate_scale = Fixed::from_f64(0.6);
             }
             DifficultyProfile::Harsh => {
                 p.hunger_decay_rate = Fixed::from_f64(0.0014); // 0.0010 × 1.4
@@ -692,15 +703,18 @@ impl SimParameters {
                                                                 // Row 3, Brittle band: fast accumulation, slow recovery.
                 p.pathology_growth_scale = Fixed::from_f64(1.8);
                 p.pathology_decay_scale = Fixed::from_f64(0.7);
+                // Row 2 threshold half: tolerate more deficit before acting.
+                p.goal_gate_scale = Fixed::from_f64(1.4);
             }
         }
         p
     }
 }
-/// Difficulty-lever profile (i303; row 3 wired i304): which ratified band
-/// the run sits in across the promoted rows of
-/// `docs/balance/difficulty-levers.md` — row 2 need decay (0.6×/1.0×/1.4×)
-/// and row 3 pathology growth+decay (Resilient/Standard/Brittle). Standard
+/// Difficulty-lever profile (i303; row 3 wired i304; row 2's threshold
+/// half wired i305): which ratified band the run sits in across the
+/// promoted rows of `docs/balance/difficulty-levers.md` — row 2 (need decay
+/// AND the goal-generation fulfillment thresholds, both 0.6×/1.0×/1.4×) and
+/// row 3 pathology growth+decay (Resilient/Standard/Brittle). Standard
 /// is the canon default and the only value every calibrated window was
 /// measured at; Lenient/Harsh are the catalog's Low/High candidate bands
 /// promoted to a runtime surface with probe evidence (i303 + i304 probes
@@ -828,11 +842,14 @@ mod tests {
         assert_eq!(d.social_decay_rate, s.social_decay_rate);
         assert_eq!(d.meaning_decay_rate, s.meaning_decay_rate);
         assert_eq!(d.difficulty, DifficultyProfile::Standard);
-        // Row 3 (i304) rides the same identity contract.
+        // Row 3 (i304) and row 2's threshold half (i305) ride the same
+        // identity contract.
         assert_eq!(d.pathology_growth_scale, s.pathology_growth_scale);
         assert_eq!(d.pathology_decay_scale, s.pathology_decay_scale);
+        assert_eq!(d.goal_gate_scale, s.goal_gate_scale);
         assert_eq!(s.pathology_growth_scale, Fixed::ONE);
         assert_eq!(s.pathology_decay_scale, Fixed::ONE);
+        assert_eq!(s.goal_gate_scale, Fixed::ONE);
         // Full-struct identity: difficulty is the ONLY field the mapping may
         // differ on, and for Standard it does not differ at all.
         let json_a = serde_json::to_string(&d).unwrap();
@@ -953,9 +970,42 @@ mod tests {
         assert_eq!(bri.pathology_decay_scale.to_f64(), 0.7);
     }
 
+    // ── i305 difficulty-lever row 2, threshold half (goal gates) ──
+
+    /// The goal-gate band rides the same multipliers as the row-2 decay half
+    /// (0.6/1.0/1.4) and, like the row-3 scales, survives Fixed-4 exactly — no
+    /// sub-resolution collapse class exists on this half either.
+    #[test]
+    fn goal_gate_band_scales_the_fulfillment_thresholds() {
+        let len = SimParameters::with_difficulty(DifficultyProfile::Lenient);
+        let std = SimParameters::with_difficulty(DifficultyProfile::Standard);
+        let harsh = SimParameters::with_difficulty(DifficultyProfile::Harsh);
+        assert_eq!(len.goal_gate_scale.to_raw(), 6_000);
+        assert_eq!(std.goal_gate_scale.to_raw(), 10_000);
+        assert_eq!(harsh.goal_gate_scale.to_raw(), 14_000);
+        assert!(len.goal_gate_scale < std.goal_gate_scale);
+        assert!(std.goal_gate_scale < harsh.goal_gate_scale);
+        // Fixed-4 is exact for all three multipliers, so the scale that reaches
+        // the gate math is the catalog factor itself. Canon gates 0.5/0.6/0.7
+        // and the retain gate 0.3 stay exactly representable when scaled
+        // (0.3/0.36/0.42/0.18 lenient; 0.7/0.84/0.98/0.42 harsh).
+        for (gate, expect_len, expect_harsh) in [
+            (0.5_f64, 0.3, 0.7),
+            (0.6, 0.36, 0.84),
+            (0.7, 0.42, 0.98),
+            (0.3, 0.18, 0.42),
+        ] {
+            let canon = Fixed::from_f64(gate);
+            assert_eq!((canon * len.goal_gate_scale).to_f64(), expect_len);
+            assert_eq!((canon * harsh.goal_gate_scale).to_f64(), expect_harsh);
+            assert_eq!((canon * std.goal_gate_scale).to_f64(), gate);
+        }
+    }
+
     /// Serde back-compat: a param payload serialized before i304 (no
     /// pathology-scale keys) loads at the canon identity — the same
     /// serde-default pattern every Snapshot field addition has used since v8.
+    /// The i305 `goal_gate_scale` key is covered by the same assertion.
     #[test]
     fn legacy_params_json_defaults_pathology_scales_to_canon() {
         let json = serde_json::to_string(&SimParameters::default()).unwrap();
@@ -963,9 +1013,11 @@ mod tests {
         let obj = v.as_object_mut().unwrap();
         obj.remove("pathology_growth_scale");
         obj.remove("pathology_decay_scale");
+        obj.remove("goal_gate_scale");
         let restored: SimParameters = serde_json::from_value(v).unwrap();
         assert_eq!(restored.pathology_growth_scale, Fixed::ONE);
         assert_eq!(restored.pathology_decay_scale, Fixed::ONE);
+        assert_eq!(restored.goal_gate_scale, Fixed::ONE);
     }
 
     /// Serde back-compat: a param payload serialized before i303 (no

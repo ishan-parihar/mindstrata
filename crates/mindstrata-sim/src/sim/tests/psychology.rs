@@ -225,3 +225,110 @@ fn skill_milestone_crossed_fires_only_on_tenth_boundaries() {
         Fixed::from_f64(1.0)
     ));
 }
+
+// ── i305: difficulty-lever row 2, threshold half (goal gates) ─────────────
+
+/// Standard must resolve the canon fulfillment thresholds bit-for-bit — the
+/// zero-blast contract for the threshold half (the golden replay proves it
+/// end-to-end; this names the mechanism).
+#[test]
+fn goal_gates_in_the_standard_band_are_the_canon_thresholds() {
+    use crate::systems::GoalGates;
+    let gates = GoalGates::for_params(&crate::parameters::SimParameters::default());
+    assert_eq!(gates, GoalGates::CANON);
+    assert_eq!(gates.eat.to_raw(), 5_000);
+    assert_eq!(gates.drink.to_raw(), 5_000);
+    assert_eq!(gates.rest.to_raw(), 6_000);
+    assert_eq!(gates.socialize.to_raw(), 7_000);
+    assert_eq!(gates.worship.to_raw(), 7_000);
+    assert_eq!(gates.retain.to_raw(), 3_000);
+}
+
+/// The band multiplier reaches every gate, in the coherent direction: a
+/// Lenient village responds to smaller deficits (lower gates), a Harsh one
+/// tolerates more (higher gates). Fixed-4 is exact for 0.6/1.4, so no gate
+/// lands on a rounding edge.
+#[test]
+fn goal_gates_scale_with_the_difficulty_band() {
+    use crate::parameters::{DifficultyProfile, SimParameters};
+    use crate::systems::GoalGates;
+    let lenient =
+        GoalGates::for_params(&SimParameters::with_difficulty(DifficultyProfile::Lenient));
+    let harsh = GoalGates::for_params(&SimParameters::with_difficulty(DifficultyProfile::Harsh));
+    assert_eq!(lenient.eat.to_raw(), 3_000);
+    assert_eq!(lenient.socialize.to_raw(), 4_200);
+    assert_eq!(lenient.retain.to_raw(), 1_800);
+    assert_eq!(harsh.eat.to_raw(), 7_000);
+    assert_eq!(harsh.socialize.to_raw(), 9_800);
+    assert_eq!(harsh.retain.to_raw(), 4_200);
+    for (l, h) in [
+        (lenient.eat, harsh.eat),
+        (lenient.drink, harsh.drink),
+        (lenient.rest, harsh.rest),
+        (lenient.socialize, harsh.socialize),
+        (lenient.worship, harsh.worship),
+        (lenient.retain, harsh.retain),
+    ] {
+        assert!(l < h, "lenient gates must sit below harsh gates");
+    }
+}
+
+/// Behavioural pin (no RNG, no seed dependence): the band actually changes
+/// which goals exist. An agent carrying a hunger deficit of 0.55 sits between
+/// the canon gate (0.5) and the Harsh gate (0.7), so the same state generates
+/// an `Eat` goal under Lenient/Standard and none under Harsh.
+#[test]
+fn harsh_gate_scale_withholds_a_goal_the_standard_band_generates() {
+    use crate::parameters::{DifficultyProfile, SimParameters};
+    use crate::person::GoalKind;
+    use crate::systems::{system_goal_generation, SystemContext};
+
+    let generated = |profile: DifficultyProfile| -> bool {
+        let mut sim = Simulation::new(SimConfig {
+            seed: 42,
+            max_ticks: 100,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 6,
+            snapshot_interval: None,
+        });
+        sim.populate();
+        for a in &mut sim.agents {
+            a.needs.hunger = Fixed::from_f64(0.55);
+        }
+        let personalities: Vec<_> = sim.agents.iter().map(|a| a.personality.clone()).collect();
+        let needs: Vec<_> = sim.agents.iter().map(|a| a.needs.clone()).collect();
+        let emotions: Vec<_> = sim.agents.iter().map(|a| a.emotions.clone()).collect();
+        let mut goals: Vec<Vec<crate::person::Goal>> = vec![Vec::new(); sim.agents.len()];
+        let params = SimParameters::with_difficulty(profile);
+        let mut events = Vec::new();
+        let mut ctx = SystemContext {
+            tick: 1,
+            rng: &mut sim.rng,
+            world: &mut sim.world,
+            events: &mut events,
+        };
+        system_goal_generation(
+            &mut ctx,
+            &personalities,
+            &needs,
+            &mut goals,
+            &emotions,
+            &params,
+        );
+        goals[0].iter().any(|g| g.kind == GoalKind::Eat)
+    };
+
+    assert!(
+        generated(DifficultyProfile::Lenient),
+        "a hunger deficit of 0.55 must generate an Eat goal in the Lenient band"
+    );
+    assert!(
+        generated(DifficultyProfile::Standard),
+        "a hunger deficit of 0.55 must generate an Eat goal in the Standard band"
+    );
+    assert!(
+        !generated(DifficultyProfile::Harsh),
+        "the Brittle/1.4x band must tolerate 0.55 hunger before acting"
+    );
+}

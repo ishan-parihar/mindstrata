@@ -9,10 +9,23 @@ Frozen at 2.18; values CALIBRATION-PENDING(AP3) until probe-measured per FR-027.
 ## Evidence
 
 - Existing mechanics: need decay rates live in `SimParameters`
-  (`system_need_decay_with_params`, crates/mindstrata-sim/src/systems/mod.rs:57–74);
-  goal generation gates on fixed thresholds 0.3/0.5/0.6/0.7 inline
-  (`system_goal_generation`, systems/mod.rs:130–197). These are empirical, NOT
-  theory-cited — now CALIBRATION-PENDING(AP3) per this spec.
+  (`system_need_decay_with_params`, crates/mindstrata-sim/src/systems/mod.rs);
+  goal generation gates on 0.3/0.5/0.6/0.7 (`systems::GoalGates::CANON`, the
+  pre-i305 inline consts). These are empirical, NOT theory-cited —
+  CALIBRATION-PENDING(AP3) per this spec.
+- **i305 status**: the gates are now a runtime surface
+  (`SimParameters.goal_gate_scale`, banded 0.6×/1.0×/1.4× by
+  `DifficultyProfile`) resolved once per tick into `systems::GoalGates`. The
+  MEASURED distributions the bands sit on, at 12 seeds × 2K/20K agent-ticks:
+  hunger p50 0.025 / p99 0.413; thirst p50 0.116 / p99 1.0; fatigue p50 0.145 /
+  p99 1.0; social p50 0.005 / p99 0.196; meaning p50 0.471 / p90 1.000
+  (saturated). Two consequences for the rows below: (a) the proposed ranges for
+  the survival/belonging/meaning gates sit ABOVE the range those channels
+  occupy at the calibrated horizon, so the canon gate values were kept rather
+  than moved to the spec's bands; (b) the meaning channel's saturation is the
+  binding calibration problem in this table, and it is a decay-vs-relief
+  balance issue, not a gate issue. Full tables:
+  `docs/architecture/AP4-studio/evidence/i305_goal_gate_bands.md`.
 - Motivation-context amplifications couple fear/anger/joy/sadness into drive pressures
   (Iteration-124 fix; see docs/MINDSTRATA_CURRENT_STATE.md historical note).
 - Development field altitudes now live on every agent (task 3.1) and are updated

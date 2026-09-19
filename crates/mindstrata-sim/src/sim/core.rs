@@ -215,6 +215,7 @@ impl Simulation {
                 &needs,
                 &mut goals,
                 &emotions,
+                &params,
             );
 
             Self::tick_action_pass(
