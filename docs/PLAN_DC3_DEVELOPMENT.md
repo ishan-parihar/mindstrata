@@ -63,7 +63,7 @@ Every item is documented debt with a named probe plan; none is hidden.
 
 - [ ] Perf regression probe wired as CI-adjacent bench (warn-only, N=12 ≤150 µs/tick).
 - [ ] Superlinearity probe at N=192 (interaction-volume vs algorithmic growth; never run).
-- [ ] Asset pipeline v0 charter (sets the UM-3 envelope).
+- [x] Asset pipeline v0 charter (sets the UM-3 envelope). — **LANDED i301** (`charters/ASSET-PIPELINE-v0.md`; `sim/assets.rs` + CLI `--export-assets`; see `evidence/i301_asset_export.md`).
 
 ## 4. The iteration ladder (one root cause each, doctrine §2)
 
@@ -127,6 +127,7 @@ that into ten probe-first iterations, each with a named exit test.
 | i298 | **DONE** | evidence/i298_auto_partition.md | UM-3 leg 2 (assignment rule) CLOSED — `auto_partition_polities(max_gap)`: deterministic single-linkage clustering over inhabited home sites; single settlement → inert (0 polities), two settlements → disjoint cover with divergent trajectories (S 4.000 vs 3.000), derived ≡ assigned bit-identical over 10K; sim lib 253/253 |
 | i299 | **DONE** | evidence/i299_trade_diffusion.md | UM-3 leg 3 (diffusion) CLOSED — `system_trade_diffusion`: cross-polity trades damp sender's namespaced genesis memes into the receiver (§13.1 weight 0.3, zero RNG); zero-at-zero in vivo; diet LOADED (1160 cross trades/window); measurement boundary recorded (host_count conflates gossip+diffusion → `meme.hosts` schema debt for i300); sim lib 257/257 |
 | i300 | **DONE** | evidence/i300_um3_gate.md | **UM-3 GATE CLOSED** — `meme.hosts` per-agent hosting sets (additive serde-default); gate @50K/seed 42: 2 auto-partitioned polities, 26 territory-routed genesis memes (p0=14/p1=12), 26/26 cross-hosted via trade+gossip (origin-share 0.288, saturation caveat recorded); sim lib 258/258 |
+| i301 | **DONE** | evidence/i301_asset_export.md | **ASSET PIPELINE v0 landed** (last DC-3 checklist item) — charter ratified (5 binding rules, versioned schema); `export_world_assets_json` + CLI `--export-assets`; determinism byte-identical, v1 round-trip, polities/stage_lines/culture.hosts/annals payload verified; sim lib 262/262 |
 
 ## 8. 2026-09-19 audit + UM-3 continuation ladder (post-i296)
 

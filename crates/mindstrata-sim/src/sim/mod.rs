@@ -748,6 +748,7 @@ pub struct Simulation {
 pub use snapshot_metrics::{AgentSummary, MetricsSnapshot};
 
 mod api;
+pub mod assets;
 mod births_deaths;
 pub mod catalyst_observers;
 pub mod chronicle;

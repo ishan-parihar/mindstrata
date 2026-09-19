@@ -129,6 +129,11 @@ enum Commands {
         /// Export metric history to CSV file.
         #[arg(long)]
         export_metrics: Option<String>,
+
+        /// Export the v0 asset document (world + culture + annals JSON,
+        /// ASSET-PIPELINE-v0 charter) to the given path after simulation.
+        #[arg(long)]
+        export_assets: Option<String>,
     },
     /// Run a named scenario.
     Scenario {
@@ -177,6 +182,7 @@ fn main() {
             save_snapshot,
             load_snapshot,
             export_metrics,
+            export_assets,
         } => {
             init_logging(verbose);
 
@@ -583,6 +589,20 @@ fn main() {
                         &sim.noospheric_field,
                     )
                 );
+            }
+
+            // Iteration 301 (ASSET-PIPELINE-v0 charter): export the world +
+            // culture asset document after simulation. Pure read over public
+            // state — see the charter's binding rules.
+            if let Some(ref path) = export_assets {
+                let json = mindstrata_sim::sim::assets::export_world_assets_json(&sim);
+                match std::fs::write(path, &json) {
+                    Ok(()) => println!(
+                        "\n  Assets exported to: {path} (schema v{})",
+                        mindstrata_sim::sim::assets::ASSET_SCHEMA_VERSION
+                    ),
+                    Err(e) => eprintln!("\n  Failed to export assets: {e}"),
+                }
             }
 
             // §6.5 + §17: Export metric history to CSV using MetricsSnapshot methods
