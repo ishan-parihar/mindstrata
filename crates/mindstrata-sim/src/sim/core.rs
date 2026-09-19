@@ -700,6 +700,19 @@ impl Simulation {
             );
         }
 
+        // ── Iter-297 (UM-3 leg 1): territory-anchored per-polity genesis.
+        // Each polity's field generates culture citing ITS territory (site
+        // ownership by nearest home-site centroid; institutions by member
+        // majority) — the referent leg i296 deferred. The whole-village
+        // genesis call below still runs first in tick order and wins the
+        // shared-registry dedup on (bucket, class, epoch) tags, so worlds
+        // with polities assigned keep every whole-village meme and gain only
+        // NEW epochs that the whole-village field has not yet reached — which
+        // is exactly the divergence channel: a polity whose holon advanced
+        // past the village's stage commemorates it with ITS OWN places.
+        // Inert without `assign_polities` (empty polity_fields → early
+        // return; zero allocation beyond the empty check).
+
         // ── Era IV (i273): collective-line meme genesis. The first consumer
         // that GENERATES culture from collective development instead of
         // modulating an existing channel (substrate §5: replaces the
@@ -708,6 +721,28 @@ impl Simulation {
         // lines at exactly 1.0 (probe i273, CV 0.000) — so zero blast on
         // calibrated windows; fires when a bucket's deepest line crosses
         // stage 2.0 (first observed at ~5-8K ticks in the probe).
+        if !self.polity_fields.is_empty() {
+            let site_positions: Vec<(i32, i32)> = self
+                .world
+                .sites
+                .iter()
+                .enumerate()
+                .map(|(idx, _)| self.world.site_position(idx).unwrap_or((8, 8)))
+                .collect();
+            let agent_home_site: Vec<Option<usize>> =
+                self.agents.iter().map(|a| a.home_site).collect();
+            crate::systems::genesis::system_polity_genesis(
+                &self.polity_fields,
+                &self.polity_members,
+                &mut self.meme_registry,
+                self.params.meme_virality_scaling,
+                tick,
+                &self.institutions,
+                &self.world.sites,
+                &site_positions,
+                &agent_home_site,
+            );
+        }
         crate::systems::genesis::system_collective_genesis(
             &self.collective_field,
             &mut self.meme_registry,

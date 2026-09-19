@@ -120,8 +120,37 @@ that into ten probe-first iterations, each with a named exit test.
 | i291 | **DONE** | evidence/i291_chronicle_lens.md | WP-L CLOSED — **Era V exit gate CLOSED**; ray lens extracted from vault per-cell frontmatter (provisional until rays.md vendors); mechanical-effect pin = zero (untinted lines survive verbatim) |
 | i292 | **DONE** | evidence/i292_dose_calibration.md | A3+A4 RATIFIED at existing values with sweep evidence (agape 0.6 in the 0.5–3% metabolizer band; cap 0.6 measured binding in vivo). Both CALIBRATION-PENDING markers closed |
 | i293 | **DONE** | evidence/i293_festival_regime.md | A5 closed: i278 PARTIAL → diet-pacing (≥3 buckets by 5K under festival press, zero production edits); **N=12/~100K ratified as the designed cultural horizon**; uniform press homogenizes rosters (jaccard 0.822) — recorded for UM-3 |
+| i294 | **DONE** | evidence/i294_superlinearity.md | O(N³) social-support scan fixed golden-identical (uniform −20%); α_total=2.115 attributed: volume linear (0.975), cost/event climbs (1.14) — algorithmic; dense-matrix α_rels=2.03 structural floor |
+| i295 | **DONE** | (charter §5 closed) | Perf envelope warn-only in gate 2.55 (N=12 102.6/150, N=96 4577.7/6500); VecDeque/claims-index triggers re-reviewed, NOT hit |
+| i296 | **DONE** | evidence/i296_multi_village.md | UM-3 core landed: per-polity holons (`polity_fields`/`assign_polities`), identity-at-isolation pinned unit+in-vivo, partition diverges (Safety 3.000 vs 4.000). Remaining UM-3 legs: referent/naming, auto-partition, cross-village diffusion |
+| i297 | **DONE** | evidence/i297_polity_genesis.md | UM-3 leg 1 (referents) CLOSED — per-polity genesis with territory-anchored referent views (sites: nearest home-site centroid; institutions: member-majority) + per-polity dedup namespaces; probe: p0 cites Village Market, p1 cites Village Temple (20K, seed 42); zero blast without polities; sim lib 250/250 |
 
-**Next up:** i294 (N=192 superlinearity probe + hot-path table) → i295 (perf-envelope
-warn-only bench) → i296+ (multi-village holons, UM-3 "the world scales" — the ledger
-notes press-timing and per-village naming as the two levers for cultural
-differentiation).
+## 8. 2026-09-19 audit + UM-3 continuation ladder (post-i296)
+
+**Live verification at HEAD `1992883` (all measured this session):** fmt clean, clippy 0,
+release suite **307/0/1** (215 s), sim lib 241/241. Every gate green; no debt masked.
+
+**Audit verdict:** Era III/IV/V exits all closed (UM-2 passed @~100K, Era IV i287, Era V
+i291). The six §3.1 calibration items are all resolved or recorded (A1–A5 DONE via
+i288/i289/i292/i293; A6 closed i287). **What remains of DC-3 is exactly the UM-3 scale
+program**, whose three named legs (i296 scope statement) become the next iteration
+ladder. Vendor-blocked items stay parked (realms.md, resonance attestation, cult-liveliness).
+
+**i297 — genesis referent/naming leg (UM-3 leg 1). DONE (`evidence/i297_polity_genesis.md`).**
+Sites anchor by nearest home-site centroid (the only rule that can own communal sites);
+institutions by member-majority; per-polity genesis dedups on `pN`-namespaced tags so
+same-epoch crossings each commemorate their own territory. Probe-verified divergence:
+p0 cites Village Market, p1 cites Village Temple; zero blast without polities.
+
+**i298 — settlement-based auto-partition (probe-gated per i296 doctrine).** Only after
+i297 proves the referent leg valuable: membership derives from household residence
+clusters (site adjacency), not operator assignment. Zero blast without multiple clusters.
+
+**i299 — cross-village cultural diffusion via trade partners (UM-3 leg 3).** Generated
+memes cross polities along the existing trade-partner graph with attenuation; probe
+measures jaccard convergence between trading vs non-trading polity pairs.
+
+**i300 — UM-3 gate: multi-village disjointness probe.** Two+ polities, shared world,
+50K horizon: generated rosters diverge (jaccard < threshold, set from same-polity control
+as i278 did) AND trade-linked pairs converge measurably vs unlinked pairs. Pass → UM-3
+evidence file + DC-3 unify review.

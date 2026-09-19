@@ -25,7 +25,6 @@ use mindstrata_development::collective::{bucket_for_line, CollectiveBucket, Coll
 use mindstrata_institutions::institutions::Institution;
 use mindstrata_social::culture::MemeRegistry;
 use mindstrata_world::world::{Site, SiteKind};
-
 /// Stage at which a bucket's collective depth first births culture.
 pub const GENESIS_STAGE_GATE: f64 = 2.0;
 
@@ -144,6 +143,30 @@ pub fn system_collective_genesis(
     institutions: &[Institution],
     sites: &[Site],
 ) {
+    genesis_for_namespace(
+        field,
+        registry,
+        params_virality_scaling,
+        tick,
+        institutions,
+        sites,
+        None,
+    );
+}
+
+/// Namespaced variant (Iter-297): `Some(ns)` scopes the dedup tag to one
+/// culture (`[genesis:p0:Bucket:Class:Epoch]`), so per-polity genesis passes
+/// dedup independently in the shared registry. `None` is the legacy
+/// whole-village tag — byte-identical output for unassigned worlds.
+fn genesis_for_namespace(
+    field: &CollectiveField,
+    registry: &mut MemeRegistry,
+    params_virality_scaling: mindstrata_core::fixed::Fixed,
+    tick: Tick,
+    institutions: &[Institution],
+    sites: &[Site],
+    namespace: Option<&str>,
+) {
     let slugs = CollectiveField::line_slugs();
     // Precompute each bucket's deepest line stage once (O(buckets × lines)).
     let mut bucket_stage = [0.0_f64; 4];
@@ -171,7 +194,14 @@ pub fn system_collective_genesis(
         // classes dedup independently (a Moral epoch-4 meme must not block
         // the Political epoch-4 unlock).
         let class_tag = format!("{content:?}");
-        let tag = format!("{GENESIS_TAG}{bucket:?}:{class_tag}:{epoch}]");
+        // Iter-297: a culture namespace disambiguates polities that reach the
+        // same (bucket, class, epoch) — each polity commemorates ITS OWN
+        // crossing with ITS territory's referents. Built only on fire (after
+        // the band gate), so non-firing ticks allocate nothing.
+        let tag = match namespace {
+            None => format!("{GENESIS_TAG}{bucket:?}:{class_tag}:{epoch}]"),
+            Some(ns) => format!("{GENESIS_TAG}{ns}:{bucket:?}:{class_tag}:{epoch}]"),
+        };
         if registry.memes.iter().any(|m| m.description.contains(&tag)) {
             continue; // already commemorated this advance
         }
@@ -219,6 +249,132 @@ pub fn system_collective_genesis(
     }
 }
 
+/// Iter-297 (UM-3 leg 1): territory-anchored per-polity genesis.
+///
+/// The i296 per-polity holons give partitioned villages divergent stage
+/// trajectories (measured: Safety 3.000 vs 4.000), but genesis still cited
+/// the WHOLE village's referent pools — divergent cultures would generate
+/// identical founding memories from identical templates + referents. This
+/// pass gives each polity its own referent view:
+///
+/// **Anchoring law (deterministic, zero RNG, total):** every entity anchors
+/// to exactly ONE polity —
+/// - *Institutions*: member-majority (strict majority of `members` in the
+///   polity; ties/empty stay with the first polity in list order only if that
+///   majority exists, else no owner → whole-village fallback below).
+/// - *Sites*: the polity whose members' home-site centroid is nearest in
+///   Manhattan distance (works for communal sites — temple/well/square have
+///   no residents of their own, so residence-majority cannot own them).
+///
+/// Sites of kind House are excluded from genesis pools as before (i276 law:
+/// private dwellings are not the village's self-image).
+///
+/// Legacy contract preserved: with no polities assigned (`polity_fields`
+/// empty) nothing runs; with polities assigned, the whole-village genesis
+/// call in `tick()` still runs FIRST in tick order and wins the shared-registry
+/// dedup on (bucket, class, epoch) tags — so single-polity worlds reproduce
+/// byte-identical meme sets, and multi-polity worlds gain polity-specific
+/// memes only for epochs the whole-village pass did not register.
+///
+/// Uses agent positions (`home_site` tile coordinates) as the spatial anchor.
+pub fn system_polity_genesis(
+    fields: &[CollectiveField],
+    members: &[Vec<usize>],
+    registry: &mut MemeRegistry,
+    params_virality_scaling: mindstrata_core::fixed::Fixed,
+    tick: Tick,
+    institutions: &[Institution],
+    sites: &[Site],
+    site_positions: &[(i32, i32)],
+    agent_home_site: &[Option<usize>],
+) {
+    if fields.is_empty() || members.len() != fields.len() {
+        return;
+    }
+    // Per-polity home-site centroid (integer mean; deterministic tie-break by
+    // first occurrence).
+    let mut centroids: Vec<(i64, i64)> = Vec::with_capacity(members.len());
+    for polity in members {
+        let (mut sx, mut sy, mut n) = (0i64, 0i64, 0i64);
+        for &agent in polity {
+            if let Some(site) = agent_home_site.get(agent).and_then(|h| *h) {
+                if let Some((x, y)) = site_positions.get(site) {
+                    sx += *x as i64;
+                    sy += *y as i64;
+                    n += 1;
+                }
+            }
+        }
+        centroids.push(if n > 0 { (sx / n, sy / n) } else { (0, 0) });
+    }
+
+    // Site → nearest-centroid polity (Manhattan; exact tie → lowest polity
+    // index). Deterministic and total.
+    let site_owner: Vec<Option<usize>> = sites
+        .iter()
+        .map(|site| {
+            if site.kind == SiteKind::House {
+                return None; // never a genesis referent anyway
+            }
+            site_positions
+                .get(
+                    sites
+                        .iter()
+                        .position(|s| s.id == site.id)
+                        .unwrap_or(usize::MAX),
+                )
+                .and_then(|(x, y)| {
+                    let (mut best, mut best_d) = (None, i64::MAX);
+                    for (pid, (cx, cy)) in centroids.iter().enumerate() {
+                        let d = (*x - *cx as i32).abs() as i64 + (*y - *cy as i32).abs() as i64;
+                        if d < best_d {
+                            best_d = d;
+                            best = Some(pid);
+                        }
+                    }
+                    best
+                })
+        })
+        .collect();
+
+    for (pid, (field, polity)) in fields.iter().zip(members.iter()).enumerate() {
+        // Institutions: strict member-majority owned by this polity, plus
+        // no-owner institutions (shared order) — every polity cites those.
+        let inst_view: Vec<Institution> = institutions
+            .iter()
+            .filter(|inst| {
+                let total = inst.members.len();
+                if total == 0 {
+                    return true; // shared
+                }
+                let in_polity = inst
+                    .members
+                    .iter()
+                    .filter(|m| polity.contains(&(m.as_u64() as usize)))
+                    .count();
+                in_polity * 2 > total
+            })
+            .cloned()
+            .collect();
+        // Sites: owned by this polity (nearest centroid), Houses excluded.
+        let site_view: Vec<Site> = sites
+            .iter()
+            .enumerate()
+            .filter(|(si, site)| site.kind != SiteKind::House && site_owner[*si] == Some(pid))
+            .map(|(_, s)| s.clone())
+            .collect();
+
+        genesis_for_namespace(
+            field,
+            registry,
+            params_virality_scaling,
+            tick,
+            &inst_view,
+            &site_view,
+            Some(&format!("p{pid}")),
+        );
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -573,5 +729,200 @@ mod tests {
                 .any(|m| m.content_type == MemeContent::Prophecy),
             "crossing stage 6 must unlock the Prophecy class"
         );
+    }
+
+    // ── Iter-297 (UM-3 leg 1): territory-anchored per-polity genesis ──────
+
+    /// Two spatially separated clusters (polities A at x≈2, B at x≈12) with
+    /// communal sites near each cluster plus a centered shared site.
+    fn partitioned_world() -> (
+        Vec<Institution>,
+        Vec<Site>,
+        Vec<(i32, i32)>,
+        Vec<Option<usize>>,
+    ) {
+        use mindstrata_core::id::EntityId;
+        use mindstrata_institutions::institutions::InstitutionKind;
+        let sites = vec![
+            Site {
+                // 0: well near cluster A (x=2)
+                id: EntityId::new(0),
+                kind: SiteKind::Well,
+                name: "East Well".into(),
+                owner: None,
+                capacity: 10,
+                storage_capacity: Fixed::from_f64(100.0),
+                inventory: Vec::new(),
+            },
+            Site {
+                // 1: temple near cluster B (x=12)
+                id: EntityId::new(1),
+                kind: SiteKind::Temple,
+                name: "West Shrine".into(),
+                owner: None,
+                capacity: 10,
+                storage_capacity: Fixed::from_f64(100.0),
+                inventory: Vec::new(),
+            },
+            Site {
+                // 2: centered shared square
+                id: EntityId::new(2),
+                kind: SiteKind::Square,
+                name: "Meeting Square".into(),
+                owner: None,
+                capacity: 20,
+                storage_capacity: Fixed::from_f64(100.0),
+                inventory: Vec::new(),
+            },
+            Site {
+                // 3: house (never a referent)
+                id: EntityId::new(3),
+                kind: SiteKind::House,
+                name: "House A1".into(),
+                owner: None,
+                capacity: 1,
+                storage_capacity: Fixed::from_f64(10.0),
+                inventory: Vec::new(),
+            },
+        ];
+        let positions = vec![(2, 2), (12, 2), (7, 7), (2, 3)];
+        // 4 agents: 0,1 homed at site 0 (east); 2,3 homed at site 1 (west).
+        let homes = vec![Some(0), Some(0), Some(1), Some(1)];
+        let inst = vec![Institution::new(
+            0,
+            InstitutionKind::Council,
+            "East Council".into(),
+        )];
+        (inst, sites, positions, homes)
+    }
+
+    /// Advance every Identity line to a genesis-firing stage on `field`.
+    fn fire_identity(field: &mut CollectiveField) {
+        let slugs = CollectiveField::line_slugs();
+        for (i, line) in field.lines.iter_mut().enumerate() {
+            if i < slugs.len() && bucket_for_line(slugs[i]) == CollectiveBucket::Identity {
+                line.stage = 2.1;
+            }
+        }
+    }
+
+    #[test]
+    fn polity_genesis_routes_sites_to_the_owning_territory() {
+        let (inst, sites, positions, homes) = partitioned_world();
+        let mut field_east = CollectiveField::default();
+        fire_identity(&mut field_east);
+        let mut field_west = CollectiveField::default();
+        fire_identity(&mut field_west);
+
+        let mut registry = MemeRegistry::default();
+        system_polity_genesis(
+            &[field_east, field_west],
+            &[vec![0, 1], vec![2, 3]],
+            &mut registry,
+            virality(),
+            Tick::new(10),
+            &inst,
+            &sites,
+            &positions,
+            &homes,
+        );
+
+        // Both polities' identity lines fire → exactly 2 memes (one per
+        // polity: the whole-village pass is not part of this unit call, so
+        // no dedup collision).
+        assert_eq!(
+            registry.memes.len(),
+            2,
+            "each polity generates its own identity meme"
+        );
+        // Polity A (east, centroid (2,2.5)) owns the East Well; polity B
+        // (west, centroid (12,2.5)) owns the West Shrine.
+        let east = registry.memes[0].description.clone();
+        let west = registry.memes[1].description.clone();
+        assert!(
+            east.contains("East Well") && !east.contains("West Shrine"),
+            "east polity must cite ITS well, not the foreign shrine: `{east}`"
+        );
+        assert!(
+            west.contains("West Shrine") && !west.contains("East Well"),
+            "west polity must cite ITS shrine, not the foreign well: `{west}`"
+        );
+    }
+
+    #[test]
+    fn polity_genesis_is_inert_without_assignment() {
+        let (inst, sites, positions, homes) = partitioned_world();
+        let mut registry = MemeRegistry::default();
+        system_polity_genesis(
+            &[], // no polities assigned → identity at isolation (zero blast)
+            &[],
+            &mut registry,
+            virality(),
+            Tick::new(10),
+            &inst,
+            &sites,
+            &positions,
+            &homes,
+        );
+        assert!(
+            registry.memes.is_empty(),
+            "empty polity list must be a no-op (legacy single-village contract)"
+        );
+    }
+
+    #[test]
+    fn polity_genesis_single_all_agent_polity_matches_whole_village() {
+        // Identity-at-isolation for the REFERENT leg: one polity covering all
+        // agents owns every non-House site (nearest centroid = their own), so
+        // its genesis output equals the whole-village pool.
+        let (inst, sites, positions, homes) = partitioned_world();
+        let mut field = CollectiveField::default();
+        fire_identity(&mut field);
+
+        let mut via_polity = MemeRegistry::default();
+        system_polity_genesis(
+            &[field],
+            &[vec![0, 1, 2, 3]],
+            &mut via_polity,
+            virality(),
+            Tick::new(10),
+            &inst,
+            &sites,
+            &positions,
+            &homes,
+        );
+
+        let mut whole_field = CollectiveField::default();
+        fire_identity(&mut whole_field);
+        let mut whole = MemeRegistry::default();
+        system_collective_genesis(
+            &whole_field,
+            &mut whole,
+            virality(),
+            Tick::new(10),
+            &inst,
+            &sites,
+        );
+
+        assert_eq!(
+            via_polity.memes.len(),
+            whole.memes.len(),
+            "single all-agent polity must fire the same classes"
+        );
+        for (p, w) in via_polity.memes.iter().zip(whole.memes.iter()) {
+            // Compare the RENDERED text (before the dedup tag): the namespace
+            // suffix `[genesis:p0:...]` vs `[genesis:...]` is bookkeeping, the
+            // contract is that the pools coincide so the text is identical.
+            fn strip(d: &str) -> &str {
+                d.split(" [").next().unwrap_or(d)
+            }
+            assert_eq!(
+                strip(&p.description),
+                strip(&w.description),
+                "referent pools must coincide at isolation: `{}` vs `{}`",
+                p.description,
+                w.description
+            );
+        }
     }
 }
