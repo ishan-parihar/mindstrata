@@ -1213,11 +1213,13 @@ fn pathology_params_standard_band_is_bit_identical_to_canon() {
     }
 }
 
-/// Every quadrant's growth and decay scale with the band multiplier
-/// (0.5/1.2 resilient, 1.8/0.7 brittle); ceilings do NOT move — the catalog's
-/// row-3 candidate bands name growth and decay only.
+/// Every quadrant's growth, decay AND ceiling scale with the band multiplier
+/// (growth 0.5/1.8, decay 1.2/0.7, ceiling 0.85/1.15). §4.4 re-contract: this
+/// assertion was written when the ceiling was not yet a knob (i304, catalog
+/// named growth/decay only); i315 promoted the ceiling band, so the pin now
+/// guards the scaled ceilings instead of their immobility.
 #[test]
-fn pathology_params_scale_growth_and_decay_without_touching_ceilings() {
+fn pathology_params_scale_growth_decay_and_ceiling_with_the_band() {
     use crate::systems::development::{pathology_params, PROD_QUADRANT_PARAMS};
     let resilient = pathology_params(&SimParameters::with_difficulty(DifficultyProfile::Lenient));
     let brittle = pathology_params(&SimParameters::with_difficulty(DifficultyProfile::Harsh));
@@ -1247,14 +1249,23 @@ fn pathology_params_scale_growth_and_decay_without_touching_ceilings() {
             brittle[i].decay,
             canon.decay * 0.7
         );
-        assert_eq!(
-            resilient[i].ceiling, canon.ceiling,
-            "Q{i} ceiling is not a knob yet"
+        assert!(
+            rel(resilient[i].ceiling, canon.ceiling * 0.85),
+            "Q{i} resilient ceiling {} != canon×0.85 {}",
+            resilient[i].ceiling,
+            canon.ceiling * 0.85
         );
-        assert_eq!(
-            brittle[i].ceiling, canon.ceiling,
-            "Q{i} ceiling is not a knob yet"
+        assert!(
+            rel(brittle[i].ceiling, canon.ceiling * 1.15),
+            "Q{i} brittle ceiling {} != canon×1.15 {}",
+            brittle[i].ceiling,
+            canon.ceiling * 1.15
         );
+        // The resilient band lowers caps, the brittle raises them.
+        assert!(resilient[i].ceiling < canon.ceiling);
+        assert!(brittle[i].ceiling > canon.ceiling);
+        // And the scaling stays inside the intensity range.
+        assert!(resilient[i].ceiling >= 0.0 && brittle[i].ceiling <= 1.0);
     }
 }
 

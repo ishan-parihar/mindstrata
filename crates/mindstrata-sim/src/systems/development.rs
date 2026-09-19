@@ -163,9 +163,9 @@ pub(crate) fn collect_catalysts(events: &[SimEvent]) -> Vec<(AgentId, CatalystKi
 /// exposed for calibration probes and pins: `[0]` Q1 dark-addiction,
 /// `[1]` Q2 dark-allergy, `[2]` Q3 golden-addiction, `[3]` Q4
 /// golden-allergy. These are the CANON (Standard-band) values; the live
-/// params a run uses are [`pathology_params`], which scales growth/decay by
-/// the row-3 difficulty multipliers and returns these four bit-for-bit in
-/// the Standard band.
+/// params a run uses are [`pathology_params`], which scales growth/decay/
+/// ceiling by the row-3 difficulty multipliers (ceiling band added i315) and
+/// returns these four bit-for-bit in the Standard band.
 pub const PROD_QUADRANT_PARAMS: [OperatorParams; 4] = [
     OperatorParams {
         growth: 0.06,
@@ -190,14 +190,13 @@ pub const PROD_QUADRANT_PARAMS: [OperatorParams; 4] = [
 ];
 
 /// Resolve the live per-quadrant operator params for a run's parameters
-/// (difficulty-levers row 3, i304). Growth and decay of every quadrant are
-/// scaled by the two band multipliers; ceilings are NOT scaled (the catalog's
-/// row-3 candidate bands name growth and decay only — a per-quadrant ceiling
-/// band is a separate hypothesis, recorded as residual rather than guessed).
+/// (difficulty-levers row 3, i304 + ceiling band i315). Growth, decay and
+/// ceiling of every quadrant are scaled by the three band multipliers.
 ///
 /// Identity holds bit-for-bit in the Standard band: `x * 1.0 == x` in IEEE-754
 /// for every finite `x`, so every calibrated window that ran before i304 runs
-/// identically after it.
+/// identically after it. The ceiling is clamped to 1.0 (the pathology
+/// intensity range top) after scaling.
 ///
 /// §5 quantize-once: the multipliers arrive already materialized in
 /// `SimParameters` (one `Fixed::from_f64` at construction), so nothing here
@@ -206,10 +205,11 @@ pub const PROD_QUADRANT_PARAMS: [OperatorParams; 4] = [
 pub fn pathology_params(params: &crate::parameters::SimParameters) -> [OperatorParams; 4] {
     let growth = params.pathology_growth_scale.to_f64();
     let decay = params.pathology_decay_scale.to_f64();
+    let ceiling_scale = params.pathology_ceiling_scale.to_f64();
     PROD_QUADRANT_PARAMS.map(|q| OperatorParams {
         growth: q.growth * growth,
         decay: q.decay * decay,
-        ceiling: q.ceiling,
+        ceiling: (q.ceiling * ceiling_scale).clamp(0.0, 1.0),
     })
 }
 

@@ -51,6 +51,15 @@ pub struct SimParameters {
     /// 1.0 = canon; the Resilient band is 1.2, the Brittle band 0.7.
     #[serde(default = "scale_identity")]
     pub pathology_decay_scale: Fixed,
+    /// Multiplier on every quadrant's pathology intensity CEILING (i315;
+    /// the row-3 axis the catalog lists as a `0.65–1.0` range and i304
+    /// deferred). 1.0 = canon (Q1/Q2 0.80, Q3 0.85, Q4 0.75). The Resilient
+    /// band is 0.85 (lower caps), the Brittle band 1.15 (higher caps).
+    /// Governing, not cosmetic: growth is `headroom = ceiling − intensity`,
+    /// so the ceiling sets each quadrant's equilibrium (live where intensity
+    /// approaches the cap — Q2 and Q4 at the calibrated horizons).
+    #[serde(default = "scale_identity")]
+    pub pathology_ceiling_scale: Fixed,
     /// Multiplier on the five goal-generation fulfillment thresholds
     /// (`docs/balance/difficulty-levers.md` row 2's threshold half, the
     /// companion of the need-decay rates above; i305). 1.0 = canon. A LOWER
@@ -463,6 +472,7 @@ impl Default for SimParameters {
             // Identity multipliers — the canon band (see `with_difficulty`).
             pathology_growth_scale: Fixed::from_f64(1.0),
             pathology_decay_scale: Fixed::from_f64(1.0),
+            pathology_ceiling_scale: Fixed::from_f64(1.0),
             goal_gate_scale: Fixed::from_f64(1.0),
 
             // Psychological
@@ -687,9 +697,12 @@ impl SimParameters {
                 p.safety_decay_rate = Fixed::from_f64(0.0002); // 0.0003 × 0.6 (1.8 → 2)
                 p.social_decay_rate = Fixed::from_f64(0.0001); // 0.0002 × 0.6 (1.2 → 1)
                 p.meaning_decay_rate = Fixed::from_f64(0.0001); // 0.00015 × 0.6 (0.9 → 1, sub-resolution)
-                                                                // Row 3, Resilient band: slow accumulation, fast recovery.
+                                                                // Row 3, Resilient band: slow accumulation, fast recovery,
+                                                                // and a lower ceiling — 0.85 × canon (Q1/Q2 0.68, Q3 0.7225,
+                                                                // Q4 0.6375), inside the catalog's 0.65–1.0 range.
                 p.pathology_growth_scale = Fixed::from_f64(0.5);
                 p.pathology_decay_scale = Fixed::from_f64(1.2);
+                p.pathology_ceiling_scale = Fixed::from_f64(0.85);
                 // Row 2 threshold half: respond to deficits earlier (i305).
                 p.goal_gate_scale = Fixed::from_f64(0.6);
             }
@@ -700,9 +713,12 @@ impl SimParameters {
                 p.safety_decay_rate = Fixed::from_f64(0.0004); // 0.0003 × 1.4 (4.2 → 4)
                 p.social_decay_rate = Fixed::from_f64(0.0003); // 0.0002 × 1.4 (2.8 → 3)
                 p.meaning_decay_rate = Fixed::from_f64(0.0002); // 0.00015 × 1.4 (2.1 → 2)
-                                                                // Row 3, Brittle band: fast accumulation, slow recovery.
+                                                                // Row 3, Brittle band: fast accumulation, slow recovery, and
+                                                                // a higher ceiling — 1.15 × canon (Q1/Q2 0.92, Q3 0.9775,
+                                                                // Q4 0.8625), inside the catalog's 0.65–1.0 range.
                 p.pathology_growth_scale = Fixed::from_f64(1.8);
                 p.pathology_decay_scale = Fixed::from_f64(0.7);
+                p.pathology_ceiling_scale = Fixed::from_f64(1.15);
                 // Row 2 threshold half: tolerate more deficit before acting.
                 p.goal_gate_scale = Fixed::from_f64(1.4);
             }
@@ -846,6 +862,7 @@ mod tests {
         // identity contract.
         assert_eq!(d.pathology_growth_scale, s.pathology_growth_scale);
         assert_eq!(d.pathology_decay_scale, s.pathology_decay_scale);
+        assert_eq!(d.pathology_ceiling_scale, s.pathology_ceiling_scale);
         assert_eq!(d.goal_gate_scale, s.goal_gate_scale);
         assert_eq!(s.pathology_growth_scale, Fixed::ONE);
         assert_eq!(s.pathology_decay_scale, Fixed::ONE);
@@ -970,6 +987,25 @@ mod tests {
         assert_eq!(bri.pathology_decay_scale.to_f64(), 0.7);
     }
 
+    // ── i315 difficulty-lever row 3, ceiling half ──
+
+    /// The ceiling band (i315) rides the row-3 multipliers: lower caps in the
+    /// Resilient band, higher in the Brittle band, and Fixed-4-exact
+    /// (0.85 → 8 500, 1.15 → 11 500).
+    #[test]
+    fn pathology_ceiling_band_lowers_resilient_and_raises_brittle() {
+        let res = SimParameters::with_difficulty(DifficultyProfile::Lenient);
+        let std = SimParameters::with_difficulty(DifficultyProfile::Standard);
+        let bri = SimParameters::with_difficulty(DifficultyProfile::Harsh);
+        assert_eq!(res.pathology_ceiling_scale.to_raw(), 8_500);
+        assert_eq!(std.pathology_ceiling_scale.to_raw(), 10_000);
+        assert_eq!(bri.pathology_ceiling_scale.to_raw(), 11_500);
+        assert!(res.pathology_ceiling_scale < std.pathology_ceiling_scale);
+        assert!(std.pathology_ceiling_scale < bri.pathology_ceiling_scale);
+        assert_eq!(res.pathology_ceiling_scale.to_f64(), 0.85);
+        assert_eq!(bri.pathology_ceiling_scale.to_f64(), 1.15);
+    }
+
     // ── i305 difficulty-lever row 2, threshold half (goal gates) ──
 
     /// The goal-gate band rides the same multipliers as the row-2 decay half
@@ -1013,10 +1049,12 @@ mod tests {
         let obj = v.as_object_mut().unwrap();
         obj.remove("pathology_growth_scale");
         obj.remove("pathology_decay_scale");
+        obj.remove("pathology_ceiling_scale");
         obj.remove("goal_gate_scale");
         let restored: SimParameters = serde_json::from_value(v).unwrap();
         assert_eq!(restored.pathology_growth_scale, Fixed::ONE);
         assert_eq!(restored.pathology_decay_scale, Fixed::ONE);
+        assert_eq!(restored.pathology_ceiling_scale, Fixed::ONE);
         assert_eq!(restored.goal_gate_scale, Fixed::ONE);
     }
 
