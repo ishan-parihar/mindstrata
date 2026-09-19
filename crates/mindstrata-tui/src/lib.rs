@@ -4,6 +4,7 @@
 //! ([`View`], [`UiState`]) in [`session`]. Glob re-exports preserve the
 //! original single-module API.
 
+pub mod assets_view;
 pub mod charts;
 pub mod export;
 pub mod feature_flag;
@@ -11,6 +12,7 @@ pub mod panel_virtual;
 mod render;
 mod session;
 
+pub use assets_view::{render_asset_viewer, ASSET_VIEW_ROWS};
 pub use render::{
     render_agent_inspector, render_agent_list, render_belief_inspector, render_chronicle_view,
     render_clan_dashboard, render_dashboard, render_decision_traces, render_dossier_view,
@@ -142,10 +144,22 @@ mod tests {
         // Iteration 261: the chronicle annals close the cycle.
         assert_eq!(ui.view, View::Chronicle);
         ui.cycle_view();
-        // Iteration 264: the dossier pane closes the cycle.
+        // Iteration 264: the dossier pane.
         assert_eq!(ui.view, View::Dossier);
         ui.cycle_view();
+        // Iteration 317 (DC-4a): the asset-viewer panel closes the cycle.
+        assert_eq!(ui.view, View::Assets);
+        ui.cycle_view();
         assert_eq!(ui.view, View::Dashboard);
+    }
+
+    #[test]
+    fn asset_view_state_starts_empty_and_labels() {
+        // Iteration 317 (DC-4a): the panel renders a cached capture, not a
+        // per-frame export (charter rule 5) — so a fresh session holds None.
+        let ui = UiState::new(4);
+        assert!(ui.assets.is_none());
+        assert_eq!(View::Assets.label(), "Assets");
     }
 
     #[test]

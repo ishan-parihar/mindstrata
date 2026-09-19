@@ -21,13 +21,14 @@ use mindstrata_sim::person::GoalKind;
 /// quit:      q / Esc / Ctrl+C  (Esc cancels `/` search first)
 /// run/pause: Space  toggle auto-run
 /// step:      n      one tick while paused
-/// views:     Tab / t cycle · v dossier
+/// views:     Tab / t cycle · v dossier · a assets
 /// select:    ↑ / k  prev  ·  ↓ / j  next  (wraps, clamped)
 /// find:      / open · Enter jump · Esc cancel · Backspace erase
 /// command:   w Work · e Eat · d Drink · r Rest · s Socialize · p Worship
 /// clear:     x      cancel directives on selected agent
+/// capture:   a      capture the i301 asset document (asset-viewer panel)
 /// ```
-pub const KEYBIND_HELP: &str = "quit: q/Esc/Ctrl+C \u{00B7} run: Space \u{00B7} step: n \u{00B7} views: Tab/t/v \u{00B7} select: \u{2191}/k \u{2193}/j \u{00B7} find: / Enter Esc Backspace \u{00B7} command: w/e/d/r/s/p \u{00B7} clear: x";
+pub const KEYBIND_HELP: &str = "quit: q/Esc/Ctrl+C \u{00B7} run: Space \u{00B7} step: n \u{00B7} views: Tab/t/v/a \u{00B7} select: \u{2191}/k \u{2193}/j \u{00B7} find: / Enter Esc Backspace \u{00B7} command: w/e/d/r/s/p \u{00B7} clear: x";
 
 /// §5 (Iteration 155): The interactive-TUI view tabs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +49,8 @@ pub enum View {
     Chronicle,
     /// The selected agent's full dossier (Iteration 264).
     Dossier,
+    /// The i301 asset-viewer panel (Iteration 317).
+    Assets,
 }
 
 impl View {
@@ -62,6 +65,7 @@ impl View {
             View::Trends => "Trends",
             View::Chronicle => "Chronicle",
             View::Dossier => "Dossier",
+            View::Assets => "Assets",
         }
     }
 }
@@ -83,6 +87,11 @@ pub struct UiState {
     /// Iteration 264: active name-search buffer (`/`). `None` = idle; the
     /// binary's event loop routes printable input here while set.
     pub name_query: Option<String>,
+    /// Iteration 317: cached i301 asset document for the asset-viewer panel.
+    /// Captured once by the `a` key — the ASSET-PIPELINE-v0 charter rule 5
+    /// forbids a per-frame export, so the panel renders this snapshot and the
+    /// operator re-captures on demand.
+    pub assets: Option<mindstrata_sim::sim::assets::WorldAssets>,
 }
 
 impl UiState {
@@ -95,6 +104,7 @@ impl UiState {
             last_command: None,
             manual_steps: 0,
             name_query: None,
+            assets: None,
         };
         state.clamp_selection(agent_count);
         state
@@ -128,7 +138,8 @@ impl UiState {
             View::Map => View::Trends,
             View::Trends => View::Chronicle,
             View::Chronicle => View::Dossier,
-            View::Dossier => View::Dashboard,
+            View::Dossier => View::Assets,
+            View::Assets => View::Dashboard,
         };
     }
 

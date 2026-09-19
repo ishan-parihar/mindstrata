@@ -30,9 +30,9 @@ use mindstrata_sim::institutions::InstitutionKind;
 use mindstrata_sim::sim::{SimConfig, Simulation};
 use mindstrata_tui::{
     key_to_command, mark_selected_agent_row, render_agent_inspector, render_agent_list,
-    render_chronicle_view, render_dashboard, render_dossier_view, render_event_log,
-    render_metric_charts, render_world_map, AgentMarker, DashboardConfig, SearchFailure, UiState,
-    View,
+    render_asset_viewer, render_chronicle_view, render_dashboard, render_dossier_view,
+    render_event_log, render_metric_charts, render_world_map, AgentMarker, DashboardConfig,
+    SearchFailure, UiState, View,
 };
 use ratatui::layout::{Constraint, Layout};
 use ratatui::text::Line;
@@ -185,6 +185,14 @@ fn handle_key(sim: &mut Simulation, ui: &mut UiState, key: &KeyEvent) -> Control
         // selected agent's dossier without leaving the current selection.
         KeyCode::Char('/') => ui.begin_search(),
         KeyCode::Char('v') => ui.view = View::Dossier,
+        // Iteration 317 (DC-4a): `a` captures the i301 asset document ONCE and
+        // opens the viewer. The export is O(world + registries) and the
+        // ASSET-PIPELINE-v0 charter rule 5 forbids per-frame exports, so the
+        // panel renders the cached capture and `a` re-captures on demand.
+        KeyCode::Char('a') => {
+            ui.assets = Some(mindstrata_sim::sim::assets::export_world_assets(sim));
+            ui.view = View::Assets;
+        }
         other => {
             if let Some(kind) = key_to_command(other) {
                 let name = sim
@@ -250,7 +258,7 @@ fn draw(frame: &mut Frame, sim: &Simulation, ui: &UiState) {
     let command = ui.last_command.as_deref().unwrap_or("—");
     let footer = format!(
         " selected: {selected} ({sel_name})  |  steps: {}  |  ↑↓ select · space run · n step · \
-         t view · / find · v dossier · w/e/d/r/s/p command · x clear  |  last: {command}",
+         t view · a assets · / find · v dossier · w/e/d/r/s/p command · x clear  |  last: {command}",
         ui.manual_steps,
     );
     frame.render_widget(
@@ -305,6 +313,12 @@ fn render_view(sim: &Simulation, ui: &UiState) -> String {
                 200,
             )
         }
+        View::Assets => match &ui.assets {
+            Some(doc) => render_asset_viewer(doc),
+            None => "Asset Viewer — press [a] to capture the i301 asset document\n\
+                     (schema v1: world · polities · culture diffusion · annals)"
+                .into(),
+        },
         View::Map => {
             let markers: Vec<AgentMarker> = sim
                 .agents

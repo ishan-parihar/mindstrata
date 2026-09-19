@@ -32,7 +32,7 @@ use crate::sim::Simulation;
 pub const ASSET_SCHEMA_VERSION: u32 = 1;
 
 /// A site asset: identity, kind, name, tile position, capacity.
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SiteAsset {
     pub id: u64,
     pub kind: String,
@@ -43,7 +43,7 @@ pub struct SiteAsset {
 
 /// One polity's export: membership + its holon's full stage-line canon map
 /// (the i290 KosmOS-frontmatter export, reused verbatim).
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct PolityAsset {
     pub members: Vec<usize>,
     pub stage_lines: Vec<crate::snapshot::StageLineEntry>,
@@ -51,7 +51,7 @@ pub struct PolityAsset {
 
 /// A culture asset: the meme as a consumable cultural item, with the i300
 /// per-agent hosting ledger (CLIENT renders diffusion maps from it).
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CultureAsset {
     pub id: usize,
     pub description: String,
@@ -61,7 +61,7 @@ pub struct CultureAsset {
 }
 
 /// The v0 root document.
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct WorldAssets {
     pub schema_version: u32,
     pub meta: MetaAsset,
@@ -71,7 +71,7 @@ pub struct WorldAssets {
     pub annals: String,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct MetaAsset {
     pub seed: u64,
     pub ticks: u64,
@@ -79,7 +79,7 @@ pub struct MetaAsset {
     pub polities: usize,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct WorldSection {
     pub sites: Vec<SiteAsset>,
 }
