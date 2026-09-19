@@ -293,6 +293,11 @@ impl Simulation {
                 let h = &mut bodies[i];
                 h.health += (derived_health - h.health) * Fixed::from_f64(0.1);
                 h.health = h.health.clamp_01();
+                // i313: the legacy facade's `injury` field was never refreshed
+                // from the biological substrate either (like the dead health
+                // sync above), so consumers of `BodyState.injury` read a
+                // birth-time zero forever. Mirror the authoritative value.
+                h.injury = agent.embodied.injury;
                 agent.body = std::mem::take(&mut bodies[i]);
                 agent.needs = std::mem::take(&mut needs[i]);
                 agent.goals = std::mem::take(&mut goals[i]);

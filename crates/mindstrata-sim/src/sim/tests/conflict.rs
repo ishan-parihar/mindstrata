@@ -584,3 +584,44 @@ fn violence_audit_increments_holders_when_violence_fires() {
     // The real control is that the enforcement_count test above passes
     // (holders' counts match exactly), proving the audit channel works.
 }
+
+/// i313: violence must record a wound on the biological substrate.
+///
+/// Before i313 the violence path damaged `health` directly and never wrote
+/// `EmbodiedState.injury`, so nervous acute pain, cardiovascular blood loss,
+/// shock, wound-infection exposure and the derived-health `pain`/`shock`
+/// penalties were all dead state (probe-pinned max injury 0.00000 across
+/// 49–264 recorded violence events per 12-seed run).
+#[test]
+fn violence_records_injury_on_the_substrate() {
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 20_000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    let mut max_injury = Fixed::ZERO;
+    let mut max_pain = Fixed::ZERO;
+    for _ in 0..20_000 {
+        sim.tick();
+        for a in sim.agents.iter() {
+            max_injury = max_injury.max(a.embodied.injury);
+            max_pain = max_pain.max(a.embodied.nervous.pain.effective_pain());
+        }
+    }
+    // The recorded violence in this window (see
+    // `violence_audit_increments_holders_when_violence_fires`) must leave a
+    // wound, and the wound must reach the pain channel.
+    assert!(
+        max_injury > Fixed::ZERO,
+        "violence must record an injury (max injury {max_injury:?})"
+    );
+    assert!(
+        max_pain > Fixed::ZERO,
+        "a recorded injury must produce acute pain (max pain {max_pain:?})"
+    );
+}

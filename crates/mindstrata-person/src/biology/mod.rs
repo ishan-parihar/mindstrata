@@ -135,6 +135,25 @@ pub struct EmbodiedState {
 }
 
 impl EmbodiedState {
+    /// Damage from a wound, recorded on the biological substrate by the
+    /// violence path (i313). `EmbodiedState.injury` is consumed by nervous
+    /// (acute pain), immune (wound exposure), cardiovascular (blood loss) and
+    /// `chronic_damage`; before i313 it had no producer at all and sat at its
+    /// birth value ZERO forever (probe `i313_injury_channel`: max injury
+    /// 0.00000 across 49–264 recorded violence events per 12-seed run). Stacks
+    /// and clamps.
+    pub fn wound(&mut self, severity: Fixed) {
+        self.injury = (self.injury + severity).clamp_01();
+    }
+
+    /// Heal a wound over time (i313). A wound must close: 0.0005/tick ≈
+    /// 0.07/day, so a 0.12 violence wound clears in ~1.7 days and a
+    /// life-threatening 1.0 in ~14 days. Quantize-safe (0.0005 > the 1e-4
+    /// `Fixed` step — see AGENTS §5).
+    pub fn heal_injury(&mut self) {
+        self.injury = (self.injury - Fixed::from_f64(0.0005)).max(Fixed::ZERO);
+    }
+
     /// Generate a random embodied state for a new agent.
     pub fn random(age: Fixed, rng: &mut impl Rng) -> Self {
         let genome = Genome::random(rng);
@@ -314,6 +333,9 @@ impl EmbodiedState {
     ) {
         // 1. Circadian — advances time of day
         self.circadian.tick_update(144, is_sleeping); // 144 ticks per day
+
+        // 1b. Injury healing (i313) — see `heal_injury`.
+        self.heal_injury();
 
         // 2. Nervous — arousal, pain, trauma
         self.nervous.update(
@@ -686,5 +708,93 @@ mod tests {
     fn derived_health_in_range(e: &EmbodiedState) -> bool {
         let h = e.derived_health();
         h >= Fixed::ZERO && h <= Fixed::ONE
+    }
+}
+
+#[cfg(test)]
+mod injury_channel_tests {
+    use super::*;
+    use crate::biology::nervous::PainState;
+    use rand::SeedableRng;
+
+    fn embodied() -> EmbodiedState {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(7);
+        EmbodiedState::random(Fixed::from_f64(30.0), &mut rng)
+    }
+
+    #[test]
+    fn wound_records_and_stacks_on_the_substrate() {
+        // i313: the violence path used to damage `health` directly and never
+        // write `EmbodiedState.injury`, so the whole pain/shock/blood-loss
+        // chain was dead state (probe-pinned max injury 0.00000).
+        let mut e = embodied();
+        assert_eq!(e.injury, Fixed::ZERO);
+        e.wound(Fixed::from_f64(0.12));
+        assert_eq!(e.injury, Fixed::from_f64(0.12));
+        e.wound(Fixed::from_f64(0.2));
+        assert_eq!(e.injury, Fixed::from_f64(0.32));
+        e.wound(Fixed::ONE);
+        assert_eq!(e.injury, Fixed::ONE, "wounds stack but stay clamped");
+    }
+
+    #[test]
+    fn injury_heals_toward_zero() {
+        let mut e = embodied();
+        e.wound(Fixed::from_f64(0.5));
+        for _ in 0..1_000 {
+            e.heal_injury();
+        }
+        assert_eq!(
+            e.injury,
+            Fixed::ZERO,
+            "a 0.5 wound must fully close in ~1000 ticks (0.0005/tick)"
+        );
+        // Healing is monotone and never goes below zero.
+        let mut e = embodied();
+        e.wound(Fixed::from_f64(0.01));
+        for _ in 0..50 {
+            e.heal_injury();
+        }
+        assert_eq!(e.injury, Fixed::ZERO);
+    }
+
+    #[test]
+    fn injury_feeds_acute_pain() {
+        // The nervous pain model reads the injury as its input; with the
+        // field live, a wound must raise effective pain above zero.
+        let mut pain = PainState::default();
+        assert_eq!(pain.effective_pain(), Fixed::ZERO);
+        for _ in 0..50 {
+            pain.update(Fixed::from_f64(0.3));
+        }
+        assert!(
+            pain.effective_pain() > Fixed::from_f64(0.5),
+            "a sustained 0.3 wound must produce substantial acute pain (got {:?})",
+            pain.effective_pain()
+        );
+        // And it decays once the wound closes.
+        for _ in 0..200 {
+            pain.update(Fixed::ZERO);
+        }
+        assert_eq!(
+            pain.acute,
+            Fixed::ZERO,
+            "acute pain must clear with the wound"
+        );
+    }
+
+    #[test]
+    fn pain_depresses_derived_health() {
+        // `derived_health` subtracts `pain_penalty = effective_pain × 0.1`; the
+        // channel was dead only because the pain input (injury) never existed.
+        // Pin that a live pain state actually reaches the health axis.
+        let healthy = embodied().derived_health();
+        let mut wounded = embodied();
+        wounded.nervous.pain.acute = Fixed::ONE;
+        assert!(
+            wounded.derived_health() < healthy,
+            "acute pain must reduce derived health ({:?} vs {healthy:?})",
+            wounded.derived_health()
+        );
     }
 }

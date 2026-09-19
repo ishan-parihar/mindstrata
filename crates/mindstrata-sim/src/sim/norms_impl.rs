@@ -189,6 +189,23 @@ impl Simulation {
                                             &self.health_config,
                                             wound_roll,
                                         );
+                                        // i313: record the wound on the
+                                        // biological substrate. Until now the
+                                        // violence path damaged `health`
+                                        // directly and left `EmbodiedState.injury`
+                                        // at its birth value ZERO forever, so
+                                        // the entire downstream chain —
+                                        // nervous acute pain, cardiovascular
+                                        // blood loss → shock, immune wound
+                                        // exposure, and the derived-health
+                                        // `pain`/`shock`/`chronic_damage`
+                                        // penalties — was dead state (probe
+                                        // `i313_injury_channel`: max injury
+                                        // 0.00000 with 49–264 violence events
+                                        // per 12-seed run). Stacking wounds
+                                        // sum and clamp; `EmbodiedState::
+                                        // tick_update` heals them at 0.0005/tick.
+                                        self.agents[to_idx].embodied.wound(injury);
                                     }
                                     // Record injury
                                     self.agents[to_idx].conflict.record_injury();

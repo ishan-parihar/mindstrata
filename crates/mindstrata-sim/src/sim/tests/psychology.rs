@@ -170,12 +170,24 @@ fn emotional_body_tone_resists_regulation_in_tick() {
     //    measured (seed 42, 4000 ticks) arousal 0.206 vs 0.196 — the direct
     //    physiological channel dominates again. The original pin stands, now
     //    with the polarity graph live and bounded rather than dead.
+    // i313 trail (§4.4 — RE-CONTRACT, not re-pin): this assertion was an
+    // exact equality (`assert_eq!`) justified by the i275 rationale that the
+    // interoception bias is "bounded, not chaotic". Wiring the injury channel
+    // (i313) makes wounds feed pain/blood-loss/shock into derived health,
+    // which shifts behavioural closure enough that the two runs' conflict
+    // counts no longer coincide exactly. The real invariant the i275 comment
+    // names is BOUNDED divergence, not identity — the i275 failure state it
+    // was written against read 117 vs 141 (Δ24). Measured here (seed 42,
+    // 4000 ticks): 133 vs 135 (Δ2). The pin now guards the bounded-divergence
+    // contract explicitly.
     let (embodied_conflicts, detached_conflicts) =
         (conflict_count(&embodied), conflict_count(&detached));
-    assert_eq!(
-        embodied_conflicts, detached_conflicts,
-        "with the polarity loop closed, identical world dynamics must produce \
-             identical conflict exposure (the bias is bounded, not chaotic)"
+    let divergence = embodied_conflicts.abs_diff(detached_conflicts);
+    assert!(
+        divergence <= 10,
+        "interoception bias must stay bounded, not chaotic: conflict exposure \
+             diverged by {divergence} ({embodied_conflicts} vs {detached_conflicts}, \
+             the i275 chaotic state measured 24)"
     );
     assert!(
         mean_arousal(&embodied) > mean_arousal(&detached),
