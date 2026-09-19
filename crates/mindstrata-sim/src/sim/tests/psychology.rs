@@ -419,3 +419,94 @@ fn worship_action_relieves_meaning_through_the_pipeline() {
         "Worship must relieve meaning through the pipeline: {before} -> {after}"
     );
 }
+
+/// i307: the i255 survival-integrity reflex layer documented its contract
+/// verbatim ("no utility contest, no habit substitution, no command override
+/// can outrank a body at its limits") — but the later §8.1.19 stress-habit
+/// fallback overwrote the selected action unconditionally, and its habit set
+/// ({Work, Trade, Socialize, Worship, Eat}) cannot produce `Drink` or `Rest`
+/// at all. Measured consequence (probe `i307_physio_saturation`): a
+/// chronically stressed, habituated agent sat in Trade 0.986 of ticks while
+/// its thirst stayed above the reflex threshold for 49 212 of 50 000 ticks.
+/// Pinned here so the reflex can never be habit-substituted again.
+#[test]
+fn habit_substitution_cannot_override_a_physiological_reflex() {
+    use crate::actions::ActionKind;
+    let mut sim = Simulation::new(SimConfig {
+        seed: 42,
+        max_ticks: 100,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 6,
+        snapshot_interval: None,
+    });
+    sim.populate();
+    {
+        let a = &mut sim.agents[0];
+        // Every condition of the habit-substitution gate is satisfied...
+        a.psych_skills
+            .form_habit("Trade".into(), "thirst".into(), Fixed::from_f64(0.9), 0);
+        a.psych_skills.automaticity = Fixed::ONE;
+        a.emotions.fear = Fixed::from_f64(0.8);
+        a.emotions.anger = Fixed::from_f64(0.4);
+        // ...and the body is at its limit.
+        a.needs.thirst = Fixed::from_f64(1.0);
+        a.needs.hunger = Fixed::from_f64(0.1);
+        a.needs.fatigue = Fixed::from_f64(0.1);
+        a.body.health = Fixed::ONE;
+        a.current_action = ActionKind::Work;
+        a.action_progress = 0;
+    }
+    sim.tick();
+    assert_eq!(
+        sim.agents[0].current_action,
+        ActionKind::Drink,
+        "a critical thirst reflex must outrank the stress-habit fallback"
+    );
+    assert!(
+        sim.agents[0].needs.thirst < Fixed::from_f64(1.0),
+        "and the reflex's relief must actually land"
+    );
+}
+
+/// i307 mirror clause: the gate must NOT disable habit substitution in
+/// general — below every physiological threshold the stress-habit fallback
+/// still replaces the deliberated action, exactly as §8.1.19 calibrated.
+#[test]
+fn habit_substitution_still_fires_when_no_reflex_is_active() {
+    use crate::actions::ActionKind;
+    let mut sim = Simulation::new(SimConfig {
+        seed: 42,
+        max_ticks: 100,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 6,
+        snapshot_interval: None,
+    });
+    sim.populate();
+    {
+        let a = &mut sim.agents[0];
+        // Habit keyed on the agent's dominant-need trigger "hunger" (the
+        // trigger string the fallback derives from the motive category), with
+        // every gate condition open...
+        a.psych_skills
+            .form_habit("Trade".into(), "hunger".into(), Fixed::from_f64(0.9), 0);
+        a.psych_skills.automaticity = Fixed::ONE;
+        a.emotions.fear = Fixed::from_f64(0.8);
+        a.emotions.anger = Fixed::from_f64(0.4);
+        // ...and no need anywhere near a reflex threshold.
+        a.needs.thirst = Fixed::from_f64(0.1);
+        a.needs.hunger = Fixed::from_f64(0.3);
+        a.needs.fatigue = Fixed::from_f64(0.1);
+        a.needs.meaning = Fixed::from_f64(0.1);
+        a.body.health = Fixed::ONE;
+        a.current_action = ActionKind::Rest;
+        a.action_progress = 0;
+    }
+    sim.tick();
+    assert_eq!(
+        sim.agents[0].current_action,
+        ActionKind::Trade,
+        "with no reflex active the stress-habit fallback still substitutes"
+    );
+}

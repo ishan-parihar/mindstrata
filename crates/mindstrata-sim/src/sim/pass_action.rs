@@ -408,7 +408,25 @@ impl Simulation {
                 // horizons are untouched and only long-horizon runs where
                 // practice has accumulated see the fallback. Deterministic,
                 // no RNG.
-                if stress > Fixed::from_f64(0.5)
+                //
+                // Iteration 307 (audit finding i307): this block used to
+                // overwrite the action UNCONDITIONALLY — including an action
+                // the survival-integrity reflex layer had just forced. That
+                // violates i255's own contract above verbatim ("no utility
+                // contest, NO HABIT SUBSTITUTION, no command override can
+                // outrank a body at its limits"), and it was not theoretical:
+                // the substituted habit set is {Work, Trade, Socialize,
+                // Worship, Eat} — it cannot produce `Drink` or `Rest` at all,
+                // so a chronically stressed, habituated agent was trapped
+                // in Trade/Work while its thirst and fatigue sat pinned at
+                // 1.0 for tens of thousands of ticks (measured:
+                // i307_physio_saturation, seed 99 agent 2 — thirst above the
+                // reflex for 49 212/50 000 ticks, 4 Drink ticks in the whole
+                // run, action census Trade 0.997). The physiological reflex
+                // layer is therefore gated off from habit substitution, the
+                // same way it is gated off from the routine path.
+                if reflex_override.is_none()
+                    && stress > Fixed::from_f64(0.5)
                     && agents[i].psych_skills.automaticity > Fixed::from_f64(0.5)
                 {
                     let trigger = match agents[i].motivation.dominant_need {

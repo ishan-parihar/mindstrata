@@ -102,9 +102,29 @@ fn assert_emergence_and_invariants(sim: &mindstrata_sim::Simulation) {
         // Iteration 247 re-pin (Arc B interoception activation): calmer
         // felt-world equilibria charge beliefs less; measured 0.123.
         // Lower bound 0.15 -> 0.10 (still above the dead-channel floor).
+        //
+        // Iteration 307 RE-CONTRACT (not a re-pin). The old ceiling (0.5, the
+        // §7.2 panic trigger) was calibrated back when this leg read a
+        // NORMALIZED charge — and it was applied to a CRISIS world. The i307
+        // physiology fix (the survival reflex is no longer habit-substituted)
+        // drops reflex-zone duty here from 0.2260 to 0.0013, so the population
+        // is no longer desensitized by chronic dehydration and actually
+        // APPRAISES the pestilence it is living through: avg charge 0.3877 ->
+        // 0.5242 (probe `i307_physio_saturation` leg 4, both sides measured).
+        // Demanding a sub-trigger average from a pestilence village was the
+        // wrong contract in the first place — this scenario's own emergence
+        // signal is that panics FIRE (27 of them at 50K, plus 5 v2 factions),
+        // so charges near the trigger are the design working. What the guard
+        // must actually protect is that the charge channel is ALIVE and
+        // REGULATED: above the dead-channel floor the audit found (~0.10) and
+        // not saturated. Measured dispersion post-fix: n 30, p10 0.470, p50
+        // 0.542, p90 0.625, max 0.695, zero beliefs at >=0.99 — a live spread,
+        // nothing pinned. The ceiling is therefore lifted to the saturation
+        // guard (0.90) and the panic/faction signals below carry the
+        // "regulated, not numb" burden.
         assert!(
-            (0.10..0.5).contains(&avg_charge),
-            "calm-world belief charges must sit in the live sub-trigger band, got {avg_charge:.3}"
+            (0.10..0.90).contains(&avg_charge),
+            "crisis-world belief charges must stay alive and un-saturated, got {avg_charge:.3}"
         );
     }
     // Registration is NOT execution (rituals are seeded at populate). The
