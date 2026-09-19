@@ -1126,6 +1126,106 @@ fn content_pack_validation_rejects_duplicate_ids_before_apply() {
         "duplicate norm ids must be rejected: {err}"
     );
 }
+// ── i303 (DC-4 entry "b"): difficulty-lever band surface ─────────────
+
+/// Deterministic projection of the world's need/action surface, used to
+/// compare two runs for identity without relying on aggregate means that
+/// can cancel.
+fn need_digest(sim: &Simulation) -> String {
+    let rows: Vec<(i64, i64, i64, i64, i64, String)> = sim
+        .agents
+        .iter()
+        .map(|a| {
+            (
+                a.needs.hunger.to_raw(),
+                a.needs.thirst.to_raw(),
+                a.needs.fatigue.to_raw(),
+                a.needs.social.to_raw(),
+                a.needs.meaning.to_raw(),
+                format!("{:?}", a.current_action),
+            )
+        })
+        .collect();
+    format!("{}|{rows:?}", sim.event_count())
+}
+
+/// i303 zero-blast contract: `with_difficulty(Standard)` must be EXACTLY the
+/// canon defaults — both the serialized params and a full 2000-tick world.
+/// This is what allows the lever surface to ship without re-anchoring a
+/// single golden/snapshot pin.
+#[test]
+fn standard_difficulty_is_byte_identical_to_canon() {
+    use mindstrata_sim::parameters::{DifficultyProfile, SimParameters};
+    let canon = run_sim(42, 2000);
+    let standard = crate::test_helpers::run_sim_with_params(42, 2000, |p| {
+        *p = SimParameters::with_difficulty(DifficultyProfile::Standard);
+    });
+    assert_eq!(
+        serde_json::to_string(&canon.params).unwrap(),
+        serde_json::to_string(&standard.params).unwrap(),
+        "Standard params must serialize identically to canon defaults"
+    );
+    assert_eq!(
+        need_digest(&canon),
+        need_digest(&standard),
+        "a Standard run must be behaviorally identical to the canon run"
+    );
+}
+
+/// i303 liveness contract: the band knob is LIVE end-to-end — Harsh (1.4×
+/// need decay) must accumulate strictly larger deficits than Lenient (0.6×).
+/// Measured at 2000 ticks, the i303 probe's own strongest channels are
+/// pinned: thirst (+34%, a throttled resource whose relief cannot absorb
+/// the band) and meaning (+60% at Harsh — the Lenient band is quantized onto
+/// canon, so the separation is Harsh-vs-Standard), plus the 5-channel
+/// aggregate (the probe's pre-registered contract: coupled channels wobble,
+/// the aggregate does not — hunger/fatigue are relief-saturated).
+#[test]
+fn harsh_difficulty_raises_need_pressure_over_lenient() {
+    use mindstrata_sim::parameters::{DifficultyProfile, SimParameters};
+    let lenient = crate::test_helpers::run_sim_with_params(42, 2000, |p| {
+        *p = SimParameters::with_difficulty(DifficultyProfile::Lenient);
+    });
+    let harsh = crate::test_helpers::run_sim_with_params(42, 2000, |p| {
+        *p = SimParameters::with_difficulty(DifficultyProfile::Harsh);
+    });
+    let mean = |sim: &Simulation, f: fn(&mindstrata_sim::sim::AgentBundle) -> f64| -> f64 {
+        let n = sim.agents.len().max(1) as f64;
+        sim.agents.iter().map(f).sum::<f64>() / n
+    };
+    let thirst_h = mean(&harsh, |a| a.needs.thirst.to_f64());
+    let thirst_l = mean(&lenient, |a| a.needs.thirst.to_f64());
+    let meaning_h = mean(&harsh, |a| a.needs.meaning.to_f64());
+    let meaning_l = mean(&lenient, |a| a.needs.meaning.to_f64());
+    let aggregate = |sim: &Simulation| -> f64 {
+        (mean(sim, |a| a.needs.hunger.to_f64())
+            + mean(sim, |a| a.needs.thirst.to_f64())
+            + mean(sim, |a| a.needs.fatigue.to_f64())
+            + mean(sim, |a| a.needs.social.to_f64())
+            + mean(sim, |a| a.needs.meaning.to_f64()))
+            / 5.0
+    };
+    assert!(
+        thirst_h > thirst_l,
+        "Harsh must raise thirst deficit above Lenient: {thirst_h:.4} vs {thirst_l:.4}"
+    );
+    assert!(
+        meaning_h > meaning_l,
+        "Harsh must raise meaning deficit above Lenient: {meaning_h:.4} vs {meaning_l:.4}"
+    );
+    assert!(
+        aggregate(&harsh) > aggregate(&lenient),
+        "Harsh aggregate need pressure must exceed Lenient"
+    );
+    // Family stability: both bands must keep the world alive at the horizon.
+    assert!(
+        lenient.agents.len() >= 12 && harsh.agents.len() >= 12,
+        "both bands must keep a live population (lenient {}, harsh {})",
+        lenient.agents.len(),
+        harsh.agents.len()
+    );
+}
+
 // ── §7.2.6 / AP2 Phase 5: Reproduction multiplier tuning ────────────
 
 /// §7.2.6: the previously-dead `reproduction_conception_multiplier` must now

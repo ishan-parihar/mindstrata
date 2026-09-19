@@ -116,6 +116,14 @@ pub struct Snapshot {
     /// semantics exactly).
     #[serde(default)]
     pub collective_field: mindstrata_development::collective::CollectiveField,
+    /// i303 (v16): the run's tuning parameters, including the
+    /// difficulty-lever band. Serialized so save/load round-trips preserve
+    /// the exact band the world was tuned to instead of silently reverting
+    /// to canon defaults (the pre-i303 restore built `SimParameters::
+    /// default()`). Serde default keeps pre-v16 JSON saves loading at
+    /// Standard — the identical reset-to-default semantics they had.
+    #[serde(default)]
+    pub params: crate::parameters::SimParameters,
 }
 
 /// Version of the snapshot format.
@@ -145,7 +153,16 @@ pub struct Snapshot {
 /// Safety-bucket pacify consumer). `#[serde(default)]` keeps v14 saves
 /// loadable: they restore the neutral field, which is exactly the pre-WP-I
 /// restore semantics (the kinship_graph v10 precedent).
-pub const SNAPSHOT_VERSION: u32 = 15;
+/// i303 (DC-4 entry "b"): bumped 15 → 16 — `Snapshot` gained `params`
+/// (`SimParameters`). Restore previously REBUILT parameters at
+/// `SimParameters::default()`, silently discarding every run-level tuning
+/// override across a save/load boundary — a replay hazard once the
+/// difficulty-lever surface (also i303) makes band selection a run property.
+/// `#[serde(default)]` restores pre-i303 JSON saves at the Standard band,
+/// which is exactly the old reset-to-default semantics; pre-v16 postcard
+/// bytes fail parse explicitly (no default-fill in the binary format) and
+/// the version bump makes that mismatch a loud error instead of silent drift.
+pub const SNAPSHOT_VERSION: u32 = 16;
 
 /// Save-schema framework v0 (task 2.17) — version header + migration trait.
 ///
@@ -204,6 +221,8 @@ pub struct CaptureContext<'a> {
     pub kinship_graph: &'a crate::social::kinship::KinshipGraph,
     /// WP-I (Iter-266): the village collective field participates in capture.
     pub collective_field: &'a mindstrata_development::collective::CollectiveField,
+    /// i303 (v16): the run's tuning parameters participate in capture.
+    pub params: &'a crate::parameters::SimParameters,
 }
 
 impl Snapshot {
@@ -242,6 +261,7 @@ impl Snapshot {
             meme_registry: ctx.meme_registry.clone(),
             kinship_graph: ctx.kinship_graph.clone(),
             collective_field: *ctx.collective_field,
+            params: *ctx.params,
         }
     }
 
@@ -530,6 +550,7 @@ mod tests {
             meme_registry: crate::culture::MemeRegistry::default(),
             kinship_graph: crate::social::kinship::KinshipGraph::default(),
             collective_field: mindstrata_development::collective::CollectiveField::neutral(),
+            params: crate::parameters::SimParameters::default(),
         }
     }
 
@@ -637,6 +658,75 @@ mod tests {
         let restored = Snapshot::from_json(&json).expect("Failed to deserialize from JSON");
         assert_eq!(original.tick, restored.tick);
         assert_eq!(original.config.seed, restored.config.seed);
+    }
+
+    /// i303 (v16): the run's `SimParameters` — including the difficulty-lever
+    /// band — round-trip through BOTH wire formats. The pre-i303 restore
+    /// rebuilt `SimParameters::default()`, so a Lenient/Harsh world silently
+    /// became Standard across save/load; this pin guards that regression and
+    /// the v16 wire shape.
+    #[test]
+    fn snapshot_roundtrip_preserves_params_and_difficulty_band() {
+        let mut original = make_test_snapshot();
+        original.params = crate::parameters::SimParameters::with_difficulty(
+            crate::parameters::DifficultyProfile::Harsh,
+        );
+        assert_eq!(original.params.hunger_decay_rate.to_raw(), 14);
+
+        let bytes = original.to_bytes().expect("postcard serialize");
+        let restored = Snapshot::from_bytes(&bytes).expect("postcard deserialize");
+        assert_eq!(
+            restored.params.difficulty,
+            crate::parameters::DifficultyProfile::Harsh
+        );
+        assert_eq!(
+            restored.params.hunger_decay_rate.to_raw(),
+            14,
+            "band rates, not just the provenance tag, must survive"
+        );
+
+        // JSON path: serde default fills missing fields, so an old payload
+        // without `params` loads at the Standard band (old semantics).
+        let json = original.to_json().expect("json serialize");
+        let json_restored = Snapshot::from_json(&json).expect("json deserialize");
+        assert_eq!(
+            json_restored.params.difficulty,
+            crate::parameters::DifficultyProfile::Harsh
+        );
+        let mut v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        v.as_object_mut().unwrap().remove("params");
+        let legacy = Snapshot::from_json(&v.to_string()).expect("legacy json deserialize");
+        assert_eq!(
+            legacy.params.difficulty,
+            crate::parameters::DifficultyProfile::Standard,
+            "pre-v16 saves keep the old reset-to-default semantics"
+        );
+    }
+
+    /// i303 (v16): `Simulation::from_snapshot` restores the captured band —
+    /// the end-to-end resume path the wire pin above guards.
+    #[test]
+    fn from_snapshot_restores_difficulty_band() {
+        let mut sim = crate::Simulation::new(SimConfig {
+            seed: 42,
+            max_ticks: 10,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 6,
+            snapshot_interval: None,
+        });
+        sim.params = crate::parameters::SimParameters::with_difficulty(
+            crate::parameters::DifficultyProfile::Lenient,
+        );
+        sim.populate();
+        sim.run(5);
+        let snap = sim.capture_snapshot();
+        let resumed = crate::Simulation::from_snapshot(snap);
+        assert_eq!(
+            resumed.params.difficulty,
+            crate::parameters::DifficultyProfile::Lenient
+        );
+        assert_eq!(resumed.params.hunger_decay_rate.to_raw(), 6);
     }
 
     #[test]

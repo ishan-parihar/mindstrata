@@ -412,6 +412,13 @@ pub struct SimParameters {
     pub yearly_interval: u64,
     /// Tier reclassification interval (ticks).
     pub tier_reclassify_interval: u64,
+    /// i303: which difficulty-lever band this parameter set carries. Serde
+    /// default (Standard) keeps pre-i303 serialized params loading at the
+    /// canon band. The six decay rates above are the MATERIALIZED band —
+    /// `with_difficulty` writes both together; this field is the honest
+    /// provenance record for snapshots/probes, not an independent input.
+    #[serde(default)]
+    pub difficulty: DifficultyProfile,
 }
 
 impl Default for SimParameters {
@@ -569,13 +576,16 @@ impl Default for SimParameters {
             enforcement_effectiveness: Fixed::from_f64(0.5),
             corruption_rate: Fixed::from_f64(0.002),
 
-            // Scheduler — §6 tick intervals
+            //            // Scheduler — §6 tick intervals
             hourly_interval: 6,
             daily_interval: 144,
             weekly_interval: 1008,
             seasonal_interval: 4320,
             yearly_interval: 51840,
             tier_reclassify_interval: 100,
+            // i303: canon difficulty band (the Materialized default —
+            // `with_difficulty` rewrites the six rates above for other bands).
+            difficulty: DifficultyProfile::Standard,
         }
     }
 }
@@ -600,6 +610,118 @@ impl SimParameters {
             stress_smoothing: Fixed::from_f64(0.05),
             ..Self::default()
         }
+    }
+
+    /// Difficulty-lever surface (i303, DC-4 entry "b"): the ratified levers
+    /// catalog (`docs/balance/difficulty-levers.md` row 2, "Need decay")
+    /// promoted from DRAFT to a live setting. Standard is BYTE-IDENTICAL to
+    /// today's canon by construction — it returns `default()` untouched, so
+    /// every golden/snapshot window stays zero-blast; Lenient/Harsh rescale
+    /// the six need-decay rates (0.6× / 1.4×) per the catalog's candidate
+    /// bands.
+    ///
+    /// §5 quantize-once discipline: band values are computed here ONCE at
+    /// construction (f64 → one `Fixed::from_f64`), never re-derived per tick,
+    /// so no sub-resolution per-tick increment can truncate to zero. The
+    /// effective raw bands are pinned in `parameters::tests` — the meaning
+    /// channel's Lenient band collapses onto Standard at Fixed-4 resolution
+    /// (raw 1 both; 0.00015 × 0.6 = 0.00009 rounds back to raw 1), recorded
+    /// honestly rather than reshaped: the lever bites on hunger/thirst/
+    /// fatigue/safety/social and on meaning only at Harsh (raw 1 → 2). If a
+    /// 3-way distinct meaning band is ever required, the upgrade path is the
+    /// standing §5 f64-shadow accumulator, a behavioral iteration of its own.
+    ///
+    /// Composes with nothing: presets like `fast()`/`stable()` that override
+    /// the same six rates must be applied AFTER difficulty (or their overrides
+    /// re-applied) — difficulty is the world-level contract, presets are dev
+    /// knobs. The derived esteem/autonomy rate stays coupled at 2/3 of
+    /// meaning per `system_need_decay_with_params`; at Fixed-4 resolution its
+    /// raw rate is 1 in every band (0.0001×0.6667 and 0.0002×0.6667 both
+    /// round to raw 1) — also pinned in tests.
+    pub fn with_difficulty(profile: DifficultyProfile) -> Self {
+        let mut p = Self {
+            difficulty: profile,
+            ..Self::default()
+        };
+        match profile {
+            // Identity by construction: never re-derive the canon rates.
+            DifficultyProfile::Standard => {}
+            DifficultyProfile::Lenient => {
+                p.hunger_decay_rate = Fixed::from_f64(0.0006); // 0.0010 × 0.6
+                p.thirst_decay_rate = Fixed::from_f64(0.0012); // 0.0020 × 0.6
+                p.fatigue_decay_rate = Fixed::from_f64(0.0003); // 0.0005 × 0.6
+                p.safety_decay_rate = Fixed::from_f64(0.0002); // 0.0003 × 0.6 (1.8 → 2)
+                p.social_decay_rate = Fixed::from_f64(0.0001); // 0.0002 × 0.6 (1.2 → 1)
+                p.meaning_decay_rate = Fixed::from_f64(0.0001); // 0.00015 × 0.6 (0.9 → 1, sub-resolution)
+            }
+            DifficultyProfile::Harsh => {
+                p.hunger_decay_rate = Fixed::from_f64(0.0014); // 0.0010 × 1.4
+                p.thirst_decay_rate = Fixed::from_f64(0.0028); // 0.0020 × 1.4
+                p.fatigue_decay_rate = Fixed::from_f64(0.0007); // 0.0005 × 1.4
+                p.safety_decay_rate = Fixed::from_f64(0.0004); // 0.0003 × 1.4 (4.2 → 4)
+                p.social_decay_rate = Fixed::from_f64(0.0003); // 0.0002 × 1.4 (2.8 → 3)
+                p.meaning_decay_rate = Fixed::from_f64(0.0002); // 0.00015 × 1.4 (2.1 → 2)
+            }
+        }
+        p
+    }
+}
+
+/// Difficulty-lever profile (i303): which ratified band the run's need-decay
+/// rates sit in (`docs/balance/difficulty-levers.md` row 2). Standard is the
+/// canon default and the only value every calibrated window was measured at;
+/// Lenient/Harsh are the catalog's Low/High candidate bands promoted to a
+/// runtime surface with probe evidence (i303 probe + parameters tests).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum DifficultyProfile {
+    /// Canon default — the calibrated 1.0× decay band; byte-identical to the
+    /// unparameterized defaults every golden/snapshot window pins.
+    #[default]
+    Standard,
+    /// Low band — 0.6× need decay: deficits accumulate slower, the village
+    /// feels abundant (fewer survival-driven goals). Catalog hypothesis band.
+    Lenient,
+    /// High band — 1.4× need decay: deficits accumulate faster, the village
+    /// feels scarcity-driven (survival work crowds out social/worship).
+    /// Catalog hypothesis band.
+    Harsh,
+}
+
+impl DifficultyProfile {
+    /// Catalog decay multiplier (the `match difficulty { Low => 0.85, … }`
+    /// pure-data shape the levers doc prescribes). Standard is exactly 1.0 —
+    /// the identity that keeps every calibrated window untouched.
+    #[must_use]
+    pub fn decay_multiplier(self) -> f64 {
+        match self {
+            Self::Lenient => 0.6,
+            Self::Standard => 1.0,
+            Self::Harsh => 1.4,
+        }
+    }
+}
+
+impl std::str::FromStr for DifficultyProfile {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "lenient" => Ok(Self::Lenient),
+            "standard" => Ok(Self::Standard),
+            "harsh" => Ok(Self::Harsh),
+            other => Err(format!(
+                "unknown difficulty profile '{other}' — expected lenient|standard|harsh"
+            )),
+        }
+    }
+}
+
+impl std::fmt::Display for DifficultyProfile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Lenient => "lenient",
+            Self::Standard => "standard",
+            Self::Harsh => "harsh",
+        })
     }
 }
 
@@ -650,5 +772,131 @@ mod tests {
         let deserialized: SimParameters = serde_json::from_str(&json).unwrap();
         assert_eq!(p.hunger_decay_rate, deserialized.hunger_decay_rate);
         assert_eq!(p.daily_interval, deserialized.daily_interval);
+    }
+
+    // ── i303 difficulty-lever bands (docs/balance/difficulty-levers.md row 2) ──
+
+    /// STANDARD IS BYTE-IDENTICAL to the canon defaults — the zero-blast
+    /// contract that lets the lever ship without touching a single pin.
+    /// `with_difficulty(Standard)` must return exactly `default()`.
+    #[test]
+    fn standard_difficulty_is_identity_with_canon_defaults() {
+        let d = SimParameters::default();
+        let s = SimParameters::with_difficulty(DifficultyProfile::Standard);
+        assert_eq!(d.hunger_decay_rate, s.hunger_decay_rate);
+        assert_eq!(d.thirst_decay_rate, s.thirst_decay_rate);
+        assert_eq!(d.fatigue_decay_rate, s.fatigue_decay_rate);
+        assert_eq!(d.safety_decay_rate, s.safety_decay_rate);
+        assert_eq!(d.social_decay_rate, s.social_decay_rate);
+        assert_eq!(d.meaning_decay_rate, s.meaning_decay_rate);
+        assert_eq!(d.difficulty, DifficultyProfile::Standard);
+        // Full-struct identity: difficulty is the ONLY field the mapping may
+        // differ on, and for Standard it does not differ at all.
+        let json_a = serde_json::to_string(&d).unwrap();
+        let json_b = serde_json::to_string(&s).unwrap();
+        assert_eq!(
+            json_a, json_b,
+            "Standard must serialize identical to default"
+        );
+    }
+
+    /// §5 quantize-once pin: the EFFECTIVE raw (Fixed-4) bands after the
+    /// 0.6×/1.4× mapping. The levers doc's candidate bands quantize
+    /// non-uniformly at 4-decimal resolution — these are the honest measured
+    /// bands, each pinned with its derivation so no future "fix" re-derives
+    /// them differently. Notes:
+    ///   - hunger 0.0006→raw 6 (0.0010×0.6); thirst 0.0012→raw 12;
+    ///     fatigue 0.0003→raw 3; safety 0.00018→raw 2 (rounds up); social
+    ///     0.00012→raw 1 (rounds DOWN from 1.2 — lenient social decay is
+    ///     HALF canon, not 0.6×);
+    ///   - meaning 0.00009→raw 1 = CANON — the Lenient meaning band collapses
+    ///     onto Standard at Fixed-4 (recorded, not reshaped; upgrade path is
+    ///     the §5 f64-shadow accumulator);
+    ///   - harsh social 0.00028→raw 3, safety 0.00042→raw 4, meaning
+    ///     0.00021→raw 2 (all round-to-nearest).
+    #[test]
+    fn difficulty_bands_quantize_to_pinned_raw_values() {
+        let len = SimParameters::with_difficulty(DifficultyProfile::Lenient);
+        let harsh = SimParameters::with_difficulty(DifficultyProfile::Harsh);
+        let std = SimParameters::with_difficulty(DifficultyProfile::Standard);
+        // Lenient raw band (raw units: 1 raw = 1e-4).
+        assert_eq!(len.hunger_decay_rate.to_raw(), 6);
+        assert_eq!(len.thirst_decay_rate.to_raw(), 12);
+        assert_eq!(len.fatigue_decay_rate.to_raw(), 3);
+        assert_eq!(len.safety_decay_rate.to_raw(), 2);
+        assert_eq!(len.social_decay_rate.to_raw(), 1);
+        assert_eq!(
+            len.meaning_decay_rate.to_raw(),
+            1,
+            "sub-resolution collapse: 0.9 rounds back to canon 1"
+        );
+        // Harsh raw band.
+        assert_eq!(harsh.hunger_decay_rate.to_raw(), 14);
+        assert_eq!(harsh.thirst_decay_rate.to_raw(), 28);
+        assert_eq!(harsh.fatigue_decay_rate.to_raw(), 7);
+        assert_eq!(harsh.safety_decay_rate.to_raw(), 4);
+        assert_eq!(harsh.social_decay_rate.to_raw(), 3);
+        assert_eq!(
+            harsh.meaning_decay_rate.to_raw(),
+            2,
+            "harsh meaning bites: canon 1 → 2"
+        );
+        // Monotonic band ordering, every channel.
+        assert!(len.hunger_decay_rate < std.hunger_decay_rate);
+        assert!(std.hunger_decay_rate < harsh.hunger_decay_rate);
+        assert!(len.thirst_decay_rate < std.thirst_decay_rate);
+        assert!(std.thirst_decay_rate < harsh.thirst_decay_rate);
+        assert!(len.fatigue_decay_rate < std.fatigue_decay_rate);
+        assert!(std.fatigue_decay_rate < harsh.fatigue_decay_rate);
+        assert!(len.safety_decay_rate < std.safety_decay_rate);
+        assert!(std.safety_decay_rate < harsh.safety_decay_rate);
+        assert!(len.social_decay_rate < std.social_decay_rate);
+        assert!(std.social_decay_rate < harsh.social_decay_rate);
+        // Meaning: lenient == standard (documented collapse), harsh > standard.
+        assert_eq!(len.meaning_decay_rate, std.meaning_decay_rate);
+        assert!(std.meaning_decay_rate < harsh.meaning_decay_rate);
+    }
+
+    /// The catalog's pure-data multiplier contract: Standard is exactly 1.0
+    /// (identity), Lenient/Harsh carry the 0.6×/1.4× candidate bands.
+    #[test]
+    fn difficulty_multipliers_match_catalog() {
+        assert_eq!(DifficultyProfile::Lenient.decay_multiplier(), 0.6);
+        assert_eq!(DifficultyProfile::Standard.decay_multiplier(), 1.0);
+        assert_eq!(DifficultyProfile::Harsh.decay_multiplier(), 1.4);
+        // Parsing (CLI surface) is total over the catalog vocabulary.
+        use std::str::FromStr;
+        assert_eq!(
+            DifficultyProfile::from_str("harsh"),
+            Ok(DifficultyProfile::Harsh)
+        );
+        assert_eq!(
+            DifficultyProfile::from_str("Standard"),
+            Ok(DifficultyProfile::Standard)
+        );
+        assert_eq!(
+            DifficultyProfile::from_str("LENIENT"),
+            Ok(DifficultyProfile::Lenient)
+        );
+        assert!(DifficultyProfile::from_str("extreme").is_err());
+    }
+
+    /// Serde back-compat: a param payload serialized before i303 (no
+    /// `difficulty` key) loads at the Standard band — the same serde-default
+    /// pattern every Snapshot field addition has used since v8.
+    #[test]
+    fn legacy_params_json_defaults_to_standard_band() {
+        let mut p = SimParameters::default();
+        p.difficulty = DifficultyProfile::Harsh;
+        let json = serde_json::to_string(&p).unwrap();
+        // Simulate pre-i303 bytes: strip the difficulty key.
+        let mut v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        v.as_object_mut().unwrap().remove("difficulty");
+        let restored: SimParameters = serde_json::from_value(v).unwrap();
+        assert_eq!(restored.difficulty, DifficultyProfile::Standard);
+        assert_eq!(
+            restored.hunger_decay_rate,
+            SimParameters::default().hunger_decay_rate
+        );
     }
 }

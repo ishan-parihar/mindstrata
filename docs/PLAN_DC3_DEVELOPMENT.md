@@ -201,3 +201,10 @@ CLIENT contract; art/audio sub-charters may be drafted against it. First
 DC-4 iterations: (a) CLIENT asset-viewer panel consuming `--export-assets`
 output; (b) difficulty-levers live tuning surface over the ratified needs
 bands; (c) graphical shell spike against the same document.
+
+#### DC-4 execution ledger
+
+| Iter | Status | Landing | Verdict recorded |
+|---|---|---|---|
+| i303 | **DONE** | evidence/i303_difficulty_levers.md | **(b) difficulty-levers**: row 2 (need decay) promoted DRAFT → LIVE. `DifficultyProfile` (0.6/1.0/1.4) + `SimParameters::with_difficulty` quantize-once mapping; Standard byte-identical to canon (params serde + end-state digest, zero re-anchor); Snapshot v16 persists `params` (fixes the silent reset-all-tuning-on-restore defect); CLI `--difficulty`. Probe `i303_difficulty_bands` verdict `DIFFICULTY_BANDS_LIVE` (aggregate +27%, Worship share −19%, 12/12 alive × 3 bands); 4 core + 2 snapshot + 2 integration pins. Carries forward: levers row 3 (pathology params need `system_development` param-threading), row 2 threshold-half residual |
+| i304+ | queued | — | (a) CLIENT asset-viewer panel over the i301 schema; (b) levers row 3 (pathology bands); (c) graphical shell spike |

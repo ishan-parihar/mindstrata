@@ -242,6 +242,8 @@ impl Simulation {
             meme_registry: &self.meme_registry,
             kinship_graph: &self.kinship_graph,
             collective_field: &self.collective_field,
+            // i303 (v16): tuning params (incl. the difficulty band) capture.
+            params: &self.params,
         })
     }
 

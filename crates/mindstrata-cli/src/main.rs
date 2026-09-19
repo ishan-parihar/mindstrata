@@ -36,6 +36,18 @@ enum Commands {
         #[arg(long, value_name = "DIR")]
         mod_dir: Option<String>,
 
+        /// Difficulty-lever band for need decay (DC-4 entry "b",
+        /// docs/balance/difficulty-levers.md row 2): lenient (0.6× decay),
+        /// standard (canon), or harsh (1.4× decay). Applied to a fresh run
+        /// before seeding; ignored (with a note) when resuming a snapshot,
+        /// whose captured params take precedence.
+        #[arg(
+            long,
+            value_name = "lenient|standard|harsh",
+            default_value = "standard"
+        )]
+        difficulty: String,
+
         /// Verbose logging.
         #[arg(short, long)]
         verbose: bool,
@@ -160,6 +172,7 @@ fn main() {
             ticks,
             agents,
             mod_dir,
+            difficulty,
             verbose,
             map,
             render_map,
@@ -195,6 +208,17 @@ fn main() {
                 snapshot_interval: None,
             };
 
+            // i303 (DC-4 entry "b"): difficulty-lever band. Parsed up front so
+            // a typo fails before any seeding work.
+            let difficulty_profile: mindstrata_sim::parameters::DifficultyProfile =
+                match difficulty.parse() {
+                    Ok(p) => p,
+                    Err(e) => {
+                        eprintln!("Invalid --difficulty: {e}");
+                        std::process::exit(2);
+                    }
+                };
+
             println!("╔══════════════════════════════════════════════╗");
             println!("║  Mindstrata v{}", env!("CARGO_PKG_VERSION"));
             println!("║  A Deterministic Emergent Society Simulation");
@@ -203,6 +227,7 @@ fn main() {
             println!("  Seed:    {seed}");
             println!("  Ticks:   {ticks}");
             println!("  Agents:  {agents}");
+            println!("  Difficulty: {difficulty_profile}");
             println!();
 
             // §16.1: Snapshot loading — restore from disk if requested
@@ -213,9 +238,21 @@ fn main() {
                         std::process::exit(1);
                     });
                 println!("  Loaded snapshot from tick {}", snapshot.tick);
+                if difficulty_profile != mindstrata_sim::parameters::DifficultyProfile::Standard {
+                    println!(
+                        "  Note: --difficulty {difficulty_profile} ignored — the snapshot's captured params (i303 v16) take precedence."
+                    );
+                }
                 Simulation::from_snapshot(snapshot)
             } else {
                 let mut s = Simulation::new(config);
+                // i303: apply the band BEFORE populate so every consumer that
+                // reads a decay rate during the run sees the band (the
+                // `run_sim_with_params` ordering contract). Standard is
+                // byte-identical to the untouched default, so this line is a
+                // no-op on the canon path.
+                s.params =
+                    mindstrata_sim::parameters::SimParameters::with_difficulty(difficulty_profile);
                 s.populate();
                 s
             };

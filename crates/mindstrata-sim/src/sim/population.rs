@@ -232,7 +232,13 @@ impl Simulation {
         let mut sim = Self {
             config: snapshot.config,
             clock,
-            params: crate::parameters::SimParameters::default(),
+            // i303 (v16): restore the captured tuning parameters instead of
+            // rebuilding defaults — the pre-i303 behavior silently discarded
+            // every run-level override (including the difficulty band) across
+            // a save/load boundary. Pre-v16 JSON saves deserialize the field
+            // at `SimParameters::default()` via serde default, which is
+            // exactly the old reset-to-default semantics.
+            params: snapshot.params,
             rng,
             world: snapshot.world,
             agents: snapshot.agents,
