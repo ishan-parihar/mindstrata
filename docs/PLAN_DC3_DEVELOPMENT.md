@@ -125,6 +125,7 @@ that into ten probe-first iterations, each with a named exit test.
 | i296 | **DONE** | evidence/i296_multi_village.md | UM-3 core landed: per-polity holons (`polity_fields`/`assign_polities`), identity-at-isolation pinned unit+in-vivo, partition diverges (Safety 3.000 vs 4.000). Remaining UM-3 legs: referent/naming, auto-partition, cross-village diffusion |
 | i297 | **DONE** | evidence/i297_polity_genesis.md | UM-3 leg 1 (referents) CLOSED — per-polity genesis with territory-anchored referent views (sites: nearest home-site centroid; institutions: member-majority) + per-polity dedup namespaces; probe: p0 cites Village Market, p1 cites Village Temple (20K, seed 42); zero blast without polities; sim lib 250/250 |
 | i298 | **DONE** | evidence/i298_auto_partition.md | UM-3 leg 2 (assignment rule) CLOSED — `auto_partition_polities(max_gap)`: deterministic single-linkage clustering over inhabited home sites; single settlement → inert (0 polities), two settlements → disjoint cover with divergent trajectories (S 4.000 vs 3.000), derived ≡ assigned bit-identical over 10K; sim lib 253/253 |
+| i299 | **DONE** | evidence/i299_trade_diffusion.md | UM-3 leg 3 (diffusion) CLOSED — `system_trade_diffusion`: cross-polity trades damp sender's namespaced genesis memes into the receiver (§13.1 weight 0.3, zero RNG); zero-at-zero in vivo; diet LOADED (1160 cross trades/window); measurement boundary recorded (host_count conflates gossip+diffusion → `meme.hosts` schema debt for i300); sim lib 257/257 |
 
 ## 8. 2026-09-19 audit + UM-3 continuation ladder (post-i296)
 
@@ -148,9 +149,10 @@ p0 cites Village Market, p1 cites Village Temple; zero blast without polities.
 inhabited home sites; single-cluster worlds stay inert; two-settlement worlds derive
 the i296 partition bit-identically to operator assignment.
 
-**i299 — cross-village cultural diffusion via trade partners (UM-3 leg 3).** Generated
-memes cross polities along the existing trade-partner graph with attenuation; probe
-measures jaccard convergence between trading vs non-trading polity pairs.
+**i299 — cross-village cultural diffusion via trade partners. DONE (`evidence/i299_trade_diffusion.md`).**
+`system_trade_diffusion` — damped cross-polity meme growth on trade events. In-vivo A/B
+isolation recorded as impossible at N=12 (wandering, shared market sites, host_count
+conflation); unit pins carry the liveness proof; `meme.hosts` schema debt recorded for i300.
 
 **i300 — UM-3 gate: multi-village disjointness probe.** Two+ polities, shared world,
 50K horizon: generated rosters diverge (jaccard < threshold, set from same-polity control

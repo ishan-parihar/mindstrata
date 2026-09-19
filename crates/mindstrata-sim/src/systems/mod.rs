@@ -56,6 +56,7 @@ pub mod development;
 pub mod genesis;
 pub(crate) mod health;
 pub mod institutions_multiplier;
+pub mod trade_diffusion;
 
 // ── Need decay system ────────────────────────────────────────────────────
 

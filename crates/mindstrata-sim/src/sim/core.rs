@@ -700,6 +700,23 @@ impl Simulation {
             );
         }
 
+        // ── Iter-299 (UM-3 leg 3): cross-polity cultural diffusion via
+        // trade. Trade/Trade-interaction events between members of
+        // DIFFERENT polities expose the receiver's polity to the sender's
+        // namespaced genesis memes (damped host-count growth — the §13.1
+        // trade weight 0.3 vs gossip). Zero-at-zero: no polities or no
+        // cross-polity trades → no-op; the pass is pure over the event
+        // window and touches no golden-projected state. Runs BEFORE the
+        // genesis/field passes so this tick's trades inform this tick's
+        // culture step (event order: trades pushed by the economy pass
+        // earlier in this same tick are in the window).
+        crate::systems::trade_diffusion::system_trade_diffusion(
+            polarity_window,
+            tick,
+            &self.polity_members,
+            &mut self.meme_registry,
+        );
+
         // ── Iter-297 (UM-3 leg 1): territory-anchored per-polity genesis.
         // Each polity's field generates culture citing ITS territory (site
         // ownership by nearest home-site centroid; institutions by member
