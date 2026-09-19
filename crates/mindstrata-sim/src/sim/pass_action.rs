@@ -14,6 +14,21 @@ use crate::institutions;
 /// the routine behave exactly as calibrated.
 const REFLEX_MEANING_THRESHOLD: Fixed = Fixed::from_raw(9_000);
 
+/// Derived-health level below which a body is treated as too compromised to
+/// exert itself (i255's health-critical frame; i309 turned it from a Rest mutex
+/// into an exertion veto).
+const HEALTH_CRITICAL_THRESHOLD: Fixed = Fixed::from_raw(2_500);
+
+/// Whether an action spends the body's reserves — the actions a health-critical
+/// agent must not take (i309). `Work` is heavy labour (energy cost 0.05) and
+/// `Wander` roams (energy cost 0.02, and it is the classified risky action).
+/// Everything else — eat, drink, rest, socialize, worship, trade, idle — is
+/// compatible with a body in crisis, which is why the veto is a filter and not
+/// a forced action.
+pub(super) fn is_exerting(action: ActionKind) -> bool {
+    matches!(action, ActionKind::Work | ActionKind::Wander)
+}
+
 impl Simulation {
     pub(super) fn tick_action_pass(
         ctx: &mut crate::systems::SystemContext,
@@ -197,6 +212,29 @@ impl Simulation {
                 // rest/recovery instead. Deterministic, RNG-free, and
                 // unreachable in calibrated calm windows (thirst tops out
                 // ~0.62 there), so golden stays byte-identical.
+                // Iteration 309 (audit finding i309): the health-critical case
+                // used to force `Rest` — and that made a permanent trap out of
+                // a chronic state. `body.health` is the DERIVED value
+                // (`derived_health` = base × immune − 0.2 × stress level −
+                // 0.15 × chronic load − pain − sickness − shock − …, all times
+                // the skeletal factor), so any chronically stressed agent sits
+                // permanently below the 0.25 gate, and Rest reduces exactly
+                // none of those penalties. Measured (i309_rest_plateau_mechanism):
+                // the affected agents spent 78–89% of their lives in Rest —
+                // 81% for pestilence-era seed 123 agent 6 — with social and
+                // meaning needs pinned at 1.0 because Rest was the ONLY legal
+                // action, and thirst allowed to climb to 0.9 before the thirst
+                // reflex could fire. i308 had already excluded energy, sleep,
+                // habit-substitution and the emotional modifiers; the trace
+                // (`[pass] agent 6 … reflex Some(Rest)`) named this branch.
+                //
+                // The i255 intent was "a body at its limits does not exert
+                // itself", not "a body at its limits loses all agency". This
+                // flag keeps that intent and drops the mutex: the agent goes on
+                // choosing (drink, eat, rest, socialize, worship — every
+                // non-exerting option), and only the EXERTING actions are
+                // refused below.
+                let health_critical = agents[i].body.health < HEALTH_CRITICAL_THRESHOLD;
                 let reflex_override = if needs[i].thirst > Fixed::from_f64(0.9)
                     && needs[i].thirst >= needs[i].hunger
                 {
@@ -204,9 +242,6 @@ impl Simulation {
                 } else if needs[i].hunger > Fixed::from_f64(0.9) {
                     Some(ActionKind::Eat)
                 } else if needs[i].fatigue > Fixed::from_f64(0.95) {
-                    Some(ActionKind::Rest)
-                } else if agents[i].body.health < Fixed::from_f64(0.25) {
-                    // Health-critical: restrict to recovery actions only.
                     Some(ActionKind::Rest)
                 } else if needs[i].meaning > REFLEX_MEANING_THRESHOLD {
                     // Iteration 306 (audit finding i306): the MEANING reflex.
@@ -449,6 +484,15 @@ impl Simulation {
                             _ => action,
                         };
                     }
+                }
+                // Iteration 309: a body at its limits does not exert itself.
+                // The health-critical frame vetoes the exerting actions and
+                // leaves every restorative/expressive option available, instead
+                // of the old Rest mutex (see the `health_critical` comment
+                // above). Applied AFTER the habit fallback so a stress habit
+                // cannot smuggle `Work` past the veto either.
+                if health_critical && is_exerting(action) {
+                    action = ActionKind::Rest;
                 }
                 agents[i].current_action = action;
                 agents[i].action_progress = action.definition().duration_ticks;

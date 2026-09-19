@@ -77,9 +77,19 @@ is measured, its candidates A–D are excluded by ablation, and the residual
 driver is localized to the pass-level inputs that the utility ledger does not
 carry.
 
-## Queue after this iteration
+## RESOLVED — see i309
 
-1. **Utility-landscape iteration (next behavioural candidate)**: extend the
+The driver was named the next iteration by tracing the pass directly: the
+**health-critical reflex** (`body.health < 0.25 → Some(Rest)`), a Rest mutex over
+a *chronic* derived-health state. Fix and numbers:
+`docs/architecture/AP4-studio/evidence/i309_health_frame.md`. The utility-ledger
+route proposed below was superseded by that trace (the ledger could not have
+reproduced the sim for the simplest of reasons: selection never ran — the reflex
+path returns before the utility layer is consulted).
+
+## Queue after this iteration (kept for the record)
+
+1. **Utility-landscape iteration**: extend the
    ledger to a *pass-faithful* one (routine override + adjusted norm pressure +
    habit modifier + institution bonus + polarity + somatic marker), then re-run
    the ablation against it. Only after that should a fix be attempted — the

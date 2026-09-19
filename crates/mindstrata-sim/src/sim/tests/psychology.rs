@@ -510,3 +510,134 @@ fn habit_substitution_still_fires_when_no_reflex_is_active() {
         "with no reflex active the stress-habit fallback still substitutes"
     );
 }
+
+/// i309: the health-critical frame is an EXERTION veto, not a Rest mutex.
+///
+/// The old branch forced `Rest` whenever `body.health < 0.25`. Because
+/// `body.health` is the DERIVED value (`derived_health` subtracts chronic
+/// stress load, stress level, pain, sickness and shock — none of which Rest
+/// reduces), any chronically stressed agent sat permanently below the gate and
+/// was locked out of every other action: measured 78–89% Rest duty with social
+/// and meaning needs pinned at 1.0 and thirst left to climb to 0.9 before the
+/// thirst reflex could fire (`i308_rest_dominance`, `i309_rest_plateau_mechanism`
+/// trace `reflex Some(Rest)`). The frame must keep the body's agency.
+#[test]
+fn health_critical_agent_addresses_needs_instead_of_being_locked_into_rest() {
+    use crate::actions::ActionKind;
+    let mut sim = Simulation::new(SimConfig {
+        seed: 42,
+        max_ticks: 100,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 6,
+        snapshot_interval: None,
+    });
+    sim.populate();
+    let before;
+    {
+        let a = &mut sim.agents[0];
+        // `body.health` is DERIVED each tick from the embodied state, so the
+        // critical HEALTH has to be set on its driver (the base health it is
+        // derived from), not on the facade.
+        a.embodied.health = Fixed::from_f64(0.05);
+        a.needs.hunger = Fixed::from_f64(0.5);
+        a.needs.thirst = Fixed::from_f64(0.05);
+        a.needs.fatigue = Fixed::from_f64(0.05);
+        a.needs.social = Fixed::from_f64(0.05);
+        a.needs.meaning = Fixed::from_f64(0.05);
+        // Stress above the routine gate (0.7) so the daily schedule does not
+        // decide this selection — the point here is the health frame's effect
+        // on AGENCY, and the routine would otherwise force its own slot.
+        a.emotions.fear = Fixed::from_f64(0.8);
+        a.emotions.anger = Fixed::ZERO;
+        a.current_action = ActionKind::Rest;
+        a.action_progress = 0;
+        before = a.needs.hunger.to_f64();
+    }
+    sim.tick();
+    let a = &sim.agents[0];
+    assert_ne!(
+        a.current_action,
+        ActionKind::Work,
+        "a health-critical agent must not be put to work"
+    );
+    assert_ne!(
+        a.current_action,
+        ActionKind::Wander,
+        "a health-critical agent must not roam"
+    );
+    assert_eq!(
+        a.current_action,
+        ActionKind::Eat,
+        "with a 0.5 hunger deficit the health-critical agent must be free to eat"
+    );
+    assert!(
+        a.needs.hunger.to_f64() < before,
+        "a health-critical agent must still be able to eat: hunger {before} -> {}",
+        a.needs.hunger.to_f64()
+    );
+}
+
+/// i309: and the veto still bites — an exerting selection is replaced.
+/// The construction forces the routine branch (hour 9 = Work, calm emotions,
+/// satisfied needs) so the selected action is `Work`; the health frame must
+/// downgrade it to `Rest`.
+#[test]
+fn health_critical_frame_downgrades_a_scheduled_work_selection() {
+    use crate::actions::ActionKind;
+    let mut sim = Simulation::new(SimConfig {
+        seed: 42,
+        max_ticks: 1000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 6,
+        snapshot_interval: None,
+    });
+    sim.populate();
+    // Run to hour 9 (tick 36 = hour 9) with every agent in good shape, then
+    // make agent 0 health-critical and force a fresh selection.
+    for _ in 0..36 {
+        sim.tick();
+    }
+    {
+        let a = &mut sim.agents[0];
+        a.embodied.health = Fixed::from_f64(0.05);
+        a.emotions.fear = Fixed::ZERO;
+        a.emotions.anger = Fixed::ZERO;
+        a.needs.hunger = Fixed::from_f64(0.2);
+        a.needs.thirst = Fixed::from_f64(0.2);
+        a.needs.fatigue = Fixed::from_f64(0.2);
+        a.needs.social = Fixed::from_f64(0.2);
+        a.needs.meaning = Fixed::from_f64(0.2);
+        a.action_progress = 0;
+    }
+    sim.tick();
+    assert_eq!(
+        sim.agents[0].current_action,
+        ActionKind::Rest,
+        "an exerting selection must be downgraded while health is critical"
+    );
+}
+
+/// i309: the veto is a filter, not a blanket — only exertion is refused.
+#[test]
+fn exertion_classification_is_work_and_wander_only() {
+    use crate::actions::ActionKind as K;
+    use crate::sim::pass_action::is_exerting;
+    assert!(is_exerting(K::Work));
+    assert!(is_exerting(K::Wander));
+    for kind in [
+        K::Eat,
+        K::Drink,
+        K::Rest,
+        K::Socialize,
+        K::Worship,
+        K::Trade,
+        K::Idle,
+    ] {
+        assert!(
+            !is_exerting(kind),
+            "{kind:?} must remain available to a body in crisis"
+        );
+    }
+}
