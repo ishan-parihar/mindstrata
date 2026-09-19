@@ -234,6 +234,21 @@ impl Simulation {
                 // choosing (drink, eat, rest, socialize, worship — every
                 // non-exerting option), and only the EXERTING actions are
                 // refused below.
+                // Iteration 312 (post-i311 re-audit, AGENTS §2.5): the guard is
+                // currently DORMANT. i311 fixed the immune-clearance pin that
+                // used to hold ~3% of agents below 0.25, so `i312_health_reflex_
+                // liveness` measures 0 below-gate agent-ticks across ~22M
+                // (pestilence/collapse/drought/calm, 4320–50K; ever-crossed 0).
+                // The derived-health floor is now ≈0.40 and decomposes as
+                // `base×immune 0.74 − stress 0.16 − chronic 0.135 − sickness 0.05`
+                // with `pain` and `shock` contributing EXACTLY 0.0000 — two of
+                // the five penalty channels are dead, and the floor is set by
+                // stress+chronic saturating at a fixed ~0.29 total. No absolute
+                // threshold can restore liveness: the per-scenario distributions
+                // overlap (p1 0.47–0.62 in every context). Kept as a correct
+                // safety veto; restoring a reachable crisis band is queued as its
+                // own behavioural iteration (needs live pain/shock channels), not
+                // a threshold re-pin (AGENTS §4.5).
                 let health_critical = agents[i].body.health < HEALTH_CRITICAL_THRESHOLD;
                 let reflex_override = if needs[i].thirst > Fixed::from_f64(0.9)
                     && needs[i].thirst >= needs[i].hunger
