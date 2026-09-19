@@ -26,6 +26,17 @@ Frozen at 2.18; values CALIBRATION-PENDING(AP3) until probe-measured per FR-027.
   binding calibration problem in this table, and it is a decay-vs-relief
   balance issue, not a gate issue. Full tables:
   `docs/architecture/AP4-studio/evidence/i305_goal_gate_bands.md`.
+- **i306 status (supersedes (b) above)**: the meaning saturation was NOT a
+  decay-vs-relief balance issue — the relief surplus was 22.3×. It was a DEAD
+  PRODUCER: the §10.3 routine override resolves to Work and the routine template
+  has no worship slot, so agents at meaning 1.0000 with a `Worship` goal live 85%
+  of ticks performed ZERO Worship ticks. Fixed with the unbanded **meaning
+  reflex** (i255 survival-integrity chain, threshold 0.9, below every
+  physiological reflex). Measured: at-ceiling share 0.272 → 0.056 (−79%);
+  worship ACTION duty 0.0220 → 0.0225. Note the goal-duty caveat: i305's 41.5%
+  `Worship` *goal* duty corresponds to 2.25% worship *action* duty — goal presence
+  is not action performance. Evidence:
+  `docs/architecture/AP4-studio/evidence/i306_meaning_reflex.md`.
 - Motivation-context amplifications couple fear/anger/joy/sadness into drive pressures
   (Iteration-124 fix; see docs/MINDSTRATA_CURRENT_STATE.md historical note).
 - Development field altitudes now live on every agent (task 3.1) and are updated
@@ -40,7 +51,7 @@ Frozen at 2.18; values CALIBRATION-PENDING(AP3) until probe-measured per FR-027.
 | Safety — safety/scarcity | 0.7 analog to social | Vault `needs` rung 2–3 (red→amber transition), scarcity vs threat distinction in pathology operator (§5 collective-system) | 0.60–0.75 | `i<iter>_needs_gate_safety_delta` — vary safety retain 0.6→0.8, measure SeekSafety goal frequency and feud escalation rate |
 | Belonging — social/attachment | 0.3 retain / 0.7 generate Socialize | `needs` rung 3 (amber), Communion drive (IC-1), attachment system (psych/attachment.rs) | 0.25–0.35 retain / 0.60–0.75 generate | `i<iter>_needs_gate_belonging_pacing` — sweep generate threshold, measure Socialize actions/day and kinship edge count at 10K ticks |
 | Esteem — esteem/competence/recognition | derived at 2/3 meaning rate | `needs` rung 4 (achievement), Agency drive; Work/Trade relieve paths (sim/core.rs:657–665) | 0.55–0.65 (derived) | `i<iter>_needs_gate_esteem_scan` — sensitivity scan 0.5→0.7, measure Work vs Socialize trade-off and wealth Gini at 20K |
-| Self-actualization — meaning/worship | 0.4 traditional gate, 0.7 Worship goal | `needs` rung 5–6 (formal/postformal), Agape/Eros drives, `meaning` need decay | 0.35–0.45 gate / 0.60–0.75 goal | `i<iter>_needs_gate_meaning_accum` — sweep gate 0.3→0.5, measure Worship actions/day and meaning deficit EMA at 10K |
+| Self-actualization — meaning/worship | 0.4 traditional gate, 0.7 Worship goal, 0.9 meaning reflex (i306) | `needs` rung 5–6 (formal/postformal), Agape/Eros drives, `meaning` need decay | 0.35–0.45 gate / 0.60–0.75 goal | `i<iter>_needs_gate_meaning_accum` — sweep gate 0.3→0.5, measure Worship actions/day and meaning deficit EMA at 10K |
 | Self-transcendence — autonomy | 2/3 meaning rate | `needs` rung 7 collective field (Era II village holon), CollectiveField lambda | MEASURED (i282): deficit equilibrium median ~0.10 (workers) with ≥10% low-workload agents at deficit cap 1.0 — workload-differentiated per the i267 ODE design; pressure ceiling 0.3 (urgency 0.3 × cap 1.0) makes the draft [0.55,0.65] pressure threshold structurally unreachable (§4.4 re-contract — semantics invalidated by construction, not magnitude). Behavioral expression is via grievance (factions `compute_grievance`) + depression-risk (person/mind.rs) couplings, live; dominance argmax 0/112 by design (higher needs yield to survival). | `i282_transcendence_sweep` + `i282_autonomy_dominance` (3 seeds × 1K/5K/20K) — DONE |
 
 ## Open questions

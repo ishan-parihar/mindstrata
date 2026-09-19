@@ -332,3 +332,90 @@ fn harsh_gate_scale_withholds_a_goal_the_standard_band_generates() {
         "the Brittle/1.4x band must tolerate 0.55 hunger before acting"
     );
 }
+
+/// i306 regression pin: the MEANING reflex. An agent whose meaning need is
+/// saturated performs Worship on the next selection even when a strong daily
+/// routine (Work, strength 0.70 > the 0.5 follow-threshold) would otherwise
+/// win — the measured deadlock that pinned 27% of agent-ticks at the meaning
+/// ceiling (`i306_meaning_channel`). Vital signs are set clear of every
+/// physiological reflex so the ordering under test is the meaning one.
+#[test]
+fn meaning_reflex_forces_worship_over_a_strong_routine() {
+    use crate::actions::ActionKind;
+    let mut sim = Simulation::new(SimConfig {
+        seed: 42,
+        max_ticks: 100,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 6,
+        snapshot_interval: None,
+    });
+    sim.populate();
+    let a = &mut sim.agents[0];
+    a.needs.meaning = Fixed::from_f64(0.95);
+    a.needs.hunger = Fixed::from_f64(0.05);
+    a.needs.thirst = Fixed::from_f64(0.05);
+    a.needs.fatigue = Fixed::from_f64(0.05);
+    a.body.health = Fixed::ONE;
+    a.current_action = ActionKind::Work;
+    a.action_progress = 0; // force a fresh selection this tick
+    sim.tick();
+    assert_eq!(
+        sim.agents[0].current_action,
+        ActionKind::Worship,
+        "a saturated meaning need must outrank the routine"
+    );
+    // And the same agent below the reflex threshold keeps its routine.
+    let mut sim = Simulation::new(SimConfig {
+        seed: 42,
+        max_ticks: 100,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 6,
+        snapshot_interval: None,
+    });
+    sim.populate();
+    let a = &mut sim.agents[0];
+    a.needs.meaning = Fixed::from_f64(0.85);
+    a.needs.hunger = Fixed::from_f64(0.05);
+    a.needs.thirst = Fixed::from_f64(0.05);
+    a.needs.fatigue = Fixed::from_f64(0.05);
+    a.body.health = Fixed::ONE;
+    a.action_progress = 0;
+    sim.tick();
+    assert_ne!(
+        sim.agents[0].current_action,
+        ActionKind::Worship,
+        "below the reflex threshold the routine decision stands"
+    );
+}
+
+/// i306 diagnostic (kept as a regression pin): does the Worship action's
+/// meaning relief actually land through the real tick pipeline?
+#[test]
+fn worship_action_relieves_meaning_through_the_pipeline() {
+    use crate::actions::ActionKind;
+    let mut sim = Simulation::new(SimConfig {
+        seed: 42,
+        max_ticks: 100,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 6,
+        snapshot_interval: None,
+    });
+    sim.populate();
+    sim.agents[0].needs.meaning = Fixed::from_f64(0.8);
+    sim.agents[0].current_action = ActionKind::Worship;
+    sim.agents[0].action_progress = 4;
+    let before = sim.agents[0].needs.meaning.to_f64();
+    sim.tick();
+    let after = sim.agents[0].needs.meaning.to_f64();
+    println!(
+        "i306 diag: meaning {before} -> {after} (action {:?})",
+        sim.agents[0].current_action
+    );
+    assert!(
+        after < before - 0.05,
+        "Worship must relieve meaning through the pipeline: {before} -> {after}"
+    );
+}

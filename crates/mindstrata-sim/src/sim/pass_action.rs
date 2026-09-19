@@ -8,6 +8,12 @@ use super::{
 use crate::actions;
 use crate::institutions;
 
+/// Meaning deficit above which the meaning reflex forces a `Worship` action
+/// (i306). Sized just under saturation so the reflex is the LAST resort the
+/// routine can trip, not a general worship bias: below it the utility AI and
+/// the routine behave exactly as calibrated.
+const REFLEX_MEANING_THRESHOLD: Fixed = Fixed::from_raw(9_000);
+
 impl Simulation {
     pub(super) fn tick_action_pass(
         ctx: &mut crate::systems::SystemContext,
@@ -202,6 +208,30 @@ impl Simulation {
                 } else if agents[i].body.health < Fixed::from_f64(0.25) {
                     // Health-critical: restrict to recovery actions only.
                     Some(ActionKind::Rest)
+                } else if needs[i].meaning > REFLEX_MEANING_THRESHOLD {
+                    // Iteration 306 (audit finding i306): the MEANING reflex.
+                    //
+                    // The routine override below the reflex layer assumes the
+                    // daily schedule covers every need channel, but the routine
+                    // template has no worship slot — so an agent whose meaning
+                    // need saturates is locked into Work/Rest while its Worship
+                    // goal sits at priority 1.0 and never fires. Measured
+                    // (i306_meaning_channel, 20K x 12 seeds): agents at meaning
+                    // 1.0000 with a Worship goal present 70–85% of ticks
+                    // performed ZERO Worship ticks, and 27% of all agent-ticks
+                    // sat at the meaning ceiling — the channel was dead for the
+                    // very agents who needed it most.
+                    //
+                    // The reflex layer exists to make "an agent at its limits
+                    // acts, whatever the schedule says" true by construction
+                    // (Iteration 255, audit Phase 3); a need pinned at its
+                    // ceiling is at its limit. Sits BELOW every physiological
+                    // reflex (body still outranks soul) and ABOVE routine and
+                    // utility. Deterministic, RNG-free. The threshold keeps
+                    // calibrated short windows untouched by construction:
+                    // meaning tops out ~0.30 at 2K ticks, so golden stays
+                    // byte-identical.
+                    Some(ActionKind::Worship)
                 } else {
                     None
                 };
