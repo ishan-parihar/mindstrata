@@ -1,7 +1,8 @@
 # Difficulty Levers Catalog — Post-AA Knobs (DESIGN 9-10)
 
 Owner: DESIGN → PLATFORM/SIM implementation via `IC-5` `CO-` only.
-Status: **v1.0 — row 2 (need decay) LIVE (i303); rows 1 and 3 still DRAFT.**
+Status: **v1.1 — rows 2 (need decay, i303) and 3 (pathology, i304) LIVE;
+row 1 still DRAFT (prohibited, see below).**
 Companion to `pacing-model.md` (which horizon each lever paces) and
 `canon-inventory.md` rows 1/2/7.
 
@@ -16,7 +17,7 @@ approved bands. The mapping is pure data — `match difficulty { Low => 0.85, �
 |---|---|---|---|---|---|
 | 1 | **Founding variance** — `FOUNDER_SPREAD` shaping `U(0,1)` line-profile draws (AGENTS §5 debt, `needs` line) | 10K clusters | Narrow `σ=0.12` / Standard `σ=0.20` / Wide `σ=0.29` (variance 1/12) | Villages diverge visibly vs feel same — `inter` `0.12` floor fails on Narrow, `0.18` on Standard (current `i272` 0.1817), `0.25+` on Wide | `i272_differentiation` `inter/intra` sweep + `i268` family `12/12` must stay `PASS` at all three settings |
 | 2 | **Need decay / fulfillment thresholds** — `NEEDS_BANDS` 6 bands `0.25–0.92` (safety/belonging/esteem/meaning) | 50K midcourse | Lenient `0.6×` decay / Standard `1.0×` / Harsh `1.4×` — **LIVE (i303)** | Village feels abundant vs scarcity-driven — measured at 2000 ticks × 12 seeds: aggregate need pressure +27% lenient→harsh, Worship share −19%, thirst +34%, social +83%; hunger/fatigue end-deficits relief-saturated (finding) | `i303_difficulty_bands` (family differential + Standard-identity) + `parameters::tests` (raw band pins) — DONE |
-| 3 | **Pathology growth/ceiling** — `PATHOLOGY_GROWTH_*` `0.02–0.10` / `DECAY 0.01–0.05` / `CEILING 0.65–1.0` per 4 quadrants | 100K lineage | Resilient `0.5×` growth `1.2×` decay / Standard `1.0×` / Brittle `1.8×` growth `0.7×` decay | Lineage diverges slowly vs brittly — dark-addiction half-life `69→23→12` ticks, golden-allergy stickiness | `i<iter>_pathology_*_signature` 20K sweeps (planned `pathology-curves.md`) + fear equilibrium co-check (anti-pinning CA-2) |
+| 3 | **Pathology growth/ceiling** — `PATHOLOGY_GROWTH_*` `0.02–0.10` / `DECAY 0.01–0.05` / `CEILING 0.65–1.0` per 4 quadrants | 100K lineage | Resilient `0.5×` growth `1.2×` decay / Standard `1.0×` / Brittle `1.8×` growth `0.7×` decay — **LIVE (i304)** | Lineage diverges slowly vs brittly — measured at 20K × 12 seeds: dark-addiction mean `0.197 → 0.341 → 0.480` (resilient/standard/brittle), direction 12/12 per seed; event counts flat within 2% while quadrant intensities differ 2.4× | `i304_pathology_bands` (family differential + resolved-band table + Standard-identity) + `systems::development` pins + `parameters::tests` — DONE |
 
 ## Non-goals (not levers, deliberately)
 
@@ -48,6 +49,21 @@ are still inline constants in `system_goal_generation`.
 
 **Row 1** stays Medium-only under the standing AGENTS §5 H5 prohibition
 (founder-variance draws are load-bearing at N=12; reshaping requires larger
-N + a coordinated re-anchor sweep, never piecemeal). **Row 3** (pathology
-growth/decay/ceiling) is the next promotion candidate: `PROD_QUADRANT_PARAMS`
-needs the same param-threading `system_development` lacks today.
+N + a coordinated re-anchor sweep, never piecemeal). **Row 3 promoted (i304)** on the same rule: the surface is
+`SimParameters::{pathology_growth_scale, pathology_decay_scale}` +
+`systems::development::pathology_params` (resolve once per tick) +
+`system_development_with_params`, with Standard **bit-identical by
+construction** (the resolver multiplies by exactly 1.0 — IEEE-754 identity),
+so again no golden/snapshot re-anchor. Measured bands and findings (Q2
+near-saturation debt, ceilings deliberately not a band) live in
+`docs/architecture/AP4-studio/evidence/i304_pathology_bands.md` and are pinned
+in `parameters::tests`, `sim/tests/development.rs` and the two snapshot pins.
+
+**Row 3 residual** (not claimed): the catalog's row text mentions a
+`0.65–1.0` ceiling range, but names multipliers only for growth and decay —
+ceilings stay canon until a ceiling-band hypothesis is probed in its own
+iteration. The Q2 (dark-allergy) quadrant sits at 0.44–0.73 against ceiling
+0.80 in every band (the i293/i294 always-step absence-growth law), so the
+lever's dynamic range is compressed there; re-shaping the Allergy absence rate
+is behavioural work that re-anchors the pathology equilibrium pins and is
+recorded as systemic debt rather than folded into a config-surface commit.

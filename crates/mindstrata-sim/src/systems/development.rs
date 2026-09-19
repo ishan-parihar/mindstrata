@@ -160,15 +160,13 @@ pub(crate) fn collect_catalysts(events: &[SimEvent]) -> Vec<(AgentId, CatalystKi
 /// Zero-at-zero: empty `events` or empty catalysts produce zero deltas.
 /// Hooked after birth mechanics so all demographic events are visible.
 /// Production per-quadrant operator params (IC-5 #3 spec midpoints),
-/// exposed for calibration probes and pins: (Q1 dark-add, Q2 dark-all,
-/// Q3 golden-add, Q4 golden-all). Keep in lock-step with the locals in
-/// [`system_development`] — the Q4 local reads its tuple slot directly.
-pub const PROD_QUADRANT_PARAMS: (
-    OperatorParams,
-    OperatorParams,
-    OperatorParams,
-    OperatorParams,
-) = (
+/// exposed for calibration probes and pins: `[0]` Q1 dark-addiction,
+/// `[1]` Q2 dark-allergy, `[2]` Q3 golden-addiction, `[3]` Q4
+/// golden-allergy. These are the CANON (Standard-band) values; the live
+/// params a run uses are [`pathology_params`], which scales growth/decay by
+/// the row-3 difficulty multipliers and returns these four bit-for-bit in
+/// the Standard band.
+pub const PROD_QUADRANT_PARAMS: [OperatorParams; 4] = [
     OperatorParams {
         growth: 0.06,
         decay: 0.015,
@@ -189,13 +187,55 @@ pub const PROD_QUADRANT_PARAMS: (
         decay: 0.025,
         ceiling: 0.75,
     },
-);
+];
+
+/// Resolve the live per-quadrant operator params for a run's parameters
+/// (difficulty-levers row 3, i304). Growth and decay of every quadrant are
+/// scaled by the two band multipliers; ceilings are NOT scaled (the catalog's
+/// row-3 candidate bands name growth and decay only — a per-quadrant ceiling
+/// band is a separate hypothesis, recorded as residual rather than guessed).
+///
+/// Identity holds bit-for-bit in the Standard band: `x * 1.0 == x` in IEEE-754
+/// for every finite `x`, so every calibrated window that ran before i304 runs
+/// identically after it.
+///
+/// §5 quantize-once: the multipliers arrive already materialized in
+/// `SimParameters` (one `Fixed::from_f64` at construction), so nothing here
+/// re-derives a sub-resolution rate per tick.
+#[must_use]
+pub fn pathology_params(params: &crate::parameters::SimParameters) -> [OperatorParams; 4] {
+    let growth = params.pathology_growth_scale.to_f64();
+    let decay = params.pathology_decay_scale.to_f64();
+    PROD_QUADRANT_PARAMS.map(|q| OperatorParams {
+        growth: q.growth * growth,
+        decay: q.decay * decay,
+        ceiling: q.ceiling,
+    })
+}
 
 /// The ratified mourning-rite Agape metabolizer dose (i292 sweep; see the
 /// emitter comment in `household.rs` for the measured/old/mechanism record).
 pub const MOURNING_AGAPE_DOSE: f64 = 0.6;
 
 pub fn system_development(agents: &mut [AgentBundle], events: &[SimEvent]) {
+    system_development_with_params(agents, events, &crate::parameters::SimParameters::default());
+}
+
+/// The parameterized pass the tick pipeline calls: identical law to
+/// [`system_development`], with the per-quadrant operator params resolved
+/// from the run's `SimParameters` (difficulty-levers row 3, i304). The
+/// no-params wrapper above keeps every pre-i304 call site (probes, unit
+/// tests) compiling at the canon band.
+///
+/// `events` is the slice `self.events[pre_tick_events..]` captured at tick
+/// start (read-only); only `agents[*].development` is mutated.
+/// Zero-at-zero: empty `events` or empty catalysts produce zero deltas.
+/// Hooked after birth mechanics so all demographic events are visible.
+pub fn system_development_with_params(
+    agents: &mut [AgentBundle],
+    events: &[SimEvent],
+    params: &crate::parameters::SimParameters,
+) {
     if events.is_empty() {
         return;
     }
@@ -221,29 +261,11 @@ pub fn system_development(agents: &mut [AgentBundle], events: &[SimEvent]) {
 
     // Frozen engine components — CALIBRATION-PENDING values via pending().
     let gate = Gate::pending();
-    // Per-quadrant params (IC-5 #3, spec midpoints; Allergy 0.1x scaled in dynamics.rs for absence).
-    // Values mirrored into the pub `PROD_QUADRANT_PARAMS` consts below so
-    // calibration probes/pins read the live production numbers.
-    let params_q1 = OperatorParams {
-        growth: 0.06,
-        decay: 0.015,
-        ceiling: 0.80,
-    };
-    let params_q2 = OperatorParams {
-        growth: 0.045,
-        decay: 0.022,
-        ceiling: 0.80,
-    };
-    let params_q3 = OperatorParams {
-        growth: 0.07,
-        decay: 0.015,
-        ceiling: 0.85,
-    };
-    let params_q4 = OperatorParams {
-        growth: PROD_QUADRANT_PARAMS.3.growth,
-        decay: PROD_QUADRANT_PARAMS.3.decay,
-        ceiling: PROD_QUADRANT_PARAMS.3.ceiling,
-    };
+    // Live per-quadrant params (IC-5 #3 spec midpoints scaled by the row-3
+    // difficulty band; Allergy 0.1x scaled in dynamics.rs for absence).
+    // Resolved ONCE per tick — never re-derived per agent or per catalyst.
+    let q = pathology_params(params);
+    let (params_q1, params_q2, params_q3, params_q4) = (q[0], q[1], q[2], q[3]);
 
     // ── Iter-285 (WP-H3): Agape-metabolizer sweep ──────────────────────
     // Mourning rites are the wave brief's "ritual forms generated as

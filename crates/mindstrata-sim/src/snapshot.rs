@@ -684,6 +684,11 @@ mod tests {
             14,
             "band rates, not just the provenance tag, must survive"
         );
+        // i304: the row-3 pathology scales are part of the same band contract
+        // — a resumed Brittle world must keep its brittle operator, not
+        // silently become canon.
+        assert_eq!(restored.params.pathology_growth_scale.to_raw(), 18_000);
+        assert_eq!(restored.params.pathology_decay_scale.to_raw(), 7_000);
 
         // JSON path: serde default fills missing fields, so an old payload
         // without `params` loads at the Standard band (old semantics).
@@ -727,6 +732,9 @@ mod tests {
             crate::parameters::DifficultyProfile::Lenient
         );
         assert_eq!(resumed.params.hunger_decay_rate.to_raw(), 6);
+        // i304 row 3: resilient scales survive the resume too.
+        assert_eq!(resumed.params.pathology_growth_scale.to_raw(), 5_000);
+        assert_eq!(resumed.params.pathology_decay_scale.to_raw(), 12_000);
     }
 
     #[test]

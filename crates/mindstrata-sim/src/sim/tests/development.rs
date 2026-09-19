@@ -868,7 +868,7 @@ fn norm_violated_projects_justice_norm_claim() {
 #[test]
 fn mourning_rite_agape_dose_measures_in_metabolizer_band() {
     use crate::systems::development::{MOURNING_AGAPE_DOSE, PROD_QUADRANT_PARAMS};
-    let q4 = &PROD_QUADRANT_PARAMS.3;
+    let q4 = &PROD_QUADRANT_PARAMS[3];
     for i0 in [0.2_f64, 0.3, 0.5, 0.7] {
         let q = mindstrata_development::dynamics::QuadrantState { intensity: i0 };
         let stepped = q.step(
@@ -1187,5 +1187,124 @@ fn auto_partition_gap_threshold_is_respected() {
         sim.polity_fields.len(),
         3,
         "threshold 0 must leave every inhabited site unmerged"
+    );
+}
+
+// ── i304: difficulty-lever row 3 — pathology growth/decay bands ───────────
+
+use crate::parameters::{DifficultyProfile, SimParameters};
+
+/// The Standard band must hand the field engine the canon consts BIT-FOR-BIT
+/// — the zero-blast contract that lets this lever ship without re-anchoring a
+/// single pathology pin (`docs/balance/difficulty-levers.md` row 3, i304).
+#[test]
+fn pathology_params_standard_band_is_bit_identical_to_canon() {
+    use crate::systems::development::{pathology_params, PROD_QUADRANT_PARAMS};
+    let p = SimParameters::with_difficulty(DifficultyProfile::Standard);
+    let q = pathology_params(&p);
+    for (i, canon) in PROD_QUADRANT_PARAMS.iter().enumerate() {
+        assert_eq!(q[i].growth.to_bits(), canon.growth.to_bits(), "Q{i} growth");
+        assert_eq!(q[i].decay.to_bits(), canon.decay.to_bits(), "Q{i} decay");
+        assert_eq!(
+            q[i].ceiling.to_bits(),
+            canon.ceiling.to_bits(),
+            "Q{i} ceiling"
+        );
+    }
+}
+
+/// Every quadrant's growth and decay scale with the band multiplier
+/// (0.5/1.2 resilient, 1.8/0.7 brittle); ceilings do NOT move — the catalog's
+/// row-3 candidate bands name growth and decay only.
+#[test]
+fn pathology_params_scale_growth_and_decay_without_touching_ceilings() {
+    use crate::systems::development::{pathology_params, PROD_QUADRANT_PARAMS};
+    let resilient = pathology_params(&SimParameters::with_difficulty(DifficultyProfile::Lenient));
+    let brittle = pathology_params(&SimParameters::with_difficulty(DifficultyProfile::Harsh));
+    for (i, canon) in PROD_QUADRANT_PARAMS.iter().enumerate() {
+        let rel = |a: f64, b: f64| (a - b).abs() <= 1e-12 * b.abs().max(1.0);
+        assert!(
+            rel(resilient[i].growth, canon.growth * 0.5),
+            "Q{i} resilient growth {} != canon×0.5 {}",
+            resilient[i].growth,
+            canon.growth * 0.5
+        );
+        assert!(
+            rel(resilient[i].decay, canon.decay * 1.2),
+            "Q{i} resilient decay {} != canon×1.2 {}",
+            resilient[i].decay,
+            canon.decay * 1.2
+        );
+        assert!(
+            rel(brittle[i].growth, canon.growth * 1.8),
+            "Q{i} brittle growth {} != canon×1.8 {}",
+            brittle[i].growth,
+            canon.growth * 1.8
+        );
+        assert!(
+            rel(brittle[i].decay, canon.decay * 0.7),
+            "Q{i} brittle decay {} != canon×0.7 {}",
+            brittle[i].decay,
+            canon.decay * 0.7
+        );
+        assert_eq!(
+            resilient[i].ceiling, canon.ceiling,
+            "Q{i} ceiling is not a knob yet"
+        );
+        assert_eq!(
+            brittle[i].ceiling, canon.ceiling,
+            "Q{i} ceiling is not a knob yet"
+        );
+    }
+}
+
+/// Mechanism pin (no RNG, no seed dependence): the threaded parameter really
+/// reaches the field engine. The SAME deterministic Threat window repeated
+/// N times — the pathological accumulation channel — leaves the brittle band
+/// carrying more dark-addiction than the resilient band, in the catalog's
+/// predicted direction. This is the unit-level counterpart of the 12-seed
+/// family probe (`i304_pathology_bands`, per-seed direction 12/12).
+#[test]
+fn brittle_band_accumulates_more_dark_addiction_than_resilient() {
+    use mindstrata_core::conflict::ConflictKind;
+    use mindstrata_core::event::SimEvent;
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_core::id::AgentId;
+
+    let accumulate = |profile: DifficultyProfile| -> f64 {
+        let mut sim = make_sim(42);
+        sim.params = SimParameters::with_difficulty(profile);
+        let tick = sim.current_tick();
+        let evs = vec![SimEvent::ConflictOccurred {
+            aggressor: AgentId::new(0),
+            target: AgentId::new(1),
+            kind: ConflictKind::Violence,
+            injury: Fixed::from_f64(0.4),
+            fear_induced: Fixed::from_f64(0.1),
+            tick,
+        }];
+        for _ in 0..200 {
+            crate::systems::development::system_development_with_params(
+                &mut sim.agents,
+                &evs,
+                &sim.params,
+            );
+        }
+        sim.agents[0].development.pathology.dark_addiction.intensity
+    };
+
+    let resilient = accumulate(DifficultyProfile::Lenient);
+    let standard = accumulate(DifficultyProfile::Standard);
+    let brittle = accumulate(DifficultyProfile::Harsh);
+    assert!(
+        brittle > standard && standard > resilient,
+        "band direction must hold on an identical window (resilient {resilient:.4} | \
+         standard {standard:.4} | brittle {brittle:.4})"
+    );
+    // The window is 200 identical maximal-ish threats, so the raw magnitudes
+    // must be far apart, not a rounding artifact.
+    assert!(
+        brittle > resilient * 1.5,
+        "band separation must be material (resilient {resilient:.4} vs brittle {brittle:.4})"
     );
 }

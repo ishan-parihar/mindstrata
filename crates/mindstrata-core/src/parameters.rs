@@ -41,6 +41,17 @@ pub struct SimParameters {
     /// Attachment separation distress decay rate (daily).
     pub attachment_decay_rate: Fixed,
 
+    // ── Development / pathology (difficulty row 3) ─────────────
+    /// Multiplier on every quadrant's per-tick pathology GROWTH fraction
+    /// (`docs/balance/difficulty-levers.md` row 3). 1.0 = canon; the
+    /// Resilient band is 0.5, the Brittle band 1.8.
+    #[serde(default = "scale_identity")]
+    pub pathology_growth_scale: Fixed,
+    /// Multiplier on every quadrant's per-tick pathology DECAY fraction.
+    /// 1.0 = canon; the Resilient band is 1.2, the Brittle band 0.7.
+    #[serde(default = "scale_identity")]
+    pub pathology_decay_scale: Fixed,
+
     // ── Psychological ─────────────────────────────────────────
     /// Stress smoothing factor (lower = slower adaptation).
     pub stress_smoothing: Fixed,
@@ -421,6 +432,15 @@ pub struct SimParameters {
     pub difficulty: DifficultyProfile,
 }
 
+/// Serde default for the row-3 pathology scale multipliers: the canon
+/// identity (1.0), so parameter payloads written before i304 load in the band
+/// every calibrated window was measured in. (`Fixed::default()` is ZERO —
+/// harmless for a decay rate, catastrophic for a scale multiplier, which is
+/// why this is an explicit helper rather than a bare `#[serde(default)]`.)
+fn scale_identity() -> Fixed {
+    Fixed::ONE
+}
+
 impl Default for SimParameters {
     fn default() -> Self {
         Self {
@@ -432,6 +452,9 @@ impl Default for SimParameters {
             social_decay_rate: Fixed::from_f64(0.0002), // decay_rate * 0.2
             meaning_decay_rate: Fixed::from_f64(0.00015), // decay_rate * 0.15
             attachment_decay_rate: Fixed::from_f64(0.05),
+            // Identity multipliers — the canon band (see `with_difficulty`).
+            pathology_growth_scale: Fixed::from_f64(1.0),
+            pathology_decay_scale: Fixed::from_f64(1.0),
 
             // Psychological
             stress_smoothing: Fixed::from_f64(0.1),
@@ -612,13 +635,15 @@ impl SimParameters {
         }
     }
 
-    /// Difficulty-lever surface (i303, DC-4 entry "b"): the ratified levers
-    /// catalog (`docs/balance/difficulty-levers.md` row 2, "Need decay")
-    /// promoted from DRAFT to a live setting. Standard is BYTE-IDENTICAL to
-    /// today's canon by construction — it returns `default()` untouched, so
-    /// every golden/snapshot window stays zero-blast; Lenient/Harsh rescale
-    /// the six need-decay rates (0.6× / 1.4×) per the catalog's candidate
-    /// bands.
+    /// Difficulty-lever surface (i303, DC-4 entry "b"; row 3 added in i304):
+    /// the ratified levers catalog (`docs/balance/difficulty-levers.md`) row 2
+    /// ("Need decay", bands 0.6× / 1.0× / 1.4×) and row 3 ("Pathology
+    /// growth/ceiling", bands Resilient growth 0.5× decay 1.2× / Standard 1.0×
+    /// / Brittle growth 1.8× decay 0.7×) promoted from DRAFT to a live
+    /// setting. Standard is BYTE-IDENTICAL to today's canon by construction —
+    /// it returns `default()` untouched, so every golden/snapshot window stays
+    /// zero-blast; Lenient/Harsh rescale the six need-decay rates and the two
+    /// pathology scale multipliers per the catalog's candidate bands.
     ///
     /// §5 quantize-once discipline: band values are computed here ONCE at
     /// construction (f64 → one `Fixed::from_f64`), never re-derived per tick,
@@ -653,6 +678,9 @@ impl SimParameters {
                 p.safety_decay_rate = Fixed::from_f64(0.0002); // 0.0003 × 0.6 (1.8 → 2)
                 p.social_decay_rate = Fixed::from_f64(0.0001); // 0.0002 × 0.6 (1.2 → 1)
                 p.meaning_decay_rate = Fixed::from_f64(0.0001); // 0.00015 × 0.6 (0.9 → 1, sub-resolution)
+                                                                // Row 3, Resilient band: slow accumulation, fast recovery.
+                p.pathology_growth_scale = Fixed::from_f64(0.5);
+                p.pathology_decay_scale = Fixed::from_f64(1.2);
             }
             DifficultyProfile::Harsh => {
                 p.hunger_decay_rate = Fixed::from_f64(0.0014); // 0.0010 × 1.4
@@ -661,17 +689,27 @@ impl SimParameters {
                 p.safety_decay_rate = Fixed::from_f64(0.0004); // 0.0003 × 1.4 (4.2 → 4)
                 p.social_decay_rate = Fixed::from_f64(0.0003); // 0.0002 × 1.4 (2.8 → 3)
                 p.meaning_decay_rate = Fixed::from_f64(0.0002); // 0.00015 × 1.4 (2.1 → 2)
+                                                                // Row 3, Brittle band: fast accumulation, slow recovery.
+                p.pathology_growth_scale = Fixed::from_f64(1.8);
+                p.pathology_decay_scale = Fixed::from_f64(0.7);
             }
         }
         p
     }
 }
-
-/// Difficulty-lever profile (i303): which ratified band the run's need-decay
-/// rates sit in (`docs/balance/difficulty-levers.md` row 2). Standard is the
-/// canon default and the only value every calibrated window was measured at;
-/// Lenient/Harsh are the catalog's Low/High candidate bands promoted to a
-/// runtime surface with probe evidence (i303 probe + parameters tests).
+/// Difficulty-lever profile (i303; row 3 wired i304): which ratified band
+/// the run sits in across the promoted rows of
+/// `docs/balance/difficulty-levers.md` — row 2 need decay (0.6×/1.0×/1.4×)
+/// and row 3 pathology growth+decay (Resilient/Standard/Brittle). Standard
+/// is the canon default and the only value every calibrated window was
+/// measured at; Lenient/Harsh are the catalog's Low/High candidate bands
+/// promoted to a runtime surface with probe evidence (i303 + i304 probes
+/// and the `parameters`/`systems::development` pins).
+///
+/// The two rows move together by design: a lenient world is abundant in
+/// provisioning AND forgiving in its pathology operator, a harsh world is
+/// scarce AND brittle. If a future consumer needs them decoupled, split
+/// this into per-row profiles rather than adding a third enum.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum DifficultyProfile {
     /// Canon default — the calibrated 1.0× decay band; byte-identical to the
@@ -790,6 +828,11 @@ mod tests {
         assert_eq!(d.social_decay_rate, s.social_decay_rate);
         assert_eq!(d.meaning_decay_rate, s.meaning_decay_rate);
         assert_eq!(d.difficulty, DifficultyProfile::Standard);
+        // Row 3 (i304) rides the same identity contract.
+        assert_eq!(d.pathology_growth_scale, s.pathology_growth_scale);
+        assert_eq!(d.pathology_decay_scale, s.pathology_decay_scale);
+        assert_eq!(s.pathology_growth_scale, Fixed::ONE);
+        assert_eq!(s.pathology_decay_scale, Fixed::ONE);
         // Full-struct identity: difficulty is the ONLY field the mapping may
         // differ on, and for Standard it does not differ at all.
         let json_a = serde_json::to_string(&d).unwrap();
@@ -879,6 +922,50 @@ mod tests {
             Ok(DifficultyProfile::Lenient)
         );
         assert!(DifficultyProfile::from_str("extreme").is_err());
+    }
+
+    // ── i304 difficulty-lever row 3 (pathology growth/decay) ──
+
+    /// Quantize-once pin for the row-3 bands. These multipliers survive
+    /// Fixed-4 exactly (0.5/1.2/1.8/0.7 are all representable), so unlike
+    /// row 2 there is NO sub-resolution collapse here — the honest record is
+    /// exactness. Growth falls resilient → standard → brittle; recovery
+    /// (decay) rises the other way, which is what makes the band a band.
+    #[test]
+    fn pathology_bands_scale_growth_up_and_decay_down() {
+        let res = SimParameters::with_difficulty(DifficultyProfile::Lenient);
+        let std = SimParameters::with_difficulty(DifficultyProfile::Standard);
+        let bri = SimParameters::with_difficulty(DifficultyProfile::Harsh);
+        assert_eq!(res.pathology_growth_scale.to_raw(), 5_000);
+        assert_eq!(res.pathology_decay_scale.to_raw(), 12_000);
+        assert_eq!(std.pathology_growth_scale.to_raw(), 10_000);
+        assert_eq!(std.pathology_decay_scale.to_raw(), 10_000);
+        assert_eq!(bri.pathology_growth_scale.to_raw(), 18_000);
+        assert_eq!(bri.pathology_decay_scale.to_raw(), 7_000);
+        assert!(res.pathology_growth_scale < std.pathology_growth_scale);
+        assert!(std.pathology_growth_scale < bri.pathology_growth_scale);
+        assert!(res.pathology_decay_scale > std.pathology_decay_scale);
+        assert!(std.pathology_decay_scale > bri.pathology_decay_scale);
+        // f64 resolution: each multiplier is exact, so the operator's
+        // per-tick growth/decay fractions scale by the pinned factor with no
+        // rounding step of its own.
+        assert_eq!(res.pathology_growth_scale.to_f64(), 0.5);
+        assert_eq!(bri.pathology_decay_scale.to_f64(), 0.7);
+    }
+
+    /// Serde back-compat: a param payload serialized before i304 (no
+    /// pathology-scale keys) loads at the canon identity — the same
+    /// serde-default pattern every Snapshot field addition has used since v8.
+    #[test]
+    fn legacy_params_json_defaults_pathology_scales_to_canon() {
+        let json = serde_json::to_string(&SimParameters::default()).unwrap();
+        let mut v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let obj = v.as_object_mut().unwrap();
+        obj.remove("pathology_growth_scale");
+        obj.remove("pathology_decay_scale");
+        let restored: SimParameters = serde_json::from_value(v).unwrap();
+        assert_eq!(restored.pathology_growth_scale, Fixed::ONE);
+        assert_eq!(restored.pathology_decay_scale, Fixed::ONE);
     }
 
     /// Serde back-compat: a param payload serialized before i303 (no

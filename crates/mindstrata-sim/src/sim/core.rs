@@ -641,9 +641,12 @@ impl Simulation {
         // when window empty). Hooked after birth mechanics so all demographic
         // events of the tick are visible, before kinship rebuild.
         // Window is pre_tick_events captured at tick start (read-only slice).
-        crate::systems::development::system_development(
+        // i304: parameterized entry — the difficulty-levers row-3 pathology
+        // band is read from the run's `SimParameters` once per tick.
+        crate::systems::development::system_development_with_params(
             &mut self.agents,
             &self.events[pre_tick_events..],
+            &self.params,
         );
 
         // ── DC-1 STORY 9-10: polarity data-path wire. Reuse the same
