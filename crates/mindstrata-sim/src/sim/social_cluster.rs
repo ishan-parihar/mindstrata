@@ -742,6 +742,11 @@ impl Simulation {
                             // could actually spread).
                             let pop = self.agents.len() as u32;
                             meme.host_count = (meme.host_count.saturating_add(1)).min(pop);
+                            // Iter-300 (UM-3 gate): the listener now hosts the
+                            // meme — per-agent hosting set, the clean diffusion
+                            // signal (i299's measurement debt). Set semantics:
+                            // a re-transmission to an existing host is a no-op.
+                            meme.add_host(to_idx);
                             meme.novelty = (meme.novelty + nb).clamp_01();
                             sampled += 1;
                             // §13.2 (AP2): Meme mutation during transmission —

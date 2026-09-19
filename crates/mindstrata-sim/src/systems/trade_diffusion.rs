@@ -102,6 +102,8 @@ pub fn system_trade_diffusion(
             // f64 accumulation happens via saturating adds of quantized
             // damped units (one trade per event, deterministic).
             meme.host_count = (meme.host_count.saturating_add(damped as u32)).min(pop);
+            // The trade counterparty receives the sender's culture.
+            meme.add_host(to);
             let _ = tick;
         }
     }
@@ -184,6 +186,31 @@ mod tests {
         assert!(
             registry.memes[0].host_count == 0,
             "no polities → the legacy single-village no-op contract"
+        );
+    }
+
+    #[test]
+    fn trade_records_the_receiver_in_hosting_set() {
+        let tick = Tick::new(10);
+        let mut registry = MemeRegistry::default();
+        registry.register(genesis_meme("[genesis:p0:Identity:Historical:2]"));
+        // Repeated cross trades to the SAME receiver must be idempotent.
+        let evs = vec![
+            trade_event(0, 2, tick),
+            trade_event(1, 2, tick),
+            trade_event(0, 3, tick),
+        ];
+        system_trade_diffusion(&evs, tick, &[vec![0, 1], vec![2, 3]], &mut registry);
+        let meme = &registry.memes[0];
+        assert!(
+            meme.is_hosted_by(2) && meme.is_hosted_by(3),
+            "the trade receiver must appear in the hosting set"
+        );
+        assert_eq!(
+            meme.hosts.len(),
+            2,
+            "re-transmission to the same receiver must not double-host: {:?}",
+            meme.hosts
         );
     }
 

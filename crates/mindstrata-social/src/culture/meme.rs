@@ -127,6 +127,17 @@ pub struct Meme {
     /// Gates transmission: `× (1 - suppression)`.
     #[serde(default)]
     pub suppression_level: Fixed,
+    /// Iter-300 (UM-3 gate): per-agent hosting sets — the agent indices of
+    /// everyone hosting this meme. The clean DIFFUSION signal that
+    /// `host_count` cannot provide: a polity's meme hosting set is directly
+    /// observable per agent, so cross-polity diffusion contributions are
+    /// countable (i299's recorded measurement debt). Additive with
+    /// `#[serde(default)]` (pre-i300 saves load with an empty set, exactly
+    /// the old semantics); the aggregate count is derivable as `hosts.len()`
+    /// and remains consistent with `host_count` where both are maintained.
+    /// Bounded by the population cap (§19.5.F), so no growth explosion.
+    #[serde(default)]
+    pub hosts: Vec<usize>,
     /// Tick when this meme was created.
     pub created_tick: u64,
     /// Whether this meme is currently active (can be suppressed).
@@ -181,9 +192,25 @@ impl Meme {
             lineage: MemeLineage::Founding,
             institutional_backing: None,
             suppression_level: Fixed::ZERO,
+            hosts: Vec::new(),
             created_tick: tick,
             active: true,
         }
+    }
+
+    /// Iter-300 (UM-3 gate): record that an agent now hosts this meme.
+    /// Idempotent per agent (set semantics — a re-transmission to an
+    /// existing host is a no-op), bounded by the population cap. The
+    /// `host_count` aggregate is kept in sync where both are maintained.
+    pub fn add_host(&mut self, agent: usize) {
+        if !self.hosts.contains(&agent) {
+            self.hosts.push(agent);
+        }
+    }
+
+    /// Whether a specific agent currently hosts this meme.
+    pub fn is_hosted_by(&self, agent: usize) -> bool {
+        self.hosts.contains(&agent)
     }
 
     /// Compute transmission probability from source to listener.
