@@ -1046,3 +1046,146 @@ fn single_all_agent_polity_equals_whole_village_field() {
         "one all-agent polity must reproduce the whole-village field exactly"
     );
 }
+
+/// Iter-298 (UM-3 leg 2): auto-partition from settlement geography.
+/// Deterministic single-linkage clustering over home-site positions.
+#[test]
+fn auto_partition_single_cluster_is_inert() {
+    use crate::sim::{SimConfig, Simulation};
+    let mut sim = Simulation::new(SimConfig {
+        seed: 42,
+        max_ticks: 0,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    });
+    sim.populate();
+    // The calibrated village is ONE settlement (houses on a jittered ring
+    // around the center): a generous gap threshold must produce NO partition.
+    sim.auto_partition_polities(30);
+    assert!(
+        sim.polity_fields.is_empty() && sim.polity_members.is_empty(),
+        "single-cluster worlds must keep the legacy no-polity default"
+    );
+}
+
+#[test]
+fn auto_partition_splits_two_settlements() {
+    use crate::sim::{SimConfig, Simulation};
+    let mut sim = Simulation::new(SimConfig {
+        seed: 42,
+        max_ticks: 0,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    });
+    sim.populate();
+    // Two settlements: houses 0..4 sit left of center, 4..8 right — verified
+    // by positions. Move agents 0..6 onto site 0 and agents 6..12 onto the
+    // farthest site to force a genuine two-cluster geography.
+    let n = sim.agents.len();
+    let far = sim
+        .world
+        .sites
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| s.kind == crate::world::SiteKind::House)
+        .map(|(i, _)| i)
+        .max_by_key(|&i| {
+            let (x0, _) = sim.world.site_position(0).unwrap_or((0, 0));
+            let (x, _) = sim.world.site_position(i).unwrap_or((0, 0));
+            (x - x0).abs()
+        })
+        .expect("world has houses");
+    for (i, agent) in sim.agents.iter_mut().enumerate() {
+        agent.home_site = if i < n / 2 { Some(0) } else { Some(far) };
+    }
+    sim.auto_partition_polities(4);
+    assert_eq!(
+        sim.polity_fields.len(),
+        2,
+        "two separated settlements must auto-partition into two polities"
+    );
+    // Disjoint cover of the assigned agents.
+    let mut seen: Vec<usize> = sim.polity_members.iter().flatten().copied().collect();
+    seen.sort_unstable();
+    seen.dedup();
+    assert_eq!(seen.len(), n, "every agent must be assigned exactly once");
+    // Sorted-membership contract.
+    for members in &sim.polity_members {
+        let mut sorted = members.clone();
+        sorted.sort_unstable();
+        assert_eq!(&sorted, members, "polity membership must be sorted");
+    }
+}
+
+#[test]
+fn auto_partition_gap_threshold_is_respected() {
+    use crate::sim::{SimConfig, Simulation};
+    let mut sim = Simulation::new(SimConfig {
+        seed: 42,
+        max_ticks: 0,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    });
+    sim.populate();
+    let n = sim.agents.len();
+    let far = sim
+        .world
+        .sites
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| s.kind == crate::world::SiteKind::House)
+        .map(|(i, _)| i)
+        .max_by_key(|&i| {
+            let (x0, _) = sim.world.site_position(0).unwrap_or((0, 0));
+            let (x, _) = sim.world.site_position(i).unwrap_or((0, 0));
+            (x - x0).abs()
+        })
+        .expect("world has houses");
+    for (i, agent) in sim.agents.iter_mut().enumerate() {
+        agent.home_site = if i < n / 2 { Some(0) } else { Some(far) };
+    }
+    // The threshold gates whether NEARBY inhabited sites merge into one
+    // settlement, not whether distant ones split: any threshold below the
+    // inter-settlement distance leaves two polities. The real gate leg needs
+    // an intermediate inhabited site forming a chain: with a small threshold
+    // the chain does NOT bridge (three settlements... collapsed to the two
+    // extreme clusters + middle singleton), with a large one everything
+    // merges into ONE settlement → no partition at all.
+    // Redo with three inhabited sites: 0, middle-house, far.
+    let mid = sim
+        .world
+        .sites
+        .iter()
+        .enumerate()
+        .filter(|&(i, s)| s.kind == crate::world::SiteKind::House && i != 0 && i != far)
+        .map(|(i, _)| i)
+        .next()
+        .expect("a third house exists");
+    for (i, agent) in sim.agents.iter_mut().enumerate() {
+        agent.home_site = match i % 3 {
+            0 => Some(0),
+            1 => Some(mid),
+            _ => Some(far),
+        };
+    }
+    // A huge threshold merges all three into one settlement → inert.
+    sim.auto_partition_polities(64);
+    assert!(
+        sim.polity_fields.is_empty(),
+        "a threshold larger than every gap must yield ONE settlement (no partition)"
+    );
+    // A zero threshold merges nothing → every inhabited site is its own
+    // settlement (three polities).
+    sim.auto_partition_polities(0);
+    assert_eq!(
+        sim.polity_fields.len(),
+        3,
+        "threshold 0 must leave every inhabited site unmerged"
+    );
+}

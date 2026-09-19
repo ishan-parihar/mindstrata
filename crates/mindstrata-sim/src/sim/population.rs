@@ -382,6 +382,99 @@ impl Simulation {
             .collect();
     }
 
+    /// Iter-298 (UM-3 leg 2): settlement-based auto-partition.
+    ///
+    /// Derives polities from settlement geography instead of operator
+    /// assignment: agents are clustered by the Manhattan distance between
+    /// their home sites (single-linkage agglomeration with threshold
+    /// `max_gap`; ties resolve to the lowest site index via the site-order
+    /// seed pass). Agents without a home site join no polity. A world with
+    /// ONE cluster (the calibrated default — 8 houses on a jittered ring
+    /// around one center) produces no partition at all: `polity_fields`
+    /// stays empty and every downstream consumer is untouched (zero blast).
+    ///
+    /// Deterministic: no RNG; the cluster seed order is the house-site
+    /// registry order; membership is sorted by `assign_polities`.
+    pub fn auto_partition_polities(&mut self, max_gap: i32) {
+        // Home site per agent (unique site indices, ascending registry order
+        // = the cluster seed order).
+        let home_of: Vec<Option<usize>> = self.agents.iter().map(|a| a.home_site).collect();
+        let mut site_positions: Vec<(usize, (i32, i32))> = Vec::new();
+        for home in home_of.iter().flatten() {
+            // First agent seen on a site seeds the site entry (the
+            // site is the cluster atom, not the agent).
+            if !site_positions.iter().any(|(s, _)| *s == *home) {
+                if let Some((x, y)) = self.world.site_position(*home) {
+                    site_positions.push((*home, (x, y)));
+                }
+            }
+        }
+        if site_positions.len() < 2 {
+            // Zero or one inhabited site → one settlement → no partition.
+            return;
+        }
+        // Single-linkage agglomeration: each site starts its own cluster;
+        // repeatedly merge the closest pair while the gap ≤ max_gap.
+        let mut clusters: Vec<Vec<usize>> = site_positions.iter().map(|(s, _)| vec![*s]).collect();
+        loop {
+            let mut best: Option<(i32, usize, usize)> = None;
+            for a in 0..clusters.len() {
+                for b in (a + 1)..clusters.len() {
+                    // Min pairwise Manhattan distance between the two
+                    // clusters (single linkage).
+                    let mut min_d = i32::MAX;
+                    for &sa in &clusters[a] {
+                        for &sb in &clusters[b] {
+                            let (_, (xa, ya)) = site_positions
+                                .iter()
+                                .find(|(s, _)| *s == sa)
+                                .expect("seeded site present");
+                            let (_, (xb, yb)) = site_positions
+                                .iter()
+                                .find(|(s, _)| *s == sb)
+                                .expect("seeded site present");
+                            let d = (xa - xb).abs() + (ya - yb).abs();
+                            if d < min_d {
+                                min_d = d;
+                            }
+                        }
+                    }
+                    if min_d <= max_gap && best.is_none_or(|(bd, _, _)| min_d < bd) {
+                        best = Some((min_d, a, b));
+                    }
+                }
+            }
+            match best {
+                Some((_, a, b)) => {
+                    let moved = clusters.remove(b);
+                    clusters[a].extend(moved);
+                }
+                None => break,
+            }
+        }
+        if clusters.len() < 2 {
+            // Everything merged into one settlement → no partition.
+            return;
+        }
+        // Site-cluster → agent membership: an agent belongs to the cluster of
+        // its home site. Sorted ascending inside each polity by contract.
+        let polities: Vec<Vec<usize>> = clusters
+            .iter()
+            .map(|cluster| {
+                home_of
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(agent, home)| home.filter(|h| cluster.contains(h)).map(|_| agent))
+                    .collect()
+            })
+            .filter(|p: &Vec<usize>| !p.is_empty())
+            .collect();
+        if polities.len() < 2 {
+            return; // degenerate single-populated-cluster safety net
+        }
+        self.assign_polities(polities);
+    }
+
     /// Populate the world with terrain, sites, and agents.
     pub fn populate(&mut self) {
         // §13.1 (Iteration 174): Seed the founding memes here — the

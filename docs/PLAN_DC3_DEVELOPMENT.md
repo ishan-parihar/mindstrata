@@ -124,6 +124,7 @@ that into ten probe-first iterations, each with a named exit test.
 | i295 | **DONE** | (charter §5 closed) | Perf envelope warn-only in gate 2.55 (N=12 102.6/150, N=96 4577.7/6500); VecDeque/claims-index triggers re-reviewed, NOT hit |
 | i296 | **DONE** | evidence/i296_multi_village.md | UM-3 core landed: per-polity holons (`polity_fields`/`assign_polities`), identity-at-isolation pinned unit+in-vivo, partition diverges (Safety 3.000 vs 4.000). Remaining UM-3 legs: referent/naming, auto-partition, cross-village diffusion |
 | i297 | **DONE** | evidence/i297_polity_genesis.md | UM-3 leg 1 (referents) CLOSED — per-polity genesis with territory-anchored referent views (sites: nearest home-site centroid; institutions: member-majority) + per-polity dedup namespaces; probe: p0 cites Village Market, p1 cites Village Temple (20K, seed 42); zero blast without polities; sim lib 250/250 |
+| i298 | **DONE** | evidence/i298_auto_partition.md | UM-3 leg 2 (assignment rule) CLOSED — `auto_partition_polities(max_gap)`: deterministic single-linkage clustering over inhabited home sites; single settlement → inert (0 polities), two settlements → disjoint cover with divergent trajectories (S 4.000 vs 3.000), derived ≡ assigned bit-identical over 10K; sim lib 253/253 |
 
 ## 8. 2026-09-19 audit + UM-3 continuation ladder (post-i296)
 
@@ -142,9 +143,10 @@ institutions by member-majority; per-polity genesis dedups on `pN`-namespaced ta
 same-epoch crossings each commemorate their own territory. Probe-verified divergence:
 p0 cites Village Market, p1 cites Village Temple; zero blast without polities.
 
-**i298 — settlement-based auto-partition (probe-gated per i296 doctrine).** Only after
-i297 proves the referent leg valuable: membership derives from household residence
-clusters (site adjacency), not operator assignment. Zero blast without multiple clusters.
+**i298 — settlement-based auto-partition. DONE (`evidence/i298_auto_partition.md`).**
+`auto_partition_polities(max_gap)` — deterministic single-linkage clustering over
+inhabited home sites; single-cluster worlds stay inert; two-settlement worlds derive
+the i296 partition bit-identically to operator assignment.
 
 **i299 — cross-village cultural diffusion via trade partners (UM-3 leg 3).** Generated
 memes cross polities along the existing trade-partner graph with attenuation; probe
