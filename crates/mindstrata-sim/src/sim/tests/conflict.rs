@@ -624,4 +624,11 @@ fn violence_records_injury_on_the_substrate() {
         max_pain > Fixed::ZERO,
         "a recorded injury must produce acute pain (max pain {max_pain:?})"
     );
+    // i314: the pain is not merely nonzero but reaches the exertion-veto band,
+    // so the `exertion_vetoed` guard is reachable in a real run (i312 found the
+    // health clause dormant).
+    assert!(
+        max_pain >= Fixed::from_raw(9_000),
+        "recorded violence must reach the i314 veto threshold (max pain {max_pain:?})"
+    );
 }

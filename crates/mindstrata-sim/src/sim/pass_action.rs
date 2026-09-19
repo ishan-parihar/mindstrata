@@ -17,7 +17,32 @@ const REFLEX_MEANING_THRESHOLD: Fixed = Fixed::from_raw(9_000);
 /// Derived-health level below which a body is treated as too compromised to
 /// exert itself (i255's health-critical frame; i309 turned it from a Rest mutex
 /// into an exertion veto).
+///
+/// i312 measured this dormant after i311 (0 below-gate agent-ticks across ~22M):
+/// the derived-health distributions overlap across contexts, so no absolute
+/// health threshold can separate crisis from calm.
 const HEALTH_CRITICAL_THRESHOLD: Fixed = Fixed::from_raw(2_500);
+
+/// Effective-pain level above which a body is treated as at its limits (i314).
+///
+/// This is the reachable crisis signal the i312 finding asked for. Pain is
+/// structurally crisis-only (a wound) and sparse — `i314_pain_veto` measures
+/// p90 = 0.0000 in every context. The threshold sits at 0.9 (firing for
+/// 0.04–0.31% of agent-ticks): a lower 0.7 band (0.25–1.05%) drifts 11 pins
+/// including BOTH golden baselines, whereas 0.9 costs a single 10K-surface
+/// re-anchor — a rare crisis guard, not a routine action governor. It is
+/// reachable AND non-trapping, unlike the old health mutex: pain clears when
+/// the wound heals (i313).
+const PAIN_VETO_THRESHOLD: Fixed = Fixed::from_raw(9_000);
+
+/// Whether a body is too compromised to exert itself (i255's frame): either its
+/// derived health is below [`HEALTH_CRITICAL_THRESHOLD`] (dormant safety net,
+/// i312) or it is in acute pain at/above [`PAIN_VETO_THRESHOLD`] (the live,
+/// reachable signal, i314). Pure and RNG-free.
+#[must_use]
+fn exertion_vetoed(health: Fixed, pain: Fixed) -> bool {
+    health < HEALTH_CRITICAL_THRESHOLD || pain >= PAIN_VETO_THRESHOLD
+}
 
 /// Whether an action spends the body's reserves — the actions a health-critical
 /// agent must not take (i309). `Work` is heavy labour (energy cost 0.05) and
@@ -249,7 +274,13 @@ impl Simulation {
                 // safety veto; restoring a reachable crisis band is queued as its
                 // own behavioural iteration (needs live pain/shock channels), not
                 // a threshold re-pin (AGENTS §4.5).
-                let health_critical = agents[i].body.health < HEALTH_CRITICAL_THRESHOLD;
+                // i314: the veto fires on EITHER a compromised derived health
+                // (dormant since i311/312, kept as a safety net) OR severe pain
+                // — the live, reachable crisis signal. A body in acute pain at
+                // its limits does not exert itself; the wound heals (i313) so
+                // this never traps the way the i255 Rest mutex did.
+                let pain = agents[i].embodied.nervous.pain.effective_pain();
+                let health_critical = exertion_vetoed(agents[i].body.health, pain);
                 let reflex_override = if needs[i].thirst > Fixed::from_f64(0.9)
                     && needs[i].thirst >= needs[i].hunger
                 {
@@ -607,5 +638,28 @@ impl Simulation {
 
             agents[i].action_progress = agents[i].action_progress.saturating_sub(1);
         }
+    }
+}
+
+#[cfg(test)]
+mod exertion_veto_tests {
+    use super::*;
+
+    #[test]
+    fn exertion_veto_fires_on_severe_pain() {
+        // i314: pain is the reachable crisis signal (i312 found the health
+        // clause dormant). A body in acute pain does not exert itself.
+        assert!(!exertion_vetoed(Fixed::ONE, Fixed::ZERO));
+        assert!(!exertion_vetoed(Fixed::ONE, Fixed::from_f64(0.89)));
+        assert!(exertion_vetoed(Fixed::ONE, Fixed::from_raw(9_000)));
+        assert!(exertion_vetoed(Fixed::ONE, Fixed::ONE));
+    }
+
+    #[test]
+    fn exertion_veto_keeps_the_health_safety_net() {
+        // The i255 clause is dormant (i312) but retained: a body whose derived
+        // health collapses below the gate must still be refused exertion.
+        assert!(exertion_vetoed(Fixed::from_f64(0.24), Fixed::ZERO));
+        assert!(!exertion_vetoed(Fixed::from_f64(0.25), Fixed::ZERO));
     }
 }

@@ -75,5 +75,10 @@ reachable crisis band is queued as its own behavioural iteration: it needs
 a mechanism gap, not a threshold tweak — exactly the kind of fix this doctrine
 refuses to paper over with a re-pin.
 
+**Resolution (i313 + i314):** i313 wired the pain/shock/blood-loss channels
+(the injury field had no producer), and i314 keyed the veto on the now-live
+pain signal at a measured 0.9 band — see `i313_injury_channel.md` and
+`i314_pain_veto.md`. The `health < 0.25` clause remains as a dormant safety net.
+
 **Zero drift:** no behaviour change, golden byte-identical, no snapshot
 re-anchors, no new re-pins.
