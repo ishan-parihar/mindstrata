@@ -161,3 +161,43 @@ conflation); unit pins carry the liveness proof; `meme.hosts` schema debt record
 memes, 26/26 cross-hosted (origin-share 0.288 with saturation caveat). **UM-3 exit
 verdict: multi-village worlds generate per-village culture that differentiates by
 territory and interlinks by trade.** DC-3 unify review is the next arc.
+
+## 9. DC-3 UNIFY REVIEW (2026-09-19, i302) — VERDICT
+
+**Milestone contract (ROADMAP):** DC-3 → UM-3 "the world scales" = AP3 Era IV
+collective holon + N≥48 performance budget + asset pipeline v0.
+
+**Live verification at HEAD `7a4ddec` (all measured this session):** fmt
+clean, clippy 0, release suite **307/0/1**, sim lib **262/262**, full gate
+GREEN, bench law 0 violations. No debt masked.
+
+| Contract leg | Delivered | Verdict |
+|---|---|---|
+| AP3 Era IV collective holon | i266 step_collective; i273 genesis; i274/i279 feeds; i280 WP-J coupling; i287 Era IV exit probe | **CLOSED** |
+| Multi-village holons (Era IV→V extension, i296 scope) | i296 per-polity holons; i297 territory genesis; i298 auto-partition; i299 trade diffusion; i300 gate (26 memes, 26/26 cross-hosted) | **CLOSED** |
+| N≥48 performance budget | charter ratified (§1 baseline, §2 binding rules); i294 superlinearity attributed + O(N³) fix; i295 warn-only perf gate in `scripts/gate` | **CLOSED** |
+| Asset pipeline v0 | i301 charter + `export_world_assets_json` + CLI flag; determinism/round-trip/payload pins | **CLOSED** |
+
+**VERDICT: DC-3 COMPLETE at 4/4 legs.** UM-3 evidence trail:
+`evidence/i296..i301`, `charters/DC3-P0-perf-budget.md`,
+`charters/ASSET-PIPELINE-v0.md`.
+
+### What carries forward (recorded, honest)
+
+- **Saturation caveat** (i300): origin-share at N=12 measures the interlinking
+  ceiling; longitudinal origin-share decay would separate trade vs gossip
+  channels — observability refinement, not a gate.
+- **Vendor-blocked** (unchanged): realms.md ontology, resonance attestation,
+  cult-liveliness regime. Unblock conditions documented in §3.2/§6.6.
+- **Deferred with triggers** (unchanged): VecDeque events (>250K-tick
+  operator horizons), recent-claims index (same), H5 founder variance.
+
+### DC-4 entry (next arc)
+
+Per ROADMAP: DC-4+ → UM-4 vertical slice → AA alpha — graphical client
+shell, chronicle lens (i291 lens is the read-side), difficulty levers
+(needs-bands canon, CO-2026-003 ratified). The i301 asset schema v1 is the
+CLIENT contract; art/audio sub-charters may be drafted against it. First
+DC-4 iterations: (a) CLIENT asset-viewer panel consuming `--export-assets`
+output; (b) difficulty-levers live tuning surface over the ratified needs
+bands; (c) graphical shell spike against the same document.
