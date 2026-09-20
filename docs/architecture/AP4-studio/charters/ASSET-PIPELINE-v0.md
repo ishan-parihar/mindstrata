@@ -37,6 +37,7 @@ from a finished run (or snapshot restore) with zero behavioral surface.
   "schema_version": 1,
   "meta":     { seed, ticks, agents, polities },
   "world":    { sites: [ {id, kind, name, position, capacity} ] },
+  "agents":   [ {id, position, polity} ]                      // additive (i322)
   "polities": [ { members: [agent ids], stage_lines: [StageLineEntry…] } ],
   "culture":  [ { id, description, content_type, created_tick, hosts } ],
   "annals":   { per-year rendered blocks (the chronicle surface, verbatim) }
@@ -51,10 +52,15 @@ from a finished run (or snapshot restore) with zero behavioral surface.
 ## 4. Consumers (opened by this charter)
 
 - **CLIENT**: asset-viewer panels, cultural diffusion maps, territory views.
+  i317 landed the asset-viewer panel (`mindstrata-tui::assets_view`).
 - **AA graphical client (UM-4)**: the same document is the seed of the
   scene graph — sites → meshes, culture → narrative props, annals → story
   text. Art/audio sub-charters may now be drafted against THIS schema
   (versioned; additive-only until v1).
+  i322 landed the headless scene-graph spike (`mindstrata-tui::scene`) — the
+  ordered primitive list + SVG renderer a real renderer will consume, over the
+  additive `agents` placement section it added for territory/diffusion views
+  (evidence `i322_scene_graph_spike.md`).
 
 ## 5. Exit evidence (i301)
 

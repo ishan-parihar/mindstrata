@@ -128,7 +128,7 @@ fn truncated_note(out: &mut String, total: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mindstrata_sim::sim::assets::{MetaAsset, WorldSection};
+    use mindstrata_sim::sim::assets::{AgentAsset, MetaAsset, WorldSection};
 
     fn doc() -> WorldAssets {
         WorldAssets {
@@ -148,6 +148,11 @@ mod tests {
                     capacity: 200,
                 }],
             },
+            agents: vec![AgentAsset {
+                id: 0,
+                position: (3, 4),
+                polity: Some(0),
+            }],
             polities: vec![PolityAsset {
                 members: (0..12).collect(),
                 stage_lines: vec![],
@@ -198,6 +203,7 @@ mod tests {
     fn empty_document_renders_zero_at_zero() {
         let mut d = doc();
         d.world.sites.clear();
+        d.agents.clear();
         d.polities.clear();
         d.culture.clear();
         d.annals.clear();

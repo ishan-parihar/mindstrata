@@ -60,12 +60,25 @@ pub struct CultureAsset {
     pub hosts: Vec<usize>,
 }
 
+/// An agent's placement — the seed of the AA scene graph (charter §4:
+/// "sites → meshes, culture → narrative props"). Additive v0 field (charter
+/// rule 3: additive fields do not bump the version). Position is the public
+/// `AgentBundle::position`; `polity` is the assignment index so a client can
+/// colour territory and diffusion overlays without reaching into sim state.
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentAsset {
+    pub id: usize,
+    pub position: (i32, i32),
+    pub polity: Option<usize>,
+}
+
 /// The v0 root document.
 #[derive(Debug, Clone, Serialize)]
 pub struct WorldAssets {
     pub schema_version: u32,
     pub meta: MetaAsset,
     pub world: WorldSection,
+    pub agents: Vec<AgentAsset>,
     pub polities: Vec<PolityAsset>,
     pub culture: Vec<CultureAsset>,
     pub annals: String,
@@ -125,6 +138,24 @@ pub fn export_world_assets(sim: &Simulation) -> WorldAssets {
         })
         .collect();
 
+    // Additive (i322): agent placement for the scene graph. Registry order =
+    // agent index order, so the export stays deterministic. Membership is
+    // resolved by first-match scan over the polity registry (registry order →
+    // deterministic); an unassigned agent carries `None` (zero-at-zero).
+    let agents: Vec<AgentAsset> = sim
+        .agents
+        .iter()
+        .enumerate()
+        .map(|(idx, a)| AgentAsset {
+            id: idx,
+            position: (a.position.x, a.position.y),
+            polity: sim
+                .polity_members
+                .iter()
+                .position(|members| members.contains(&idx)),
+        })
+        .collect();
+
     WorldAssets {
         schema_version: ASSET_SCHEMA_VERSION,
         meta: MetaAsset {
@@ -134,6 +165,7 @@ pub fn export_world_assets(sim: &Simulation) -> WorldAssets {
             polities: sim.polity_fields.len(),
         },
         world: WorldSection { sites },
+        agents,
         polities,
         culture,
         annals: render_chronicle(sim),
@@ -233,5 +265,34 @@ mod tests {
         );
         // Culture: memes may be empty at tick 0 — the section exists.
         assert!(doc.meta.polities == 1);
+    }
+
+    /// i322 additive field: agent placement rides the document (index order,
+    /// public position) and polity membership resolves by registry order —
+    /// the scene-graph seed CLIENT needs without sim reads (IC-8).
+    #[test]
+    fn asset_document_carries_agent_placement() {
+        let mut sim = small_sim();
+        // Unassigned: every agent present, polity None (zero-at-zero).
+        let bare = export_world_assets(&sim);
+        assert_eq!(bare.agents.len(), sim.agents.len());
+        assert!(bare.agents.iter().all(|a| a.polity.is_none()));
+        assert_eq!(bare.agents[3].id, 3);
+        assert_eq!(
+            bare.agents[3].position,
+            (sim.agents[3].position.x, sim.agents[3].position.y)
+        );
+
+        // Assigned: first polity owns agents 0..6 → 0, rest → 1.
+        let n = sim.agents.len();
+        sim.assign_polities(
+            vec![0..(n / 2), (n / 2)..n]
+                .into_iter()
+                .map(Iterator::collect)
+                .collect(),
+        );
+        let doc = export_world_assets(&sim);
+        assert_eq!(doc.agents[0].polity, Some(0));
+        assert_eq!(doc.agents[n - 1].polity, Some(1));
     }
 }

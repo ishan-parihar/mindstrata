@@ -10,6 +10,7 @@ pub mod export;
 pub mod feature_flag;
 pub mod panel_virtual;
 mod render;
+pub mod scene;
 mod session;
 
 pub use assets_view::{render_asset_viewer, ASSET_VIEW_ROWS};
@@ -22,6 +23,7 @@ pub use render::{
     render_psychology_inspector, render_relationship_view, render_theology_dashboard,
     render_world_map, AgentMarker, DashboardConfig,
 };
+pub use scene::{build_scene, to_svg, Primitive, Scene};
 pub use session::{
     key_to_command, mark_selected_agent_row, SearchFailure, UiState, View, KEYBIND_HELP,
 };
