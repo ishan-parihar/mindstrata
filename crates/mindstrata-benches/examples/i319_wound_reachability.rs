@@ -83,6 +83,10 @@ fn main() {
                 }
                 prev.resize(sim.agents.len(), 0.0);
             }
+            // i327 note: `recent_events` is a BOUNDED window now, so these
+            // counts are window-limited at long horizons (the state-based
+            // figures below — max wound, shock, threshold crossings — are
+            // the verdict-bearing ones and are unaffected).
             for e in sim.recent_events(10_000_000) {
                 if let SimEvent::ConflictOccurred { kind, .. } = e {
                     match kind {
@@ -95,7 +99,7 @@ fn main() {
         }
 
         println!("\n=== {ticks} ticks ===");
-        println!("  conflict mix: Violence {injuries} | Combat {combats}");
+        println!("  conflict mix (bounded window): Violence {injuries} | Combat {combats}");
         println!("  wounds recorded {wounds} | max single wound {max_wound:.4} | max injury {max_injury:.4}");
         println!("  cardiovascular: max shock {max_shock:.5} | min blood-vol {min_blood:.4}");
         for (ci, t) in CANDIDATES.iter().enumerate() {

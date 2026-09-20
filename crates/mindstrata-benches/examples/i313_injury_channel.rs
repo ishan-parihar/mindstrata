@@ -73,7 +73,12 @@ impl Axes {
     }
 }
 
-/// Count public violence events over the whole run.
+/// Count public violence events in the retained event window.
+///
+/// i327 note: `recent_events` is a **bounded** window now, so at long
+/// horizons this undercounts the cumulative total. It is a liveness signal
+/// (violence fires), not a rate — the verdict-bearing figures in this probe
+/// (injury, pain, shock, blood-volume) are state-based and unaffected.
 fn count_violence(sim: &Simulation) -> u64 {
     sim.recent_events(10_000_000)
         .iter()

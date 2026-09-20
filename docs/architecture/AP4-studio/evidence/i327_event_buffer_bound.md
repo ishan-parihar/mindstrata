@@ -77,6 +77,23 @@ any trim). The real invariants are unchanged and still asserted:
 This is a **re-contract, not a re-pin**: nothing was widened to accept a weaker
 claim; the observation method moved to the bounded-journal contract.
 
+## §2.5 re-audit — the bound's blast radius on prior event-derived evidence
+
+Two earlier verdicts rested partly on whole-run `recent_events` scans, so both
+probes were **re-run live** after the bound:
+
+- **i313 injury channel** — holds. Injury 0.3186/0.2950, pain 1.0000, shock
+  0.6651, blood-vol floor 0.3770 — all **state-based**. Only the event count
+  line is now window-limited (50K reads 49 rather than the cumulative total).
+- **i319 blood-loss threshold** — holds, and the decisive evidence was already
+  state-based: `Combat 0`, max single wound 0.1656, max injury 0.2950, and the
+  threshold table (0.15 crossed by 0.13%/0.06% of agent-ticks, 0.30 by **0**) is
+  computed from agent injury state, not events. The conflict-mix counts at 50K
+  (49) are window-limited.
+
+Both probes now **label** the event-count lines as bounded-window readings so a
+future reader cannot mistake an undercount for a rate change. No verdict moved.
+
 ## Verification
 
 - `scripts/gate --full` **GATE GREEN** (309/0/1); **golden byte-identical**,
