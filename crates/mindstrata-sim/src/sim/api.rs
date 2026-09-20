@@ -6,6 +6,22 @@ use super::{
 };
 
 impl Simulation {
+    /// i342: every agent's **contacted degree** — how many ordered relationship
+    /// rows carry any interaction state (`interaction_count > 0`).
+    ///
+    /// Exposed because the relationship-list LENGTH that two appraisal channels
+    /// use as a "social connections" count is the complete graph's N−1 for every
+    /// agent (the i335/i336 pin), and therefore discriminates nothing: probe
+    /// `i342_social_count_proxy` measured `min(len, 4) == 4` for every agent at
+    /// N=12/48/96, pinning `social_visibility` at a constant 0.900/0.400 and the
+    /// normal-life anxiety term at exactly 0.000 village-wide. This is the count
+    /// those channels mean, and the quantity a sparse store must define (i341).
+    ///
+    /// One O(R) pass; ordered by agent index.
+    pub fn contacted_degrees(&self) -> Vec<u32> {
+        crate::sim::memory_ops::contacted_degrees(&self.relationships, self.agents.len())
+    }
+
     /// i339/i340: override the house-site count used when `populate` generates
     /// the world.
     ///

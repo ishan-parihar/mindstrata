@@ -155,6 +155,54 @@ fn social_status_counts_matches_per_agent_fold() {
     assert_eq!(counts.len(), 2, "range clamped to the population");
 }
 
+/// i342: the contacted-degree census must count rows carrying interaction
+/// state, per `from` agent, and nothing else.
+///
+/// This is the quantity a queued §4.3 fix wires into two appraisal channels that
+/// currently read the complete graph's length (N−1 for everyone, so they
+/// discriminate nothing). Pinned here so the census cannot drift silently while
+/// that fix waits for its re-anchor sweep.
+#[test]
+fn contacted_degrees_counts_only_rows_with_interaction_state() {
+    let mut sim = Simulation::new(SimConfig {
+        seed: 42,
+        max_ticks: 1,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 8,
+        snapshot_interval: None,
+    });
+    sim.populate();
+    // At populate every row is a stranger: degree 0 everywhere, while the
+    // list length is N−1 — the discrepancy the survey exists to name.
+    let degrees = sim.contacted_degrees();
+    assert_eq!(degrees.len(), sim.agents.len());
+    assert!(
+        degrees.iter().all(|d| *d == 0),
+        "populate seeds stranger rows, so no agent has contacts yet"
+    );
+    assert_eq!(
+        sim.agents[0].relationship_v2s.len(),
+        sim.agents.len() - 1,
+        "…while the list length is the whole population"
+    );
+
+    // After a run some agents have contacts, some may not, and the sum over
+    // agents equals the number of touched rows exactly.
+    sim.run(500);
+    let degrees = sim.contacted_degrees();
+    let touched = sim
+        .relationships()
+        .iter()
+        .filter(|r| r.interaction_count > 0)
+        .count();
+    assert_eq!(
+        degrees.iter().map(|d| *d as usize).sum::<usize>(),
+        touched,
+        "every touched row contributes to exactly its own `from` agent"
+    );
+}
+
 /// i335: the relationship store is a **complete directed graph** at populate.
 ///
 /// This is a *structural fact*, not an emergent outcome, and it is the reason

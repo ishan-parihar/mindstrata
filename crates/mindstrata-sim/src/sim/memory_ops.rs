@@ -160,6 +160,36 @@ pub(crate) fn social_status_counts(
     counts
 }
 
+/// i342: per-agent **contacted degree** — how many ordered rows carry any
+/// interaction state (`interaction_count > 0`).
+///
+/// The i341 coupling map found two appraisal channels reading the agent's
+/// relationship-list LENGTH as its number of social connections. That length is
+/// the complete graph's N−1 for every agent (the i335/i336 pin), so the proxy
+/// measures the population, not sociality: probe `i342_social_count_proxy`
+/// measured `min(len, 4) == 4` for **every agent at every N** (lists of 11/47/95),
+/// pinning `social_visibility` at a constant 0.900/0.400 and the normal-life
+/// anxiety term at exactly 0.000 for the whole village.
+///
+/// Contacted degree is the honest count, it differentiates an isolate from the
+/// village's best-connected agent (probe: 0–28 across N=12–96), and it is the
+/// same quantity a sparse store must define (i341). Each row contributes to
+/// exactly its own `from` agent, so this is one O(R) pass — the i331 pattern for
+/// replacing per-agent matrix scans.
+pub(crate) fn contacted_degrees(
+    relationships: &[crate::person::Relationship],
+    n: usize,
+) -> Vec<u32> {
+    let mut degrees = vec![0u32; n];
+    for r in relationships {
+        let fi = r.from.as_u64() as usize;
+        if fi < n && r.interaction_count > 0 {
+            degrees[fi] += 1;
+        }
+    }
+    degrees
+}
+
 impl Simulation {
     /// §13.5: Record a famine (scarcity) trauma in the village's collective
     /// memory when hunger or thirst runs critically high. Episode-guarded:

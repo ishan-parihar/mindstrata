@@ -194,6 +194,16 @@ impl Simulation {
             // no damping), and attachment threat adds an isolation term
             // so the socially-absent agent is chronically lonely.
             // Deterministic (pure relationship-state arithmetic, no RNG).
+            // i342 SURVEY (§4.3 class, queued — NOT wired): this reads
+            // `relationship_v2s.len()`, the COMPLETE graph list, i.e. N−1 rows for
+            // every agent (the i335/i336 pin). `min(len, 4)` is therefore 4 for
+            // **every agent at every N** (probe `i342_social_count_proxy` measured
+            // lists of 11/47/95), so `social_visibility` is a constant 0.900/0.400
+            // that cannot distinguish an isolate from the best-connected villager.
+            // The fix is the contacted degree — `Simulation::contacted_degrees`, the
+            // count this channel always meant — and it is measured to move 13 tests
+            // (goldens, 7 snapshots, 4 behavioural), so it lands with its own
+            // re-anchor sweep rather than here.
             let rel_count = agents[i].relationship_v2s.len() as f64;
             let social_visibility = if agents[i].partner.is_some() {
                 Fixed::from_f64(0.5) + Fixed::from_f64(rel_count.min(4.0) * 0.1)
@@ -600,6 +610,13 @@ impl Simulation {
                 // connections, mild anxiety accumulates — the "something
                 // might go wrong" worry channel. This is the natural
                 // anxiety that fires from uncertainty and insecurity.
+                // i342 SURVEY (queued, not wired): with `min(len, 4) == 4` for
+                // everyone this "few social connections ⇒ worry" term evaluates to
+                // exactly 0.000 for the whole village (probe
+                // `i342_social_count_proxy`), so the anxiety channel has no
+                // isolation input at all. On the contacted degree it is zero for
+                // connected agents (degree ≥ 4 — the calibrated case, so the
+                // magnitude band is preserved) and rises for genuine isolates.
                 let rel_count = agents[i].relationship_v2s.len() as f64;
                 let social_factor = (Fixed::from_f64(4.0) - Fixed::from_f64(rel_count.min(4.0)))
                     * Fixed::from_f64(0.002);
