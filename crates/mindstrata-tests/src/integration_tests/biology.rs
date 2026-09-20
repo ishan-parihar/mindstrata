@@ -1491,15 +1491,21 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
     // live children, 3 marriage records, children_born 3, open_preg 0,
     // population 15 — every birth through the pregnancy path, no counter
     // wiped; the horizon stays 175K).
-    let late = run_sim(1, 175000);
-    let birth_ticks: Vec<u64> = late
-        .recent_events(10_000_000)
-        .iter()
-        .filter_map(|e| match e {
-            mindstrata_core::event::SimEvent::ChildBorn { tick, .. } => Some(tick.as_u64()),
-            _ => None,
-        })
-        .collect();
+    // i327 re-contract: the rolling event buffer is now BOUNDED (charter
+    // rule 4), so the old whole-run `recent_events` scan lost the early
+    // births. The pin observes incrementally instead — same contract
+    // (liveness + volume band + post-window safety), bounded-independent
+    // observation.
+    let mut late = Simulation::new(SimConfig {
+        seed: 1,
+        max_ticks: 175_000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    });
+    late.populate();
+    let birth_ticks = crate::test_helpers::collect_child_born_ticks(&mut late, 175_000, 2_000);
     // Iteration 242 re-anchor (fertility restoration — health-sync revival,
     // couple-average gut nutrition, f64 gestation): seed 1 @175K now
     // delivers 18 births starting at 11,060 (~0.2 yr after founding couples
@@ -1551,15 +1557,17 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
 
     // Determinism: two seed-1 175K runs -> identical birth timeline and
     // population.
-    let again = run_sim(1, 175000);
-    let ticks2: Vec<u64> = again
-        .recent_events(10_000_000)
-        .iter()
-        .filter_map(|e| match e {
-            mindstrata_core::event::SimEvent::ChildBorn { tick, .. } => Some(tick.as_u64()),
-            _ => None,
-        })
-        .collect();
+    // i327: same incremental observation on the repeat run (bounded buffer).
+    let mut again = Simulation::new(SimConfig {
+        seed: 1,
+        max_ticks: 175_000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    });
+    again.populate();
+    let ticks2 = crate::test_helpers::collect_child_born_ticks(&mut again, 175_000, 2_000);
     assert_eq!(
         birth_ticks, ticks2,
         "birth timeline must be seed-deterministic"

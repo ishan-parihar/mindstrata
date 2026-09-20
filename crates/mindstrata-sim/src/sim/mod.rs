@@ -78,6 +78,15 @@ pub const EXPECTED_WATER_PER_AGENT: u32 = 200;
 /// (~7 days of daily practice).
 pub const SKILL_GAIN_PER_TICK: Fixed = Fixed::from_raw(40); // 0.004
 
+/// i327: steady-state cap on the rolling event buffer (`Simulation::events`).
+/// Chosen as the perf-charter §4 / ASSET-PIPELINE-v0 ring trigger ("a future
+/// export needing >250K-tick journals is the trigger"), rounded to a power of
+/// two. At the measured peak (≈52 events/tick at N=48) this holds ≈5 000 ticks
+/// of rolling history — far more than `recent_events()`/catalyst observers
+/// read. The buffer is allowed to reach `2×` this before one bulk drop back to
+/// it, so peak memory is bounded at `2×MAX ≈ 28 MiB` instead of unbounded.
+pub const MAX_EVENTS: usize = 262_144;
+
 /// §8.1.3: Whether a practice tick carried a skill across a 0.1-proficiency
 /// boundary — the milestone that warrants a Procedural memory. Integer raw
 /// math (tenth = SCALE/10) keeps the gate exactly deterministic; tenth-step
@@ -569,6 +578,9 @@ pub struct Simulation {
     pub world: World,
     pub agents: Vec<AgentBundle>,
     pub relationships: Vec<Relationship>,
+    /// Rolling event buffer, bounded by an amortized bulk drop at
+    /// `2×`[`MAX_EVENTS`] (i327 — see `core::tick`). The cumulative reading is
+    /// `total_event_count`, so trimming never changes a public number.
     events: Vec<SimEvent>,
     /// Cumulative event count — incremented after the events pass each tick.
     /// Used by `metrics_snapshot.event_count` and the API. The on-buffer

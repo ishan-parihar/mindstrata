@@ -90,7 +90,7 @@ fn leg(n: usize, ticks: u64) {
     println!("  end-to-end ms/tick         : {ms:>8.3}");
     let ev_bytes = ev_total * std::mem::size_of::<mindstrata_core::event::SimEvent>() as f64;
     println!(
-        "  event buffer (untrimmed)   : {ev_total:>12.0} events  ({:.1} MiB at {} B/event)",
+        "  event buffer (bounded i327) : {ev_total:>12.0} events  ({:.1} MiB at {} B/event)",
         ev_bytes / (1024.0 * 1024.0),
         std::mem::size_of::<mindstrata_core::event::SimEvent>()
     );
@@ -120,10 +120,10 @@ fn main() {
          \n      sparse-store lever does NOT address the tick bottleneck; demote it."
     );
     println!(
-        "  (2) event buffer: `self.events` is never trimmed (documented debt in \
-         \n      core::tick) and grows ~O(N) per tick — 1.05M events / 56 MiB at \
-         \n      N=48 @20K. This is the real scale wall (memory, not time), and the \
-         \n      recorded VecDeque<SimEvent> refactor is the fix. VERDICT: \
-         \n      EVENT_BUFFER_IS_THE_SCALE_WALL"
+        "  (2) event buffer: this probe found `self.events` growing unbounded \
+         \n      (1.05M events / 56 MiB at N=48 @20K) — a MEMORY wall, not a time \
+         \n      one. i327 bounded it with an amortized bulk drop to MAX_EVENTS \
+         \n      (2×MAX ceiling); the numbers above are post-i327. VERDICT: \
+         \n      EVENT_BUFFER_BOUND_NOW_LIVE"
     );
 }

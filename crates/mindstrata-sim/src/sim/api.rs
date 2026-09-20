@@ -96,7 +96,14 @@ impl Simulation {
         self.agents[from].relationship_v2s.get(idx)
     }
 
-    /// Get recent events (last n).
+    /// Get recent events (last n) from the **bounded** rolling buffer.
+    ///
+    /// i327: the buffer is capped (see [`crate::sim::MAX_EVENTS`]), so this is
+    /// a window over recent history, not the whole run — `n` larger than the
+    /// retained window returns only what is held. The unbounded reading is
+    /// [`Self::event_count`] (the cumulative counter). Callers that need a
+    /// whole-run scan must observe incrementally (see the `collect_child_born_ticks`
+    /// pattern in the test helpers) rather than requesting a huge `n`.
     pub fn recent_events(&self, n: usize) -> &[SimEvent] {
         let start = self.events.len().saturating_sub(n);
         &self.events[start..]

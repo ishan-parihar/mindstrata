@@ -8,6 +8,7 @@ use super::{
 use crate::systems;
 
 use super::snapshot_metrics::MAX_METRIC_HISTORY;
+use super::MAX_EVENTS;
 
 use rand::Rng;
 impl Simulation {
@@ -875,28 +876,50 @@ impl Simulation {
                 self.metric_history.drain(..drop_n);
             }
         }
-        // ── End-of-tick: bump the cumulative event counter. The
-        // counter is read by `event_count()` and the metrics
-        // snapshot's `event_count` field; the per-tick buffer is
-        // intentionally not trimmed here (drain() shifts the entire
-        // tail and at 10K×100 events it's a 1M-element shift per
-        // tick — 30% perf regression measured at 96ea2c6+perf).
-        // The buffer remains a growing rolling history; downstream
-        // `recent_events()` and catalyst observers depend on the
-        // rolling content. The cumulative counter preserves the
-        // public reading even as the buffer grows.
-        //
-        // ponytail: ring-trim (`drain(..drop_n)`) regressed
-        // N=48 10K 742→524 tps because of the O(n) shift on a
-        // large buffer. The proper fix is `VecDeque<SimEvent>` for
-        // O(1) front pop, but that's a data-structure refactor
-        // (touching every `self.events.push/get` site). Recorded
-        // as DC-2 perf work. Until then, the buffer grows but the
-        // counter is correct.
+        // ── End-of-tick: bump the cumulative event counter. The counter is
+        // read by `event_count()` and the metrics snapshot's `event_count`
+        // field, so it tracks the full history independently of the rolling
+        // buffer (trimmed just below — i327).
         let events_pushed_this_tick = self.events.len().saturating_sub(pre_tick_events);
         self.total_event_count = self
             .total_event_count
             .saturating_add(events_pushed_this_tick as u64);
+
+        // ── i327: bound the rolling event buffer (amortized bulk drop) ──
+        // The buffer used to grow without bound (probe i326: 1 049 162 events
+        // ≈ 56 MiB at N=48 @20K, ~O(N) per tick — a memory wall, not a time
+        // one). The recorded fix was `VecDeque<SimEvent>` for an O(1) front
+        // pop; measured against the real churn that is a much larger refactor
+        // than the win (≈40 `.push` sites need `push_back`, ~15 slice-read
+        // sites need reworking, and `VecDeque` has no range indexing) — it is
+        // recorded as the upgrade path, not attempted piecemeal.
+        //
+        // Bounded here instead by an AMORTIZED bulk drop: let the buffer reach
+        // 2×MAX_EVENTS, then one `drain` back to MAX. The memmove is O(MAX),
+        // but fires only once per (MAX / events-per-tick) ticks — at the
+        // measured ~52 events/tick (N=48) that is one ~14 MiB move every
+        // ~5 000 ticks, i.e. amortized ≈O(1) per event, with peak memory
+        // 2×MAX ≈ 28 MiB instead of unbounded. Trimmed HERE, at tick end,
+        // after every pass read its `pre_tick_events..` window, so no in-tick
+        // index is disturbed; the next tick re-reads `self.events.len()` as
+        // its own base. `total_event_count` carries the cumulative reading, so
+        // the public `event_count()` and the golden `metric_hash` are unmoved.
+        //
+        // ponytail: ceiling = the periodic bulk memmove (a sub-ms tick-jitter
+        // stall every ~5K ticks); upgrade path = the recorded
+        // `VecDeque<SimEvent>` ring if a pass ever needs jitter-free ticks.
+        Self::trim_event_buffer(&mut self.events);
+    }
+
+    /// i327: the amortized bulk drop that bounds the rolling event buffer.
+    /// Extracted so the bound has a runnable check without a 100K-tick run.
+    /// No-op until the buffer exceeds `2×`[`MAX_EVENTS`]; then one drain back
+    /// to `MAX_EVENTS` (see the call site for the cost/benefit rationale).
+    pub(super) fn trim_event_buffer(events: &mut Vec<SimEvent>) {
+        if events.len() > 2 * MAX_EVENTS {
+            let drop_n = events.len() - MAX_EVENTS;
+            events.drain(..drop_n);
+        }
     }
 
     // ── Tick subsystem methods ──────────────────────────────────────

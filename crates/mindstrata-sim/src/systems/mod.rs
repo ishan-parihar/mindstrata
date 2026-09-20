@@ -27,6 +27,7 @@ pub struct SystemContext<'a> {
     pub tick: u64,
     pub rng: &'a mut RngStreams,
     pub world: &'a mut World,
+    /// Rolling event buffer (bounded — see `Simulation::events`).
     pub events: &'a mut Vec<mindstrata_core::event::SimEvent>,
 }
 

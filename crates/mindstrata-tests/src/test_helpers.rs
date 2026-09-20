@@ -22,6 +22,39 @@ pub fn run_sim(seed: u64, ticks: u64) -> Simulation {
     sim
 }
 
+/// Collect every `ChildBorn` tick over a long run **without relying on an
+/// unbounded event history**.
+///
+/// i327 bounded the rolling event buffer (`MAX_EVENTS`, amortized bulk drop),
+/// so `recent_events(usize::MAX)` no longer spans a 175K–220K-tick run — the
+/// old whole-run scans in the conception/birth pins silently lost their early
+/// births and read 0. Bounded journals are the charter contract (§ASSET-
+/// PIPELINE-v0 rule 4), so the pins observe **incrementally** instead: the run
+/// is stepped in segments, and each segment's window is read straight after it
+/// and filtered to that segment's tick range. Segment event volume (~15–30
+/// events/tick × `step`) stays far under the buffer bound, and the tick-range
+/// filter makes the result independent of any trim.
+pub fn collect_child_born_ticks(sim: &mut Simulation, total: u64, step: u64) -> Vec<u64> {
+    let mut out = Vec::new();
+    let mut done = 0u64;
+    while done < total {
+        let seg = step.min(total - done);
+        let lo = done;
+        sim.run(seg);
+        done += seg;
+        for e in sim.recent_events(usize::MAX) {
+            if let mindstrata_core::event::SimEvent::ChildBorn { tick, .. } = e {
+                let t = tick.as_u64();
+                if t > lo && t <= done {
+                    out.push(t);
+                }
+            }
+        }
+    }
+    out.sort_unstable();
+    out
+}
+
 /// Run a simulation with mutated tuning parameters, returning it for inspection.
 ///
 /// The mutation is applied to `sim.params` BEFORE `populate`/`run`, so every

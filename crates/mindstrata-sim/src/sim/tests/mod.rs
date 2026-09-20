@@ -14,6 +14,34 @@ mod psychology;
 
 use super::Simulation;
 
+// ── i327: rolling event buffer bound ──────────────────────────────────
+
+/// The buffer is left alone below `2×MAX_EVENTS` (so every calibrated
+/// horizon — well under the bound — is byte-identical), and one bulk drop
+/// brings it to `MAX_EVENTS` once it exceeds it. The cumulative reading is
+/// carried by `total_event_count`, not by buffer length, so the trim cannot
+/// move a public number.
+#[test]
+fn event_buffer_is_bounded_by_an_amortized_bulk_drop() {
+    use crate::sim::MAX_EVENTS;
+    let ev = || mindstrata_core::event::SimEvent::AgentSpawned {
+        agent: mindstrata_core::id::AgentId::new(0),
+        tick: mindstrata_core::clock::Tick::new(0),
+    };
+
+    let mut small = vec![ev(); MAX_EVENTS];
+    Simulation::trim_event_buffer(&mut small);
+    assert_eq!(small.len(), MAX_EVENTS, "at the cap: untouched");
+
+    let mut over = vec![ev(); 2 * MAX_EVENTS];
+    Simulation::trim_event_buffer(&mut over);
+    assert_eq!(over.len(), 2 * MAX_EVENTS, "at 2×: still untouched");
+
+    let mut huge = vec![ev(); 2 * MAX_EVENTS + 1];
+    Simulation::trim_event_buffer(&mut huge);
+    assert_eq!(huge.len(), MAX_EVENTS, "past 2×: one drop to the cap");
+}
+
 // Shared test helper (used by family + conflict domains).
 /// §10.8: Find two agents in different seeded clans (home-site parity
 /// seeds 2 clans during populate).

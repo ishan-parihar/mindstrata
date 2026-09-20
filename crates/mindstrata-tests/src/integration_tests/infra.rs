@@ -1289,22 +1289,21 @@ fn reproduction_conception_multiplier_parameter_is_live() {
         let mut sim = Simulation::new(config);
         sim.params.reproduction_conception_multiplier = Fixed::from_f64(mult);
         sim.populate();
-        sim.run(220_000);
         sim
     };
-    let first_birth = |sim: &Simulation| -> Option<u64> {
-        sim.recent_events(10_000_000)
-            .iter()
-            .filter_map(|e| match e {
-                mindstrata_core::event::SimEvent::ChildBorn { tick, .. } => Some(tick.as_u64()),
-                _ => None,
-            })
+    // i327 re-contract: the rolling event buffer is BOUNDED (charter rule 4),
+    // so the old whole-run `recent_events` scan read 0 births at 220K ticks.
+    // Observe incrementally — the liveness contract (a doubled conception
+    // rate's FIRST birth is no later than baseline's) is unchanged.
+    let first_birth = |sim: &mut Simulation| -> Option<u64> {
+        crate::test_helpers::collect_child_born_ticks(sim, 220_000, 2_000)
+            .into_iter()
             .min()
     };
-    let baseline_sim = make(1.0);
-    let boosted_sim = make(2.0);
-    let baseline_first = first_birth(&baseline_sim);
-    let boosted_first = first_birth(&boosted_sim);
+    let mut baseline_sim = make(1.0);
+    let mut boosted_sim = make(2.0);
+    let baseline_first = first_birth(&mut baseline_sim);
+    let boosted_first = first_birth(&mut boosted_sim);
     assert!(
         baseline_first.is_some(),
         "the calibrated window must deliver baseline births"
