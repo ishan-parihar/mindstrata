@@ -130,12 +130,36 @@ registers panics, every registration carries a mapped trigger, the family peak c
 | injury channel (i313) | live: injury 0.31–0.32, pain 1.000, shock 0–0.67, social memory → 12 panic / 4 faction at 50K |
 | golden baselines | 9/9 byte-identical |
 
+## Re-audit of the scale envelope (i332 charter method, same session)
+
+The i295/i332 charter method (32×32, 2000 ticks, seed 42, new+populate+run, min-of-3)
+run against the pre-i334 file (`HEAD~1`) and after, in one session:
+
+| N | µs/tick pre-i334 | µs/tick post-i334 | Δ |
+|---|---|---|---|
+| 48 | 534.7 | 520.5 | −2.7% |
+| 96 | 1 802.3 | 1 788.2 | −0.8% |
+| 144 | 4 005.6 | 3 819.1 | −4.7% |
+| 192 | 7 351.0 | 6 830.5 | **−7.1%** |
+
+The charter method reports a **smaller** delta than the i329 per-tick probe (−16.3% at
+N=192) because it divides a fixed `populate` + short-run cost by only 2 000 ticks, so the
+one-off setup dilutes the per-tick saving. Both readings are honest measurements of
+different quantities; the i329 number is the per-tick delta, this one is the
+charter-method cost.
+
+The **verdict tier is unchanged**: N=96 headroom 73% → 72% (noise-level) and N=192
+still breaches the N=96 budget (6 830 > 6 500), so `ENVELOPE_EXPANDED_1_5X` stands exactly
+as i332 recorded it. Stated plainly: **i334 is a correctness fix that pays for itself,
+not an envelope expansion.** The Phase-1 population-target question is therefore
+unaffected by this iteration — it remains open on the i332 evidence.
+
 ## Verdict
 
 **`PERCEPTION_GATE_LIVE`** — the last recorded non-floor term is closed with the
 doctrine that named it (§2.4), and the pass now costs a distance test per pair instead
 of a salience computation. The pass remains O(N·E) = O(N²); the structural floor is
-unchanged and still the envelope's governor.
+unchanged and still the envelope's governor (re-audited above, not asserted).
 
 ## Recorded debt
 
