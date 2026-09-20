@@ -27,6 +27,7 @@ impl Simulation {
 
         let sim = Self {
             config,
+            house_count: crate::world_gen::DEFAULT_HOUSE_COUNT,
             params: crate::parameters::SimParameters::default(),
             clock: Clock::new(),
             rng,
@@ -232,6 +233,16 @@ impl Simulation {
         let rng = RngStreams::new(snapshot.master_seed);
         let mut sim = Self {
             config: snapshot.config,
+            // i339: the restored world already carries its own sites, so derive
+            // the count from it rather than assuming the default — a snapshot of
+            // a re-housed run must keep that fact across a save/load boundary.
+            house_count: snapshot
+                .world
+                .sites
+                .iter()
+                .filter(|s| matches!(s.kind, crate::world::SiteKind::House))
+                .count()
+                .max(1) as u32,
             clock,
             // i303 (v16): restore the captured tuning parameters instead of
             // rebuilding defaults — the pre-i303 behavior silently discarded
@@ -506,7 +517,7 @@ impl Simulation {
             );
         }
 
-        world_gen::generate_village(&mut self.world, &mut self.rng);
+        world_gen::generate_village_with_houses(&mut self.world, &mut self.rng, self.house_count);
 
         let mut populate_rng =
             rand_chacha::ChaCha8Rng::seed_from_u64(self.config.seed.wrapping_add(1000));

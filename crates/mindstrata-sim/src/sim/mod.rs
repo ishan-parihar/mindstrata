@@ -570,6 +570,12 @@ pub struct AgentSkills {
 /// The simulation state.
 pub struct Simulation {
     config: SimConfig,
+    /// i339: house-site count used by `populate` (defaults to the historical
+    /// [`crate::world_gen::DEFAULT_HOUSE_COUNT`]). Overridable via
+    /// [`Simulation::set_house_count`] *before* `populate`, so the i338 finding
+    /// (every N lives on exactly 8 cells) can be probed without a behavioural
+    /// change: at the default the generated world is byte-identical.
+    pub(crate) house_count: u32,
     /// §5.1 / Phase 5: Configurable simulation parameters.
     pub params: crate::parameters::SimParameters,
     clock: Clock,

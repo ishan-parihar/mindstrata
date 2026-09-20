@@ -6,6 +6,26 @@ use super::{
 };
 
 impl Simulation {
+    /// i339: set the house-site count used when `populate` generates the world.
+    ///
+    /// Must be called **before** `populate` (the world is generated there); a
+    /// later call has no effect on an already-populated run. The default is
+    /// [`crate::world_gen::DEFAULT_HOUSE_COUNT`] (8), whose generated world is
+    /// byte-identical to the historical path.
+    ///
+    /// Exists to measure i338's finding — that with 8 fixed sites every N lives
+    /// on exactly 8 cells, which is what pins the relationship store at Ω(N²) —
+    /// without changing any calibrated behaviour. See
+    /// `evidence/i339_housing_spread.md`.
+    pub fn set_house_count(&mut self, houses: u32) {
+        self.house_count = houses.max(1);
+    }
+
+    /// i339: the house-site count this run will generate (8 unless overridden).
+    pub fn house_count(&self) -> u32 {
+        self.house_count
+    }
+
     /// Access the current tick.
     /// §5 (Iteration 155): The interactive-TUI command channel — inject a
     /// high-priority directive goal into an agent's goal queue.

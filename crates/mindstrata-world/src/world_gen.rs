@@ -20,8 +20,24 @@ fn place_site(world: &mut World, x: i32, y: i32, site: Site) -> bool {
     }
 }
 
-/// Generate a small village world.
+/// i339: the village's house count. Historically a hardcoded `for i in 0..8`
+/// (i338 measured that this makes every N live on exactly 8 cells, which is
+/// what pins the relationship store at Ω(N²)); exposed so the counterfactual
+/// can be measured before any behavioural change lands.
+pub const DEFAULT_HOUSE_COUNT: u32 = 8;
+
+/// Generate a small village world with the historical 8 houses.
 pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
+    generate_village_with_houses(world, rng, DEFAULT_HOUSE_COUNT);
+}
+
+/// Generate a small village world with `houses` house sites.
+///
+/// `houses == DEFAULT_HOUSE_COUNT` is the byte-identical legacy path (same draw
+/// order). Other values shift the world RNG stream downstream of the house loop
+/// — a larger village, not a re-housed village — which is the honest reading for
+/// a spread experiment (see evidence/i339_housing_spread.md).
+pub fn generate_village_with_houses(world: &mut World, rng: &mut RngStreams, houses: u32) {
     let world_rng = rng.get_mut(RngStream::World);
     let w = world.width as i32;
     let h = world.height as i32;
@@ -99,17 +115,29 @@ pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
     // Iteration 257: houses on a jittered ring - seeded per-house radius
     // (3-5) and angle wobble break the perfect-circle grammar. A candidate
     // that lands on water falls back to the unjittered position.
-    for i in 0..8 {
-        let angle = (i as f64) * std::f64::consts::PI / 4.0 + world_rng.random_range(-0.15..0.15);
-        let radius = 4.0 + world_rng.random_range(-1.0..1.0);
+    //
+    // i339: the ring's RADIUS now spans the map when the count grows (the i338
+    // finding is that a fixed radius-4 ring inside a fixed disc is what makes
+    // contact saturate); the legacy 8-house case keeps radius ~4 exactly.
+    let house_count = houses.max(1);
+    let ring_span = (w.min(h) as f64 / 2.0 - 2.0).max(4.0);
+    let ring_base = if house_count <= DEFAULT_HOUSE_COUNT {
+        4.0
+    } else {
+        ring_span
+    };
+    for i in 0..house_count {
+        let angle = (i as f64) * 2.0 * std::f64::consts::PI / house_count as f64
+            + world_rng.random_range(-0.15..0.15);
+        let radius = ring_base + world_rng.random_range(-1.0..1.0);
         let mut hx = center_x + (angle.cos() * radius) as i32;
         let mut hy = center_y + (angle.sin() * radius) as i32;
         let on_water = world
             .tile(hx, hy)
             .is_some_and(|t| matches!(t.terrain, Terrain::Water));
         if on_water {
-            hx = center_x + (angle.cos() * 4.0) as i32;
-            hy = center_y + (angle.sin() * 4.0) as i32;
+            hx = center_x + (angle.cos() * ring_base) as i32;
+            hy = center_y + (angle.sin() * ring_base) as i32;
         }
         let site = Site {
             id: EntityId::new(site_id),
