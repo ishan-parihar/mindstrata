@@ -6,6 +6,134 @@ use super::{
     SimEvent, Simulation,
 };
 
+/// §2.4 (i334): the perception anchors of one tick-event — the positions the
+/// event *happened at*, one per agent lane.
+///
+/// Before i334 the memory-encoding pass ran `compute_salience` (and with it a
+/// habituation increment) for **every** event for **every** agent, i.e. N·E
+/// salience evaluations per tick, regardless of whether the agent could
+/// possibly have perceived the event. i333 sized that: at N=192 only **0.9%**
+/// of those pairs involve the agent, so 99.1% of the pass was work no
+/// perception model would license. §2.4 already fixes the radius
+/// (`DEFAULT_PERCEPTION_RADIUS`, the same one the interaction engine uses) —
+/// this is that radius applied to attention.
+///
+/// An agent perceives an event when it sits within the radius of an anchor;
+/// an involved agent is its own anchor at distance 0, so involvement is the
+/// degenerate case and the gates compose.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum EventAnchors {
+    /// The event names no agent lane — perceived by every agent. This is the
+    /// pre-i334 behavior, kept only for `InstitutionChangedPolicy` (an
+    /// institution's policy change is public village news).
+    Everywhere,
+    /// Every agent lane pointed outside the living population (a stale id),
+    /// so there is nothing to stand near — nobody perceives it.
+    Nowhere,
+    One((i32, i32)),
+    Two((i32, i32), (i32, i32)),
+    /// Three or more lanes (births, rituals, witness lists) — rare.
+    Many(Vec<(i32, i32)>),
+}
+
+impl EventAnchors {
+    /// Does an agent standing at `me` perceive this event?
+    pub(crate) fn perceived_from(&self, me: (i32, i32), radius: i32) -> bool {
+        let near = |p: &(i32, i32)| (p.0 - me.0).abs() + (p.1 - me.1).abs() <= radius;
+        match self {
+            EventAnchors::Everywhere => true,
+            EventAnchors::Nowhere => false,
+            EventAnchors::One(a) => near(a),
+            EventAnchors::Two(a, b) => near(a) || near(b),
+            EventAnchors::Many(ps) => ps.iter().any(near),
+        }
+    }
+}
+
+/// The position of agent `id`, when that id is still inside the population.
+///
+/// A lane whose agent died earlier in the tick can point outside `positions`;
+/// its anchor is dropped (the event is still perceived by every lane that
+/// survived). This is the same stale-id guard the i331 social-status fold
+/// uses.
+fn lane_position(positions: &[(i32, i32)], id: AgentId) -> Option<(i32, i32)> {
+    positions.get(id.as_u64() as usize).copied()
+}
+
+/// §2.4 (i334): build the perception anchors of `event` from the tick's final
+/// agent positions.
+///
+/// The match is **exhaustive by design**: a new `SimEvent` variant must state
+/// its perception lanes explicitly rather than inherit a silent default.
+/// Positions are the tick's *final* ones, so an anchor is where the agent
+/// ended the tick, not where it stood at event time — an approximation that is
+/// invisible at the r=5 scale the interaction engine already uses.
+pub(crate) fn anchors_of(event: &SimEvent, positions: &[(i32, i32)]) -> EventAnchors {
+    let one = |id: AgentId| lane_position(positions, id);
+    let pair = |a: AgentId, b: AgentId| match (one(a), one(b)) {
+        (Some(x), Some(y)) => EventAnchors::Two(x, y),
+        (Some(x), None) | (None, Some(x)) => EventAnchors::One(x),
+        (None, None) => EventAnchors::Nowhere,
+    };
+    match event {
+        // ── Two lanes ────────────────────────────────────────────────
+        SimEvent::RelationshipChanged { from, to, .. }
+        | SimEvent::InteractionOccurred { from, to, .. } => pair(*from, *to),
+        SimEvent::TradeOccurred { buyer, seller, .. } => pair(*buyer, *seller),
+        SimEvent::RumorSpread { source, target, .. }
+        | SimEvent::KnowledgeTransferred { source, target, .. } => pair(*source, *target),
+        SimEvent::ConflictOccurred {
+            aggressor, target, ..
+        } => pair(*aggressor, *target),
+        SimEvent::FeudFormed {
+            party_a, party_b, ..
+        } => pair(*party_a, *party_b),
+        SimEvent::MarriageFormed {
+            spouse_a, spouse_b, ..
+        } => pair(*spouse_a, *spouse_b),
+        // ── One lane ─────────────────────────────────────────────────
+        SimEvent::AgentAte { agent, .. }
+        | SimEvent::AgentDrank { agent, .. }
+        | SimEvent::AgentRested { agent, .. }
+        | SimEvent::AgentSpawned { agent, .. }
+        | SimEvent::AgentDied { agent, .. }
+        | SimEvent::AgentMoved { agent, .. } => match one(*agent) {
+            Some(p) => EventAnchors::One(p),
+            None => EventAnchors::Nowhere,
+        },
+        SimEvent::GriefStruck { mourner, .. } => match one(*mourner) {
+            Some(p) => EventAnchors::One(p),
+            None => EventAnchors::Nowhere,
+        },
+        // ── Three or more lanes ──────────────────────────────────────
+        SimEvent::ChildBorn {
+            child,
+            parent_a,
+            parent_b,
+            ..
+        } => EventAnchors::Many(
+            [one(*child), one(*parent_a), one(*parent_b)]
+                .into_iter()
+                .flatten()
+                .collect(),
+        ),
+        SimEvent::NormViolated {
+            agent, witnesses, ..
+        } => EventAnchors::Many(
+            std::iter::once(one(*agent))
+                .chain(witnesses.iter().map(|w| one(*w)))
+                .flatten()
+                .collect(),
+        ),
+        SimEvent::RitualPerformed { participants, .. }
+        | SimEvent::MourningObserved { participants, .. } => {
+            EventAnchors::Many(participants.iter().filter_map(|p| one(*p)).collect())
+        }
+        // ── No lane: public institutional news ───────────────────────
+        SimEvent::InstitutionChangedPolicy { .. } => EventAnchors::Everywhere,
+    }
+}
+
 /// §19.5.G (i331): per-agent `(positive, total)` relationship counts.
 ///
 /// A relationship is "positive" when `trust > 0.6`. Each row contributes to
@@ -87,6 +215,24 @@ impl Simulation {
         // O(R) pass (each row contributes to exactly its own `from` agent), so
         // the counts are identical by construction.
         let rel_counts = social_status_counts(&self.relationships, self.agents.len());
+        // §2.4 (i334): perception gate. One O(E) pass builds each tick-event's
+        // anchors from the tick's final positions; the inner loop then tests a
+        // Manhattan distance instead of computing salience for events the
+        // agent could not have perceived. i333 measured 0.9% of the pre-i334
+        // pairs as agent-involving at N=192, so this removes ~99% of the
+        // pass's work *and* the causal implausibility it stood on (before: a
+        // village-wide agent habituated to every event in the village).
+        let positions: Vec<(i32, i32)> = self
+            .agents
+            .iter()
+            .map(|a| (a.position.x, a.position.y))
+            .collect();
+        let radius = crate::social::interaction::DEFAULT_PERCEPTION_RADIUS;
+        let tick_events = &self.events[pre_tick_events..];
+        let anchors: Vec<EventAnchors> = tick_events
+            .iter()
+            .map(|ev| anchors_of(ev, &positions))
+            .collect();
         for (i, agent) in self.agents.iter_mut().enumerate() {
             // §17: Background agents skip memory encoding entirely
             // §17.2: Also check memory retrieval budget
@@ -98,7 +244,11 @@ impl Simulation {
             // §8.1.2: Fresh salience competition each tick — the map records
             // this tick's percepts, not a rolling top-N.
             agent.attention.salience_map.clear();
-            for ev in &self.events[pre_tick_events..] {
+            let me = (agent.position.x, agent.position.y);
+            for (ev, footprint) in tick_events.iter().zip(anchors.iter()) {
+                if !footprint.perceived_from(me, radius) {
+                    continue;
+                }
                 // §22.5: Attention computes salience based on intensity, novelty, relevance
                 let salience = agent.attention.compute_salience(
                     ev,
@@ -512,5 +662,122 @@ impl Simulation {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const R: i32 = 5;
+
+    fn pos(n: usize) -> Vec<(i32, i32)> {
+        (0..n).map(|i| (i as i32 * 2, 0)).collect()
+    }
+
+    fn interaction(from: u64, to: u64) -> SimEvent {
+        SimEvent::InteractionOccurred {
+            from: AgentId::new(from),
+            to: AgentId::new(to),
+            kind: mindstrata_core::event::InteractionKind::Talk,
+            tick: mindstrata_core::clock::Tick::new(1),
+        }
+    }
+
+    /// The gate's core contract: an agent perceives what it is part of, and
+    /// what happens within the §2.4 radius of an involved agent — nothing else.
+    #[test]
+    fn perception_gate_is_involvement_or_radius() {
+        let positions = pos(4); // (0,0) (2,0) (4,0) (6,0)
+        let anchors = anchors_of(&interaction(0, 2), &positions);
+        assert_eq!(anchors, EventAnchors::Two((0, 0), (4, 0)));
+        // Involved at distance 0.
+        assert!(anchors.perceived_from((0, 0), R));
+        assert!(anchors.perceived_from((4, 0), R));
+        // A bystander within the radius of one lane perceives it.
+        assert!(anchors.perceived_from((6, 0), R));
+        // ...and a distant one does not.
+        assert!(!anchors.perceived_from((20, 0), R));
+        assert!(!anchors.perceived_from((0, 40), R));
+    }
+
+    /// The radius is inclusive at exactly `r` tiles (the boundary the
+    /// interaction engine's own selector uses).
+    #[test]
+    fn perception_radius_boundary_is_inclusive() {
+        let anchors = anchors_of(&interaction(0, 0), &pos(1));
+        assert!(anchors.perceived_from((R, 0), R), "distance r is in range");
+        assert!(
+            !anchors.perceived_from((R + 1, 0), R),
+            "distance r + 1 is not"
+        );
+    }
+
+    /// Lane extraction covers the shapes the sim actually emits: one lane,
+    /// two lanes, three lanes (a birth), a witness list, and the single
+    /// positionless institutional variant.
+    #[test]
+    fn lane_extraction_covers_every_event_shape() {
+        use mindstrata_core::clock::Tick;
+        let positions = pos(6);
+        let ate = SimEvent::AgentAte {
+            agent: AgentId::new(3),
+            food: mindstrata_core::id::EntityId::new(0),
+            tick: Tick::new(1),
+        };
+        assert_eq!(anchors_of(&ate, &positions), EventAnchors::One((6, 0)));
+
+        let born = SimEvent::ChildBorn {
+            child: AgentId::new(0),
+            parent_a: AgentId::new(1),
+            parent_b: AgentId::new(2),
+            tick: Tick::new(1),
+        };
+        assert_eq!(
+            anchors_of(&born, &positions),
+            EventAnchors::Many(vec![(0, 0), (2, 0), (4, 0)])
+        );
+
+        let violation = SimEvent::NormViolated {
+            agent: AgentId::new(1),
+            norm_id: 0,
+            witnesses: vec![AgentId::new(4)],
+            tick: Tick::new(1),
+        };
+        assert_eq!(
+            anchors_of(&violation, &positions),
+            EventAnchors::Many(vec![(2, 0), (8, 0)]),
+            "witnesses are lanes too"
+        );
+
+        let policy = SimEvent::InstitutionChangedPolicy {
+            institution: mindstrata_core::id::EntityId::new(0),
+            policy_id: 0,
+            tick: Tick::new(1),
+        };
+        assert_eq!(anchors_of(&policy, &positions), EventAnchors::Everywhere);
+        assert!(anchors_of(&policy, &positions).perceived_from((99, 99), R));
+    }
+
+    /// A lane pointing outside the living population contributes no anchor.
+    /// With no surviving lane the event is perceived by nobody — the pre-i334
+    /// behavior (everyone) is deliberately NOT restored, since a phantom
+    /// position would anchor attention to a dead id.
+    #[test]
+    fn stale_lanes_anchor_nowhere() {
+        let positions = pos(2);
+        let dead = SimEvent::AgentDied {
+            agent: AgentId::new(9),
+            cause: mindstrata_core::event::DeathCause::Unknown,
+            tick: mindstrata_core::clock::Tick::new(1),
+        };
+        assert_eq!(anchors_of(&dead, &positions), EventAnchors::Nowhere);
+        assert!(!anchors_of(&dead, &positions).perceived_from((0, 0), R));
+
+        // One survivor lane keeps the event perceivable from that lane.
+        let half = anchors_of(&interaction(1, 9), &positions);
+        assert_eq!(half, EventAnchors::One((2, 0)));
+        assert!(half.perceived_from((2, 0), R));
+        assert!(!half.perceived_from((0, 0), 0));
     }
 }

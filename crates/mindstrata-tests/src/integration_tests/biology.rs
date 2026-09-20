@@ -1256,7 +1256,18 @@ fn conception_pipeline_round_trips_with_birth() {
     // conception at 160, delivery at 3,500. The total horizon returns to
     // 4,000 (birth lands at 3,500) and the determinism leg below re-anchors
     // to 4,000.
-    sim.run(2000);
+    //
+    // Iteration 334 re-anchor (§4.2, mechanism named): the §2.4 perception
+    // gate on memory/attention removed the assumption that every agent
+    // perceives every event in the village, which re-paced this world's
+    // pairing and gestation. Probe `i335_seed46_pipeline` (accelerated seed
+    // 46, horizons 2K→12K) pins the new trajectory: 3 pregnancies, births
+    // at [180, 250, **4960**] — the pregnancy-path delivery lands ~1.5K
+    // ticks later than the old 3,500 pin, so the segment-2 horizon extends
+    // 2,000 → 4,000 (total 6,000) to keep the delivery INSIDE the window.
+    // The pipeline is re-paced, not dead (one live pregnancy still carried
+    // at tick 4,000 in the probe).
+    sim.run(4000);
     let child_events: Vec<u64> = sim
         .recent_events(10_000_000)
         .iter()
@@ -1283,6 +1294,11 @@ fn conception_pipeline_round_trips_with_birth() {
     // couples, slower conception cadence) — probe-pinned births now land
     // at [2890], after the tick-30/140/640/370 conceptions, so the
     // post-conception boundary stays at 700.
+    //
+    // Iteration 334: unchanged boundary, extended horizon — the i335 probe
+    // measured the delivery at 4,960 (well past the 700 boundary and past
+    // the old 4,000 window end), so the assertion is now made against a
+    // window that actually contains it.
     assert!(
         child_events.iter().any(|t| *t >= 700),
         "a pregnancy-path birth must land after its conception (got {child_events:?})"
@@ -1309,9 +1325,11 @@ fn conception_pipeline_round_trips_with_birth() {
 
     // Determinism: a second identical accelerated run reproduces the same
     // pregnancy→birth lifecycle (same seed → same outcome). Re-anchored to
-    // 4,000 with the P2/P3 re-pacing (the birth lands at 3,500).
+    // 6,000 with the Iteration-334 perception gate (the birth lands at
+    // 4,960 — probe `i335_seed46_pipeline`); both runs must match, which is
+    // the actual invariant being guarded.
     let mut again = build();
-    again.run(4000);
+    again.run(6000);
     let again_children: usize = again
         .marriage_registry
         .marriages
