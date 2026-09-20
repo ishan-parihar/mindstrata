@@ -6,6 +6,26 @@
 use mindstrata_core::fixed::Fixed;
 use serde::{Deserialize, Serialize};
 
+/// Wound severity above which a body bleeds.
+///
+/// Iteration 319. The rule was a bare `0.3`, calibrated when `Combat`-kind
+/// conflicts (severity 0.5) and multi-wound stacking were the bleeding
+/// pathway. The i314 exertion veto ended the stacking — an injured agent is
+/// vetoed from exertion and therefore from further conflict — and `Combat`
+/// fires **0 times** at every horizon (probe `i319_wound_reachability`), so
+/// the reachable wound range became single `Violence` wounds 0.12–0.166 and
+/// two-wound stacks up to 0.295. `0.3` is therefore crossed by **0
+/// agent-ticks** in 12 seeds × 20K/50K and the whole cardiovascular chain
+/// (`blood_volume` → `shock_risk` → the derived-health `shock_penalty`) went
+/// dead — the same AGENTS §4.3 dead-producer class i311/i313 closed.
+///
+/// `0.15` makes a *single* serious beating bleed (just under the 0.166 maximum
+/// reachable single wound) while leaving the common 0.12–0.13 scuffle dry;
+/// measured share above it is 0.06–0.13% of agent-ticks. Chosen on the probe's
+/// threshold table, not guessed: 0.20 requires a two-wound stack (0.02–0.04%
+/// of agent-ticks) and 0.30 is unreachable.
+pub const BLOOD_LOSS_INJURY_THRESHOLD: f64 = 0.15;
+
 /// Cardiovascular state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CardiovascularState {
@@ -46,13 +66,22 @@ impl CardiovascularState {
         nutrition_quality: Fixed,
         age_modifier: Fixed,
     ) {
-        // Blood loss from injury
-        if injury_severity > Fixed::from_f64(0.3) {
+        // Blood loss from injury (threshold reconciled with the post-i314
+        // reachable wound range — see BLOOD_LOSS_INJURY_THRESHOLD).
+        if injury_severity > Fixed::from_f64(BLOOD_LOSS_INJURY_THRESHOLD) {
             let blood_loss = injury_severity * Fixed::from_f64(0.005);
             self.blood_volume = (self.blood_volume - blood_loss).max(Fixed::from_f64(0.3));
         }
-        // Blood volume recovers slowly with good nutrition
-        if injury_severity < Fixed::from_f64(0.2) {
+        // Blood volume recovers slowly with good nutrition — but only while
+        // the body is NOT bleeding. The recovery band used to be `< 0.2`
+        // against a bleed threshold of `0.3`, leaving a dry gap; reconciling
+        // the threshold to 0.15 (i319) made the bands OVERLAP in (0.15, 0.2),
+        // where recovery (`0.5 × 0.002 = 0.001/tick`) exceeds the loss
+        // (`0.16 × 0.005 = 0.0008/tick`) and a serious wound still nets zero
+        // — caught by `blood_loss_threshold_admits_a_serious_wound_but_not_a_scuffle`.
+        // Pinning recovery to the same threshold removes the overlap: a body
+        // at or above it only bleeds, and recovers once the wound drops below.
+        if injury_severity < Fixed::from_f64(BLOOD_LOSS_INJURY_THRESHOLD) {
             let recovery = nutrition_quality * self.recovery_rate * Fixed::from_f64(0.002);
             self.blood_volume = (self.blood_volume + recovery).min(Fixed::ONE);
         }
@@ -249,6 +278,50 @@ mod tests {
             Fixed::from_f64(0.3),
         );
         assert!(cv.blood_volume < Fixed::ONE);
+    }
+
+    /// i319: the blood-loss threshold must be reachable by a real single
+    /// `Violence` wound. A violence wound is `0.12 + aggression × 0.1`
+    /// (`conflict.rs`), and the i319 probe measured a 12-seed maximum of
+    /// **0.1656**; `Combat` (0.5) fires 0 times. The old threshold `0.3` sat
+    /// above the entire reachable range, so the cardiovascular chain was dead
+    /// state. Guard the boundary: a common scuffle stays dry, a serious
+    /// beating bleeds.
+    #[test]
+    fn blood_loss_threshold_admits_a_serious_wound_but_not_a_scuffle() {
+        assert!(
+            BLOOD_LOSS_INJURY_THRESHOLD < 0.1656,
+            "threshold {BLOOD_LOSS_INJURY_THRESHOLD} must be reachable by the measured max single wound 0.1656"
+        );
+        // A serious wound (just under the measured 0.1656 max) bleeds.
+        let mut serious = CardiovascularState::default();
+        serious.tick_update(
+            Fixed::ZERO,
+            Fixed::from_f64(0.16),
+            Fixed::ZERO,
+            Fixed::ONE,
+            Fixed::from_f64(0.3),
+        );
+        assert!(
+            serious.blood_volume < Fixed::ONE,
+            "a serious wound must bleed (blood volume {:?})",
+            serious.blood_volume
+        );
+        // A base-severity `Violence` scuffle (0.12) stays dry, so ordinary
+        // fights do not slowly exsanguinate the village.
+        let mut scuffle = CardiovascularState::default();
+        scuffle.tick_update(
+            Fixed::ZERO,
+            Fixed::from_f64(0.12),
+            Fixed::ZERO,
+            Fixed::ONE,
+            Fixed::from_f64(0.3),
+        );
+        assert_eq!(
+            scuffle.blood_volume,
+            Fixed::ONE,
+            "a base-severity scuffle must not bleed"
+        );
     }
 
     #[test]

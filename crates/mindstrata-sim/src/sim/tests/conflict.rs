@@ -606,11 +606,13 @@ fn violence_records_injury_on_the_substrate() {
     sim.populate();
     let mut max_injury = Fixed::ZERO;
     let mut max_pain = Fixed::ZERO;
+    let mut min_blood = Fixed::ONE;
     for _ in 0..20_000 {
         sim.tick();
         for a in sim.agents.iter() {
             max_injury = max_injury.max(a.embodied.injury);
             max_pain = max_pain.max(a.embodied.nervous.pain.effective_pain());
+            min_blood = min_blood.min(a.embodied.cardiovascular.blood_volume);
         }
     }
     // The recorded violence in this window (see
@@ -623,6 +625,14 @@ fn violence_records_injury_on_the_substrate() {
     assert!(
         max_pain > Fixed::ZERO,
         "a recorded injury must produce acute pain (max pain {max_pain:?})"
+    );
+    // i319: and the wound must reach the cardiovascular channel. Before the
+    // threshold was reconciled with the post-i314 reachable wound range, the
+    // `> 0.3` rule was crossed by 0 agent-ticks and `blood_volume` sat frozen
+    // at 1.0 in every context (probe `i319_wound_reachability`).
+    assert!(
+        min_blood < Fixed::ONE,
+        "a serious wound must bleed (min blood volume {min_blood:?})"
     );
     // i314: the pain is not merely nonzero but reaches the exertion-veto band,
     // so the `exertion_vetoed` guard is reachable in a real run (i312 found the
