@@ -37,6 +37,15 @@ pub fn process_interaction(
     bonding_rate: Fixed,             // §5.1: from SimParameters
     conflict_escalation_rate: Fixed, // §5.1: from SimParameters
     params: &mindstrata_core::parameters::SimParameters,
+    // i330: dense `(from·n + to) → relationships position` index (row stride
+    // `num_agents`). The two `relationships.iter_mut().find(..)` below are
+    // O(R)=O(N²) each, run once per interaction — O(N³)/tick and, after the
+    // read-site fixes, the last supercubic term in the interaction engine
+    // (probe i330: `+interactions` local exponent ≈3.2 at N=192).
+    // Value-identical: first-occurrence lookup (what `find` returns) with a
+    // revalidating fallback to the linear scan.
+    rel_lookup: &[u32],
+    num_agents: usize,
 ) {
     let (trust_delta, affection_delta) = match interaction.kind {
         InteractionKind::Talk => (
@@ -90,10 +99,14 @@ pub fn process_interaction(
     let is_negative = trust_delta < Fixed::ZERO;
 
     // Update the relationship from → to
-    if let Some(rel) = relationships
-        .iter_mut()
-        .find(|r| r.from == interaction.from && r.to == interaction.to)
-    {
+    if let Some(p) = resolve_rel_pos(
+        relationships,
+        rel_lookup,
+        num_agents,
+        interaction.from,
+        interaction.to,
+    ) {
+        let rel = &mut relationships[p];
         rel.trust = (rel.trust + trust_delta).clamp_01();
         rel.affection = (rel.affection + affection_delta).clamp_01();
         rel.last_interaction_tick = tick_u64;
@@ -109,10 +122,14 @@ pub fn process_interaction(
     }
 
     // Reciprocal relationship update (weaker)
-    if let Some(rel) = relationships
-        .iter_mut()
-        .find(|r| r.from == interaction.to && r.to == interaction.from)
-    {
+    if let Some(p) = resolve_rel_pos(
+        relationships,
+        rel_lookup,
+        num_agents,
+        interaction.to,
+        interaction.from,
+    ) {
+        let rel = &mut relationships[p];
         rel.trust = (rel.trust + trust_delta * params.social_reciprocal_factor).clamp_01();
         rel.affection =
             (rel.affection + affection_delta * params.social_reciprocal_factor).clamp_01();
@@ -143,6 +160,38 @@ pub fn process_interaction(
         affection_delta,
         tick,
     });
+}
+
+/// i330: O(1) position of the `from → to` edge in `relationships`, via the
+/// dense caller-built lookup with a **revalidating fallback** to the linear
+/// scan (correct when the lookup is stale — the pass runs on a slice, so
+/// positions are stable, but a mid-tick population change can shift ids).
+/// Records first-occurrence semantics, matching `iter().find(..)` exactly.
+fn resolve_rel_pos(
+    relationships: &[Relationship],
+    rel_lookup: &[u32],
+    num_agents: usize,
+    from: AgentId,
+    to: AgentId,
+) -> Option<usize> {
+    let fi = from.as_u64() as usize;
+    let ti = to.as_u64() as usize;
+    if fi < num_agents && ti < num_agents {
+        if let Some(&p) = rel_lookup.get(fi * num_agents + ti) {
+            if p != u32::MAX {
+                let p = p as usize;
+                if relationships
+                    .get(p)
+                    .is_some_and(|r| r.from == from && r.to == to)
+                {
+                    return Some(p);
+                }
+            }
+        }
+    }
+    relationships
+        .iter()
+        .position(|r| r.from == from && r.to == to)
 }
 
 /// §2.4: Default perception radius — agents can only interact within this Manhattan distance.
@@ -363,9 +412,19 @@ pub fn choose_interaction(
 ///
 /// §5.1: Witness trust deltas scaled by `bonding_rate` (positive) and
 /// `conflict_escalation_rate` (negative) from `SimParameters`.
+/// i330: `rel_lookup` is the dense `(from·n + to) → relationships position`
+/// index built by the caller. The per-witness `iter_mut().find(..)` below was
+/// `O(R)` = `O(N²)` **per witness per interaction**, i.e. `O(I·N·R) ≈ O(N⁴)`
+/// per tick — the dominant term in the whole tick at N=192 (probe i330:
+/// `social_pass` local exponent ≈3.0). With the lookup each witness update is
+/// O(1) indexing. Value-identical: the lookup records the first occurrence of
+/// each pair, exactly the element `find` returns, and the caller falls back to
+/// the linear scan if the lookup is stale (population changed mid-pass).
+/// `relationships` is a slice here, so positions cannot move during the pass.
 pub fn update_witnesses(
     interaction: &Interaction,
     relationships: &mut [Relationship],
+    rel_lookup: &[u32],
     num_agents: usize,
     tick: Tick,
     bonding_rate: Fixed,             // §5.1
@@ -377,25 +436,54 @@ pub fn update_witnesses(
             continue;
         }
 
+        // Neutral interactions have no witness effect — skip before any lookup.
+        let negative = matches!(
+            interaction.kind,
+            InteractionKind::Threaten | InteractionKind::Insult
+        );
+        let positive = matches!(
+            interaction.kind,
+            InteractionKind::Help | InteractionKind::Comfort
+        );
+        if !negative && !positive {
+            continue;
+        }
+
+        // The witness always looks at `(witness → interaction.from)`.
+        let to_u = interaction.from.as_u64();
+        let known = rel_lookup
+            .get(w * num_agents + to_u as usize)
+            .copied()
+            .filter(|&p| p != u32::MAX)
+            .map(|p| p as usize);
+
+        let pos = known
+            .filter(|&p| {
+                relationships
+                    .get(p)
+                    .is_some_and(|r| r.from == witness && r.to == interaction.from)
+            })
+            .or_else(|| {
+                relationships
+                    .iter()
+                    .position(|r| r.from == witness && r.to == interaction.from)
+            });
+
         match interaction.kind {
             // Negative interactions: witnesses reduce trust in perpetrator
             InteractionKind::Threaten | InteractionKind::Insult => {
-                if let Some(rel) = relationships
-                    .iter_mut()
-                    .find(|r| r.from == witness && r.to == interaction.from)
-                {
+                if let Some(p) = pos {
                     let delta = Fixed::from_f64(-0.03) * conflict_escalation_rate;
+                    let rel = &mut relationships[p];
                     rel.trust = (rel.trust + delta).max(Fixed::ZERO);
                     rel.last_interaction_tick = tick.as_u64();
                 }
             }
             // Positive interactions: witnesses increase trust in helper
             InteractionKind::Help | InteractionKind::Comfort => {
-                if let Some(rel) = relationships
-                    .iter_mut()
-                    .find(|r| r.from == witness && r.to == interaction.from)
-                {
+                if let Some(p) = pos {
                     let delta = Fixed::from_f64(0.02) * bonding_rate;
+                    let rel = &mut relationships[p];
                     rel.trust = (rel.trust + delta).clamp_01();
                     rel.last_interaction_tick = tick.as_u64();
                 }
@@ -487,6 +575,13 @@ pub fn system_social_interactions(
     bonding_rate: Fixed,             // §5.1: from SimParameters
     conflict_escalation_rate: Fixed, // §5.1: from SimParameters
     params: &mindstrata_core::parameters::SimParameters,
+    // i330: dense `(from·n + to) → relationships position` index. The three
+    // `relationships.iter().find(..)` scans below (trust, affection, and every
+    // witness update) were O(R)=O(N²) each, per interaction — O(N³)/O(N⁴) per
+    // tick and the dominant term in the tick at N=192. The lookup records the
+    // first occurrence of each pair, the element `find` returns; each site
+    // revalidates and falls back to the linear scan, so behavior is unchanged.
+    rel_lookup: &[u32],
 ) {
     let num_agents = agents.len();
 
@@ -563,16 +658,27 @@ pub fn system_social_interactions(
         ) {
             let target_id = agents[target_idx].0;
 
-            // Find existing relationship or create default
-            let trust = relationships
-                .iter()
-                .find(|r| r.from == *agent_id && r.to == target_id)
-                .map_or(params.social_default_trust, |r| r.trust);
-
-            let affection = relationships
-                .iter()
-                .find(|r| r.from == *agent_id && r.to == target_id)
-                .map_or(params.social_default_affection, |r| r.affection);
+            // Find existing relationship or create default (i330: O(1) via the
+            // dense lookup, with a revalidating fallback to the linear scan).
+            let pair = rel_lookup
+                .get(i * num_agents + target_idx)
+                .copied()
+                .filter(|&p| p != u32::MAX)
+                .map(|p| p as usize)
+                .filter(|&p| {
+                    relationships
+                        .get(p)
+                        .is_some_and(|r| r.from == *agent_id && r.to == target_id)
+                })
+                .or_else(|| {
+                    relationships
+                        .iter()
+                        .position(|r| r.from == *agent_id && r.to == target_id)
+                });
+            let (trust, affection) = pair.map_or(
+                (params.social_default_trust, params.social_default_affection),
+                |p| (relationships[p].trust, relationships[p].affection),
+            );
 
             // §5.4: In-group/out-group — check if both agents share a faction
             let same_faction = same_faction_matrix[i][target_idx];
@@ -602,6 +708,7 @@ pub fn system_social_interactions(
             update_witnesses(
                 &interaction,
                 relationships,
+                rel_lookup,
                 num_agents,
                 tick,
                 bonding_rate,
@@ -617,6 +724,8 @@ pub fn system_social_interactions(
                 bonding_rate,
                 conflict_escalation_rate,
                 params,
+                rel_lookup,
+                num_agents,
             );
         }
     }
@@ -625,6 +734,78 @@ pub fn system_social_interactions(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// i330: the dense `(from·n + to) → position` lookup must be behaviorally
+    /// identical to the linear `find` it replaces — for a populated lookup, for
+    /// the empty fallback, and for a stale lookup that points at the wrong pair.
+    /// Guards the O(N³)→O(N²) rewrite of `process_interaction` and
+    /// `update_witnesses` (probe i330: tick cost at N=192 −47%, local exponent
+    /// 2.87 → 2.42, goldens byte-identical).
+    #[test]
+    fn dense_relationship_lookup_matches_linear_scan() {
+        let mk_rel = |from: u64, to: u64, trust: f64| Relationship {
+            from: AgentId::new(from),
+            to: AgentId::new(to),
+            trust: Fixed::from_f64(trust),
+            affection: Fixed::from_f64(0.5),
+            respect: Fixed::ZERO,
+            fear: Fixed::ZERO,
+            obligation: Fixed::ZERO,
+            last_interaction_tick: 0,
+            kind: RelationshipKind::Stranger,
+            interaction_count: 0,
+            last_positive_tick: 0,
+            last_negative_tick: 0,
+        };
+
+        // (trust[0→1], affection[0→1], count[0→1], trust[1→0], counts of both)
+        let run = |lookup: &[u32]| -> (Fixed, Fixed, u32, Fixed, u32) {
+            let mut relationships = vec![mk_rel(0, 1, 0.4), mk_rel(1, 0, 0.6)];
+            let mut events = Vec::new();
+            process_interaction(
+                &Interaction {
+                    from: AgentId::new(0),
+                    to: AgentId::new(1),
+                    kind: InteractionKind::Help,
+                },
+                &mut relationships,
+                &mut events,
+                Tick::new(7),
+                false,
+                Fixed::ONE,
+                Fixed::ONE,
+                &mindstrata_core::parameters::SimParameters::default(),
+                lookup,
+                2,
+            );
+            (
+                relationships[0].trust,
+                relationships[0].affection,
+                relationships[0].interaction_count,
+                relationships[1].trust,
+                relationships[1].interaction_count,
+            )
+        };
+
+        // Row stride 2, first-occurrence positions — exactly what the sim builds.
+        let mut lookup = vec![u32::MAX; 4];
+        lookup[1] = 0; // (0→1) at position 0
+        lookup[2] = 1; // (1→0) at position 1
+
+        let fast = run(&lookup);
+        let scanned = run(&[]);
+        assert_eq!(fast, scanned, "populated lookup must match the linear scan");
+        assert!(fast.0 > Fixed::from_f64(0.4), "help must raise trust");
+
+        // Stale lookup: the stored position no longer holds this pair, so the
+        // site must revalidate and fall back rather than mutate the wrong row.
+        let stale = vec![u32::MAX, 1, 0, u32::MAX];
+        assert_eq!(
+            run(&stale),
+            scanned,
+            "stale lookup must fall back, not mis-apply"
+        );
+    }
 
     #[test]
     fn help_increases_trust() {
@@ -659,6 +840,8 @@ mod tests {
             Fixed::from_f64(0.05),
             Fixed::from_f64(0.08),
             &mindstrata_core::parameters::SimParameters::default(),
+            &[],
+            2,
         );
 
         assert!(relationships[0].trust > Fixed::from_f64(0.5));
@@ -698,6 +881,8 @@ mod tests {
             Fixed::from_f64(0.05),
             Fixed::from_f64(0.08),
             &mindstrata_core::parameters::SimParameters::default(),
+            &[],
+            2,
         );
 
         assert!(relationships[0].trust < Fixed::from_f64(0.5));
@@ -1166,6 +1351,7 @@ mod tests {
                     params.bonding_rate,
                     params.conflict_escalation_rate,
                     &params,
+                    &[],
                 );
             }
             for ev in &events {
@@ -1269,6 +1455,7 @@ mod tests {
                     params.bonding_rate,
                     params.conflict_escalation_rate,
                     &params,
+                    &[],
                 );
             }
             for ev in &events {
@@ -1384,6 +1571,7 @@ mod tests {
                     params.bonding_rate,
                     params.conflict_escalation_rate,
                     &params,
+                    &[],
                 );
             }
             let bg_involved = events

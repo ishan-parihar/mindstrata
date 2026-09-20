@@ -53,6 +53,17 @@ removes the pattern from future reach — not because it fixed the exponent
 
 ## What remains
 
+> **RESOLVED (i330):** the ≈N^2.8 term was four *more* instances of this same
+> accident class — the `relationships.iter()/iter_mut().find(..)` scans inside
+> `system_social_interactions` / `update_witnesses` / `process_interaction`
+> (O(N³) and O(N⁴), run per interaction) plus the `trust_sync+reset` prepass' per-
+> relationship `TrustNetwork` scans. All removed value-identically; N=192
+> 24 932.1 → 12 908.2 µs/tick (−48%), local α 2.731 → 2.415,
+> `SURVIVING_SUPERQUADRATIC_TERM` → `QUADRATIC_FLOOR_CONFIRMED`. See
+> `i330_supercubic_relationship_scans.md`. The refutation of the four
+> gossip/knowledge sites above still stands — it simply did not generalize to
+> the interaction engine's sites.
+
 The ≈N^2.8 term is **localized but not identified**. Candidate classes to test
 next, in order:
 

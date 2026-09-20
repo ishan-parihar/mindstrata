@@ -561,6 +561,8 @@ mod tests {
                 Fixed::ONE, // bonding_rate
                 Fixed::ONE, // conflict_escalation_rate
                 &mindstrata_core::parameters::SimParameters::default(),
+                &[], // no lookup: exercises the linear-scan fallback
+                2,
             );
             let applied = events
                 .iter()

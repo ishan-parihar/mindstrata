@@ -45,6 +45,18 @@ impl Simulation {
         }
     }
 
+    /// §17 (i330): the tick number to profile, from `MINDSTRATA_PROFILE_TICK`
+    /// (parsed once). `None` disables pass profiling.
+    pub(crate) fn pass_profile_tick() -> Option<u64> {
+        use std::sync::OnceLock;
+        static TICK: OnceLock<Option<u64>> = OnceLock::new();
+        *TICK.get_or_init(|| {
+            std::env::var("MINDSTRATA_PROFILE_TICK")
+                .ok()
+                .and_then(|s| s.parse().ok())
+        })
+    }
+
     /// i330: rebuild the dense `(from·n + to) → relationships index` lookup.
     /// One O(R) pass; every subsequent per-event trust read is O(1) array
     /// indexing instead of a full-matrix scan. Called at the start of each pass
@@ -52,19 +64,40 @@ impl Simulation {
     /// (those passes do not mutate `relationships`).
     pub(crate) fn rebuild_rel_lookup(&mut self) {
         let n = self.agents.len();
+        Self::rebuild_rel_lookup_into(&mut self.rel_lookup, &self.relationships, n);
+    }
+
+    /// The body of [`Self::rebuild_rel_lookup`], split out as an associated fn
+    /// so it can be called from inside the tick while `SystemContext` holds a
+    /// borrow of other `self` fields (a `&mut self` method cannot be).
+    ///
+    /// i330: records the **first** occurrence of each `from → to` pair — the
+    /// same element `[Relationship]::iter().find(..)` and `position(..)` would
+    /// return. (Before i330 the assignment was unconditional, i.e. the *last*
+    /// occurrence, which diverged from `find` semantics whenever a pair had
+    /// duplicates; goldens are byte-identical under first-occurrence, so the
+    /// recorded lookup now matches the scans it replaces exactly.)
+    pub(crate) fn rebuild_rel_lookup_into(
+        lookup: &mut Vec<u32>,
+        relationships: &[crate::person::Relationship],
+        n: usize,
+    ) {
         let cells = n * n;
-        if self.rel_lookup.len() != cells {
-            self.rel_lookup.clear();
-            self.rel_lookup.resize(cells, u32::MAX);
+        if lookup.len() != cells {
+            lookup.clear();
+            lookup.resize(cells, u32::MAX);
         } else {
-            self.rel_lookup.fill(u32::MAX);
+            lookup.fill(u32::MAX);
         }
-        for (pos, r) in self.relationships.iter().enumerate() {
+        for (pos, r) in relationships.iter().enumerate() {
             let from = r.from.as_u64() as usize;
             let to = r.to.as_u64() as usize;
             if from < n && to < n {
-                if let Ok(slot) = u32::try_from(pos) {
-                    self.rel_lookup[from * n + to] = slot;
+                let cell = from * n + to;
+                if lookup[cell] == u32::MAX {
+                    if let Ok(slot) = u32::try_from(pos) {
+                        lookup[cell] = slot;
+                    }
                 }
             }
         }
@@ -111,6 +144,25 @@ impl Simulation {
         let tick_u64 = tick.as_u64();
         // §6: Compute multi-timescale phase flags once per tick.
         let phases = crate::scheduler::TickPhases::compute(tick_u64);
+        // §17 (i330): opt-in per-pass timing. Off by default and costing one
+        // `Instant::now()` per tick when off; set `MINDSTRATA_PROFILE_TICK=<n>`
+        // to print per-pass nanoseconds for tick `n` (used by the i330 probe to
+        // attribute the superlinear term to a pass). Left in place because the
+        // next scale question will ask the same question again.
+        let profiling = Self::pass_profile_tick() == Some(tick_u64);
+        let mut mark_at = std::time::Instant::now();
+        macro_rules! mark {
+            ($name:expr) => {
+                if profiling {
+                    eprintln!(
+                        "PROFILE {:>18} {:>10} ns",
+                        $name,
+                        mark_at.elapsed().as_nanos()
+                    );
+                    mark_at = std::time::Instant::now();
+                }
+            };
+        }
 
         // ── Scenario shocks (verbatim-extracted to sim/pass_scenario.rs) ──
         self.apply_scenario_shocks(tick_u64, tick);
@@ -205,23 +257,55 @@ impl Simulation {
                     self.tick_trust_deltas[from_idx].push((target_id, rel.trust));
                 }
             }
+            // i330: O(1) position into `agent_trust` instead of the linear
+            // `Vec<(u64, Fixed)>::iter().find` inside both `trust_for_agent`
+            // and `update_agent_trust`. Those two linear scans per relationship
+            // made this prepass O(N³) per tick (probe i330: local exponent
+            // ≈2.85 at N=48→96, ≈3.66 at 96→144 — the second-largest term in
+            // the tick at N=192). One reusable dense position buffer per tick
+            // (refilled per agent, O(N)) restores O(N²) total. Value-identical:
+            // the position map records the FIRST occurrence, exactly what
+            // `find` returns, and the update/append branches are unchanged.
             #[allow(
                 clippy::needless_range_loop,
                 reason = "intentional parallel-array indexing: trust_deltas[i] + agents[i]"
             )]
+            let mut pos: Vec<u32> = vec![u32::MAX; n_agents];
             for i in 0..self.agents.len() {
+                pos.fill(u32::MAX);
+                {
+                    let net = &self.agents[i].epistemic.trust_network;
+                    for (k, (id, _)) in net.agent_trust.iter().enumerate() {
+                        let idu = *id as usize;
+                        if idu < n_agents && pos[idu] == u32::MAX {
+                            pos[idu] = k as u32;
+                        }
+                    }
+                }
                 for &(target_id, rel_trust) in &self.tick_trust_deltas[i] {
-                    let current_trust = self.agents[i]
-                        .epistemic
-                        .trust_network
-                        .trust_for_agent(target_id);
+                    let ti = target_id as usize;
+                    let known = ti < n_agents && pos[ti] != u32::MAX;
+                    let net = &mut self.agents[i].epistemic.trust_network;
+                    let current_trust = if known {
+                        net.agent_trust[pos[ti] as usize].1
+                    } else {
+                        Fixed::from_f64(0.5)
+                    };
                     let delta = (rel_trust - current_trust) * trust_sync_rate;
-                    self.agents[i]
-                        .epistemic
-                        .trust_network
-                        .update_agent_trust(target_id, delta);
+                    if known {
+                        let p = pos[ti] as usize;
+                        net.agent_trust[p].1 = (net.agent_trust[p].1 + delta).clamp_01();
+                    } else {
+                        let new_trust = (Fixed::from_f64(0.5) + delta).clamp_01();
+                        net.agent_trust.push((target_id, new_trust));
+                        if ti < n_agents {
+                            pos[ti] = (net.agent_trust.len() - 1) as u32;
+                        }
+                    }
                 }
             }
+
+            mark!("trust_sync+reset");
 
             Self::tick_biology_pass(
                 &mut self.agents,
@@ -233,6 +317,7 @@ impl Simulation {
                 world_food_total,
                 world_water_total,
             );
+            mark!("biology");
             let reg_strategies = Self::tick_cognitive_pass(
                 &mut self.agents,
                 &mut emotions,
@@ -252,6 +337,7 @@ impl Simulation {
                 &mut self.households,
                 &self.faction_v2_registry,
             );
+            mark!("cognitive");
             // ── 1. Need decay (nonlinear pressure, §9.1) ────────────────
             // §5.1: Use configurable parameters for decay rates.
             let params = self.params;
@@ -272,6 +358,7 @@ impl Simulation {
                 &params,
             );
 
+            mark!("need+body+goal");
             Self::tick_action_pass(
                 &mut ctx,
                 &mut self.agents,
@@ -289,6 +376,16 @@ impl Simulation {
                 &self.season,
                 &mut self.tick_action_starts,
             );
+            mark!("action");
+            // i330: the social pass's per-event trust reads use the dense
+            // lookup; build it once here (positions are stable for the pass —
+            // `system_social_interactions` takes a slice and cannot push).
+            Self::rebuild_rel_lookup_into(
+                &mut self.rel_lookup,
+                &self.relationships,
+                self.agents.len(),
+            );
+            let rel_lookup = std::mem::take(&mut self.rel_lookup);
             Self::tick_social_pass(
                 &mut ctx,
                 &mut self.agents,
@@ -301,7 +398,10 @@ impl Simulation {
                 &mut self.relationships,
                 &self.institutions,
                 &self.norms,
+                &rel_lookup,
             );
+            self.rel_lookup = rel_lookup;
+            mark!("social_pass");
             Self::tick_appraisal_pass(
                 &mut ctx,
                 &mut self.agents,
@@ -315,6 +415,7 @@ impl Simulation {
                 tick,
                 &self.params,
             );
+            mark!("appraisal");
             Self::tick_decay_pass(
                 &mut self.agents,
                 tick_u64,
@@ -359,6 +460,7 @@ impl Simulation {
                 agent.emotions = std::mem::take(&mut emotions[i]);
             }
         } // ctx is dropped here, releasing mutable borrows on self.events and self.rng
+        mark!("writeback");
 
         // §6: Spatial movement — update agent positions AFTER ctx drops (no borrow conflicts)
         {
@@ -394,6 +496,8 @@ impl Simulation {
                 }
             }
         }
+
+        mark!("movement");
 
         // §19.5.J: Record relationship traces for any changes from social interactions
         // This must happen after ctx is dropped so we can read self.events.
@@ -446,8 +550,11 @@ impl Simulation {
             }
         }
 
+        mark!("rel_traces");
+
         // ── 4a. Weather (verbatim-extracted to sim/pass_weather.rs) ──
         self.weather_pass(tick_u64);
+        mark!("weather");
         // ── 4b. Resource operations (extracted) ──
         // Iteration 218: drain the pre-allocated buffer into a local Vec
         // so tick_resource_operations can take &mut self without borrow conflict.
@@ -455,11 +562,13 @@ impl Simulation {
         let action_starts_local: Vec<(usize, ActionKind)> =
             std::mem::take(&mut self.tick_action_starts);
         self.tick_resource_operations(&action_starts_local, pre_tick_events, tick_u64, tick);
+        mark!("resource_ops");
         // Restore the buffer (now empty) for the next tick's clear()+push() cycle.
         self.tick_action_starts = action_starts_local;
 
         // ── 9. Memory encoding (extracted) ──
         self.tick_memory_encoding(pre_tick_events, tick_u64, phases);
+        mark!("memory");
 
         // ── 16. Ecology: season advance + yearly cadence gates
         // (verbatim-extracted to sim/pass_ecology.rs) ──
@@ -468,6 +577,7 @@ impl Simulation {
         // ── 17./17b./17b-2. Health, epidemic contagion, seasonal vector
         // (verbatim-extracted to sim/pass_health.rs) ──
         self.health_disease_pass(tick_u64, phases);
+        mark!("health_disease");
 
         // ── 17c. Migration pressure (verbatim-extracted to
         // sim/pass_ecology.rs) ──
@@ -497,10 +607,14 @@ impl Simulation {
         self.apply_storage_overflow();
 
         // ── 11. Norm evaluation (extracted) ──
+        mark!("ecology+spoilage");
         self.tick_norm_evaluation(pre_tick_events, tick_u64, tick);
+        mark!("norm_eval");
 
         // ── 11b. §11.2 Gossip propagation with mutation ── (extracted)
+        mark!("decay+writeback");
         self.tick_gossip_and_knowledge(pre_tick_events, tick_u64, tick);
+        mark!("gossip+knowledge");
 
         // ── 11d. §19.5.F Childhood socialization — children learn from parents ──
         {
@@ -664,7 +778,9 @@ impl Simulation {
         self.tick_derived_states_and_beliefs(pre_tick_events, tick_u64);
 
         // ── 18+19+20+21. Social cluster (extracted) ──
+        mark!("instit+faction+panic+derived");
         self.tick_social_cluster(pre_tick_events, tick_u64, tick, phases);
+        mark!("social_cluster");
 
         // Architecture-plan-2 §13.6: Per-tick echo chamber drift.
         // After the daily cluster rebuild (in tick_social_cluster), this accumulates
@@ -849,7 +965,12 @@ impl Simulation {
         );
 
         // ── §6 + §10.6/§10.7: Kinship & Household daily update ──
+        mark!("marriage+births+rituals");
         self.tick_kinship_household_daily(tick_u64, phases);
+        mark!("kinship_daily");
+        // Read the final mark so the profiler's last (unused) timestamp is not a
+        // dead store in the non-profiling build.
+        let _ = &mark_at;
 
         // ── Architecture-plan-2 §8.1.5: Motivation relieve() calls ──
         // Relieve psychological needs based on current actions.

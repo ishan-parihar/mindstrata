@@ -19,7 +19,32 @@ impl Simulation {
         relationships: &mut [crate::person::Relationship],
         institutions_reg: &[crate::institutions::Institution],
         norms_reg: &crate::norms::NormRegistry,
+        // i330: dense `(from·n + to) → relationships position` lookup, built by
+        // the caller from the pre-pass matrix. The per-speech-act credibility
+        // read below was a linear `relationships.iter().find(..)` per event —
+        // O(E·R) = O(N³) per tick and the largest single term in the tick at
+        // N=192 (probe i330). `system_social_interactions` takes a slice, so it
+        // cannot push: positions are stable for the whole pass.
+        rel_lookup: &[u32],
     ) {
+        // i330 sub-profile: split the pass into its two halves (the interaction
+        // engine vs. the speech-act/courtship wiring above it) when the tick is
+        // being profiled. Off by default.
+        let profiling = Self::pass_profile_tick() == Some(tick_u64);
+        let mut mark_at = std::time::Instant::now();
+        macro_rules! mark {
+            ($name:expr) => {
+                if profiling {
+                    eprintln!(
+                        "PROFILE {:>18} {:>10} ns",
+                        $name,
+                        mark_at.elapsed().as_nanos()
+                    );
+                    mark_at = std::time::Instant::now();
+                }
+            };
+        }
+
         // ── 5. Social interactions ────────────────────────────────
         {
             // §2.4: Pass agent positions for proximity-based social interactions
@@ -210,7 +235,10 @@ impl Simulation {
                 params.bonding_rate,
                 params.conflict_escalation_rate,
                 params,
+                rel_lookup,
             );
+
+            mark!("  +interactions");
 
             // §8.1.11: Record speech acts — the structured linguistic frame
             // on the interaction system just run. Every InteractionOccurred
@@ -266,10 +294,31 @@ impl Simulation {
                     // Speaker's current trust in the listener — computed
                     // once, reused by both the courtship wiring below and
                     // the speech-act credibility.
-                    let credibility = relationships
-                        .iter()
-                        .find(|r| r.from.as_u64() == from_u && r.to.as_u64() == to_u)
-                        .map_or(Fixed::from_f64(0.5), |r| r.trust);
+                    let credibility = {
+                        let n_lk = agents.len();
+                        let from_i = from_u as usize;
+                        let to_i = to_u as usize;
+                        let pos = if from_i < n_lk && to_i < n_lk {
+                            rel_lookup.get(from_i * n_lk + to_i).copied()
+                        } else {
+                            None
+                        };
+                        let hit = pos
+                            .filter(|&p| p != u32::MAX)
+                            .and_then(|p| relationships.get(p as usize))
+                            .filter(|r| r.from.as_u64() == from_u && r.to.as_u64() == to_u);
+                        // Fallback keeps correctness if the lookup is stale
+                        // (e.g. a mid-tick population change).
+                        hit.map_or_else(
+                            || {
+                                relationships
+                                    .iter()
+                                    .find(|r| r.from.as_u64() == from_u && r.to.as_u64() == to_u)
+                                    .map_or(Fixed::from_f64(0.5), |r| r.trust)
+                            },
+                            |r| r.trust,
+                        )
+                    };
                     let kind_is_hostile = matches!(
                         kind,
                         mindstrata_core::event::InteractionKind::Threaten
@@ -514,5 +563,9 @@ impl Simulation {
                 }
             }
         }
+        mark!("  +speech_acts");
+        // Read the final mark so the profiler's last (unused) timestamp is not a
+        // dead store in the non-profiling build.
+        let _ = &mark_at;
     }
 }
