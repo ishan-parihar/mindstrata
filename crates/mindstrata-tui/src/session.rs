@@ -51,6 +51,8 @@ pub enum View {
     Dossier,
     /// The i301 asset-viewer panel (Iteration 317).
     Assets,
+    /// The DC-4(c) scene-graph preview over the same document (Iteration 325).
+    Scene,
 }
 
 impl View {
@@ -66,6 +68,7 @@ impl View {
             View::Chronicle => "Chronicle",
             View::Dossier => "Dossier",
             View::Assets => "Assets",
+            View::Scene => "Scene",
         }
     }
 }
@@ -139,7 +142,8 @@ impl UiState {
             View::Trends => View::Chronicle,
             View::Chronicle => View::Dossier,
             View::Dossier => View::Assets,
-            View::Assets => View::Dashboard,
+            View::Assets => View::Scene,
+            View::Scene => View::Dashboard,
         };
     }
 

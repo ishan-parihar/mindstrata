@@ -44,6 +44,8 @@ pub enum Primitive {
         size: f64,
         /// Fill colour (kind-derived).
         color: &'static str,
+        /// Single-character kind marker (the ASCII fallback glyph).
+        glyph: char,
         /// Text label drawn inside the square.
         label: String,
     },
@@ -57,6 +59,8 @@ pub enum Primitive {
         r: f64,
         /// Fill colour (polity-derived).
         color: &'static str,
+        /// Polity index (the ASCII marker); `None` → unassigned.
+        polity: Option<usize>,
     },
     /// A caption line (meta / diffusion legend).
     Caption {
@@ -208,6 +212,7 @@ fn site_primitive(s: &SiteAsset) -> Primitive {
         y: MARGIN + s.position.1 as f64 * TILE,
         size: TILE,
         color: site_color(&s.kind),
+        glyph: site_glyph(&s.kind),
         label: format!("{} {}", site_glyph(&s.kind), s.name),
     }
 }
@@ -218,7 +223,97 @@ fn agent_primitive(a: &AgentAsset) -> Primitive {
         cy: MARGIN + (a.position.1 as f64 + 0.5) * TILE,
         r: TILE * 0.28,
         color: polity_color(a.polity),
+        polity: a.polity,
     }
+}
+
+/// Tile cell for an unassigned agent (no polity).
+const AGENT_NEUTRAL_CELL: char = '☐';
+
+/// The ASCII face of the scene: a tile grid + a legend. This is the spike's
+/// terminal-observable form (SVG needs a browser; a TUI needs text), and it is
+/// a pure function of the scene → of the document, so it is deterministic.
+///
+/// Layer order mirrors the SVG: sites first, agents paint over them. The grid
+/// is derived from the scene extents, so it is bounded by the world, never by
+/// history.
+#[must_use]
+pub fn render_ascii(scene: &Scene) -> String {
+    // Grid extents from the primitive coordinates (sites are top-left anchored
+    // at MARGIN + tile·TILE; agents at the tile centre).
+    let mut cols = 0usize;
+    let mut rows = 0usize;
+    for p in &scene.primitives {
+        match p {
+            Primitive::Site { x, y, .. } => {
+                cols = cols.max((((x - MARGIN) / TILE).round() as usize) + 1);
+                rows = rows.max((((y - MARGIN) / TILE).round() as usize) + 1);
+            }
+            Primitive::Agent { cx, cy, .. } => {
+                cols = cols.max((((cx - MARGIN) / TILE - 0.5).round() as usize) + 1);
+                rows = rows.max((((cy - MARGIN) / TILE - 0.5).round() as usize) + 1);
+            }
+            Primitive::Caption { .. } => {}
+        }
+    }
+
+    let mut grid = vec![vec![' '; cols]; rows];
+    let mut site_count = 0usize;
+    let mut agent_by_polity: std::collections::BTreeMap<usize, usize> =
+        std::collections::BTreeMap::new();
+    let mut neutral_agents = 0usize;
+    for p in &scene.primitives {
+        match p {
+            Primitive::Site { x, y, glyph, .. } => {
+                let c = ((x - MARGIN) / TILE).round() as usize;
+                let r = ((y - MARGIN) / TILE).round() as usize;
+                if let Some(row) = grid.get_mut(r) {
+                    if let Some(cell) = row.get_mut(c) {
+                        *cell = *glyph;
+                        site_count += 1;
+                    }
+                }
+            }
+            Primitive::Agent { cx, cy, polity, .. } => {
+                let c = ((cx - MARGIN) / TILE - 0.5).round() as usize;
+                let r = ((cy - MARGIN) / TILE - 0.5).round() as usize;
+                let mark = match polity {
+                    Some(i) => char::from_digit((i % 10) as u32, 10).unwrap_or('?'),
+                    None => AGENT_NEUTRAL_CELL,
+                };
+                if let Some(row) = grid.get_mut(r) {
+                    if let Some(cell) = row.get_mut(c) {
+                        *cell = mark;
+                    }
+                }
+                match polity {
+                    Some(i) => *agent_by_polity.entry(*i % 10).or_insert(0) += 1,
+                    None => neutral_agents += 1,
+                }
+            }
+            Primitive::Caption { .. } => {}
+        }
+    }
+
+    let mut out = String::new();
+    let _ = writeln!(out, "Scene preview — {cols}×{rows} tiles (i301 document)");
+    for row in &grid {
+        let line: String = row.iter().collect();
+        let _ = writeln!(out, "  {line}");
+    }
+    let _ = writeln!(
+        out,
+        "\n  legend: f/w/t/m/h/c/b = sites ({site_count} placed)"
+    );
+    let mut legend = String::new();
+    for (polity, count) in &agent_by_polity {
+        let _ = write!(legend, " [{polity}]×{count}");
+    }
+    if neutral_agents > 0 {
+        let _ = write!(legend, " [{AGENT_NEUTRAL_CELL}]×{neutral_agents}");
+    }
+    let _ = writeln!(out, "  agents:{legend}");
+    out
 }
 
 /// Serialize the scene to SVG. Pure function of the scene → of the document,
@@ -244,6 +339,7 @@ pub fn to_svg(scene: &Scene) -> String {
                 size,
                 color,
                 label,
+                ..
             } => {
                 let _ = writeln!(
                     out,
@@ -259,7 +355,9 @@ pub fn to_svg(scene: &Scene) -> String {
                     escape(label)
                 );
             }
-            Primitive::Agent { cx, cy, r, color } => {
+            Primitive::Agent {
+                cx, cy, r, color, ..
+            } => {
                 let _ = writeln!(
                     out,
                     "<circle cx=\"{cx:.1}\" cy=\"{cy:.1}\" r=\"{r:.1}\" fill=\"{color}\" \
@@ -427,5 +525,36 @@ mod tests {
     fn unknown_site_kind_falls_back_neutral() {
         assert_eq!(site_glyph("Spaceport"), '?');
         assert_eq!(site_color("Spaceport"), "#475569");
+    }
+
+    #[test]
+    fn ascii_render_places_sites_and_polity_markers() {
+        let scene = build_scene(&doc());
+        let grid = render_ascii(&scene);
+        assert!(
+            grid.contains("2 sites (2 placed)") || grid.contains("(2 placed)"),
+            "{grid}"
+        );
+        // Site glyph at (3,4) and (0,0): Farm glyph and Well glyph appear.
+        assert!(grid.contains('f'), "{grid}");
+        assert!(grid.contains('w'), "{grid}");
+        // Agent 0 is polity 0 → digit '0'; agent 1 unassigned → neutral cell.
+        assert!(grid.contains('0'), "{grid}");
+        assert!(grid.contains(AGENT_NEUTRAL_CELL), "{grid}");
+        assert!(grid.contains("[0]×1"), "{grid}");
+        assert!(render_ascii(&scene) == grid, "deterministic");
+    }
+
+    #[test]
+    fn ascii_render_is_zero_at_zero() {
+        let mut d = doc();
+        d.world.sites.clear();
+        d.agents.clear();
+        let scene = build_scene(&d);
+        let grid = render_ascii(&scene);
+        assert!(grid.contains("(0 placed)"), "{grid}");
+        // No agent markers, and an empty agent legend roster.
+        assert!(!grid.contains("[0]×"), "{grid}");
+        assert!(!grid.contains(AGENT_NEUTRAL_CELL), "{grid}");
     }
 }

@@ -258,7 +258,7 @@ fn draw(frame: &mut Frame, sim: &Simulation, ui: &UiState) {
     let command = ui.last_command.as_deref().unwrap_or("—");
     let footer = format!(
         " selected: {selected} ({sel_name})  |  steps: {}  |  ↑↓ select · space run · n step · \
-         t view · a assets · / find · v dossier · w/e/d/r/s/p command · x clear  |  last: {command}",
+         t view · a assets/scene · / find · v dossier · w/e/d/r/s/p command · x clear  |  last: {command}",
         ui.manual_steps,
     );
     frame.render_widget(
@@ -317,6 +317,12 @@ fn render_view(sim: &Simulation, ui: &UiState) -> String {
             Some(doc) => render_asset_viewer(doc),
             None => "Asset Viewer — press [a] to capture the i301 asset document\n\
                      (schema v1: world · polities · culture diffusion · annals)"
+                .into(),
+        },
+        View::Scene => match &ui.assets {
+            Some(doc) => mindstrata_tui::scene::render_ascii(&mindstrata_tui::build_scene(doc)),
+            None => "Scene preview — press [a] to capture the i301 asset document\n\
+                     (DC-4(c) spike: same document → scene graph → tile grid)"
                 .into(),
         },
         View::Map => {

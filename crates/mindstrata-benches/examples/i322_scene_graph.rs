@@ -18,7 +18,7 @@
 
 use mindstrata_sim::sim::assets::export_world_assets;
 use mindstrata_sim::sim::{SimConfig, Simulation};
-use mindstrata_tui::scene::{build_scene, count_agents, count_sites, to_svg};
+use mindstrata_tui::scene::{build_scene, count_agents, count_sites, render_ascii, to_svg};
 
 fn main() {
     println!("i322 DC-4(c) graphical-shell spike — asset document → scene graph → SVG");
@@ -71,6 +71,11 @@ fn main() {
     let out_path = std::path::Path::new("target/i322_scene_graph.svg");
     let wrote = std::fs::write(out_path, &svg).is_ok();
 
+    // The TUI-observable face (i325): the same scene as a tile grid.
+    let ascii = render_ascii(&scene);
+    let ascii_deterministic = ascii == render_ascii(&build_scene(&doc));
+    let ascii_covers = ascii.contains(&format!("({} placed)", doc.world.sites.len()));
+
     println!(
         "  document: schema v{} · {} sites · {} agents ({} in a polity) · {} memes",
         doc.schema_version,
@@ -100,12 +105,18 @@ fn main() {
             "svg well-formed",
             svg.starts_with("<svg") && svg.trim_end().ends_with("</svg>"),
         ),
+        ("ascii deterministic", ascii_deterministic),
+        ("ascii site coverage", ascii_covers),
     ];
     for (name, ok) in &checks {
         println!("  {:<22} {}", name, if *ok { "PASS" } else { "FAIL" });
     }
     println!("\n--- svg header ---");
     for line in svg.lines().take(4) {
+        println!("{line}");
+    }
+    println!("\n--- ascii scene (the TUI face) ---");
+    for line in ascii.lines().take(20) {
         println!("{line}");
     }
 

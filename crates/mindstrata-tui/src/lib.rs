@@ -23,7 +23,7 @@ pub use render::{
     render_psychology_inspector, render_relationship_view, render_theology_dashboard,
     render_world_map, AgentMarker, DashboardConfig,
 };
-pub use scene::{build_scene, to_svg, Primitive, Scene};
+pub use scene::{build_scene, render_ascii, to_svg, Primitive, Scene};
 pub use session::{
     key_to_command, mark_selected_agent_row, SearchFailure, UiState, View, KEYBIND_HELP,
 };
@@ -149,8 +149,11 @@ mod tests {
         // Iteration 264: the dossier pane.
         assert_eq!(ui.view, View::Dossier);
         ui.cycle_view();
-        // Iteration 317 (DC-4a): the asset-viewer panel closes the cycle.
+        // Iteration 317 (DC-4a): the asset-viewer panel joins the cycle.
         assert_eq!(ui.view, View::Assets);
+        ui.cycle_view();
+        // Iteration 325 (DC-4c): the scene-graph preview closes the cycle.
+        assert_eq!(ui.view, View::Scene);
         ui.cycle_view();
         assert_eq!(ui.view, View::Dashboard);
     }
