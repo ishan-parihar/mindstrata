@@ -884,13 +884,18 @@ impl Simulation {
             if phases.is_daily {
                 let adult_age = Fixed::from_f64(16.0);
                 let mut max_relatedness = Fixed::ZERO;
+                // i320: one BFS from i yields the coefficient to every j, so the
+                // old O(N²) single-pair calls (each re-walking the graph and
+                // allocating a HashSet/VecDeque) collapse to O(N) BFS here. The
+                // BFS is query-independent (no early exit, expand-once), so the
+                // per-j values — and thus the max — are bit-identical.
+                let coeffs = kinship_graph.transitive_coefficients(i, tick_agent_ages.len());
                 for (j, age) in tick_agent_ages.iter().enumerate() {
                     if j == i || *age < adult_age {
                         continue;
                     }
-                    let coeff = kinship_graph.transitive_coefficient(i, j);
-                    if coeff > max_relatedness {
-                        max_relatedness = coeff;
+                    if coeffs[j] > max_relatedness {
+                        max_relatedness = coeffs[j];
                     }
                 }
                 agent.attraction.update_kinship_penalty(max_relatedness);
@@ -910,21 +915,26 @@ impl Simulation {
                     }
                 }
             }
+        }
 
-            // §5.1: Legacy relationship mean reversion — trust drifts toward a
-            // neutral baseline so it cannot pin at 1.0 for every pair. Without
-            // this, positive interactions ratcheted all trust to 1.0 once agents
-            // were healthy/wealthy, erasing the differentiation the witness
-            // system produces. `relationship_dormant_decay` was previously dead
-            // parameter. Mean reversion: trust -= (trust - 0.5) * decay per day.
-            if tick_u64.is_multiple_of(144) && params.relationship_dormant_decay > Fixed::ZERO {
-                for rel in relationships.iter_mut() {
-                    if rel.from == AgentId::new(i as u64) {
-                        let drift =
-                            (rel.trust - Fixed::from_f64(0.5)) * params.relationship_dormant_decay;
-                        rel.trust = (rel.trust - drift).clamp_01();
-                    }
-                }
+        // §5.1: Legacy relationship mean reversion — trust drifts toward a
+        // neutral baseline so it cannot pin at 1.0 for every pair. Without
+        // this, positive interactions ratcheted all trust to 1.0 once agents
+        // were healthy/wealthy, erasing the differentiation the witness
+        // system produces. `relationship_dormant_decay` was previously dead
+        // parameter. Mean reversion: trust -= (trust - 0.5) * decay per day.
+        //
+        // i320: hoisted out of the per-agent loop. It used to sit inside
+        // `for i in 0..agents.len()` and re-scan the ENTIRE matrix filtering
+        // `rel.from == i` — O(N·R)=O(N³) on every daily boundary tick (the
+        // i294 accident class). Each row's drift reads only that row's own
+        // trust, and the old `from == i` filter visits every row exactly once
+        // across the i-loop, so one O(R) pass is value-for-value identical
+        // (no accumulation, no order dependence, no RNG).
+        if tick_u64.is_multiple_of(144) && params.relationship_dormant_decay > Fixed::ZERO {
+            for rel in relationships.iter_mut() {
+                let drift = (rel.trust - Fixed::from_f64(0.5)) * params.relationship_dormant_decay;
+                rel.trust = (rel.trust - drift).clamp_01();
             }
         }
 

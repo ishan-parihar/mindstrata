@@ -140,9 +140,24 @@ impl KinshipGraph {
     /// Panics if `a == b`.
     pub fn transitive_coefficient(&self, a: usize, b: usize) -> Fixed {
         debug_assert_ne!(a, b, "transitive_coefficient called with a == b");
+        let n = std::cmp::max(a, b) + 1;
+        self.transitive_coefficients(a, n)[b]
+    }
 
+    /// Transitive kinship coefficients from `a` to every agent index in
+    /// `0..n_agents`, via a single BFS.
+    ///
+    /// Equivalent to calling [`Self::transitive_coefficient`] once per target,
+    /// but in one traversal: the BFS is query-independent (it never terminates
+    /// early on `b` and each node is expanded at most once), so the per-target
+    /// value is unchanged. Callers that need "max relatedness to any adult"
+    /// should use this instead of N single-pair calls — the per-call form
+    /// re-walks the graph and allocates a `HashSet`/`VecDeque` each time
+    /// (O(N²) allocations per call site). Entry `a` is `1.0`; unreached agents
+    /// are `Fixed::ZERO`.
+    pub fn transitive_coefficients(&self, a: usize, n_agents: usize) -> Vec<Fixed> {
         // BFS from agent a, tracking maximum coefficient seen for each reachable agent.
-        let mut best: Vec<Fixed> = vec![Fixed::ZERO; std::cmp::max(a, b) + 2];
+        let mut best: Vec<Fixed> = vec![Fixed::ZERO; n_agents];
         let mut visited: HashSet<usize> = HashSet::new();
         let mut queue: VecDeque<(usize, Fixed)> = VecDeque::new();
 
@@ -151,9 +166,10 @@ impl KinshipGraph {
         queue.push_back((a, Fixed::ONE));
 
         while let Some((current, current_coeff)) = queue.pop_front() {
-            // If we reached b, update best
-            if current == b && current_coeff > best[b] {
-                best[b] = current_coeff;
+            // Record the coefficient for every node we actually reach (the
+            // single-pair form only recorded it for its query target).
+            if current < n_agents && current_coeff > best[current] {
+                best[current] = current_coeff;
             }
 
             // Expand neighbors
@@ -170,15 +186,14 @@ impl KinshipGraph {
                 if neighbor_coeff > Fixed::from_f64(0.001) {
                     queue.push_back((edge.to, neighbor_coeff));
 
-                    // Update best if this is b
-                    if edge.to == b && neighbor_coeff > best[b] {
-                        best[b] = neighbor_coeff;
+                    if edge.to < n_agents && neighbor_coeff > best[edge.to] {
+                        best[edge.to] = neighbor_coeff;
                     }
                 }
             }
         }
 
-        best[b]
+        best
     }
 
     /// Check if two agents are close kin (above incest taboo threshold).
@@ -410,5 +425,46 @@ mod tests {
         // No self-edges.
         assert_eq!(g.link_between(0, 0), None);
         assert_eq!(g.link_between(1, 1), None);
+    }
+
+    #[test]
+    fn transitive_coefficients_match_single_pair_calls() {
+        // i320: the batched single-BFS form must agree with the per-pair form
+        // for every ordered pair — the bit-identity claim the daily
+        // max-relatedness scan relies on to replace O(N²) calls with one BFS.
+        let mut g = KinshipGraph::default();
+        // A small family: 0-1 siblings (via a shared parent 2), 1-3 parent,
+        // 3-4 parent, plus an unrelated 5.
+        // ParentChild edges are stored in BOTH directions in the real sim, so
+        // the BFS (which is directional) can walk them either way.
+        g.add_link(2, 0, KinshipLink::ParentChild, 0);
+        g.add_link(0, 2, KinshipLink::ParentChild, 0);
+        g.add_link(2, 1, KinshipLink::ParentChild, 0);
+        g.add_link(1, 2, KinshipLink::ParentChild, 0);
+        g.add_link(1, 3, KinshipLink::ParentChild, 0);
+        g.add_link(3, 1, KinshipLink::ParentChild, 0);
+        g.add_link(3, 4, KinshipLink::ParentChild, 0);
+        g.add_link(4, 3, KinshipLink::ParentChild, 0);
+        let n = 6;
+        for a in 0..n {
+            let batched = g.transitive_coefficients(a, n);
+            for b in 0..n {
+                if a == b {
+                    continue;
+                }
+                assert_eq!(
+                    batched[b],
+                    g.transitive_coefficient(a, b),
+                    "batched coefficient disagrees for a={a} b={b}"
+                );
+            }
+        }
+        // Sanity: siblings 0 and 1 share a parent, so the coefficient is
+        // strictly positive (and identical in both directions).
+        assert!(g.transitive_coefficient(0, 1) > Fixed::ZERO);
+        assert_eq!(
+            g.transitive_coefficient(0, 1),
+            g.transitive_coefficient(1, 0)
+        );
     }
 }
