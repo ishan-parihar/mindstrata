@@ -22,9 +22,6 @@ const WARMUP: u64 = 400;
 const WINDOW: u64 = 200;
 
 fn measure(n: u32) -> (f64, Vec<(&'static str, f64)>) {
-    // Safety: set before any sim reads it (OnceLock on first tick, and the
-    // first sim is built below).
-    std::env::set_var("MINDSTRATA_PROFILE_TICK", "1");
     Simulation::pass_profile_reset();
     let mut sim = Simulation::new(SimConfig {
         seed: 42,
@@ -133,6 +130,10 @@ fn density_leg() {
     );
 }
 fn main() {
+    // Safety: set before ANY sim reads it. `pass_profile_tick` caches the parsed
+    // value in a `OnceLock`, so it must be set before the first sim in the
+    // process (the density leg below builds sims first).
+    std::env::set_var("MINDSTRATA_PROFILE_TICK", "1");
     density_leg();
     println!("\n=== fixed-WORLD leg (the i295 charter: 32x32 for every N) ===\n");
     println!(

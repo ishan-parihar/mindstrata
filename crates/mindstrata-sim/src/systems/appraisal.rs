@@ -96,7 +96,58 @@ impl Simulation {
                 _ => {}
             }
         }
+        // ── i336: the population status folds, hoisted out of the agent loop ──
+        //
+        // `avg_status` and `max_other_status` in the loop below each re-scanned
+        // EVERY agent for EVERY agent — two O(N²) walks per tick inside the
+        // tick's largest pass (i335: α 1.94, 1 227.8 µs/tick at N=192, the
+        // biggest single pass in the tick). Both are pure reductions over
+        // `status_v2.effective_status()`, which this pass never writes, so
+        // computing them once is value-identical:
+        //   · `avg over j≠i` = `(total − own) / (n−1)`; `Fixed` addition is
+        //     exact integer arithmetic at these magnitudes (n · 1.0 ≪ i32::MAX),
+        //     so subtracting one's own term recovers the excluded sum exactly.
+        //   · `max over j≠i` = the population max, EXCEPT when `i` is the
+        //     recorded argmax — then it is the second-largest value, which is
+        //     also correct under ties (the runner-up equals the max).
+        // `max_other_anger` (below) is deliberately NOT hoisted: the loop
+        // writes `emotions[i].anger` before that fold runs, so it reads a
+        // mixed pre/post-update population by index — order-dependent by
+        // construction, and hoisting it would change values.
+        let status_total: Fixed = agents
+            .iter()
+            .map(|a| a.status_v2.effective_status())
+            .fold(Fixed::ZERO, |acc, s| acc + s);
+        let mut max_status = Fixed::ZERO;
+        let mut second_status = Fixed::ZERO;
+        let mut top_status_idx = 0usize;
+        for (j, a) in agents.iter().enumerate() {
+            let s = a.status_v2.effective_status();
+            if s > max_status {
+                second_status = max_status;
+                max_status = s;
+                top_status_idx = j;
+            } else if s > second_status {
+                second_status = s;
+            }
+        }
+
         for i in 0..agents.len() {
+            // ── i336: one walk over the agent's own relationship list ──
+            //
+            // Four sites in this loop folded the same list separately (mean
+            // trust ×3, minimum trust ×1). `relationship_v2s` is a COMPLETE
+            // graph list (i335: N−1 rows per agent), so those were four O(N)
+            // walks per agent where one suffices — the i331/i334 "compute once,
+            // use many" class. The pass reads these lists and never writes
+            // them, so a single fold yields all four values exactly.
+            let (own_rel_trust_sum, own_rel_trust_min) = agents[i]
+                .relationship_v2s
+                .iter()
+                .fold((Fixed::ZERO, Fixed::ONE), |(sum, min), r| {
+                    (sum + r.trust, min.min(r.trust))
+                });
+            let own_rel_count = agents[i].relationship_v2s.len();
             let threat = threat_exposure[i];
             let unfairness = witnessed_unfairness[i];
             let need_pressure = needs[i].hunger.max(needs[i].thirst);
@@ -440,11 +491,7 @@ impl Simulation {
                 // below 0.5 (not 0.3), mild sadness accumulates.
                 // Floor at 0.5 so that normal relationship drift
                 // produces a baseline sadness signal.
-                let min_trust = agents[i]
-                    .relationship_v2s
-                    .iter()
-                    .map(|r| r.trust)
-                    .fold(Fixed::ONE, Fixed::min);
+                let min_trust = own_rel_trust_min;
                 let social_sadness =
                     (Fixed::from_f64(0.5) - min_trust).max(Fixed::ZERO) * Fixed::from_f64(0.003);
                 emotions[i].sadness = (emotions[i].sadness + social_sadness).clamp_01();
@@ -518,13 +565,8 @@ impl Simulation {
                 // Nostalgia erodes when social connections are weak —
                 // the "nothing worth remembering" channel. Uses the
                 // agent's average relationship quality as the drain.
-                let avg_rel_quality = if !agents[i].relationship_v2s.is_empty() {
-                    let sum: Fixed = agents[i]
-                        .relationship_v2s
-                        .iter()
-                        .map(|r| r.trust)
-                        .fold(Fixed::ZERO, |acc, t| acc + t);
-                    sum / Fixed::from_int(agents[i].relationship_v2s.len() as i64)
+                let avg_rel_quality = if own_rel_count > 0 {
+                    own_rel_trust_sum / Fixed::from_int(own_rel_count as i64)
                 } else {
                     Fixed::from_f64(0.3)
                 };
@@ -652,13 +694,8 @@ impl Simulation {
                 // social comparison. Uses the agent's status vs the
                 // average status of others.
                 let my_status = agents[i].status_v2.effective_status();
-                let avg_status: Fixed = agents
-                    .iter()
-                    .enumerate()
-                    .filter(|(j, _)| *j != i)
-                    .map(|(_, a)| a.status_v2.effective_status())
-                    .fold(Fixed::ZERO, |acc, s| acc + s)
-                    / Fixed::from_int((agents.len() - 1) as i64);
+                let avg_status: Fixed =
+                    (status_total - my_status) / Fixed::from_int((agents.len() - 1) as i64);
                 let shame_delta =
                     (avg_status - my_status).max(Fixed::ZERO) * Fixed::from_f64(0.002);
                 emotions[i].shame = (emotions[i].shame + shame_delta).clamp_01();
@@ -682,12 +719,11 @@ impl Simulation {
                 // accumulates — the "they have what I want" coveting.
                 // This is the natural envy that fires from social
                 // comparison. Proportional to the status deficit.
-                let max_other_status: Fixed = agents
-                    .iter()
-                    .enumerate()
-                    .filter(|(j, _)| *j != i)
-                    .map(|(_, a)| a.status_v2.effective_status())
-                    .fold(Fixed::ZERO, Fixed::max);
+                let max_other_status: Fixed = if i == top_status_idx {
+                    second_status
+                } else {
+                    max_status
+                };
                 let envy_delta =
                     (max_other_status - my_status).max(Fixed::ZERO) * Fixed::from_f64(0.002);
                 emotions[i].envy = (emotions[i].envy + envy_delta).clamp_01();
@@ -698,12 +734,8 @@ impl Simulation {
                 // interaction events. This ambient producer fires when
                 // the agent has good relationships (high avg trust),
                 // creating a "people are reliable" channel.
-                let agent_avg_trust: Fixed = agents[i]
-                    .relationship_v2s
-                    .iter()
-                    .map(|r| r.trust)
-                    .fold(Fixed::ZERO, |acc, t| acc + t)
-                    / Fixed::from_int(agents[i].relationship_v2s.len().max(1) as i64);
+                let agent_avg_trust: Fixed =
+                    own_rel_trust_sum / Fixed::from_int(own_rel_count.max(1) as i64);
                 if agent_avg_trust > Fixed::from_f64(0.3) {
                     let trust_delta =
                         (agent_avg_trust - Fixed::from_f64(0.3)) * Fixed::from_f64(0.002);
@@ -738,12 +770,8 @@ impl Simulation {
                     (agents[i].moral_cognition.moral_emotions.shame + moral_shame_delta).clamp_01();
                 // Moral pride: high status + good relationships →
                 // "I earned this through moral behavior."
-                let avg_trust: Fixed = agents[i]
-                    .relationship_v2s
-                    .iter()
-                    .map(|r| r.trust)
-                    .fold(Fixed::ZERO, |acc, t| acc + t)
-                    / Fixed::from_int(agents[i].relationship_v2s.len().max(1) as i64);
+                let avg_trust: Fixed =
+                    own_rel_trust_sum / Fixed::from_int(own_rel_count.max(1) as i64);
                 let moral_pride_delta = (my_status - avg_status).max(Fixed::ZERO)
                     * avg_trust
                     * moral_id
