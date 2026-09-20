@@ -453,6 +453,14 @@ impl Simulation {
         tick_u64: u64,
         tick: Tick,
     ) {
+        // i330: build the O(1) (from,to)→relationship-position index once for
+        // this pass. The per-event trust reads below used to be full-matrix
+        // `relationships.iter().find(..)` scans — E events × O(R) matrix =
+        // O(N³) per tick (probe i329: local exponent ≈2.8 at N≥96). This pass
+        // never mutates `relationships`, so one build at pass start is valid
+        // throughout.
+        self.rebuild_rel_lookup();
+
         // Collect event indices to process (avoids .to_vec() heap allocation)
         let event_range = pre_tick_events..self.events.len();
         // Snapshot event count to avoid re-processing newly-pushed events
@@ -510,10 +518,8 @@ impl Simulation {
                 // the recipient's attachment).
                 if matches!(kind, mindstrata_core::event::InteractionKind::Comfort) {
                     let rel_trust = self
-                        .relationships
-                        .iter()
-                        .find(|r| r.from == from && r.to == to)
-                        .map_or(Fixed::from_f64(0.5), |r| r.trust);
+                        .rel_pos(from_idx, to_idx)
+                        .map_or(Fixed::from_f64(0.5), |p| self.relationships[p].trust);
                     // Iteration 191 calibration: the raw recovery rates
                     // (0.3/0.6/0.4/0.5) made a SINGLE comfort event reduce
                     // distress by up to ~0.24 (effectiveness = receptivity ×
@@ -545,15 +551,11 @@ impl Simulation {
                 // §8.1.9: Theory of Mind update
                 // §17.2: Gate social inference budget — ToM is the most expensive per-interaction op.
                 let trust_from_to = self
-                    .relationships
-                    .iter()
-                    .find(|r| r.from == from && r.to == to)
-                    .map_or(Fixed::from_f64(0.5), |r| r.trust);
+                    .rel_pos(from_idx, to_idx)
+                    .map_or(Fixed::from_f64(0.5), |p| self.relationships[p].trust);
                 let trust_to_from = self
-                    .relationships
-                    .iter()
-                    .find(|r| r.from == to && r.to == from)
-                    .map_or(Fixed::from_f64(0.5), |r| r.trust);
+                    .rel_pos(to_idx, from_idx)
+                    .map_or(Fixed::from_f64(0.5), |p| self.relationships[p].trust);
                 // Iteration 198: the observed-behavior inputs were derived
                 // from trust with scaled-down multipliers (pos = trust × 0.3,
                 // neg = (1−trust) × 0.1), so `infer_intent`'s Friendly
@@ -826,10 +828,8 @@ impl Simulation {
                     continue;
                 }
                 let source_trust = self
-                    .relationships
-                    .iter()
-                    .find(|r| r.from == from && r.to == to)
-                    .map_or(Fixed::from_f64(0.5), |r| r.trust);
+                    .rel_pos(fi, ti)
+                    .map_or(Fixed::from_f64(0.5), |p| self.relationships[p].trust);
                 if !self.agents[fi].cultural.knowledge.is_empty() {
                     let pick = self
                         .rng

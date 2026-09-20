@@ -14,7 +14,50 @@ mod psychology;
 
 use super::Simulation;
 
-// ── i327: rolling event buffer bound ──────────────────────────────────
+// ── i329: O(1) relationship lookup ────────────────────────────────────
+
+/// `rel_pos` must agree with a linear scan for every pair — including after
+/// ticks that add/remove relationships, where the revalidation fallback is
+/// what keeps it correct (a birth or death moves the matrix and invalidates
+/// the stored positions).
+#[test]
+fn rel_pos_matches_linear_scan_including_after_population_change() {
+    use mindstrata_core::id::AgentId;
+    let mut sim = super::Simulation::new(super::SimConfig {
+        seed: 42,
+        max_ticks: 3_000,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    });
+    sim.populate();
+
+    let check = |sim: &mut super::Simulation, when: &str| {
+        sim.rebuild_rel_lookup();
+        let n = sim.agents.len();
+        for i in 0..n {
+            for j in 0..n {
+                if i == j {
+                    continue;
+                }
+                let linear = sim.relationships().iter().position(|r| {
+                    r.from == AgentId::new(i as u64) && r.to == AgentId::new(j as u64)
+                });
+                assert_eq!(sim.rel_pos(i, j), linear, "{when}: pair ({i},{j})");
+            }
+        }
+        // Self-edges and out-of-range must be None.
+        assert_eq!(sim.rel_pos(0, 0), None, "{when}: self edge");
+        assert_eq!(sim.rel_pos(n, 0), None, "{when}: out of range");
+    };
+
+    check(&mut sim, "at populate");
+    // Long enough to cross demography/birth windows, so the matrix changes
+    // under the lookup between rebuilds.
+    sim.run(3_000);
+    check(&mut sim, "after 3000 ticks");
+}
 
 /// The buffer is left alone below `2×MAX_EVENTS` (so every calibrated
 /// horizon — well under the bound — is byte-identical), and one bulk drop

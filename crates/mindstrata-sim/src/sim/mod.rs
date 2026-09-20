@@ -737,6 +737,12 @@ pub struct Simulation {
     tick_trust_deltas: Vec<Vec<(u64, Fixed)>>,
     tick_agent_ages: Vec<Fixed>,
     tick_rel_snapshot: Vec<(AgentId, AgentId, Fixed, Fixed)>,
+    // i330: dense (from·n + to) → position-in-`relationships` index, rebuilt
+    // once per pass that needs per-event trust lookups. Removes the O(N³)
+    // per-event `relationships.iter().find(..)` scans (probe i329: local
+    // exponent ≈2.8 at N≥96). `u32::MAX` = absent; a revalidation fallback
+    // covers births/deaths that moved the matrix after the build.
+    rel_lookup: Vec<u32>,
     tick_action_starts: Vec<(usize, ActionKind)>,
     /// Pre-allocated per-tick socialization buffer; reused via `clear()`.
     /// ponytail: at 10K ticks a fresh `Vec::new()` per tick costs ~10K

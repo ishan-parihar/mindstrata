@@ -45,6 +45,59 @@ impl Simulation {
         }
     }
 
+    /// i330: rebuild the dense `(from·n + to) → relationships index` lookup.
+    /// One O(R) pass; every subsequent per-event trust read is O(1) array
+    /// indexing instead of a full-matrix scan. Called at the start of each pass
+    /// that does per-event lookups, so it is never stale within that pass
+    /// (those passes do not mutate `relationships`).
+    pub(crate) fn rebuild_rel_lookup(&mut self) {
+        let n = self.agents.len();
+        let cells = n * n;
+        if self.rel_lookup.len() != cells {
+            self.rel_lookup.clear();
+            self.rel_lookup.resize(cells, u32::MAX);
+        } else {
+            self.rel_lookup.fill(u32::MAX);
+        }
+        for (pos, r) in self.relationships.iter().enumerate() {
+            let from = r.from.as_u64() as usize;
+            let to = r.to.as_u64() as usize;
+            if from < n && to < n {
+                if let Ok(slot) = u32::try_from(pos) {
+                    self.rel_lookup[from * n + to] = slot;
+                }
+            }
+        }
+    }
+
+    /// i330: O(1) position of the `from → to` edge in `relationships`.
+    ///
+    /// Uses the dense lookup with a **revalidation fallback**: if a birth or
+    /// death moved the matrix after the lookup was built, the stored position
+    /// no longer matches, so this degrades to the linear scan (correct, and
+    /// only on ticks that changed the population).
+    pub(crate) fn rel_pos(&self, from: usize, to: usize) -> Option<usize> {
+        let n = self.agents.len();
+        if from >= n || to >= n {
+            return None;
+        }
+        let want_from = AgentId::new(from as u64);
+        let want_to = AgentId::new(to as u64);
+        if let Some(&pos) = self.rel_lookup.get(from * n + to) {
+            if pos != u32::MAX {
+                let p = pos as usize;
+                if let Some(r) = self.relationships.get(p) {
+                    if r.from == want_from && r.to == want_to {
+                        return Some(p);
+                    }
+                }
+            }
+        }
+        self.relationships
+            .iter()
+            .position(|r| r.from == want_from && r.to == want_to)
+    }
+
     /// Run the simulation for `n` ticks.
     pub fn run(&mut self, n: u64) {
         for _ in 0..n {
