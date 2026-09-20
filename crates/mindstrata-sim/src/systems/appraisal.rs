@@ -21,6 +21,9 @@ impl Simulation {
         reg_strategies: &[crate::psychology::emotion_regulation::RegulationStrategy],
         tick: Tick,
         params_x: &crate::parameters::SimParameters,
+        // i343: per-agent CONTACTED degree (rows carrying interaction state),
+        // hoisted to one O(R) pass in `core` — see the two sites below.
+        contacted_degrees: &[u32],
     ) {
         // ── 6. Appraisal — emotions from state ────────────────────
         // §8.1.4: Compute per-agent threat/unfairness exposure from this tick's
@@ -194,17 +197,19 @@ impl Simulation {
             // no damping), and attachment threat adds an isolation term
             // so the socially-absent agent is chronically lonely.
             // Deterministic (pure relationship-state arithmetic, no RNG).
-            // i342 SURVEY (§4.3 class, queued — NOT wired): this reads
-            // `relationship_v2s.len()`, the COMPLETE graph list, i.e. N−1 rows for
-            // every agent (the i335/i336 pin). `min(len, 4)` is therefore 4 for
-            // **every agent at every N** (probe `i342_social_count_proxy` measured
-            // lists of 11/47/95), so `social_visibility` is a constant 0.900/0.400
-            // that cannot distinguish an isolate from the best-connected villager.
-            // The fix is the contacted degree — `Simulation::contacted_degrees`, the
-            // count this channel always meant — and it is measured to move 13 tests
-            // (goldens, 7 snapshots, 4 behavioural), so it lands with its own
-            // re-anchor sweep rather than here.
-            let rel_count = agents[i].relationship_v2s.len() as f64;
+            // i343 (§4.3 dead-producer fix; survey + probe `i342_social_count_proxy`):
+            // this used to read `relationship_v2s.len()` — the COMPLETE graph list,
+            // i.e. N−1 rows for every agent (the i335/i336 pin). `min(len, 4)` was
+            // therefore 4 for **every agent at every N** (lists measured at
+            // 11/47/95), so `social_visibility` was a constant 0.900/0.400 whose
+            // only variation was partner status: an isolate and the best-connected
+            // villager scored identically, and the channel had no reachable
+            // isolation state for any N ≥ 5. It now reads the CONTACTED degree
+            // (rows with interaction state), which is the count the channel always
+            // meant; the clamp and the 0.1 weight are unchanged, so agents with
+            // ≥4 contacts keep the calibrated magnitude and only genuine isolates
+            // move (probe `i343_social_channels` measures the post-fix band).
+            let rel_count = contacted_degrees.get(i).copied().unwrap_or(0) as f64;
             let social_visibility = if agents[i].partner.is_some() {
                 Fixed::from_f64(0.5) + Fixed::from_f64(rel_count.min(4.0) * 0.1)
             } else {
@@ -610,14 +615,14 @@ impl Simulation {
                 // connections, mild anxiety accumulates — the "something
                 // might go wrong" worry channel. This is the natural
                 // anxiety that fires from uncertainty and insecurity.
-                // i342 SURVEY (queued, not wired): with `min(len, 4) == 4` for
-                // everyone this "few social connections ⇒ worry" term evaluates to
-                // exactly 0.000 for the whole village (probe
-                // `i342_social_count_proxy`), so the anxiety channel has no
-                // isolation input at all. On the contacted degree it is zero for
-                // connected agents (degree ≥ 4 — the calibrated case, so the
-                // magnitude band is preserved) and rises for genuine isolates.
-                let rel_count = agents[i].relationship_v2s.len() as f64;
+                // i343: same dead-proxy fix as `social_visibility` above — with
+                // `min(len, 4) == 4` for everyone this "few social connections ⇒
+                // worry" term evaluated to exactly 0.000 for the whole village
+                // (probe `i342_social_count_proxy`), so the anxiety channel had no
+                // isolation input at all. On the contacted degree it stays zero for
+                // agents with ≥4 contacts (the calibrated, common case) and rises
+                // for genuine isolates, which is the behaviour it describes.
+                let rel_count = contacted_degrees.get(i).copied().unwrap_or(0) as f64;
                 let social_factor = (Fixed::from_f64(4.0) - Fixed::from_f64(rel_count.min(4.0)))
                     * Fixed::from_f64(0.002);
                 let anxiety_delta = (agents[i].embodied.endocrine.stress.chronic_load

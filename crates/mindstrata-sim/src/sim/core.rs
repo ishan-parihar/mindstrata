@@ -456,6 +456,12 @@ impl Simulation {
             );
             self.rel_lookup = rel_lookup;
             mark!("social_pass");
+            // i343: one O(R) hoisted pass supplies the contacted-degree census
+            // that `tick_appraisal_pass` uses for its two social-connection
+            // channels (the relationship-list length it used before is N−1 for
+            // every agent, so it discriminated nothing — see the pass comments).
+            let contacted_degrees =
+                crate::sim::memory_ops::contacted_degrees(&self.relationships, self.agents.len());
             Self::tick_appraisal_pass(
                 &mut ctx,
                 &mut self.agents,
@@ -468,6 +474,7 @@ impl Simulation {
                 &reg_strategies,
                 tick,
                 &self.params,
+                &contacted_degrees,
             );
             mark!("appraisal");
             Self::tick_decay_pass(

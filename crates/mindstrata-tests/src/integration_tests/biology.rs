@@ -1531,8 +1531,22 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
     // The contract is liveness + post-golden-window safety + determinism,
     // not exact ticks: birth volume in a healthy pre-modern band, no birth
     // inside any calibrated window, and the bookkeeping chain intact.
+    // Iteration 343 RE-PIN (§4.2 — measured magnitude drifted, same contract).
+    // Measured: 18 births @175K (i242) → **5** @175K after the contacted-degree
+    // social channels were wired (i343: `social_visibility` and the normal-life
+    // anxiety term now read real contacts instead of the complete graph's N−1,
+    // which had pinned them to constants). The floor moves 8 → 3; the contract is
+    // unchanged (liveness, a healthy-not-explosive volume, no birth inside a
+    // calibrated window, intact bookkeeping).
+    //
+    // Mechanism, probed rather than assumed (`i343_birth_pacing`, seed 1 @250K):
+    // this is RE-PACING, not suppressed fertility — deliveries accumulate steadily
+    // past the pin horizon (5 by 175K, 6 by 200K, 9 by 250K, final population 21
+    // with 10 partnered and mean contacted degree 16.5), so the producer is alive
+    // and the demographic equilibrium has simply slowed; a flat tail with couples
+    // present and deliveries absent would have demanded revival instead (§2.3).
     assert!(
-        birth_ticks.len() >= 8 && birth_ticks.len() <= 30,
+        birth_ticks.len() >= 3 && birth_ticks.len() <= 30,
         "seed-1 175K must deliver a healthy birth volume, got {}",
         birth_ticks.len()
     );
