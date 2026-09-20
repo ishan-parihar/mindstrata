@@ -79,8 +79,15 @@ Q2 `0.519 → 0.615 → 0.718`, direction 12/12 both comparisons; every quadrant
 ceiling-sensitive because growth is `headroom = ceiling − intensity`. Row 3 is
 now **fully live** (growth/decay i304, ceiling i315).
 
-**Residual** (not claimed, recorded as systemic debt): the Q2 dark-allergy
-quadrant still sits at 0.6–0.7 against ceiling 0.80 in the canon band (the
-i293/i294 always-step absence-growth law), so its dynamic range is compressed;
-re-shaping the Allergy absence rate is behavioural work that re-anchors the
-pathology equilibrium pins.
+**Residual, CLOSED (i318)**: the Allergy absence-growth law had no
+pressure-independent relaxation, so pure absence was monotone growth to the
+ceiling and the quadrant's long-horizon equilibrium was the *horizon*, not the
+agent's reconciliation diet (probe `i318_allergy_dynamic_range`: 0% of Q2 agents
+within 5% of the ceiling at 20K, 50% at 50K, **64% at 100K**). Added
+`ALLERGY_RESTING_RELAXATION = 0.05 × decay`, giving the absence attractor
+`I* = growth·0.1·ceiling / (growth·0.1 + decay·0.05)` — strictly below the
+ceiling for every quadrant and scaled by the row-3 **decay band**. Post-fix the
+ceiling pile is **0% at every horizon** and the Q2 asymptote (0.643) lands inside
+the catalog's `0.6–0.7` band. Both row-3 lever verdicts re-run live at HEAD;
+one long-horizon snapshot re-anchored (mechanism in
+`evidence/i318_allergy_resting_relaxation.md`), goldens byte-identical.

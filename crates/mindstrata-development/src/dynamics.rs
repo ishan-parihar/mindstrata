@@ -26,6 +26,36 @@ pub fn resonance_weight(catalyst_line: LineId, reading_line: LineId, magnitude: 
     }
 }
 
+/// Growth scale of the Allergy absence-accumulation term (the always-step
+/// law in `development.rs`): Allergy grows at `growth × this × headroom` on a
+/// tick with no pressure.
+///
+/// CALIBRATION-PENDING(AP3): 0.1× the pending growth keeps a 5 000-tick
+/// window near ~0.4 mean rather than saturating in 20 ticks (`pathology-
+/// curves.md` Q4 0.02–0.04 vs Q1 0.04–0.08).
+pub const ALLERGY_ABSENCE_SCALE: f64 = 0.1;
+
+/// Resting relaxation of an Allergy quadrant, as a fraction of the quadrant's
+/// `decay`, applied EVERY tick regardless of pressure.
+///
+/// Iteration 318 (difficulty-levers row 3 residual). Before this, pressure was
+/// the ONLY decay channel on an Allergy quadrant (`− decay·pressure·I`), so a
+/// tick with no pressure was pure monotone growth toward `ceiling`: the
+/// long-horizon equilibrium was set by the horizon, not by the agent's
+/// reconciliation diet, and the quadrant lost dynamic range (i318 probe: 0% of
+/// Q2 agents within 5% of the ceiling at 20K, 50% at 50K, **64% at 100K** —
+/// the lever's own catalog horizon). Tying the relaxation to `decay` keeps it
+/// on the row-3 difficulty band (a brittle village relaxes slower) without
+/// adding an `OperatorParams` field.
+///
+/// Equilibrium under pure absence: `growth·SCALE·(ceiling−I) = decay·RELAX·I`,
+/// i.e. `I* = growth·SCALE·ceiling / (growth·SCALE + decay·RELAX)` — strictly
+/// below `ceiling` for every quadrant, giving the ceiling/centre band residual
+/// headroom at every horizon.
+///
+/// CALIBRATION-PENDING(AP3).
+pub const ALLERGY_RESTING_RELAXATION: f64 = 0.05;
+
 /// Pathology polarity axis of the ratified operator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Polarity {
@@ -114,8 +144,14 @@ impl QuadrantState {
                 // Use 0.1× the pending growth for Allergy so the
                 // 5000-tick horizon shows ~0.4 mean not 1.0, preserving
                 // dynamic range for differentiation.  CALIBRATION-PENDING.
-                self.intensity + p.growth * 0.1 * headroom * (1.0 - pressure)
+                //
+                // i318 resting relaxation: bounds the absence attractor
+                // strictly below `ceiling` (see ALLERGY_RESTING_RELAXATION)
+                // so the quadrant keeps headroom at the 100K lever horizon
+                // instead of piling on its cap.
+                self.intensity + p.growth * ALLERGY_ABSENCE_SCALE * headroom * (1.0 - pressure)
                     - p.decay * pressure * self.intensity
+                    - p.decay * ALLERGY_RESTING_RELAXATION * self.intensity
             }
         };
         Self {
@@ -294,6 +330,37 @@ mod tests {
         assert!(
             avoided.intensity > start.intensity,
             "avoidance accumulates allergy"
+        );
+    }
+
+    /// i318 (difficulty-levers row 3 residual): before the resting relaxation,
+    /// pressure was the ONLY decay channel on an Allergy quadrant, so a tick
+    /// with no pressure was monotone growth to `ceiling` and the long-horizon
+    /// equilibrium was the horizon, not the agent's reconciliation diet — the
+    /// i318 probe measured 0% of Q2 agents within 5% of the ceiling at 20K but
+    /// 64% at 100K. The attraction point must now sit strictly below the
+    /// ceiling at `I* = growth·SCALE·ceiling / (growth·SCALE + decay·RELAX)`.
+    #[test]
+    fn allergy_absence_attractor_stays_below_ceiling() {
+        let p = OperatorParams::pending();
+        let g_eff = p.growth * ALLERGY_ABSENCE_SCALE;
+        let relax = p.decay * ALLERGY_RESTING_RELAXATION;
+        let predicted = g_eff * p.ceiling / (g_eff + relax);
+        let mut q = QuadrantState::neutral();
+        for _ in 0..20_000 {
+            q = q.step(Metabolism::Allergy, 0.0, &p);
+        }
+        assert!(
+            (q.intensity - predicted).abs() < 1e-3,
+            "absence equilibrium {:.4} must match the leak-balance prediction {:.4}",
+            q.intensity,
+            predicted
+        );
+        assert!(
+            q.intensity < p.ceiling - 0.1,
+            "absence must leave headroom below the ceiling: {:.4} vs ceiling {:.4}",
+            q.intensity,
+            p.ceiling
         );
     }
 
