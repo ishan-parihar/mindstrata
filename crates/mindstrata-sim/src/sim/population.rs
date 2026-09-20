@@ -27,7 +27,8 @@ impl Simulation {
 
         let sim = Self {
             config,
-            house_count: crate::world_gen::DEFAULT_HOUSE_COUNT,
+            // i340: `None` = derive from the population at `populate`.
+            house_count: None,
             params: crate::parameters::SimParameters::default(),
             clock: Clock::new(),
             rng,
@@ -236,13 +237,15 @@ impl Simulation {
             // i339: the restored world already carries its own sites, so derive
             // the count from it rather than assuming the default — a snapshot of
             // a re-housed run must keep that fact across a save/load boundary.
-            house_count: snapshot
-                .world
-                .sites
-                .iter()
-                .filter(|s| matches!(s.kind, crate::world::SiteKind::House))
-                .count()
-                .max(1) as u32,
+            house_count: Some(
+                snapshot
+                    .world
+                    .sites
+                    .iter()
+                    .filter(|s| matches!(s.kind, crate::world::SiteKind::House))
+                    .count()
+                    .max(1) as u32,
+            ),
             clock,
             // i303 (v16): restore the captured tuning parameters instead of
             // rebuilding defaults — the pre-i303 behavior silently discarded
@@ -517,7 +520,15 @@ impl Simulation {
             );
         }
 
-        world_gen::generate_village_with_houses(&mut self.world, &mut self.rng, self.house_count);
+        // i340: housing scales with the population (i339 measured that this is
+        // what localizes contact — touched-R α 1.929 → 0.898). The N ≤ 32 case
+        // resolves to the historical 8 houses, so the calibrated N=12 windows
+        // and the goldens are byte-identical by construction.
+        let houses = self
+            .house_count
+            .unwrap_or_else(|| world_gen::houses_for_population(self.config.num_agents));
+        self.house_count = Some(houses);
+        world_gen::generate_village_with_houses(&mut self.world, &mut self.rng, houses);
 
         let mut populate_rng =
             rand_chacha::ChaCha8Rng::seed_from_u64(self.config.seed.wrapping_add(1000));

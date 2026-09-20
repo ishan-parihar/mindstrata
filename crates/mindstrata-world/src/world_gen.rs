@@ -20,11 +20,27 @@ fn place_site(world: &mut World, x: i32, y: i32, site: Site) -> bool {
     }
 }
 
-/// i339: the village's house count. Historically a hardcoded `for i in 0..8`
-/// (i338 measured that this makes every N live on exactly 8 cells, which is
-/// what pins the relationship store at Ω(N²)); exposed so the counterfactual
-/// can be measured before any behavioural change lands.
+/// i339/i340: the village's baseline house count. Historically a hardcoded
+/// `for i in 0..8` — and i338 measured that this makes every N live on exactly
+/// 8 cells, which is what pins the relationship store at Ω(N²).
 pub const DEFAULT_HOUSE_COUNT: u32 = 8;
+
+/// i340: houses needed to seat a population of `agents` at the declared
+/// `SiteKind::House.capacity` of 4.
+///
+/// The governor is the *co-residency* the store has to represent (i338): with a
+/// fixed 8 houses, `ceil(N/8)` villagers share each cell and the contact graph
+/// grows with N. Scaling housing with the population is the measured fix — with
+/// one house per ~4 villagers the touched-relationship exponent falls from 1.929
+/// to 0.898 and mean partners/agent goes flat (i339).
+///
+/// Floored at [`DEFAULT_HOUSE_COUNT`] so small populations keep the historical
+/// village exactly: at N ≤ 32 the generated world (and its RNG draw order) is
+/// byte-identical to the pre-i340 path, which is why the calibrated N=12 windows
+/// and the goldens are untouched by construction.
+pub fn houses_for_population(agents: u32) -> u32 {
+    agents.div_ceil(4).max(DEFAULT_HOUSE_COUNT)
+}
 
 /// Generate a small village world with the historical 8 houses.
 pub fn generate_village(world: &mut World, rng: &mut RngStreams) {

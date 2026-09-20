@@ -12,7 +12,7 @@ mod governance;
 mod legal;
 mod psychology;
 
-use super::Simulation;
+use super::{SimConfig, Simulation};
 
 // ── i329: O(1) relationship lookup ────────────────────────────────────
 
@@ -202,6 +202,59 @@ fn relationship_store_is_complete_at_populate() {
         assert!(
             sim.relationships().iter().all(|r| r.interaction_count == 0),
             "N={n}: populate seeds stranger rows with zero interactions"
+        );
+    }
+}
+
+/// i340: housing scales with the population, and the historical village is kept
+/// exactly at small N.
+///
+/// This is the fix for i338's finding — with a fixed 8 houses every N lived on
+/// exactly 8 cells, which pinned the relationship store at Ω(N²). The floor at
+/// `DEFAULT_HOUSE_COUNT` is what makes the change a no-op for the calibrated
+/// N=12 windows (and therefore for the goldens), so it is pinned here rather
+/// than left to the probe.
+#[test]
+fn housing_scales_with_population_and_keeps_small_villages_historical() {
+    // The pure rule: floor at 8, one house per ~4 villagers above it.
+    for (n, expected) in [(1u32, 8u32), (12, 8), (32, 8), (33, 9), (48, 12), (96, 24)] {
+        assert_eq!(
+            crate::world_gen::houses_for_population(n),
+            expected,
+            "houses_for_population({n})"
+        );
+    }
+
+    // End to end: the generated world carries that many House sites, and the
+    // round-robin assignment respects the declared capacity of 4 (i340 measured
+    // max co-location 12 → 4 at N=96).
+    for (n, expected) in [(12usize, 8usize), (48, 12)] {
+        let mut sim = Simulation::new(SimConfig {
+            seed: 42,
+            max_ticks: 1,
+            world_width: 32,
+            world_height: 32,
+            num_agents: n as u32,
+            snapshot_interval: None,
+        });
+        sim.populate();
+        let houses = sim
+            .world
+            .sites
+            .iter()
+            .filter(|s| matches!(s.kind, crate::world::SiteKind::House))
+            .count();
+        assert_eq!(houses, expected, "N={n}: house sites generated");
+        let mut per_site = std::collections::BTreeMap::new();
+        for a in sim.agents.iter() {
+            if let Some(site) = a.home_site {
+                *per_site.entry(site).or_insert(0usize) += 1;
+            }
+        }
+        let worst = per_site.values().copied().max().unwrap_or(0);
+        assert!(
+            worst <= 4,
+            "N={n}: {worst} agents share a house (declared capacity is 4)"
         );
     }
 }
