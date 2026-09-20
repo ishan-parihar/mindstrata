@@ -27,19 +27,15 @@ impl Simulation {
         // cannot push: positions are stable for the whole pass.
         rel_lookup: &[u32],
     ) {
-        // i330 sub-profile: split the pass into its two halves (the interaction
-        // engine vs. the speech-act/courtship wiring above it) when the tick is
-        // being profiled. Off by default.
-        let profiling = Self::pass_profile_tick() == Some(tick_u64);
+        // i330 sub-profile: split this pass into its halves (the interaction
+        // engine vs. the speech-act/courtship wiring above it). Off by default;
+        // i335 accumulates into the same sink `core::tick` writes.
+        let profiling = Self::pass_profile_tick().is_some();
         let mut mark_at = std::time::Instant::now();
         macro_rules! mark {
             ($name:expr) => {
                 if profiling {
-                    eprintln!(
-                        "PROFILE {:>18} {:>10} ns",
-                        $name,
-                        mark_at.elapsed().as_nanos()
-                    );
+                    Self::profile_record($name, mark_at.elapsed().as_nanos() as u64);
                     mark_at = std::time::Instant::now();
                 }
             };

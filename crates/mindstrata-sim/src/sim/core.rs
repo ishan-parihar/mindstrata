@@ -47,6 +47,14 @@ impl Simulation {
 
     /// §17 (i330): the tick number to profile, from `MINDSTRATA_PROFILE_TICK`
     /// (parsed once). `None` disables pass profiling.
+    ///
+    /// i335: setting the variable now enables **accumulation** over the whole
+    /// run (the named totals are readable from [`Self::pass_profile_totals`]);
+    /// the numeric value is kept only so an existing `MINDSTRATA_PROFILE_TICK=<n>`
+    /// invocation still turns profiling on. Accumulating replaced single-tick
+    /// printing because a one-tick sample carries ~±15% run-to-run noise at
+    /// N=192 — enough to mis-attribute a term, which is the failure mode
+    /// i294's single log-log fit already paid for.
     pub(crate) fn pass_profile_tick() -> Option<u64> {
         use std::sync::OnceLock;
         static TICK: OnceLock<Option<u64>> = OnceLock::new();
@@ -55,6 +63,55 @@ impl Simulation {
                 .ok()
                 .and_then(|s| s.parse().ok())
         })
+    }
+
+    /// i335: opt-in per-pass accumulation, keyed by mark name.
+    ///
+    /// A process-global is the right shape here: the profiler is a diagnostic,
+    /// not simulation state — it is never serialized, never read by a pass, and
+    /// cannot touch RNG or ordering. Only [`Self::profile_record`] writes it,
+    /// and only when profiling is enabled.
+    fn pass_profile_sink(
+    ) -> &'static std::sync::Mutex<std::collections::BTreeMap<&'static str, (u64, u64)>> {
+        use std::sync::{Mutex, OnceLock};
+        static SINK: OnceLock<Mutex<std::collections::BTreeMap<&'static str, (u64, u64)>>> =
+            OnceLock::new();
+        SINK.get_or_init(|| Mutex::new(std::collections::BTreeMap::new()))
+    }
+
+    /// i335: record one mark sample (nanoseconds) under `name`.
+    ///
+    /// `samples` counts entries so the reader can report a mean rather than a
+    /// single-tick reading. Called once per pass per tick while profiling.
+    pub(crate) fn profile_record(name: &'static str, ns: u64) {
+        if let Ok(mut sink) = Self::pass_profile_sink().lock() {
+            let slot = sink.entry(name).or_insert((0, 0));
+            slot.0 = slot.0.saturating_add(ns);
+            slot.1 += 1;
+        }
+    }
+
+    /// i335: the accumulated per-pass totals, sorted by total cost
+    /// descending. Empty when profiling was never enabled.
+    ///
+    /// Returns `(name, total_ns, samples)`.
+    #[must_use]
+    pub fn pass_profile_totals() -> Vec<(&'static str, u64, u64)> {
+        let Ok(sink) = Self::pass_profile_sink().lock() else {
+            return Vec::new();
+        };
+        let mut out: Vec<(&'static str, u64, u64)> =
+            sink.iter().map(|(k, v)| (*k, v.0, v.1)).collect();
+        out.sort_by_key(|(_, total, _)| std::cmp::Reverse(*total));
+        out
+    }
+
+    /// i335: clear the accumulated samples (so a probe can measure one N at a
+    /// time in a single process).
+    pub fn pass_profile_reset() {
+        if let Ok(mut sink) = Self::pass_profile_sink().lock() {
+            sink.clear();
+        }
     }
 
     /// i330: rebuild the dense `(from·n + to) → relationships index` lookup.
@@ -144,21 +201,18 @@ impl Simulation {
         let tick_u64 = tick.as_u64();
         // §6: Compute multi-timescale phase flags once per tick.
         let phases = crate::scheduler::TickPhases::compute(tick_u64);
-        // §17 (i330): opt-in per-pass timing. Off by default and costing one
-        // `Instant::now()` per tick when off; set `MINDSTRATA_PROFILE_TICK=<n>`
-        // to print per-pass nanoseconds for tick `n` (used by the i330 probe to
-        // attribute the superlinear term to a pass). Left in place because the
-        // next scale question will ask the same question again.
-        let profiling = Self::pass_profile_tick() == Some(tick_u64);
+        // §17 (i330) + i335: opt-in per-pass timing. Off by default and costing
+        // one `Instant::now()` per tick when off; with `MINDSTRATA_PROFILE_TICK`
+        // set, every mark ACCUMULATES (name → total ns, samples) for the whole
+        // run and is read back through `pass_profile_totals()`. i330 printed a
+        // single tick; i335 accumulates because one tick's sample runs ±15%
+        // noisy at N=192, which is enough to mis-attribute a term.
+        let profiling = Self::pass_profile_tick().is_some();
         let mut mark_at = std::time::Instant::now();
         macro_rules! mark {
             ($name:expr) => {
                 if profiling {
-                    eprintln!(
-                        "PROFILE {:>18} {:>10} ns",
-                        $name,
-                        mark_at.elapsed().as_nanos()
-                    );
+                    Self::profile_record($name, mark_at.elapsed().as_nanos() as u64);
                     mark_at = std::time::Instant::now();
                 }
             };
