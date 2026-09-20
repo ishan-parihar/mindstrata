@@ -155,6 +155,57 @@ fn social_status_counts_matches_per_agent_fold() {
     assert_eq!(counts.len(), 2, "range clamped to the population");
 }
 
+/// i335: the relationship store is a **complete directed graph** at populate.
+///
+/// This is a *structural fact*, not an emergent outcome, and it is the reason
+/// the whole tick is quadratic: i335 measured edges = N(N−1) exactly at
+/// N=48/96/192 (`edges/agent = N−1`), at the fixed 32×32 charter size *and*
+/// at constant density, and located the construction in `population.rs`
+/// (every ordered pair gets a `Relationship` with random trust 0.3–0.7 and
+/// `interaction_count: 0`; the birth path similarly links every newborn to
+/// everyone). Every per-edge pass and every per-agent fold over
+/// `relationship_v2s` therefore carries an O(N²) term even though interactions
+/// themselves are locality-gated at the §2.4 perception radius.
+///
+/// The pin exists so that sparsifying the store (i335's recorded next lever)
+/// is an explicit re-contract, not a silent change: if this assertion starts
+/// failing because edges were created on contact, that is the intended repair
+/// — re-anchor it with probe evidence rather than widening it.
+#[test]
+fn relationship_store_is_complete_at_populate() {
+    use crate::sim::SimConfig;
+    for n in [12usize, 24, 48] {
+        let mut sim = Simulation::new(SimConfig {
+            seed: 42,
+            max_ticks: 1,
+            world_width: 32,
+            world_height: 32,
+            num_agents: n as u32,
+            snapshot_interval: None,
+        });
+        sim.populate();
+        assert_eq!(
+            sim.relationships().len(),
+            n * (n - 1),
+            "N={n}: every ordered pair must hold a relationship row"
+        );
+        for (i, agent) in sim.agents.iter().enumerate() {
+            assert_eq!(
+                agent.relationship_v2s.len(),
+                n - 1,
+                "N={n} agent {i}: every agent must hold a row to every other"
+            );
+        }
+        // The rows start untouched: a stranger edge that has never been
+        // interacted with still occupies matrix and per-agent list space
+        // (i326 measured 46–53% of them never touched for a whole run).
+        assert!(
+            sim.relationships().iter().all(|r| r.interaction_count == 0),
+            "N={n}: populate seeds stranger rows with zero interactions"
+        );
+    }
+}
+
 // Shared test helper (used by family + conflict domains).
 /// §10.8: Find two agents in different seeded clans (home-site parity
 /// seeds 2 clans during populate).
