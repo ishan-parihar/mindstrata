@@ -718,7 +718,23 @@ impl Simulation {
            // Iteration 218: reuse pre-allocated buffer.
         tick_agent_ages.clear();
         tick_agent_ages.extend(agents.iter().map(|a| a.age));
+        // i337 sub-profile: this loop's body carries several per-agent walks
+        // over `relationship_v2s` — a COMPLETE graph list (i335), i.e. O(N)
+        // per agent → O(N²) per tick. Marked so their share is measured
+        // rather than argued. Marks fire once per agent, so the probe reads
+        // their share from the accumulated TOTAL, not from ns/samples.
+        let cog_profiling = Self::pass_profile_tick().is_some();
+        let mut cog_mark_at = std::time::Instant::now();
+        macro_rules! cog_mark {
+            ($name:expr) => {
+                if cog_profiling {
+                    Self::profile_record($name, cog_mark_at.elapsed().as_nanos() as u64);
+                    cog_mark_at = std::time::Instant::now();
+                }
+            };
+        }
         for (i, agent) in agents.iter_mut().enumerate() {
+            cog_mark!("·cog head");
             // Architecture-plan-2 §11.1: Status dimensions update.
             // Decay shame and honor gradually; update wealth_rank from relative wealth.
             agent.status_v2.decay();
@@ -739,6 +755,7 @@ impl Simulation {
                 }
             }
             agent.status_v2.institutional_rank = best_role_authority;
+            cog_mark!("·cog inst-rank");
             if avg_wealth > Fixed::ZERO {
                 agent.status_v2.wealth_rank =
                     (agent.wealth.coin / avg_wealth * Fixed::from_f64(0.5)).clamp_01();
@@ -749,16 +766,41 @@ impl Simulation {
                 + agent.moral_cognition.moral_emotions.gratitude * Fixed::from_f64(0.5))
             .clamp_01();
             // Update prestige from relationship count (social connections)
+            //
+            // i337: this fold and the §17.3 dirty-decay walk that used to sit
+            // at the end of this loop body BOTH walked `relationship_v2s` once
+            // per agent per tick — on a COMPLETE graph list (i335: N−1 rows
+            // per agent) that is two O(R) traversals of the same data per
+            // tick. The sub-profile (`i330_pass_profile`) sized them at
+            // 464.3 + 447.3 µs of the pass's 1 357.9 µs at N=192 — **67% of
+            // the pass**, ~17% of the whole tick. Nothing between the two
+            // sites reads or writes these rows (verified by inspection of
+            // every statement in the range), so they fuse into ONE traversal
+            // with no value change: every row's `quality()` is still read
+            // before that row's own decay (the old fold read every row before
+            // ANY decay, and a row's decay cannot affect another row's
+            // quality), the sum's row order is unchanged, and `Fixed`
+            // addition is order-exact at these magnitudes. The daily
+            // `clear_dirty` rides along on the same tick it did before.
             let num_connections = agent.relationship_v2s.len() as i64;
-            if num_connections > 0 {
-                let avg_quality: Fixed = agent
-                    .relationship_v2s
-                    .iter()
-                    .map(crate::social::relationship_v2::RelationshipV2::quality)
-                    .fold(Fixed::ZERO, |acc, q| acc + q)
-                    / Fixed::from_int(num_connections);
-                agent.status_v2.network_centrality = avg_quality;
+            let daily_boundary = tick_u64 > 0 && tick_u64.is_multiple_of(144);
+            let mut quality_sum = Fixed::ZERO;
+            for rv2 in &mut agent.relationship_v2s {
+                quality_sum += rv2.quality();
+                // §17.3: only recently-touched (dirty) rows decay per tick;
+                // dormant rows get the daily pass. On the daily boundary every
+                // row is active, so the whole list decays and is cleared.
+                if rv2.is_active_this_tick(tick_u64) {
+                    rv2.decay(1);
+                    if daily_boundary {
+                        rv2.clear_dirty(tick_u64);
+                    }
+                }
             }
+            if num_connections > 0 {
+                agent.status_v2.network_centrality = quality_sum / Fixed::from_int(num_connections);
+            }
+            cog_mark!("·cog row sweep");
             // §10.4 (Iteration 77): status_attraction was a declared
             // AttractionModel field with zero production writers — the
             // last of the three attraction factors (with familiarity and
@@ -901,20 +943,10 @@ impl Simulation {
                 agent.attraction.update_kinship_penalty(max_relatedness);
             }
 
-            // Architecture-plan-2 §17.3: Relationship caching.
-            // Only decay relationships that have been recently active (dirty)
-            // or are due for the daily full update. Dormant relationships
-            // receive no per-tick decay — they only decay during the daily pass.
-            for rv2 in &mut agent.relationship_v2s {
-                if rv2.is_active_this_tick(tick_u64) {
-                    rv2.decay(1);
-                    // After daily boundary decay, clear dirty so dormant
-                    // relationships return to sleep on the next tick.
-                    if tick_u64 > 0 && tick_u64.is_multiple_of(144) {
-                        rv2.clear_dirty(tick_u64);
-                    }
-                }
-            }
+            // (i337: the §17.3 dirty-decay walk that used to live here was
+            // fused into the single `relationship_v2s` traversal above — see
+            // the comment at that site. Same rows, same order, same tick.)
+            cog_mark!("·cog tail");
         }
 
         // §5.1: Legacy relationship mean reversion — trust drifts toward a

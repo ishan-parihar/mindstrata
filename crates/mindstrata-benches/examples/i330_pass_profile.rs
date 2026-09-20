@@ -45,19 +45,30 @@ fn main() {
 
     eprintln!("i330 pass profile — N={n}, mean over {window} ticks after {warmup} warmup");
     eprintln!("  whole tick: {us_per_tick:.1} µs/tick\n");
+    let us_per_tick_whole = us_per_tick;
+    eprintln!(
+        "{:>24} {:>12} {:>8} {:>14} {:>10}",
+        "mark", "µs/tick", "% tick", "mean per call", "calls/tick"
+    );
     let rows = Simulation::pass_profile_totals();
     let total: u64 = rows.iter().map(|(_, ns, _)| *ns).sum();
     for (name, ns, samples) in rows {
-        let mean_us = ns as f64 / samples.max(1) as f64 / 1000.0;
+        // i336: a mark may fire once per agent (inner-loop marks), so the
+        // share must come from the TOTAL over the window, not from
+        // `ns / samples` (which is the mean per call). Both are printed.
+        let us_per_tick = ns as f64 / window as f64 / 1000.0;
+        let per_call_us = ns as f64 / samples.max(1) as f64 / 1000.0;
         eprintln!(
-            "PROFILE {:>22} {:>12.1} µs/tick {:>6.1}%",
+            "PROFILE {:>22} {:>10.1} {:>7.1}% {:>13.3} {:>10.1}",
             name,
-            mean_us,
-            mean_us * 1000.0 / (us_per_tick * 1000.0) * 100.0
+            us_per_tick,
+            us_per_tick * 100.0 / us_per_tick_whole,
+            per_call_us,
+            samples as f64 / window as f64
         );
     }
     eprintln!(
-        "\n  summed pass means: {:.1} µs/tick (residual = unmarked work)",
+        "\n  summed marks: {:.1} µs/tick (residual = unmarked work)",
         total as f64 / window as f64 / 1000.0
     );
 }
