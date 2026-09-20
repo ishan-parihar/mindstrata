@@ -765,17 +765,23 @@ impl Simulation {
             }
         }
 
+        mark!("  ·socialize+innovate");
+
         // ── 12. Institutional collective psychology (extracted) ────
         self.tick_institutional_psychology(tick_u64, phases);
+        mark!("  ·institutional");
 
         // ── 15. Faction dynamics (extracted) ────
         self.tick_faction_dynamics(tick_u64, tick);
+        mark!("  ·faction");
 
         // ── 14. Moral panic + Revolution (extracted) ──
         self.tick_moral_panic_and_revolution(tick_u64, tick);
+        mark!("  ·panic+revolution");
 
         // ── 15+13. Derived mental state + Belief updates (extracted) ──
         self.tick_derived_states_and_beliefs(pre_tick_events, tick_u64);
+        mark!("  ·derived+belief");
 
         // ── 18+19+20+21. Social cluster (extracted) ──
         mark!("instit+faction+panic+derived");

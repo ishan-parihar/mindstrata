@@ -85,6 +85,76 @@ fn event_buffer_is_bounded_by_an_amortized_bulk_drop() {
     assert_eq!(huge.len(), MAX_EVENTS, "past 2×: one drop to the cap");
 }
 
+// ── i331: hoisted social-status fold ──────────────────────────────────
+
+/// The hoisted O(R) `social_status_counts` pass must yield exactly the
+/// per-agent `(positive, total)` counts the old per-agent
+/// `relationships.iter().filter(r.from == i)` fold produced — for real sim
+/// data (including duplicate pairs) and for a synthetic list carrying an
+/// out-of-range `from` (a stale id after a death), which the old fold could
+/// never match and must not be counted here either.
+#[test]
+fn social_status_counts_matches_per_agent_fold() {
+    use super::Fixed;
+    use crate::person::{Relationship, RelationshipKind};
+    use mindstrata_core::id::AgentId;
+
+    let mk = |from: u64, to: u64, trust: f64| Relationship {
+        from: AgentId::new(from),
+        to: AgentId::new(to),
+        trust: Fixed::from_f64(trust),
+        affection: Fixed::from_f64(0.5),
+        respect: Fixed::ZERO,
+        fear: Fixed::ZERO,
+        obligation: Fixed::ZERO,
+        last_interaction_tick: 0,
+        kind: RelationshipKind::Stranger,
+        interaction_count: 0,
+        last_positive_tick: 0,
+        last_negative_tick: 0,
+    };
+
+    let naive = |rels: &[Relationship], i: usize| -> (u32, u32) {
+        let id = AgentId::new(i as u64);
+        rels.iter()
+            .filter(|r| r.from == id)
+            .fold((0u32, 0u32), |(pos, total), r| {
+                (pos + u32::from(r.trust > Fixed::from_f64(0.6)), total + 1)
+            })
+    };
+
+    // Real sim data after enough ticks to have accumulated duplicate/edge rows.
+    let mut sim = Simulation::new(super::SimConfig {
+        seed: 42,
+        max_ticks: 500,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    });
+    sim.populate();
+    sim.run(500);
+    let n = sim.agents.len();
+    let counts = super::memory_ops::social_status_counts(sim.relationships(), n);
+    for i in 0..n {
+        assert_eq!(counts[i], naive(sim.relationships(), i), "agent {i}");
+    }
+
+    // Synthetic: duplicate pairs keep both rows in the total; an out-of-range
+    // `from` contributes nothing (idents > n are not an indexable agent).
+    let rels = vec![
+        mk(0, 1, 0.9),
+        mk(0, 2, 0.2),
+        mk(0, 1, 0.7),
+        mk(1, 0, 0.65),
+        mk(99, 0, 1.0),
+    ];
+    let counts = super::memory_ops::social_status_counts(&rels, 2);
+    assert_eq!(counts[0], naive(&rels[..4], 0), "duplicates counted");
+    assert_eq!(counts[1], naive(&rels[..4], 1), "single pair");
+    assert_eq!(counts.len(), 2, "range clamped to the population");
+}
+
 // Shared test helper (used by family + conflict domains).
 /// §10.8: Find two agents in different seeded clans (home-site parity
 /// seeds 2 clans during populate).

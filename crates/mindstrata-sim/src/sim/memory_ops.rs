@@ -6,6 +6,32 @@ use super::{
     SimEvent, Simulation,
 };
 
+/// §19.5.G (i331): per-agent `(positive, total)` relationship counts.
+///
+/// A relationship is "positive" when `trust > 0.6`. Each row contributes to
+/// exactly its own `from` agent, so this single O(R) pass yields the same
+/// per-agent counts as the old per-agent `relationships.iter().filter(..)`
+/// fold — but at O(R) instead of O(N·R) = O(N³)/tick. Rows whose `from` is
+/// outside the current population (a stale id after a death) are skipped,
+/// matching the old fold (which could only match an in-range index).
+///
+pub(crate) fn social_status_counts(
+    relationships: &[crate::person::Relationship],
+    n: usize,
+) -> Vec<(u32, u32)> {
+    let mut counts = vec![(0u32, 0u32); n];
+    for r in relationships {
+        let fi = r.from.as_u64() as usize;
+        if fi < n {
+            counts[fi].1 += 1;
+            if r.trust > Fixed::from_f64(0.6) {
+                counts[fi].0 += 1;
+            }
+        }
+    }
+    counts
+}
+
 impl Simulation {
     /// §13.5: Record a famine (scarcity) trauma in the village's collective
     /// memory when hunger or thirst runs critically high. Episode-guarded:
@@ -54,6 +80,13 @@ impl Simulation {
         // ── 9. Memory encoding from this tick's events ───────────────
         // §22.5: Use attention system to compute salience instead of hardcoded values.
         // Only events that pass the attention threshold are encoded into memory.
+        //
+        // i331: the §19.5.G social-status fold below used to re-scan the whole
+        // relationship matrix *per agent* (`iter().filter(r.from == i)`), i.e.
+        // O(N·R) = O(N³)/tick inside the tick's largest pass. Hoisted to one
+        // O(R) pass (each row contributes to exactly its own `from` agent), so
+        // the counts are identical by construction.
+        let rel_counts = social_status_counts(&self.relationships, self.agents.len());
         for (i, agent) in self.agents.iter_mut().enumerate() {
             // §17: Background agents skip memory encoding entirely
             // §17.2: Also check memory retrieval budget
@@ -245,17 +278,7 @@ impl Simulation {
             agent.status.wealth_status = (agent.wealth.coin / Fixed::from_f64(20.0)).clamp_01();
             // Social status: ratio of positive relationships to total relationships
             // §19.5.G: A relationship is "positive" when trust exceeds 0.6
-            let agent_id = AgentId::new(i as u64);
-            let (positive_rels, total_rels) = self
-                .relationships
-                .iter()
-                .filter(|r| r.from == agent_id)
-                .fold((0u32, 0u32), |(pos, total), r| {
-                    (
-                        pos + if r.trust > Fixed::from_f64(0.6) { 1 } else { 0 },
-                        total + 1,
-                    )
-                });
+            let (positive_rels, total_rels) = rel_counts[i];
             if total_rels > 0 {
                 agent.status.social_status =
                     Fixed::from_f64(positive_rels as f64 / total_rels as f64);

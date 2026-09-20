@@ -952,11 +952,18 @@ impl Simulation {
                 let from_idx = from.as_u64() as usize;
                 let to_idx = to.as_u64() as usize;
                 if from_idx < self.agents.len() && to_idx < self.agents.len() {
+                    // i331: O(1) dense-lookup read instead of an
+                    // `iter().find(..)` over the whole matrix. Per interaction
+                    // event this was O(R) = O(N²), i.e. O(N³)/tick — the
+                    // dominant term inside `tick_derived_states_and_beliefs`
+                    // (probe i330/i331: `·derived+belief` local exponent ≈3.2
+                    // at N=192, 17% of the tick). `rel_pos` returns the first
+                    // matching element (what `find` returned) and falls back to
+                    // the linear scan itself if the lookup is stale, so the
+                    // read is unchanged.
                     let trust = self
-                        .relationships
-                        .iter()
-                        .find(|r| r.from == *from && r.to == *to)
-                        .map_or(Fixed::from_f64(0.5), |r| r.trust);
+                        .rel_pos(from_idx, to_idx)
+                        .map_or(Fixed::from_f64(0.5), |p| self.relationships[p].trust);
 
                     let evidence_strength = trust - Fixed::from_f64(0.5);
                     let source_trust = Fixed::from_f64(0.6);

@@ -325,14 +325,14 @@ impl Simulation {
                         .accessible_farm_with_grain_amount(agent_id, &self.institutions, quantity)
                         .or_else(|| self.world.farm_with_grain_amount(quantity));
                     if let (Some(seller), Some(farm_idx)) = (seller_info, farm_idx) {
+                        // i331: O(1) dense-lookup read (first-match semantics,
+                        // with the linear scan kept as `rel_pos`' stale-lookup
+                        // fallback) instead of an O(R) matrix scan per trade —
+                        // the same scan class removed from the social and belief
+                        // passes this iteration.
                         let trust = self
-                            .relationships
-                            .iter()
-                            .find(|r| {
-                                r.from == AgentId::new(*agent_idx as u64)
-                                    && r.to == AgentId::new(seller as u64)
-                            })
-                            .map_or(Fixed::from_f64(0.5), |r| r.trust);
+                            .rel_pos(*agent_idx, seller)
+                            .map_or(Fixed::from_f64(0.5), |p| self.relationships[p].trust);
                         // §13.3: Execute trade — buyer pays coin, seller's farm provides grain
                         let base_price = self.market.price(GRAIN_RESOURCE_ID);
                         // Trust discount: high trust → lower price
@@ -399,10 +399,15 @@ impl Simulation {
                                     },
                                 );
                                 // §19.5.J: Record relationship trace — trade builds trust
-                                if let Some(rel) = self.relationships.iter_mut().find(|r| {
-                                    r.from == AgentId::new(*agent_idx as u64)
-                                        && r.to == AgentId::new(seller as u64)
-                                }) {
+                                //
+                                // i331: O(1) dense-lookup position (first-match
+                                // semantics, with the linear scan kept as `rel_pos`'
+                                // revalidating fallback) instead of an O(R) matrix
+                                // scan per trade — the last of the per-entity
+                                // relationship scans removed this iteration.
+                                let trade_rel_pos = self.rel_pos(*agent_idx, seller);
+                                if let Some(rel) = trade_rel_pos.map(|p| &mut self.relationships[p])
+                                {
                                     let old_trust = rel.trust;
                                     rel.trust = (rel.trust + Fixed::from_f64(0.02)).clamp_01();
                                     self.provenance.record_relationship(
