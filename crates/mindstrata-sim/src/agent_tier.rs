@@ -24,6 +24,73 @@ use serde::{Deserialize, Serialize};
 /// to Secondary (measured at 24: 4F/20S, 48: 5F/43S).
 const TIER_MATURITY_TICKS: u64 = 900;
 
+/// §17.1 Secondary→Background entry gate on `narrative_importance`.
+///
+/// **Re-contracted twice at i348, both times on the measured distribution
+/// (§4.4 — the old number was never anchored on the signal it gated).**
+///
+/// The gate used to be `0.1`, but the importance target carries a `+0.15`
+/// base plus non-negative bonuses, so the reachable floor is ≥ 0.15 — i316
+/// measured min 0.3000 and 0 Background agent-ticks in every run (§4.3: the
+/// aggregate tier the scaling strategy is built around could never be
+/// entered). i316 deferred the fix as its own behavioural iteration; this is
+/// that iteration.
+///
+/// The first draft of this fix also kept a `degree < 2` conjunct ("no social
+/// gravity") on the contacted degree. The i348 liveness probe refuted it:
+/// with contact-paced relationship building every village agent embeds
+/// socially — contacted degree p10 = 2–3, and **0 of the below-gate
+/// candidates** across 6 runs (3 seeds × N=12/N=48, 10K ticks) had degree < 2
+/// — so the conjunct is unsatisfiable at every runnable N *and* redundant:
+/// importance's own target already prices gravity via
+/// `min(contacted_degree × 0.02, +0.2)`. Entry is therefore importance-only.
+///
+/// **And the wiring fix moved the distribution itself.** Feeding the honest
+/// degree (instead of `len()` = N−1, which saturated the network bonus at
+/// +0.2 for everyone) dropped the floor 0.3000 → 0.1943 (N=12) / 0.2110
+/// (N=48): importance now differentiates. `i348_background_band`
+/// (3 seeds × calm N=12/N=48 @10K, post-wiring) supplies the band:
+/// min 0.1943/0.2110, p01 0.1947/0.2130, p05 0.2290/0.2151, p50
+/// 0.3622/0.3000, max 0.7004/0.6274. Share of agent-ticks below each
+/// candidate gate:
+///
+/// | gate | calm N=12 | calm N=48 |
+/// |---|---|---|
+/// | < 0.10 (old) | 0.000% | 0.000% |
+/// | < 0.20 | 1.995% | 0.000% |
+/// | < 0.22 | **4.230%** | **11.397%** |
+/// | < 0.25 | 11.731% | 31.465% |
+/// | < 0.30 | 24.578% | 49.618% |
+///
+/// `0.22` is chosen from that table: it sits **above the floor-pinned
+/// cohort** (N=48 min 0.2110 — a 0.20 gate would again hold 0.000% there,
+/// the same unreachable-gate mistake one notch down) while staying below
+/// p05 at N=12 (0.2290), so the gate reads "bottom-of-village", not
+/// "median". The modal N=48 agent sits at exactly ~0.30 (degree 7–8 →
+/// base 0.15 + bonus 0.15), safely above entry.
+const BACKGROUND_IMPORTANCE_GATE: Fixed = Fixed::from_raw(2_200); // 0.22
+
+/// Background→Secondary re-promotion threshold — the upper edge of the
+/// Background residency band `[0.22, 0.25]`.
+///
+/// **Re-contracted at i348 together with the entry gate.** The old exits
+/// (`importance > 0.3` or `relationship_count >= 2`) both break under the
+/// importance-only regime: `degree >= 2` is instantly true for every village
+/// agent (contacted p10 = 2–3), which would eject every Background agent one
+/// reclassify interval after entry — churn, not a tier; and `> 0.3` sits
+/// exactly on the modal importance mass (degree 7–8 → target 0.30), so half
+/// the village would straddle the exit. `0.25` gives a 0.03-wide hysteresis
+/// above the 0.22 entry: agents regain Secondary the moment their gravity
+/// (degree, emotion, events) lifts importance out of the bottom band, and
+/// role/status/crisis exits still fire immediately.
+const BACKGROUND_REPROMOTION_IMPORTANCE: Fixed = Fixed::from_raw(2_500); // 0.25
+
+/// Whether `narrative_importance` falls under the [`BACKGROUND_IMPORTANCE_GATE`].
+#[must_use]
+fn narrative_importance_below_background_gate(importance: Fixed) -> bool {
+    importance < BACKGROUND_IMPORTANCE_GATE
+}
+
 /// Simulation tier for an agent — determines which systems run each tick.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default,
@@ -87,7 +154,20 @@ impl AgentTier {
 
     /// Does this tier participate in social interactions?
     pub fn runs_social_interactions(&self) -> bool {
-        matches!(self, Self::Focal | Self::Secondary)
+        // i348 re-contract (§4.4, measured): Background agents REMAIN
+        // socially present. The tier went live at 25–40% of crisis-world
+        // agent-ticks, and the old exclusion starved every collective
+        // producer through it — faction formation collapsed to 3/6 pestilence
+        // seeds (the i348 producer sweep, seed family 1/5/7/42/55/12345);
+        // with presence restored it is 6/6 (seed 1: 0 → 26 303 live-faction
+        // ticks), and the panic/echo-chamber liveness anchors re-pass
+        // unmodified. Social withdrawal is already modelled behaviourally
+        // (`psychopathology.is_impaired()` gates the same pass), so the tier
+        // must not re-model it as a LOD artifact. Background stays a
+        // *cognitive* rung: no memory encoding, prospection, belief updates,
+        // or theory-of-mind (the predicates that actually cut per-agent
+        // cost); the social fabric is load-bearing and stays whole.
+        true
     }
 
     /// Does this tier run action selection (utility AI)?
@@ -368,9 +448,11 @@ impl AgentTierState {
     /// - No acute crisis
     ///
     /// Demotion to Background:
-    /// - Very low narrative importance (< 0.1) and no relationships
-    ///   (structurally unreachable at village scale — every agent builds a
-    ///   full relationship graph; reserved for sparse multi-settlement runs)
+    /// - importance under [`BACKGROUND_IMPORTANCE_GATE`] (0.22, re-contracted
+    ///   at i348 — see its doc; the old 0.1 sat below the channel's reachable
+    ///   floor and the drafted degree conjunct proved unsatisfiable at every
+    ///   runnable N, so entry is importance-only. Social gravity is already
+    ///   priced into importance itself via the network bonus.)
     pub fn reclassify(
         &mut self,
         status_effective: Fixed,
@@ -392,7 +474,12 @@ impl AgentTierState {
         // mass-demotion ratchet (anger-only post-159, 4F/20S at 24).
         fear: Fixed,
         anger: Fixed,
-        relationship_count: usize,
+        // i348: the former `relationship_count` parameter is REMOVED —
+        // entry is importance-only (see BACKGROUND_IMPORTANCE_GATE) and
+        // social gravity is priced into importance itself via the network
+        // bonus in `update_narrative_importance` (fed the honest contacted
+        // degree). A separate degree conjunct here was proven unsatisfiable
+        // at every runnable N and redundant with its own input signal.
         tick: u64,
         min_reassign_interval: u64,
     ) {
@@ -457,20 +544,22 @@ impl AgentTierState {
                     || self.narrative_importance > Fixed::from_f64(0.5)
                 {
                     AgentTier::Focal
-                } else if self.narrative_importance < Fixed::from_f64(0.1) && relationship_count < 2
-                {
+                } else if narrative_importance_below_background_gate(self.narrative_importance) {
                     AgentTier::Background
                 } else {
                     AgentTier::Secondary
                 }
             }
             AgentTier::Background => {
-                // Promote if any relevance signal appears
+                // Promote on any relevance signal, or when importance climbs
+                // out of the residency band (i348: see
+                // BACKGROUND_REPROMOTION_IMPORTANCE — the old `count >= 2`
+                // exit was instantly true for everyone and the old `> 0.3`
+                // exit straddled the modal mass).
                 if high_status
                     || has_institutional_role
                     || crisis
-                    || self.narrative_importance > Fixed::from_f64(0.3)
-                    || relationship_count >= 2
+                    || self.narrative_importance > BACKGROUND_REPROMOTION_IMPORTANCE
                 {
                     AgentTier::Secondary
                 } else {
@@ -583,12 +672,14 @@ mod tests {
         assert!(AgentTier::Secondary.runs_action_selection());
         assert!(!AgentTier::Background.runs_action_selection());
 
-        // §17.2 (Iteration 158): the social-participation gate now has a
-        // production consumer — Background agents must be excluded from the
-        // individual interaction pass (aggregate simulation).
+        // §17.2 (Iteration 158 → i348 re-contract): social presence is
+        // universal — Background agents stay in the interaction pass (the
+        // exclusion starved collective producers once the tier went live);
+        // the tier's cut is cognitive (memory/prospection/belief/ToM),
+        // pinned above.
         assert!(AgentTier::Focal.runs_social_interactions());
         assert!(AgentTier::Secondary.runs_social_interactions());
-        assert!(!AgentTier::Background.runs_social_interactions());
+        assert!(AgentTier::Background.runs_social_interactions());
     }
 
     #[test]
@@ -600,7 +691,6 @@ mod tests {
             false,
             Fixed::ZERO,
             Fixed::ZERO,
-            0,
             100,
             10, // min interval
         );
@@ -616,7 +706,6 @@ mod tests {
             false,
             Fixed::ZERO,
             Fixed::ZERO,
-            0,
             100,
             100, // min interval = 100
         );
@@ -636,7 +725,6 @@ mod tests {
             false,
             Fixed::ZERO,          // fear alone no longer triggers crisis
             Fixed::from_f64(0.7), // high anger = acute crisis
-            0,
             100,
             10,
         );
@@ -665,7 +753,6 @@ mod tests {
             false,
             Fixed::from_f64(0.7), // elevated fear — the differentiated band
             Fixed::ZERO,          // but not acutely angry
-            0,
             100,
             10,
         );
@@ -676,14 +763,19 @@ mod tests {
         );
         // Same state at a sub-threshold fear: no crisis → stays Secondary
         // (the role/importance gradient alone drives the split).
+        // i348: importance is pinned at 0.4 (inside the reachable band, floor
+        // 0.30) so this leg isolates the FEAR channel in the Secondary/Focal
+        // band — at the field-default 0.0 the state would now legitimately land
+        // Background via the re-contracted entry gate, which is the dedicated
+        // demotion test's contract, not this one's.
         let mut calm = AgentTierState::new(AgentTier::Secondary, 0);
+        calm.narrative_importance = Fixed::from_f64(0.4);
         calm.reclassify(
             Fixed::from_f64(0.3),
             false,
             false,
             Fixed::from_f64(0.4), // sub-threshold fear
             Fixed::ZERO,
-            0,
             100,
             10,
         );
@@ -704,7 +796,6 @@ mod tests {
             false,
             Fixed::ZERO,
             Fixed::ZERO,
-            0,
             1000, // mature (>= 300 ticks since last reassign)
             10,
         );
@@ -723,7 +814,6 @@ mod tests {
             false,
             Fixed::ZERO,
             Fixed::ZERO,
-            0,
             1000,
             10,
         );
@@ -743,7 +833,6 @@ mod tests {
             false,
             Fixed::ZERO,
             Fixed::ZERO,
-            0,
             200, // 200 - 100 = 100 < 300 → no demotion
             10,
         );
@@ -760,7 +849,6 @@ mod tests {
             false,
             Fixed::ZERO,
             Fixed::ZERO,
-            0,
             1000,
             10,
         );
@@ -769,11 +857,12 @@ mod tests {
 
     #[test]
     fn reclassify_demotes_secondary_to_background_on_low_relevance() {
-        // The §17.1 Secondary → Background demotion path — an agent with
-        // near-zero narrative importance and no relationships (no social
-        // gravity, no story presence) drops to the aggregate tier. The
-        // budget must follow (Background = zero memory/prospection/social
-        // budgets) so the per-tick gates actually bite.
+        // The §17.1 Secondary → Background demotion path — an agent whose
+        // narrative importance rests in the bottom band (i348: entry is
+        // importance-only; social gravity is already priced into importance
+        // via the network bonus) drops to the aggregate tier. The budget
+        // must follow (Background = zero memory/prospection/social budgets)
+        // so the per-tick gates actually bite.
         let mut state = AgentTierState::new(AgentTier::Secondary, 0);
         state.narrative_importance = Fixed::from_f64(0.05);
         state.reclassify(
@@ -782,7 +871,6 @@ mod tests {
             false,
             Fixed::ZERO,
             Fixed::ZERO,
-            1, // relationship_count < 2
             1000,
             10,
         );
@@ -793,19 +881,54 @@ mod tests {
     }
 
     #[test]
-    fn reclassify_keeps_secondary_when_relationships_exist() {
-        // Guard: relationship_count >= 2 must block the demotion even at
-        // near-zero narrative importance — an agent with friends is not
-        // aggregate material.
+    fn reclassify_promotes_background_on_importance_leaving_band() {
+        // i348: the Background→Secondary exit is importance-only (> 0.25,
+        // upper edge of the residency band) plus the role/status/crisis
+        // signals. An agent whose gravity lifts importance out of the bottom
+        // band must re-promote — non-trapping is the tier's liveness
+        // contract (the probe measures it in vivo; this pins the branch).
+        let mut state = AgentTierState::new(AgentTier::Background, 0);
+        state.narrative_importance = Fixed::from_f64(0.26);
+        state.reclassify(
+            Fixed::from_f64(0.2), // low status, no role, no crisis
+            false,
+            false,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            1000,
+            10,
+        );
+        assert_eq!(state.tier, AgentTier::Secondary);
+
+        // Inside the band (0.23): stays Background — hysteresis, not churn.
+        let mut mid = AgentTierState::new(AgentTier::Background, 0);
+        mid.narrative_importance = Fixed::from_f64(0.23);
+        mid.reclassify(
+            Fixed::from_f64(0.2),
+            false,
+            false,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            1000,
+            10,
+        );
+        assert_eq!(mid.tier, AgentTier::Background);
+    }
+
+    #[test]
+    fn reclassify_keeps_secondary_when_importance_in_residency_band() {
+        // Guard (i348 re-contract): importance at 0.23 — inside the residency
+        // band [0.22, 0.25] but above the entry gate — must NOT demote. The
+        // old test guarded the refuted degree conjunct; the surviving
+        // invariant is that only the bottom band enters Background.
         let mut state = AgentTierState::new(AgentTier::Secondary, 0);
-        state.narrative_importance = Fixed::from_f64(0.05);
+        state.narrative_importance = Fixed::from_f64(0.23);
         state.reclassify(
             Fixed::from_f64(0.2),
             false,
             false,
             Fixed::ZERO,
             Fixed::ZERO,
-            2, // relationship_count >= 2
             1000,
             10,
         );
@@ -908,7 +1031,6 @@ mod tests {
             false,
             Fixed::ZERO,
             Fixed::ZERO,
-            0,
             100,
             10,
         );

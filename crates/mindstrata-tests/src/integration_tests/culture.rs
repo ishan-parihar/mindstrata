@@ -1684,29 +1684,25 @@ fn ritual_reinforces_internalized_norms() {
         "different seeds should internalize differently"
     );
 }
-/// §17.2 (Iteration 158): the Background-tier social-participation gate is
-/// LIVE — `runs_social_interactions()` now has a production consumer at the
-/// social-interaction call site (the Iter-144 report found the method dead
-/// code: Background agents still ran full social interactions). A forced
-/// Background agent must be absent from the entire InteractionOccurred event
-/// log for the window (neither initiator nor target), while the Focal
-/// population keeps interacting — the gate is differential, not a global
-/// freeze. Reclassification is blocked via `last_tier_reassign_tick =
-/// u64::MAX` so the forced tier persists (reclassify's interval guard
-/// returns early).
-///
-/// ZERO-BLAST by construction: no agent is ever Background in any
-/// calibrated window (Iter-145 probe: 0B at every size/seed), so the mask
-/// is all-true and every existing run is byte-identical.
+/// §17.2 (Iteration 158 → i348 re-contract): the Background tier's SOCIAL
+/// clause is presence-only — Background agents REMAIN in the social pass
+/// (the old exclusion starved every collective producer once the tier went
+/// live: faction formation 3/6 pestilence seeds, measured by the i348
+/// producer sweep; restored to 6/6 with presence). The surviving LOD cut is
+/// COGNITIVE: a forced Background agent must encode zero episodic memories
+/// for the window (neither from the interaction stream nor any other event
+/// channel), while the Focal population keeps encoding — the gate is
+/// differential, not a global freeze. Reclassification is blocked via
+/// `last_tier_reassign_tick = u64::MAX` so the forced tier persists
+/// (reclassify's interval guard returns early).
 #[test]
-fn background_tier_agents_do_not_participate_in_social_interactions() {
-    use mindstrata_core::event::SimEvent;
+fn background_tier_agents_do_not_encode_memories_but_stay_socially_present() {
     use mindstrata_sim::agent_tier::{AgentTier, CognitiveBudget};
 
     let mut sim = run_sim(42, 2000);
 
-    // Force agent 0 → Background (no individual social interactions),
-    // block reclassification for the window.
+    // Force agent 0 → Background (no memory encoding), block
+    // reclassification for the window.
     {
         let bg = CognitiveBudget::background();
         sim.agents[0].agent_tier.tier = AgentTier::Background;
@@ -1715,43 +1711,32 @@ fn background_tier_agents_do_not_participate_in_social_interactions() {
         a0.agent_tier.budget_tracker.reset(&a0.agent_tier.budget);
         a0.agent_tier.last_tier_reassign_tick = u64::MAX;
     }
-    assert!(!sim.agents[0].agent_tier.tier.runs_social_interactions());
+    assert!(!sim.agents[0].agent_tier.tier.runs_memory_encoding());
 
     let window_start = sim.current_tick().as_u64();
+    let base_episodes = sim.agents[0].memory.episodes.len();
     sim.run(500);
 
-    // Scan the full (unbounded) event log for the window: agent 0 must not
-    // appear as either side of any InteractionOccurred.
-    let events = sim.recent_events(usize::MAX);
-    let bg_involved = events
-        .iter()
-        .filter(|ev| {
-            if let SimEvent::InteractionOccurred { from, to, tick, .. } = ev {
-                (from.as_u64() == 0 || to.as_u64() == 0) && tick.as_u64() > window_start
-            } else {
-                false
-            }
-        })
-        .count();
+    // Agent 0 must encode nothing: episodes at count, and every
+    // InteractionOccurred in the window still flows (it stays a participant
+    // — presence is universal as of i348).
     assert_eq!(
-        bg_involved, 0,
-        "Background agent participated in {bg_involved} interactions — the §17.2 social gate has no teeth"
+        sim.agents[0].memory.episodes.len(),
+        base_episodes,
+        "Background agent encoded memories — the §17.2 cognitive gate has no teeth"
     );
 
-    // Control: the Focal population must still interact in the same window.
-    let others_interacted = events
+    // Control: the Focal population must still encode in the same window
+    // (and the social fabric must include agent 0's rows, not freeze).
+    let others_encoded = sim
+        .agents
         .iter()
-        .filter(|ev| {
-            if let SimEvent::InteractionOccurred { from, to, tick, .. } = ev {
-                from.as_u64() != 0 && to.as_u64() != 0 && tick.as_u64() > window_start
-            } else {
-                false
-            }
-        })
+        .skip(1)
+        .filter(|a| !a.memory.episodes.is_empty())
         .count();
     assert!(
-        others_interacted > 0,
-        "Focal population stopped interacting — the gate must be differential"
+        others_encoded > 0,
+        "Focal population stopped encoding — the gate must be differential"
     );
 }
 // ── §13.1 / AP2 Phase 5: Meme virality tuning ───────────────────────

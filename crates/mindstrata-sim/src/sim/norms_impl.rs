@@ -857,6 +857,11 @@ impl Simulation {
         // ── 15. Derived mental state computation (§22) ─────────────
         // §17: Periodic tier reclassification (every 100 ticks)
         if tick_u64.is_multiple_of(100) && tick_u64 > 0 {
+            // i348: one O(R) contacted-degree pass for the whole reclassify
+            // batch (the i331 pattern) instead of an O(R) pass per agent —
+            // the same census `update_narrative_importance` should read, and
+            // now does.
+            let contacted = self.contacted_degrees();
             for (idx, agent) in self.agents.iter_mut().enumerate() {
                 let agent_id = mindstrata_core::id::AgentId::new(idx as u64);
                 let has_role = self
@@ -867,7 +872,7 @@ impl Simulation {
                     agent.emotions.fear + agent.emotions.anger + agent.emotions.joy;
                 agent.agent_tier.update_narrative_importance(
                     has_role,
-                    agent.relationship_v2s.len(),
+                    contacted[idx] as usize,
                     emotional_intensity,
                     0,
                 );
@@ -877,7 +882,6 @@ impl Simulation {
                     false, // is_faction_leader — would need to check faction leadership
                     agent.emotions.fear,
                     agent.emotions.anger,
-                    agent.relationship_v2s.len(),
                     tick_u64,
                     100, // min reassign interval
                 );
