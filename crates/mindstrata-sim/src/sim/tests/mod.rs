@@ -307,6 +307,65 @@ fn housing_scales_with_population_and_keeps_small_villages_historical() {
     }
 }
 
+/// i345 (A11): above the calibrated house count the ring degenerates, so the
+/// layout must place every house on its **own** tile.
+///
+/// i344 measured the defect this pins: `ring_span = min(w,h)/2 − 2` is a function
+/// of world size only, so above ~29 houses the ring's angular stride collapses and
+/// `place_site` silently overwrites an occupied tile — at N=192 the ring placed 48
+/// houses onto **43 tiles**, and 19 agents ended up co-located on one cell against
+/// the declared `SiteKind::House.capacity` of 4. The area packing (Vogel spiral,
+/// applied above `MAX_RING_HOUSE_COUNT = 24`) places each house on a free tile, so
+/// house sites and house tiles are one-to-one. The count check is what keeps the
+/// round-robin in `population.rs` honest: fewer tiles than houses is the failure
+/// mode, not a rounding detail.
+#[test]
+fn large_villages_place_one_house_per_tile() {
+    let n = 192u32;
+    let mut sim = Simulation::new(SimConfig {
+        seed: 42,
+        max_ticks: 1,
+        world_width: 32,
+        world_height: 32,
+        num_agents: n,
+        snapshot_interval: None,
+    });
+    sim.populate();
+
+    let houses: Vec<_> = sim
+        .world
+        .sites
+        .iter()
+        .filter(|s| matches!(s.kind, crate::world::SiteKind::House))
+        .map(|s| s.id)
+        .collect();
+    assert_eq!(
+        houses.len(),
+        crate::world_gen::houses_for_population(n) as usize,
+        "house sites generated for N={n}"
+    );
+
+    let mut tiles_with_a_house = 0usize;
+    for y in 0..32 {
+        for x in 0..32 {
+            if sim
+                .world
+                .tile(x, y)
+                .and_then(|t| t.site)
+                .is_some_and(|id| houses.contains(&id))
+            {
+                tiles_with_a_house += 1;
+            }
+        }
+    }
+    assert_eq!(
+        tiles_with_a_house,
+        houses.len(),
+        "N={n}: every house must occupy its own tile (i344 measured the ring collapsing \
+         48 houses onto 43 tiles)"
+    );
+}
+
 // Shared test helper (used by family + conflict domains).
 /// §10.8: Find two agents in different seeded clans (home-site parity
 /// seeds 2 clans during populate).

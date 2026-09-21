@@ -42,6 +42,22 @@ pub fn houses_for_population(agents: u32) -> u32 {
     agents.div_ceil(4).max(DEFAULT_HOUSE_COUNT)
 }
 
+/// i345 (A11): the house count above which the ring layout is replaced by an
+/// area packing.
+///
+/// `ring_span = min(w,h)/2 − 2` is a function of **world size only**, so the
+/// ring's angular stride shrinks as houses are added: at 48 houses in the
+/// charter's 32×32 world it is `2π·14/48 ≈ 1.8` tiles and i344 measured a
+/// minimum pairwise house gap of **1 tile**, 8.4% of house pairs inside the
+/// radius-5 perception neighbourhood, and (with i340's housing) **19 agents
+/// co-located on one cell against the declared `SiteKind::House.capacity = 4`**.
+///
+/// 24 is the largest count ever *measured or calibrated* — i339/i340 probed up
+/// to N=96 ⇒ `ceil(96/4) = 24` houses — so the legacy ring path stays
+/// byte-identical for every calibrated run and the packing governs only
+/// unexplored territory (N ≥ 116).
+pub const MAX_RING_HOUSE_COUNT: u32 = 24;
+
 /// Generate a small village world with the historical 8 houses.
 pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
     generate_village_with_houses(world, rng, DEFAULT_HOUSE_COUNT);
@@ -137,35 +153,92 @@ pub fn generate_village_with_houses(world: &mut World, rng: &mut RngStreams, hou
     // contact saturate); the legacy 8-house case keeps radius ~4 exactly.
     let house_count = houses.max(1);
     let ring_span = (w.min(h) as f64 / 2.0 - 2.0).max(4.0);
-    let ring_base = if house_count <= DEFAULT_HOUSE_COUNT {
-        4.0
-    } else {
-        ring_span
+    let house_site = |i: u32, id: u64| Site {
+        id: EntityId::new(id),
+        kind: SiteKind::House,
+        name: format!("House {}", i + 1),
+        owner: None,
+        capacity: 4,
+        storage_capacity: Fixed::from_f64(200.0),
+        inventory: vec![],
     };
-    for i in 0..house_count {
-        let angle = (i as f64) * 2.0 * std::f64::consts::PI / house_count as f64
-            + world_rng.random_range(-0.15..0.15);
-        let radius = ring_base + world_rng.random_range(-1.0..1.0);
-        let mut hx = center_x + (angle.cos() * radius) as i32;
-        let mut hy = center_y + (angle.sin() * radius) as i32;
-        let on_water = world
-            .tile(hx, hy)
-            .is_some_and(|t| matches!(t.terrain, Terrain::Water));
-        if on_water {
-            hx = center_x + (angle.cos() * ring_base) as i32;
-            hy = center_y + (angle.sin() * ring_base) as i32;
-        }
-        let site = Site {
-            id: EntityId::new(site_id),
-            kind: SiteKind::House,
-            name: format!("House {}", i + 1),
-            owner: None,
-            capacity: 4,
-            storage_capacity: Fixed::from_f64(200.0),
-            inventory: vec![],
+    if house_count <= MAX_RING_HOUSE_COUNT {
+        // The historical ring — byte-identical for every calibrated run (same
+        // draw order, same radius rule). See MAX_RING_HOUSE_COUNT.
+        let ring_base = if house_count <= DEFAULT_HOUSE_COUNT {
+            4.0
+        } else {
+            ring_span
         };
-        if place_site(world, hx, hy, site) {
-            site_id += 1;
+        for i in 0..house_count {
+            let angle = (i as f64) * 2.0 * std::f64::consts::PI / house_count as f64
+                + world_rng.random_range(-0.15..0.15);
+            let radius = ring_base + world_rng.random_range(-1.0..1.0);
+            let mut hx = center_x + (angle.cos() * radius) as i32;
+            let mut hy = center_y + (angle.sin() * radius) as i32;
+            let on_water = world
+                .tile(hx, hy)
+                .is_some_and(|t| matches!(t.terrain, Terrain::Water));
+            if on_water {
+                hx = center_x + (angle.cos() * ring_base) as i32;
+                hy = center_y + (angle.sin() * ring_base) as i32;
+            }
+            if place_site(world, hx, hy, house_site(i, site_id)) {
+                site_id += 1;
+            }
+        }
+    } else {
+        // i345 (A11): a spacing-aware AREA packing for house counts the ring
+        // cannot hold. A Vogel/sunflower spiral gives every house the same share
+        // of the disc's area (`r ∝ √i`) instead of crowding the rim, so the mean
+        // nearest-neighbour spacing is `≈1.7·√(area/n)` — about 6 tiles at 48
+        // houses in a 32×32 world, against the ring's measured 1-tile minimum.
+        //
+        // This branch consumes a different number of World-stream draws than the
+        // ring (one jitter per house either way, but the same count) — it is new
+        // territory above the calibrated count, not a re-housed historical
+        // village, which is the honest reading for a layout the ring cannot do.
+        // Placement is deterministic; a candidate that lands on water or on an
+        // existing site is nudged along a fixed golden-angle spiral until a free
+        // tile is found, so the house count (and therefore `population.rs`'s
+        // round-robin) is honoured at every N.
+        const GOLDEN_ANGLE: f64 = 2.399_963_229_728_653;
+        for i in 0..house_count {
+            let frac = (f64::from(i) + 0.5) / f64::from(house_count);
+            let angle = f64::from(i) * GOLDEN_ANGLE + world_rng.random_range(-0.2..0.2);
+            let radius = ring_span * frac.sqrt();
+            let base_x = center_x + (angle.cos() * radius).round() as i32;
+            let base_y = center_y + (angle.sin() * radius).round() as i32;
+            for attempt in 0..96u32 {
+                // attempt 0 is the spiral slot itself; later attempts widen
+                // along a golden-angle ray (a ±1 nudge would just stack houses
+                // on adjacent tiles, re-creating the ring's 1-tile minimum).
+                let (dx, dy) = if attempt == 0 {
+                    (0, 0)
+                } else {
+                    let a = f64::from(attempt) * GOLDEN_ANGLE;
+                    let step = 1.0 + f64::from(attempt) * 0.35;
+                    (
+                        (a.cos() * step).round() as i32,
+                        (a.sin() * step).round() as i32,
+                    )
+                };
+                let (x, y) = (base_x + dx, base_y + dy);
+                let free = world
+                    .tile(x, y)
+                    .is_some_and(|t| t.site.is_none() && !matches!(t.terrain, Terrain::Water));
+                if free {
+                    if place_site(world, x, y, house_site(i, site_id)) {
+                        site_id += 1;
+                    }
+                    break;
+                }
+            }
+            // If no free tile was found the house is dropped, as the ring path
+            // already does for out-of-bounds candidates; the spiral's coverage
+            // makes that unreachable in practice, and `population.rs`
+            // round-robins over whatever was placed. The new
+            // `large_villages_place_one_house_per_tile` pin guards the count.
         }
     }
 
