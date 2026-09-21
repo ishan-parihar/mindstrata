@@ -779,6 +779,7 @@ pub mod chronicle;
 mod clans;
 mod core;
 mod cults_noosphere;
+pub mod decision_census;
 mod diplomacy_impl;
 mod economy;
 mod education;

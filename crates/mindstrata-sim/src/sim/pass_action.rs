@@ -1,6 +1,9 @@
 //! Tick pass 4: action execution effects.
 
 use super::command_goal_action;
+use super::decision_census::{
+    SRC_COMMAND, SRC_FEUD, SRC_HABIT, SRC_REFLEX, SRC_ROUTINE, SRC_UTILITY, SRC_VETO,
+};
 use super::{
     ActionKind, AgentBundle, AgentId, DecisionFactor, DecisionTrace, EntityId, Fixed, Goal,
     GoalKind, GoalSource, IdentityKind, SimEvent, Simulation, Tick,
@@ -316,8 +319,8 @@ impl Simulation {
                 } else {
                     None
                 };
-                let mut action = if let Some(forced) = reflex_override {
-                    forced
+                let (mut action, mut action_source) = if let Some(forced) = reflex_override {
+                    (forced, SRC_REFLEX)
                 } else if let Some((cmd_action, cmd_kind)) =
                     command_goal_action(&goals[i], &needs[i])
                 {
@@ -331,11 +334,11 @@ impl Simulation {
                     // a structural no-op everywhere calibrated and draws
                     // zero RNG.
                     goals[i].retain(|g| !(g.source == GoalSource::Command && g.kind == cmd_kind));
-                    cmd_action
+                    (cmd_action, SRC_COMMAND)
                 } else if follow_routine && effective_routine_strength > effective_routine_threshold
                 {
                     // §10.3: Routine creates behavioral stability — prefer scheduled action
-                    routine_action
+                    (routine_action, SRC_ROUTINE)
                 } else if !agents[i].feuds.is_empty()
                     && emotions[i].anger > Fixed::from_f64(0.4)
                     && needs[i].hunger < Fixed::from_f64(0.85)
@@ -343,10 +346,13 @@ impl Simulation {
                 {
                     // §19.5.G: Angry feuding agents Move toward their feud target, NOT when critical needs demand attention
                     let feud_target = agents[i].feuds[0];
-                    ActionKind::Move {
-                        target_x: agents[feud_target].position.x,
-                        target_y: agents[feud_target].position.y,
-                    }
+                    (
+                        ActionKind::Move {
+                            target_x: agents[feud_target].position.x,
+                            target_y: agents[feud_target].position.y,
+                        },
+                        SRC_FEUD,
+                    )
                 } else {
                     // §12.3: Institution collective morale modulates norm compliance.
                     // Members of institutions_reg with high morale are more norm-compliant.
@@ -380,101 +386,104 @@ impl Simulation {
                                 );
                         }
                     }
-                    actions::select_action(
-                        &actions::DecisionContext {
-                            needs: &needs[i],
-                            personality: &personalities[i],
-                            active_goals: &goals[i],
-                            identity: &agents[i].identity,
-                            decision_policy: &agents[i].decision_policy,
-                            total_grain,
-                            total_water,
-                            coin: agents[i].wealth.coin,
-                            norm_pressure: adjusted_pressure,
-                            anger: emotions[i].anger,
-                            fear: emotions[i].fear,
-                            joy: emotions[i].joy,
-                            sadness: emotions[i].sadness,
-                            stress,
-                            fairness: agents[i].moral_values.fairness,
-                            authority: agents[i].moral_values.authority,
-                            care: agents[i].moral_values.care,
-                            loyalty: agents[i].moral_values.loyalty,
-                            // §9.2 (Iteration 94): the agent's learned
-                            // RL valuation weights feed selection.
-                            action_values: agents[i].neural_like.values,
-                            // §8.1.5 (Iteration 96): the full-pressure
-                            // motivation argmax biases selection toward
-                            // actions that relieve the dominant need.
-                            dominant_need: agents[i].motivation.dominant_need,
-                            dominant_pressure: agents[i].motivation.dominant_pressure(),
-                            // §8.1.16 (Iteration 103): the scenario-
-                            // grounded dread (regrounded on the daily
-                            // phase, before selection in the same tick)
-                            // drives precautionary provisioning — Work/
-                            // Trade up, Rest down. Zero-at-zero: agents
-                            // whose tiers do not run prospection hold
-                            // dread 0 → legacy utility.
-                            dread: agents[i].prospection.dread,
-                            // §8.1.16 (Iteration 203): the scenario-
-                            // grounded hope drives aspirational
-                            // engagement — Socialize/Worship up, Idle
-                            // down (the positive mirror of dread).
-                            hope: agents[i].prospection.hope,
-                            // §8.1.12 (Iteration 204): the blended
-                            // emotion + executive-function planning
-                            // confidence drives deferred-gratification
-                            // calibration — Work up / Idle down when
-                            // confident (baseline-corrected at 0.5, so
-                            // default populations stay byte-identical).
-                            planning_confidence: agents[i].prospection.planning_confidence,
-                            // Iteration 232: mood drift — valence
-                            // from affect module ([-1,1]) drives
-                            // social/exploration vs withdrawal.
-                            mood_valence: agents[i].affect.valence,
-                            // Iteration 233: seasonal behavioral modulation
-                            season: season.current as u8,
-                            // Iteration 236: age-related behavioral modulation
-                            life_stage: agents[i].embodied.development.life_stage as u8,
-                            // Iteration 248 (Arc B): sleep-debt social
-                            // withdrawal — zero below the deprivation
-                            // threshold (0.5), scaling above; rested
-                            // agents are byte-identical.
-                            social_withdrawal: {
-                                let debt = agents[i].embodied.circadian.sleep_debt;
-                                if debt > Fixed::from_f64(0.5) {
-                                    debt - Fixed::from_f64(0.5)
-                                } else {
-                                    Fixed::ZERO
-                                }
+                    (
+                        actions::select_action(
+                            &actions::DecisionContext {
+                                needs: &needs[i],
+                                personality: &personalities[i],
+                                active_goals: &goals[i],
+                                identity: &agents[i].identity,
+                                decision_policy: &agents[i].decision_policy,
+                                total_grain,
+                                total_water,
+                                coin: agents[i].wealth.coin,
+                                norm_pressure: adjusted_pressure,
+                                anger: emotions[i].anger,
+                                fear: emotions[i].fear,
+                                joy: emotions[i].joy,
+                                sadness: emotions[i].sadness,
+                                stress,
+                                fairness: agents[i].moral_values.fairness,
+                                authority: agents[i].moral_values.authority,
+                                care: agents[i].moral_values.care,
+                                loyalty: agents[i].moral_values.loyalty,
+                                // §9.2 (Iteration 94): the agent's learned
+                                // RL valuation weights feed selection.
+                                action_values: agents[i].neural_like.values,
+                                // §8.1.5 (Iteration 96): the full-pressure
+                                // motivation argmax biases selection toward
+                                // actions that relieve the dominant need.
+                                dominant_need: agents[i].motivation.dominant_need,
+                                dominant_pressure: agents[i].motivation.dominant_pressure(),
+                                // §8.1.16 (Iteration 103): the scenario-
+                                // grounded dread (regrounded on the daily
+                                // phase, before selection in the same tick)
+                                // drives precautionary provisioning — Work/
+                                // Trade up, Rest down. Zero-at-zero: agents
+                                // whose tiers do not run prospection hold
+                                // dread 0 → legacy utility.
+                                dread: agents[i].prospection.dread,
+                                // §8.1.16 (Iteration 203): the scenario-
+                                // grounded hope drives aspirational
+                                // engagement — Socialize/Worship up, Idle
+                                // down (the positive mirror of dread).
+                                hope: agents[i].prospection.hope,
+                                // §8.1.12 (Iteration 204): the blended
+                                // emotion + executive-function planning
+                                // confidence drives deferred-gratification
+                                // calibration — Work up / Idle down when
+                                // confident (baseline-corrected at 0.5, so
+                                // default populations stay byte-identical).
+                                planning_confidence: agents[i].prospection.planning_confidence,
+                                // Iteration 232: mood drift — valence
+                                // from affect module ([-1,1]) drives
+                                // social/exploration vs withdrawal.
+                                mood_valence: agents[i].affect.valence,
+                                // Iteration 233: seasonal behavioral modulation
+                                season: season.current as u8,
+                                // Iteration 236: age-related behavioral modulation
+                                life_stage: agents[i].embodied.development.life_stage as u8,
+                                // Iteration 248 (Arc B): sleep-debt social
+                                // withdrawal — zero below the deprivation
+                                // threshold (0.5), scaling above; rested
+                                // agents are byte-identical.
+                                social_withdrawal: {
+                                    let debt = agents[i].embodied.circadian.sleep_debt;
+                                    if debt > Fixed::from_f64(0.5) {
+                                        debt - Fixed::from_f64(0.5)
+                                    } else {
+                                        Fixed::ZERO
+                                    }
+                                },
+                                // Iteration 247 (Arc B — interoception): the
+                                // somatic marker — how much worse than a
+                                // default interoceptor the agent feels (fatigue
+                                // + pain). Biases risky actions down; exactly
+                                // zero for default configurations, so calm
+                                // worlds stay byte-identical.
+                                somatic_marker: agents[i]
+                                    .interoception
+                                    .somatic_risk_bias(needs[i].fatigue, agents[i].embodied.injury),
+                                // AP3 DC-1 (task 3.4): development gating —
+                                // fulfillment thresholds via needs bands.
+                                // Zero at neutral (task 3.1 newborn/3.2 virgin)
+                                // so goldens stay byte-identical until field moves.
+                                development: &agents[i].development,
+                                // DC-2 Era III lite: polarity_claims list
+                                // (read-only; the action selector applies the
+                                // i282 safe-coefficient 0.01 bias to social
+                                // actions based on ActiveTension count).
+                                polarity_claims: &agents[i].polarity_claims,
+                                // WP-J (i280): institution-membership work
+                                // bonus (zero below the band-III gate).
+                                institution_work_bonus,
+                                // i281: anchors the polarity-claim salience
+                                // window (1000-tick recency integral).
+                                current_tick: tick_u64,
                             },
-                            // Iteration 247 (Arc B — interoception): the
-                            // somatic marker — how much worse than a
-                            // default interoceptor the agent feels (fatigue
-                            // + pain). Biases risky actions down; exactly
-                            // zero for default configurations, so calm
-                            // worlds stay byte-identical.
-                            somatic_marker: agents[i]
-                                .interoception
-                                .somatic_risk_bias(needs[i].fatigue, agents[i].embodied.injury),
-                            // AP3 DC-1 (task 3.4): development gating —
-                            // fulfillment thresholds via needs bands.
-                            // Zero at neutral (task 3.1 newborn/3.2 virgin)
-                            // so goldens stay byte-identical until field moves.
-                            development: &agents[i].development,
-                            // DC-2 Era III lite: polarity_claims list
-                            // (read-only; the action selector applies the
-                            // i282 safe-coefficient 0.01 bias to social
-                            // actions based on ActiveTension count).
-                            polarity_claims: &agents[i].polarity_claims,
-                            // WP-J (i280): institution-membership work
-                            // bonus (zero below the band-III gate).
-                            institution_work_bonus,
-                            // i281: anchors the polarity-claim salience
-                            // window (1000-tick recency integral).
-                            current_tick: tick_u64,
-                        },
-                        ctx.rng,
+                            ctx.rng,
+                        ),
+                        SRC_UTILITY,
                     )
                 };
                 // §8.1.19 (P3-1, August 14, 2026): habitual fallback
@@ -521,7 +530,7 @@ impl Simulation {
                         _ => "",
                     };
                     if let Some(habit) = agents[i].psych_skills.execute_habit(trigger, tick_u64) {
-                        action = match habit.as_str() {
+                        let substituted = match habit.as_str() {
                             "Work" => ActionKind::Work,
                             "Trade" => ActionKind::Trade,
                             "Socialize" => ActionKind::Socialize,
@@ -529,6 +538,12 @@ impl Simulation {
                             "Eat" => ActionKind::Eat,
                             _ => action,
                         };
+                        // i346 census: only a habit that actually changed the
+                        // action counts as the deciding source.
+                        if substituted != action {
+                            action_source = SRC_HABIT;
+                        }
+                        action = substituted;
                     }
                 }
                 // Iteration 309: a body at its limits does not exert itself.
@@ -539,8 +554,13 @@ impl Simulation {
                 // cannot smuggle `Work` past the veto either.
                 if health_critical && is_exerting(action) {
                     action = ActionKind::Rest;
+                    action_source = SRC_VETO;
                 }
                 agents[i].current_action = action;
+                // i346: record the finalized (source, action) pair. Off by
+                // default — one relaxed atomic load per agent-tick when the
+                // census has never been enabled.
+                super::decision_census::record(action_source, action);
                 agents[i].action_progress = action.definition().duration_ticks;
                 tick_action_starts.push((i, action));
 

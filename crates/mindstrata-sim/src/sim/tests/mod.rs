@@ -3,6 +3,7 @@
 //! from the cfg(test)-gated `mod tests;` declaration in mod.rs.
 
 mod biology;
+mod census;
 mod conflict;
 mod culture;
 mod development;

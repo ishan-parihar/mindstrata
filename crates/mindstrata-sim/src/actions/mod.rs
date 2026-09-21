@@ -785,6 +785,12 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
 
     let mut best_action = ActionKind::Idle;
     let mut best_utility = Fixed::MIN;
+    // i346 census: the realized utility of the two candidates that carry no
+    // need-relief term of their own (`Wander` — ledger A8 — and `Idle`).
+    // Recording where they finish is what turns "never selected" into a
+    // sizing — see `sim::decision_census`.
+    let mut wander_utility: Option<Fixed> = None;
+    let mut idle_utility: Option<Fixed> = None;
 
     for kind in &candidates {
         let def = kind.definition();
@@ -995,10 +1001,27 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
         let dev_nudge = development_pathology_nudge(*kind, &ctx.development.pathology);
         utility += dev_nudge;
 
+        if matches!(kind, ActionKind::Wander) {
+            wander_utility = Some(utility);
+        } else if matches!(kind, ActionKind::Idle) {
+            idle_utility = Some(utility);
+        }
+
         if utility > best_utility {
             best_utility = utility;
             best_action = *kind;
         }
+    }
+
+    // i346: hand the arbitration to the census. `record_utility_sample` is
+    // gated on the census being enabled and only reads values the loop has
+    // already computed — no RNG draw, no state write — so an instrumented run
+    // is byte-identical to an uninstrumented one.
+    if let (Some(wander_utility), Some(idle_utility)) = (wander_utility, idle_utility) {
+        crate::sim::decision_census::record_utility_sample(
+            (best_utility - wander_utility).to_f64(),
+            (best_utility - idle_utility).to_f64(),
+        );
     }
 
     best_action
