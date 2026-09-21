@@ -265,37 +265,43 @@ Crate-extraction discipline (full procedure in `docs/PLAN_SCALING_FOUNDATION.md`
 
 ## 8. Where Things Stand / Next Work
 
-Landed through Iteration 247 + refactor `e5cb5a9` (see `git log` for the full trail):
-faction crisis-pressure lifecycle, lived-experience belief charging, health-sync
-revival, genome blending + dead-predisposition activation (Arc A), family surnames,
-vertical moral-values transmission, Iteration-243 knife-edge calibrations (304/0),
-Iteration-247 interoception activation + ideology inheritance (Arc B opens), and the
-full module-segregation refactor: sim god-file → hub + six verbatim tick passes,
-integration tests namespaced by domain, TUI render/session split, person/ split — all
-golden-proven byte-identical.
+**The live queue is `docs/PLAN_DC3_DEVELOPMENT.md`** (its §3.1 is the calibration-debt
+ledger, its execution ledgers are the iteration trail; per-iteration probes and measured
+verdicts live in `docs/architecture/AP4-studio/evidence/`). Keep that file current and
+treat this section as a pointer, not a second ledger — it went stale once by holding a
+queue from Iteration 247 while DC-3 and DC-4 landed.
 
-Queue, in order:
+Landed since this section was last written (see `git log` for the trail): the full
+module-segregation refactor, the **crate ladder** (S1–S3: `core ← person ← psych ←
+{social, institutions, world} ← sim`, DAG cargo-enforced, every extraction golden-proven
+byte-identical, new crates born with `deny(missing_docs)`), **DC-3 complete at 4/4 legs**
+(Era IV holon, multi-village UM-3, N≥48 perf budget + `scripts/gate` perf envelopes, asset
+pipeline v0), and **DC-4 opening** (difficulty-levers rows 2–3 live, pathology/goal-gate
+bands, meaning reflex and physiological-reflex repairs, TUI asset/scene viewers, and the
+scale program: i330–i345 removed every accidental relationship scan, re-ranked the scale
+levers on measurement, and fixed the housing governor).
 
-Landing status: the scaling ladder is DONE (commits `e702a77`, `f66b988`) —
-S1 closed as no-op (round 1 had already cleared production wildcards; coupling map
-shipped instead), S2 `mindstrata-person` extracted, S3 `mindstrata-psych`
-(+appraisal), `-institutions`, `-social`, `-world` extracted. The dependency DAG is
-cargo-enforced: core <- person <- {psych} <- {social, institutions, world} <- sim.
-All extractions golden-proven byte-identical; new crates born with full doc coverage.
+Live queue, in order (evidence link per item):
 
-Queue, in order:
-
-1. **Arc D — infrastructure**: extract bio/psych passes from `sim/core.rs` into
-   `systems/`, lineage/emotion metrics + TUI longitudinal charts (Iter-251 landed
-   lineage/tail observability + chart scaffolding). Cross-crate work now follows the
-   crate-ladder discipline above.
-2. **Sim slimming toward <15K orchestration**: root mind/social modules are DONE
-   (`3ad212b` — memory/attention/belief_update/journal -> psych, gossip/conflict ->
-   social, health -> person; shims kept). Remaining: `sim/*_impl` glue detangling +
-   Arc-D pass extraction into `systems/`; actions.rs waits until arcs move off it.
-3. **Arc C continuation / behavioral arcs**: resume audit Phases 2–6 in
-   `docs/AUDIT_2026-08-22_EMERGENT_REALISM.md`; interoception (Iter-247), Whitehall +
-   sleep-debt (Iter-248), ToM-steering (Iter-249) already landed.
+1. **The sparse relationship store with stable identity** — i341/i344 confirmed it is the
+   *only* remaining lever on the tick's dominant cost class (~58% of the tick walks N(N−1)
+   rows while 8–11% carry state; contact volume is flat and world size does not help).
+   Constraints already measured: i337 disqualified a positional index (positions are reused
+   by births/deaths), and it carries a §4.4 re-contract of
+   `relationship_store_is_complete_at_populate` plus a full re-anchor sweep. Probe first.
+2. **A9 — the envelope at constant density** — re-scoped by i344: a **fidelity** policy
+   (max co-location 19 → 4, contacted share halved), **not** throughput (+9.1%/−2.3%/+5.6%
+   at N=96/144/192). A charter decision; do not sell it as speed.
+3. **A8 — locomotion is a dead producer** (`Wander`/`Move` 0.00% of agent-ticks; positions
+   frozen). §4.3 class: decide the semantics, revive the producer, expect a behavioural
+   sweep. Read `i338`/`i340` first — space is currently decorative.
+4. **§17 tier gate reads the same non-varying `relationship_count`** that made the i342
+   social-count proxy a dead channel; i328 measured the tier-gate payoff at ≈5%, so this is
+   a correctness item, not a perf one.
+5. **Deferred with triggers** (do not pull early): `VecDeque<SimEvent>` (>250K-tick
+   horizons), recent-claims index (same), H5 founder-variance shaping (needs larger N **and**
+   a coordinated re-anchor sweep), vendor-blocked era items (realms.md, resonance
+   attestation, cult-liveliness).
 
 ## 9. Tone & Conduct
 
