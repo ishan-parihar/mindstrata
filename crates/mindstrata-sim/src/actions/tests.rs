@@ -60,6 +60,8 @@ fn broke_hungry_agent_prefers_eat_over_trade() {
             action_values: ActionValues::default(),
             dominant_need: MotiveCategory::Hunger,
             dominant_pressure: Fixed::ZERO,
+            novelty_pressure: Fixed::ZERO,
+            needs_quiet: false,
             dread: Fixed::ZERO,
             hope: Fixed::ZERO,
             // 0.5 = neutral default → zero calibration shift (legacy utility).
@@ -120,6 +122,8 @@ fn wealthy_hungry_agent_can_prefer_trade() {
             action_values: ActionValues::default(),
             dominant_need: MotiveCategory::Hunger,
             dominant_pressure: Fixed::ZERO,
+            novelty_pressure: Fixed::ZERO,
+            needs_quiet: false,
             dread: Fixed::ZERO,
             hope: Fixed::ZERO,
             // 0.5 = neutral default → zero calibration shift (legacy utility).
@@ -177,6 +181,8 @@ fn utility_prefers_food_when_hungry() {
             action_values: ActionValues::default(),
             dominant_need: MotiveCategory::Hunger,
             dominant_pressure: Fixed::ZERO,
+            novelty_pressure: Fixed::ZERO,
+            needs_quiet: false,
             dread: Fixed::ZERO,
             hope: Fixed::ZERO,
             // 0.5 = neutral default → zero calibration shift (legacy utility).
@@ -291,6 +297,8 @@ fn scarcity_increases_food_utility() {
             action_values: ActionValues::default(),
             dominant_need: MotiveCategory::Hunger,
             dominant_pressure: Fixed::ZERO,
+            novelty_pressure: Fixed::ZERO,
+            needs_quiet: false,
             dread: Fixed::ZERO,
             hope: Fixed::ZERO,
             // 0.5 = neutral default → zero calibration shift (legacy utility).
@@ -347,6 +355,8 @@ fn scarcity_increases_water_utility() {
             action_values: ActionValues::default(),
             dominant_need: MotiveCategory::Hunger,
             dominant_pressure: Fixed::ZERO,
+            novelty_pressure: Fixed::ZERO,
+            needs_quiet: false,
             dread: Fixed::ZERO,
             hope: Fixed::ZERO,
             // 0.5 = neutral default → zero calibration shift (legacy utility).
@@ -1109,6 +1119,8 @@ fn dread_shifts_selection_toward_provisioning() {
                     action_values: ActionValues::default(),
                     dominant_need: MotiveCategory::Hunger,
                     dominant_pressure: Fixed::ZERO,
+                    novelty_pressure: Fixed::ZERO,
+                    needs_quiet: false,
                     dread,
                     hope: Fixed::ZERO,
                     // 0.5 = neutral default → zero calibration shift.
@@ -1664,6 +1676,8 @@ fn institution_work_bonus_shifts_selection_toward_work() {
                     action_values: ActionValues::default(),
                     dominant_need: MotiveCategory::Hunger,
                     dominant_pressure: Fixed::ZERO,
+                    novelty_pressure: Fixed::ZERO,
+                    needs_quiet: false,
                     dread: Fixed::ZERO,
                     hope: Fixed::ZERO,
                     planning_confidence: Fixed::from_f64(0.5),

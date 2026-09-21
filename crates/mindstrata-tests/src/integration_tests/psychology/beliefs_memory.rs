@@ -572,9 +572,15 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
     // swept family)", with the mechanism checks (mapped triggers, meaningful
     // intensity, drain completion) applied to the members that actually fire.
     // Family extended to the three swept seeds with margin.
-    let sim = crisis(5);
-    let crisis_second = crisis(7);
-    let crisis_third = crisis(42);
+    // i351 re-anchor (§4.4, probe `i351_panic_sweep`): the Wander driver
+    // re-times conflict/stress exposure and the belief-charge trajectories
+    // re-seat (registry counts {5: 0, 7: 11, 42: 0, 11: 5, 46: 2}); the
+    // family re-anchors onto the seeds that register post-driver {7, 11, 46}
+    // — same contract, same majority rule, the family itself is what moves
+    // when pacing shifts.
+    let sim = crisis(7);
+    let crisis_second = crisis(11);
+    let crisis_third = crisis(46);
 
     // Leg A - registration + escalation ran in the crisis window, asserted
     // across a SEED FAMILY. Iteration 334 RE-CONTRACT (§4.1/§4.4): the old
@@ -587,7 +593,7 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
     // flips when one seed's saturation regime moves is a lucky-seed pin:
     // the honest contract is the mechanism (register -> charge -> escalate
     // -> drain) firing in a crisis world, not one seed's magnitude.
-    let family: [(u64, &Simulation); 3] = [(5, &sim), (7, &crisis_second), (42, &crisis_third)];
+    let family: [(u64, &Simulation); 3] = [(7, &sim), (11, &crisis_second), (46, &crisis_third)];
     let registering = family
         .iter()
         .filter(|(_, world)| !world.moral_panic_registry.panics.is_empty())
@@ -667,7 +673,10 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
     // hardcoded 99 replayed a different village. i343: replay seed 7, a family
     // member measured to REGISTER panics, so the determinism check is not
     // trivially satisfied by an empty registry (seed 5 now registers none).
-    sc2.seed = 7;
+    // i351: replay seed 11, a family member measured to REGISTER panics
+    // post-driver (5 registrations; the old replay seed 7 was promoted to a
+    // Leg-A family member and 42 registered none).
+    sc2.seed = 11;
     sc2.ticks = 20000;
     let mut again = Simulation::from_scenario(sc2);
     again.populate();

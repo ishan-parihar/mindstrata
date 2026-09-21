@@ -164,6 +164,19 @@ struct Census {
     /// need-relief term of their own: `Wander` (A8) and `Idle`.
     wander: GapStats,
     idle: GapStats,
+    // i351 quiet-window split: the A8 exploration driver only competes when
+    // the need-quietude gate is open, so the wall it must clear is the
+    // quiet-window winner — not the all-decisions winner (whose mass rides
+    // need pressure the gate excludes).
+    quiet_samples: u64,
+    quiet_wander: GapStats,
+    quiet_winner_sum: f64,
+    quiet_winner_max: f64,
+    quiet_winner_actions: [u64; ACTION_COUNT],
+    /// i351 coefficient sweep: per quiet sample, the PRE-driver
+    /// winner−Wander gap and the novelty pressure that would multiply the
+    /// coefficient. Capped — instrumentation only, never read in production.
+    quiet_pairs: Vec<(f64, f64)>,
 }
 
 fn sink() -> &'static Mutex<Census> {
@@ -250,7 +263,15 @@ pub fn record(source: usize, action: ActionKind) {
 ///
 /// Called from [`crate::actions::select_action`] with values it has already
 /// computed, so the call draws no RNG and the stream position is untouched.
-pub fn record_utility_sample(best_minus_wander: f64, best_minus_idle: f64) {
+pub fn record_utility_sample(
+    best_minus_wander_pre: f64,
+    best_minus_wander: f64,
+    best_minus_idle: f64,
+    needs_quiet: bool,
+    winner_utility: f64,
+    winner_action: usize,
+    novelty_pressure: f64,
+) {
     if !enabled() {
         return;
     }
@@ -262,7 +283,47 @@ pub fn record_utility_sample(best_minus_wander: f64, best_minus_idle: f64) {
         sink.wander
             .observe(best_minus_wander <= 0.0, best_minus_wander);
         sink.idle.observe(best_minus_idle <= 0.0, best_minus_idle);
+        if needs_quiet {
+            sink.quiet_samples += 1;
+            sink.quiet_wander
+                .observe(best_minus_wander <= 0.0, best_minus_wander);
+            sink.quiet_winner_sum += winner_utility;
+            if winner_utility > sink.quiet_winner_max {
+                sink.quiet_winner_max = winner_utility;
+            }
+            if winner_action < ACTION_COUNT {
+                sink.quiet_winner_actions[winner_action] += 1;
+            }
+            if sink.quiet_pairs.len() < QUIET_PAIR_CAP {
+                sink.quiet_pairs
+                    .push((best_minus_wander_pre, novelty_pressure));
+            }
+        }
     }
+}
+
+/// Cap on the per-sample sweep pairs (instrumentation memory bound).
+const QUIET_PAIR_CAP: usize = 200_000;
+
+/// i351: offline coefficient sweep over the RECORDED quiet samples — wins at
+/// coefficient `c` are the samples whose pre-driver gap ≤ pressure × c. Reads
+/// only recorded values; the run itself is unaffected.
+#[must_use]
+pub fn quiet_sweep(coefs: &[f64]) -> Vec<(f64, u64)> {
+    let Ok(sink) = sink().lock() else {
+        return Vec::new();
+    };
+    coefs
+        .iter()
+        .map(|&c| {
+            let wins = sink
+                .quiet_pairs
+                .iter()
+                .filter(|&&(gap, p)| gap <= p * c)
+                .count() as u64;
+            (c, wins)
+        })
+        .collect()
 }
 
 /// A read-only snapshot of the census.
@@ -280,6 +341,15 @@ pub struct Report {
     pub wander: GapStats,
     /// Distance from the winner for the `Idle` candidate.
     pub idle: GapStats,
+    /// Arbitrations where the need-quietude gate was open.
+    pub quiet_samples: u64,
+    /// Quiet-window `Wander` gap stats (the driver's actual arena).
+    pub quiet_wander: GapStats,
+    /// Sum/Max of the winner's absolute utility at quiet windows.
+    pub quiet_winner_sum: f64,
+    pub quiet_winner_max: f64,
+    /// Which action won each quiet-window arbitration.
+    pub quiet_winner_actions: [u64; ACTION_COUNT],
 }
 
 impl Report {
@@ -301,6 +371,11 @@ pub fn report() -> Report {
             utility_samples: 0,
             wander: GapStats::default(),
             idle: GapStats::default(),
+            quiet_samples: 0,
+            quiet_wander: GapStats::default(),
+            quiet_winner_sum: 0.0,
+            quiet_winner_max: 0.0,
+            quiet_winner_actions: [0; ACTION_COUNT],
         };
     };
     Report {
@@ -310,5 +385,10 @@ pub fn report() -> Report {
         utility_samples: sink.utility_samples,
         wander: sink.wander,
         idle: sink.idle,
+        quiet_samples: sink.quiet_samples,
+        quiet_wander: sink.quiet_wander,
+        quiet_winner_sum: sink.quiet_winner_sum,
+        quiet_winner_max: sink.quiet_winner_max,
+        quiet_winner_actions: sink.quiet_winner_actions,
     }
 }

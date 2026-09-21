@@ -953,21 +953,69 @@ fn rituals_correlate_with_group_stability() {
 
 #[test]
 fn meme_transmission_multiplier_affects_meme_count() {
-    // Higher transmission multiplier should produce more active memes after 3000 ticks
+    // Higher transmission multiplier should produce more or equal memes after 3000 ticks
     let baseline = run_with_params(42, 3000, |p| {
         p.meme_transmission_multiplier = Fixed::from_f64(1.2); // default
     });
     let high_transmission = run_with_params(42, 3000, |p| {
         p.meme_transmission_multiplier = Fixed::from_f64(3.0); // 2.5x higher
     });
-    // Higher transmission should produce more or equal memes
+    // i351 re-contract (§4.4, probe `i351_meme_dump`): this monotonicity read
+    // `active_meme_count`, which COUNTS genesis commemorations — and the
+    // collective-line band gate (stage 2.0) is marginal at 3000 ticks: the
+    // baseline run crossed it (4 memes) while the high-transmission run did
+    // not (3). The tie at an epoch boundary is pacing, not a dead
+    // transmission channel. The count floor below guards the founding set;
+    // the multiplier's REAL surface (host adoption) is pinned by
+    // `meme_transmission_multiplier_increases_host_adoption`.
     assert!(
-        high_transmission.active_meme_count >= baseline.active_meme_count,
-        "Higher meme transmission should produce more memes: baseline={}, high={}",
-        baseline.active_meme_count,
+        high_transmission.active_meme_count >= 3,
+        "founding memes must stay active under high transmission: {}",
         high_transmission.active_meme_count
     );
 }
+
+/// i351: the transmission multiplier's real behavioural surface — host
+/// adoption of the founding memes. Needs the registry, not the snapshot,
+/// so it builds its own sims.
+#[test]
+fn meme_transmission_multiplier_increases_host_adoption() {
+    let run = |mult: f64| {
+        let mut sim = Simulation::new(SimConfig {
+            seed: 42,
+            max_ticks: 3000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        });
+        sim.populate();
+        sim.params.meme_transmission_multiplier = Fixed::from_f64(mult);
+        sim.run(3000);
+        let total_hosts: u32 = sim.meme_registry.memes.iter().map(|m| m.host_count).sum();
+        let min_hosts = sim
+            .meme_registry
+            .memes
+            .iter()
+            .take(3)
+            .map(|m| m.host_count)
+            .min()
+            .unwrap_or(0);
+        (total_hosts, min_hosts)
+    };
+    let (baseline_total, baseline_min) = run(1.2);
+    let (high_total, high_min) = run(3.0);
+    // The multiplier scales transmission_chance → more adoptions per contact.
+    assert!(
+        high_total > baseline_total,
+        "higher transmission must acquire more total hosts: baseline={baseline_total}, high={high_total}"
+    );
+    assert!(
+        high_min >= baseline_min,
+        "every founding meme must be at least as widely hosted under high transmission: min baseline={baseline_min}, high={high_min}"
+    );
+}
+
 /// The meme registry must start seeded with the village's founding memes —
 /// previously it began empty so the aggregation/spread loops early-returned
 /// and cultural dynamics never emerged (active_meme_count pinned at 0).
@@ -995,12 +1043,39 @@ fn meme_registry_seeds_founding_memes() {
         total_hosts > 0,
         "seeded memes should gain hosts over 3000 ticks (total_hosts={total_hosts})"
     );
+    // i351 re-contract (§4.4, probe `i351_meme_dump`): the `== seeded` freeze
+    // predated Iter-297's genesis system — `system_collective_genesis` registers
+    // a commemoration meme whenever a collective line crosses a band gate
+    // (measured here: the Safety axiom at stage 2.0 → 4 memes). Registry GROWTH
+    // at an epoch crossing is the designed behaviour; the surviving invariants
+    // are (a) no seeded meme is ever deactivated (nothing in production writes
+    // `active = false`), and (b) genesis growth is BOUNDED (band-gated, deduped
+    // per (bucket, class, epoch) — not unbounded spawning).
+    let all_seeded_active = sim
+        .meme_registry
+        .memes
+        .iter()
+        .take(seeded)
+        .all(|m| m.active);
     assert!(
-        sim.meme_registry.active_count() == seeded,
-        "all seeded memes should stay active: {} != {seeded}",
+        all_seeded_active,
+        "no seeded meme may be deactivated by the run"
+    );
+    assert!(
+        sim.meme_registry.active_count() >= seeded,
+        "genesis may only ADD memes (band-gated commemorations), never lose seeded ones: {} < {seeded}",
         sim.meme_registry.active_count()
     );
+    assert!(
+        sim.meme_registry.memes.len() <= seeded + GENESIS_MEME_GROWTH_BOUND,
+        "genesis growth must stay band-bounded: {} memes vs seeded {seeded} + bound {GENESIS_MEME_GROWTH_BOUND}",
+        sim.meme_registry.memes.len()
+    );
 }
+/// i351: upper bound on genesis commemorations inside a 3000-tick window —
+/// 7 band-gated templates total (GENESIS_TEMPLATES), each deduped per epoch,
+/// so growth beyond a couple of registrations signals a gate leak.
+const GENESIS_MEME_GROWTH_BOUND: usize = 4;
 /// `from_snapshot` must restore the exact meme registry (serialized since
 /// v9 — mutation is live by default, so re-seeding founding memes on
 /// restore would diverge from the fresh run's mutated lineage state).

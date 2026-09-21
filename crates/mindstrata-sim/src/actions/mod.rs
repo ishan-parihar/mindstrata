@@ -37,6 +37,25 @@ const PERSISTENCE_NOISE_FLOOR: f64 = 0.02;
 /// (pure utility term — no RNG).
 const APPROACH_WANDER_BONUS: Fixed = Fixed::from_raw(500); // 0.05
 
+/// i351 (A8 closure): the exploration driver's coefficient — utility per
+/// unit of motivation-layer novelty pressure for the `Wander` action.
+/// Sized from the probe pair (`i351_wander_driver` leg A: novelty pressure
+/// p50 0.29–0.33, p90 0.46–0.48 at settlement; leg B: the pre-driver wall
+/// mean-loss 1.61, wins 0): at coef 2.0 the term is 0.58–0.96 — competitive
+/// with the 0.1–0.4 winning-utility band that holds when biological needs
+/// are quiet (the gate's condition), without reaching the 1.2+ wall of a
+/// pressed agent (and the gate excludes them anyway). The 0.5–3%-share
+/// target band (§4.2) is verified in vivo by `i351_wander_bands`.
+const WANDER_NOVELTY_COEF: Fixed = Fixed::from_raw(20_000); // 2.0
+
+/// i351 (A8 closure): the need-quietude gate for the exploration driver.
+/// Exploration is what a satiated, restless agent does — a villager with
+/// hunger/thirst/fatigue above this gate must provision first (the winner
+/// utilities there ride pressure² × 2.0–2.5 and SHOULD beat a driver).
+/// 0.5 = the mid-band boundary the goals/needs machinery already treats as
+/// "pressing" (§8.1.16 goal-congruence keys on hunger < 0.5).
+pub(crate) const WANDER_QUIETUDE_GATE: Fixed = Fixed::from_raw(5000); // 0.5
+
 /// i281: salience-recency window for the polarity-claim social bias, in
 /// ticks — one in-sim year (`ticks_per_year = 1000`). The 0.01 coefficient
 /// was ratified (i275) against the claim integral a 1–2K horizon produces;
@@ -139,6 +158,19 @@ pub struct DecisionContext<'a> {
     pub dominant_need: MotiveCategory,
     /// Pressure of the dominant need (full formula) — scales the urgency boost.
     pub dominant_pressure: Fixed,
+    // ── i351 (A8 closure): the exploration driver ───────────────────
+    /// The agent's motivation-layer NOVELTY pressure (full formula —
+    /// deficit × urgency × amplifiers, exactly what `update_dominant`
+    /// compares). Drives the Wander driver term: a restless agent with
+    /// quiet biological needs explores. Zero when novelty is saturated-
+    /// relieved, so identity holds at novelty 0.
+    pub novelty_pressure: Fixed,
+    /// `true` when the agent's biological needs are quiet enough to
+    /// explore (`max(hunger, thirst, fatigue) < WANDER_QUIETUDE_GATE`).
+    /// The driver term is gated on this: exploration is what a SATIATED
+    /// restless agent does — a hungry agent's high-novelty pressure must
+    /// not pull it off provisioning (the wall is correct for them).
+    pub needs_quiet: bool,
     // ── §8.1 (Iteration 248): sleep-debt social withdrawal ──────────
     /// How much circadian sleep debt suppresses social participation.
     /// Zero below the `sleep_deprived()` threshold (0.5), scaling above —
@@ -575,6 +607,11 @@ pub fn compute_utility(
             MotiveCategory::Thirst => action.thirst_relief > Fixed::ZERO,
             MotiveCategory::Sleep => action.fatigue_relief > Fixed::ZERO,
             MotiveCategory::Meaning => action.bonus_meaning_relief > Fixed::ZERO,
+            // i351 (A8 closure): `MotiveCategory::Novelty` competes in
+            // `update_dominant` but had no relief mapping — a dead dominant
+            // motive (§4.3): it could WIN the argmax and nothing responded.
+            // The exploration driver is its response.
+            MotiveCategory::Novelty => action.kind == ActionKind::Wander,
             _ => false,
         };
         if urgent {
@@ -812,6 +849,34 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
             ctx.planning_confidence,
         );
 
+        // i351 (A8 closure): the exploration driver, applied in the
+        // selection loop (where `ctx` lives). `Wander` was imported with
+        // zero relief on every channel and lost all 107 085 measured
+        // arbitrations by 1.2–1.6 (i346 §4.3) — and the motivation layer's
+        // novelty need grew with NO behavioural outlet, so
+        // `MotiveCategory::Novelty` could dominate an agent with nothing to
+        // do about it. The design act A8 asked for: **a villager may roam,
+        // and does so when restless and unpressured**. The term is gated on
+        // need quietude: the wall (winning utilities ride pressure² ×
+        // 2.0–2.5) is CORRECT for a pressed agent — the driver only
+        // competes when the biological needs are quiet, where the measured
+        // winner sits at mean 0.71 / max 1.40 (`i351_wander_diag`: quiet
+        // windows are 70.1% of utility samples, and Work 53% / Worship 30%
+        // still ride production+meaning pressure there). Sizing is the
+        // offline sweep over the same realized samples (census
+        // `quiet_sweep`): c=2.0 wins 4.9% of quiet windows (56/1141) —
+        // landing Wander's overall share in the sub-1% band (comparable to
+        // the §4.2 target under Worship 1.74%), while c=3.0 already jumps
+        // to 19.5% (over-drive). First draft shipped coef 0.2 by a
+        // Fixed::from_raw unit error (2000 raw = 0.2, not 2.0) — the
+        // in-vivo census (0 wins despite the sweep predicting 56) is what
+        // exposed it. Zero-at-zero: novelty pressure 0 or gate closed →
+        // exactly the pre-i351 utility. Deterministic (pure utility term,
+        // no RNG).
+        if *kind == ActionKind::Wander && ctx.novelty_pressure > Fixed::ZERO && ctx.needs_quiet {
+            utility += ctx.novelty_pressure * WANDER_NOVELTY_COEF;
+        }
+
         for goal in ctx.active_goals {
             let goal_aligned = matches!(
                 (kind, goal.kind),
@@ -1016,11 +1081,34 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
     // i346: hand the arbitration to the census. `record_utility_sample` is
     // gated on the census being enabled and only reads values the loop has
     // already computed — no RNG draw, no state write — so an instrumented run
-    // is byte-identical to an uninstrumented one.
+    // is byte-identical to an uninstrumented one. i351: the quiet-window
+    // split records the driver's actual arena — the winner it must beat when
+    // the need-quietude gate is open — plus the pre-driver gap and novelty
+    // pressure so coefficients can be swept offline (§4.2 sizing).
     if let (Some(wander_utility), Some(idle_utility)) = (wander_utility, idle_utility) {
+        // i351 instrumentation: the exact PRE-driver gap, derived by
+        // subtracting the driver term (known in full at this point) from
+        // whichever candidate carried it. Lets the census sweep coefficients
+        // offline over realized samples (§4.2 sizing). Read-only, no RNG.
+        let term_current = if ctx.novelty_pressure > Fixed::ZERO && ctx.needs_quiet {
+            ctx.novelty_pressure * WANDER_NOVELTY_COEF
+        } else {
+            Fixed::ZERO
+        };
+        let best_utility_pre = if matches!(best_action, ActionKind::Wander) {
+            best_utility - term_current
+        } else {
+            best_utility
+        };
+        let pre_gap = (best_utility_pre - (wander_utility - term_current)).to_f64();
         crate::sim::decision_census::record_utility_sample(
+            pre_gap,
             (best_utility - wander_utility).to_f64(),
             (best_utility - idle_utility).to_f64(),
+            ctx.needs_quiet,
+            best_utility.to_f64(),
+            crate::sim::decision_census::action_index(best_action),
+            ctx.novelty_pressure.to_f64(),
         );
     }
 

@@ -1099,6 +1099,19 @@ impl Simulation {
                     m.health.relieve(Fixed::from_f64(0.0015));
                     m.safety.relieve(Fixed::from_f64(0.002));
                 }
+                ActionKind::Wander => {
+                    // i351 (A8 closure): the exploration driver's relief
+                    // write-back — wandering is how the novelty need is
+                    // discharged. Primary: novelty (new sights — the driver
+                    // that selected the action). Secondary: autonomy (self-
+                    // direction). Sized so the relief per decision (deficit
+                    // grows 0.001/tick × ~5.6-tick action duration ≈ 0.0056;
+                    // relief 0.008) keeps the deficit oscillating mid-band
+                    // instead of pinning at the 0.2 cap — the loop that makes
+                    // the driver self-limiting rather than a ratchet.
+                    m.novelty.relieve(Fixed::from_f64(0.008));
+                    m.autonomy.relieve(Fixed::from_f64(0.003));
+                }
                 _ => {}
             }
         }

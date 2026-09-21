@@ -776,6 +776,7 @@ dependencies = [
  "criterion",
  "mindstrata-core",
  "mindstrata-development",
+ "mindstrata-psych",
  "mindstrata-sim",
  "mindstrata-social",
  "mindstrata-tui",

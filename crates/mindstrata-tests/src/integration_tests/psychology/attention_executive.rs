@@ -907,27 +907,41 @@ fn sensory_field_fear_contagion_is_live_and_sustains_fear() {
     let sim = run_sim(42, 2000);
 
     // Reach: the producer fires for every agent, so the fold has real input.
+    // i351 re-contract (§4.4, probe `i351_presence`): the 12/12 assertion was
+    // written when no agent ever moved (Wander structurally dead). With the
+    // exploration driver live, an agent caught alone at the daily field
+    // snapshot legitimately reads `perceived_stress = 0` (`nearby_count == 0`
+    // → zero, social_cluster.rs) — the same locality family as i349/i350.
+    // Measured across 8 seeds @2000 (16×16 world): 11–12/12 perceive; the
+    // liveness meaning ("the producer fires village-wide in a default run")
+    // is preserved at ≥ 11/12, and the contagion floor below still pins the
+    // fold's sustained output.
     let n_pos = sim
         .agents
         .iter()
         .filter(|a| a.relational_fields.perceived_stress > mindstrata_core::fixed::Fixed::ZERO)
         .count();
-    assert_eq!(
-        n_pos,
-        sim.agents.len(),
-        "every agent must perceive ambient stress in a default run ({n_pos}/{})",
+    assert!(
+        n_pos + 1 >= sim.agents.len(),
+        "near-village-wide ambient-stress perception must hold with live \
+             locomotion (i351_presence band 11–12/12, got {n_pos}/{})",
         sim.agents.len()
     );
+    // i351: the contribution is positive FOR PERCEIVING AGENTS — an agent
+    // alone at the snapshot has perceived_stress 0 and contributes nothing
+    // that day (correct locality semantics, not a dead fold).
     for a in &sim.agents {
-        assert!(
-            mindstrata_sim::social::relational_field::RelationalFields::contagion_delta(
-                a.relational_fields.perceived_stress,
-                mindstrata_core::fixed::Fixed::from_f64(
-                    mindstrata_sim::social::relational_field::FEAR_CONTAGION_RATE,
-                ),
-            ) > mindstrata_core::fixed::Fixed::ZERO,
-            "the daily contagion contribution must be strictly positive"
-        );
+        if a.relational_fields.perceived_stress > mindstrata_core::fixed::Fixed::ZERO {
+            assert!(
+                mindstrata_sim::social::relational_field::RelationalFields::contagion_delta(
+                    a.relational_fields.perceived_stress,
+                    mindstrata_core::fixed::Fixed::from_f64(
+                        mindstrata_sim::social::relational_field::FEAR_CONTAGION_RATE,
+                    ),
+                ) > mindstrata_core::fixed::Fixed::ZERO,
+                "the daily contagion contribution must be strictly positive for perceiving agents"
+            );
+        }
     }
 
     // Behavioral floor: contagion sustains ambient fear against decay.

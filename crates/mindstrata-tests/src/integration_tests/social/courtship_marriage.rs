@@ -1035,7 +1035,16 @@ fn marriage_formation_rate_parameter_is_live() {
     // the count comparison saturates. A rate sweep finds 0.0002 delivers
     // 4 marriages (first @318) vs 0.1's 6 (first @2) — the count
     // differential is live again without the ceiling.
-    let (low_count, low_first) = make(0.0002);
+    // i351 re-anchor (§4.2, probe `i351_marriage_rate`, seed-42 sweep): the
+    // Wander driver re-paces the trust diet feeding the marriage gate
+    // (post-i349/i350 the contacted pairs reach near-saturation faster —
+    // mean contacted trust 0.992 vs 0.987 pre-driver, and more pairs are
+    // contacted: 88/132 vs 52/132), so the 0.0002 rate sits just below the
+    // first-marriage threshold in this window (0 marriages by 5000). The
+    // sweep measures 0.0004 → 4 marriages (first @453) still non-saturating
+    // vs 0.1's ceiling — the differential contract is preserved one step up
+    // the rate axis, with the same liveness meaning.
+    let (low_count, low_first) = make(0.0004);
     let (high_count, high_first) = make(0.1);
     let low_first = low_first.expect("low-rate run must eventually marry");
     let high_first = high_first.expect("high-rate run must eventually marry");

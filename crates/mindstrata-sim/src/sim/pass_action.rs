@@ -30,13 +30,23 @@ const HEALTH_CRITICAL_THRESHOLD: Fixed = Fixed::from_raw(2_500);
 ///
 /// This is the reachable crisis signal the i312 finding asked for. Pain is
 /// structurally crisis-only (a wound) and sparse — `i314_pain_veto` measures
-/// p90 = 0.0000 in every context. The threshold sits at 0.9 (firing for
-/// 0.04–0.31% of agent-ticks): a lower 0.7 band (0.25–1.05%) drifts 11 pins
-/// including BOTH golden baselines, whereas 0.9 costs a single 10K-surface
-/// re-anchor — a rare crisis guard, not a routine action governor. It is
-/// reachable AND non-trapping, unlike the old health mutex: pain clears when
-/// the wound heals (i313).
-const PAIN_VETO_THRESHOLD: Fixed = Fixed::from_raw(9_000);
+/// p90 = 0.0000 in every context. i314 ratified 0.9 (firing 0.04–0.31% of
+/// agent-ticks; a 0.7 band drifted 11 pins including BOTH golden baselines
+/// under the PRE-driver conflict regime).
+///
+/// **Re-anchored at i351 on sweep evidence (probe `i351_wound_band`, 8 seeds
+/// × 20K, post-Wander-driver):** the exploration driver re-times conflict
+/// exposure and the severe-wound ceiling compressed from ~0.9+ to
+/// 0.7877–0.8235 across the violence-active seeds (7/8 seeds carry wounds;
+/// 43/47/123 stay clean), leaving 0.9 DORMANT — 0 agent-ticks above it, a
+/// §4.3 dead guard. The sweep measures firing rates 0.70 → 0.226%,
+/// 0.72 → 0.178%, 0.75 → 0.083%, 0.78 → 0.027%, ≥0.85 → 0. **0.75** sits
+/// just under the post-driver severe band (all violence seeds' maxima clear
+/// it), fires 0.083% of agent-ticks — inside the i314-ratified band — and
+/// keeps 2.7× margin above the 0.70 rate that drifted pins pre-driver.
+/// Still a rare crisis guard, not a routine governor; pain clears when the
+/// wound heals (i313), so non-trapping as before.
+const PAIN_VETO_THRESHOLD: Fixed = Fixed::from_raw(7_500);
 
 /// Anger level at which a feuding agent walks toward its feud target (§19.5.G,
 /// the only producer of `ActionKind::Move` in the whole selection chain).
@@ -457,6 +467,19 @@ impl Simulation {
                                 // actions that relieve the dominant need.
                                 dominant_need: agents[i].motivation.dominant_need,
                                 dominant_pressure: agents[i].motivation.dominant_pressure(),
+                                // i351 (A8 closure): the exploration driver
+                                // inputs — the motivation layer's novelty
+                                // pressure (full formula, the same number
+                                // `update_dominant` compares) and the need-
+                                // quietude gate. Zero-at-identity: the driver
+                                // term is 0 unless the gate opens AND novelty
+                                // pressure is live.
+                                novelty_pressure: agents[i].motivation.pressure_full(
+                                    crate::psychology::motivation::MotiveCategory::Novelty,
+                                ),
+                                needs_quiet: needs[i].hunger < actions::WANDER_QUIETUDE_GATE
+                                    && needs[i].thirst < actions::WANDER_QUIETUDE_GATE
+                                    && needs[i].fatigue < actions::WANDER_QUIETUDE_GATE,
                                 // §8.1.16 (Iteration 103): the scenario-
                                 // grounded dread (regrounded on the daily
                                 // phase, before selection in the same tick)
@@ -711,9 +734,12 @@ mod exertion_veto_tests {
     fn exertion_veto_fires_on_severe_pain() {
         // i314: pain is the reachable crisis signal (i312 found the health
         // clause dormant). A body in acute pain does not exert itself.
+        // i351 re-anchor (0.9 → 0.75, probe `i351_wound_band`): the test
+        // straddles the threshold on both sides — just-below and just-above
+        // — so the boundary move is exercised, not assumed.
         assert!(!exertion_vetoed(Fixed::ONE, Fixed::ZERO));
-        assert!(!exertion_vetoed(Fixed::ONE, Fixed::from_f64(0.89)));
-        assert!(exertion_vetoed(Fixed::ONE, Fixed::from_raw(9_000)));
+        assert!(!exertion_vetoed(Fixed::ONE, Fixed::from_f64(0.74)));
+        assert!(exertion_vetoed(Fixed::ONE, Fixed::from_raw(7_500)));
         assert!(exertion_vetoed(Fixed::ONE, Fixed::ONE));
     }
 
