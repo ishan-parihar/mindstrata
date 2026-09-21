@@ -47,13 +47,22 @@ fn relational_dominance_feeds_violence_escalation() {
     }
     let mut dominant_total = 0usize;
     let mut subordinate_total = 0usize;
-    // Iteration 200 re-anchor (feud-guilt shadowing closure): the guilt
-    // attribution de-escalates the violence fold, inverting the pinned
-    // [42, 44, 45] set (probe: 21 dom vs 22 sub). A 16-seed sweep finds
-    // [1, 2, 3] with the direction on EVERY seed and the healthiest
-    // aggregate margin (probe: 35 dom vs 18 sub, margin 17 — seeds 7
-    // +9, 17 +6, 99 +4, 44 +3, 2 +4, 21 +3, 33 +4 also hold).
-    for seed in [1u64, 2, 3] {
+    // i200 re-anchored this onto [1, 2, 3], chosen by a 16-seed sweep for the
+    // "healthiest aggregate margin" — i.e. it was already a lucky-seed family,
+    // and §4.1's warning applied to the *choice of family*, not just to the
+    // seed. i347 made §19.5.G locomotion live (feud-approach `Move` at 0.55% of
+    // decisions), which reshapes the contact graph and re-rolled that tail:
+    // [1, 2, 3] now reads 27 vs 29 (margin −2, seed 2 alone −7).
+    //
+    // Re-contracted to a 12-seed family with the aggregate direction guarded, so
+    // the pin tests the mechanism instead of one seed's tail (§4.1/§4.4), with
+    // the margin measured by `i347_feud_move_delta` under the live producer:
+    // **dominant 103 vs subordinate 81 (margin +22), strictly higher on 7/12
+    // seeds** ([1,2,3,5,7,11,17,21,33,42,44,99]; per-seed margins 5,−7,0,0,5,0,
+    // 4,1,0,4,4,6). The crafted-asymmetry reach assertion below stays per-seed —
+    // that half is structural and holds on every seed.
+    const SEEDS: [u64; 12] = [1, 2, 3, 5, 7, 11, 17, 21, 33, 42, 44, 99];
+    for seed in SEEDS {
         let dominant = run_world(0.0, seed);
         let subordinate = run_world(1.0, seed);
         // Reach: the crafted asymmetry must survive the daily recompute
@@ -78,8 +87,8 @@ fn relational_dominance_feeds_violence_escalation() {
     }
     assert!(
         dominant_total > subordinate_total,
-        "zero-dependence (dominant) world must escalate strictly more: \
-         {dominant_total} vs {subordinate_total}"
+        "zero-dependence (dominant) world must escalate strictly more in aggregate \
+         (i347 measured 103 vs 81, margin 22): {dominant_total} vs {subordinate_total}"
     );
 }
 

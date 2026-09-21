@@ -38,6 +38,33 @@ const HEALTH_CRITICAL_THRESHOLD: Fixed = Fixed::from_raw(2_500);
 /// the wound heals (i313).
 const PAIN_VETO_THRESHOLD: Fixed = Fixed::from_raw(9_000);
 
+/// Anger level at which a feuding agent walks toward its feud target (§19.5.G,
+/// the only producer of `ActionKind::Move` in the whole selection chain).
+///
+/// **Re-contracted at i347 on two measurements (not widened for convenience).**
+/// The gate used to be `0.4`; `i346_decision_census` measured the branch firing
+/// **0 times in 96 000 agent-ticks** while `feuds` were non-empty for 13.3–22.9%
+/// of agent-ticks — the feuds were there and the anger was not.
+///
+/// (1) **The band.** Anger is an *acute* emotion with fast decay, not a slow
+/// state: calm `p50 / p90 / p99 / p99.9 = 0.0000 / 0.0089 / 0.1113 / 0.3005`
+/// (N=12, 3 seeds × 20K; probe `i347_feud_gate_reach`), so an absolute gate on
+/// it is a tail gate by construction and `0.4` sat past p99.9. On the
+/// `feuds ∧ anger > t` conjunction the probe measures (calm N=12 / N=48 /
+/// collapse / drought): `0.02 → 0.226% / 0.088% / 0.032% / 0.042%` of
+/// agent-ticks, `0.05 → 0.110% / 0.038% / 0.020% / 0.020%`, `0.10 → 0.044% /
+/// 0.011%`, `0.40 → 0.000% in every leg`. `0.02` is ~p96 of the calm N=12
+/// distribution — elevated rather than the noise floor — and is the candidate
+/// that stays live in every measured context.
+///
+/// (2) **The ordering (the actual root cause).** With a reachable gate but the
+/// branch *below* routine, the probe counted 45 candidate decisions at N=12 /
+/// seed 42 and **45 of them swallowed by `follow_routine`** (and 314 of 505 at a
+/// lower gate). The branch is therefore evaluated **above** the §10.3 routine
+/// ladder now — see the call-site comment. Acceptance for both halves is the
+/// i346 census: the `feud` source row must be non-zero and `Move` must appear.
+const FEUD_APPROACH_ANGER: Fixed = Fixed::from_raw(200); // 0.02
+
 /// Whether a body is too compromised to exert itself (i255's frame): either its
 /// derived health is below [`HEALTH_CRITICAL_THRESHOLD`] (dormant safety net,
 /// i312) or it is in acute pain at/above [`PAIN_VETO_THRESHOLD`] (the live,
@@ -335,16 +362,27 @@ impl Simulation {
                     // zero RNG.
                     goals[i].retain(|g| !(g.source == GoalSource::Command && g.kind == cmd_kind));
                     (cmd_action, SRC_COMMAND)
-                } else if follow_routine && effective_routine_strength > effective_routine_threshold
-                {
-                    // §10.3: Routine creates behavioral stability — prefer scheduled action
-                    (routine_action, SRC_ROUTINE)
                 } else if !agents[i].feuds.is_empty()
-                    && emotions[i].anger > Fixed::from_f64(0.4)
+                    && emotions[i].anger > FEUD_APPROACH_ANGER
                     && needs[i].hunger < Fixed::from_f64(0.85)
                     && needs[i].thirst < Fixed::from_f64(0.85)
                 {
-                    // §19.5.G: Angry feuding agents Move toward their feud target, NOT when critical needs demand attention
+                    // §19.5.G: Angry feuding agents Move toward their feud target,
+                    // NOT when critical needs demand attention.
+                    //
+                    // i347: this branch sits ABOVE the daily routine, and that
+                    // ordering is the fix, not an accident of layout. Placed
+                    // below routine it was shadowed: with a reachable anger
+                    // gate (0.02) the i347 probe measured **45 of 45**
+                    // candidate decisions swallowed by `follow_routine` — an
+                    // angry agent mid-schedule never approached, which is the
+                    // opposite of what the clause above says. Routine is the
+                    // schedule for *ordinary* business; a live feud is not
+                    // ordinary business, and the branch's own needs guard
+                    // (hunger/thirst < 0.85) is exactly the "NOT when critical
+                    // needs demand attention" carve-out. External commands
+                    // still outrank it (§5), and the physiological reflexes
+                    // still outrank everything (i255).
                     let feud_target = agents[i].feuds[0];
                     (
                         ActionKind::Move {
@@ -353,6 +391,10 @@ impl Simulation {
                         },
                         SRC_FEUD,
                     )
+                } else if follow_routine && effective_routine_strength > effective_routine_threshold
+                {
+                    // §10.3: Routine creates behavioral stability — prefer scheduled action
+                    (routine_action, SRC_ROUTINE)
                 } else {
                     // §12.3: Institution collective morale modulates norm compliance.
                     // Members of institutions_reg with high morale are more norm-compliant.
