@@ -570,7 +570,19 @@ fn kinship_penalty_rises_when_families_form() {
     // is moved to the "forms-family" set, seeds 43/44 stay in the clean
     // set. The contract preserved is that *some* seeds stay clean (liveness
     // of the seed-family sweep).
-    for seed in [43u64, 44] {
+    //
+    // i349 re-contract (§4.4, witness-locality revival): the i349 witness
+    // channel locality fix de-saturated village trust (probe
+    // i349_sparse_design leg 5: witness-stamped rows 43–77% → 0.2–2.3%),
+    // which revived ORGANIC courtship on seed 44 — probe i349_kinship_seed44
+    // @2000: at HEAD 0 births / penalty 0.000; post-fix 1 birth / 16 kin
+    // edges / penalty 0.500. Seed 44's "clean" premise is refuted by a
+    // producer revival, not a hazard. The surviving invariant is the one the
+    // four prior re-anchors preserved: *some* founding seeds stay clean
+    // (situational taboo, seed-family liveness). Seed 44 moves to the
+    // forms-family set; seed 43 remains the clean witness (probe: 0 births,
+    // penalty 0.000, post-fix).
+    for seed in [43u64] {
         let sim = run_sim(seed, 2000);
         for a in &sim.agents {
             assert_eq!(

@@ -226,10 +226,9 @@ impl Simulation {
                 }
             }
             // Children inherit second — skip if also dying
-            for child_idx in 0..self.agents.len() {
+            for (child_idx, child) in self.agents.iter().enumerate() {
                 if child_idx != idx && !deaths.contains(&child_idx) {
-                    let is_child = self.agents[child_idx].parent_a == Some(idx)
-                        || self.agents[child_idx].parent_b == Some(idx);
+                    let is_child = child.parent_a == Some(idx) || child.parent_b == Some(idx);
                     if is_child {
                         heirs.push(child_idx);
                     }
@@ -436,7 +435,7 @@ impl Simulation {
         self.agents[idx].relationship_v2s = v2s;
 
         // Reset other agents' entry that points at idx.
-        for j in 0..n {
+        for (j, entry_slot) in self.agents.iter_mut().enumerate() {
             if j == idx {
                 continue;
             }
@@ -444,7 +443,7 @@ impl Simulation {
             // targets are ordered 0..n excluding j, so target idx is at
             // position idx if idx < j else idx - 1.
             let pos = if idx < j { idx } else { idx - 1 };
-            if let Some(entry) = self.agents[j].relationship_v2s.get_mut(pos) {
+            if let Some(entry) = entry_slot.relationship_v2s.get_mut(pos) {
                 *entry = RelationshipV2::new(AgentId::new(j as u64), agent_id);
             }
         }
@@ -859,8 +858,8 @@ impl Simulation {
                 // testing). The child is the last index, so its slot in any
                 // vec is the last position — append.
                 let new_idx = self.agents.len() - 1;
-                for j in 0..new_idx {
-                    self.agents[j]
+                for (j, agent) in self.agents.iter_mut().enumerate().take(new_idx) {
+                    agent
                         .relationship_v2s
                         .push(RelationshipV2::new(AgentId::new(j as u64), agent_id));
                 }

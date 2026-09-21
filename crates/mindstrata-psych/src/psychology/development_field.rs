@@ -68,8 +68,7 @@ impl DevelopmentFieldState {
     pub fn inherited<R: Rng>(mother: &Self, father: Option<&Self>, rng: &mut R) -> Self {
         let n = mother.altitudes.len();
         let mut altitudes = Vec::with_capacity(n);
-        for i in 0..n {
-            let m = mother.altitudes[i];
+        for (i, &m) in mother.altitudes.iter().enumerate() {
             let f = father.map_or(m, |p| p.altitudes.get(i).copied().unwrap_or(m));
             let noise = (rng.random::<f64>() - 0.5) * 0.1;
             altitudes.push(((m + f) * 0.5 + noise).clamp(0.0, 1.0));

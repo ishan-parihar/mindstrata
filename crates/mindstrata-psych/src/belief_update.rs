@@ -180,6 +180,8 @@ mod tests {
             // §10.1.3 (Iteration 109): identity factor — legacy tests keep
             // rigidity 1.0 so the pre-consumer expectations hold exactly.
             Fixed::ONE,
+            // DC-2.5: identity-at-zero (no polarity feed in this unit test).
+            0,
         );
 
         assert!(
@@ -213,6 +215,8 @@ mod tests {
             // §10.1.3 (Iteration 109): identity factor — legacy tests keep
             // rigidity 1.0 so the pre-consumer expectations hold exactly.
             Fixed::ONE,
+            // DC-2.5: identity-at-zero (no polarity feed in this unit test).
+            0,
         );
 
         // Identity-linked beliefs resist change, but should still move somewhat
@@ -251,6 +255,7 @@ mod tests {
             100,
             &params,
             Fixed::ONE,
+            0,
         );
 
         let mut rigid = make(0.5);
@@ -263,6 +268,7 @@ mod tests {
             100,
             &params,
             Fixed::from_f64(1.275),
+            0,
         );
 
         assert!(
@@ -301,7 +307,7 @@ mod tests {
         let evidence = [(2u64, Fixed::from_f64(0.6), Fixed::from_f64(0.8))];
 
         let mut undamped = vec![make()];
-        update_beliefs(
+        update_beliefs_with_polarity(
             &mut undamped,
             &evidence,
             Fixed::ZERO,
@@ -310,9 +316,10 @@ mod tests {
             &params,
             Fixed::ONE,
             Fixed::ONE,
+            0,
         );
         let mut damped = vec![make()];
-        update_beliefs(
+        update_beliefs_with_polarity(
             &mut damped,
             &evidence,
             Fixed::ZERO,
@@ -321,6 +328,7 @@ mod tests {
             &params,
             Fixed::ONE,
             Fixed::from_f64(0.5),
+            0,
         );
 
         assert!(

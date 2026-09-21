@@ -429,10 +429,31 @@ pub fn update_witnesses(
     tick: Tick,
     bonding_rate: Fixed,             // §5.1
     conflict_escalation_rate: Fixed, // §5.1
+    agent_positions: &[(i32, i32)],
+    perception_radius: i32,
 ) {
-    for w in 0..num_agents {
+    // i349: witnesses must be able to PERCEIVE the act. The original loop
+    // treated every agent in the village as a witness of every interaction —
+    // no locality test — so `witness → helper` trust rose (+0.02 × bonding)
+    // and `witness → perpetrator` trust fell (−0.03 × escalation) village-wide
+    // per act. With ~1–2 interactions/tick the ratchet pinned ALL row trust at
+    // 1.000 within ~5K ticks (probe i349_sparse_design leg 5: 43–77% of
+    // NEVER-INTERACTED rows saturated; `interaction_count` stayed 0, so the
+    // saturation was invisible to the contacted-row census) — every downstream
+    // fold (top-3 social support, appraisal mean/min trust, patronage and
+    // peer-group trust gates) read a constant. The fix applies the SAME
+    // perception model `select_interaction_target` already uses (Manhattan
+    // distance from the act site): if you cannot see the interaction, it does
+    // not move your trust.
+    let (fx, fy) = agent_positions[interaction.from.as_u64() as usize];
+    for (w, &(wx, wy)) in agent_positions.iter().enumerate().take(num_agents) {
         let witness = AgentId::new(w as u64);
         if witness == interaction.from || witness == interaction.to {
+            continue;
+        }
+        let dx = (wx - fx).abs();
+        let dy = (wy - fy).abs();
+        if dx + dy > perception_radius {
             continue;
         }
 
@@ -713,6 +734,8 @@ pub fn system_social_interactions(
                 tick,
                 bonding_rate,
                 conflict_escalation_rate,
+                agent_positions,
+                DEFAULT_PERCEPTION_RADIUS,
             );
 
             process_interaction(

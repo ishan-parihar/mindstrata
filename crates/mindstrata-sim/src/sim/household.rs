@@ -988,20 +988,20 @@ impl Simulation {
             // Evaluate whether any RelationshipV2 should advance or regress based on
             // interaction count, trust, and affection. Runs once daily for all pairs.
             let n_agents = self.agents.len();
-            for i in 0..n_agents {
+            for (i, agent_i) in self.agents.iter_mut().enumerate() {
                 for j in 0..n_agents {
                     if i == j {
                         continue;
                     }
                     let rv2_idx = Self::relationship_v2_pos(i, j);
-                    if rv2_idx >= self.agents[i].relationship_v2s.len() {
+                    if rv2_idx >= agent_i.relationship_v2s.len() {
                         continue;
                     }
-                    let current_stage = self.agents[i].relationship_v2s[rv2_idx].stage;
+                    let current_stage = agent_i.relationship_v2s[rv2_idx].stage;
                     // Short-circuit: skip pairs with 0 interactions at entry-level stages.
                     // No advancement is possible without interactions; regression only matters
                     // for Established+ stages or when fear is high.
-                    let interactions = self.agents[i].relationship_v2s[rv2_idx].interaction_count;
+                    let interactions = agent_i.relationship_v2s[rv2_idx].interaction_count;
                     // Kin and authority stages are assigned, not advanced —
                     // skip them outright.
                     if crate::social::relationship_stages::is_kin_stage(current_stage)
@@ -1019,9 +1019,9 @@ impl Simulation {
                     {
                         continue;
                     }
-                    let trust = self.agents[i].relationship_v2s[rv2_idx].trust;
-                    let affection = self.agents[i].relationship_v2s[rv2_idx].affection;
-                    let fear = self.agents[i].relationship_v2s[rv2_idx].fear;
+                    let trust = agent_i.relationship_v2s[rv2_idx].trust;
+                    let affection = agent_i.relationship_v2s[rv2_idx].affection;
+                    let fear = agent_i.relationship_v2s[rv2_idx].fear;
                     // Iteration 201 (write-side closure): produce the
                     // continuous within-stage progress toward the next
                     // stage's thresholds — the previously-dead
@@ -1031,7 +1031,7 @@ impl Simulation {
                     // the §10.3 ladder is dense in every calibrated
                     // window, so a live consumer would re-pace the
                     // golden, the Iter-199 class).
-                    let rv2 = &mut self.agents[i].relationship_v2s[rv2_idx];
+                    let rv2 = &mut agent_i.relationship_v2s[rv2_idx];
                     if let Some(progress) =
                         crate::social::relationship_stages::stage_progress_toward_next(
                             rv2.stage,
@@ -1049,14 +1049,14 @@ impl Simulation {
                         trust,
                         affection,
                     ) {
-                        self.agents[i].relationship_v2s[rv2_idx].stage = new_stage;
+                        agent_i.relationship_v2s[rv2_idx].stage = new_stage;
                         // P5 audit (Iteration 184): stages now move daily
                         // (V2 trust/affection are interaction-live), so the
                         // identity metadata must refresh in the same pass —
                         // otherwise public/private labels lag a full day
                         // behind the stage and end-state snapshots catch
                         // the desync. Deterministic, no RNG.
-                        self.agents[i].relationship_v2s[rv2_idx].update_identity_metadata();
+                        agent_i.relationship_v2s[rv2_idx].update_identity_metadata();
                     } else if let Some(new_stage) =
                         crate::social::relationship_stages::try_regress_stage(
                             current_stage,
@@ -1064,8 +1064,8 @@ impl Simulation {
                             fear,
                         )
                     {
-                        self.agents[i].relationship_v2s[rv2_idx].stage = new_stage;
-                        self.agents[i].relationship_v2s[rv2_idx].update_identity_metadata();
+                        agent_i.relationship_v2s[rv2_idx].stage = new_stage;
+                        agent_i.relationship_v2s[rv2_idx].update_identity_metadata();
                     }
                 }
             }

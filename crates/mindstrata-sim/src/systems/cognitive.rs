@@ -1063,14 +1063,13 @@ impl Simulation {
                         .map(|inst| inst.id)
                 })
                 .collect();
-            for i in 0..n {
-                let rel_count = agents[i].relationship_v2s.len();
-                for pos in 0..rel_count {
-                    let to_idx = agents[i].relationship_v2s[pos].to.as_u64() as usize;
+            for (i, agent_i) in agents.iter_mut().enumerate() {
+                let rel_count = agent_i.relationship_v2s.len();
+                for rv2 in agent_i.relationship_v2s.iter_mut().take(rel_count) {
+                    let to_idx = rv2.to.as_u64() as usize;
                     if to_idx >= n || to_idx == i {
                         continue;
                     }
-                    let rv2 = &mut agents[i].relationship_v2s[pos];
                     rv2.update_identity_metadata();
                     // §10.2: Reconciliation — when a betrayal has been
                     // repaired by recovered trust (no reconciliation since
