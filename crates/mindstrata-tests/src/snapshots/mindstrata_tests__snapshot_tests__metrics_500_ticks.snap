@@ -7,7 +7,7 @@ Metrics500 {
     avg_thirst: 0.21766666666666662,
     avg_fatigue: 0.05594166666666667,
     avg_stress: 0.2902166666666667,
-    avg_health: 0.7853666666666665,
+    avg_health: 0.7853583333333332,
     avg_relationship_trust: 0.6354166666666665,
     avg_relationship_quality: 0.4116848484848485,
     polarization_index: 0.0414,

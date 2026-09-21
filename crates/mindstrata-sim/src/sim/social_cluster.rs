@@ -79,17 +79,36 @@ impl Simulation {
                 }
             }
             // ── Social field ──
+            // i350 re-contract (§4.4, probe `i350_fold_semantics` leg B): the
+            // trust/obligation means ran over ALL rows and were diluted toward
+            // the stranger prior by N−1−degree frozen rows (measured
+            // |all − contacted| p50 ≈ 0.30 at N=48–96). `social_trust` feeds
+            // the clans violence-pacification factor, so the dilution made a
+            // hermit in a big village as pacified as a socialite. The means now
+            // run over CONTACTED rows only (`is_contacted`: interacted ∨
+            // kin-assigned); with no contacted rows the fold falls back to the
+            // stranger prior itself — exactly the constant the all-rows fold
+            // degenerated to, so a contact-less agent is neither pacified nor
+            // trusted by construction.
             let mut trust_sum = Fixed::ZERO;
             let mut oblig_sum = Fixed::ZERO;
             let mut kin_count: u32 = 0;
+            let mut contacted = 0usize;
             for r in &self.agents[i].relationship_v2s {
-                trust_sum += r.trust;
-                oblig_sum += r.obligation;
+                if r.is_contacted() {
+                    trust_sum += r.trust;
+                    oblig_sum += r.obligation;
+                    contacted += 1;
+                }
                 if crate::social::relationship_stages::is_kin_stage(r.stage) {
                     kin_count += 1;
                 }
             }
-            let rel_count = self.agents[i].relationship_v2s.len().max(1);
+            let (trust_sum, oblig_sum, rel_count) = if contacted == 0 {
+                (Fixed::from_f64(0.4), Fixed::ZERO, 1usize)
+            } else {
+                (trust_sum, oblig_sum, contacted)
+            };
             // ── Noospheric field ──
             let mut belief_sum = Fixed::ZERO;
             let mut hottest_charge = Fixed::ZERO;

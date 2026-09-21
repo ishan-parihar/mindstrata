@@ -144,13 +144,35 @@ impl Simulation {
             // walks per agent where one suffices — the i331/i334 "compute once,
             // use many" class. The pass reads these lists and never writes
             // them, so a single fold yields all four values exactly.
-            let (own_rel_trust_sum, own_rel_trust_min) = agents[i]
+            //
+            // i350 re-contract (§4.4, probe `i350_fold_semantics` leg B): the
+            // fold ran over ALL rows, so as N grows the mean is diluted toward
+            // the stranger prior (0.4) by rows that never moved — measured
+            // |all − contacted| p50 ≈ 0.30 at N=48–96, and `min_trust` was
+            // PINNED at the 0.4 prior for 19/48 agents (the "closest
+            // relationship trust < 0.5" sadness producer fired identically for
+            // hermit and socialite — the §4.3 zero-discrimination shape). The
+            // fold now runs over CONTACTED rows only (`is_contacted`:
+            // interacted ∨ kin-assigned), which is the population the
+            // channels mean. Fallback when no row is contacted: the stranger
+            // prior itself (sum 0.4/count 1, min 0.4), so an agent with no
+            // contacts reads exactly what a villager surrounded by strangers
+            // read before — the fallback is the OLD fold's constant term.
+            let (own_rel_trust_sum, own_rel_trust_min, own_rel_count) = agents[i]
                 .relationship_v2s
                 .iter()
-                .fold((Fixed::ZERO, Fixed::ONE), |(sum, min), r| {
-                    (sum + r.trust, min.min(r.trust))
+                .fold((Fixed::ZERO, Fixed::ONE, 0usize), |(sum, min, n), r| {
+                    if r.is_contacted() {
+                        (sum + r.trust, min.min(r.trust), n + 1)
+                    } else {
+                        (sum, min, n)
+                    }
                 });
-            let own_rel_count = agents[i].relationship_v2s.len();
+            let (own_rel_trust_sum, own_rel_trust_min, own_rel_count) = if own_rel_count == 0 {
+                (Fixed::from_f64(0.4), Fixed::from_f64(0.4), 1usize)
+            } else {
+                (own_rel_trust_sum, own_rel_trust_min, own_rel_count)
+            };
             let threat = threat_exposure[i];
             let unfairness = witnessed_unfairness[i];
             let need_pressure = needs[i].hunger.max(needs[i].thirst);

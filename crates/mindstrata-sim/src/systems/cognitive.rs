@@ -784,9 +784,23 @@ impl Simulation {
             // `clear_dirty` rides along on the same tick it did before.
             let num_connections = agent.relationship_v2s.len() as i64;
             let daily_boundary = tick_u64 > 0 && tick_u64.is_multiple_of(144);
+            // i350 re-contract (§4.4, probe `i350_fold_semantics` leg B): the
+            // centrality mean ran over ALL rows, diluting toward the stranger
+            // row's frozen prior quality — |all − contacted| p50 0.40–0.45 at
+            // N=48–96, scaling with N (an isolate in a big village looked
+            // identical to a socialite). The mean now runs over CONTACTED rows
+            // only (`is_contacted`: interacted ∨ kin-assigned); the decay walk
+            // below still visits every row (a dormant row's decay-to-zero is
+            // state maintenance, not sociality). Fallback = the stranger row's
+            // own prior quality (what the all-rows fold read for a
+            // never-interacted agent).
             let mut quality_sum = Fixed::ZERO;
+            let mut contacted_count = 0i64;
             for rv2 in &mut agent.relationship_v2s {
-                quality_sum += rv2.quality();
+                if rv2.is_contacted() {
+                    quality_sum += rv2.quality();
+                    contacted_count += 1;
+                }
                 // §17.3: only recently-touched (dirty) rows decay per tick;
                 // dormant rows get the daily pass. On the daily boundary every
                 // row is active, so the whole list decays and is cleared.
@@ -797,8 +811,17 @@ impl Simulation {
                     }
                 }
             }
-            if num_connections > 0 {
-                agent.status_v2.network_centrality = quality_sum / Fixed::from_int(num_connections);
+            if contacted_count > 0 {
+                agent.status_v2.network_centrality = quality_sum / Fixed::from_int(contacted_count);
+            } else if num_connections > 0 {
+                // No contacted rows: keep the stranger-prior mean the old fold
+                // produced (frozen rows all carry the same prior), so the
+                // fallback is identity with the pre-i350 value. A fresh
+                // `RelationshipV2::new` IS the stranger prior.
+                let me = mindstrata_core::id::AgentId::new(i as u64);
+                agent.status_v2.network_centrality =
+                    mindstrata_social::social::relationship_v2::RelationshipV2::new(me, me)
+                        .quality();
             }
             cog_mark!("·cog row sweep");
             // §10.4 (Iteration 77): status_attraction was a declared

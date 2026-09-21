@@ -777,6 +777,7 @@ dependencies = [
  "mindstrata-core",
  "mindstrata-development",
  "mindstrata-sim",
+ "mindstrata-social",
  "mindstrata-tui",
  "serde_json",
 ]

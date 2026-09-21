@@ -457,6 +457,33 @@ impl RelationshipV2 {
         }
     }
 
+    /// i350: does this row carry LIVE semantics (state that moved off the
+    /// birth prior), as opposed to being a frozen stranger row?
+    ///
+    /// A row is contacted when the pair has interacted at least once
+    /// (`interaction_count > 0`) or a kin stage was structurally assigned
+    /// (family bonds exist without interaction — a newborn's parent rows).
+    /// Authority stages are deliberately NOT included: they are labels on
+    /// pairs that may never have met, and an unmet authority row carries
+    /// exactly the stranger prior (trust 0.4 / affection 0.3) — including it
+    /// would re-dilute every fold with a constant.
+    ///
+    /// This is the predicate the mean-folds (appraisal trust sum/min/count,
+    /// cognitive `network_centrality`, social_cluster `social_trust` /
+    /// `social_obligation`) gate on since i350: probe `i350_fold_semantics`
+    /// leg B measured the all-rows folds at N=48 as ~0.30 stranger-diluted
+    /// (min_trust pinned at the 0.4 prior for 19/48 agents — the
+    /// "closest relationship" sadness producer fired identically for hermit
+    /// and socialite), while the all-rows iteration cost ~50% of the tick
+    /// (i341). Folding only contacted rows restores the per-agent semantics
+    /// the channels mean; callers pass an explicit fallback (the stranger
+    /// prior) when NO row is contacted, so a genuinely-isolated agent reads
+    /// exactly what a villager surrounded by strangers reads.
+    #[must_use]
+    pub fn is_contacted(&self) -> bool {
+        self.interaction_count > 0 || crate::social::relationship_stages::is_kin_stage(self.stage)
+    }
+
     /// Fn. (doc added at S3 extraction)
     pub fn quality(&self) -> Fixed {
         (self.trust * Fixed::from_f64(0.3)

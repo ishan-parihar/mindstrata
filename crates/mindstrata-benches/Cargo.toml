@@ -9,6 +9,7 @@ license.workspace = true
 mindstrata-core = { workspace = true }
 mindstrata-development = { workspace = true }
 mindstrata-sim = { workspace = true }
+mindstrata-social = { workspace = true }
 mindstrata-tui = { workspace = true }
 
 [dev-dependencies]
