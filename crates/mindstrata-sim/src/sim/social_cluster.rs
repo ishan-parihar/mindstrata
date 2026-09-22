@@ -536,9 +536,20 @@ impl Simulation {
                 // RNG — the draw stream is untouched (only state deltas on
                 // the recipient's attachment).
                 if matches!(kind, mindstrata_core::event::InteractionKind::Comfort) {
+                    // i369 (v1→v2 migration, first subsystem): read the DYADIC
+                    // store (v2), not the legacy v1 ledger. This module already
+                    // reads v2 everywhere else (`relationship_v2_pos` at the
+                    // cluster/pair folds above), so the v1 read here was an
+                    // intra-module inconsistency — and v2 is the model that
+                    // carries the attachment fields comfort/soothing is
+                    // grounded in (Sternberg triangle + attachment_security),
+                    // while v1 is a compact event-impact ledger. Same 0.5
+                    // stranger fallback; only the store changes. Behavioural →
+                    // carries its own probe + re-anchor sweep (see
+                    // evidence/i369_comfort_v2_trust.md).
                     let rel_trust = self
-                        .rel_pos(from_idx, to_idx)
-                        .map_or(Fixed::from_f64(0.5), |p| self.relationships[p].trust);
+                        .relationship_v2_between(from_idx, to_idx)
+                        .map_or(Fixed::from_f64(0.5), |r| r.trust);
                     // Iteration 191 calibration: the raw recovery rates
                     // (0.3/0.6/0.4/0.5) made a SINGLE comfort event reduce
                     // distress by up to ~0.24 (effectiveness = receptivity ×

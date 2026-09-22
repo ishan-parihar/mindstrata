@@ -10,7 +10,7 @@ LongHorizonSurface10000 {
     avg_stress: 0.3340769230769231,
     avg_health: 0.7884538461538462,
     avg_relationship_trust: 0.8161083333333325,
-    avg_relationship_quality: 0.7324993589743592,
+    avg_relationship_quality: 0.7324891025641027,
     polarization_index: 0.0471,
     active_meme_count: 5,
     total_grain: 2.3612,

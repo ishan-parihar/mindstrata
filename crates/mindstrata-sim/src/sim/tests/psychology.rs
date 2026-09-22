@@ -3,6 +3,64 @@
 use super::super::snapshot_metrics::self_esteem_support;
 use super::super::*;
 
+/// i369 (v1→v2 migration, first subsystem): the **comfort/soothing** path must
+/// read the DYADIC v2 store, not the legacy v1 ledger.
+///
+/// i353 measured the two stores diverging (90% of pairs >0.01 at N=48/20K), so
+/// *which* store a consumer reads is behavioural. This pins the comfort read
+/// three ways: two sims differing **only** in v1 trust must soothe identically
+/// (v1 is ignored), while a sim with a different **v2** trust must soothe
+/// differently (v2 is live and drives the effect).
+#[test]
+fn comfort_soothing_reads_the_v2_dyadic_store() {
+    use mindstrata_core::clock::Tick;
+    use mindstrata_core::event::{InteractionKind, SimEvent};
+    use mindstrata_core::id::AgentId;
+
+    fn soothe(v1_trust: f64, v2_trust: f64) -> f64 {
+        let mut sim = Simulation::new(SimConfig {
+            seed: 42,
+            max_ticks: 5,
+            world_width: 16,
+            world_height: 16,
+            num_agents: 12,
+            snapshot_interval: None,
+        });
+        sim.populate();
+        // Recipient 1 is Secure with mid security, so comfort raises security.
+        sim.agents[1].attachment.style = crate::psychology::attachment::AttachmentStyle::Secure;
+        sim.agents[1].attachment.security = Fixed::from_f64(0.2);
+        // Set the two stores' trusts independently for the pair (0 → 1).
+        let pos = Simulation::relationship_v2_pos(0, 1);
+        sim.agents[0].relationship_v2s[pos].trust = Fixed::from_f64(v2_trust);
+        if let Some(p) = sim.rel_pos(0, 1) {
+            sim.relationships[p].trust = Fixed::from_f64(v1_trust);
+        }
+        // Inject one Comfort event and run the pass that handles it.
+        let pre = sim.events.len();
+        sim.events.push(SimEvent::InteractionOccurred {
+            from: AgentId::new(0),
+            to: AgentId::new(1),
+            kind: InteractionKind::Comfort,
+            tick: Tick::new(1),
+        });
+        sim.tick_gossip_and_knowledge(pre, 1, Tick::new(1));
+        sim.agents[1].attachment.security.to_f64()
+    }
+
+    let a = soothe(0.1, 0.5);
+    let b = soothe(0.9, 0.5);
+    assert!(
+        (a - b).abs() < 1e-9,
+        "v1 trust must be ignored by the comfort path: {a} vs {b}"
+    );
+    let c = soothe(0.1, 0.9);
+    assert!(
+        c > a + 1e-4,
+        "higher v2 trust must soothe more (v2 is the read store): {a} vs {c}"
+    );
+}
+
 /// §8.1: Self-esteem support is zero at baseline and signed around it.
 #[test]
 fn self_esteem_support_is_zero_at_baseline() {

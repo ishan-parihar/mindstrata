@@ -7,7 +7,7 @@ Metrics2000 {
     avg_hunger: 0.030000000000000002,
     avg_thirst: 0.13384615384615386,
     avg_fatigue: 0.4037307692307692,
-    avg_stress: 0.2642846153846154,
+    avg_stress: 0.2642923076923077,
     avg_health: 0.8096846153846154,
     avg_relationship_trust: 0.6995647435897431,
     polarization_index: 0.0461,
