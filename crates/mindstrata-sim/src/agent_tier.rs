@@ -106,18 +106,6 @@ pub enum AgentTier {
 }
 
 impl AgentTier {
-    /// Does this tier run the full biological update (endocrine, metabolism, cardiovascular, etc.)?
-    ///
-    /// **RECORDED DEBT (i316, i355) — NOT CONSUMED.** The biology pass runs for
-    /// every tier today, so this predicate describes the *intended* LOD rung,
-    /// not current behaviour. Do not gate on it expecting a saving: i328
-    /// measured the whole tier-gate payoff at ≈5%. Wiring it (or deleting it)
-    /// is its own behavioural iteration; until then this is a false affordance
-    /// and is documented as such deliberately.
-    pub fn runs_full_biology(&self) -> bool {
-        matches!(self, Self::Focal)
-    }
-
     /// Does this tier run the full psychological pipeline (appraisal, emotion regulation,
     /// theory of mind, prospection, narrative)?
     pub fn runs_full_psychology(&self) -> bool {
@@ -175,17 +163,6 @@ impl AgentTier {
         // or theory-of-mind (the predicates that actually cut per-agent
         // cost); the social fabric is load-bearing and stays whole.
         true
-    }
-
-    /// Does this tier run action selection (utility AI)?
-    ///
-    /// **RECORDED DEBT (i316, i355) — NOT CONSUMED.** Action selection runs for
-    /// every tier (the census `i346` shows Background agents still take
-    /// decisions), so this predicate describes intended LOD, not behaviour.
-    /// Wiring it would silently freeze Background agents mid-action; treat any
-    /// future gate on it as a behavioural change requiring its own sweep.
-    pub fn runs_action_selection(&self) -> bool {
-        matches!(self, Self::Focal | Self::Secondary)
     }
 
     /// §17: Numeric tier index for metrics (Focal=0, Secondary=1, Background=2).
@@ -667,10 +644,12 @@ mod tests {
 
     #[test]
     fn tier_methods_match_expected_tiers() {
-        assert!(AgentTier::Focal.runs_full_biology());
-        assert!(!AgentTier::Secondary.runs_full_biology());
-        assert!(!AgentTier::Background.runs_full_biology());
-
+        // i372: `runs_full_biology` / `runs_action_selection` are DELETED
+        // (charter decision) — both had zero production call sites (i316), the
+        // whole gate payoff was ≈5% (i328), and the Background tier is dark in
+        // calm towns (i367). A biology LOD rung, if ever built, gets a real
+        // gate, not a lying predicate. The wired cognitive rungs stay pinned
+        // below.
         assert!(AgentTier::Focal.runs_full_psychology());
         assert!(!AgentTier::Secondary.runs_full_psychology());
         assert!(!AgentTier::Background.runs_full_psychology());
@@ -684,10 +663,6 @@ mod tests {
         assert!(AgentTier::Focal.runs_relationship_updates());
         assert!(AgentTier::Secondary.runs_relationship_updates());
         assert!(!AgentTier::Background.runs_relationship_updates());
-
-        assert!(AgentTier::Focal.runs_action_selection());
-        assert!(AgentTier::Secondary.runs_action_selection());
-        assert!(!AgentTier::Background.runs_action_selection());
 
         // §17.2 (Iteration 158 → i348 re-contract): social presence is
         // universal — Background agents stay in the interaction pass (the

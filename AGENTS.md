@@ -393,12 +393,11 @@ Live queue, in order (evidence link per item):
    premises:** locomotion pace (i357 — `Move` already steps one tile per tick), the
    dual-store *migration* (i353/i356 — redundancy, not a liveness fault), and the
    "N≥192 capacity" framing (i359 — capacity is fine; world structure is the blocker).
-6. **§17 tier-gate residual** — i355 closed the cosmetic half (the stale
-   `relationship_count` parameter is renamed `contacted_degree`, and the unwired
-   `runs_full_biology()` / `runs_action_selection()` predicates are documented as recorded
-   debt, not behaviour). The remaining half is a **decision, not a cleanup**: wire the
-   biology/action LOD rungs (behavioural, sweep-carrying, i328 measured the whole gate
-   payoff at ≈5%) or delete the predicates. The *cognitive* rungs already work.
+6. **§17 tier-gate residual — CLOSED (i372, charter decision: DELETE).** The dead
+   `runs_full_biology()` / `runs_action_selection()` predicates are removed (zero call
+   sites, i316; whole-gate payoff ≈5%, i328; Background dark in calm towns, i367). The
+   *cognitive* rungs stay wired and pinned. A future biology LOD rung gets a real gate,
+   not a false affordance.
 7. **The sparse relationship store is DEMOTED, not queued** — i338 (ω(N²) is a housing
    artifact), i344 (world area is fidelity, not throughput), and i350 (the contacted graph
    re-saturates 13.3%→73.7% by 40K) all measured it as a ≤2× constant decaying toward 1.
