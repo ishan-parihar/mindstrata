@@ -98,8 +98,10 @@ These rules exist because we repeatedly paid for violating them:
    state variable in the sim already measures what the constant guesses at — promote it
    to a state-derived law, behaviourally, with its own sweep. The full classification
    lives in `evidence/i373_hardcodedness_audit.md`; the queue is led by the
-   legitimacy-coupled dividend share, endogenous tax policy, geography-derived marriage
-   distance, and status-scaled patronage capacity.
+   legitimacy-coupled dividend share (**LANDED, i374** — `s = s0 + k·(1−legit)`,
+   midpoint-neutral through the old constant at equilibrium legitimacy 0.6; the
+   treasury now feeds back through legitimacy), endogenous tax policy,
+   geography-derived marriage distance, and status-scaled patronage capacity.
 
 ## 5. Known Systemic Hazards
 

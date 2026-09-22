@@ -397,6 +397,18 @@ pub struct SimParameters {
     /// identity factor (no decision roll ever drawn → byte-identical
     /// baseline).
     pub meme_mutation_rate_base: Fixed,
+    /// i374: the legitimacy-coupled council dividend share — BASE term `s0`
+    /// of the law `s = s0 + k·(1 − legitimacy)`. The organic replacement for
+    /// the hardcoded 0.25 (i363): a nervous/resented council buys goodwill
+    /// with patronage, a secure one hoards. Default `s0 = 0.15`, `k = 0.25`
+    /// passes exactly through the old constant at the §29.2 equilibrium
+    /// legitimacy 0.6 (0.15 + 0.25·0.4 = 0.25 — see `council_dividend_share_k`).
+    pub council_dividend_share_s0: Fixed,
+    /// i374: legitimacy COUPLING STRENGTH `k` of the dividend law. `k = 0`
+    /// degenerates to a constant share `s0` (the pre-i374 shape). Default is
+    /// set so the law passes exactly through the old 0.25 constant at the
+    /// measured legitimacy equilibrium: 0.25 = 0.15 + k·(1 − 0.6) → k = 0.25.
+    pub council_dividend_share_k: Fixed,
     /// Propaganda effectiveness multiplier (§13.4). Iteration 177: now
     /// LIVE — applied to the full effectiveness product in
     /// `compute_effectiveness`. Default recalibrated 0.35 -> 1.0 (identity):
@@ -603,6 +615,11 @@ impl Default for SimParameters {
             meme_transmission_multiplier: Fixed::from_f64(1.2),
             meme_virality_scaling: Fixed::from_f64(0.8),
             meme_mutation_rate_base: Fixed::from_f64(0.3),
+            // i374: s = 0.15 + 0.25·(1 − legit) passes through 0.25 at the
+            // §29.2 legitimacy equilibrium 0.6 — the constant law at the
+            // measured midpoint, coupled away from it.
+            council_dividend_share_s0: Fixed::from_f64(0.15),
+            council_dividend_share_k: Fixed::from_f64(0.25),
             propaganda_effectiveness: Fixed::from_f64(1.0),
             propaganda_resistance_growth: Fixed::from_f64(0.002),
             ritual_cohesion_boost: Fixed::from_f64(0.12),

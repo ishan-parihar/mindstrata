@@ -435,14 +435,23 @@ impl Simulation {
                         // (whose equal-payout counterfactual is recorded there:
                         // equal absolute shares preserve the wealth ratio, so
                         // the weighting must be wealth-inverse).
-                        /// ponytail: local constant, mirrors
-                        /// RELIEF_FLOOR_MEDIAN_SHARE; promote to a named sim
-                        /// parameter if a second consumer appears.
-                        const COUNCIL_SURPLUS_DIVIDEND_SHARE: f64 = 0.25;
+                        // i374: the share is now the ORGANIC LAW
+                        // `s = s0 + k·(1 − legitimacy)` (i373 Class-B
+                        // promotion #1) — a nervous/resented council buys
+                        // goodwill with patronage, a secure one hoards. The
+                        // default parameters pass through the old constant
+                        // (0.25) at the §29.2 legitimacy equilibrium (0.6),
+                        // so behaviour at the midpoint is unchanged and the
+                        // coupling only bites when legitimacy moves —
+                        // midpoint-neutrality per §5. Computed in f64,
+                        // quantized once.
+                        let share_f = self.params.council_dividend_share_s0.to_f64()
+                            + self.params.council_dividend_share_k.to_f64()
+                                * (1.0 - institution.legitimacy.to_f64());
+                        let share_f = share_f.clamp(0.05, 0.95);
                         let surplus = (institution.treasury - reserve).max(Fixed::ZERO);
                         if surplus > Fixed::ZERO && !self.agents.is_empty() {
-                            let dividend =
-                                surplus * Fixed::from_f64(COUNCIL_SURPLUS_DIVIDEND_SHARE);
+                            let dividend = surplus * Fixed::from_f64(share_f);
                             let dividend_f = dividend.to_f64();
                             let weights: Vec<f64> = self
                                 .agents

@@ -1,6 +1,5 @@
 ---
 source: crates/mindstrata-tests/src/snapshot_tests.rs
-assertion_line: 184
 expression: agent_states
 ---
 [
@@ -20,7 +19,7 @@ expression: agent_states
         redemption_script: 0.5,
         depression_risk: 0.0,
         authority: 0.6,
-        wealth_rank: 0.6258,
+        wealth_rank: 0.6257,
     },
     AgentSnapshot {
         name: "Bran",
@@ -38,7 +37,7 @@ expression: agent_states
         redemption_script: 0.5,
         depression_risk: 0.0,
         authority: 0.0,
-        wealth_rank: 0.3857,
+        wealth_rank: 0.386,
     },
     AgentSnapshot {
         name: "Cara",
