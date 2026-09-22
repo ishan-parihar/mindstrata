@@ -360,11 +360,12 @@ Live queue, in order (evidence link per item):
    1, 4)` centres (`world_gen.rs`), so N=192 → **3** and N=256 → **4** settlements at the
    natural gap, each with its own live polity holon (genesis memes/polity [2,2,1] / [6,4,2,1]).
    Calibrated range (<25 houses) is byte-identical (the ring/i345 path is untouched);
-   golden 5/5, sim **299/299**. **Next queued: measure cross-polity diffusion liveness at
-   town scale** — does i299 `system_trade_diffusion` move genesis memes across village
-   boundaries now that villages are geographically distinct (agent trade needs a
-   counter-party within 12 tiles); and does raising the `cluster_count_for` cap to 5–6 buy
-   more polities without crowding a density-law world.
+   golden 5/5, sim **299/299**. **The multi-settlement stack is now end-to-end LIVE
+   (i362):** at 20K, **100% of genesis memes leak across a village boundary** (12/12 at
+   N=192, 20/20 at N=256; 1018/2806 foreign host-links) via cross-polity trade, so
+   geography → partition (i298) → per-polity holon (i297) → trade diffusion (i299) all
+   fire at town scale. Open: does raising the `cluster_count_for` cap to 5–6 buy more
+   polities without crowding a density-law world.
 4. **Wealth tail — treasury redistribution (re-scoped by i361)** — i358 measured the
    distribution as **bounded** (Gini plateaus ~0.65, no destitution) but with one agent
    holding ~50% of the village's coin. i358 scoped a **progressive surcharge**; i361
