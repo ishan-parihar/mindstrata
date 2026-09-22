@@ -364,8 +364,10 @@ Live queue, in order (evidence link per item):
    (i362):** at 20K, **100% of genesis memes leak across a village boundary** (12/12 at
    N=192, 20/20 at N=256; 1018/2806 foreign host-links) via cross-polity trade, so
    geography → partition (i298) → per-polity holon (i297) → trade diffusion (i299) all
-   fire at town scale. Open: does raising the `cluster_count_for` cap to 5–6 buy more
-   polities without crowding a density-law world.
+   fire at town scale. The **cap-raise open item is closed as refuted (i366):** the cap
+   never binds in the reachable range (`(houses/16).clamp(1,4)` needs N ≥ 320, above
+   `MAX_POPULATION = 256`), so the real knob is the **divisor** (a sweep to ~10–12 for
+   5–6 villages is queued as an experiment, trading village size for count).
 4. **Wealth tail — council surplus dividend — LANDED (i363).** i358 measured the
    distribution as bounded (~0.65) but with one agent holding ~50% of the coin; the
    i358-scoped **progressive surcharge was implemented and refuted by i361** (Gini
