@@ -145,18 +145,21 @@ and (d) the two-store relationship split makes some consumers read stale values.
 
 ## 8. Scale ceiling (measured)
 
-Per-tick cost, release, 2000 ticks, seed 42 (envelope re-baselined i332; further improved
-by i352):
+Per-tick cost, release, 2000 ticks, seed 42, **density world law** `side(N) = max(16,
+ceil(√(21.33·N)))` (charter method; envelope re-baselined i332, then expanded by the
+housing spread i340/i345, the i352 scan removal, and i356 — re-measured at i359):
 
-| N | µs/tick | ticks/sec | vs N=96 budget (6500) |
-|---|---|---|---|
-| 12 | 96.7 | ~10,300 | −6,403 |
-| 48 | 531.4 | ~1,880 | −5,969 |
-| 96 | 1,853.0 | ~540 | **71% headroom** |
-| 144 | 4,157.9 | ~240 | **fits** |
-| 192 | 7,700.8 | ~130 | breaches by **16%** |
+| N | side | µs/tick | ticks/sec | vs N=96 budget (6500) |
+|---|---|---|---|---|
+| 48 | 32 | 405.3 | ~2,470 | −6,095 |
+| 96 | 46 | 987.3 | ~1,010 | **85% headroom** |
+| 144 | 56 | 1,856.0 | ~540 | **fits** |
+| 192 | 64 | **3,239.4** | ~310 | **fits, 50% headroom** |
+| 256 | 74 | **5,805.2** | ~170 | **fits** (demographic cap) |
 
-Hard demographic cap: `MAX_POPULATION = 256`. World default fixed **32×32**; a
+`ENVELOPE_EXPANDED_2_7X` — the N=96 charter budget covers **N=256**. Liveness holds at
+the cap (i359: N=256 health 0.777, hunger 0.045, zero-coin 0, all partnered). Hard
+demographic cap: `MAX_POPULATION = 256`. World default fixed **32×32**; a
 constant-density law (`side(N) = max(16, ceil(√(21.33·N)))`, i344) exists but is a
 *fidelity* option, not a speed one. The rolling event buffer is **bounded** by i327
 (amortized bulk drop, `MAX_EVENTS = 262_144`, peak ≈28 MiB), so **long horizons are
@@ -165,14 +168,17 @@ available now** — i354 measured a 250 000-tick village run at 55.3 s (N=12→3
 
 | World class | Feasible now? | Why |
 |---|---|---|
-| **Village** (10–50) | ✅ yes, comfortably — the calibrated regime | 540–10,300 tps |
-| **Small town** (up to ~192–256) | ✅ yes, slowly | 130 tps @192; cap 256; LOD tiers engage |
+| **Village** (10–50) | ✅ yes, comfortably — the calibrated regime | 2,470 tps @48 |
+| **Small town** (up to ~256) | ✅ yes | **310 tps @192, 170 tps @256**; cap 256; capacity is no longer the blocker |
+| **Multi-settlement town** | ❌ not yet | i359: sim capacity is there but the **world is one settlement** — the Vogel spiral places houses uniformly, so `auto_partition_polities` merges everything above gap 8. Needs a **clustered world generator** (queued), not more throughput |
 | **City** (10³–10⁴) | ❌ no | needs the sparse relationship store (**demoted** by i338/i344/i350), multi-settlement orchestration, larger world; the Ω(N²) relationship floor is structural |
 | **Country** | ❌ no | requires hierarchical polities (the per-polity holon is only a seed) + regional aggregation |
 | **Planet** | ❌ no | requires a different scaling architecture (partitioning, LOD at every layer, distributed execution) |
 
-**Verdict:** mindstrata today is an exquisitely detailed **village** simulator that
-stretches to a **small town**. It is not yet a city/country/planet simulator.
+**Verdict:** mindstrata today is an exquisitely detailed **village** simulator whose
+**capacity already reaches a 256-agent town** (i359) — what it lacks at town scale is
+the *spatial structure* (one settlement, not several) and, beyond that, the
+city/country/planet architecture.
 
 ## 9. Calibration debt (the honest ledger)
 
@@ -184,7 +190,7 @@ it is authoritative for *work*, this section is the summary.
 3. **§17 tier-gate residual** — cosmetic rename + `runs_action_selection()` has zero call sites (i355 documented as recorded debt).
 4. **Per-edge pass pacing** — ~58% of the tick; remaining reduction is behavioural (§17.3 dirty-window pacing).
 
-**Queue additions:** the **wealth-tail progressive tax** (i358 — the distribution is bounded at ~0.65 and nobody is destitute, but `collect_taxes` is proportional and scale-invariant, so it cannot dent the one agent holding ~50% of the coin; fix is a surcharge above the membership median, behavioural + sweep-carrying) and **multi-settlement at N≥192** (the city-path experiment on the i344 density world law).
+**Queue additions:** the **wealth-tail progressive tax** (i358 — the distribution is bounded at ~0.65 and nobody is destitute, but `collect_taxes` is proportional and scale-invariant, so it cannot dent the one agent holding ~50% of the coin; fix is a surcharge above the membership median, behavioural + sweep-carrying) and the **clustered world generator** (i359 — sim capacity already reaches N=256, but the world is one uniform settlement, so multi-settlement orchestration has nothing to orchestrate; needs multiple village centres with intra-village jitter, the i339/i340 blast class).
 
 **Closed (do not re-open without new evidence):** `Idle` (i356 — the `Play` recreation driver made the last dead action live, 0.01%–3.67% of decisions), the A8 `Wander` driver (i351), the **locomotion-pace** premise (i357 — `Move` already steps one tile per tick; the limiters are the anger gate and co-location/A9), and the dual-store **migration** (i353/i356 — architectural redundancy, not a liveness fault).
 
