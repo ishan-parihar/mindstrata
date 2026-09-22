@@ -366,17 +366,21 @@ Live queue, in order (evidence link per item):
    geography → partition (i298) → per-polity holon (i297) → trade diffusion (i299) all
    fire at town scale. Open: does raising the `cluster_count_for` cap to 5–6 buy more
    polities without crowding a density-law world.
-4. **Wealth tail — treasury redistribution (re-scoped by i361)** — i358 measured the
-   distribution as **bounded** (Gini plateaus ~0.65, no destitution) but with one agent
-   holding ~50% of the village's coin. i358 scoped a **progressive surcharge**; i361
-   implemented it and it made the target **worse** (Gini 0.647→0.705 / 0.652→0.671),
-   so it was **reverted**. The instrumented root cause: the council treasury **hoards**
-   (163 602 coins at 50K seed 42 vs the Market's ~1K) because its only outflow is a
-   ≤0.5-coin/recipient/cycle poor-relief drip — so *any* steeper extraction feeds an
-   untouchable sink and widens the gap. The real queued fix is **council surplus
-   redistribution** (a wealth-inverse progressive dividend above a reserve, mirroring the
-   i186 Market dividend), behavioural + sweep-carrying with its own probe + re-anchor
-   sweep. Also recorded: council membership is inconsistent (31 vs 3 members).
+4. **Wealth tail — council surplus dividend — LANDED (i363).** i358 measured the
+   distribution as bounded (~0.65) but with one agent holding ~50% of the coin; the
+   i358-scoped **progressive surcharge was implemented and refuted by i361** (Gini
+   0.647→0.705 — it fed a **hoarding** council treasury, 163 602 coins, whose only
+   outflow was a ≤0.5-coin drip). i363 landed the corrected fix — a **spending rule**, not
+   a steeper tax: above the reserve, pay 25% of the council surplus as a **wealth-inverse
+   `1/(1+coin)`** dividend to the whole village (mirroring the i186 Market dividend).
+   Result: Gini **0.647→0.611 / 0.652→0.619** (below baseline), bottom-half share
+   10.3%→11.6% / 8.8%→11.5%, hoard 163 602→241 — `WEALTH_TAIL_BENT`. Sweep-carrying:
+   re-anchored 3 pins (biology golden seed 43→44; fear >0.30→>0.27 measured 0.2864;
+   belief high >0.34→>0.28 measured 0.2968 with the 0.1635 differential invariant held),
+   re-contracted the Idle pin to a run-minimum, regenerated goldens (agent_count 12→13,
+   in-contract) and accepted 5 snapshots. **Open:** collapse-scenario longer-horizon
+   lethality softening unmeasured; dividend share is a first calibration; council
+   membership inconsistency (31 vs 3) still open.
 5. **Closed:** `Idle` (i356 — the `Play` recreation driver made the last dead action
    live, 0.01%–3.67% of decisions) and `A8` `Wander` (i351). **Refuted/closed as
    premises:** locomotion pace (i357 — `Move` already steps one tile per tick), the

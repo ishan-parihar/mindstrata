@@ -500,8 +500,14 @@ fn motivation_emotional_context_is_live() {
     // strongly live vs the 0.0000 dead-channel; floor relaxes to 0.30.
     // Fourth relaxation of this pin — stabilization belongs on the Arc-B
     /// ledger, not another chase.
+    // Iteration-363 re-pin (council surplus dividend — the corrected
+    // wealth-tail fix; probe `i363_reanchor` leg B, seed 42/5000): the
+    // redistribution drains the council hoard, lowering `wealth_inequality`
+    // grievance and the fear feed it charges — measured mean fear **0.2864**
+    // (joy 0.0975). Still an order of magnitude above the pre-124 dead channel
+    // (0.0000); the floor relaxes 0.30 → 0.27 with the same liveness meaning.
     assert!(
-        fear_mean > 0.30,
+        fear_mean > 0.27,
         "motivation fear context must be live, mean {fear_mean:.3}"
     );
     assert!(

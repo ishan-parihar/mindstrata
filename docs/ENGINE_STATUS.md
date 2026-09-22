@@ -4,7 +4,7 @@ description: "The authoritative current-state description of the mindstrata engi
 type: Authority
 status: AUTHORITY
 scope: "engine behaviour, architecture, realism, scale"
-reconciled_commit: 09924ac
+reconciled_commit: 8923e8a
 created: 2026-09-22
 owner: SIM + PROD (AP4 Studio)
 ---
@@ -190,9 +190,9 @@ it is authoritative for *work*, this section is the summary.
 3. **§17 tier-gate residual** — cosmetic rename + `runs_action_selection()` has zero call sites (i355 documented as recorded debt).
 4. **Per-edge pass pacing** — ~58% of the tick; remaining reduction is behavioural (§17.3 dirty-window pacing).
 
-**Queue additions:** **council treasury redistribution** (i358+i361 — the distribution is bounded at ~0.65 with no destitution, but one agent holds ~50% of the coin; the i358-scoped progressive surcharge was **implemented and refuted** by i361, which made Gini *worse* (0.647→0.705) because the council treasury **hoards** (163 602 coins at 50K seed 42, outflow a ≤0.5-coin/recipient/cycle drip) — the real fix is a wealth-inverse progressive dividend above a reserve, mirroring the i186 Market dividend; behavioural + sweep-carrying) and **cross-polity diffusion liveness at town scale** (i360 — the clustered world now forms 3–4 villages, so measure whether i299 `system_trade_diffusion` actually moves genesis memes across village boundaries).
+**Queue additions:** **cross-polity diffusion at larger cluster caps** (i362 measured the i296–i299 stack end-to-end live at town scale; open is whether raising `cluster_count_for` to 5–6 buys more polities on a density-law world) and **collapse-scenario resilience** (i363's council surplus dividend lifted Gini below baseline 0.647→0.611 and drained the 163K hoard, but the collapse golden's longer-horizon lethality softening is unmeasured) (i360 — the clustered world now forms 3–4 villages, so measure whether i299 `system_trade_diffusion` actually moves genesis memes across village boundaries).
 
-**Closed (do not re-open without new evidence):** the **clustered world generator** (i360 — landed: N=192→3, N=256→4 settlements, per-polity holons live, calibrated range byte-identical), `Idle` (i356 — the `Play` recreation driver made the last dead action live, 0.01%–3.67% of decisions), the A8 `Wander` driver (i351), the **locomotion-pace** premise (i357 — `Move` already steps one tile per tick; the limiters are the anger gate and co-location/A9), and the dual-store **migration** (i353/i356 — architectural redundancy, not a liveness fault).
+**Closed (do not re-open without new evidence):** the **wealth-tail fix** (i363 — council surplus dividend: Gini 0.647→0.611, hoard 163 602→241, `WEALTH_TAIL_BENT`; the i358-scoped progressive tax was refuted by i361), the **clustered world generator** (i360 — landed: N=192→3, N=256→4 settlements, per-polity holons live, calibrated range byte-identical), `Idle` (i356 — the `Play` recreation driver made the last dead action live, 0.01%–3.67% of decisions), the A8 `Wander` driver (i351), the **locomotion-pace** premise (i357 — `Move` already steps one tile per tick; the limiters are the anger gate and co-location/A9), and the dual-store **migration** (i353/i356 — architectural redundancy, not a liveness fault).
 
 **Deferred with triggers:** event `VecDeque` (>250K ticks), recent-claims index (same),
 H5 founder-variance shaping (needs larger N + coordinated sweep).

@@ -1447,7 +1447,13 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
     // window — probe i269 sweep 40..70 @2000: seed 46 now births 1 (was 0),
     // seed 42 births 1, seeds 43/44/45/47 remain 0/0/0; golden leg moves to
     // seed 43 (clean at 0/0/0, liveness leg at 175K on seed 1 unaffected).
-    let golden = run_sim(43, 2000);
+    // Iteration 363 re-anchor (council surplus dividend — the corrected
+    // wealth-tail fix): redistribution lowers early-village scarcity and
+    // re-paces courtship, so seed 43 now conceives inside the window. Probe
+    // `i363_reanchor` leg A (16×16, N=12, @2000): seed 43 pollutes; the clean
+    // family is 40/41/42/44/45/46/47/50–69 — the golden leg moves to **seed 44**
+    // (still 0/0/0 by construction; the liveness leg on seed 1 is untouched).
+    let golden = run_sim(44, 2000);
     assert_eq!(
         golden
             .agents

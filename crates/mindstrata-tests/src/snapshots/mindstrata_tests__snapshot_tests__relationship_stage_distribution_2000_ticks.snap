@@ -4,12 +4,17 @@ assertion_line: 226
 expression: stage_counts
 ---
 {
-    "Acquaintance": 20,
-    "Ally": 44,
+    "Acquaintance": 17,
+    "Ally": 47,
+    "AncestorDescendant": 2,
+    "CloseFriend": 2,
+    "Confidant": 1,
     "ElderJunior": 3,
-    "Familiar": 23,
-    "Friend": 3,
-    "Neighbor": 5,
+    "Familiar": 21,
+    "Friend": 9,
+    "Neighbor": 9,
+    "Noticed": 2,
+    "ParentChild": 4,
     "PatronClient": 6,
-    "Unnoticed": 28,
+    "Unnoticed": 33,
 }

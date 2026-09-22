@@ -423,6 +423,41 @@ impl Simulation {
                                 );
                             }
                         }
+                        // i363: council SURPLUS DIVIDEND — the corrected
+                        // wealth-tail fix. i361 measured the council hoarding
+                        // **163 602 coins** at 50K seed 42 because its only
+                        // outflow was the ≤0.5-coin/recipient relief drip
+                        // above; coin extracted by tax left circulation and
+                        // the Gini *widened*. Above the operating reserve, pay
+                        // a fraction of the surplus as a PROGRESSIVE
+                        // (wealth-inverse `1/(1+coin)`) dividend to the whole
+                        // village — the same shape as the i186 market dividend
+                        // (whose equal-payout counterfactual is recorded there:
+                        // equal absolute shares preserve the wealth ratio, so
+                        // the weighting must be wealth-inverse).
+                        /// ponytail: local constant, mirrors
+                        /// RELIEF_FLOOR_MEDIAN_SHARE; promote to a named sim
+                        /// parameter if a second consumer appears.
+                        const COUNCIL_SURPLUS_DIVIDEND_SHARE: f64 = 0.25;
+                        let surplus = (institution.treasury - reserve).max(Fixed::ZERO);
+                        if surplus > Fixed::ZERO && !self.agents.is_empty() {
+                            let dividend =
+                                surplus * Fixed::from_f64(COUNCIL_SURPLUS_DIVIDEND_SHARE);
+                            let dividend_f = dividend.to_f64();
+                            let weights: Vec<f64> = self
+                                .agents
+                                .iter()
+                                .map(|a| 1.0 / (1.0 + a.wealth.coin.to_f64()))
+                                .collect();
+                            let total_w: f64 = weights.iter().sum();
+                            if total_w > 0.0 {
+                                for (agent, w) in self.agents.iter_mut().zip(weights) {
+                                    agent.wealth.coin += Fixed::from_f64(dividend_f * w / total_w);
+                                }
+                                institution.treasury =
+                                    (institution.treasury - dividend).max(Fixed::ZERO);
+                            }
+                        }
                     }
                 }
                 let wage = Fixed::from_f64(institutions::BASE_WAGE);

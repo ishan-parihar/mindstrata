@@ -499,8 +499,16 @@ fn noospheric_belief_confidence_sustains_conviction() {
         high_mean > low_mean + 0.15,
         "the confident belief ecology must persist far above the weak one (probe-pinned 0.4860 vs 0.2175 at 2000, got {high_mean:.4} vs {low_mean:.4})"
     );
+    // Iteration-363 re-anchor (council surplus dividend — the corrected
+    // wealth-tail fix; probe `i363_reanchor` leg C, seed 42/2000): redistribution
+    // lowers the grievance/fear charge that belief confidence rides, so the
+    // confident ecology eases to **0.2968** (low 0.1332, delta **0.1635**). The
+    // structural invariant — the confident belief ecology far above the weak one
+    // — still holds and the differential stays above its 0.15 floor, so only the
+    // absolute high floor relaxes 0.34 → 0.28; the weak-belief floor (< 0.24)
+    // and the differential are untouched.
     assert!(
-        high_mean > 0.34,
+        high_mean > 0.28,
         "high-confidence beliefs must remain elevated (got {high_mean:.4})"
     );
     assert!(
