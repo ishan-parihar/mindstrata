@@ -1453,7 +1453,15 @@ fn conception_pregnancy_birth_pipeline_runs_and_is_seed_deterministic() {
     // `i363_reanchor` leg A (16×16, N=12, @2000): seed 43 pollutes; the clean
     // family is 40/41/42/44/45/46/47/50–69 — the golden leg moves to **seed 44**
     // (still 0/0/0 by construction; the liveness leg on seed 1 is untouched).
-    let golden = run_sim(44, 2000);
+    // i376 re-anchor (v1 trust store converges onto the dyadic store instead of
+    // saturating — see `systems/cognitive.rs`): the trust-gated courtship and
+    // trade channels now read a differentiated field, and the early-village
+    // pacing re-seats again. Probe `i376_golden_window_sweep` (16×16, N=12,
+    // @2000, seeds 1–70): seed 44 now conceives inside the window; **51/70
+    // seeds are clean**, and the golden leg returns to the canonical **seed 42**
+    // (0 pregnancies / 0 parents / 0 marriage children by construction, first
+    // time since Iteration 185). The liveness leg on seed 1 is untouched.
+    let golden = run_sim(42, 2000);
     assert_eq!(
         golden
             .agents

@@ -365,12 +365,22 @@ matrix scan (the marriage pass was O(N³) every tick).
 Live queue, in order (evidence link per item):
 
 1. **The v1→v2 relationship migration (charter DECIDED: finish it subsystem by
-   subsystem)** — **i369 landed the first migration** (comfort/soothing reads the dyadic
-   v2 store; three-way runnable pin; collapse golden one birth flipped 13→12,
-   in-contract). Remaining readers: economy, norms_impl, household, births_deaths —
-   each behavioural with its own probe. Marriage pass REFUTED (i353). The cognitive
-   mean-reversion writer (`systems/cognitive.rs:984`) is queued first among writers (a
-   divergence *source*).
+   subsystem)** — **i369 landed the first reader migration** (comfort/soothing reads the
+   dyadic v2 store; three-way runnable pin; collapse golden one birth flipped 13→12,
+   in-contract). **i376 closed the divergence SOURCE**: the queued cognitive writer
+   (`systems/cognitive.rs`) was not merely a divergence source but a producer failing at
+   its own purpose — v1 trust saturated (mean 0.887–0.920, 79–85% of pairs ≥0.95 at 50K)
+   because its 0.001/day mean reversion lost to the interaction gains by ~14×, while the
+   dyadic store held 0.588–0.628, so the two diverged by 0.27–0.31 mean across 55–63% of
+   pairs and every v1 trust gate read a dead signal. The legacy row now **converges onto
+   the dyadic row** (`v1.trust += (v2.trust − v1.trust) × relationship_dormant_decay`
+   daily, default 1.0 = full sync; baseline is the sim's own dyadic estimate, not a magic
+   0.5). Remaining readers: economy, norms_impl, household, births_deaths — each
+   behavioural with its own probe. Marriage pass REFUTED (i353). **Queued next from i376's
+   evidence:** v1's interaction gains remain ~10× v2's (`record_positive` ×0.02), leaving
+   a +0.06–0.08 offset; and the panic channel's firing density halved (3/5 → 3/10 swept
+   seeds) as the trust field de-saturated — its residual dependence on the wide trust
+   range is its own iteration, not a pin to move.
 2. **A9 — the envelope at constant density** — re-scoped by i344: a **fidelity** policy
    (max co-location 19 → 4, contacted share halved), **not** throughput (+9.1%/−2.3%/+5.6%
    at N=96/144/192). A charter decision; do not sell it as speed.

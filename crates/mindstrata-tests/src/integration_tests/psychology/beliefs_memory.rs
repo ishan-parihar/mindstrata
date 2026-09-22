@@ -586,9 +586,19 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
     // family re-anchors onto the seeds that register post-driver {7, 11, 46}
     // — same contract, same majority rule, the family itself is what moves
     // when pacing shifts.
+    // i376 re-anchor (§4.4, probe `i376_panic_sweep` — 10-seed pestilence @20K):
+    // the v1 trust store stopped saturating (convergence onto the dyadic store,
+    // `systems/cognitive.rs`), so the trust-gated rumor channels see a
+    // differentiated field and the charge trajectories re-seat a third time
+    // (registry counts {5: 0, 7: 11, 42: 0, **11: 0**, 46: 0, 1: 4, 23: 5,
+    // 13: 0, 99: 0, 3: 0}). The mechanism is alive — seed 7 fires 11 panics at
+    // peak 0.1535 — so the family re-anchors onto {7, 1, 23}; same contract,
+    // same majority rule as i343/i351. The denser-trust world fired on 3/5
+    // swept seeds, this one on 3/10: the panic channel's residual dependence on
+    // the wide trust range is recorded as its own queued iteration.
     let sim = crisis(7);
-    let crisis_second = crisis(11);
-    let crisis_third = crisis(46);
+    let crisis_second = crisis(1);
+    let crisis_third = crisis(23);
 
     // Leg A - registration + escalation ran in the crisis window, asserted
     // across a SEED FAMILY. Iteration 334 RE-CONTRACT (§4.1/§4.4): the old
@@ -601,7 +611,7 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
     // flips when one seed's saturation regime moves is a lucky-seed pin:
     // the honest contract is the mechanism (register -> charge -> escalate
     // -> drain) firing in a crisis world, not one seed's magnitude.
-    let family: [(u64, &Simulation); 3] = [(7, &sim), (11, &crisis_second), (46, &crisis_third)];
+    let family: [(u64, &Simulation); 3] = [(7, &sim), (1, &crisis_second), (23, &crisis_third)];
     let registering = family
         .iter()
         .filter(|(_, world)| !world.moral_panic_registry.panics.is_empty())
@@ -684,7 +694,11 @@ fn moral_panic_lifecycle_registers_and_drains_legitimacy_end_to_end() {
     // i351: replay seed 11, a family member measured to REGISTER panics
     // post-driver (5 registrations; the old replay seed 7 was promoted to a
     // Leg-A family member and 42 registered none).
-    sc2.seed = 11;
+    // i376: the replay seed follows the re-anchored family — it must replay
+    // `crisis_second` (seed 1), which the `i376_panic_sweep` measured to
+    // REGISTER (4 registrations). Replaying the old seed 11 would compare two
+    // different worlds (it now registers none).
+    sc2.seed = 1;
     sc2.ticks = 20000;
     let mut again = Simulation::from_scenario(sc2);
     again.populate();

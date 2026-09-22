@@ -972,24 +972,65 @@ impl Simulation {
             cog_mark!("·cog tail");
         }
 
-        // §5.1: Legacy relationship mean reversion — trust drifts toward a
-        // neutral baseline so it cannot pin at 1.0 for every pair. Without
-        // this, positive interactions ratcheted all trust to 1.0 once agents
-        // were healthy/wealthy, erasing the differentiation the witness
-        // system produces. `relationship_dormant_decay` was previously dead
-        // parameter. Mean reversion: trust -= (trust - 0.5) * decay per day.
+        // §5.1 (i376): LEGACY-STORE CONVERGENCE — the v1 trust row now tracks
+        // its dyadic counterpart instead of a hardcoded 0.5 baseline.
         //
-        // i320: hoisted out of the per-agent loop. It used to sit inside
-        // `for i in 0..agents.len()` and re-scan the ENTIRE matrix filtering
-        // `rel.from == i` — O(N·R)=O(N³) on every daily boundary tick (the
-        // i294 accident class). Each row's drift reads only that row's own
-        // trust, and the old `from == i` filter visits every row exactly once
-        // across the i-loop, so one O(R) pass is value-for-value identical
-        // (no accumulation, no order dependence, no RNG).
+        // History. This block used to be mean reversion: `trust -= (trust −
+        // 0.5) * relationship_dormant_decay` per day, described as the v1
+        // store's protection against the interaction ratchet pinning trust at
+        // 1.0. Measured (`i376_v2_trust_divergence`, 46×46/N=48, seeds
+        // 42/7/23), it lost that fight by ~14× and the store saturated anyway:
+        // at 50K the v1 mean reached 0.887–0.920 with 79–85% of pairs ≥0.95 and
+        // 42–57% ≥0.99, exactly the state its comment said it prevented
+        // (doctrine §4.3: a saturated state blinds every reader). Meanwhile
+        // `RelationshipV2::decay` (toward zero at `decay_rate`/tick) held the
+        // dyadic store at 0.588–0.628, so the two stores diverged by 0.33 mean
+        // / 0.97 p95 across 58–63% of pairs — and every v1 trust gate
+        // (`memory_ops`'s `r.trust > 0.6` encoding gate, the gossip trust gate,
+        // marriage partner trust, economy trade trust) read the saturated
+        // store, i.e. a dead signal.
+        //
+        // The law: one quantity, one truth. `RelationshipV2` is the charter's
+        // designated store (35+ fields, Sternberg triangle, attachment
+        // security) and is the one the cognitive/appraisal/attention passes
+        // already read, so the legacy row CONVERGES onto it: the baseline is no
+        // longer a magic 0.5 but the sim's own dyadic estimate for that ordered
+        // pair. `relationship_dormant_decay` keeps its role as the relaxation
+        // rate and gains a second reading (0 = legacy store frozen, 1 = full
+        // sync each day); the deprecated `0.5` baseline is gone. Fixing the
+        // source beats retuning the rate: the divergence between the two stores
+        // — the item the v1→v2 migration ledger opened with — closes here.
+        //
+        // Determinism: pure function of state in fixed row order, no RNG, no
+        // allocation. `Fixed` is 1e-4-resolution, so a coupling that leaves the
+        // per-day step under ~1e-4 would quantize away — the shipped default is
+        // orders of magnitude above that.
+        //
+        // i320 note (kept): the pass is hoisted OUT of the per-agent loop. It
+        // used to sit inside `for i in 0..agents.len()` and re-scan the ENTIRE
+        // matrix filtering `rel.from == i` — O(N·R)=O(N³) on every daily
+        // boundary tick (the i294 accident class). One O(R) pass is
+        // value-for-value identical (no accumulation, no order dependence).
         if tick_u64.is_multiple_of(144) && params.relationship_dormant_decay > Fixed::ZERO {
+            let n = agents.len();
+            let coupling = params.relationship_dormant_decay;
             for rel in relationships.iter_mut() {
-                let drift = (rel.trust - Fixed::from_f64(0.5)) * params.relationship_dormant_decay;
-                rel.trust = (rel.trust - drift).clamp_01();
+                let fi = rel.from.as_u64() as usize;
+                let ti = rel.to.as_u64() as usize;
+                if fi >= n || ti >= n || fi == ti {
+                    continue;
+                }
+                let pos = Simulation::relationship_v2_pos(fi, ti);
+                let Some(v2) = agents[fi].relationship_v2s.get(pos) else {
+                    continue;
+                };
+                // Validate the dyadic row's endpoint: a stale v1 pair (dead or
+                // reassigned partner) must never read an unrelated row.
+                if v2.to.as_u64() as usize != ti {
+                    continue;
+                }
+                let target = v2.trust;
+                rel.trust = (rel.trust + (target - rel.trust) * coupling).clamp_01();
             }
         }
 

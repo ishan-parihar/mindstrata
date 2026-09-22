@@ -201,7 +201,12 @@ pub struct SimParameters {
     pub friendship_trust_threshold: Fixed,
     /// Trust threshold for alliance classification.
     pub alliance_trust_threshold: Fixed,
-    /// Relationship decay rate when dormant (daily).
+    /// i376: daily convergence rate of the legacy v1 trust row onto its dyadic
+    /// (`RelationshipV2`) counterpart. 0 = the legacy store is frozen, 1 = it is
+    /// set to the dyadic value each daily boundary. Previously this was a
+    /// mean-reversion rate toward a hardcoded 0.5 baseline, which the i376 probe
+    /// measured as ~14× too weak (v1 trust saturated at 0.887–0.920 with 79–85%
+    /// of pairs ≥0.95 while the dyadic store held 0.588–0.628).
     pub relationship_dormant_decay: Fixed,
     /// Emotional event contribution to relationship change.
     pub emotional_event_weight: Fixed,
@@ -535,7 +540,7 @@ impl Default for SimParameters {
             // Relational
             friendship_trust_threshold: Fixed::from_f64(0.5),
             alliance_trust_threshold: Fixed::from_f64(0.7),
-            relationship_dormant_decay: Fixed::from_f64(0.001),
+            relationship_dormant_decay: Fixed::from_f64(1.0),
             emotional_event_weight: Fixed::from_f64(0.3),
             bonding_rate: Fixed::ONE, // identity: preserves original hardcoded deltas
             conflict_escalation_rate: Fixed::ONE, // identity: preserves original hardcoded deltas
