@@ -91,3 +91,88 @@ refused by default and needs evidence that the feedback loop anchors.
 
 No code changed in this iteration (audit + doctrine only). Suite state carried:
 sim **300/300**, tests **310/0/1**, gate GREEN.
+
+---
+
+## Refresh (i377) — post i374 / i375 / i376
+
+The classification is living: every landed organic promotion moves an entry from Class B
+to Class A, and every behavioural iteration that measures a *new* gain/law adds one. Three
+promotions landed since the first pass, and i376's probe surfaced two items the first pass
+classified too coarsely.
+
+### Class A additions (state-derived laws now live)
+
+| Law | Derives from | Landed |
+|---|---|---|
+| Council dividend share `s = s₀ + k·(1−legitimacy)` | council legitimacy | i374 |
+| Patronage capacity `cap = 3 + floor(effective_status × 4)` | patron's effective status | i375 |
+| **Legacy v1 trust row** `v1.trust += (v2.trust − v1.trust) × rate` (daily) | **the dyadic `RelationshipV2` store** | i376 |
+
+The i376 entry is the purest instance of the audit's test — *"does a state variable already
+measure what the constant guesses at?"* The constant was a hardcoded `0.5` neutral
+baseline; the state variable that already measures the right thing was **the other store of
+the same quantity**. When the answer is "a parallel store holds it", the organic form is
+convergence, not a stronger reversion: the probe showed retuning the rate (0.001 under the
+new baseline) still saturates, while changing the baseline cuts the divergence 4× and
+roughly doubles the store's discriminating band.
+
+### Class B — remaining queue (unchanged order)
+
+1. **Tax/tithe/fee rates** (`COUNCIL_TAX_RATE` 0.05, `MARKET_FEE_RATE` 0.03,
+   `TEMPLE_TITHE_RATE` 0.02, `institutions.rs`) — the council should set its own rate.
+   Highest realism yield, largest sweep (every wealth pin). **Design constraint found while
+   scoping:** coupling the rate to *legitimacy* creates a positive feedback (low legitimacy
+   → higher rate → line-549 legitimacy erosion → lower legitimacy). The anchored form is
+   **fiscal need** (treasury vs its operating target), which is self-stabilizing. Do not
+   couple it to legitimacy.
+2. **`MAX_MARRIAGE_DISTANCE = 20.0`** (`marriage.rs`) — derive from the settlement
+   structure (same settlement or adjacent), now that geography is adaptive.
+3. **Trait-derived disposition thresholds** (`CULT_FORM_MEMBERS = 4`, `FEUD_APPROACH_ANGER`,
+   patronage thresholds) — the honest organic form is the agent's own traits.
+4. **`TIER_MATURITY_TICKS = 900`** — should derive from the smoothing rate it protects.
+   Low priority (invisible in behaviour).
+
+### Class B **newly found** by i376's probe (the audit's second payoff)
+
+These are *divergent gains for one quantity* — the same class as the constants above, but
+found by measuring a store rather than by grepping a `const`:
+
+5. **The v1 interaction gains** (`social/interaction.rs` per-kind deltas +0.02…+0.10,
+   `marriage.rs` +0.2 on marriage, `economy.rs` +0.02 on trade). The dyadic store applies
+   `record_positive`'s `magnitude × volatility × 0.02` — about **10× smaller** for the same
+   act. That is why the convergence leaves a residual +0.06–0.08 offset: the legacy row
+   sits one day of (larger) gains above the store it now follows. Two candidate organic
+   forms: (a) derive the legacy gains from the dyadic ones, (b) finish the migration and
+   delete the legacy write path — which is the charter's stated end state. **Queued with
+   the offset measured.**
+6. **`social_reciprocal_factor`** (`interaction.rs`) — a second, independent gain applied
+   only to the reciprocal v1 row, with no dyadic counterpart. Same class: a per-quantity
+   gain that should either be derived or disappear with the legacy path.
+
+### Class C — one promotion into, and one clarification
+
+- **`relationship_dormant_decay` is now Class C.** Re-purposed by i376 from a behavioural
+  reversion strength to a **convergence timescale** (0 = frozen, 1 = full sync each day).
+  Under doctrine §4.6 this is solver/damping numerics, not a modelled disposition — the
+  same category as `TRADE_DIFFUSION_DAMP`. Endogenizing a timescale would only produce
+  numerics pretending to be psychology. Refused by default.
+- **Test scaffold is not simulator configuration.** The seed *families* that probes and
+  integration tests re-anchor (panic seeds, golden-window seeds, liveness seeds) look like
+  hardcoded values but are not: they select which already-emergent world a pin is measured
+  on. Re-anchoring them is legitimate **only** with a sweep — and i376 did exactly that
+  (10-seed panic sweep → family `{7,11,46}`→`{7,1,23}`; seeds 1–70 sweep → golden window
+  back to canonical seed 42). The rule that keeps this honest: never re-anchor a family
+  without a runnable sweep, and record the *mechanism* that moved it.
+- **The panic channel's trust-range coupling is recorded as debt, not a constant.** i376
+  halved panic firing density (3/5 → 3/10 swept crisis seeds) by de-saturating the trust
+  field. That is a *coupling* to re-examine in its own iteration (the rumor/credibility
+  path's dependence on the wide trust range), and explicitly not a threshold to re-pin.
+
+### Method note
+
+The first pass found candidates by enumerating `const` sites. The higher-yield method this
+round was to **probe a store and ask whether its equilibrium is doing work** (doctrine
+§4.3). That found a 14×-mistuned gain, a saturated reader family, and two divergent-gain
+constants — none of which a `const` census would surface, because they are *numbers inside
+call sites*, not named constants. Future refreshes should alternate the two methods.

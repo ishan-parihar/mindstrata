@@ -103,7 +103,20 @@ These rules exist because we repeatedly paid for violating them:
    treasury now feeds back through legitimacy), endogenous tax policy,
    geography-derived marriage distance, and status-scaled patronage capacity
    (**LANDED, i375** — `cap = 3 + floor(status×4)`; redistribution only, volume
-   and Gini band unchanged).
+   and Gini band unchanged), and the legacy v1 trust row (**LANDED, i376** — it
+   converges onto the dyadic `RelationshipV2` store instead of mean-reverting toward a
+   hardcoded 0.5; the purest instance of the test, because the state variable that
+   already measured the right thing was *the other store of the same quantity*).
+7. **Probe a store's equilibrium, not only a `const` census (i376).** The highest-yield
+   audit method is to ask whether a store's *equilibrium is doing work*: i376 found a
+   14×-mistuned counter-force, a whole saturated reader family, and two divergent per-act
+   gains for one quantity — none of which a `const` grep surfaces, because they are
+   numbers inside call sites. Alternate both methods each refresh.
+8. **Test scaffold is not simulator configuration.** Seed families that probes and pins
+   measure on (panic seeds, golden-window seeds, liveness seeds) are not hardcoded sim
+   values. Re-anchoring one is legitimate **only** with a runnable sweep (i376: 10-seed
+   panic sweep `{7,11,46}`→`{7,1,23}`; 70-seed golden-window sweep back to canonical seed
+   42) and the mechanism recorded. Never re-anchor a family from a single failing run.
 
 ## 5. Known Systemic Hazards
 
