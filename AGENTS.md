@@ -101,7 +101,9 @@ These rules exist because we repeatedly paid for violating them:
    legitimacy-coupled dividend share (**LANDED, i374** — `s = s0 + k·(1−legit)`,
    midpoint-neutral through the old constant at equilibrium legitimacy 0.6; the
    treasury now feeds back through legitimacy), endogenous tax policy,
-   geography-derived marriage distance, and status-scaled patronage capacity.
+   geography-derived marriage distance, and status-scaled patronage capacity
+   (**LANDED, i375** — `cap = 3 + floor(status×4)`; redistribution only, volume
+   and Gini band unchanged).
 
 ## 5. Known Systemic Hazards
 

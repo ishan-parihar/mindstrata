@@ -293,7 +293,9 @@ const VIOLENCE_TABOO_AVERSION_RATE: Fixed = Fixed::from_raw(1000); // 0.1
 const VIOLENCE_TABOO_AVERSION_FLOOR: Fixed = Fixed::from_raw(5000); // 0.5
 
 // ── Patronage creation constants (§22b) ────────────────────────────
-/// Maximum clients a single patron may acquire per duodeca cycle.
+/// BASE clients a single patron may acquire per duodeca cycle — the floor
+/// of the i375 status-scaled capacity `base + floor(status × 4)`. A low-
+/// status patron (0.1) still gets 3; a paramount chief (0.9) gets 6.
 const PATRONAGE_MAX_CLIENTS_PER_PATRON: usize = 3;
 /// Minimum status differential for patron over client.
 const PATRONAGE_STATUS_GAP: Fixed = Fixed::from_raw(1500); // 0.15

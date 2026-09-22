@@ -312,7 +312,7 @@ impl Simulation {
                 .filter(|(idx, _)| self.patronage_registry.patron_of(*idx).is_some())
                 .map(|(idx, _)| idx)
                 .collect();
-            // Track how many clients each patron has acquired this tick (max 3).
+            // Track how many clients each patron has acquired this tick.
             // Vec indexed by agent ID — simpler and avoids HashMap overhead.
             let mut patron_client_counts: Vec<usize> = vec![0; self.agents.len()];
             #[expect(
@@ -321,7 +321,18 @@ impl Simulation {
             )]
             for i in 0..self.agents.len() {
                 let patron_status = status_cache[i];
-                if patron_client_counts[i] >= PATRONAGE_MAX_CLIENTS_PER_PATRON {
+                // i375: capacity is now STATUS-SCALED (i373 Class-B promotion
+                // #4) — the rich attract more clients because more people want
+                // to be their client, which IS the mechanism. The old constant
+                // cap 3 is kept as the floor; a patron's per-cycle capacity
+                // grows with how far above the village its status sits:
+                // `cap = 3 + floor(status × 4)` → status 0.4 (village mean)
+                // ⇒ 4, status 0.9 (paramount chief) ⇒ 6, status 0.1 ⇒ 3.
+                // The patron-status multiplier is computed in f64, quantized
+                // once, and stays deterministic (no RNG).
+                let status_f = patron_status.to_f64();
+                let capacity = PATRONAGE_MAX_CLIENTS_PER_PATRON + (status_f * 4.0).floor() as usize;
+                if patron_client_counts[i] >= capacity {
                     continue;
                 }
                 for j in 0..self.agents.len() {
