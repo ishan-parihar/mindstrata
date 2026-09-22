@@ -219,3 +219,38 @@ Note that neither the `const` census nor the store-equilibrium probe would have 
 this item alone: the census lists the constant, and the probe (i376) surfaced the symptom
 (the re-anchored family) — it took both, plus a third measurement (headroom) to classify it
 correctly.
+
+---
+
+## Refresh (i379) — the third method, and the four classes it settles
+
+A **gate selectivity census** now sits alongside the `const` census (i373) and the
+store-equilibrium probe (i376): measure the share of samples that OPEN each shipped gate,
+over a **distribution type × context** grid. Full table and analysis:
+`evidence/i379_gate_selectivity_audit.md`.
+
+Why a third method was needed: the first two cannot see a gate whose *reachable band* sits
+entirely on one side of its threshold. i379 found three such gates — `needs.social > 0.30`
+(p95 0.03 in every world), `emotions.anger > 0.50` (p95 0.005–0.071 at town scale) and
+`council legitimacy < 0.50` (never fires; the legitimacy band is 0.54–0.69) — plus one
+near-dead at the calibrated N (`v1 trust > 0.60` opens 82.9% at N=12 but 42.3% at N=48,
+which is how i376's fix is only visible at scale).
+
+The refreshed classification replaces "Class B = organic candidates" with four rules:
+
+1. **Quantile gates over the fixed founder draw** — trait thresholds are self-balancing
+   (measured 31–54% open, *stable across all four worlds*). Keep hardcoded; their robustness
+   comes from the uniformity of the draw, which §5's H5 already protects.
+2. **Crisis gates on bounded need scales** — dark in calm IS the semantics (`hunger > 0.85`
+   opens only in famine). Keep hardcoded. **Always read a 0.0% open-rate against the world
+   that should open it.**
+3. **Gain/scale mismatches** — a gain whose *common case* rounds to nothing
+   (`needs.social × …` contributes ~0.5% of typical action utility; i376's v1 trust gains
+   were ~10× the dyadic ones). Rescale or derive. This is the class that hides behind
+   passing tests.
+4. **Absolute thresholds on self-driven aggregates** — the operating point drifts with the
+   distribution (panic charge i378; the faction legitimacy arm). Make relative/anomaly-based.
+
+The queue this yields is in the i379 doc §"implementation queue": the `needs.social` utility
+scale, the anger arm of the negativity channel, the faction legitimacy arm, and the
+relative-trigger redesign.

@@ -128,6 +128,21 @@ These rules exist because we repeatedly paid for violating them:
    swept seed missing by 0.5%) — the fault is the absolute form, whose organic
    redesign is a **relative/anomaly** trigger against the population's own baseline.
    A large negative margin means the producer is genuinely under-driven — revive it.
+10. **Census GATE SELECTIVITY, not just constants (i379).** A threshold is only a defect
+   when it stops discriminating, and the first two audit methods cannot see a gate whose
+   *reachable band* sits entirely on one side of its bar. Measure the share of samples
+   that OPEN each gate, over a **distribution type × context** grid — and always read a
+   `0.0%` open-rate against the world that *should* open it (`hunger > 0.85` is dark in a
+   fed village by design). The four rulings: **quantile gates over the fixed founder draw
+   stay hardcoded** (their robustness IS the uniform draw; reshaping it silently moves
+   every one — §5 H5); **crisis gates on bounded need scales stay hardcoded**;
+   **gain/scale mismatches** (a gain whose common case rounds to nothing — `needs.social`
+   in the action utility, i376's v1 trust gains) get rescaled or derived; **absolute
+   thresholds on self-driven aggregates** (panic charge, the faction legitimacy arm) get
+   the relative/anomaly form. Full audit: `evidence/i379_gate_selectivity_audit.md`.
+   Audit method ladder: `const` census → store-equilibrium probe (i376) → gate
+   selectivity (i379) → trigger headroom (i378). Use all four; each is blind to what the
+   next one finds.
 
 ## 5. Known Systemic Hazards
 
