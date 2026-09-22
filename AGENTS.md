@@ -91,6 +91,15 @@ These rules exist because we repeatedly paid for violating them:
 5. **Knife-edge flags are debt.** When a pin sits on an unstable equilibrium (epidemic R0≈1
    flipping TRANSIENT↔ENDEMIC nine times), record it as systemic debt in the ledger rather
    than flip-flopping pins forever.
+6. **Organic vs realism-preserving constants (i373 audit).** A constant is
+   *realism-preserving* when the hard number IS the modelled natural law (physiology,
+   mutation noise, the cognitive ontology, solver damping) or a performance envelope —
+   endogenizing it is REFUSED by default. A constant is an *organic candidate* when a
+   state variable in the sim already measures what the constant guesses at — promote it
+   to a state-derived law, behaviourally, with its own sweep. The full classification
+   lives in `evidence/i373_hardcodedness_audit.md`; the queue is led by the
+   legitimacy-coupled dividend share, endogenous tax policy, geography-derived marriage
+   distance, and status-scaled patronage capacity.
 
 ## 5. Known Systemic Hazards
 
