@@ -1116,6 +1116,23 @@ impl Simulation {
                     m.novelty.relieve(Fixed::from_f64(0.008));
                     m.autonomy.relieve(Fixed::from_f64(0.003));
                 }
+                ActionKind::Idle => {
+                    // i356 (Idle revival): the recreation driver's relief
+                    // write-back — idling is how the play need is discharged.
+                    // `Play` had NO relief anywhere, so its deficit sat pinned
+                    // at the 1.0 cap and its pressure at 0.20 for every agent
+                    // (probe i356 leg A) — a dead motive §4.3. Primary: play
+                    // (recreation — the driver that selected the action).
+                    // Secondary: autonomy (self-direction: choosing to do
+                    // nothing). Relief is per-tick (this loop runs on
+                    // `current_action` every tick), so a 1-tick Idle relieves
+                    // 0.03; equilibrium deficit is duty-cycle-dependent
+                    // (relief·duty = growth 0.001 → ~3% duty cycles it), which
+                    // IS the signal that de-saturates the drive instead of
+                    // pinning it.
+                    m.play.relieve(Fixed::from_f64(0.03));
+                    m.autonomy.relieve(Fixed::from_f64(0.004));
+                }
                 _ => {}
             }
         }

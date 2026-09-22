@@ -179,11 +179,12 @@ stretches to a **small town**. It is not yet a city/country/planet simulator.
 The live iteration ledger is [`PLAN_DC3_DEVELOPMENT.md`](PLAN_DC3_DEVELOPMENT.md) §3;
 it is authoritative for *work*, this section is the summary.
 
-1. **v1→v2 relationship dual-store migration** — top structural item. i353 measured it: the stores are synced at populate and diverge steeply (**90% of pairs >0.01 at N=48/20K**). Migrate the daily mean-reversion **writer** first, then the `social_cluster`/`economy`/`norms` **readers** (appraisal/cognitive already read v2); the marriage pass is refuted as a target (fires only in the synced opening window).
+1. **v1→v2 relationship dual-store** — architectural redundancy, **not a liveness fault**. i353 measured per-pair divergence (90% of pairs >0.01 at N=48/20K) but i356 measured the *equilibria*: both stores settle at 0.69/0.70 mean trust and **neither is dead** (v2 dead-row share 0.00%). The two stores model overlapping quantities with independent physics, so unifying them is a redesign (charter-level), not a migration. Consumers are split (appraisal/cognitive read v2; `social_cluster`/`economy`/`norms` read v1); the marriage pass is refuted as a target (fires only in the synced opening window).
 2. **A9 — world area at constant density** — a charter/fidelity decision (co-location 19→4), not throughput.
-3. **`Idle`** — the last dead action (0 arbitrations; only relief 0.05 fatigue/tick). Same design-act shape as the A8 Wander revival (i351).
-4. **§17 tier-gate residual** — cosmetic rename + `runs_action_selection()` has zero call sites.
-5. **Per-edge pass pacing** — ~58% of the tick; remaining reduction is behavioural (§17.3 dirty-window pacing).
+3. **§17 tier-gate residual** — cosmetic rename + `runs_action_selection()` has zero call sites (i355 documented as recorded debt).
+4. **Per-edge pass pacing** — ~58% of the tick; remaining reduction is behavioural (§17.3 dirty-window pacing).
+
+**Closed (do not re-open without new evidence):** `Idle` (i356 — the `Play` recreation driver made the last dead action live, 0.01%–3.67% of decisions), and the A8 `Wander` driver (i351).
 
 **Deferred with triggers:** event `VecDeque` (>250K ticks), recent-claims index (same),
 H5 founder-variance shaping (needs larger N + coordinated sweep).

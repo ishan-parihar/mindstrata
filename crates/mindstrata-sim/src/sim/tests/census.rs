@@ -152,13 +152,60 @@ fn wander_carries_no_need_relief_at_all() {
          term is a behavioural change (i346 recorded the measured gap)"
     );
 
-    // `Idle` is the near-miss case: it does carry a relief term, but a weak one
-    // (0.05 fatigue per 1 tick) that never wins either. Pinned so the census
-    // commentary cannot drift away from the code.
+    // `Idle` was the near-miss case: it carries a relief term, but a weak one
+    // (0.05 fatigue per 1 tick) that never won either. i356 closed it the same
+    // way A8 closed `Wander` — a recreation (`Play`) driver, not a relief bump
+    // — so the definition is deliberately UNCHANGED here and the liveness pin
+    // lives in `idle_is_reached_once_the_recreation_driver_is_live` below.
     let idle = ActionKind::Idle.definition();
     assert_eq!(
         idle.fatigue_relief,
         mindstrata_core::fixed::Fixed::from_f64(0.05)
     );
     assert_eq!(idle.hunger_relief, mindstrata_core::fixed::Fixed::ZERO);
+}
+
+/// i356 (Idle revival): `Idle` was the LAST dead action — 0 wins in 96 000
+/// agent-ticks before the recreation driver (i346/i351). This pins the
+/// invariant that matters: with the `Play` driver live the action is
+/// **reached**, and the driver's need is no longer pinned at its saturation
+/// cap for every agent (the §4.3 dead-motive signature — `Play` had zero
+/// relief sites, so its deficit sat at 1.0 and its pressure at 0.20 for
+/// everyone; probe i356 leg A).
+///
+/// The assertion is **positivity, not a magnitude band**: `i356_idle_driver`
+/// measured the share at 0.01%–3.67% across nine seed/N runs. The quiet-window
+/// winner-utility wall varies ~3× across seeds, so a tight band there would be
+/// the §4.1 lucky-seed pin the doctrine forbids; positivity held on all nine.
+#[test]
+fn idle_is_reached_once_the_recreation_driver_is_live() {
+    use mindstrata_core::fixed::Fixed;
+
+    let mut sim = sim(12, 20_000);
+    let mut idle_agent_ticks = 0u64;
+    for _ in 0..20_000 {
+        sim.tick();
+        idle_agent_ticks += sim
+            .agents
+            .iter()
+            .filter(|a| a.current_action == ActionKind::Idle)
+            .count() as u64;
+    }
+    assert!(
+        idle_agent_ticks > 0,
+        "Idle must be reached once the Play driver is live (0 pre-i356), got 0"
+    );
+    // The dead-motive signature is gone: `Play` must not sit at its cap for
+    // EVERY agent (idling is now its relief outlet).
+    let saturated = sim
+        .agents
+        .iter()
+        .filter(|a| a.motivation.play.deficit >= Fixed::ONE)
+        .count();
+    assert!(
+        saturated < sim.agents.len(),
+        "Play must not be pinned at its cap for every agent (dead motive): \
+         {saturated}/{}",
+        sim.agents.len()
+    );
 }

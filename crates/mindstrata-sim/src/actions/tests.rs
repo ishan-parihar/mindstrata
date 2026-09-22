@@ -1,6 +1,6 @@
 use super::{
-    apply_action_tick, compute_utility, noise_amplitude, select_action, ActionKind,
-    DecisionContext, APPROACH_WANDER_BONUS, PERSISTENCE_NOISE_FLOOR,
+    apply_action_tick, compute_utility, idle_play_driver, noise_amplitude, select_action,
+    ActionKind, DecisionContext, APPROACH_WANDER_BONUS, IDLE_PLAY_COEF, PERSISTENCE_NOISE_FLOOR,
 };
 use crate::person::{BodyState, IdentityKind, IdentityState, NeedState, Personality, Temperament};
 use crate::psychology::decision_policy::DecisionPolicy;
@@ -61,6 +61,7 @@ fn broke_hungry_agent_prefers_eat_over_trade() {
             dominant_need: MotiveCategory::Hunger,
             dominant_pressure: Fixed::ZERO,
             novelty_pressure: Fixed::ZERO,
+            play_pressure: Fixed::ZERO,
             needs_quiet: false,
             dread: Fixed::ZERO,
             hope: Fixed::ZERO,
@@ -123,6 +124,7 @@ fn wealthy_hungry_agent_can_prefer_trade() {
             dominant_need: MotiveCategory::Hunger,
             dominant_pressure: Fixed::ZERO,
             novelty_pressure: Fixed::ZERO,
+            play_pressure: Fixed::ZERO,
             needs_quiet: false,
             dread: Fixed::ZERO,
             hope: Fixed::ZERO,
@@ -182,6 +184,7 @@ fn utility_prefers_food_when_hungry() {
             dominant_need: MotiveCategory::Hunger,
             dominant_pressure: Fixed::ZERO,
             novelty_pressure: Fixed::ZERO,
+            play_pressure: Fixed::ZERO,
             needs_quiet: false,
             dread: Fixed::ZERO,
             hope: Fixed::ZERO,
@@ -298,6 +301,7 @@ fn scarcity_increases_food_utility() {
             dominant_need: MotiveCategory::Hunger,
             dominant_pressure: Fixed::ZERO,
             novelty_pressure: Fixed::ZERO,
+            play_pressure: Fixed::ZERO,
             needs_quiet: false,
             dread: Fixed::ZERO,
             hope: Fixed::ZERO,
@@ -356,6 +360,7 @@ fn scarcity_increases_water_utility() {
             dominant_need: MotiveCategory::Hunger,
             dominant_pressure: Fixed::ZERO,
             novelty_pressure: Fixed::ZERO,
+            play_pressure: Fixed::ZERO,
             needs_quiet: false,
             dread: Fixed::ZERO,
             hope: Fixed::ZERO,
@@ -1120,6 +1125,7 @@ fn dread_shifts_selection_toward_provisioning() {
                     dominant_need: MotiveCategory::Hunger,
                     dominant_pressure: Fixed::ZERO,
                     novelty_pressure: Fixed::ZERO,
+                    play_pressure: Fixed::ZERO,
                     needs_quiet: false,
                     dread,
                     hope: Fixed::ZERO,
@@ -1293,6 +1299,39 @@ fn hope_leaves_non_engagement_actions_untouched() {
             "{kind:?} must be untouched by hope"
         );
     }
+}
+
+// ── i356 (Idle revival): the recreation driver ─────────────────────
+
+/// i356: the `Idle` recreation driver is gated on need quietude and carries
+/// the expected magnitude — the runnable check for the pure term (the utility
+/// path and the census's pre-driver correction both call this).
+#[test]
+fn idle_play_driver_is_gated_saturating_and_zero_at_zero() {
+    let p = Fixed::from_f64(0.2);
+    // Open gate, live pressure → pressure × coefficient.
+    let live = idle_play_driver(p, true);
+    assert!(
+        (live - p * IDLE_PLAY_COEF).to_f64().abs() < 1e-9,
+        "open-gate driver must be pressure × coef, got {:.6}",
+        live.to_f64()
+    );
+    assert!(
+        live.to_f64() > 0.5,
+        "driver must be competitive, got {live:?}"
+    );
+    // Closed gate → exactly zero (a pressed agent provisions first).
+    assert_eq!(
+        idle_play_driver(p, false),
+        Fixed::ZERO,
+        "closed gate must zero the driver"
+    );
+    // Zero pressure → exactly zero (identity with the pre-i356 utility).
+    assert_eq!(
+        idle_play_driver(Fixed::ZERO, true),
+        Fixed::ZERO,
+        "zero play pressure must zero the driver"
+    );
 }
 
 // ── §8.1.12 (Iteration 204): planning-confidence calibration ───────
@@ -1677,6 +1716,7 @@ fn institution_work_bonus_shifts_selection_toward_work() {
                     dominant_need: MotiveCategory::Hunger,
                     dominant_pressure: Fixed::ZERO,
                     novelty_pressure: Fixed::ZERO,
+                    play_pressure: Fixed::ZERO,
                     needs_quiet: false,
                     dread: Fixed::ZERO,
                     hope: Fixed::ZERO,

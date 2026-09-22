@@ -48,6 +48,21 @@ const APPROACH_WANDER_BONUS: Fixed = Fixed::from_raw(500); // 0.05
 /// target band (§4.2) is verified in vivo by `i351_wander_bands`.
 const WANDER_NOVELTY_COEF: Fixed = Fixed::from_raw(20_000); // 2.0
 
+/// i356 (Idle revival): the recreation driver's coefficient — utility per
+/// unit of motivation-layer `Play` pressure for the `Idle` action.
+///
+/// Sized to the SAME driver magnitude as the i351 Wander term: `Play`
+/// saturates at 0.20 (deficit cap 1.0 × urgency 0.2 — nothing relieved it,
+/// so it pinned at the cap for every agent; probe i356 leg A: mean 0.202,
+/// p50 0.201), while `Novelty` runs ~0.30 at settlement, so `0.20 × 3.0 =
+/// 0.30 × 2.0 = 0.60`. The in-vivo sweep (`i356_idle_driver` leg B, seeds
+/// 42/7/11/46 + N=48) is the binding evidence: the quiet-window
+/// `winner − Idle` gap is sharp (p50 0.77–0.96, a knee between 0.4 and
+/// 0.6), so c=2.0 leaves Idle dead on three of five seeds while c=3.0 is
+/// the smallest coefficient live on **all** of them (§4.1 — a driver that
+/// only fires on one seed is a broken gate, not a calibrated one).
+const IDLE_PLAY_COEF: Fixed = Fixed::from_raw(30_000); // 3.0
+
 /// i351 (A8 closure): the need-quietude gate for the exploration driver.
 /// Exploration is what a satiated, restless agent does — a villager with
 /// hunger/thirst/fatigue above this gate must provision first (the winner
@@ -165,6 +180,12 @@ pub struct DecisionContext<'a> {
     /// quiet biological needs explores. Zero when novelty is saturated-
     /// relieved, so identity holds at novelty 0.
     pub novelty_pressure: Fixed,
+    /// i356 (Idle revival): the agent's motivation-layer PLAY pressure
+    /// (full formula — the same number `update_dominant` compares). Drives
+    /// the Idle driver term: a satiated agent with unmet recreation need
+    /// idles. `MotiveCategory::Play` was a dead motive (zero relief sites,
+    /// the i351 `Novelty` class) and `Idle` its natural expression.
+    pub play_pressure: Fixed,
     /// `true` when the agent's biological needs are quiet enough to
     /// explore (`max(hunger, thirst, fatigue) < WANDER_QUIETUDE_GATE`).
     /// The driver term is gated on this: exploration is what a SATIATED
@@ -612,6 +633,9 @@ pub fn compute_utility(
             // motive (§4.3): it could WIN the argmax and nothing responded.
             // The exploration driver is its response.
             MotiveCategory::Novelty => action.kind == ActionKind::Wander,
+            // i356: `Play` had the same defect (competed, no relief). `Idle`
+            // is its response — same wiring as `Novelty → Wander`.
+            MotiveCategory::Play => action.kind == ActionKind::Idle,
             _ => false,
         };
         if urgent {
@@ -763,6 +787,22 @@ pub fn compute_utility(
     utility
 }
 
+/// i356 (Idle revival): the pure recreation-driver term for `Idle` —
+/// `play_pressure × IDLE_PLAY_COEF` when the need-quietude gate is open,
+/// exactly zero otherwise. Extracted so the driver has a runnable unit
+/// check independent of the full `select_action` machinery, and so the
+/// utility term and the census's pre-driver correction read the SAME
+/// expression (the i351 lesson: an in-vivo/census disagreement is how a
+/// mis-sized constant is caught, and that needs one source of truth).
+#[must_use]
+fn idle_play_driver(play_pressure: Fixed, needs_quiet: bool) -> Fixed {
+    if needs_quiet && play_pressure > Fixed::ZERO {
+        play_pressure * IDLE_PLAY_COEF
+    } else {
+        Fixed::ZERO
+    }
+}
+
 /// §8.1.6 (Iteration 162): the decision-noise amplitude for a given
 /// persistence deviation from the trait-derived baseline.
 ///
@@ -875,6 +915,24 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
         // no RNG).
         if *kind == ActionKind::Wander && ctx.novelty_pressure > Fixed::ZERO && ctx.needs_quiet {
             utility += ctx.novelty_pressure * WANDER_NOVELTY_COEF;
+        }
+
+        // i356 (Idle revival): the recreation driver. `Idle` was the last
+        // dead action — 0 wins in 96 000 agent-ticks (i346/i351) — because
+        // its 0.05 fatigue/tick is the same effective rate as `Rest`
+        // (0.4 over 8 ticks) with no energy recovery, no motive relief, and
+        // a behavioural-inhibition trait: `Rest` strictly dominated it. In
+        // parallel `MotiveCategory::Play` (recreation) competed in
+        // `update_dominant` with **no relief anywhere** — a dead motive, the
+        // i351 `Novelty` class. The design act: **a satiated villager with
+        // unmet recreation need does nothing in particular**. Same
+        // need-quietude gate as Wander (a pressed agent provisions first),
+        // same loop shape — the completion write-back in `core::tick`
+        // relieves `play` so the drive is self-limiting rather than a
+        // ratchet. Zero-at-zero: play pressure 0 or gate closed → exactly
+        // the pre-i356 utility. Deterministic (pure utility term, no RNG).
+        if *kind == ActionKind::Idle {
+            utility += idle_play_driver(ctx.play_pressure, ctx.needs_quiet);
         }
 
         for goal in ctx.active_goals {
@@ -1095,20 +1153,32 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
         } else {
             Fixed::ZERO
         };
-        let best_utility_pre = if matches!(best_action, ActionKind::Wander) {
-            best_utility - term_current
-        } else {
-            best_utility
-        };
+        // i356: the same PRE-driver correction for the Idle candidate, so the
+        // recorded gap stays the coefficient-sizing quantity after the driver
+        // lands (mirrors the Wander correction above). Both corrections key on
+        // which candidate actually won — a winner that IS the driven action
+        // carries the term too, and subtracting it only from the loser would
+        // otherwise produce a negative "gap".
+        let idle_term_current = idle_play_driver(ctx.play_pressure, ctx.needs_quiet);
+        let mut best_utility_pre = best_utility;
+        if matches!(best_action, ActionKind::Wander) {
+            best_utility_pre -= term_current;
+        }
+        if matches!(best_action, ActionKind::Idle) {
+            best_utility_pre -= idle_term_current;
+        }
         let pre_gap = (best_utility_pre - (wander_utility - term_current)).to_f64();
+        let idle_pre_gap = (best_utility_pre - (idle_utility - idle_term_current)).to_f64();
         crate::sim::decision_census::record_utility_sample(
             pre_gap,
             (best_utility - wander_utility).to_f64(),
             (best_utility - idle_utility).to_f64(),
+            idle_pre_gap,
             ctx.needs_quiet,
             best_utility.to_f64(),
             crate::sim::decision_census::action_index(best_action),
             ctx.novelty_pressure.to_f64(),
+            ctx.play_pressure.to_f64(),
         );
     }
 

@@ -354,9 +354,10 @@ Live queue, in order (evidence link per item):
 2. **A9 — the envelope at constant density** — re-scoped by i344: a **fidelity** policy
    (max co-location 19 → 4, contacted share halved), **not** throughput (+9.1%/−2.3%/+5.6%
    at N=96/144/192). A charter decision; do not sell it as speed.
-3. **Idle — the last dead action** — `Idle` still wins 0 arbitrations (its only relief is
-   0.05 fatigue/tick). Same design-act shape as the A8 `Wander` revival (i351): decide the
-   semantics, give it a driver, expect a behavioural sweep. `A8` itself is CLOSED.
+3. **Idle — CLOSED (i356)** — the last dead action is live: a `Play` recreation driver
+   gated on need quietude, `MotiveCategory::Play → Idle` urgency wiring, and a relief
+   write-back (the motive had zero relief sites). `Idle` now wins 0.01%–3.67% of
+   decisions across nine runs (was 0 everywhere). `A8` (Wander) is likewise CLOSED.
 4. **§17 tier-gate residual** — i355 closed the cosmetic half (the stale
    `relationship_count` parameter is renamed `contacted_degree`, and the unwired
    `runs_full_biology()` / `runs_action_selection()` predicates are documented as recorded

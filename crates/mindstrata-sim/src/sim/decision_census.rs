@@ -177,6 +177,11 @@ struct Census {
     /// winner−Wander gap and the novelty pressure that would multiply the
     /// coefficient. Capped — instrumentation only, never read in production.
     quiet_pairs: Vec<(f64, f64)>,
+    /// i356: the same pair shape for the `Idle` candidate — PRE-driver
+    /// `winner − Idle` gap against the player's `Play` pressure, so the
+    /// recreation driver's coefficient can be swept offline over realized
+    /// samples before it is sized (§4.2). Instrumentation only.
+    quiet_idle_pairs: Vec<(f64, f64)>,
 }
 
 fn sink() -> &'static Mutex<Census> {
@@ -267,10 +272,12 @@ pub fn record_utility_sample(
     best_minus_wander_pre: f64,
     best_minus_wander: f64,
     best_minus_idle: f64,
+    best_minus_idle_pre: f64,
     needs_quiet: bool,
     winner_utility: f64,
     winner_action: usize,
     novelty_pressure: f64,
+    play_pressure: f64,
 ) {
     if !enabled() {
         return;
@@ -298,12 +305,57 @@ pub fn record_utility_sample(
                 sink.quiet_pairs
                     .push((best_minus_wander_pre, novelty_pressure));
             }
+            if sink.quiet_idle_pairs.len() < QUIET_PAIR_CAP {
+                // i356: the PRE-driver `winner − Idle` gap — the quantity the
+                // recreation coefficient must clear (the realized gap above
+                // already contains the driver term once it lands).
+                sink.quiet_idle_pairs
+                    .push((best_minus_idle_pre, play_pressure));
+            }
         }
     }
 }
 
 /// Cap on the per-sample sweep pairs (instrumentation memory bound).
 const QUIET_PAIR_CAP: usize = 200_000;
+
+/// i356: offline coefficient sweep for the `Idle` recreation driver — wins
+/// at coefficient `c` are the recorded quiet samples whose pre-driver
+/// `winner − Idle` gap is ≤ `play_pressure × c`. Mirrors [`quiet_sweep`];
+/// reads only recorded values, so the run is unaffected.
+#[must_use]
+pub fn quiet_idle_sweep(coefs: &[f64]) -> Vec<(f64, u64)> {
+    let Ok(sink) = sink().lock() else {
+        return Vec::new();
+    };
+    coefs
+        .iter()
+        .map(|&c| {
+            let wins = sink
+                .quiet_idle_pairs
+                .iter()
+                .filter(|&&(gap, p)| gap <= p * c)
+                .count() as u64;
+            (c, wins)
+        })
+        .collect()
+}
+
+/// i356: number of recorded quiet-window idle pairs (the sweep denominator).
+#[must_use]
+pub fn quiet_idle_pair_count() -> usize {
+    sink().lock().map_or(0, |s| s.quiet_idle_pairs.len())
+}
+
+/// i356: the recorded quiet-window `winner − Idle` gaps (unsorted), so a probe
+/// can report the distribution the coefficient must clear. Instrumentation
+/// only; copies the recorded column.
+#[must_use]
+pub fn quiet_idle_gaps() -> Vec<f64> {
+    sink().lock().map_or(Vec::new(), |s| {
+        s.quiet_idle_pairs.iter().map(|&(gap, _)| gap).collect()
+    })
+}
 
 /// i351: offline coefficient sweep over the RECORDED quiet samples — wins at
 /// coefficient `c` are the samples whose pre-driver gap ≤ pressure × c. Reads

@@ -477,6 +477,14 @@ impl Simulation {
                                 novelty_pressure: agents[i].motivation.pressure_full(
                                     crate::psychology::motivation::MotiveCategory::Novelty,
                                 ),
+                                // i356 (Idle revival): the recreation driver's
+                                // input — the same full-formula pressure
+                                // `update_dominant` compares for `Play`.
+                                // Instrumentation-only until the driver term
+                                // lands (probe i356 sizes it first).
+                                play_pressure: agents[i].motivation.pressure_full(
+                                    crate::psychology::motivation::MotiveCategory::Play,
+                                ),
                                 needs_quiet: needs[i].hunger < actions::WANDER_QUIETUDE_GATE
                                     && needs[i].thirst < actions::WANDER_QUIETUDE_GATE
                                     && needs[i].fatigue < actions::WANDER_QUIETUDE_GATE,
