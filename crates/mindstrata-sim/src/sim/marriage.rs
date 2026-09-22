@@ -6,6 +6,18 @@ use rand::Rng;
 impl Simulation {
     /// Section 19: Marriage formation.
     pub(super) fn tick_marriage_formation(&mut self, tick_u64: u64, tick: Tick) {
+        // i352: the candidate loop below reads `trust` and `affection` for each
+        // eligible pair. It used two `self.relationships.iter().find(..)` scans
+        // per pair, inside `for i { for j { .. } }`, on a pass that runs EVERY
+        // tick — O(N² pairs × R rows) = **O(N³)/tick**. Probe `i352_marriage_scan`
+        // measured 6.55 → 57.08 µs/tick across N=48 → 96 (α≈3.1). One O(R)
+        // lookup rebuild here makes each pair read O(1) via `rel_pos`, which
+        // i330 documented as returning the same element `iter().find(..)`
+        // would (first occurrence) — so this is byte-identical, only faster.
+        // NOTE: `rel_pos` still reads the legacy v1 matrix (the pass writes it
+        // too). Migrating to the v2 store is BEHAVIOURAL (i352 measured 63% of
+        // pairs diverging >0.01) and is queued as its own sweep.
+        self.rebuild_rel_lookup();
         // ── 19. §19.5.F Marriage formation — compatible age + high affection ──
         // §10.5 (P5 audit, Iteration 184): same-pass bigamy guard. The
         // formation loop previously collected `new_marriages` and applied
@@ -53,14 +65,10 @@ impl Simulation {
                     if age_diff > Fixed::from_f64(15.0) {
                         continue;
                     }
-                    // Check relationship affection
+                    // Check relationship affection (i352: O(1) via rel_pos)
                     let affection = self
-                        .relationships
-                        .iter()
-                        .find(|r| {
-                            r.from == AgentId::new(i as u64) && r.to == AgentId::new(j as u64)
-                        })
-                        .map_or(Fixed::ZERO, |r| r.affection);
+                        .rel_pos(i, j)
+                        .map_or(Fixed::ZERO, |p| self.relationships[p].affection);
                     // Architecture-plan-2 §10.4: Compute attraction score.
                     // Personality compatibility (agreeableness similarity), physical proximity,
                     // and social approval feed into the AttractionModel.
@@ -87,13 +95,10 @@ impl Simulation {
                     // Marriage probability: attraction * health * trust
                     let health = (self.agents[i].body.health + self.agents[j].body.health)
                         * Fixed::from_f64(0.5);
+                    // i352: O(1) via rel_pos (was a second O(R) matrix scan)
                     let trust = self
-                        .relationships
-                        .iter()
-                        .find(|r| {
-                            r.from == AgentId::new(i as u64) && r.to == AgentId::new(j as u64)
-                        })
-                        .map_or(Fixed::ZERO, |r| r.trust);
+                        .rel_pos(i, j)
+                        .map_or(Fixed::ZERO, |p| self.relationships[p].trust);
                     // Marriage probability: attraction * health * trust, scaled to a
                     // daily cadence. Previously the 0.001 scalar made the effective
                     // chance ~1e-4/pair/day — a 12-agent village needed ~20K ticks

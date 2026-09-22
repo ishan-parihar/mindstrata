@@ -240,3 +240,45 @@ fn clan_enmity_clears_when_feuds_decay() {
         "peace allows a marriage alliance"
     );
 }
+
+/// i352: the marriage gate's `affection`/`trust` read goes through
+/// `rel_pos` into the legacy v1 `relationships` matrix — NOT the per-agent
+/// v2 store. The two stores diverge in vivo (probe `i352_marriage_scan`:
+/// 63% of pairs at N=48 differ by >0.01 in trust or affection), so an
+/// accidental migration of this read is a BEHAVIOURAL change, not a
+/// refactor. This pin makes the deliberate store choice explicit and
+/// fails loudly if someone swaps it without a probe-evidenced sweep.
+#[test]
+fn marriage_gate_reads_the_v1_matrix_deliberately() {
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 100,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.rebuild_rel_lookup();
+
+    // Craft a pair whose v1 and v2 trust deliberately disagree.
+    let p = sim.rel_pos(0, 1).expect("pair (0,1) row exists");
+    sim.relationships[p].trust = Fixed::from_f64(0.9);
+    let q = Simulation::relationship_v2_pos(0, 1);
+    sim.agents[0].relationship_v2s[q].trust = Fixed::from_f64(0.1);
+
+    // The marriage gate's read expression, verbatim.
+    let gate_trust = sim
+        .rel_pos(0, 1)
+        .map_or(Fixed::ZERO, |pos| sim.relationships[pos].trust);
+    assert_eq!(
+        gate_trust,
+        Fixed::from_f64(0.9),
+        "the marriage gate must read the v1 matrix (0.9), not the v2 store (0.1)"
+    );
+    assert_ne!(
+        sim.agents[0].relationship_v2s[q].trust, gate_trust,
+        "v2 must be a distinct store — this is why migration needs a sweep"
+    );
+}

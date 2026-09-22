@@ -859,7 +859,11 @@ impl Simulation {
         }
 
         // ── 19. Marriage formation (extracted) ──
+        // i352: mark around the pass so its cost is attributable in the
+        // i330/i335 per-pass profile (it was the one unmarked heavy pass).
+        mark!("pre_marriage");
         self.tick_marriage_formation(tick_u64, tick);
+        mark!("marriage");
 
         // ── 19b. Birth mechanics (extracted) — demography cadence ──
         // Births roll on the same 10-tick cadence as aging/mortality so the
