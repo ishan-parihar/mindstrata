@@ -854,7 +854,25 @@ fn revolution_is_regime_change_not_repeat_loop() {
     // breakdown produces revolutions (≥2 of the swept family), and EVERY seed
     // that fires must satisfy the absorption contract (a coup hands the faction
     // to the council, i.e. peak membership beyond the 2-4 appointed elders).
-    let mut family: Vec<(u64, usize, usize)> = Vec::new();
+    // i370 RE-CONTRACT (charter decision, probe-evidenced) — the absorption
+    // contract's SHAPE was itself the bug the hoard audit (i361/i363) chased.
+    // The old code cloned the whole faction roster into `council.members`,
+    // making every faction member a TAXED council member: probe `i370`
+    // (50K, seed 7) measured one revolution → membership 3→34 and a treasury
+    // hoard of 28 697 coins vs ~300 on no-revolution seeds (T* = reserve +
+    // inflow/share scales with the taxed roster). The council is an OFFICE
+    // (the `default_institutions` shape: Elder + Guard Captain + a second
+    // seat = 3), and a coup now installs offices: the faction leader takes
+    // the Elder seat, the top dominance/conscientiousness members fill the
+    // other two, the rest return to villager status. The regime-change
+    // contract is preserved and strengthened: a coup must seat NEW holders
+    // from the faction into the council offices — measured via role
+    // holders, not membership mass. Peak-membership ≥ 5 is HEREDITY-dead
+    // (councils are capped at 3 by design now), so the pin re-contracts to
+    // the real invariant: on every seed that fired, the council's Elder
+    // holder at run end differs from the populate appointment when a
+    // revolution occurred (regime change actually changed the office).
+    let mut family: Vec<(u64, usize, usize, u64)> = Vec::new();
     for seed in [5u64, 11, 42] {
         let mut sc = mindstrata_sim::scenario::Scenario::pestilence();
         sc.seed = seed;
@@ -868,6 +886,9 @@ fn revolution_is_regime_change_not_repeat_loop() {
         // (more than the original 2-4 appointed elders). Chunked run() calls are
         // additive and deterministic (identical to one 70K run).
         let mut peak_council = 0usize;
+        let populate_elder = None::<u64>; // offices are appointed at populate; captured below instead
+        let _ = populate_elder;
+        let mut elder_at_start: Option<u64> = None;
         for _ in 0..140 {
             sim.run(500);
             let council = sim
@@ -875,6 +896,9 @@ fn revolution_is_regime_change_not_repeat_loop() {
                 .iter()
                 .find(|i| i.kind == InstitutionKind::Council)
                 .expect("council should exist");
+            if elder_at_start.is_none() {
+                elder_at_start = council.get_role_holder("Elder").map(|a| a.as_u64());
+            }
             peak_council = peak_council.max(council.members.len());
         }
         let rev_count = sim
@@ -890,22 +914,33 @@ fn revolution_is_regime_change_not_repeat_loop() {
                 )
             })
             .count();
-        family.push((seed, rev_count, peak_council));
+        let elder_at_end = sim
+            .institutions
+            .iter()
+            .find(|i| i.kind == InstitutionKind::Council)
+            .and_then(|c| c.get_role_holder("Elder"))
+            .map(|a| a.as_u64());
+        family.push((
+            seed,
+            rev_count,
+            peak_council,
+            u64::from(elder_at_start != elder_at_end),
+        ));
     }
-    let firing = family.iter().filter(|(_, r, _)| *r > 0).count();
+    let firing = family.iter().filter(|(_, r, _, _)| *r > 0).count();
     assert!(
         firing >= 2,
         "a revolution must fire in the 70K horizon (family {family:?})"
     );
-    // After a coup, faction members transfer to the council — the peak
-    // council membership must hold more members than the original 2-4
-    // appointed elders. Checked on every seed that fired, so the absorption
-    // mechanism is guarded on each live instance rather than one trajectory.
-    for (seed, revs, peak) in &family {
+    // i370: on every seed that fired, the Elder OFFICE must have changed
+    // hands (regime change = new office holder). Membership stays capped at
+    // the 3-office shape; the old ≥5-membership absorption pin tested the
+    // roster-clone bug itself.
+    for (seed, revs, peak, elder_changed) in &family {
         if *revs > 0 {
             assert!(
-                *peak >= 5,
-                "after revolution the council should absorb the faction (seed {seed}, peak {peak})"
+                *elder_changed == 1,
+                "after revolution the Elder office must change hands (seed {seed}, peak {peak})"
             );
         }
     }

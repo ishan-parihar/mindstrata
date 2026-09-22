@@ -706,10 +706,56 @@ impl Simulation {
                     self.faction_v2_registry.deactivate_all();
                     self.institutions
                         .retain(|i| i.kind != InstitutionKind::Faction);
-                    // The faction leadership becomes the new council.
+                    // i370: the new regime installs OFFICES, not a roster. The
+                    // old code cloned the whole faction membership list into
+                    // the council, making every faction member a TAXED council
+                    // member (`collect_taxes` iterates `members`) — probe
+                    // i370: seed 7, one revolution → membership 3→34 and the
+                    // treasury hoard equilibrium T* = reserve + inflow/share
+                    // scaled with the roster (28 697 coins at 50K vs ~300 on
+                    // no-revolution seeds). The council is an office (the
+                    // `default_institutions` shape: Elder + Guard Captain + a
+                    // second seat = 3): the faction leader takes the Elder
+                    // seat, the top dominance/conscientiousness members fill
+                    // the other seats, the rest return to villager status.
+                    // Faction roles (Leader etc.) are still recorded on the
+                    // council so the history is legible.
+                    let mut incoming: Vec<(usize, u64)> = faction_members
+                        .iter()
+                        .filter_map(|m| {
+                            let idx = m.as_u64() as usize;
+                            self.agents.get(idx).map(|a| {
+                                (
+                                    idx,
+                                    (a.personality.dominance + a.personality.conscientiousness)
+                                        .to_raw() as u64,
+                                )
+                            })
+                        })
+                        .collect();
+                    // Deterministic: sort by score desc, then index asc.
+                    incoming.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
                     for inst in &mut self.institutions {
                         if inst.kind == InstitutionKind::Council {
-                            inst.members.clone_from(&faction_members);
+                            inst.members.clear();
+                            // Elder: the faction leader (fall back to the
+                            // top-scored member if the role was unset).
+                            let elder = leader_id;
+                            inst.assign_role("Elder", elder);
+                            inst.add_member(elder);
+                            // Guard Captain + second seat: top-scored others.
+                            let others: Vec<usize> = incoming
+                                .iter()
+                                .map(|(idx, _)| *idx)
+                                .filter(|idx| AgentId::new(*idx as u64) != elder)
+                                .collect();
+                            if let Some(&captain) = others.first() {
+                                inst.assign_role("Guard Captain", AgentId::new(captain as u64));
+                                inst.add_member(AgentId::new(captain as u64));
+                            }
+                            if let Some(&councilor) = others.get(1) {
+                                inst.add_member(AgentId::new(councilor as u64));
+                            }
                             for role in &faction_roles {
                                 inst.add_role(role.clone());
                             }

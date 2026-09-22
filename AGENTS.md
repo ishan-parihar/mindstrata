@@ -351,15 +351,13 @@ matrix scan (the marriage pass was O(N³) every tick).
 
 Live queue, in order (evidence link per item):
 
-1. **The v1→v2 relationship dual-store migration** — i353 measured the divergence and
-   re-scoped this item. The stores are **synced at populate** and diverge steeply with
-   horizon: **90% of pairs differ >0.01 at N=48/20K** (Δtrust p90 0.242). Consumers are
-   split — appraisal/cognitive read v2 (contacted-gated, i350); `social_cluster`,
-   `economy`, `norms_impl` read v1 — so subsystems disagree about the same pairs. **Migrate
-   the daily mean-reversion *writer* first** (`systems/cognitive.rs:984`; it is a divergence
-   *source*), then the three v1 readers; each is behavioural and carries its own sweep.
-   **REFUTED as a target:** the marriage pass — it fires only in the opening ~300 ticks,
-   where v1≈v2 (worst exposure 2/30 pairs); a sweep there is the §4.1/i338/i350 mistake.
+1. **The v1→v2 relationship migration (charter DECIDED: finish it subsystem by
+   subsystem)** — **i369 landed the first migration** (comfort/soothing reads the dyadic
+   v2 store; three-way runnable pin; collapse golden one birth flipped 13→12,
+   in-contract). Remaining readers: economy, norms_impl, household, births_deaths —
+   each behavioural with its own probe. Marriage pass REFUTED (i353). The cognitive
+   mean-reversion writer (`systems/cognitive.rs:984`) is queued first among writers (a
+   divergence *source*).
 2. **A9 — the envelope at constant density** — re-scoped by i344: a **fidelity** policy
    (max co-location 19 → 4, contacted share halved), **not** throughput (+9.1%/−2.3%/+5.6%
    at N=96/144/192). A charter decision; do not sell it as speed.
@@ -377,26 +375,19 @@ Live queue, in order (evidence link per item):
    never binds in the reachable range (`(houses/16).clamp(1,4)` needs N ≥ 320, above
    `MAX_POPULATION = 256`), so the real knob is the **divisor** (a sweep to ~10–12 for
    5–6 villages is queued as an experiment, trading village size for count).
-4. **Wealth tail — council surplus dividend — LANDED (i363).** i358 measured the
-   distribution as bounded (~0.65) but with one agent holding ~50% of the coin; the
-   i358-scoped **progressive surcharge was implemented and refuted by i361** (Gini
-   0.647→0.705 — it fed a **hoarding** council treasury, 163 602 coins, whose only
-   outflow was a ≤0.5-coin drip). i363 landed the corrected fix — a **spending rule**, not
-   a steeper tax: above the reserve, pay 25% of the council surplus as a **wealth-inverse
-   `1/(1+coin)`** dividend to the whole village (mirroring the i186 Market dividend).
-   Result: Gini **0.647→0.611 / 0.652→0.619** (below baseline), bottom-half share
-   10.3%→11.6% / 8.8%→11.5%, hoard 163 602→241 — `WEALTH_TAIL_BENT`. Sweep-carrying:
-   re-anchored 3 pins (biology golden seed 43→44; fear >0.30→>0.27 measured 0.2864;
-   belief high >0.34→>0.28 measured 0.2968 with the 0.1635 differential invariant held),
-   re-contracted the Idle pin to a run-minimum,   regenerated goldens (agent_count 12→13,
-   in-contract) and accepted 5 snapshots. i364 then **closed the collapse-resilience
-   concern**: an A/B against the pre-i363 parent shows the cascade kills **exactly 2
-   agents on both builds** — the 12→13 shift is one extra *birth*, not a reprieve.
-   **Validated across the seed family (i365):** mean Gini 0.5786, max 0.6189 — every
-   seed below the pre-fix plateau ~0.647–0.652 (`IMPROVEMENT_STRUCTURAL`). **Open:** the
-   per-cycle proportional share can leave a residual hoard (seed 23: 25 274 coins vs
-   ~250 elsewhere) — a treasury **ceiling** would bound it (queued, behavioural); council
-   membership inconsistency (31 vs 3) still open.
+4. **Wealth tail — RESOLVED end-to-end (i363 + i370).** i363's council surplus dividend
+   bent the Gini below baseline (`WEALTH_TAIL_BENT`, structural across six seeds per
+   i365) but left a "residual hoard" anomaly (seed 23: 25 274). **i370 root-caused the
+   anomaly and the old 31-vs-3 membership debt as ONE bug:** the revolution path cloned
+   the whole faction roster into `council.members` — the taxed class — so the dividend
+   equilibrium T* = reserve + inflow/share scaled with the roster (probe: seed 7, 1
+   coup → 34 members, treasury 28 697 @50K). A coup now installs OFFICES (faction leader
+   → Elder, top dominance/conscientiousness → Guard Captain + second seat; 3-office
+   `default_institutions` shape), the rest return to villagers; post-fix seed 7:
+   3/3/3 members, treasury 182.0. The i365 treasury-ceiling item is **closed as
+   superseded** (the organic dividend suffices once the tax base is bounded);
+   `revolution_is_regime_change_not_repeat_loop` re-contracted to pin the office
+   hand-over (the old ≥5-membership pin asserted the bug itself).
 5. **Closed:** `Idle` (i356 — the `Play` recreation driver made the last dead action
    live, 0.01%–3.67% of decisions) and `A8` `Wander` (i351). **Refuted/closed as
    premises:** locomotion pace (i357 — `Move` already steps one tile per tick), the
