@@ -158,8 +158,10 @@ by i352):
 
 Hard demographic cap: `MAX_POPULATION = 256`. World default fixed **32×32**; a
 constant-density law (`side(N) = max(16, ceil(√(21.33·N)))`, i344) exists but is a
-*fidelity* option, not a speed one. Event buffer is append-only (~780 MB at 1M ticks);
-a `VecDeque` conversion is deferred until >250K-tick horizons are needed.
+*fidelity* option, not a speed one. The rolling event buffer is **bounded** by i327
+(amortized bulk drop, `MAX_EVENTS = 262_144`, peak ≈28 MiB), so **long horizons are
+available now** — i354 measured a 250 000-tick village run at 55.3 s (N=12→36). The
+`VecDeque` conversion stays deferred; its only remaining trigger is jitter-free ticks.
 
 | World class | Feasible now? | Why |
 |---|---|---|

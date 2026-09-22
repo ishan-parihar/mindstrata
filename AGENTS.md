@@ -365,10 +365,11 @@ Live queue, in order (evidence link per item):
    artifact), i344 (world area is fidelity, not throughput), and i350 (the contacted graph
    re-saturates 13.3%→73.7% by 40K) all measured it as a ≤2× constant decaying toward 1.
    Do **not** build it; re-open only against new horizon evidence.
-6. **Deferred with triggers** (do not pull early): `VecDeque<SimEvent>` (>250K-tick
-   horizons), recent-claims index (same), H5 founder-variance shaping (needs larger N **and**
-   a coordinated re-anchor sweep), vendor-blocked era items (realms.md, resonance
-   attestation, cult-liveliness).
+6. **Deferred with triggers** (do not pull early): `VecDeque<SimEvent>` — **i354 refuted the
+   horizon trigger** (>250K-tick runs already work; i327 bounded the buffer), so its only
+   remaining trigger is *jitter-free ticks*; recent-claims index (>250K ticks); H5
+   founder-variance shaping (needs larger N **and** a coordinated re-anchor sweep);
+   vendor-blocked era items (realms.md, resonance attestation, cult-liveliness).
 
 ## 9. Tone & Conduct
 
