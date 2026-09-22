@@ -12,9 +12,14 @@ coupled biological, psychological, and social subsystems. It is an R&D instrumen
 every mechanism must be **live** (measurably influences behavior), every calibration must be
 **probe-evidenced**, and every iteration must leave the suite **greener than it found it**.
 
-Architecture docs: `docs/architecture/archive/AP1-implemented.md` (what exists),
-`docs/architecture/AP2.md` (the spec). Deepening program: `docs/PLAN_BIO_PSYCH_DEEPENING.md`.
-Audit methodology: `docs/AUDIT_2026-08-22_EMERGENT_REALISM.md`.
+**Where to look (the authority set — see `docs/DOCUMENTATION.md` for the full map).**
+Current engine truth: **`docs/ENGINE_STATUS.md`** (authoritative for behaviour, realism and
+scale). Work queue: **`docs/PLAN_DC3_DEVELOPMENT.md`**. Trajectory: `docs/ROADMAP.md`.
+Specs of record (implemented): `docs/architecture/AP2.md` (village substrate),
+`docs/architecture/AP3-afa/` (attractor-field Eras I–V). **Historical only — never use for
+current state:** `docs/architecture/archive/AP1-implemented.md`,
+`docs/PLAN_BIO_PSYCH_DEEPENING.md` (deepening program, closed i259),
+`docs/AUDIT_2026-08-22_EMERGENT_REALISM.md` (realism findings, mostly closed).
 
 ## 2. The Iterative R&D Loop
 
@@ -34,10 +39,16 @@ state, no re-summarizing, no clarifying questions.
 
 ## 3. Verification Discipline (non-negotiable)
 
-- `cargo fmt --all && cargo clippy --workspace --quiet && cargo test -p mindstrata-tests --lib --release`
-  must run before EVERY commit. No exceptions, no reminders. Behavioral iterations
-  additionally run `scripts/gate --full` before push — the pre-commit hook covers only
-  fmt+clippy; the release suite + golden baselines are enforced at push time.
+- **The gate is `scripts/gate` (quick) / `scripts/gate --full` (before push).** It runs
+  fmt, clippy, the bench-naming law (IC-4), the documentation authority map
+  (`scripts/doc_index.py`), the warn-only perf budgets, the seed-family sweep, and the
+  golden baselines (quick) or the whole release suite (full). The pre-commit hook covers
+  only fmt+clippy; the release suite + goldens are enforced at push time. Behavioral
+  iterations run `--full`. No exceptions, no reminders.
+- **Known gate gap (recorded debt, i349/i351 ledger):** the clippy step does not pass
+  `--all-targets`, so test-cfg code in crates other than the one being built can hide
+  warnings. Closing it requires clearing the ~14 existing `mindstrata-tests` test-cfg
+  warnings first — its own tooling iteration, not a drive-by.
 - Full suite is release-mode (`--release`); debug-mode runs of long-horizon tests take 10–20×.
 - Snapshot drift is reviewed via `cargo insta test -p mindstrata-tests --release`, then
   `cargo insta accept --all` **only with documented evidence** of why the shift is expected.
@@ -87,6 +98,15 @@ These rules exist because we repeatedly paid for violating them:
 - **RNG stream discipline**: birth-path constructors consume draws in field order;
   `Personality::inherit` consumes exactly one draw per trait to preserve alignment.
   Different range widths consume different byte counts — count-alignment ≠ byte-alignment.
+- **The unreachable-gate / dead-producer class (i306, i307, i346–i351).** A threshold or
+  gate calibrated against a channel that was never actually live is a silent bug: `Wander`
+  lost all 107 085 arbitrations by 25–30× the jitter, the feud gate sat past p99.9 of its
+  channel, the `Background` entry gate below its reachable floor, and the witness channel
+  had no locality test at all (village trust ratcheted to 1.000). **Rules:** probe the
+  channel's *reachable distribution* before trusting any gate on it; and remember a 0.00%
+  share cannot distinguish "the branch never runs" from "it runs and loses" — instrument
+  the decision (`sim::decision_census`) before choosing a fix. Tests passing on a saturated
+  or dead channel is the failure mode this class exists to catch.
 - **Founder variance IS the behavioral budget at small N (Iteration 263, audit
   H5)**: reshaping founder trait draws away from U(0,1) starves every
   extreme-driven producer. A triangular/bell draw killed the stress axis (max 0),
@@ -169,8 +189,10 @@ and the deviation gets a `// ponytail:` comment naming the ceiling and upgrade p
 - Every calibration re-anchor comment names: measured value, old band, mechanism
   (§4.2). A TODO without a follow-up path doesn't belong — record it in the plan doc
   instead.
-- `#![deny(missing_docs)]` is aspirational for `mindstrata-core`; don't enable it
-  workspace-wide while public surfaces still churn.
+- `#![deny(missing_docs)]` is **enforced** in the leaf crates born or migrated under the
+  crate ladder (`person`, `psych`, `social`, `institutions`, `world`, `development`). It is
+  deliberately **not** yet enabled in `mindstrata-core` or `mindstrata-sim`, whose public
+  surfaces still churn — do not enable it workspace-wide until those settle.
 
 ## 7. Hierarchical Module Splitting (the scaling foundation)
 
@@ -200,52 +222,67 @@ by parallel agents or reviewed precisely. The pattern established by the sim.rs 
    during migration but is cleanup debt — settle to explicit imports once the module
    stabilizes.
 
-### Current layout (post crate-ladder, `f66b988`+`3ad212b`; refresh me when structure moves)
+### Current layout (post crate-ladder; refresh me when structure moves)
+
+> **The `<15K` orchestration target is RETIRED** (doctrine correction `9c53812`). `sim` is
+> ~36K LOC and is deliberately *not* shrunk below the point where the domains it glues can
+> be read and reviewed; file/crate boundaries, not LOC, are the scaling currency. The
+> remaining `sim`-internal tidy-up (Arc-D pass extraction into `systems/`, `*_impl` glue
+> detangling) continues as infrastructure work in its own iterations.
 
 ```
 crates/
   mindstrata-core/          # Fixed, ids, clock, events, rng, parameters, propositions
-  mindstrata-person/        # person/ aggregate + biology/ + health        [leaf]
-  mindstrata-psych/         # psychology/ + appraisal + memory/attention/
-                            # belief_update/journal                        [leaf]
+  mindstrata-person/        # person/ aggregate + biology/ (11 systems) + health  [leaf, deny(missing_docs)]
+  mindstrata-psych/         # psychology/ (16 systems) + appraisal + memory/attention/
+                            # belief_update/journal                          [leaf, deny(missing_docs)]
   mindstrata-institutions/  # institutions/legal/diplomacy/military/theology/
-                            # schools/norms/factions types (pure domain)   [leaf]
-  mindstrata-social/        # social/ culture/ noosphere/ + gossip/conflict
+                            # schools/norms/factions (pure domain)           [leaf, deny(missing_docs)]
+  mindstrata-social/        # social/ culture/ noosphere/ + gossip/conflict    [leaf, deny(missing_docs)]
   mindstrata-world/         # world/world_gen/ecology/market/logistics/
-                            # demography/black_market
-  mindstrata-sim/           # ORCHESTRATION ONLY (target <15K):
+                            # demography/black_market                        [leaf, deny(missing_docs)]
+  mindstrata-development/   # AFA developmental lines + field engine          [leaf, deny(missing_docs)]
+  mindstrata-sim/           # ORCHESTRATION (~36K; see the retired-target note above)
     sim/mod.rs              #   Simulation struct, AgentBundle, wiring
-    sim/core.rs             #   tick() pipeline order
-    sim/pass_*.rs           #   six verbatim tick passes
+    sim/core.rs             #   tick() pipeline order + per-pass profiler
+    sim/pass_*.rs           #   the five remaining verbatim passes
+                            #     (action, ecology, scenario, social, weather)
+    systems/                #   Arc-D-extracted passes: biology, cognitive,
+                            #     appraisal, decay, health, development, genesis,
+                            #     trade_diffusion, institutions_multiplier (+INVENTORY.md)
+    sim/decision_census.rs  #   action-selection instrument (opt-in, inert by default)
     sim/{population,api}.rs #   constructors/seeding; command channel
-    sim/*_impl.rs + {household,economy,births_deaths,...}.rs
-                            #   impl-Simulation glue (Arc-D detangle target)
+    sim/*_impl.rs + {household,economy,births_deaths,marriage,clans,
+      cults_noosphere,memory_ops,norms_impl,social_cluster,...}.rs
+                            #   impl-Simulation domain glue (detangle target)
     actions/{mod,tests}.rs  #   action-selection engine (sits above domains)
     {routines,scheduler,snapshot,scenario,spec_lint,agent_tier,
-     provenance,population_cap,mods}.rs  # infra
+     provenance,population_cap,mods,assets}.rs  # infra
     legacy shims in lib.rs preserve pre-extraction crate:: paths
-crates/mindstrata-tests/src/integration_tests/{biology,psychology,social,
-  culture,governance,economy,legal,infra}.rs
-crates/mindstrata-tui/src/{lib,render,session}.rs
+  mindstrata-tests/         # integration_tests/{biology,psychology,social,culture,
+                            #   governance,economy,legal,infra}/ + snapshots/golden
+  mindstrata-tui/           # {lib,render,session,assets_view,scene}.rs
+  mindstrata-cli/ mindstrata-render/ mindstrata-benches/  # entry points, 186 probes
 ```
 
-DAG (cargo-enforced): core ← person ← psych ← social; person ← institutions;
-person/institutions ← world; all five ← sim ← tui/cli/render/tests/benches.
+DAG (cargo-enforced): `core ← person ← psych ← {social, institutions, world}`;
+`development` below `psych`; all leaf crates ← `sim` ← `tui/cli/render/tests/benches`.
 
-### The module → crate ladder (scaling to 200K+ LOC)
+### The module → crate ladder — **DONE** (S1–S3, commits `e702a77`, `f66b988`)
 
 File splits fix navigability; only **crate boundaries** fix build-time coupling and
-dependency direction. The ladder, one rung per iteration:
+dependency direction. The ladder landed one rung per iteration:
 
-1. **S1 — settle remaining wildcards** (~102 files in `biology/ psychology/ culture/
-   social/ noosphere/` + roots). Explicit imports double as the coupling survey.
-2. **S2 — extract `mindstrata-person`** (+ `biology/`) as the first leaf crate;
-   proves the recipe on the smallest blast radius.
-3. **S3+ — cluster extractions** (`mindstrata-psych`, `mindstrata-social`,
-   `mindstrata-institutions`, `mindstrata-world`) ordered by the S1 coupling map.
-   End state: `sim` = pure orchestration (<15K LOC), dependency DAG enforced by cargo.
+1. **S1 — DONE (closed as a no-op).** Round 1 had already cleared production wildcards,
+   so the rung shipped the **coupling map** (`docs/scaling/coupling_map.md`) instead.
+2. **S2 — DONE.** `mindstrata-person` (+ `biology/`) extracted as the first leaf crate.
+3. **S3 — DONE.** `mindstrata-psych` (+appraisal), `-institutions`, `-social`, `-world`
+   extracted in coupling-map order. **Every extraction is golden-proven byte-identical**,
+   and the DAG above is cargo-enforced. New crates were born with `deny(missing_docs)`.
 
-Crate-extraction discipline (full procedure in `docs/PLAN_SCALING_FOUNDATION.md`):
+**Adding a new crate** follows the same discipline in `docs/PLAN_SCALING_FOUNDATION.md`.
+
+Crate-extraction discipline (the procedure that produced the ladder):
 
 - **Golden replay is the referee** — every extraction byte-identical, behavioral
   changes never mixed into structural commits.
@@ -272,11 +309,19 @@ Crate-extraction discipline (full procedure in `docs/PLAN_SCALING_FOUNDATION.md`
 
 ## 8. Where Things Stand / Next Work
 
-**The live queue is `docs/PLAN_DC3_DEVELOPMENT.md`** (its §3.1 is the calibration-debt
-ledger, its execution ledgers are the iteration trail; per-iteration probes and measured
-verdicts live in `docs/architecture/AP4-studio/evidence/`). Keep that file current and
-treat this section as a pointer, not a second ledger — it went stale once by holding a
-queue from Iteration 247 while DC-3 and DC-4 landed.
+**This section is a pointer, not a ledger.** The authoritative set is:
+
+- **`docs/ENGINE_STATUS.md`** — current engine truth (behaviour, realism, measured scale).
+- **`docs/PLAN_DC3_DEVELOPMENT.md`** — the live work queue (§3.1 calibration-debt ledger;
+  §7/§9 execution ledgers).
+- **`docs/DOCUMENTATION.md`** — which doc owns which scope, and the status of every doc.
+- **`docs/architecture/AP4-studio/evidence/`** — per-iteration probes and measured verdicts.
+
+Keep those current and treat this section as a summary. It has gone stale twice — once by
+holding the Iteration-247 queue while DC-3 closed and DC-4 opened, and once by naming the
+sparse relationship store "the only remaining lever" after i338/i344/i350 had measured and
+demoted it. `scripts/doc_index.py` (in the gate) now catches the *structural* drift; the
+judgement calls remain ours.
 
 Landed since this section was last written (see `git log` for the trail): the full
 module-segregation refactor, the **crate ladder** (S1–S3: `core ← person ← psych ←
