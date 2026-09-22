@@ -1,5 +1,10 @@
 # Plan — Biological & Psychological Deepening (bio/psycho → social upgrade)
 
+> **HISTORICAL / COMPLETE (2026-09-22):** the program closed at Iteration 259
+> (commit `e55d32c`) — Arcs A (heredity), B (embodiment→mind), C (mind→social), and D
+> (architecture) all delivered; see §4 "PROGRAM CLOSE" below. The status narrative here
+> is frozen at closure. Current engine truth: [`ENGINE_STATUS.md`](ENGINE_STATUS.md).
+
 *Created Iteration 242+, post-commit `8881980`. Supersedes nothing; extends the
 audit roadmap's Phase 1 into a full bio↔psych↔social coupling program.*
 

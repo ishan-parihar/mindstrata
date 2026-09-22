@@ -4,13 +4,20 @@ description: "Attractor-Field Architecture (AP3): staged developmental lines for
 type: Architecture-Plan
 plan_id: AP3
 supersedes: docs/PLAN_ATTRACTOR_FIELD_ARCHITECTURE.md (uncommitted v1, deleted)
-status: Active
+status: Complete
 created: 2026-08-25
 iteration_range: "266 – ~365"
 ontology_source: /home/ishanp/Documents/knowledge-base/KosmOS/_Ontology (see refs/kosmos-index.md)
 ---
 
 # AP3 — Attractor-Field Architecture
+
+> **HISTORICAL / COMPLETE (2026-09-22):** AP3 Eras I–V have all landed (Era IV collective
+> holon, Era III content emergence, Era V observability + chronicle lens; UM-2 and UM-3
+> gates PASSED). This document is retained as the **theory + doctrine reference** — read
+> [`docs/ENGINE_STATUS.md`](../../ENGINE_STATUS.md) for current status and
+> [`docs/PLAN_DC3_DEVELOPMENT.md`](../../PLAN_DC3_DEVELOPMENT.md) for remaining work.
+> The "Current state" section below is frozen at the arc's start and is **not** current.
 
 ## Mission
 
@@ -52,8 +59,8 @@ and content is whatever the field metabolizes."* — synthesized from KosmOS `_O
 5. **Every behavioral claim cites its derivation** — probe output, ontology cell path, or
    both (KosmOS CONSTITUTION rule 12 adopted).
 
-## Current state
+## Current state (FROZEN at arc start — see the banner above)
 
-- Era I not started. Next actionable: [waves/WP-0A](waves/WP-0A-vendor-codegen.md).
+- ~~Era I not started.~~ **All five eras landed**; see `ENGINE_STATUS.md`.
 - Iterations 264–265 were consumed by the parallel session (TUI dossier, annals
-  provenance). AP3 numbering starts at **266**.
+  provenance). AP3 numbering started at **266**.

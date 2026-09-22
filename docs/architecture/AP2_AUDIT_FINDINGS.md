@@ -1,5 +1,9 @@
 # Mindstrata — AP2 Audit Findings Log
 
+> **HISTORICAL (Iter 181):** the per-system findings log produced during the AP2 audit.
+> Its verdicts describe the code as of `d8af39c`, not today. Current truth:
+> [`../ENGINE_STATUS.md`](../ENGINE_STATUS.md).
+
 **Status:** Phase 1 of 14 complete. Generated during Phase 1 execution at commit `d8af39c` (Iteration 181).
 **Verdict legend:** FULL · WIRED-LIVE · WRITE-ONLY · PARTIAL · MISSING · SUPERSEDED · DEAD-PARAM · UNVERIFIED (see `docs/architecture/AP2_AUDIT_PLAN.md` §0.2).
 **Severity:** S1 plan-mandate absent/dead · S2 plan effect does not occur · S3 live but under-probed · S4 cosmetic/spec drift.

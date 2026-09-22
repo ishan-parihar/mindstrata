@@ -19,6 +19,13 @@ echo "[gate 2.5/3] bench naming law (IC-4)"
 python3 scripts/bench_index.py --strict 2>&1 | tail -5
 python3 scripts/bench_index.py --strict
 
+# Documentation authority map (docs/DOCUMENTATION.md §5): every non-exempt doc
+# must be classified in the index, no ghost entries, and AUTHORITY/ACTIVE docs
+# must carry a resolvable reconciliation marker. This is what stops the doctrine
+# pointer / current-state doc from silently diverging from the code again.
+echo "[gate 2.5b/3] documentation authority map"
+python3 scripts/doc_index.py --check
+
 # DC3-P0 §5.1 (i295): golden-budget envelopes as WARN-ONLY drift visibility —
 # N=12 ≤150 µs/tick (golden-suite wall budget), N=96 ≤6500 (Phase-1 target).
 # Release noise (±8%) on shared hosts must not block commits, but drift must

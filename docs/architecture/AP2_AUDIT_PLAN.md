@@ -1,5 +1,8 @@
 # Mindstrata — AP2 Full-Depth Re-Audit Plan
 
+> **HISTORICAL:** the methodology for the AP2 re-audit (completed). Kept as the audit
+> method reference; not current state. Current truth: [`../ENGINE_STATUS.md`](../ENGINE_STATUS.md).
+
 **Scope:** Verify that *everything* mandated by `docs/architecture/AP2.md` (the Human-Scale Deepening Architectural Plan) is implemented, **and** — critically — that it *operationalizes*: every system produces state that moves, is consumed by decisions, and produces realistic, differentiated, non-saturated behavior.
 
 **Method:** Every audited system is examined on two axes simultaneously:

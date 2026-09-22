@@ -44,6 +44,13 @@ state, no re-summarizing, no clarifying questions.
 - The canonical success signal is **observable output** (probes, rendered artifacts, test
   runs), never source diffs or intent.
 - Stale binaries produce fix-less reproductions: rebuild before re-auditing.
+- **Documentation alignment is gated.** `scripts/gate` runs `scripts/doc_index.py`: every
+  non-exempt doc must be classified in `docs/DOCUMENTATION.md` §6, and AUTHORITY/ACTIVE
+  docs must carry a resolvable `reconciled_commit`. A behaviour change that invalidates an
+  assertion in `docs/ENGINE_STATUS.md` (the single source of engine truth) or a ledger row
+  is **not done** until that doc moves in the same commit. If a doc contradicts
+  `ENGINE_STATUS.md`, the doc is stale — fix it or mark it `SUPERSEDED`; never leave the
+  contradiction standing.
 
 ## 4. Calibration Honesty Rules
 

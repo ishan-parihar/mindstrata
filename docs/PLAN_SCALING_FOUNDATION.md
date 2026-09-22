@@ -1,5 +1,12 @@
 # Plan — Scaling Foundation: From 100K to 200K+ LOC
 
+> **HISTORICAL / COMPLETE (2026-09-22, i352):** the crate ladder landed — S1 closed as a
+> no-op (production wildcards already cleared; the coupling map shipped instead), S2
+> `mindstrata-person` extracted, S3 `mindstrata-psych`, `-institutions`, `-social`,
+> `-world` extracted. The dependency DAG is now cargo-enforced and every extraction is
+> golden-proven byte-identical. Remaining infrastructure work is tracked in
+> [`PLAN_DC3_DEVELOPMENT.md`](PLAN_DC3_DEVELOPMENT.md), not here.
+
 *Created post-commit `e5cb5a9` (module-segregation refactor). Companion doctrine:
 `AGENTS.md` §7. This plan owns the crate-extraction program; behavioral arcs
 (Audit Phases 2–6) proceed in parallel and are never mixed into these commits.*

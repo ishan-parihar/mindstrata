@@ -1,5 +1,11 @@
 # Mindstrata — Remaining Work Report
 
+> **SUPERSEDED (2026-09-22, i352):** this report is baselined at Iteration 134
+> (commit `086f73e`) and its queued items were largely closed by AP2's final sweep,
+> the bio/psych deepening program, and DC-3. For what remains **now**, see
+> [`ENGINE_STATUS.md`](ENGINE_STATUS.md) §9 and [`PLAN_DC3_DEVELOPMENT.md`](PLAN_DC3_DEVELOPMENT.md) §3.
+> Kept for historical context only.
+
 **Scope:** refinement, testing, validation, and optimization items still open.
 **Baseline:** commit `086f73e` (Iteration 134), tree clean, **1,105 workspace tests green** (849 sim + 236 tests-crate + 20 core), zero snapshot drift, strict clippy `-D warnings` clean.
 **Plan status:** AP2 is structurally ~99% complete — every plan-mandated *system* exists and is wired into the deterministic tick loop. The remaining work is overwhelmingly **decisional consumers** (state that is produced but never read back into decisions), **scale/perf hardening**, and **post-AP2 game features**.

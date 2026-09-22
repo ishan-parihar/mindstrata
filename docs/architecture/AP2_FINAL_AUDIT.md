@@ -1,5 +1,8 @@
 # Mindstrata Final Exhaustive Audit — Iteration 186+
 
+> **HISTORICAL (2026-08-17):** the AP2 closeout audit. Records the state at Iter 186, not
+> today. Current truth: [`../ENGINE_STATUS.md`](../ENGINE_STATUS.md).
+
 **Date:** 2026-08-17 · **Scope:** full workspace (mindstrata-sim 16,507-line sim.rs, 43 sim modules, 17 psychology, 20 social, 15 biology) · **Method:** full test suite + clippy + systematic production-caller sweep of every `pub fn`/field per module + targeted runtime probes.
 
 ---

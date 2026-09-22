@@ -1,5 +1,11 @@
 # MindStrata — Operational Audit Report
 
+> **HISTORICAL (2026-08-03):** an empirical audit snapshot taken before most systems
+> landed. Its findings (marriage 0-in-20K, market zero-volume, population cap 48,
+> health misreported) have since been fixed and are contradicted by
+> [`docs/ENGINE_STATUS.md`](docs/ENGINE_STATUS.md). Kept as the before/after baseline;
+> **not current state.**
+
 **Date:** 2026-08-03
 **Method:** Empirical only. The game was run exhaustively across every simulation dimension and CLI vector. No architecture-plan documents were consulted; everything below was observed by running the built binary.
 

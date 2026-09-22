@@ -1,5 +1,11 @@
 # Mindstrata — Current State Technical Document
 
+> **SUPERSEDED (2026-09-22, i352):** replaced by [`ENGINE_STATUS.md`](ENGINE_STATUS.md).
+> This document is AP2-era: it reports ~1,100 tests, `MAX_POPULATION = 48`, no heredity,
+> and 22 emotions as "write-only observational state" — all of which are now false
+> (1,665 tests, cap 256, parent–child r=0.81 heredity, all 22 emotions decisional).
+> **Do not use it for decisions.** Kept for historical context only.
+
 **Prepared for:** Lead Game Designer  
 **Date:** August 10, 2026  
 **Codebase Version:** 74,998 lines of Rust across 7 crates, **1,238 tests passing** (914 sim + 281 tests-crate + 11 tui + 3 cli + 9 render + 20 core), 0 clippy warnings, 0 TODO/FIXME

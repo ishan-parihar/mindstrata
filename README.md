@@ -9,11 +9,11 @@
 > **A deterministic, emergent human-society simulation** — a small medieval settlement where every person carries a full psychological mind, biological needs, social relationships, moral values, and institutional memberships. History emerges from first principles, not scripted events. **But it is far more than a "society sim":** beneath the village lies a complete cognitive-science stack — embodied bodies, nervous systems, appraisal-based emotion, belief systems, and noospheric fields — built to be *deepened* by three architecture plans (AP1 → AP2 → AP3) into a multi-scale civilization simulation.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/ishan-parihar/mindstrata/ci.yml?style=flat-square)](https://github.com/ishan-parihar/mindstrata/actions)
-![LOC](https://img.shields.io/badge/LOC-84.2K-informational?style=flat-square)
+![LOC](https://img.shields.io/badge/LOC-139.8K-informational?style=flat-square)
 <img src="https://img.shields.io/badge/Status-Active-brightgreen" alt="Status">
 [![CI](https://github.com/ishan-parihar/mindstrata/actions/workflows/ci.yml/badge.svg)](https://github.com/ishan-parihar/mindstrata/actions/workflows/ci.yml)
-[![Rust](https://img.shields.io/badge/rust-1.75+-blue?style=flat-square)](https://www.rust-lang.org)
-[![Tests](https://img.shields.io/badge/tests-1238%20passing-brightgreen?style=flat-square)](#)
+[![Rust](https://img.shields.io/badge/rust-1.98+-blue?style=flat-square)](https://www.rust-lang.org)
+[![Tests](https://img.shields.io/badge/tests-1665%20passing-brightgreen?style=flat-square)](#)
 [![License](https://img.shields.io/badge/license-MIT-purple?style=flat-square)](LICENSE)
 
 ---
@@ -34,7 +34,7 @@ Agents are not omniscient. Each knows only its body, needs, emotions, memories, 
 
 - **Emergent history** — outcomes arise from locally bounded minds and material constraints, never global variables
 - **Deterministic replay** — byte-identical runs from `seed + scenario + input log`; emergent behavior is debugger-accessible
-- **Full cognitive pipeline per agent** — needs → emotions → appraisal → decisions → social consequences, across 60+ simulation modules
+- **Full cognitive pipeline per agent** — needs → emotions → appraisal → decisions → social consequences, across 425 Rust source files in 13 crates
 - **Simulation-first, GUI-later** — the TUI is a debug instrument; the simulation runs headless
 
 The design sits between **The Sims** (individual psychology), **Cities: Skylines** (settlements/economy), and **Dwarf Fortress** (deep emergence) — with the differentiator that *every* agent has a complete cognitive pipeline.
@@ -44,13 +44,13 @@ The design sits between **The Sims** (individual psychology), **Cities: Skylines
 | **Agent psychology** | Full pipeline: needs → emotions → appraisal → decisions | Shallow moodlets | None | Needs + emotions | Usually none |
 | **Emergent history** | ✅ outcomes from bounded local minds, never global flags | Scripted | Scripted | Legendary emergent | ✅ but abstract |
 | **Determinism** | Byte-identical replay from seed + scenario + input log | Save-dependent | Save-dependent | Deterministic | ✅ |
-| **Scale** | Village (~10² agents, 60+ modules) | Small | City | Fortress | Variable |
+| **Scale** | Village → small town (~10²–2.5×10² agents; measured, see ENGINE_STATUS §8) | Small | City | Fortress | Variable |
 | **Social structure** | Trust, rumor, misinformation, institutions, legitimacy | Relationship sims | Districts | Caste + factions | Basic links |
 | **Openable as a lab** | ✅ TUI debug instrument + headless sim | No | No | Yes | Yes |
 
 Mindstrata is the only one where *every* agent reasons with a complete, inspectable cognitive pipeline — making misinformation, panic, and institutional failure *emergent properties* rather than scripted events.
 
-The substrate architecture is documented in [`docs/architecture/AP2.md`](docs/architecture/AP2.md); live state and remaining work in [`docs/MINDSTRATA_CURRENT_STATE.md`](docs/MINDSTRATA_CURRENT_STATE.md) and [`docs/REMAINING_WORK_REPORT.md`](docs/REMAINING_WORK_REPORT.md).
+**Start here:** [`docs/ENGINE_STATUS.md`](docs/ENGINE_STATUS.md) is the authoritative current-state document (architecture, behaviour, realism, measured scale). [`docs/ROADMAP.md`](docs/ROADMAP.md) is the trajectory; [`docs/PLAN_DC3_DEVELOPMENT.md`](docs/PLAN_DC3_DEVELOPMENT.md) is the live work ledger; [`docs/DOCUMENTATION.md`](docs/DOCUMENTATION.md) maps which document owns which scope. The substrate spec is [`docs/architecture/AP2.md`](docs/architecture/AP2.md) (implemented); the field-theory arc is [`docs/architecture/AP3-afa/`](docs/architecture/AP3-afa/PLAN.md) (Eras I–V complete).
 
 ## Quick Start
 

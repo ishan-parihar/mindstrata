@@ -1,5 +1,11 @@
 # Emergent-Realism Audit — Iteration 239
 
+> **HISTORICAL (2026-08-22):** a findings snapshot, **not** current state. Most findings
+> have since been closed: H1 heredity (Arc A, parent–child r=0.81), H2/H4 scripted culture
+> and fixed clans (Phase 4), H3 template world (Phase 5), H6 regulation-init (Arc A),
+> E1 dysphoria plateau (i259), E3 survival-needs inversion (i307/i309), E5 faction-dormancy
+> (i348). Live status and remaining debt: [`ENGINE_STATUS.md`](ENGINE_STATUS.md) §6/§9.
+
 **Date:** 2026-08-22
 **Method:** Static sweep of every seeding/birth/world-gen/emotion site + empirical probes on the release binary (5-seed × 20K metric exports, 100K-tick single-seed trajectory, agent psychology inspectors, targeted example probes) + full-suite verification runs.
 **Scope:** anything that hardcodes outcomes, injects false history, breaks heredity, or pins dynamics in ways that defeat the "emergent from first principles" design contract.

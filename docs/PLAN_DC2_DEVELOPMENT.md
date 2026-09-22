@@ -1,5 +1,9 @@
 # Mindstrata — Exhaustive Development Audit + DC-2 Plan
 
+> **HISTORICAL / COMPLETE (2026-09-22):** DC-2 closed (WP-H3 landed at i286). This is the
+> DC-2-era audit and plan; its ledger was superseded by
+> [`PLAN_DC3_DEVELOPMENT.md`](PLAN_DC3_DEVELOPMENT.md) §7/§9. Kept for history.
+
 **Date:** 2026-09-16
 **Baseline:** HEAD `392e64a` (post DC-2 Q1–Q4 calibration), main, 790 commits.
 **Method:** full git-history review (790 commits, AP1→AP2→AP3→AP4 arcs), docs survey

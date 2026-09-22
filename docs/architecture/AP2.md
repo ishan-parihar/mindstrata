@@ -1,5 +1,9 @@
 # Mindstrata — Human-Scale Deepening Architectural Plan
 
+> **HISTORICAL / IMPLEMENTED (2026-09-22):** AP2 is ~99% complete and its final dead-
+> producer sweep landed across Iters 22–186. This is the spec of record for what AP2
+> mandated; it is **not** a status document. Current truth: [`../ENGINE_STATUS.md`](../ENGINE_STATUS.md).
+
 ---
 
 ## 1. Architectural Mandate

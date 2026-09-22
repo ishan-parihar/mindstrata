@@ -1,4 +1,15 @@
+---
+name: plan-dc3
+status: ACTIVE
+description: "Live work ledger. DC-3 closed at 4/4 legs; §9 carries the DC-4 execution ledger. §3.1 is the calibration-debt ledger. Authoritative for what work remains; ENGINE_STATUS.md is authoritative for engine truth."
+type: Plan
+reconciled_commit: adc5985
+---
+
 # Mindstrata — DC-3 Development Plan (Era V harvest → "the world scales")
+
+> **This is the live work ledger** (DC-3 is closed; the DC-4 ledger lives in §9).
+> Engine truth lives in [`ENGINE_STATUS.md`](ENGINE_STATUS.md); this file owns *work*.
 
 **Date:** 2026-09-18 · **Baseline:** HEAD `5ee3c1c` (i286, WP-H3 closed), main, 819 commits,
 118,569 LOC across 13 crates, tree clean.
