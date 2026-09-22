@@ -234,6 +234,7 @@ impl Simulation {
             metric_history: &self.metric_history,
             last_revolution_tick: self.last_revolution_tick,
             last_moral_panic_tick: self.last_moral_panic_tick,
+            moral_charge_baseline: &self.moral_charge_baseline,
             last_cult_formation_tick: self.last_cult_formation_tick,
             black_market: &self.black_market,
             site_work_ticks: &self.site_work_ticks,

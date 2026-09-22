@@ -649,6 +649,19 @@ pub struct Simulation {
     /// §7.2: Tick when the last moral panic fired — enforces a cooldown so a
     /// saturated belief-charge loop cannot hammer legitimacy every tick.
     last_moral_panic_tick: u64,
+    /// i381: the moral-panic trigger's **anomaly baseline** — a slow moving
+    /// average of the population's own mean belief-charge, one per watched
+    /// proposition (`gossip::MORAL_PANIC_PROPOSITIONS`). The §7.2 gate fires
+    /// when the current charge is anomalous *against this*, not against a fixed
+    /// bar, so the trigger adapts to the population it is testing instead of
+    /// sitting inside that population's input distribution (i378: the old
+    /// absolute 0.55 bar had 2.5–9.4% headroom, and three iterations had to
+    /// rename the firing seed family because of it).
+    ///
+    /// Stored as f64 for the same reason `faction_crisis_pressure` is: a
+    /// recursive `Fixed` fold quantizes on every tick and accumulates a standing
+    /// bias. The gate quantizes once per tick (`anomaly_baseline_fixed`).
+    moral_charge_baseline: [f64; crate::gossip::MORAL_PANIC_PROPOSITIONS as usize],
     /// §8.1.4 (P3-6): Famine production-suppression window — the tick (exclusive)
     /// until which a Famine shock suppresses grain output. A famine is a crop
     /// failure, not a one-shot store drain: without this, Work production

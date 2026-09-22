@@ -284,3 +284,38 @@ single-knob fixes were measured and both fail:
 measured WINNER's utility and ask whether any plausible value of the term reaches it. If
 not, the term is not the defect and rescaling is wasted work — the census is the instrument
 that answers it (`winner_utility`, already recorded per arbitration).
+
+---
+
+## Refresh after i381 — the panic trigger's absolute threshold is gone (Class B → Class A)
+
+i378/i379 queued the §7.2 panic charge threshold (`MORAL_PANIC_CHARGE_THRESHOLD = 0.55`) as
+the biggest Class-4 item — an **absolute threshold on a self-driven aggregate**. i381 landed
+the relative/anomaly form and the constant is **deleted**. The classification moves from
+Class B to Class A: the trigger now measures the population against its own charge history.
+
+Three corrections this refresh makes to the audit's own method, all of them from sampling a
+side of the corpus the earlier passes never looked at:
+
+1. **A firing-set-only corpus cannot size a relative redesign.** i378 concluded
+   "`panic_ratio ≥ 0.30` is the clean discriminator" from crisis seeds alone. i381 sampled
+   calm worlds too: they are **warm** — `calm/42` meets that leg on **85% of its ticks**
+   while `crisis/7` meets it on 50%. The leg never discriminated; the absolute charge bar
+   was doing all the work by sitting above the calm plateau.
+2. **The right quantity to size is the GAP between the extremes, not the firing margin.**
+   The highest must-not-fire plateau (`crisis/42`, 0.4188) and the lowest must-fire spike
+   (`crisis/11`, 0.5475) are only **1.31×** apart; the shipped floor is their geometric
+   midpoint (0.47), which is why the achievable margin is ~12–17% rather than the
+   comfortable margin a wider gap would allow. Report the gap ceiling honestly instead of
+   claiming the redesign manufactured headroom the signal does not contain.
+3. **A relative bar has a crossover, and the corpus can sit on it.** `floor / ratio` = 0.376;
+   the corpus's warmest *stable* population is 0.373 — so the floor, not the relative arm,
+   is the operating point in every measured world. State that plainly, and demonstrate the
+   relative arm's job on shapes the floor provably cannot handle (a sustained plateau:
+   67 → 0 fires; a warming step: 50 → 13) rather than implying it is what fixed the corpus.
+
+**Still queued from i379's rulings (unchanged):** the `needs.social` utility term (Class 3b —
+needs the winner-decomposition census first), the `emotions.anger > 0.50` arm (near-dead at
+town scale — re-anchor or delete, explicitly), and the faction `council legitimacy < 0.50`
+arm (never fires in any measured world — live-or-delete; it ORs with a live arm, so its
+presence is a false affordance until it is resolved).

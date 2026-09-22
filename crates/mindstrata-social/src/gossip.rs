@@ -270,9 +270,117 @@ pub fn apply_gossip(listener_beliefs: &mut Vec<Belief>, result: &GossipResult, t
 
 // ── §7.2: Moral Panic / Rumor Cascade ──────────────────────────────────
 
-/// Threshold of average emotional charge across all rumors about an institution
-/// that triggers a moral panic event.
-pub const MORAL_PANIC_CHARGE_THRESHOLD: Fixed = Fixed::from_raw(5500); // 0.55
+/// i381: the panic cadence — a moral panic is a discrete crisis, not a per-tick
+/// loop. Once it fires, the belief-charge pool relaxes toward its resting level
+/// over roughly this window before another can register. Also the unit the
+/// anomaly baseline's memory is expressed in (below), so that the trigger's two
+/// timescales are derived from one another rather than independently guessed.
+pub const MORAL_PANIC_COOLDOWN: u64 = 300;
+
+/// i381: how many propositions the trigger watches — 0 `the_market_is_fair`,
+/// 1 `the_council_protects_us`. The simulation keeps **one anomaly baseline per
+/// proposition**, because the two charges are driven by different institutions.
+pub const MORAL_PANIC_PROPOSITIONS: u64 = 2;
+
+/// i381: the anomaly baseline's memory, in multiples of the panic cadence. The
+/// baseline must be far slower than the crisis it measures, or a normal crisis
+/// becomes its own reference and the trigger can never see it as anomalous; it
+/// must still be fast enough to track a population whose resting charge drifts
+/// over an arc. 10 crisis windows ≈ 3 000 ticks ≈ 20 simulated days.
+pub const MORAL_PANIC_BASELINE_COOLDOWNS: u64 = 10;
+
+/// i381: ABSOLUTE FLOOR on the average emotional charge — the arm that governs a
+/// population whose own level is *low*, and the level assumed about one whose
+/// history is still unmeasured.
+///
+/// This const used to be the whole trigger at **0.55** (`MORAL_PANIC_CHARGE_
+/// THRESHOLD`), and i378 measured that bar sitting inside the body of its own
+/// input distribution: firing runs cleared it by only 2.5–9.4% while one swept
+/// crisis seed missed by 0.5% (0.9955). The absolute form is why the firing seed
+/// family moved on every pacing shift (i343/i351/i376 each renamed it).
+///
+/// **0.47 is the geometric midpoint of the measured decision gap** (i381 probe,
+/// 13 worlds × 20K ticks, sampling the trigger's own inputs every tick):
+///
+/// | side | measured extreme | value | headroom vs 0.47 |
+/// |---|---|---|---|
+/// | must NOT fire | highest non-firing plateau (`crisis/42`) | 0.4188 | ×1.12 |
+/// | must fire | lowest firing spike (`crisis/11`, the i378 knife-edge seed) | 0.5475 | ×1.165 |
+///
+/// so the floor is the point of equal relative margin between the two sides. That
+/// is the honest ceiling of a *level* bar on this corpus: the gap between "fires"
+/// and "must stay dark" is only 1.31× wide, and i378's bar sat at one edge of it
+/// instead of between them. (For comparison the old 0.55 gives `crisis/11` a
+/// margin of 0.9955 — the knife-edge that started this iteration.)
+pub const MORAL_PANIC_CHARGE_FLOOR: Fixed = Fixed::from_raw(4700); // 0.47
+
+/// i381: fold an observed population charge into the anomaly baseline.
+///
+/// `tau` is the time constant in ticks. Deliberately **f64**: the accumulator is
+/// recursive, so a `Fixed` update of `(observed − baseline) × (1/tau)` would
+/// quantize at 1e-4 per tick, and that error does not average out — it becomes a
+/// standing bias of up to `1e-4 × tau` (0.3 at the shipped tau), which is the
+/// size of the signal itself. This is §5's fixed-4 truncation hazard applied to
+/// *state* rather than to a one-off increment: compute at full precision, quantize
+/// once at the point of use (`anomaly_baseline_fixed`).
+///
+/// Two structural rules, both load-bearing:
+///
+/// * **A cold baseline adopts its first observation.** An unmeasured population's
+///   first impression *is* its normal level. The alternative (starting at 0) makes
+///   every young world look maximally anomalous while its history is still
+///   unknown — the i381 probe measured exactly that as spurious calm-world panics
+///   (a stably-warm calm world firing 3–5 times in its first few thousand ticks
+///   before its own baseline had been learned).
+/// * **A zero observation carries no information.** `observed == 0` means nobody
+///   holds a charged belief about this proposition — not that the population has
+///   calmed down — so folding it would drag the baseline toward zero and re-arm
+///   the trigger for no reason.
+pub fn anomaly_baseline_fold(baseline: f64, observed: Fixed, tau: f64) -> f64 {
+    if observed <= Fixed::ZERO {
+        return baseline;
+    }
+    let obs = observed.to_f64();
+    if baseline <= 0.0 {
+        return obs;
+    }
+    baseline + (obs - baseline) * (1.0 / tau)
+}
+
+/// i381: the gate's view of the anomaly baseline — quantized exactly once, here.
+pub fn anomaly_baseline_fixed(baseline: f64) -> Fixed {
+    Fixed::from_f64(baseline.max(0.0))
+}
+
+/// i381: the ANOMALY leg — the population's charge must exceed this multiple of
+/// its own slow baseline to read as a cascade rather than as its normal level.
+///
+/// This is the relative form the audit's Class-4 ruling calls for: an absolute
+/// threshold on a self-driven aggregate has an operating point that drifts with
+/// the distribution, so its pins churn. A *relative* threshold adapts to the
+/// population it is testing, so a world whose charge is stably high is NOT
+/// anomalous while one whose charge climbs above its own recent level IS.
+///
+/// Two consequences the floor alone cannot deliver, and the reason this arm ships
+/// even though the floor is the operating point everywhere in the calibration
+/// corpus (whose warmest *stable* population, `calm/42`, sits at 0.373 — just
+/// under this law's crossover of `floor / ratio` = 0.376):
+///
+/// 1. **A sustained high level stops firing.** Under the old law a population
+///    whose charge plateaus above the bar fires every cooldown forever; here the
+///    baseline rises to meet it and the cascade goes quiet after its burst — a
+///    panic is an *event*, not a new equilibrium. Measured on synthetic shapes by
+///    the i381 probe: a population that steps from 0.20 to a sustained 0.65 fires
+///    **50** times under the old law and **13** here (a burst, then silence —
+///    `tick_moral_panic_and_revolution`'s 300-tick cooldown over the ~4 800 ticks
+///    it takes the baseline to catch up). A world that never left 0.65 fires 67
+///    times there and **0** here: a chronically charged population has no
+///    *sudden* collapse to have, which is the §7.2 semantics the absolute bar
+///    never expressed.
+/// 2. **The bar follows an arc.** As a settlement's charge drifts over thousands of
+///    ticks the bar drifts with it, so the trigger keeps a constant *relative*
+///    sensitivity instead of needing a re-anchor at every pacing shift.
+pub const MORAL_PANIC_ANOMALY_RATIO: Fixed = Fixed::from_raw(12500); // 1.25
 
 /// Moral panic result — what happens when gossip accumulates enough emotional charge.
 #[derive(Debug, Clone)]
@@ -295,7 +403,11 @@ pub struct MoralPanicResult {
 /// it can trigger a sudden collapse in trust — a moral panic.
 /// This implements §7.2: "Gossip about institutions spreads through the
 /// social graph. Distorted rumors can create moral panics."
-pub fn detect_moral_panic(beliefs: &[&[Belief]], proposition_id: u64) -> MoralPanicResult {
+pub fn detect_moral_panic(
+    beliefs: &[&[Belief]],
+    proposition_id: u64,
+    charge_baseline: Fixed,
+) -> MoralPanicResult {
     // Collect emotional charges from all agents' beliefs about this proposition
     let charges: Vec<Fixed> = beliefs
         .iter()
@@ -328,9 +440,15 @@ pub fn detect_moral_panic(beliefs: &[&[Belief]], proposition_id: u64) -> MoralPa
     let panic_ratio =
         Fixed::from_int(high_charge_count as i64) / Fixed::from_int(charges.len() as i64);
 
-    // Moral panic requires: high average charge AND widespread fear (many agents affected)
-    let triggered =
-        avg_charge >= MORAL_PANIC_CHARGE_THRESHOLD && panic_ratio >= Fixed::from_f64(0.3); // at least 30% of agents are emotionally charged
+    // Moral panic requires: an ANOMALOUS average charge (above the population's
+    // own slow baseline by `MORAL_PANIC_ANOMALY_RATIO`, and above an absolute
+    // floor so a quiet world cannot trip it) AND widespread charge (≥30% of
+    // holders emotionally charged — the leg i378 measured as the clean
+    // discriminator). A zero baseline (a fresh world, or a caller that has no
+    // history) reduces the bar to the absolute floor, which is the pre-i381
+    // behaviour with a lower bar rather than a different mechanism.
+    let elevation_bar = (charge_baseline * MORAL_PANIC_ANOMALY_RATIO).max(MORAL_PANIC_CHARGE_FLOOR);
+    let triggered = avg_charge >= elevation_bar && panic_ratio >= Fixed::from_f64(0.3); // at least 30% of agents are emotionally charged
 
     let legitimacy_damage = if triggered {
         // Damage scales with how intense the panic is
@@ -736,11 +854,78 @@ mod tests {
     }
 
     #[test]
+    fn anomaly_baseline_raises_the_bar_above_a_stable_population() {
+        // The same population charge, judged against two different histories:
+        // a cold baseline leaves the absolute floor in charge, while a baseline
+        // at or above the charge itself makes the level stop being anomalous.
+        // This is the whole point of the relative form — i378's absolute bar sat
+        // inside the population's own input distribution (2.5–9.4% headroom).
+        let mk = |charge: f64| {
+            let mut b = make_belief(1, 0.8);
+            b.emotional_charge = Fixed::from_f64(charge);
+            vec![b]
+        };
+        let a = mk(0.7);
+        let b = mk(0.7);
+        let c = mk(0.7);
+        let beliefs: Vec<&[Belief]> = vec![&a[..], &b[..], &c[..]];
+
+        // Cold history: the absolute floor governs and a charged population fires.
+        assert!(detect_moral_panic(&beliefs, 1, Fixed::ZERO).triggered);
+        // Warm history: the population has *lived* at 0.8, so 0.7 is not news.
+        let warm = detect_moral_panic(&beliefs, 1, Fixed::from_f64(0.8));
+        assert!(
+            !warm.triggered,
+            "a charge no higher than the population's own baseline must not read as a cascade"
+        );
+    }
+
+    #[test]
+    fn anomaly_baseline_fold_seeds_cold_and_ignores_an_empty_population() {
+        // A cold baseline adopts its first observation rather than starting at
+        // zero — a young world must not read as maximally anomalous.
+        assert_eq!(
+            anomaly_baseline_fold(0.0, Fixed::from_f64(0.42), 3000.0),
+            0.42
+        );
+        // Zero holders carry no information: folding must not drag the baseline
+        // down, or an empty proposition would re-arm the trigger for nothing.
+        assert_eq!(anomaly_baseline_fold(0.42, Fixed::ZERO, 3000.0), 0.42);
+        // Once seeded, the fold is slow.
+        assert!(anomaly_baseline_fold(0.42, Fixed::from_f64(0.9), 3000.0) < 0.4202);
+    }
+
+    #[test]
+    fn anomaly_baseline_fold_is_slow_and_never_truncates_to_zero() {
+        // Slow: one fold moves a seeded baseline by only a fraction of the gap.
+        let one = anomaly_baseline_fold(0.30, Fixed::from_f64(0.6), 3000.0);
+        assert!((0.30..0.301).contains(&one), "one tick moved {one}");
+        // Convergence: after one time constant the baseline has covered ~63% of
+        // the gap (1 − 1/e), which is what "slow moving average" means.
+        let mut acc = 0.30f64;
+        for _ in 0..3000 {
+            acc = anomaly_baseline_fold(acc, Fixed::from_f64(0.6), 3000.0);
+        }
+        assert!((0.48..0.50).contains(&acc), "after one tau: {acc}");
+        // The §5 hazard this design exists to avoid: the SAME update expressed in
+        // `Fixed` quantizes to zero for a near-baseline observation, so a recursive
+        // accumulator built out of `Fixed` would silently freeze — a standing bias
+        // of up to `1e-4 × tau` (0.3 here), the size of the signal itself.
+        let delta = 0.301 - 0.30;
+        assert_eq!(
+            Fixed::from_f64(delta * (1.0 / 3000.0)),
+            Fixed::ZERO,
+            "if this ever stops truncating, the f64 accumulator is no longer load-bearing"
+        );
+        assert!(anomaly_baseline_fold(0.30, Fixed::from_f64(0.301), 3000.0) > 0.30);
+    }
+
+    #[test]
     fn moral_panic_triggers_with_high_charge() {
         // Create beliefs with high emotional charge across multiple agents
         let b1 = {
             let mut b = make_belief(1, 0.8);
-            b.emotional_charge = Fixed::from_f64(0.7); // well above 0.55 threshold
+            b.emotional_charge = Fixed::from_f64(0.7); // above the absolute floor
             vec![b]
         };
         let b2 = {
@@ -755,7 +940,8 @@ mod tests {
         };
         let beliefs: Vec<&[Belief]> = vec![&b1[..], &b2[..], &b3[..]];
 
-        let result = detect_moral_panic(&beliefs, 1);
+        // A cold baseline: the absolute floor is the whole bar (a fresh world).
+        let result = detect_moral_panic(&beliefs, 1, Fixed::ZERO);
         assert!(
             result.triggered,
             "Moral panic should trigger with high emotional charge"
@@ -768,12 +954,12 @@ mod tests {
     fn moral_panic_does_not_trigger_with_low_charge() {
         let b1 = {
             let mut b = make_belief(1, 0.5);
-            b.emotional_charge = Fixed::from_f64(0.2); // well below 0.55 threshold
+            b.emotional_charge = Fixed::from_f64(0.2); // below the absolute floor
             vec![b]
         };
         let beliefs: Vec<&[Belief]> = vec![&b1[..]];
 
-        let result = detect_moral_panic(&beliefs, 1);
+        let result = detect_moral_panic(&beliefs, 1, Fixed::ZERO);
         assert!(
             !result.triggered,
             "Moral panic should not trigger with low emotional charge"
@@ -785,7 +971,7 @@ mod tests {
     #[test]
     fn moral_panic_no_beliefs_returns_no_trigger() {
         let empty_beliefs: Vec<&[Belief]> = vec![];
-        let result = detect_moral_panic(&empty_beliefs, 1);
+        let result = detect_moral_panic(&empty_beliefs, 1, Fixed::ZERO);
         assert!(!result.triggered);
         assert_eq!(result.avg_charge, Fixed::ZERO);
     }
@@ -804,8 +990,8 @@ mod tests {
         let b5 = vec![low_charge];
         let beliefs: Vec<&[Belief]> = vec![&b1[..], &b2[..], &b3[..], &b4[..], &b5[..]];
 
-        let result = detect_moral_panic(&beliefs, 1);
-        // avg_charge = (0.7 + 0.3 + 0.3 + 0.3 + 0.3) / 5 = 0.38 — below 0.55 threshold
+        let result = detect_moral_panic(&beliefs, 1, Fixed::ZERO);
+        // avg_charge = (0.7 + 0.3 + 0.3 + 0.3 + 0.3) / 5 = 0.38 — below the floor
         assert!(
             !result.triggered,
             "Should NOT trigger when avg charge is below threshold even with one high agent"

@@ -165,4 +165,18 @@ impl Simulation {
     pub fn provenance(&self) -> &CausalProvenance {
         &self.provenance
     }
+
+    /// i381: the §7.2 moral-panic trigger's per-proposition **anomaly baseline**
+    /// — the slow average of the population's own belief charge that the gate's
+    /// relative arm measures against (see `gossip::anomaly_baseline_fold`).
+    ///
+    /// Exposed because it is the trigger's *internal state*, and the trigger's
+    /// behaviour is only honestly auditable when the state it conditions on is
+    /// observable (the i379 lesson: a gate you cannot see the inputs of cannot be
+    /// classified). Ordered by `gossip::MORAL_PANIC_PROPOSITIONS`.
+    pub fn moral_charge_baseline(
+        &self,
+    ) -> &[f64; crate::gossip::MORAL_PANIC_PROPOSITIONS as usize] {
+        &self.moral_charge_baseline
+    }
 }

@@ -33,6 +33,15 @@ fn collective_fear_amplifies_panic_legitimacy_damage() {
     calm.populate();
     let mut terrified = Simulation::new(make_config());
     terrified.populate();
+    // i381: the trigger now measures the charge against the population's own
+    // slow baseline, so this world needs a *history* before the injected charge
+    // — otherwise a population charged from its very first tick is simply a
+    // chronically charged population and has no sudden collapse to have (probe:
+    // a flat 0.65 world fires 67 times under the old absolute law, 0 under this
+    // one). 0.30 is a measured calm-world level; the injected 0.9 is then a
+    // genuine spike above it. This is scaffold for the amplifier under test.
+    calm.moral_charge_baseline = [0.30, 0.30];
+    terrified.moral_charge_baseline = [0.30, 0.30];
     // Pin every agent's council belief above the §7.2 trigger threshold
     // so the panic fires deterministically in both worlds at the same
     // tick (proposition 1 → Council).

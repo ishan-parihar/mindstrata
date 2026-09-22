@@ -120,14 +120,22 @@ These rules exist because we repeatedly paid for violating them:
    When a family has been re-anchored three times, the family is the fault, not the
    seeds: hold a fixed swept family and DISCOVER which members fire (i378), so a pacing
    shift moves which member carries the downstream legs instead of breaking the pin.
-9. **Measure a trigger's HEADROOM before diagnosing it (i378).** "The pin family moved"
-   and "the producer is starving" look identical from a firing count and want opposite
-   fixes. Sample the trigger's own inputs every tick and report the best score it ever
-   reached: a clearing margin of a few per-cent means the threshold is an **absolute
-   threshold on a moving distribution** (i378: firing legs cleared by 2.5–9.4%, one
-   swept seed missing by 0.5%) — the fault is the absolute form, whose organic
-   redesign is a **relative/anomaly** trigger against the population's own baseline.
-   A large negative margin means the producer is genuinely under-driven — revive it.
+9. **Measure a trigger's HEADROOM before diagnosing it (i378) — and always sample BOTH
+   SIDES (i381).** "The pin family moved" and "the producer is starving" look identical
+   from a firing count and want opposite fixes. Sample the trigger's own inputs every
+   tick and report the best score it ever reached: a clearing margin of a few per-cent
+   means the threshold is an **absolute threshold on a moving distribution** (i378:
+   firing legs cleared by 2.5–9.4%, one swept seed missing by 0.5%) — the fault is the
+   absolute form, whose organic redesign is a **relative/anomaly** trigger against the
+   population's own baseline. A large negative margin means the producer is genuinely
+   under-driven — revive it. **i381's correction:** a corpus of *firing* seeds alone
+   cannot size the redesign. i378 concluded "`panic_ratio` is the clean discriminator"
+   from crisis seeds only; the calm worlds are in fact *warm* (85% of ticks above that
+   leg) and always had been. Size a level bar from the gap between the highest
+   **must-not-fire** plateau and the lowest **must-fire** spike (i381: 0.4188 vs 0.5475
+   — a 1.31× gap whose geometric midpoint is the shipped floor), and state the
+   achievable margin honestly: the relative form changes *what the bar depends on*, it
+   does not manufacture headroom the signal does not contain.
 10. **Census GATE SELECTIVITY, not just constants (i379).** A threshold is only a defect
    when it stops discriminating, and the first two audit methods cannot see a gate whose
    *reachable band* sits entirely on one side of its bar. Measure the share of samples
@@ -429,6 +437,17 @@ Live queue, in order (evidence link per item):
    10-seed family and discover its firing members, so no further family renames. The
    queued follow-up is the organic redesign: a **relative/anomaly** trigger against the
    population's own charge baseline (sized by `i378_panic_threshold_headroom`).
+   **That redesign LANDED (i381):** the trigger is now
+   `avg_charge ≥ max(baseline × 1.25, 0.47) AND panic_ratio ≥ 0.30`, with a
+   per-proposition EWMA baseline (τ = 10 × the 300-tick panic cadence) that adopts its
+   first observation on a cold start. The floor 0.47 is the geometric midpoint of the
+   measured decision gap (`crisis/42` 0.4188 must-not-fire vs `crisis/11` 0.5475
+   must-fire); i378's knife-edge seed now clears by 16% instead of missing by 0.5%.
+   Two contracts re-anchored with attribution (attachment distress re-contracted to a
+   2/3 supermajority; the revolution family discovered as `{42,7,23}` by a 10-seed
+   sweep); goldens and snapshots byte-identical. **Also corrected by i381:** i378's
+   "`panic_ratio` is the clean discriminator" was an artefact of sampling crisis seeds
+   only — calm worlds are warm (85% of their ticks meet that leg).
 2. **A9 — the envelope at constant density** — re-scoped by i344: a **fidelity** policy
    (max co-location 19 → 4, contacted share halved), **not** throughput (+9.1%/−2.3%/+5.6%
    at N=96/144/192). A charter decision; do not sell it as speed.

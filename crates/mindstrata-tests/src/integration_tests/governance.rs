@@ -872,8 +872,20 @@ fn revolution_is_regime_change_not_repeat_loop() {
     // the real invariant: on every seed that fired, the council's Elder
     // holder at run end differs from the populate appointment when a
     // revolution occurred (regime change actually changed the office).
+    // i381 RE-ANCHOR (probe `i381_blast_radius`, part B) — the panic trigger's
+    // relative/anomaly law changed which crisis worlds break down politically,
+    // and this family has to be re-discovered rather than re-guessed. The sweep
+    // (pestilence @70K, meme mutation isolated, 10 seeds) measured revolutions
+    // per seed: 42→3, 7→1, 23→1, and 0 for {5, 11, 1, 99, 12345, 3, 13}. The old
+    // family {5, 11, 42} is now 0/0/3, which is why it broke. The family is
+    // re-anchored onto the discovered members {42, 7, 23} and the liveness bar
+    // stays at **≥2 of 3**: one whole member may move under a future pacing shift
+    // before the contract breaks (§4.8 — hold the family fixed, discover which
+    // members carry it). Note the members are NOT all panic-driven (seed 7 fires
+    // 1 revolution with 0 panics; seed 23 fires 1 with 6; seed 42 fires 3 with
+    // 25), so the family spans the producer's two routes into a coup.
     let mut family: Vec<(u64, usize, usize, u64)> = Vec::new();
-    for seed in [5u64, 11, 42] {
+    for seed in [42u64, 7, 23] {
         let mut sc = mindstrata_sim::scenario::Scenario::pestilence();
         sc.seed = seed;
         sc.ticks = 70000;

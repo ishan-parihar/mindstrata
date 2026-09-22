@@ -19,6 +19,14 @@
 //! the best (highest avg_charge) tick, whether both legs cleared, and the gap to
 //! the bar. Deterministic; no RNG; pure observation.
 //!
+//! **i381 note:** the bar this probe measures against is now the relative/anomaly
+//! law's *absolute floor* (`MORAL_PANIC_CHARGE_FLOOR`), because i381 replaced the
+//! old absolute 0.55 threshold — which is precisely what this probe indicted. The
+//! 0.55-based table lives on as the historical measurement in
+//! `docs/architecture/AP4-studio/evidence/i378_panic_trigger_knife_edge.md`; this
+//! probe now re-measures headroom against whatever bar ships, so it stays a
+//! reusable instrument rather than a snapshot of one law.
+//!
 //! Run: `cargo run --release -p mindstrata-benches --example i378_panic_threshold_headroom`
 
 use mindstrata_sim::scenario::Scenario;
@@ -45,7 +53,7 @@ fn legs(sim: &Simulation, prop: u64) -> Option<(f64, f64)> {
 }
 
 fn main() {
-    let bar_charge = mindstrata_social::gossip::MORAL_PANIC_CHARGE_THRESHOLD.to_f64();
+    let bar_charge = mindstrata_social::gossip::MORAL_PANIC_CHARGE_FLOOR.to_f64();
     println!("i378 — panic-trigger headroom, pestilence @20K (bar: avg_charge ≥ {bar_charge:.2}, panic_ratio ≥ 0.30)");
     println!(
         "\n{:>5} {:>4} {:>10} {:>11} {:>11} {:>9} {:>8}",

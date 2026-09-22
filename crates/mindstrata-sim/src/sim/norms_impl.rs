@@ -506,15 +506,29 @@ impl Simulation {
             // panic every single tick (previously ~19K events with legitimacy
             // pinned at 0.000). Between panics the belief charges decay toward
             // their resting level (see below), letting the crisis resolve.
-            const MORAL_PANIC_COOLDOWN: u64 = 300;
             let panic_cooldown_ok =
-                tick_u64.saturating_sub(self.last_moral_panic_tick) >= MORAL_PANIC_COOLDOWN;
+                tick_u64.saturating_sub(self.last_moral_panic_tick) >= gossip::MORAL_PANIC_COOLDOWN;
 
             // Check propositions 0 ("the_market_is_fair") and 1 ("the_council_protects_us")
             let belief_refs: Vec<&[Belief]> =
                 self.agents.iter().map(|a| a.beliefs.as_slice()).collect();
-            for prop_id in 0..=1 {
-                let mut panic_result = gossip::detect_moral_panic(&belief_refs, prop_id);
+            for prop_id in 0..gossip::MORAL_PANIC_PROPOSITIONS {
+                let idx = prop_id as usize;
+                // i381: the gate reads the baseline the *population's own history*
+                // established — folded AFTER this read, so a tick is judged against
+                // its past and never against itself.
+                let baseline = gossip::anomaly_baseline_fixed(self.moral_charge_baseline[idx]);
+                let mut panic_result = gossip::detect_moral_panic(&belief_refs, prop_id, baseline);
+                // Fold the observed mean charge into the slow baseline. `tau` is
+                // derived from the panic cadence, not guessed independently, so the
+                // trigger's two timescales stay coherent if the cadence moves.
+                let tau =
+                    (gossip::MORAL_PANIC_COOLDOWN * gossip::MORAL_PANIC_BASELINE_COOLDOWNS) as f64;
+                self.moral_charge_baseline[idx] = gossip::anomaly_baseline_fold(
+                    self.moral_charge_baseline[idx],
+                    panic_result.avg_charge,
+                    tau,
+                );
                 if panic_result.triggered && panic_cooldown_ok {
                     self.last_moral_panic_tick = tick_u64;
                     tracing::warn!(
@@ -604,7 +618,7 @@ impl Simulation {
 
             // §7.2: Let panic resolve — decay the emotional charge of the
             // affected propositions so the loop does not re-trigger instantly.
-            if tick_u64.saturating_sub(self.last_moral_panic_tick) < MORAL_PANIC_COOLDOWN
+            if tick_u64.saturating_sub(self.last_moral_panic_tick) < gossip::MORAL_PANIC_COOLDOWN
                 && tick_u64.saturating_sub(self.last_moral_panic_tick) > 0
             {
                 let post_panic_charge = Fixed::from_f64(0.1);
