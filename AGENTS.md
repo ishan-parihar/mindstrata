@@ -49,6 +49,15 @@ state, no re-summarizing, no clarifying questions.
   `--all-targets`, so test-cfg code in crates other than the one being built can hide
   warnings. Closing it requires clearing the ~14 existing `mindstrata-tests` test-cfg
   warnings first — its own tooling iteration, not a drive-by.
+- **Test-population policy (charter, i368): the perf budget is a CEILING, not a test mandate.**
+  The DC-3 P0 budget (122/1088/5961 µs/tick @ N=12/48/96) bounds *cost*; it does not
+  dictate which N a test runs at. Every test and probe picks **the smallest N that
+  exhibits the phenomenon under test** (a gossip pin needs N=12; a settlement/trade pin
+  needs N≥144). The default matrix is **{12, 48, 144}** — three canonical tiers (village /
+  large village / town edge) — with N=256 reserved as the **town-scale stress tier**
+  (envelope headroom measured at i359). Do not raise a test's N for "more realism" when a
+  smaller N demonstrates the same contract; do not lower it below the phenomenon's floor
+  (that is the unreachable-gate hazard, §5). Perf gates keep the N=12/48/96 envelope.
 - Full suite is release-mode (`--release`); debug-mode runs of long-horizon tests take 10–20×.
 - Snapshot drift is reviewed via `cargo insta test -p mindstrata-tests --release`, then
   `cargo insta accept --all` **only with documented evidence** of why the shift is expected.

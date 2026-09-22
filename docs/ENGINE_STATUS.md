@@ -4,7 +4,7 @@ description: "The authoritative current-state description of the mindstrata engi
 type: Authority
 status: AUTHORITY
 scope: "engine behaviour, architecture, realism, scale"
-reconciled_commit: 8199e64
+reconciled_commit: da4108f
 created: 2026-09-22
 owner: SIM + PROD (AP4 Studio)
 ---
@@ -159,9 +159,12 @@ housing spread i340/i345, the i352 scan removal, and i356 — re-measured at i35
 
 `ENVELOPE_EXPANDED_2_7X` — the N=96 charter budget covers **N=256**. Liveness holds at
 the cap (i359: N=256 health 0.777, hunger 0.045, zero-coin 0, all partnered). Hard
-demographic cap: `MAX_POPULATION = 256`. World default fixed **32×32**; a
-constant-density law (`side(N) = max(16, ceil(√(21.33·N)))`, i344) exists but is a
-*fidelity* option, not a speed one. The rolling event buffer is **bounded** by i327
+demographic cap: `MAX_POPULATION = 256`. World size is operator-set via `SimConfig`
+(default **16×16**; the charter/perf harness uses 32×32 at the N=48 tier; the density law
+above drives the scale probes) — the density law (i344) is a *fidelity* option, not a
+speed one. **Test-population policy (i368):** the budget is a **ceiling**, not a test
+mandate — every test/probe runs **the smallest N that exhibits its phenomenon**, with the
+default matrix **{12, 48, 144}** and N=256 reserved as the town-scale stress tier. The rolling event buffer is **bounded** by i327
 (amortized bulk drop, `MAX_EVENTS = 262_144`, peak ≈28 MiB), so **long horizons are
 available now** — i354 measured a 250 000-tick village run at 55.3 s (N=12→36). The
 `VecDeque` conversion stays deferred; its only remaining trigger is jitter-free ticks.
