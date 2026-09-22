@@ -357,10 +357,12 @@ Live queue, in order (evidence link per item):
 3. **Idle — the last dead action** — `Idle` still wins 0 arbitrations (its only relief is
    0.05 fatigue/tick). Same design-act shape as the A8 `Wander` revival (i351): decide the
    semantics, give it a driver, expect a behavioural sweep. `A8` itself is CLOSED.
-4. **§17 tier-gate residual** — i348 already wired the reclassification to honest
-   `contacted_degrees`; what remains is cosmetic + a dead predicate: the parameter is still
-   named `relationship_count`, and `AgentTier::runs_action_selection()` has **zero production
-   call sites** (i316). i328 measured the payoff at ≈5% — a correctness item, not perf.
+4. **§17 tier-gate residual** — i355 closed the cosmetic half (the stale
+   `relationship_count` parameter is renamed `contacted_degree`, and the unwired
+   `runs_full_biology()` / `runs_action_selection()` predicates are documented as recorded
+   debt, not behaviour). The remaining half is a **decision, not a cleanup**: wire the
+   biology/action LOD rungs (behavioural, sweep-carrying, i328 measured the whole gate
+   payoff at ≈5%) or delete the predicates. The *cognitive* rungs already work.
 5. **The sparse relationship store is DEMOTED, not queued** — i338 (ω(N²) is a housing
    artifact), i344 (world area is fidelity, not throughput), and i350 (the contacted graph
    re-saturates 13.3%→73.7% by 40K) all measured it as a ≤2× constant decaying toward 1.

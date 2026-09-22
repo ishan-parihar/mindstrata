@@ -107,6 +107,13 @@ pub enum AgentTier {
 
 impl AgentTier {
     /// Does this tier run the full biological update (endocrine, metabolism, cardiovascular, etc.)?
+    ///
+    /// **RECORDED DEBT (i316, i355) — NOT CONSUMED.** The biology pass runs for
+    /// every tier today, so this predicate describes the *intended* LOD rung,
+    /// not current behaviour. Do not gate on it expecting a saving: i328
+    /// measured the whole tier-gate payoff at ≈5%. Wiring it (or deleting it)
+    /// is its own behavioural iteration; until then this is a false affordance
+    /// and is documented as such deliberately.
     pub fn runs_full_biology(&self) -> bool {
         matches!(self, Self::Focal)
     }
@@ -171,6 +178,12 @@ impl AgentTier {
     }
 
     /// Does this tier run action selection (utility AI)?
+    ///
+    /// **RECORDED DEBT (i316, i355) — NOT CONSUMED.** Action selection runs for
+    /// every tier (the census `i346` shows Background agents still take
+    /// decisions), so this predicate describes intended LOD, not behaviour.
+    /// Wiring it would silently freeze Background agents mid-action; treat any
+    /// future gate on it as a behavioural change requiring its own sweep.
     pub fn runs_action_selection(&self) -> bool {
         matches!(self, Self::Focal | Self::Secondary)
     }
@@ -581,13 +594,17 @@ impl AgentTierState {
     ///
     /// Narrative importance rises when:
     /// - agent is in a faction or institution
-    /// - agent has many relationships
+    /// - agent has many contacted relationships (i348: honest degree)
     /// - agent is experiencing strong emotions
     /// - agent has recent story-worthy events
     pub fn update_narrative_importance(
         &mut self,
         has_institutional_role: bool,
-        relationship_count: usize,
+        // i355: renamed from `relationship_count` — i348 wired this to the
+        // honest `contacted_degrees()` (users with real interaction state),
+        // so the old name described a value it no longer received. Purely a
+        // naming fix; the caller has always passed positional values.
+        contacted_degree: usize,
         emotional_intensity: Fixed,
         recent_event_count: u32,
     ) {
@@ -596,7 +613,7 @@ impl AgentTierState {
         } else {
             Fixed::ZERO
         };
-        let network_bonus = (Fixed::from_f64(relationship_count as f64) * Fixed::from_f64(0.02))
+        let network_bonus = (Fixed::from_f64(contacted_degree as f64) * Fixed::from_f64(0.02))
             .min(Fixed::from_f64(0.2));
         let emotion_bonus = emotional_intensity * Fixed::from_f64(0.15);
         let event_bonus = (Fixed::from_f64(recent_event_count as f64) * Fixed::from_f64(0.05))
