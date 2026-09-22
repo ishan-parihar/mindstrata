@@ -354,21 +354,28 @@ Live queue, in order (evidence link per item):
 2. **A9 — the envelope at constant density** — re-scoped by i344: a **fidelity** policy
    (max co-location 19 → 4, contacted share halved), **not** throughput (+9.1%/−2.3%/+5.6%
    at N=96/144/192). A charter decision; do not sell it as speed.
-3. **Idle — CLOSED (i356)** — the last dead action is live: a `Play` recreation driver
-   gated on need quietude, `MotiveCategory::Play → Idle` urgency wiring, and a relief
-   write-back (the motive had zero relief sites). `Idle` now wins 0.01%–3.67% of
-   decisions across nine runs (was 0 everywhere). `A8` (Wander) is likewise CLOSED.
-4. **§17 tier-gate residual** — i355 closed the cosmetic half (the stale
+3. **Wealth tail — progressive tax (queued)** — i358 measured the distribution as
+   **bounded** (Gini plateaus ~0.65, no destitution) but the tail runs: one agent holds
+   ~50% of the village's coin and compounds ~3× faster than the median.
+   `Institution::collect_taxes` is **proportional** (`wealth × rate`), i.e.
+   scale-invariant — provably inert on the Gini — so the fix is a surcharge above the
+   membership median inside `collect_taxes`. Behavioural, sweep-carrying; needs its own
+   probe + classified re-anchor sweep.
+4. **Closed:** `Idle` (i356 — the `Play` recreation driver made the last dead action
+   live, 0.01%–3.67% of decisions) and `A8` `Wander` (i351). **Refuted/closed as
+   premises:** locomotion pace (i357 — `Move` already steps one tile per tick), the
+   dual-store *migration* (i353/i356 — redundancy, not a liveness fault).
+5. **§17 tier-gate residual** — i355 closed the cosmetic half (the stale
    `relationship_count` parameter is renamed `contacted_degree`, and the unwired
    `runs_full_biology()` / `runs_action_selection()` predicates are documented as recorded
    debt, not behaviour). The remaining half is a **decision, not a cleanup**: wire the
    biology/action LOD rungs (behavioural, sweep-carrying, i328 measured the whole gate
    payoff at ≈5%) or delete the predicates. The *cognitive* rungs already work.
-5. **The sparse relationship store is DEMOTED, not queued** — i338 (ω(N²) is a housing
+6. **The sparse relationship store is DEMOTED, not queued** — i338 (ω(N²) is a housing
    artifact), i344 (world area is fidelity, not throughput), and i350 (the contacted graph
    re-saturates 13.3%→73.7% by 40K) all measured it as a ≤2× constant decaying toward 1.
    Do **not** build it; re-open only against new horizon evidence.
-6. **Deferred with triggers** (do not pull early): `VecDeque<SimEvent>` — **i354 refuted the
+7. **Deferred with triggers** (do not pull early): `VecDeque<SimEvent>` — **i354 refuted the
    horizon trigger** (>250K-tick runs already work; i327 bounded the buffer), so its only
    remaining trigger is *jitter-free ticks*; recent-claims index (>250K ticks); H5
    founder-variance shaping (needs larger N **and** a coordinated re-anchor sweep);

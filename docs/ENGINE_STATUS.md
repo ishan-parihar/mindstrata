@@ -184,7 +184,9 @@ it is authoritative for *work*, this section is the summary.
 3. **§17 tier-gate residual** — cosmetic rename + `runs_action_selection()` has zero call sites (i355 documented as recorded debt).
 4. **Per-edge pass pacing** — ~58% of the tick; remaining reduction is behavioural (§17.3 dirty-window pacing).
 
-**Closed (do not re-open without new evidence):** `Idle` (i356 — the `Play` recreation driver made the last dead action live, 0.01%–3.67% of decisions), and the A8 `Wander` driver (i351).
+**Queue additions:** the **wealth-tail progressive tax** (i358 — the distribution is bounded at ~0.65 and nobody is destitute, but `collect_taxes` is proportional and scale-invariant, so it cannot dent the one agent holding ~50% of the coin; fix is a surcharge above the membership median, behavioural + sweep-carrying) and **multi-settlement at N≥192** (the city-path experiment on the i344 density world law).
+
+**Closed (do not re-open without new evidence):** `Idle` (i356 — the `Play` recreation driver made the last dead action live, 0.01%–3.67% of decisions), the A8 `Wander` driver (i351), the **locomotion-pace** premise (i357 — `Move` already steps one tile per tick; the limiters are the anger gate and co-location/A9), and the dual-store **migration** (i353/i356 — architectural redundancy, not a liveness fault).
 
 **Deferred with triggers:** event `VecDeque` (>250K ticks), recent-claims index (same),
 H5 founder-variance shaping (needs larger N + coordinated sweep).
