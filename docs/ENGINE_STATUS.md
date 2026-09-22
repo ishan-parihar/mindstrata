@@ -205,9 +205,14 @@ H5 founder-variance shaping (needs larger N + coordinated sweep).
 village-wide synchronized phase, the dual-store split (the v1 trust *saturation* half is
 RESOLVED by i376 — the row converges onto the dyadic store; the residual is that v1's
 interaction gains stay ~10× v2's, `record_positive` ×0.02, leaving a +0.06–0.08 offset),
-the panic channel's firing density (i376: 3/10 swept crisis seeds vs 3/5 before the trust
-field de-saturated — its residual dependence on the wide trust range is queued as its own
-iteration),
+the moral-panic trigger being an **absolute threshold on a moving distribution** (i378: probe
+`i378_panic_threshold_headroom` measured every firing leg clearing the bar by only 2.5–9.4%
+with a swept seed missing by 0.5% — §4.5's knife-edge class, the epidemic R0≈1 case). The
+pin fragility is now structural: both panic tests hold a fixed 10-seed crisis family and
+discover its firing members, so a pacing shift moves which member carries the downstream
+legs instead of renaming the family (i343/i351/i376 each renamed). The principled organic
+redesign — a RELATIVE/anomaly-based trigger against the population's own charge baseline —
+is queued with the headroom table as its sizing evidence,
 the proportional council dividend's residual hoard (RESOLVED by i370 — offices, not rosters: the hoard equilibrium is bounded by the 3-member tax base; i374's legitimacy coupling additionally makes a resented council spend more),
 and the LOD tier being **dark in calm towns** (i367: Background 0.0 % of agent-ticks at N≥96 calm, 7.5–13.9 % under crisis — a crisis modulator, not a scale lever).
 

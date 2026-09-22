@@ -117,6 +117,17 @@ These rules exist because we repeatedly paid for violating them:
    values. Re-anchoring one is legitimate **only** with a runnable sweep (i376: 10-seed
    panic sweep `{7,11,46}`→`{7,1,23}`; 70-seed golden-window sweep back to canonical seed
    42) and the mechanism recorded. Never re-anchor a family from a single failing run.
+   When a family has been re-anchored three times, the family is the fault, not the
+   seeds: hold a fixed swept family and DISCOVER which members fire (i378), so a pacing
+   shift moves which member carries the downstream legs instead of breaking the pin.
+9. **Measure a trigger's HEADROOM before diagnosing it (i378).** "The pin family moved"
+   and "the producer is starving" look identical from a firing count and want opposite
+   fixes. Sample the trigger's own inputs every tick and report the best score it ever
+   reached: a clearing margin of a few per-cent means the threshold is an **absolute
+   threshold on a moving distribution** (i378: firing legs cleared by 2.5–9.4%, one
+   swept seed missing by 0.5%) — the fault is the absolute form, whose organic
+   redesign is a **relative/anomaly** trigger against the population's own baseline.
+   A large negative margin means the producer is genuinely under-driven — revive it.
 
 ## 5. Known Systemic Hazards
 
@@ -391,9 +402,13 @@ Live queue, in order (evidence link per item):
    0.5). Remaining readers: economy, norms_impl, household, births_deaths — each
    behavioural with its own probe. Marriage pass REFUTED (i353). **Queued next from i376's
    evidence:** v1's interaction gains remain ~10× v2's (`record_positive` ×0.02), leaving
-   a +0.06–0.08 offset; and the panic channel's firing density halved (3/5 → 3/10 swept
-   seeds) as the trust field de-saturated — its residual dependence on the wide trust
-   range is its own iteration, not a pin to move.
+   a +0.06–0.08 offset. **The panic-channel item is CLOSED as diagnosed (i378):** the
+   firing-density move was not a dead producer — the trigger is an ABSOLUTE threshold
+   sitting inside its own input distribution (firing legs clear by 2.5–9.4%, one swept
+   seed missing by 0.5%), i.e. §4.5 knife-edge debt. Both panic tests now hold a fixed
+   10-seed family and discover its firing members, so no further family renames. The
+   queued follow-up is the organic redesign: a **relative/anomaly** trigger against the
+   population's own charge baseline (sized by `i378_panic_threshold_headroom`).
 2. **A9 — the envelope at constant density** — re-scoped by i344: a **fidelity** policy
    (max co-location 19 → 4, contacted share halved), **not** throughput (+9.1%/−2.3%/+5.6%
    at N=96/144/192). A charter decision; do not sell it as speed.

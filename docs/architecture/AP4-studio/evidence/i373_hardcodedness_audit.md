@@ -176,3 +176,46 @@ round was to **probe a store and ask whether its equilibrium is doing work** (do
 §4.3). That found a 14×-mistuned gain, a saturated reader family, and two divergent-gain
 constants — none of which a `const` census would surface, because they are *numbers inside
 call sites*, not named constants. Future refreshes should alternate the two methods.
+
+---
+
+## Refresh (i378) — the panic threshold, and a knife-edge that no earlier class held
+
+The i373 census enumerated 150+ `const` sites; this one was in the list but unclassified,
+and i378 shows the reason classification alone would not have caught its *problem*.
+
+### New Class B candidate — the panic trigger's threshold
+
+`MORAL_PANIC_CHARGE_THRESHOLD = 0.55` + `panic_ratio ≥ 0.30` (`gossip.rs`) — the biggest
+organic candidate the first two passes missed. It is an **absolute** threshold on a
+population-level distribution, which is why the seed family that registers moves on every
+pacing shift (i343, i351, i376; i378 measured the firing legs clearing by only 2.5–9.4%
+with one swept seed missing by 0.5%).
+
+**The organic form is a relative / anomaly-based trigger:** a panic when the population's
+charge is anomalous against *its own* baseline (with an absolute floor against quiet-world
+noise). That satisfies the i373 test literally — the state variable that already measures
+the right thing is the population's own charge history — and, unlike the absolute form, it
+is **structurally free of knife-edge**, because a relative threshold adapts to the
+distribution it is testing instead of sitting inside it. Queued as its own iteration
+(behavioural, sweep-carrying); sized by `i378_panic_threshold_headroom`.
+
+### The class this reveals: a new category, not a Class C
+
+The existing taxonomy asks "is there a principled law that derives this from state?" It did
+not carry a slot for *"the number is fine, but it is an absolute threshold on an
+endogenous distribution, so its effective operating point drifts with the distribution."*
+That is a distinct defect class — **threshold-on-a-moving-distribution** — and its symptom
+is a pin family that keeps moving (the §4.5 knife-edge family), which is easy to
+misdiagnose as "the producer died" and repair in the wrong direction.
+
+**Rule of thumb added to the refresh above:** when a pin's *membership* keeps changing but
+the mechanism demonstrably still fires, measure the trigger's **headroom** before touching
+anything. 2–9% margin ⇒ the threshold is the fault (endogenize it, or restructure the
+contract); a large negative margin ⇒ the producer is starved (revive it). The two look
+identical from a firing count and want opposite fixes.
+
+Note that neither the `const` census nor the store-equilibrium probe would have produced
+this item alone: the census lists the constant, and the probe (i376) surfaced the symptom
+(the re-anchored family) — it took both, plus a third measurement (headroom) to classify it
+correctly.
