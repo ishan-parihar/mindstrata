@@ -170,15 +170,15 @@ available now** — i354 measured a 250 000-tick village run at 55.3 s (N=12→3
 |---|---|---|
 | **Village** (10–50) | ✅ yes, comfortably — the calibrated regime | 2,470 tps @48 |
 | **Small town** (up to ~256) | ✅ yes | **310 tps @192, 170 tps @256**; cap 256; capacity is no longer the blocker |
-| **Multi-settlement town** | ❌ not yet | i359: sim capacity is there but the **world is one settlement** — the Vogel spiral places houses uniformly, so `auto_partition_polities` merges everything above gap 8. Needs a **clustered world generator** (queued), not more throughput |
+| **Multi-settlement town** | ✅ yes (structure) | i360 landed the **clustered world generator**: above 24 houses the world places `clamp(houses/16, 1, 4)` village centres, so N=192 → **3** and N=256 → **4** settlements at the natural gap (was 1), each with its own live polity holon. Calibrated range (<25 houses) byte-identical. Remaining: cross-polity diffusion liveness is unmeasured |
 | **City** (10³–10⁴) | ❌ no | needs the sparse relationship store (**demoted** by i338/i344/i350), multi-settlement orchestration, larger world; the Ω(N²) relationship floor is structural |
 | **Country** | ❌ no | requires hierarchical polities (the per-polity holon is only a seed) + regional aggregation |
 | **Planet** | ❌ no | requires a different scaling architecture (partitioning, LOD at every layer, distributed execution) |
 
-**Verdict:** mindstrata today is an exquisitely detailed **village** simulator whose
-**capacity already reaches a 256-agent town** (i359) — what it lacks at town scale is
-the *spatial structure* (one settlement, not several) and, beyond that, the
-city/country/planet architecture.
+**Verdict:** mindstrata today is an exquisitely detailed simulator that runs a
+**256-agent, multi-settlement town** (i359 capacity + i360 structure) — what it lacks
+beyond that is the city/country/planet architecture (the Ω(N²) relationship floor is
+structural, and hierarchical polities are only a seed).
 
 ## 9. Calibration debt (the honest ledger)
 
@@ -190,9 +190,9 @@ it is authoritative for *work*, this section is the summary.
 3. **§17 tier-gate residual** — cosmetic rename + `runs_action_selection()` has zero call sites (i355 documented as recorded debt).
 4. **Per-edge pass pacing** — ~58% of the tick; remaining reduction is behavioural (§17.3 dirty-window pacing).
 
-**Queue additions:** the **wealth-tail progressive tax** (i358 — the distribution is bounded at ~0.65 and nobody is destitute, but `collect_taxes` is proportional and scale-invariant, so it cannot dent the one agent holding ~50% of the coin; fix is a surcharge above the membership median, behavioural + sweep-carrying) and the **clustered world generator** (i359 — sim capacity already reaches N=256, but the world is one uniform settlement, so multi-settlement orchestration has nothing to orchestrate; needs multiple village centres with intra-village jitter, the i339/i340 blast class).
+**Queue additions:** the **wealth-tail progressive tax** (i358 — the distribution is bounded at ~0.65 and nobody is destitute, but `collect_taxes` is proportional and scale-invariant, so it cannot dent the one agent holding ~50% of the coin; fix is a surcharge above the membership median, behavioural + sweep-carrying) and **cross-polity diffusion liveness at town scale** (i360 — the clustered world now forms 3–4 villages, so measure whether i299 `system_trade_diffusion` actually moves genesis memes across village boundaries).
 
-**Closed (do not re-open without new evidence):** `Idle` (i356 — the `Play` recreation driver made the last dead action live, 0.01%–3.67% of decisions), the A8 `Wander` driver (i351), the **locomotion-pace** premise (i357 — `Move` already steps one tile per tick; the limiters are the anger gate and co-location/A9), and the dual-store **migration** (i353/i356 — architectural redundancy, not a liveness fault).
+**Closed (do not re-open without new evidence):** the **clustered world generator** (i360 — landed: N=192→3, N=256→4 settlements, per-polity holons live, calibrated range byte-identical), `Idle` (i356 — the `Play` recreation driver made the last dead action live, 0.01%–3.67% of decisions), the A8 `Wander` driver (i351), the **locomotion-pace** premise (i357 — `Move` already steps one tile per tick; the limiters are the anger gate and co-location/A9), and the dual-store **migration** (i353/i356 — architectural redundancy, not a liveness fault).
 
 **Deferred with triggers:** event `VecDeque` (>250K ticks), recent-claims index (same),
 H5 founder-variance shaping (needs larger N + coordinated sweep).

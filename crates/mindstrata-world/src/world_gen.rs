@@ -9,6 +9,74 @@ use mindstrata_core::id::EntityId;
 use mindstrata_core::rng::{RngStream, RngStreams};
 use rand::Rng;
 
+/// i360: find the first free (non-water, site-less) tile on a golden-angle ray
+/// radiating from `(base_x, base_y)` — attempt 0 is the candidate itself, later
+/// attempts widen by `step0 + attempt·width`. A bounded walk that never
+/// consumes RNG so placement stays a pure function of the world stream.
+fn free_tile_near(
+    world: &World,
+    base_x: i32,
+    base_y: i32,
+    golden_angle: f64,
+    attempts: u32,
+    width: f64,
+    step0: f64,
+    reserved: &[(i32, i32)],
+) -> Option<(i32, i32)> {
+    for attempt in 0..attempts {
+        let (dx, dy) = if attempt == 0 {
+            (0, 0)
+        } else {
+            let a = f64::from(attempt) * golden_angle;
+            let step = step0 + f64::from(attempt) * width;
+            (
+                (a.cos() * step).round() as i32,
+                (a.sin() * step).round() as i32,
+            )
+        };
+        let (x, y) = (base_x + dx, base_y + dy);
+        let free = world
+            .tile(x, y)
+            .is_some_and(|t| t.site.is_none() && !matches!(t.terrain, Terrain::Water))
+            && !reserved.contains(&(x, y));
+        if free {
+            return Some((x, y));
+        }
+    }
+    None
+}
+
+/// i360: the last-resort placement — the free tile nearest `(base_x, base_y)
+/// (Manhattan; ties broken by scan order, y then x). Deterministic and total
+/// (returns `None` only when the world has NO free tile). A golden-angle walk
+/// samples a spiral and can miss sparse free tiles in a cramped world, so this
+/// guarantees i344's invariant — one tile per house, always — while the local
+/// walk keeps placement village-shaped in every normal case.
+fn nearest_free_tile(
+    world: &World,
+    base_x: i32,
+    base_y: i32,
+    reserved: &[(i32, i32)],
+) -> Option<(i32, i32)> {
+    let mut best: Option<(i32, (i32, i32))> = None;
+    for y in 0..world.height as i32 {
+        for x in 0..world.width as i32 {
+            let free = world
+                .tile(x, y)
+                .is_some_and(|t| t.site.is_none() && !matches!(t.terrain, Terrain::Water))
+                && !reserved.contains(&(x, y));
+            if !free {
+                continue;
+            }
+            let d = (x - base_x).abs() + (y - base_y).abs();
+            if best.is_none_or(|(bd, _)| d < bd) {
+                best = Some((d, (x, y)));
+            }
+        }
+    }
+    best.map(|(_, p)| p)
+}
+
 /// Place a site at (x, y) if the coordinates are in bounds.
 fn place_site(world: &mut World, x: i32, y: i32, site: Site) -> bool {
     if let Some(tile) = world.tile_mut(x, y) {
@@ -57,6 +125,25 @@ pub fn houses_for_population(agents: u32) -> u32 {
 /// byte-identical for every calibrated run and the packing governs only
 /// unexplored territory (N ≥ 116).
 pub const MAX_RING_HOUSE_COUNT: u32 = 24;
+
+/// i360: the number of distinct village centres the large-village layout
+/// places houses around.
+///
+/// i359 measured the fault this rule fixes: i345's single Vogel spiral spreads
+/// houses *evenly* over the whole disc, so at town scale the mean inter-house
+/// spacing (~9 tiles at N=192/64²) is below any partition threshold and
+/// `auto_partition_polities` collapses the whole world into **one settlement** —
+/// the i296/i297/i298/i299 multi-setlement machinery has nothing to orchestrate.
+///
+/// One centre per ~16 houses keeps each settlement's diameter well under the
+/// usual partition gap while separating centres by `~2·ring_span/K`, so a large
+/// village becomes a **town of K villages**. Capped at 4 so the centres fit on a
+/// ring with a generous local radius even in the charter's 32×32 world.
+/// Floored at 1: counts ≤ 16 route through the unchanged i345 spiral (byte-
+/// identical), so every calibrated run (< 25 houses) is untouched.
+pub fn cluster_count_for(houses: u32) -> u32 {
+    (houses / 16).clamp(1, 4)
+}
 
 /// Generate a small village world with the historical 8 houses.
 pub fn generate_village(world: &mut World, rng: &mut RngStreams) {
@@ -203,42 +290,97 @@ pub fn generate_village_with_houses(world: &mut World, rng: &mut RngStreams, hou
         // tile is found, so the house count (and therefore `population.rs`'s
         // round-robin) is honoured at every N.
         const GOLDEN_ANGLE: f64 = 2.399_963_229_728_653;
-        for i in 0..house_count {
-            let frac = (f64::from(i) + 0.5) / f64::from(house_count);
-            let angle = f64::from(i) * GOLDEN_ANGLE + world_rng.random_range(-0.2..0.2);
-            let radius = ring_span * frac.sqrt();
-            let base_x = center_x + (angle.cos() * radius).round() as i32;
-            let base_y = center_y + (angle.sin() * radius).round() as i32;
-            for attempt in 0..96u32 {
-                // attempt 0 is the spiral slot itself; later attempts widen
-                // along a golden-angle ray (a ±1 nudge would just stack houses
-                // on adjacent tiles, re-creating the ring's 1-tile minimum).
-                let (dx, dy) = if attempt == 0 {
-                    (0, 0)
-                } else {
-                    let a = f64::from(attempt) * GOLDEN_ANGLE;
-                    let step = 1.0 + f64::from(attempt) * 0.35;
-                    (
-                        (a.cos() * step).round() as i32,
-                        (a.sin() * step).round() as i32,
-                    )
-                };
-                let (x, y) = (base_x + dx, base_y + dy);
-                let free = world
-                    .tile(x, y)
-                    .is_some_and(|t| t.site.is_none() && !matches!(t.terrain, Terrain::Water));
-                if free {
+        let clusters = cluster_count_for(house_count);
+        if clusters <= 1 {
+            for i in 0..house_count {
+                let frac = (f64::from(i) + 0.5) / f64::from(house_count);
+                let angle = f64::from(i) * GOLDEN_ANGLE + world_rng.random_range(-0.2..0.2);
+                let radius = ring_span * frac.sqrt();
+                let base_x = center_x + (angle.cos() * radius).round() as i32;
+                let base_y = center_y + (angle.sin() * radius).round() as i32;
+                if let Some((x, y)) =
+                    free_tile_near(world, base_x, base_y, GOLDEN_ANGLE, 96, 0.35, 1.0, &[])
+                {
                     if place_site(world, x, y, house_site(i, site_id)) {
                         site_id += 1;
                     }
-                    break;
+                }
+                // If no free tile was found the house is dropped, as the ring path
+                // already does for out-of-bounds candidates; the spiral's coverage
+                // makes that unreachable in practice, and `population.rs`
+                // round-robins over whatever was placed. The new
+                // `large_villages_place_one_house_per_tile` pin guards the count.
+            }
+        } else {
+            // i360: clustered multi-village layout. `clusters` village centres
+            // sit evenly on a ring of radius `centre_ring` (analytic — consumes
+            // no World draws), and each centre's house share packs onto a LOCAL
+            // Vogel spiral of radius `local_r`, so intra-village spacing is
+            // small while the villages stand `~2·centre_ring·sin(π/K)` apart.
+            // The nudge search is bounded to the local disc so a house can never
+            // drift into a neighbouring village and blur the partition.
+            let k = clusters as usize;
+            let centre_ring = (ring_span * 0.5).max(5.0);
+            let local_r = (ring_span / (clusters as f64 * 1.6)).clamp(3.0, 9.0);
+            // Reserve the four civic tiles (placed after the houses) so a house
+            // can never occupy one and be overwritten — the i344 invariant is one
+            // tile per house, and a civic site must not steal a house tile.
+            let reserved = [
+                (center_x - 6, center_y),
+                (center_x, (center_y + 5).min(h - 1)),
+                ((center_x + 5).min(w - 1), center_y),
+                (center_x, center_y.saturating_sub(5)),
+            ];
+            for i in 0..house_count {
+                let c = (i as usize * k / house_count as usize).min(k - 1);
+                let start = c as u32 * house_count / clusters;
+                let end = (c as u32 + 1) * house_count / clusters;
+                let n_c = (end - start).max(1);
+                let idx = i - start;
+                let frac = (f64::from(idx) + 0.5) / f64::from(n_c);
+                let centre_angle = c as f64 * 2.0 * std::f64::consts::PI / clusters as f64;
+                let cx = center_x + (centre_angle.cos() * centre_ring).round() as i32;
+                let cy = center_y + (centre_angle.sin() * centre_ring).round() as i32;
+                let angle = f64::from(idx) * GOLDEN_ANGLE + world_rng.random_range(-0.2..0.2);
+                let radius = local_r * frac.sqrt();
+                let base_x = cx + (angle.cos() * radius).round() as i32;
+                let base_y = cy + (angle.sin() * radius).round() as i32;
+                // Primary: a LOCAL walk that keeps the house inside its village
+                // (a wider walk would blur the settlement partition). Fallback:
+                // a wide walk so the count is always honoured — i344's invariant
+                // (fewer house tiles than houses breaks `population.rs`'s
+                // round-robin). The fallback fires only in cramped synthetic
+                // worlds (e.g. 48 houses in a 32×32 bound); at density-law
+                // sizes the local walk always lands.
+                let found = free_tile_near(
+                    world,
+                    base_x,
+                    base_y,
+                    GOLDEN_ANGLE,
+                    24,
+                    0.30,
+                    0.6,
+                    &reserved,
+                )
+                .or_else(|| {
+                    free_tile_near(
+                        world,
+                        base_x,
+                        base_y,
+                        GOLDEN_ANGLE,
+                        160,
+                        0.6,
+                        1.0,
+                        &reserved,
+                    )
+                })
+                .or_else(|| nearest_free_tile(world, base_x, base_y, &reserved));
+                if let Some((x, y)) = found {
+                    if place_site(world, x, y, house_site(i, site_id)) {
+                        site_id += 1;
+                    }
                 }
             }
-            // If no free tile was found the house is dropped, as the ring path
-            // already does for out-of-bounds candidates; the spiral's coverage
-            // makes that unreachable in practice, and `population.rs`
-            // round-robins over whatever was placed. The new
-            // `large_villages_place_one_house_per_tile` pin guards the count.
         }
     }
 
@@ -393,6 +535,31 @@ mod tests {
         assert!(site_kinds.contains(&SiteKind::Well));
         assert!(site_kinds.contains(&SiteKind::Market));
         assert!(site_kinds.contains(&SiteKind::Temple));
+    }
+
+    /// i360: the cluster rule must be inert through the entire calibrated
+    /// range (≤ 24 houses → 1 centre) and scale one centre per ~16 houses above
+    /// it, capped at 4 so the centres fit even in the charter's 32×32 world.
+    #[test]
+    fn cluster_count_matches_house_bands() {
+        for (houses, expected) in [
+            (8u32, 1u32),
+            (12, 1),
+            (24, 1),
+            (31, 1),
+            (32, 2),
+            (47, 2),
+            (48, 3),
+            (63, 3),
+            (64, 4),
+            (200, 4),
+        ] {
+            assert_eq!(
+                cluster_count_for(houses),
+                expected,
+                "cluster_count_for({houses})"
+            );
+        }
     }
 
     #[test]

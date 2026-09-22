@@ -367,6 +367,72 @@ fn large_villages_place_one_house_per_tile() {
     );
 }
 
+/// i360: at town scale the world must be a **town of villages**, not one
+/// uniform blob.
+///
+/// i359 measured the fault: i345's single Vogel spiral spreads houses evenly
+/// over the disc, so `auto_partition_polities` collapses the density-law world
+/// into ONE settlement (`gap 12 -> 0` at both N=192 and N=256). The clustered
+/// layout (`cluster_count_for`) places one centre per ~16 houses; this pins both
+/// the i344 one-tile-per-house invariant and the resulting multi-settlement
+/// partition at the density-law sizes.
+#[test]
+fn clustered_world_forms_multiple_settlements_at_town_scale() {
+    // Multi-seed: the separation must be structural, not a lucky-seed artifact
+    // (doctrine §4.1 — the i338/i350 lesson).
+    for seed in [42u64, 7, 1, 99] {
+        for n in [192u32, 256] {
+            let side = (21.333_f64 * n as f64).sqrt().ceil() as u32;
+            let cfg = || SimConfig {
+                seed,
+                max_ticks: 1,
+                world_width: side,
+                world_height: side,
+                num_agents: n,
+                snapshot_interval: None,
+            };
+            let mut sim = Simulation::new(cfg());
+            sim.populate();
+            let houses: Vec<_> = sim
+                .world
+                .sites
+                .iter()
+                .filter(|s| matches!(s.kind, crate::world::SiteKind::House))
+                .map(|s| s.id)
+                .collect();
+            assert_eq!(
+                houses.len(),
+                crate::world_gen::houses_for_population(n) as usize,
+                "seed {seed} N={n}: house sites generated"
+            );
+            let mut tiles = 0usize;
+            for y in 0..side as i32 {
+                for x in 0..side as i32 {
+                    if sim
+                        .world
+                        .tile(x, y)
+                        .and_then(|t| t.site)
+                        .is_some_and(|id| houses.contains(&id))
+                    {
+                        tiles += 1;
+                    }
+                }
+            }
+            assert_eq!(tiles, houses.len(), "seed {seed} N={n}: one tile per house");
+
+            let mut probe = Simulation::new(cfg());
+            probe.populate();
+            probe.auto_partition_polities(8);
+            assert!(
+                probe.polity_members.len() >= 2,
+                "seed {seed} N={n}: expected a town of villages, found {} settlement(s) \
+                 — the i359 one-settlement collapse",
+                probe.polity_members.len()
+            );
+        }
+    }
+}
+
 // Shared test helper (used by family + conflict domains).
 /// §10.8: Find two agents in different seeded clans (home-site parity
 /// seeds 2 clans during populate).

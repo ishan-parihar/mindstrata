@@ -354,12 +354,17 @@ Live queue, in order (evidence link per item):
 2. **A9 — the envelope at constant density** — re-scoped by i344: a **fidelity** policy
    (max co-location 19 → 4, contacted share halved), **not** throughput (+9.1%/−2.3%/+5.6%
    at N=96/144/192). A charter decision; do not sell it as speed.
-3. **Clustered world generator (queued, the city path)** — i359 measured sim capacity
-   **already reaching N=256** (5 805 µs/tick, health 0.777, `ENVELOPE_EXPANDED_2_7X`), but
-   `auto_partition_polities` finds **one settlement** on the density world (the i345 Vogel
-   spiral places houses uniformly; gap ≥12 merges everything). Multi-settlement
-   orchestration has nothing to orchestrate until the world generator places **multiple
-   village centres**. World-gen change = the i339/i340 blast class; own probe + sweep.
+3. **Clustered world generator — LANDED (i360).** Sim capacity already reached **N=256**
+   (i359, `ENVELOPE_EXPANDED_2_7X`) but the i345 Vogel spiral collapsed the density world
+   to **one settlement**; i360 places houses around `cluster_count_for = clamp(houses/16,
+   1, 4)` centres (`world_gen.rs`), so N=192 → **3** and N=256 → **4** settlements at the
+   natural gap, each with its own live polity holon (genesis memes/polity [2,2,1] / [6,4,2,1]).
+   Calibrated range (<25 houses) is byte-identical (the ring/i345 path is untouched);
+   golden 5/5, sim **299/299**. **Next queued: measure cross-polity diffusion liveness at
+   town scale** — does i299 `system_trade_diffusion` move genesis memes across village
+   boundaries now that villages are geographically distinct (agent trade needs a
+   counter-party within 12 tiles); and does raising the `cluster_count_for` cap to 5–6 buy
+   more polities without crowding a density-law world.
 4. **Wealth tail — progressive tax (queued)** — i358 measured the distribution as
    **bounded** (Gini plateaus ~0.65, no destitution) but the tail runs: one agent holds
    ~50% of the village's coin and compounds ~3× faster than the median.
