@@ -377,9 +377,11 @@ Live queue, in order (evidence link per item):
    10.3%→11.6% / 8.8%→11.5%, hoard 163 602→241 — `WEALTH_TAIL_BENT`. Sweep-carrying:
    re-anchored 3 pins (biology golden seed 43→44; fear >0.30→>0.27 measured 0.2864;
    belief high >0.34→>0.28 measured 0.2968 with the 0.1635 differential invariant held),
-   re-contracted the Idle pin to a run-minimum, regenerated goldens (agent_count 12→13,
-   in-contract) and accepted 5 snapshots. **Open:** collapse-scenario longer-horizon
-   lethality softening unmeasured; dividend share is a first calibration; council
+   re-contracted the Idle pin to a run-minimum,   regenerated goldens (agent_count 12→13,
+   in-contract) and accepted 5 snapshots. i364 then **closed the collapse-resilience
+   concern**: an A/B against the pre-i363 parent shows the cascade kills **exactly 2
+   agents on both builds** — the 12→13 shift is one extra *birth*, not a reprieve.
+   **Open:** dividend share is a first calibration (multi-seed band pending); council
    membership inconsistency (31 vs 3) still open.
 5. **Closed:** `Idle` (i356 — the `Play` recreation driver made the last dead action
    live, 0.01%–3.67% of decisions) and `A8` `Wander` (i351). **Refuted/closed as
