@@ -136,8 +136,13 @@ These rules exist because we repeatedly paid for violating them:
    fed village by design). The four rulings: **quantile gates over the fixed founder draw
    stay hardcoded** (their robustness IS the uniform draw; reshaping it silently moves
    every one — §5 H5); **crisis gates on bounded need scales stay hardcoded**;
-   **gain/scale mismatches** (a gain whose common case rounds to nothing — `needs.social`
-   in the action utility, i376's v1 trust gains) get rescaled or derived; **absolute
+   **gain/scale mismatches** split in two (i380): **3a** — the term is small but the channel
+   is alive, so rescale and pin the outcome (i376's v1 trust gains, where rescaling
+   worked); **3b** — the candidate loses the argmax on the terms it does NOT have, so
+   rescaling is a decoy (`Socialize`: 0/1 utility selections across 112 669 arbitrations,
+   and neither a ×6 gain nor a ×20 need accrual revives it). **Before rescaling a term
+   that "rounds to nothing", compare it with the measured WINNER's utility** (0.692 mean
+   here) — if no plausible value reaches it, the term is not the defect. **absolute
    thresholds on self-driven aggregates** (panic charge, the faction legitimacy arm) get
    the relative/anomaly form. Full audit: `evidence/i379_gate_selectivity_audit.md`.
    Audit method ladder: `const` census → store-equilibrium probe (i376) → gate

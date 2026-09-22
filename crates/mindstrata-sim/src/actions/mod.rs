@@ -605,6 +605,25 @@ pub fn compute_utility(
             * (Fixed::ONE - personality.conscientiousness * Fixed::from_f64(0.3));
         utility += fatigue_pressure * action.fatigue_relief * Fixed::from_f64(1.5);
     }
+    // i380: MEASURED INERT — and deliberately NOT patched here. The decision
+    // census shows the utility leg selected `Socialize` **0 times at N=12 and 1
+    // at N=48** across 112 669 arbitrations while the daily routine carried all
+    // 12 645 selections, so this term never wins. But two candidate single-knob
+    // repairs were measured and BOTH FAIL to revive it (probe
+    // `i380_socialize_reachability`):
+    //   * a x6 gain in family with the 2.0/2.5/1.5 siblings moved the
+    //     utility-selected count 0 → 0 (village) / 1 → 2 of ~19 000;
+    //   * a 20x social-decay accrual (band p50 0.006→0.096, p95 0.021→0.292)
+    //     moved it to 9 of ~19 359.
+    // The blocking quantity is the arbitration bar, not this term's scale: the
+    // measured quiet-window winner utility is **0.692 mean / 1.702 max**, and
+    // even a genuinely lonely agent's term (0.29 x 0.3 x 0.5 x 6 = 0.26) cannot
+    // reach it. So the social candidate loses on the terms it does NOT have
+    // (goal-alignment bonus, dominant-need urgency, identity affinity, norm
+    // bonus) rather than on the one it does — the root cause is still open, and
+    // shipping a coefficient here would be a symptom fix with a comment that
+    // overstates its effect. Next step: extend the census to decompose the
+    // winner's utility per candidate, then size the repair against the real bar.
     if action.social_value > Fixed::ZERO {
         utility += needs.social * action.social_value * personality.extraversion;
     }

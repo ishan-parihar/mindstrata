@@ -254,3 +254,33 @@ The refreshed classification replaces "Class B = organic candidates" with four r
 The queue this yields is in the i379 doc §"implementation queue": the `needs.social` utility
 scale, the anger arm of the negativity channel, the faction legitimacy arm, and the
 relative-trigger redesign.
+
+---
+
+## Refresh (i380) — the first Class-3 item is measured, and its two obvious repairs are refuted
+
+i379's Class 3 (gain/scale mismatches) predicted that `needs.social`'s action-utility term
+rounds to nothing. `i380_socialize_reachability` confirms it is not merely small but
+**inert**: across 112 669 utility arbitrations the utility leg selected `Socialize` once
+(0 at N=12, 1 at N=48), and all 12 645 social decisions came from the daily routine.
+
+The audit's *diagnosis* held; the audit's *implied repair* did not. Both principled
+single-knob fixes were measured and both fail:
+
+* a `×6` gain in family with the 2.0/2.5/1.5 siblings → 0 and 2 selections;
+* a `×20` social-need accrual (band p50 0.006→0.096, p95 0.021→0.292) → 9 of 19 359.
+
+**Class 3 therefore splits in two, and the distinction matters:**
+
+* **3a — scale mismatch** (the term is small but the channel is alive): rescale and pin the
+  outcome. Still the right model for i376's v1 trust gains, where rescaling *did* work.
+* **3b — structural argmax disadvantage** (the candidate loses on the terms it does NOT
+  have, not on the one it does): rescaling is a decoy. `Socialize`'s measured bar is the
+  0.692 mean winner utility, and no plausible value of its own term reaches it, so the
+  repair belongs to whichever channel (goal-alignment, dominant-need urgency, relief
+  mapping) its siblings have and it lacks.
+
+**Rule of thumb added:** before rescaling a term that "rounds to nothing", compute the
+measured WINNER's utility and ask whether any plausible value of the term reaches it. If
+not, the term is not the defect and rescaling is wasted work — the census is the instrument
+that answers it (`winner_utility`, already recorded per arbitration).
