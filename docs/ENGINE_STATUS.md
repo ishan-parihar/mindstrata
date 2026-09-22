@@ -199,8 +199,9 @@ H5 founder-variance shaping (needs larger N + coordinated sweep).
 **Vendor-blocked:** realms.md ontology, resonance attestation, cult-liveliness regime.
 
 **Systemic debt register:** epidemic R0≈1 fragility (structurally mitigated), fatigue as a
-village-wide synchronized phase, Background-tier in-vivo promotion pace, the dual-store split,
-the proportional council dividend's residual hoard (i365 seed 23: 25 274 coins vs ~250 elsewhere).
+village-wide synchronized phase, the dual-store split,
+the proportional council dividend's residual hoard (i365 seed 23: 25 274 coins vs ~250 elsewhere),
+and the LOD tier being **dark in calm towns** (i367: Background 0.0 % of agent-ticks at N≥96 calm, 7.5–13.9 % under crisis — a crisis modulator, not a scale lever).
 
 ## 10. How to keep this document current
 
