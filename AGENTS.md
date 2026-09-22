@@ -365,13 +365,17 @@ Live queue, in order (evidence link per item):
    boundaries now that villages are geographically distinct (agent trade needs a
    counter-party within 12 tiles); and does raising the `cluster_count_for` cap to 5–6 buy
    more polities without crowding a density-law world.
-4. **Wealth tail — progressive tax (queued)** — i358 measured the distribution as
-   **bounded** (Gini plateaus ~0.65, no destitution) but the tail runs: one agent holds
-   ~50% of the village's coin and compounds ~3× faster than the median.
-   `Institution::collect_taxes` is **proportional** (`wealth × rate`), i.e.
-   scale-invariant — provably inert on the Gini — so the fix is a surcharge above the
-   membership median inside `collect_taxes`. Behavioural, sweep-carrying; needs its own
-   probe + classified re-anchor sweep.
+4. **Wealth tail — treasury redistribution (re-scoped by i361)** — i358 measured the
+   distribution as **bounded** (Gini plateaus ~0.65, no destitution) but with one agent
+   holding ~50% of the village's coin. i358 scoped a **progressive surcharge**; i361
+   implemented it and it made the target **worse** (Gini 0.647→0.705 / 0.652→0.671),
+   so it was **reverted**. The instrumented root cause: the council treasury **hoards**
+   (163 602 coins at 50K seed 42 vs the Market's ~1K) because its only outflow is a
+   ≤0.5-coin/recipient/cycle poor-relief drip — so *any* steeper extraction feeds an
+   untouchable sink and widens the gap. The real queued fix is **council surplus
+   redistribution** (a wealth-inverse progressive dividend above a reserve, mirroring the
+   i186 Market dividend), behavioural + sweep-carrying with its own probe + re-anchor
+   sweep. Also recorded: council membership is inconsistent (31 vs 3 members).
 5. **Closed:** `Idle` (i356 — the `Play` recreation driver made the last dead action
    live, 0.01%–3.67% of decisions) and `A8` `Wander` (i351). **Refuted/closed as
    premises:** locomotion pace (i357 — `Move` already steps one tile per tick), the
