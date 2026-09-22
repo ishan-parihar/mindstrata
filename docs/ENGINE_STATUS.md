@@ -177,7 +177,7 @@ stretches to a **small town**. It is not yet a city/country/planet simulator.
 The live iteration ledger is [`PLAN_DC3_DEVELOPMENT.md`](PLAN_DC3_DEVELOPMENT.md) §3;
 it is authoritative for *work*, this section is the summary.
 
-1. **v1→v2 relationship dual-store migration** — top structural item; 63% of pairs diverge >0.01 (i352). Behavioural; needs a full sweep; migrate read *and* write together.
+1. **v1→v2 relationship dual-store migration** — top structural item. i353 measured it: the stores are synced at populate and diverge steeply (**90% of pairs >0.01 at N=48/20K**). Migrate the daily mean-reversion **writer** first, then the `social_cluster`/`economy`/`norms` **readers** (appraisal/cognitive already read v2); the marriage pass is refuted as a target (fires only in the synced opening window).
 2. **A9 — world area at constant density** — a charter/fidelity decision (co-location 19→4), not throughput.
 3. **`Idle`** — the last dead action (0 arbitrations; only relief 0.05 fatigue/tick). Same design-act shape as the A8 Wander revival (i351).
 4. **§17 tier-gate residual** — cosmetic rename + `runs_action_selection()` has zero call sites.

@@ -342,12 +342,15 @@ matrix scan (the marriage pass was O(N³) every tick).
 
 Live queue, in order (evidence link per item):
 
-1. **The v1→v2 relationship dual-store migration** — i352 sized it: the legacy v1
-   `relationships` matrix and the honest per-agent v2 store **diverge materially** (63% of
-   pairs differ >0.01 at N=48). The marriage pass reads v1 by design; migrating any consumer
-   is a **behavioural** change carrying a full re-anchor sweep, not a refactor. Probe each
-   consumer's store divergence before moving it. (Marshal with the marriage bond-boost
-   *write*, which targets v1, or the migration orphans it.)
+1. **The v1→v2 relationship dual-store migration** — i353 measured the divergence and
+   re-scoped this item. The stores are **synced at populate** and diverge steeply with
+   horizon: **90% of pairs differ >0.01 at N=48/20K** (Δtrust p90 0.242). Consumers are
+   split — appraisal/cognitive read v2 (contacted-gated, i350); `social_cluster`,
+   `economy`, `norms_impl` read v1 — so subsystems disagree about the same pairs. **Migrate
+   the daily mean-reversion *writer* first** (`systems/cognitive.rs:984`; it is a divergence
+   *source*), then the three v1 readers; each is behavioural and carries its own sweep.
+   **REFUTED as a target:** the marriage pass — it fires only in the opening ~300 ticks,
+   where v1≈v2 (worst exposure 2/30 pairs); a sweep there is the §4.1/i338/i350 mistake.
 2. **A9 — the envelope at constant density** — re-scoped by i344: a **fidelity** policy
    (max co-location 19 → 4, contacted share halved), **not** throughput (+9.1%/−2.3%/+5.6%
    at N=96/144/192). A charter decision; do not sell it as speed.
