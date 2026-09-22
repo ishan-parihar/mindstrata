@@ -68,8 +68,8 @@ Every item is documented debt with a named probe plan; none is hidden.
 
 ### 3.4 DC-3 checklist items still open (from the perf charter §5)
 
-- [ ] Perf regression probe wired as CI-adjacent bench (warn-only, N=12 ≤150 µs/tick).
-- [ ] Superlinearity probe at N=192 (interaction-volume vs algorithmic growth; never run).
+- [x] Perf regression probe wired as CI-adjacent bench (warn-only, N=12 ≤150 µs/tick). — **LANDED i295** (gate 2.55; i332 later re-baselined the envelope).
+- [x] Superlinearity probe at N=192 (interaction-volume vs algorithmic growth). — **LANDED i294** (α=2.115 attributed; O(N³) social-support scan fixed), re-measured **i332** (`ENVELOPE_EXPANDED_1_5X`).
 - [x] Asset pipeline v0 charter (sets the UM-3 envelope). — **LANDED i301** (`charters/ASSET-PIPELINE-v0.md`; `sim/assets.rs` + CLI `--export-assets`; see `evidence/i301_asset_export.md`).
 
 ## 4. The iteration ladder (one root cause each, doctrine §2)

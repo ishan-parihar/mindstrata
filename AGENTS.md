@@ -276,29 +276,41 @@ module-segregation refactor, the **crate ladder** (S1–S3: `core ← person ←
 {social, institutions, world} ← sim`, DAG cargo-enforced, every extraction golden-proven
 byte-identical, new crates born with `deny(missing_docs)`), **DC-3 complete at 4/4 legs**
 (Era IV holon, multi-village UM-3, N≥48 perf budget + `scripts/gate` perf envelopes, asset
-pipeline v0), and **DC-4 opening** (difficulty-levers rows 2–3 live, pathology/goal-gate
-bands, meaning reflex and physiological-reflex repairs, TUI asset/scene viewers, and the
-scale program: i330–i345 removed every accidental relationship scan, re-ranked the scale
-levers on measurement, and fixed the housing governor).
+pipeline v0), and **DC-4** (difficulty-levers rows 2–3 live, pathology/goal-gate bands,
+meaning/physiological reflex repairs, injury channel, pain-veto revival, TUI asset/scene
+viewers, and the scale program).
+
+The **dead-producer campaign** (i346–i351) then anatomized and revived the action layer
+with the `sim::decision_census`: `Move` (feud gate above reach + shadowed by routine,
+i347), the `Background` tier (entry gate below floor + a social clause starving factions,
+i348), the witness channel (village trust ratcheted to 1.000 — no locality test, i349),
+the per-agent mean-folds (stranger-diluted, i350), and `Wander` (zero relief — plus a
+`Fixed::from_raw` unit bug the census caught, i351). i352 closed the last per-tick dense-
+matrix scan (the marriage pass was O(N³) every tick).
 
 Live queue, in order (evidence link per item):
 
-1. **The sparse relationship store with stable identity** — i341/i344 confirmed it is the
-   *only* remaining lever on the tick's dominant cost class (~58% of the tick walks N(N−1)
-   rows while 8–11% carry state; contact volume is flat and world size does not help).
-   Constraints already measured: i337 disqualified a positional index (positions are reused
-   by births/deaths), and it carries a §4.4 re-contract of
-   `relationship_store_is_complete_at_populate` plus a full re-anchor sweep. Probe first.
+1. **The v1→v2 relationship dual-store migration** — i352 sized it: the legacy v1
+   `relationships` matrix and the honest per-agent v2 store **diverge materially** (63% of
+   pairs differ >0.01 at N=48). The marriage pass reads v1 by design; migrating any consumer
+   is a **behavioural** change carrying a full re-anchor sweep, not a refactor. Probe each
+   consumer's store divergence before moving it. (Marshal with the marriage bond-boost
+   *write*, which targets v1, or the migration orphans it.)
 2. **A9 — the envelope at constant density** — re-scoped by i344: a **fidelity** policy
    (max co-location 19 → 4, contacted share halved), **not** throughput (+9.1%/−2.3%/+5.6%
    at N=96/144/192). A charter decision; do not sell it as speed.
-3. **A8 — locomotion is a dead producer** (`Wander`/`Move` 0.00% of agent-ticks; positions
-   frozen). §4.3 class: decide the semantics, revive the producer, expect a behavioural
-   sweep. Read `i338`/`i340` first — space is currently decorative.
-4. **§17 tier gate reads the same non-varying `relationship_count`** that made the i342
-   social-count proxy a dead channel; i328 measured the tier-gate payoff at ≈5%, so this is
-   a correctness item, not a perf one.
-5. **Deferred with triggers** (do not pull early): `VecDeque<SimEvent>` (>250K-tick
+3. **Idle — the last dead action** — `Idle` still wins 0 arbitrations (its only relief is
+   0.05 fatigue/tick). Same design-act shape as the A8 `Wander` revival (i351): decide the
+   semantics, give it a driver, expect a behavioural sweep. `A8` itself is CLOSED.
+4. **§17 tier-gate residual** — i348 already wired the reclassification to honest
+   `contacted_degrees`; what remains is cosmetic + a dead predicate: the parameter is still
+   named `relationship_count`, and `AgentTier::runs_action_selection()` has **zero production
+   call sites** (i316). i328 measured the payoff at ≈5% — a correctness item, not perf.
+5. **The sparse relationship store is DEMOTED, not queued** — i338 (ω(N²) is a housing
+   artifact), i344 (world area is fidelity, not throughput), and i350 (the contacted graph
+   re-saturates 13.3%→73.7% by 40K) all measured it as a ≤2× constant decaying toward 1.
+   Do **not** build it; re-open only against new horizon evidence.
+6. **Deferred with triggers** (do not pull early): `VecDeque<SimEvent>` (>250K-tick
    horizons), recent-claims index (same), H5 founder-variance shaping (needs larger N **and**
    a coordinated re-anchor sweep), vendor-blocked era items (realms.md, resonance
    attestation, cult-liveliness).
