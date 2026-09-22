@@ -190,7 +190,7 @@ it is authoritative for *work*, this section is the summary.
 3. **§17 tier-gate residual** — cosmetic rename + `runs_action_selection()` has zero call sites (i355 documented as recorded debt).
 4. **Per-edge pass pacing** — ~58% of the tick; remaining reduction is behavioural (§17.3 dirty-window pacing).
 
-**Queue additions:** **cross-polity diffusion at larger cluster caps** (i362 measured the i296–i299 stack end-to-end live at town scale; open is whether raising `cluster_count_for` to 5–6 buys more polities on a density-law world) and **dividend-share calibration** (i363's council surplus dividend lifted Gini below baseline 0.647→0.611 and drained the 163K hoard; i364 confirmed it added a birth, not a reprieve — the cascade still kills 2 agents — so the share now needs a multi-seed band) (i360 — the clustered world now forms 3–4 villages, so measure whether i299 `system_trade_diffusion` actually moves genesis memes across village boundaries).
+**Queue additions:** **cross-polity diffusion at larger cluster caps** (i362 measured the i296–i299 stack end-to-end live at town scale; open is whether raising `cluster_count_for` to 5–6 buys more polities on a density-law world) and **treasury ceiling** (i363's council surplus dividend lifted Gini below baseline and drained the 163K hoard; i364 confirmed it added a birth, not a reprieve; i365 validated the improvement across six seeds — mean 0.5786, max 0.6189, every seed below the pre-fix plateau — but a proportional per-cycle share can leave a residual hoard (seed 23: 25 274 coins), so a deterministic ceiling is queued) (i360 — the clustered world now forms 3–4 villages, so measure whether i299 `system_trade_diffusion` actually moves genesis memes across village boundaries).
 
 **Closed (do not re-open without new evidence):** the **collapse-resilience concern** (i364 — A/B shows the cascade kills 2 agents on both builds; `agent_count` 12→13 is a birth), the **wealth-tail fix** (i363 — council surplus dividend: Gini 0.647→0.611, hoard 163 602→241, `WEALTH_TAIL_BENT`; the i358-scoped progressive tax was refuted by i361), the **clustered world generator** (i360 — landed: N=192→3, N=256→4 settlements, per-polity holons live, calibrated range byte-identical), `Idle` (i356 — the `Play` recreation driver made the last dead action live, 0.01%–3.67% of decisions), the A8 `Wander` driver (i351), the **locomotion-pace** premise (i357 — `Move` already steps one tile per tick; the limiters are the anger gate and co-location/A9), and the dual-store **migration** (i353/i356 — architectural redundancy, not a liveness fault).
 
@@ -199,7 +199,8 @@ H5 founder-variance shaping (needs larger N + coordinated sweep).
 **Vendor-blocked:** realms.md ontology, resonance attestation, cult-liveliness regime.
 
 **Systemic debt register:** epidemic R0≈1 fragility (structurally mitigated), fatigue as a
-village-wide synchronized phase, Background-tier in-vivo promotion pace, the dual-store split.
+village-wide synchronized phase, Background-tier in-vivo promotion pace, the dual-store split,
+the proportional council dividend's residual hoard (i365 seed 23: 25 274 coins vs ~250 elsewhere).
 
 ## 10. How to keep this document current
 

@@ -381,7 +381,10 @@ Live queue, in order (evidence link per item):
    in-contract) and accepted 5 snapshots. i364 then **closed the collapse-resilience
    concern**: an A/B against the pre-i363 parent shows the cascade kills **exactly 2
    agents on both builds** — the 12→13 shift is one extra *birth*, not a reprieve.
-   **Open:** dividend share is a first calibration (multi-seed band pending); council
+   **Validated across the seed family (i365):** mean Gini 0.5786, max 0.6189 — every
+   seed below the pre-fix plateau ~0.647–0.652 (`IMPROVEMENT_STRUCTURAL`). **Open:** the
+   per-cycle proportional share can leave a residual hoard (seed 23: 25 274 coins vs
+   ~250 elsewhere) — a treasury **ceiling** would bound it (queued, behavioural); council
    membership inconsistency (31 vs 3) still open.
 5. **Closed:** `Idle` (i356 — the `Play` recreation driver made the last dead action
    live, 0.01%–3.67% of decisions) and `A8` `Wander` (i351). **Refuted/closed as
