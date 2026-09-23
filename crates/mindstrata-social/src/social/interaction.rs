@@ -8,7 +8,7 @@ use mindstrata_core::event::{InteractionKind, SimEvent};
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::id::AgentId;
 use mindstrata_core::rng::{RngStream, RngStreams};
-use mindstrata_person::person::{Relationship, RelationshipKind};
+use mindstrata_person::person::Relationship;
 use rand::Rng;
 
 /// A social interaction between two agents.
@@ -117,8 +117,12 @@ pub fn process_interaction(
         if is_negative {
             rel.last_negative_tick = tick_u64;
         }
-        // §19.5.G: Relationship evolution — evolve kind based on interaction history
-        evolve_relationship_kind(rel, params);
+        // i393: the §19.5.G kind ladder is RETIRED here — it was a write-only
+        // producer (`Relationship.kind` has no reader anywhere in the
+        // workspace outside tests and one bench, which uses it as a contact
+        // proxy). Its live replacement is `RelationshipV2.stage`, which the
+        // stage-distribution snapshot and `is_contacted` both read. The field
+        // stays at its construction value (Kin at birth, Stranger otherwise).
     }
 
     // Reciprocal relationship update (weaker)
@@ -141,7 +145,6 @@ pub fn process_interaction(
         if is_negative {
             rel.last_negative_tick = tick_u64;
         }
-        evolve_relationship_kind(rel, params);
     }
 
     // Generate event
@@ -515,48 +518,6 @@ pub fn update_witnesses(
     }
 }
 
-/// §19.5.G: Evolve relationship kind based on accumulated interactions.
-/// Stranger → Neighbor (5+ interactions) → Friend (high trust+affection) or Rival (low trust).
-fn evolve_relationship_kind(
-    rel: &mut Relationship,
-    params: &mindstrata_core::parameters::SimParameters,
-) {
-    // Don't evolve if already a special kind
-    if matches!(rel.kind, RelationshipKind::Kin) {
-        return;
-    }
-
-    let count = rel.interaction_count;
-    let trust = rel.trust;
-    let affection = rel.affection;
-
-    // Upgrade from Stranger to Neighbor after 5 interactions
-    if rel.kind == RelationshipKind::Stranger && count >= 5 {
-        rel.kind = RelationshipKind::Neighbor;
-    }
-
-    // Upgrade from Neighbor to Friend or Rival based on trust/affection
-    if rel.kind == RelationshipKind::Neighbor {
-        if trust > params.social_friend_trust_threshold
-            && affection > params.social_friend_affection_threshold
-        {
-            rel.kind = RelationshipKind::Friend;
-        } else if trust < params.social_rival_trust_threshold {
-            rel.kind = RelationshipKind::Rival;
-        }
-    }
-
-    // Friend can downgrade to Neighbor if trust drops
-    if rel.kind == RelationshipKind::Friend && trust < params.social_friend_downgrade_threshold {
-        rel.kind = RelationshipKind::Neighbor;
-    }
-
-    // Rival can be repaired if trust recovers
-    if rel.kind == RelationshipKind::Rival && trust > params.social_rival_repair_trust {
-        rel.kind = RelationshipKind::Neighbor;
-    }
-}
-
 /// Run the social interaction system for all agents.
 ///
 /// §2.4: Social interactions are proximity-based — agents within perception
@@ -757,6 +718,7 @@ pub fn system_social_interactions(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mindstrata_person::person::RelationshipKind;
 
     /// i330: the dense `(from·n + to) → position` lookup must be behaviorally
     /// identical to the linear `find` it replaces — for a populated lookup, for

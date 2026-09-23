@@ -635,7 +635,20 @@ Live queue, in order (evidence link per item):
    (retire the write-only ladder, don't migrate it — `RelationshipV2.stage` is the live
    replacement) while **deleting the gain does not make v1 derived** (`legal_impl` −0.2 and
    `marriage` +0.2/+0.3 keep writing it, above the deleted gain's magnitude, so they are
-   separate behavioural moves with their own probes). Carried forward from i388 as
+   separate behavioural moves with their own probes). **The inert half is now LANDED** (the
+   write-only §19.5.G `RelationshipKind` ladder retired — goldens byte-identical, 314/0/1, so
+   the census's "no reader" claim is proven rather than asserted), and the migration was then
+   run **twice in two shapes and reverted both times with measurements**: deleting the v1
+   **writer first** gave **299/15/1 in 656 s** (every v1 reader is calibrated against the ~0.9
+   level that writer produced, and §2.3 forbids re-pinning a producer that goes dark), while
+   moving only the **folds** gave **301/13/1 in 143 s** with four behavioural pins of four
+   different kinds (a `contagion_delta` Fixed-4 truncation the move exposed, a kin-labelling
+   correctness break, a `peer_status` band edge, a §4.13 manipulation failure). **The writer
+   moves LAST**: migrate the readers (norms_impl, household, births_deaths, marriage/attachment)
+   first, then delete the v1 application *with* `bonding_rate`/`conflict_escalation_rate`
+   re-hosted on the dyadic magnitude (both default to `Fixed::ONE`, so the re-host is
+   value-neutral and their liveness pins stay honest), then the folds. Full map in
+   `evidence/i393_speech_act_store.md` §6. Carried forward from i388 as
    measured-but-unexplained: action duration rose 4.31 → 5.40 ticks and the 2K relationship
    stages shifted shallower (`Unnoticed` 20 → 26, `Friend` 8 → 5) — W2 must decide whether
    contact falls when the drive is served *before* the sparse-store question is re-opened.

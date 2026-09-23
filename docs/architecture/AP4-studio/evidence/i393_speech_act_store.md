@@ -1,7 +1,17 @@
-# i393 — the dual-store writer: probe landed, migration shape decided
+# i393 — the dual-store writer: probe landed, migration shape decided, ordering proven
 
-**Status:** PROBE LANDED (measurement + design decision) · **Migration not yet wired.**
+**Status:** PROBE LANDED + **PARTIAL LANDING** (the provably-inert half) · the migration
+itself is **order-constrained** and now has a measured sequencing map (§6).
 Probe: `crates/mindstrata-benches/examples/i393_speech_act_store.rs`.
+
+**Landed this iteration:** the write-only §19.5.G `RelationshipKind` ladder is retired
+(`evolve_relationship_kind` deleted, `Relationship.kind` frozen at its construction value).
+Both goldens byte-identical, integration **314/0/1** — zero-blast, exactly as the census in §4(a)
+predicted, which is the proof that the ladder had no reader.
+
+**Not landed:** deleting the v1 interaction gain (experiment 1, §6.1) and moving the two
+load-bearing folds onto the dyadic store (experiment 2, §6.2). Both were built, measured and
+reverted; the measurements are below because they are the iteration's most useful output.
 
 The v1→v2 migration is down to its last structural item. i384 moved the one
 self-contained v1 read+write pair (the §13.3 trade price) and left the **general
@@ -160,3 +170,79 @@ mirror image.
 Recorded as the open item: `legal_impl`/`marriage` v1 writers are deliberately
 *out* of this commit's scope — they are behavioural moves with their own probes,
 and bundling them would violate the one-root-cause rule (§2.1).
+
+## 6. The migration is ORDER-CONSTRAINED — two measured experiments
+
+steps 1–4 above were built and run, in two shapes. Neither was landable, and the
+*reason* is the iteration's main result.
+
+### 6.1 Experiment 1 — the writer deleted first (the shape §5 describes)
+
+Deleted the v1 application in `process_interaction` (both directions), moved the two
+load-bearing folds to the dyadic store, retired the ladder, and removed
+`social_reciprocal_factor` (which the deletion made dead).
+
+**Result: integration 299 passed / 15 failed / 1 ignored, in 656 s** — against 314/0/1 in
+132 s on the unmodified tree. The 5× suite slowdown is itself a symptom: same-test
+condition searches that no longer arrive at their horizon.
+
+| failure | class |
+|---|---|
+| 2 × `golden_replay` | pinned baseline |
+| 7 × `snapshot_tests` | pinned baseline |
+| `revolution_is_regime_change_not_repeat_loop` | **liveness family** |
+| `behavioral_delta::live_consumer_bonding_rate_moves_relationship_quality_direction_blind` | **§5.1 producer went dead** |
+| `attachment_separation_rate_parameter_is_live` | **liveness** |
+| `attachment_separation_distress_coupling_is_live_after_tuning` | **liveness** |
+| `noospheric_belief_confidence_sustains_conviction` | liveness |
+| `memory_system_produces_plan_taxonomy_and_trace_properties` | liveness |
+
+**Root cause, and it is a contract, not a magnitude:** every v1 reader is calibrated
+against the *level* the v1 writer produced (~0.9, saturated). Deleting the writer
+while the readers still read v1 pulled that level out from under all of them at once —
+v1 trust falls from the saturated ~0.9 to the dyadic equilibrium (~0.61 at 50K/N=48,
+leg B). §2.3 then forbids the obvious repair: a liveness producer that goes dark is
+never re-pinned to accept zero.
+
+**The finding that changes the next attempt:** `bonding_rate` and
+`conflict_escalation_rate` are `Fixed::ONE` by default ("identity: preserves original
+hardcoded deltas") and their *only* consumer was the deleted v1 write. So the correct
+repair was never a re-anchor — it is to **re-host both rates on the dyadic
+application**, which is value-neutral at the shipped defaults (×1.0) and keeps their
+liveness pins honest.
+
+### 6.2 Experiment 2 — the folds moved, the writer kept
+
+Kept the writer, moved only `contacted_degrees` and `social_status_counts` onto the
+dyadic rows (the mandatory half of any version of this migration).
+
+**Result: integration 301 passed / 13 failed / 1 ignored, in 143 s** — normal speed
+again, goldens + 7 snapshots, plus four behavioural pins of four *different* kinds:
+
+| failure | measured | class |
+|---|---|---|
+| `sensory_field_fear_contagion_is_live_and_sustains_fear` | "the daily contagion contribution must be strictly positive for perceiving agents" | **liveness** — and it exposed a latent §5 hazard: the fold move produced a *small but nonzero* `perceived_stress`, whose `contagion_delta(stress, rate)` product truncates to zero under `Fixed::mul`. Recorded as systemic debt; the fix is quantize-once, **not** a re-anchor |
+| `kin_stages_instantiated_from_kinship_graph` | sibling pair labelled `AncestorDescendant` instead of `Sibling` | **correctness** — a labelling break, not magnitude drift, and *not* explained by the fold's stated mechanism. Unexplained ⇒ must be understood before this lands (§4.13: rule out the manipulation before trusting the response) |
+| `peer_status_envy_feeds_daily_anger_end_to_end` | `peer_status` 0.2942 against a `> 0.3` floor | band-edge drift — re-anchorable **with** the mechanism named |
+| `neural_like_prediction_error_folds_are_live_and_directional` | "holding grain at 0 must raise hunger on a majority of seeds (hungrier 3/6)" | §4.13-class **manipulation** failure in the harness's own premise |
+
+### 6.3 The conclusion: the writer moves LAST
+
+The ledger already ordered this work "subsystem by subsystem — remaining readers:
+norms_impl, household, births_deaths". Both experiments promote that from a preference
+to a hard constraint, because the store's level *is* the contract its readers are
+calibrated against. The corrected sequence:
+
+1. **Migrate the readers** — norms_impl, household, births_deaths, and the
+   marriage/attachment pair — each behavioural, each with its own probe, exactly the
+   i369/i384 pattern.
+2. **Then delete the v1 application**, and in the *same* commit **re-host
+   `bonding_rate` / `conflict_escalation_rate` on the dyadic magnitude** (identity at
+   their 1.0 defaults, so the move is value-neutral at the shipped calibration).
+3. **Only then** move the two folds, with the `contagion_delta` truncation hazard
+   fixed first (or the liveness pin that catches it will keep firing correctly) and the
+   kin-labelling regression understood.
+
+Recorded so the next attempt starts from a map: the two experiments cost two full suite
+runs and bought the ordering, the rate re-hosting insight, and the truncation hazard —
+all three of which are invisible from reading the code.
