@@ -19,7 +19,8 @@ created: 2026-07-28
 |---|---|---|
 | Doctrine (how we work) | `AGENTS.md` | binding, always |
 | **Current engine truth** | `docs/ENGINE_STATUS.md` | **authoritative for behaviour/scale** |
-| **Live work ledger** | `docs/PLAN_DC3_DEVELOPMENT.md` | **authoritative for what remains** |
+| **Live work ledger (DC-4)** | `docs/PLAN_DC3_DEVELOPMENT.md` | DC-3 closed; DC-4 ledger + calibration debt |
+| **Live plan (DC-5)** | `docs/PLAN_DC5_DEVELOPMENT.md` | **authoritative for what remains** — gap taxonomy G1–G8, ladder i387+ |
 | Documentation governance | `docs/DOCUMENTATION.md` | authority map + index |
 | Technical arc | `docs/architecture/AP3-afa/` | **Eras I–V complete** (reference/theory) |
 | Organizational model | `docs/architecture/AP4-studio/` | active |
@@ -40,11 +41,12 @@ NOW  ──► DC-4 ──► UM-4 vertical slice ──► AA alpha
                    levers — landed; scale program i330–i360; from i369 the
                    open arc is the v1→v2 relationship-store unification,
                    with the i373/i379 calibration audits feeding the queue)
-     ──► DC-5 ──► infrastructure calibration (in progress)
-                  (dual-store unify — i369/i376/i384 landed, three readers
-                   left; bounded event buffer — landed i327, VecDeque stays
-                   deferred for jitter only; city-path experiment — open;
-                   wealth dynamics — i363/i370/i374 landed)
+     ──► DC-5 ──► depth closure + inter-community scale (PLAN_DC5_DEVELOPMENT.md)
+                  (dual-store unify to a single store; encounter-driven contact
+                   + locomotion; the OFF-MAP diplomacy layer replaced by a real
+                   polity graph; hierarchical polity layer; LOD background
+                   population + measured cap; economy counter-forces;
+                   verification: citation lint + town-tier envelope)
 ```
 
 **Where we are:** construction is complete through DC-3 and DC-4's game layer. The engine is

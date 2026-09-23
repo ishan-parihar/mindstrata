@@ -8,8 +8,12 @@ reconciled_commit: 998e9fd
 
 # Mindstrata — DC-3 Development Plan (Era V harvest → "the world scales")
 
-> **This is the live work ledger** (DC-3 is closed; the DC-4 ledger lives in §9).
-> Engine truth lives in [`ENGINE_STATUS.md`](ENGINE_STATUS.md); this file owns *work*.
+> **Status: DC-3 closed, DC-4 ledger complete through i385; the forward plan has moved.**
+> The **live plan is now [`PLAN_DC5_DEVELOPMENT.md`](PLAN_DC5_DEVELOPMENT.md)** (created
+> 2026-09-23, i387+): it carries the measured gap taxonomy G1–G8 and the iteration ladder.
+> This file remains authoritative for *history* — the DC-3 §3 calibration-debt ledger, the
+> DC-3/DC-4 execution ledgers in §7/§9, and the closed/deferred registers. Engine truth lives
+> in [`ENGINE_STATUS.md`](ENGINE_STATUS.md).
 
 **Date:** 2026-09-23 · **Baseline:** HEAD `cd4ac0a` (i385), main, 925 commits,
 ~146,300 LOC across 13 crates, tree clean.

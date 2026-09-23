@@ -444,8 +444,11 @@ Crate-extraction discipline (the procedure that produced the ladder):
 **This section is a pointer, not a ledger.** The authoritative set is:
 
 - **`docs/ENGINE_STATUS.md`** — current engine truth (behaviour, realism, measured scale).
-- **`docs/PLAN_DC3_DEVELOPMENT.md`** — the live work queue (§3.1 calibration-debt ledger;
-  §7/§9 execution ledgers).
+- **`docs/PLAN_DC5_DEVELOPMENT.md`** — **the live plan** (DC-5): the measured gap taxonomy
+  G1–G8, the iteration ladder (i387+) with a probe and an exit criterion per item, its
+  dependencies, and the operator decisions it depends on.
+- **`docs/PLAN_DC3_DEVELOPMENT.md`** — the DC-3 ledger (closed) + the DC-4 execution ledger
+  and the §3 calibration-debt history.
 - **`docs/DOCUMENTATION.md`** — which doc owns which scope, and the status of every doc.
 - **`docs/architecture/AP4-studio/evidence/`** — per-iteration probes and measured verdicts.
 
