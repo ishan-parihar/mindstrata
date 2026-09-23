@@ -624,7 +624,18 @@ Live queue, in order (evidence link per item):
    golden gate is a *window* condition, so a founder-time gene on a tick-0-live gate cannot
    pass, its recorded upgrade path being a tick-0-zero state to route the expression through.
    **Five inert genes in, no inert gene left unwired-by-accident: two wired, three
-   deliberately inert with records.** Then **i393** the speech-act/kind migration. Carried forward from i388 as
+   deliberately inert with records.** Then **i393** the speech-act/kind migration, whose **probe
+   has LANDED** (`evidence/i393_speech_act_store.md`) and corrected the item twice: the
+   divergence is a *mid-day* phenomenon (trust agrees to 0.0009–0.0039 on a daily boundary,
+   rebuilds to 0.169 mean 72 ticks later; **affection is never synced at all** — 0.187 mean,
+   max 1.000 at 50K), so any v1 trust reader's verdict depends on the tick it samples; the
+   three-regime projection rejects importing the v1 gain (it lifts dyadic saturation 50% → 61%
+   at 50K, i.e. re-imports the condition i376 diagnosed as v1's failure) in favour of
+   **delete-the-gain**; and two census facts: **`Relationship.kind` has no production reader**
+   (retire the write-only ladder, don't migrate it — `RelationshipV2.stage` is the live
+   replacement) while **deleting the gain does not make v1 derived** (`legal_impl` −0.2 and
+   `marriage` +0.2/+0.3 keep writing it, above the deleted gain's magnitude, so they are
+   separate behavioural moves with their own probes). Carried forward from i388 as
    measured-but-unexplained: action duration rose 4.31 → 5.40 ticks and the 2K relationship
    stages shifted shallower (`Unnoticed` 20 → 26, `Friend` 8 → 5) — W2 must decide whether
    contact falls when the drive is served *before* the sparse-store question is re-opened.
