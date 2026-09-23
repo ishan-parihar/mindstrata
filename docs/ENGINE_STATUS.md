@@ -178,7 +178,7 @@ and has been corrected.
 | **Innovation** | present, thin | §19.5.I work-driven discovery, knowledge diffusion (5 types), teaching, meme mutation, education, taboo-damped learning. Gap: not generative; skill saturation was audit finding E8. |
 | **Thought processes** | strong | theory of mind, prospection/imagination, 12-proposition belief system, capacity-limited memory (8 kinds), narrative identity with scripts. |
 | **Feelings** | strong | 22 discrete emotions, 12 regulation strategies, hedonic setpoint drift. E1 dysphoria plateau dead (i259); valence graded. |
-| **Heredity / evolution** | real (Arc A) | genome blending, quantitative-genetics personality, surnames, moral/ideology/sacred transmission. Parent–child **r=0.81**, sibling **r=0.92**. Gap: `sensory_acuity` genome field has no consumer. |
+| **Heredity / evolution** | real (Arc A) | genome blending, quantitative-genetics personality, surnames, moral/ideology/sacred transmission. Parent–child **r=0.81**, sibling **r=0.92**. Gap: `sensory_acuity` and `aggression_threshold` genome fields have no consumer (`novelty_seeking` deliberately inert — measured-and-rejected). |
 | **Body–mind coupling** | real (Arc B) | interoception into decisions, Whitehall status→stress→health, sleep-debt withdrawal, injury→pain→blood-loss→shock (i313), immune clearance (i311). |
 | **Culture / collective** | real (Era III–V) | emergent memes, rumours, rituals, collective memory, moral panics, legitimacy, echo chambers, per-polity genesis. |
 | **World interaction** | good | 8 needs drive resource ops against a finite world; seasons, spoilage, disease, market pricing. **World area is decorative below N≈144** (i344) — most contact is co-residency. |
@@ -275,7 +275,7 @@ institutional effects (treasury accumulating with no holder to spend it, legitim
 are unmeasured. It would have blocked the inter-community layer's offices (W3).
 
 
-**Dead genes (i391 census; i392 row 1 CLOSED, row 2 REJECTED, rows 3–5 blocked):**
+**Dead genes (i391 census; rows 1 and 3 CLOSED, row 2 REJECTED, rows 4–5 open):**
 `aggression_threshold`, `novelty_seeking`, `chronic_pain_risk`, `sensory_acuity` and
 `puberty_age` were drawn at founder creation, defaulted and blended at `inherit`, and **read by
 nothing outside `genome.rs`** — heritable trait variation that changed no behaviour.
@@ -285,6 +285,18 @@ default (13.0 = the gene's midpoint, so the wiring is midpoint-neutral). Its mea
 honest and narrow: **0 agent-ticks in age [10,16) over 240K + 987K agent-ticks** (founders
 ≥18, the ramp opens at ~385 000 ticks), so the fix is invisible in every corpus — both goldens
 byte-identical, 0 re-anchors — and its target is the next generation at long horizons.
+**`chronic_pain_risk` is wired (i392 row 3, `i393_chronic_pain_gene.md`):** it now scales
+the skeletal accumulation law through `SkeletalUpdateParams` (the row-1 params-struct
+pattern). Both §4.15 gates cleared: the band it governs is **closed in every calibrated
+corpus** (2.29 M agent-ticks, five corpora including pestilence and collapse — severe injury
+never occurs, so the wiring is invisible to goldens *by construction*, recorded as
+measured-scope), and the response is **exactly linear** (±40% gene ⇒ ±40% state — the
+proportional shape row 2's elastic consumer lacked). Anchored at the **draw midpoint 0.25**,
+not the gene's `Default` 0.2 — the Default anchor would have baked a +8% population drift
+into every future injury world. Same-row finding: the `organs.ron` spec field
+`chronic_pain_accumulation_rate` is **inert** — it declares 0.001, which cannot work at the
+state's 1e-4 resolution (5e-5 < quantum), the operative 0.005 was correct, and the
+misattributing comment is now a documented divergence (spec debt in `PLAN_DC5`).
 **`novelty_seeking` was measured against its named consumer and rejected (i392 row 2):** the
 wiring onto the i351 exploration driver was live and monotone (pinned-gene A/B 132 → 2 464 →
 3 927 Wander decisions) and midpoint neutrality was **proven at machine precision** (the

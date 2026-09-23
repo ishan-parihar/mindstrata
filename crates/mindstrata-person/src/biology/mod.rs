@@ -479,8 +479,22 @@ impl EmbodiedState {
             .min(self.genome.physical_potential.endurance_ceiling);
 
         // 8b. Skeletal (§7.2.3) — frailty, fracture, malnutrition
-        self.skeletal
-            .tick_update(self.age, self.injury, nutrition_quality);
+        // i392 row 3: the chronic-pain accumulation rate is the genotype's
+        // (`health_predispositions.chronic_pain_risk`). The gene's draw midpoint
+        // maps to exactly the rate the law previously hardcoded, so this is
+        // mid-point neutral by construction (§4.6) and byte-identical wherever
+        // fracture risk never rises (the band is closed in every calibrated
+        // corpus — `i393_chronic_pain_gene` leg B).
+        self.skeletal.tick_update(
+            self.age,
+            self.injury,
+            nutrition_quality,
+            skeletal::SkeletalUpdateParams {
+                chronic_pain_accumulation_rate: skeletal::chronic_pain_accumulation_rate(
+                    self.genome.health_predispositions.chronic_pain_risk,
+                ),
+            },
+        );
 
         // 8c. Digestive (§7.2.7) — stomach processing, gut health
         self.digestive.tick_update();
