@@ -14,6 +14,14 @@ impl Simulation {
         self.faction_crisis_pressure
     }
 
+    /// i382: the council's own mandate baseline — the reference the faction
+    /// trigger's collapse arm and pressure deficit both read. Observability for
+    /// probes/inspectors (the i379 lesson: a gate's inputs must be observable),
+    /// folded only inside the faction-dynamics tick.
+    pub fn council_mandate_baseline(&self) -> f64 {
+        self.council_mandate_baseline
+    }
+
     /// §29.2 (Iteration 240): Mean faction grievance across the unorganized
     /// pool (agents not currently in a faction) — the same aggregate the
     /// crisis-pressure accumulator consumes. Observability for probes,
@@ -110,6 +118,27 @@ impl Simulation {
                 }
             };
 
+            // ── i382: the legitimacy reference is the council's OWN mandate ──
+            // The deleted absolute bar (`legit < 0.5`) sat a hair below the
+            // measured 0.54–0.58 mandate equilibrium, so whether a world could
+            // ever organize through legitimacy was decided by its seed: the
+            // i382 probe measured the bar opening **0.00% of ticks in 8 of 15
+            // worlds** and 0.07–4.26% in the other 7 — while it was the ONLY
+            // arming route in the quiet worlds (5 of 8 formations). Both sites
+            // now read a baseline the council's own history established (an
+            // f64 EWMA folded below): a difference travels with each world's
+            // mandate instead of pinning every world to one equilibrium's
+            // neighbourhood. Read BEFORE the fold, so a tick is judged against
+            // its past and never against itself (the i381 rule).
+            let has_council = self
+                .institutions
+                .iter()
+                .any(|i| i.kind == InstitutionKind::Council);
+            let mandate_baseline = self.council_mandate_baseline;
+            let legitimacy_deficit = (mandate_baseline - avg_council_legitimacy.to_f64()).max(0.0);
+            let collapse_arm = avg_council_legitimacy.to_f64()
+                < mandate_baseline - factions::LEGITIMACY_COLLAPSE_MARGIN;
+
             // ── Iteration 240: crisis-pressure hazard accumulator (§29.2) ──
             // Sustained grievance above the recruitment anchor and council
             // illegitimacy below the gate build pressure; genuine peace bleeds
@@ -134,7 +163,6 @@ impl Simulation {
                     };
                     (mean - factions::CRISIS_GRIEVANCE_ANCHOR).max(0.0)
                 };
-                let legitimacy_deficit = (0.5 - avg_council_legitimacy.to_f64()).max(0.0);
                 if grievance_excess > 0.0 || legitimacy_deficit > 0.0 {
                     self.faction_crisis_pressure += grievance_excess * CRISIS_PRESSURE_BUILD_RATE
                         + legitimacy_deficit * CRISIS_PRESSURE_BUILD_RATE;
@@ -148,11 +176,27 @@ impl Simulation {
                 && tick_u64.saturating_sub(self.last_faction_formation_tick)
                     >= factions::FACTION_REARM_COOLDOWN_TICKS;
 
-            // Faction formation: instant arm on the legitimacy cliff (legacy
-            // path) OR accumulated crisis pressure (Iteration 240).
+            // Fold the observed mandate into the slow baseline. Only a real
+            // observation folds: a world with no council has no mandate to
+            // learn (and the arm below must not open on a placeholder).
+            if has_council {
+                self.council_mandate_baseline = factions::mandate_baseline_fold(
+                    self.council_mandate_baseline,
+                    avg_council_legitimacy.to_f64(),
+                    factions::LEGITIMACY_DEBT_TAU_TICKS as f64,
+                );
+            }
+
+            // Faction formation: instant arm on a mandate COLLAPSE relative to
+            // the council's own baseline (i382, the successor of the legacy
+            // legitimacy cliff) OR accumulated crisis pressure (Iteration 240).
+            // The accumulator integrates, so brief but deep collapses (the
+            // i382 corpus's calm-village dip to 0.144 — a shipped cliff-only
+            // formation) contribute almost no pressure and would be lost by a
+            // deficit-only redesign; the instant arm is what preserves them.
             let should_form = faction_count < factions::MAX_FACTIONS
                 && tick_u64 > factions::FORMATION_COOLDOWN
-                && (avg_council_legitimacy < Fixed::from_f64(0.5) || pressure_arms);
+                && (collapse_arm || pressure_arms);
 
             if should_form {
                 let recruitable = factions::find_recruitable_agents(

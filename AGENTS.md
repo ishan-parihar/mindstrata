@@ -156,6 +156,21 @@ These rules exist because we repeatedly paid for violating them:
    Audit method ladder: `const` census → store-equilibrium probe (i376) → gate
    selectivity (i379) → trigger headroom (i378). Use all four; each is blind to what the
    next one finds.
+11. **A gate census is a snapshot of ONE seed — and verifying a DEFECT does not verify
+   the REPAIR (i382).** i379 read the faction legitimacy arm (`legit < 0.5`) at 0.0% open
+   in four worlds and queued it as unreachable; the i382 probe (5 scenarios × 3 seeds)
+   measured **0.00% in 8 of 15 worlds and 0.07–4.26% in the other 7**, against a 0.54–0.58
+   mandate equilibrium: the defect (an absolute bar a hair below its own distribution) was
+   right, the *shape* (dead) was wrong, and the armed set was decided by the seed. Two
+   rules follow. **(a)** An audit verdict needs the seed dimension before "unreachable"
+   becomes a fact; one seed's 0.0% is a sample, not a property. **(b)** The same corpus
+   that proves a defect must be used to choose the repair: i382's plan opened with
+   *deleting* the arm (the i372 precedent for a dead predicate), and the corpus refuted it
+   — 5 of 8 formations were cliff-only, all in quiet worlds the accumulator cannot
+   reproduce (it integrates; the instant arm is the step response). Count what a change
+   would REMOVE across the corpus, not only what it adds. Also: **check every SITE of a
+   reference** — the same absolute `0.5` fed both the arm and the i240 accumulator's
+   deficit, so both were dead together, and fixing one would have left the other inert.
 
 ## 5. Known Systemic Hazards
 
@@ -448,6 +463,21 @@ Live queue, in order (evidence link per item):
    sweep); goldens and snapshots byte-identical. **Also corrected by i381:** i378's
    "`panic_ratio` is the clean discriminator" was an artefact of sampling crisis seeds
    only — calm worlds are warm (85% of their ticks meet that leg).
+   **The same Class-4 ruling then closed the faction legitimacy reference (i382):**
+   the absolute `0.5` appeared at BOTH sites (the instant cliff arm and the i240
+   accumulator's deficit) and was dead at both in 8 of 15 worlds — the i382 probe
+   measured it opening 0.00% of ticks there while the mandate equilibrium sat at
+   0.54–0.58, and 0.07–4.26% elsewhere. Both sites now read a baseline the council's
+   own history established (`LEGITIMACY_DEBT_TAU_TICKS = 100`, derived from the
+   0.01/tick convergence rate; `LEGITIMACY_COLLAPSE_MARGIN = 0.05`, the offset the
+   deleted bar measured empirically). Deficit contribution went 0.0000 (8/15 worlds)
+   → 0.021–0.233 (15/15), formations 8 → 12 with all five collapse-only ones
+   preserved; **zero calibrated blast radius** (goldens byte-identical, no pin moved),
+   with the new `faction_trigger_reads_the_councils_own_mandate` pin as the runnable
+   check. **Still queued from i379's rulings:** the `needs.social` utility term
+   (Class 3b — needs the winner-decomposition census first) and the
+   `emotions.anger > 0.50` arm (near-dead at town scale — re-anchor or delete,
+   explicitly).
 2. **A9 — the envelope at constant density** — re-scoped by i344: a **fidelity** policy
    (max co-location 19 → 4, contacted share halved), **not** throughput (+9.1%/−2.3%/+5.6%
    at N=96/144/192). A charter decision; do not sell it as speed.

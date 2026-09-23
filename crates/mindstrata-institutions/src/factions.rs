@@ -58,7 +58,8 @@ pub const MAX_FACTIONS: usize = 4;
 pub const CRISIS_GRIEVANCE_ANCHOR: f64 = 0.45;
 
 /// Build rate per unit of crisis excess (grievance above `CRISIS_GRIEVANCE_ANCHOR`,
-/// council-legitimacy deficit below 0.5), applied per tick. Calibration: a
+/// council-legitimacy deficit below the council's own mandate baseline — i382),
+/// applied per tick. Calibration: a
 /// sustained excess of 0.05 (epidemic-grade discontent) arms in ~5K ticks; the
 /// calm-world excess (~0.005–0.015) arms in ~25–50K — liveness without
 /// clock-coups (the Iter-186 lesson).
@@ -81,8 +82,61 @@ pub const FACTION_FORMATION_PRESSURE_THRESHOLD: f64 = 0.5;
 /// formations / 30K probed). One formation per ~2 months of sustained peak
 /// crisis preserves the pressure-valve dynamic while giving each bloc time
 /// to act (protests, negotiation, dissolution). The legacy legitimacy-cliff
-/// path bypasses this gate (an outright legitimacy collapse always arms).
+/// path bypasses this gate (an outright legitimacy collapse always arms — i382
+/// made that arm relative to the council's own mandate baseline).
 pub const FACTION_REARM_COOLDOWN_TICKS: u64 = 8640;
+
+/// i382: the mandate baseline's time constant, in ticks — the reference the
+/// faction trigger measures the council's legitimacy AGAINST.
+///
+/// The audit's Class-4 ruling (i379/i381) says an absolute bar on a self-driven
+/// aggregate is a defect: its operating point drifts with the distribution it is
+/// testing, so "does the producer live" becomes a coin flip of the world. Both
+/// legitimacy sites read the absolute `0.5`, and the i382 probe measured exactly
+/// that: `legit < 0.5` opened 0.00% of ticks in **8 of 15** sampled worlds and
+/// 0.07–4.26% in the other 7, while the measured mandate equilibrium sits at
+/// 0.54–0.58 — the bar lived a hair below the equilibrium, so which worlds could
+/// ever form a faction through legitimacy was decided by the seed.
+///
+/// Derivation (not a fresh magic number): the council converges its legitimacy on
+/// its target at 0.01/tick (`institutions_impl`, "≈70-tick half-life"), so the
+/// baseline's time constant is that rate's reciprocal — the baseline is the
+/// mandate's own memory, one convergence time constant deep. Band check: the
+/// must-not-fire property holds across 60–1080 ticks (16×); at 3240+ every quiet
+/// world crosses the arm, and at 240 the instant arm opens quiet worlds
+/// spuriously (i382 probe, 15 worlds).
+pub const LEGITIMACY_DEBT_TAU_TICKS: u64 = 100;
+
+/// i382: how far the council's legitimacy must fall below its OWN mandate
+/// baseline before the instant (collapse) arm opens.
+///
+/// The margin, not an absolute level: a difference travels with each world's
+/// mandate instead of pinning the arm to where one world's equilibrium happened
+/// to sit. 0.05 is the offset the DELETED absolute bar measured empirically — 0.5
+/// against the 0.54–0.58 mandate equilibrium — which is why the relative form
+/// reproduces the shipped opening set (all five cliff-only formations in the
+/// i382 corpus, at zero spurious openings in the quiet worlds) while adding
+/// liveness in three crisis worlds the absolute bar left dark.
+pub const LEGITIMACY_COLLAPSE_MARGIN: f64 = 0.05;
+
+/// i382: fold an observed council mandate into the slow baseline.
+///
+/// `tau` is the time constant in ticks. Deliberately **f64**: the accumulator is
+/// recursive, so a `Fixed` update of `(observed − baseline) × (1/tau)` quantizes
+/// at 1e-4 per tick and the error does not average out — it becomes a standing
+/// bias (§5's truncation hazard applied to *state*, the i381 lesson). A cold
+/// baseline (`0.0`, a fresh sim or a restored snapshot) ADOPTS its first
+/// observation: starting at zero would make every young world maximally
+/// anomalous. Callers must only fold a real observation (no councils → no fold).
+pub fn mandate_baseline_fold(baseline: f64, observed: f64, tau: f64) -> f64 {
+    if observed <= 0.0 {
+        return baseline;
+    }
+    if baseline <= 0.0 {
+        return observed;
+    }
+    baseline + (observed - baseline) * (1.0 / tau)
+}
 
 /// Minimum tick interval between faction formation attempts.
 pub const FORMATION_COOLDOWN: u64 = 100;
@@ -496,6 +550,29 @@ mod tests {
         let (suppressed_armed, _) = council_response(Fixed::from_f64(0.5), 3, 12, Fixed::ONE);
         assert!(suppressed_unarmed);
         assert!(!suppressed_armed);
+    }
+
+    /// i382: a cold baseline adopts its first observation, a settled one tracks
+    /// it, and the fold is symmetric around the level it converges on — the three
+    /// properties the trigger's two sites depend on.
+    #[test]
+    fn mandate_baseline_cold_adopts_then_tracks() {
+        let tau = LEGITIMACY_DEBT_TAU_TICKS as f64;
+        // Cold (0.0 = never observed) adopts instead of folding from zero, which
+        // would read every young world as a total mandate collapse.
+        assert_eq!(mandate_baseline_fold(0.0, 0.6, tau), 0.6);
+        // A non-observation never folds (no councils → no mandate to learn).
+        assert_eq!(mandate_baseline_fold(0.0, 0.0, tau), 0.0);
+        assert_eq!(mandate_baseline_fold(0.55, 0.0, tau), 0.55);
+        // A step is tracked, not jumped: one tick moves 1/tau of the way.
+        let after = mandate_baseline_fold(0.6, 0.5, tau);
+        assert!((after - 0.599).abs() < 1e-9, "folded to {after}");
+        // Convergence: a sustained level is reached (the baseline is not sticky).
+        let mut b = 0.6;
+        for _ in 0..1000 {
+            b = mandate_baseline_fold(b, 0.5, tau);
+        }
+        assert!((b - 0.5).abs() < 1e-3, "settled at {b}");
     }
 
     #[test]

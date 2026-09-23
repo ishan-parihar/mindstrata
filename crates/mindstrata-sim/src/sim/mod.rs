@@ -662,6 +662,18 @@ pub struct Simulation {
     /// recursive `Fixed` fold quantizes on every tick and accumulates a standing
     /// bias. The gate quantizes once per tick (`anomaly_baseline_fixed`).
     moral_charge_baseline: [f64; crate::gossip::MORAL_PANIC_PROPOSITIONS as usize],
+    /// i382: the council's own mandate baseline — the reference the faction
+    /// trigger measures legitimacy against, in place of the deleted absolute
+    /// `0.5`. Both legitimacy sites read it: the instant collapse arm
+    /// (`legit < baseline − LEGITIMACY_COLLAPSE_MARGIN`) and the crisis-pressure
+    /// accumulator's deficit term (`max(0, baseline − legit)`).
+    ///
+    /// f64 for the same reason `faction_crisis_pressure` and
+    /// `moral_charge_baseline` are: a recursive `Fixed` fold quantizes every tick
+    /// and accumulates a standing bias (§5). 0.0 = cold; the fold adopts its
+    /// first real observation. Not snapshotted (like the pressure tank it feeds,
+    /// a restored run starts cold and learns its own mandate).
+    council_mandate_baseline: f64,
     /// §8.1.4 (P3-6): Famine production-suppression window — the tick (exclusive)
     /// until which a Famine shock suppresses grain output. A famine is a crop
     /// failure, not a one-shot store drain: without this, Work production

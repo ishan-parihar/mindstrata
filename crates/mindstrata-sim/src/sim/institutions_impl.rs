@@ -23,6 +23,14 @@ impl Simulation {
         // ── 12. Institutional collective psychology derivation ────
         // §23: Derive collective psychology from member states each tick.
         //
+        // i382: the faction trigger no longer compares this legitimacy against an
+        // absolute 0.5 — both of its sites (the instant collapse arm and the
+        // crisis-pressure deficit) read the council's own mandate baseline
+        // (`Simulation::council_mandate_baseline`). The `legitimacy < 0.5`
+        // references below are the HISTORICAL calibration record for the formulas
+        // in this block, which still stand: the bar is gone, the dynamics it was
+        // calibrated against are not. See `factions::LEGITIMACY_DEBT_TAU_TICKS`.
+        //
         // §29.2: Compute the population's average grievance once per tick.
         // Council legitimacy must reflect popular sentiment. Before this fix,
         // the recovery target was max(morale, 0.3) with no grievance term — and
@@ -125,8 +133,10 @@ impl Simulation {
                 // §7.3 (Iteration 186): post-revolution honeymoon — a fresh
                 // regime that just seized power has a popular mandate: floor
                 // its legitimacy target at 0.5 for a window so the faction
-                // trigger (`legitimacy < 0.5`) stays disarmed while the new
-                // regime governs. Pre-fix the 0.5 reset immediately decayed
+                // trigger stays disarmed while the new regime governs (i382:
+                // the trigger is relative now, and a mandate reset to 0.5 sits
+                // at most a hair under a ~0.54 baseline — the floor still
+                // covers the collapse arm's margin). Pre-fix the 0.5 reset immediately decayed
                 // back under 0.5 (~500 ticks, grievance still pinned high),
                 // a new faction formed, and calm villages churned 42–129
                 // revolutions per 100K. The honeymoon lets a regime actually

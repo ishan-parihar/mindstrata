@@ -1931,3 +1931,109 @@ fn awe_reverence_shields_legitimacy_is_live_and_deterministic() {
         );
     }
 }
+
+// ── i382: the faction trigger's legitimacy reference is the council's own ──
+
+/// i382: the faction trigger reads the council's LEARNED mandate baseline, not
+/// the deleted absolute `0.5`.
+///
+/// The i382 probe (`i382_legitimacy_channel`, 15 worlds) measured the absolute
+/// bar opening **0.00% of ticks in 8 of 15** worlds while the mandate
+/// equilibrium sat at 0.54–0.58: the bar lived a hair below the equilibrium, so
+/// whether a world could ever organize *through legitimacy* was decided by its
+/// seed. Both sites (the instant collapse arm and the accumulator's deficit)
+/// now read a baseline the council's own history established, so the reference
+/// travels with each world's mandate.
+///
+/// Three properties, all runnable here:
+///  1. the reference is LEARNED (it tracks the mandate the council holds);
+///  2. a mandate held BELOW that reference builds pressure — at a level the
+///     deleted absolute bar could not see at all (`> 0.5`);
+///  3. a mandate held AT its own reference does not build.
+///
+/// Measured here (seed 7, 46×46, N=48, at tick 3 000): the learned baseline is
+/// **0.609** — i.e. the deleted bar sat 0.109 below this world's mandate — and
+/// over 600 ticks the tank gains **0.00097** held at its own reference vs
+/// **0.0147** held 0.03 below it (level 0.579, above the deleted bar): 15.2×
+/// the drift, the channel live exactly where the absolute form measured zero.
+#[test]
+fn faction_trigger_reads_the_councils_own_mandate() {
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::institutions::InstitutionKind;
+    use mindstrata_sim::sim::SimConfig;
+
+    // A large village (N=48) so the mandate settles high enough that the forced
+    // level below sits ABOVE the deleted absolute bar — the discriminating case.
+    let mut sim = mindstrata_sim::Simulation::new(SimConfig {
+        seed: 7,
+        max_ticks: 20_000,
+        world_width: 46,
+        world_height: 46,
+        num_agents: 48,
+        snapshot_interval: None,
+    });
+    sim.populate();
+    sim.run(3_000);
+
+    let council_legitimacy = |s: &mindstrata_sim::Simulation| -> f64 {
+        let councils: Vec<f64> = s
+            .institutions
+            .iter()
+            .filter(|i| i.kind == InstitutionKind::Council)
+            .map(|i| i.legitimacy.to_f64())
+            .collect();
+        councils.iter().sum::<f64>() / councils.len() as f64
+    };
+
+    let baseline = sim.council_mandate_baseline();
+    let mandate = council_legitimacy(&sim);
+    // (1) learned, not a constant: the fold tracks the mandate the council holds.
+    assert!(
+        (baseline - mandate).abs() < 0.02,
+        "the mandate baseline ({baseline}) did not learn the observed mandate ({mandate})"
+    );
+    assert!(
+        (baseline - 0.5).abs() > 0.02,
+        "the reference is still the deleted absolute constant: {baseline}"
+    );
+
+    // (3) held at its own reference: no deficit to accumulate.
+    let before = sim.faction_crisis_pressure();
+    let hold_level = mandate;
+    for _ in 0..600 {
+        for inst in &mut sim.institutions {
+            if inst.kind == InstitutionKind::Council {
+                inst.legitimacy = Fixed::from_f64(hold_level);
+            }
+        }
+        sim.run(1);
+    }
+    let stable_delta = sim.faction_crisis_pressure() - before;
+
+    // (2) held BELOW the reference, at a level the deleted absolute bar could
+    // not see (> 0.5): the relative deficit is what makes it live. The fall is
+    // kept INSIDE the collapse margin (0.05) so this leg isolates the
+    // accumulator from the instant arm (which the probe's live collapse worlds
+    // pin: collapse-7/23 and famine-7 form with collapse-arm attribution).
+    let forced = mandate - 0.03;
+    assert!(
+        forced > 0.5,
+        "the forced level ({forced}) must sit above the deleted bar for this test to discriminate"
+    );
+    let before = sim.faction_crisis_pressure();
+    for _ in 0..600 {
+        for inst in &mut sim.institutions {
+            if inst.kind == InstitutionKind::Council {
+                inst.legitimacy = Fixed::from_f64(forced);
+            }
+        }
+        sim.run(1);
+    }
+    let fall_delta = sim.faction_crisis_pressure() - before;
+
+    assert!(
+        fall_delta > stable_delta * 5.0 && fall_delta > 0.003,
+        "a mandate held below its own baseline must build pressure \
+         (stable {stable_delta}, fall {fall_delta})"
+    );
+}

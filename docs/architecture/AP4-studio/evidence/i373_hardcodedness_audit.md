@@ -319,3 +319,42 @@ needs the winner-decomposition census first), the `emotions.anger > 0.50` arm (n
 town scale — re-anchor or delete, explicitly), and the faction `council legitimacy < 0.50`
 arm (never fires in any measured world — live-or-delete; it ORs with a live arm, so its
 presence is a false affordance until it is resolved).
+
+---
+
+## Refresh after i382 — the faction legitimacy reference is organic (Class 4 → Class A)
+
+i379's census put `council legitimacy < 0.50` in Class 4 (an absolute threshold on a
+self-driven aggregate) and its queue asked live-or-delete. i382 answers it, and the answer
+corrects the census's own reading.
+
+**The census was one seed's sample.** Over a 15-world grid (5 scenarios × seeds 42/7/23) the
+bar opens **0.00% of ticks in 8 worlds and 0.07–4.26% in the other 7** — i379's four-world
+“0.0%” was true of its seeds, not of the class. And it is **load-bearing**: 5 of the corpus's
+8 formations were armed by it alone, all in quiet worlds the pressure accumulator cannot
+reach (it integrates; a brief deep dip to 0.144 adds ~0.02 of tank). The delete option was
+refuted by the corpus that proved the defect.
+
+**The reference appears twice**, which the census missed: the instant cliff arm and the i240
+accumulator's `(0.5 − legit)` deficit are the same absolute number, so the legitimacy
+channel's *entire* contribution was seed-decided — 0.0000 pressure units in all
+pestilence/collapse/famine-town worlds, 36–100% of the tank in quiet ones.
+
+**Class A now holds both sites:** the baseline is an f64 EWMA of the mean council legitimacy
+(`τ = LEGITIMACY_DEBT_TAU_TICKS = 100`, derived as the reciprocal of the council's own
+0.01/tick convergence rate, cold-adopting its first observation); the deficit is
+`max(0, baseline − legit)` and the instant arm is `legit < baseline − 0.05`, where 0.05 is the
+offset the deleted bar measured empirically against the 0.54–0.58 mandate equilibrium.
+Measured: deficit liveness **0.0000 in 8/15 → 0.021–0.233 in 15/15**; formations 8 → 12, every
+collapse-only formation preserved; **zero** calibrated blast radius (goldens byte-identical,
+no pin re-anchored, no snapshot drift).
+
+**Method corrections recorded (doctrine §4.11).** (a) An audit verdict needs the seed
+dimension before “unreachable” becomes a fact. (b) Verifying a defect does not verify the
+repair: the same corpus must choose the fix, and it must be asked what the change REMOVES.
+(c) Check every SITE of a reference before classing it — one constant can carry two
+mechanisms.
+
+**Still queued from i379's rulings (unchanged):** the `needs.social` utility term (Class 3b —
+needs the winner-decomposition census), and `emotions.anger > 0.50` (near-dead at town scale —
+re-anchor or delete, explicitly).
