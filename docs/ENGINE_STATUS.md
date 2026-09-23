@@ -25,13 +25,14 @@ owner: SIM + PROD (AP4 Studio)
 |---|---|---|
 | Format | `cargo fmt --all --check` | clean |
 | Lints | `cargo clippy --workspace --quiet` | 0 warnings |
-| Full suite | `cargo test -p mindstrata-tests --lib --release` | **312 passed / 0 failed / 1 ignored** |
-| Sim unit | `cargo test -p mindstrata-sim --lib --release` | **301 / 301** |
-| Golden replay | `scripts/gate` | 5/5 (both baselines re-anchored at i384, then byte-identical) |
+| Full suite | `cargo test -p mindstrata-tests --lib --release` | **313 passed / 0 failed / 1 ignored** |
+| Sim unit | `cargo test -p mindstrata-sim --lib --release` | **310 / 310** |
+| Golden replay | `scripts/gate --full` | GREEN (both baselines byte-identical; last re-anchored at i384) |
 | Probe law | `scripts/bench_index.py --strict` | 0 violations |
+| Doc structure | `scripts/doc_index.py` | 71 governed docs classified, 0 ghosts |
 
-**Scale of the artefact:** 13 crates · ~146,300 LOC · 1,683 test functions · 217 probes
-· 167 evidence docs · 36 RON spec files · ~925 commits.
+**Scale of the artefact:** 13 crates · 464 `.rs` · ~148,900 LOC · 1,695 test functions
+· 223 probes · 174 evidence docs · 36 RON spec files · 937 commits.
 
 ## 2. Architecture
 
