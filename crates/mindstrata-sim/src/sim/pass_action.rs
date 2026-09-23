@@ -133,6 +133,14 @@ impl Simulation {
             wpj_eco_stage,
         );
 
+        // i383: the population's own mean anger — the reference the shock gate's
+        // ANGER arm reads (§4.10's Class-4 ruling: an absolute bar on a
+        // self-driven aggregate). Hoisted out of the agent loop (§6/i336: never
+        // re-fold a population aggregate per agent).
+        let pop_mean_anger = crate::psychology::emotion_regulation::mean_anger(emotions);
+        let anger_shock_bar =
+            pop_mean_anger * crate::psychology::emotion_regulation::EMOTION_SHOCK_RATIO;
+
         // ── 4. Action execution (per-tick effects) ────────────────
         for i in 0..agents.len() {
             // Track causal provenance_x flags per agent per tick
@@ -158,7 +166,14 @@ impl Simulation {
                     intention_abandoned_this_tick = true;
                 } else {
                     let stress = emotions[i].fear + emotions[i].anger;
-                    let emotional_shock = emotions[i].anger > Fixed::from_f64(0.5)
+                    // i383: the anger arm is RELATIVE to the population's own anger.
+                    // The absolute `anger > 0.5` opened for 0.00–0.30% of
+                    // agent-ticks over the i383 corpus (0.00% in 7 of 10 worlds) —
+                    // a decoration on a predicate whose fear arm alone opened for
+                    // 15.2–38.8%; the relative bar opens 3.1–19.6% in every world,
+                    // so the anger channel decides again. The FEAR arm keeps its
+                    // measured-discriminating bar (see EMOTION_SHOCK_RATIO).
+                    let emotional_shock = emotions[i].anger > anger_shock_bar
                         || emotions[i].fear > Fixed::from_f64(0.5);
                     if intention.should_abandon(tick_u64, stress, emotional_shock) {
                         // §3.2: Goal abandoned — move to rejected list for learning

@@ -6,7 +6,45 @@
 //! Regulation success depends on: personality, stress, social support, culture, skill, exhaustion.
 
 use mindstrata_core::fixed::Fixed;
+use mindstrata_person::person::DiscreteEmotions;
 use serde::{Deserialize, Serialize};
+
+/// i383: the multiple of its own reference at which an emotion reads as an ACUTE
+/// SHOCK rather than as its ordinary level.
+///
+/// The same multiple as the §7.2 panic trigger's anomaly leg (i381's
+/// `MORAL_PANIC_ANOMALY_RATIO`): a signal is anomalous when it clears its own
+/// reference by 25%. The reference is per-emotion and self-normalizing, because
+/// the absolute `0.5` bars the emotion→action gates shipped with do not match the
+/// emotions' own scales. The i383 probe (10 worlds = 5 scenarios × 2–3 seeds)
+/// measured `anger > 0.5` opening for **0.00–0.30% of agent-ticks** while
+/// `fear > 0.5` opens for **15.2–38.8%** — so this law replaces the anger arms
+/// only, and leaves the fear bars alone: a threshold is a defect only when it
+/// stops discriminating (§4.10), and fear's does not.
+pub const EMOTION_SHOCK_RATIO: Fixed = Fixed::from_raw(12500); // 1.25
+
+/// i383: the population's own mean anger this tick — the reference the ANGER arms
+/// read.
+///
+/// No per-agent chronic anger state exists in the engine: `derived.resentment`
+/// is an injustice index that sits an order of magnitude ABOVE the acute anger
+/// signal (pooled 0.177–0.283 vs 0.000–0.012 across the i383 corpus), so a
+/// `anger > 1.25 × resentment` gate would be as dark as the bar it replaces
+/// (0.00–3.85% open). The population mean is self-normalizing instead: in a calm
+/// population the bar sits at ~1.25× a near-zero mean (a genuine spike), and in
+/// an enraged population it rises with everyone's anger (only spikes above the
+/// crowd pass). Measured open rate: **3.1–19.6% of agent-ticks in every world**
+/// of the corpus, against 0.00–0.30% for the absolute bar.
+pub fn mean_anger(emotions: &[DiscreteEmotions]) -> Fixed {
+    if emotions.is_empty() {
+        return Fixed::ZERO;
+    }
+    let sum: Fixed = emotions
+        .iter()
+        .map(|e| e.anger)
+        .fold(Fixed::ZERO, |a, b| a + b);
+    sum / Fixed::from_int(emotions.len() as i64)
+}
 
 /// Available emotion regulation strategies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

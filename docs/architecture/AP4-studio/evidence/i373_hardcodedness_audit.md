@@ -358,3 +358,31 @@ mechanisms.
 **Still queued from i379's rulings (unchanged):** the `needs.social` utility term (Class 3b —
 needs the winner-decomposition census), and `emotions.anger > 0.50` (near-dead at town scale —
 re-anchor or delete, explicitly).
+
+---
+
+## Refresh after i383 — the anger arms are relative; the fear arms were never defects
+
+The same Class-4 flag (`emotions.anger > 0.50`, near-dead at town scale) resolved into a
+**split** the audit's one-constant-one-class labelling could not express: at the predicate's
+own scope (per agent-tick) `anger > 0.5` opens **0.00% in 7 of 10 worlds**, while the
+`fear > 0.5` arm of the same OR opens **15.2–38.8%** and is a normal, discriminating gate.
+
+- **Class 4 → Class A**: both anger arms (the abandonment shock and the anger→Work emitter)
+  now read `1.25 × the population's own mean anger` — open 3.1–19.6% in every world. The
+  emitter, a **dead producer** no test could see, now fires 0.020–0.184 times per agent-tick.
+- **Class C (kept)**: the fear bars. Their open rate is stable across calm/crisis ×
+  village/town, so endogenizing them buys nothing measurable and costs robustness — the
+  i379 ruling ("a threshold is a defect only when it stops discriminating") applied *inside*
+  one predicate.
+- **Refuted candidate**: `derived.resentment` as anger's per-agent chronic baseline. It is an
+  injustice index an order of magnitude ABOVE the acute signal (pooled 0.177–0.283 vs
+  0.000–0.012), so the bar would have been as dark as the one it replaced.
+
+**Method corrections recorded (doctrine §4.12, §4.11 corollary).** Match the metric's scope to
+the predicate's scope — the probe's first cut measured per *tick* and read fear at 100.00%,
+which nearly shipped a fix to the one arm that worked. And a single constant census row can
+carry two arms with opposite verdicts: check each arm, not each number.
+
+**Still queued from i379's rulings:** the `needs.social` utility term (Class 3b — needs the
+winner-decomposition census first).

@@ -171,6 +171,16 @@ These rules exist because we repeatedly paid for violating them:
    would REMOVE across the corpus, not only what it adds. Also: **check every SITE of a
    reference** — the same absolute `0.5` fed both the arm and the i240 accumulator's
    deficit, so both were dead together, and fixing one would have left the other inert.
+12. **Match the metric's SCOPE to the predicate's scope (i383).** A per-agent gate measured
+   per *tick* ("did any agent clear it") reads 100% whenever one agent is above it and 0%
+   whenever none is — figures that have nothing to do with the gate's discrimination. i383's
+   first probe reported `fear > 0.5` at **100.00% in all 10 worlds** and nearly shipped the
+   verdict "the shock gate is unconditional decoration"; at the predicate's own scope the arm
+   opens a healthy **15.2–38.8%** of agent-ticks and needed no change. State the scope in the
+   probe's column headings, and re-read every alarming rate at the other scope before acting.
+   Corollary (the same iteration): the audit's class can be **split across arms of one
+   predicate** — `anger > 0.5` was dead while `fear > 0.5` beside it was live, so fix the arm
+   that is dark and leave the one that discriminates (§4.10).
 
 ## 5. Known Systemic Hazards
 
@@ -475,9 +485,16 @@ Live queue, in order (evidence link per item):
    preserved; **zero calibrated blast radius** (goldens byte-identical, no pin moved),
    with the new `faction_trigger_reads_the_councils_own_mandate` pin as the runnable
    check. **Still queued from i379's rulings:** the `needs.social` utility term
-   (Class 3b — needs the winner-decomposition census first) and the
-   `emotions.anger > 0.50` arm (near-dead at town scale — re-anchor or delete,
-   explicitly).
+   (Class 3b — needs the winner-decomposition census first). **The anger arms then
+   landed (i383):** `emotions.anger > 0.50` was measured opening for **0.00–0.30% of
+   agent-ticks** at BOTH of its sites — the abandonment shock (ORed with a live fear arm,
+   hence a false affordance) and the anger→Work "aggressive productivity" emitter (anger
+   the only gate, hence a dead producer) — while `fear > 0.5` beside it opened 15.2–38.8%
+   and was left alone. Both anger arms now read `1.25 × the population's own mean anger`
+   (`EMOTION_SHOCK_RATIO`, the i381 anomaly multiple); the emitter's priority is the
+   excess over that bar. Live: anger-sourced Work goals 0 in 7 of 10 worlds →
+   **0.020–0.184 per agent-tick in all 10**. One collapse golden re-anchored with mortality
+   unchanged, calm golden byte-identical, no snapshot drift.
 2. **A9 — the envelope at constant density** — re-scoped by i344: a **fidelity** policy
    (max co-location 19 → 4, contacted share halved), **not** throughput (+9.1%/−2.3%/+5.6%
    at N=96/144/192). A charter decision; do not sell it as speed.

@@ -196,6 +196,10 @@ pub fn system_goal_generation(
 ) {
     let tick = ctx.tick;
     let gates = GoalGates::for_params(params);
+    // i383: the population's own anger this tick — the reference the anger→Work
+    // emitter reads (hoisted; §6). See `emotion_regulation::mean_anger`.
+    let anger_shock_bar = crate::psychology::emotion_regulation::mean_anger(emotions)
+        * crate::psychology::emotion_regulation::EMOTION_SHOCK_RATIO;
     for (i, (need, agent_goals)) in needs.iter().zip(goals.iter_mut()).enumerate() {
         // ── Goal decay: reduce priority of old goals over time ──
         // §24: Goals that aren't addressed gradually lose priority.
@@ -297,8 +301,16 @@ pub fn system_goal_generation(
             }
 
             // High anger → Work (aggressive productivity) when hunger is manageable
-            if emo.anger > Fixed::from_f64(0.5) && need.hunger < Fixed::from_f64(0.8) {
-                let anger_prio = emo.anger * Fixed::from_f64(0.3);
+            //
+            // i383: "high anger" is relative to the population's own anger — the
+            // absolute `anger > 0.5` opened for 0.00–0.30% of agent-ticks (a dead
+            // emitter in 7 of 10 probed worlds) because anger is an acute,
+            // fast-decaying emotion (per-agent p50 0.000). The priority is the
+            // EXCESS over that reference, so the goal scales with the anomaly's
+            // size instead of pinning to a value below the arbitration bar (the
+            // i380 lesson: a term that cannot reach the bar is not a repair).
+            if emo.anger > anger_shock_bar && need.hunger < Fixed::from_f64(0.8) {
+                let anger_prio = (emo.anger - anger_shock_bar) * Fixed::from_f64(0.3);
                 if let Some(existing) = agent_goals
                     .iter_mut()
                     .find(|g| g.kind == crate::person::GoalKind::Work)

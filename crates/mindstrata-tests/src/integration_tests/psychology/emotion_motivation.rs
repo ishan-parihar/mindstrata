@@ -1031,3 +1031,100 @@ fn calm_world_valence_equilibrium_avoids_dysphoria_plateau() {
          (audit-E1 baseline had zero)",
     );
 }
+
+// ── i383: acute emotion → behaviour arms read their own scale ──────────────
+
+/// i383: the anger→Work emitter ("aggressive productivity") is gated on an acute
+/// anger SPIKE relative to the population's own anger, not on the absolute
+/// `anger > 0.5` that the i383 probe measured opening for **0.00–0.30% of
+/// agent-ticks** (dead in 7 of 10 worlds) while the fear arm beside it opened for
+/// 15.2–38.8% — a decoration, not a gate.
+///
+/// Three properties:
+///  1. a uniformly angry population emits NOTHING for its members (nobody is
+///     anomalous — the bar rises with the crowd),
+///  2. one spike in a calm population emits for the spiking agent only,
+///  3. the emitter is live in a crisis world (the dead-producer check).
+#[test]
+fn anger_driven_work_is_relative_to_the_population() {
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::person::{GoalKind, GoalSource};
+    use mindstrata_sim::scenario::Scenario;
+
+    let anger_work_goals = |sim: &mindstrata_sim::Simulation| -> Vec<usize> {
+        sim.agents
+            .iter()
+            .enumerate()
+            .filter(|(_, a)| {
+                a.goals
+                    .iter()
+                    .any(|g| g.kind == GoalKind::Work && g.source == GoalSource::Emotion)
+            })
+            .map(|(i, _)| i)
+            .collect()
+    };
+
+    // 1 + 2: hold a chosen anger vector for 200 ticks and read the emitter.
+    let run_with_anger = |levels: &[f64]| -> Vec<usize> {
+        let mut sim = mindstrata_sim::Simulation::new(mindstrata_sim::sim::SimConfig {
+            seed: 42,
+            max_ticks: 20_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: levels.len() as u32,
+            snapshot_interval: None,
+        });
+        sim.populate();
+        sim.run(400);
+        let mut seen: Vec<usize> = Vec::new();
+        for _ in 0..200 {
+            for (i, a) in sim.agents.iter_mut().enumerate() {
+                a.emotions.anger = Fixed::from_f64(levels[i]);
+            }
+            sim.run(1);
+            for i in anger_work_goals(&sim) {
+                if !seen.contains(&i) {
+                    seen.push(i);
+                }
+            }
+        }
+        seen.sort_unstable();
+        seen
+    };
+
+    // (1) uniformly angry — 0.30 everywhere, so the reference sits at 1.25×0.30
+    // and nobody is a spike. Nobody may emit.
+    let uniform = run_with_anger(&[0.30; 12]);
+    assert!(
+        uniform.is_empty(),
+        "a uniformly angry population emitted anger-Work goals for members {uniform:?} — \
+         the gate is still absolute, not relative"
+    );
+
+    // (2) one spike (agent 5 at 0.90) in a calm crowd (0.05): the crowd's mean
+    // puts the bar at ~0.08, so the spike clears it and the others do not block it.
+    let mut levels = vec![0.05f64; 12];
+    levels[5] = 0.90;
+    let spike = run_with_anger(&levels);
+    assert_eq!(
+        spike,
+        vec![5],
+        "the spike must emit for the spiking agent alone (got {spike:?})"
+    );
+
+    // (3) liveness in a crisis world — the absolute bar's dead-producer check.
+    let mut sc = Scenario::collapse();
+    sc.seed = 7;
+    sc.ticks = 4_320;
+    let mut sim = mindstrata_sim::Simulation::from_scenario(sc);
+    sim.populate();
+    let mut emitted = 0usize;
+    for _ in 0..4_320 {
+        sim.run(1);
+        emitted += anger_work_goals(&sim).len();
+    }
+    assert!(
+        emitted > 0,
+        "the anger→Work emitter is dark in a collapse cascade — the producer is dead again"
+    );
+}
