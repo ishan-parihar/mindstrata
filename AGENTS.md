@@ -523,6 +523,19 @@ contact → fission) in `PLAN_DC5_DEVELOPMENT.md` §4. Two corrections this pair
 insists on: a consumer's **response elasticity** is part of its suitability (§4.15), and the
 `max co-location 19 → 4` fix was **A11's (i345)**, not A9's.
 
+**i392b LANDED** (`evidence/i392b_wander_band.md`) — the exploration driver's stale band is
+**measured, re-contracted and pinned by a test for the first time**. i351's "0.5–3% of
+decisions at 20K" had stopped being true (12-seed family: **1.67–8.81%, mean 4.30%**) and the
+breach was already sitting in `ENGINE_STATUS` §5's own i384 table, with nothing asserting it
+because the instrument was a probe. The re-contract was decided by the band's own stated
+rationale: **no Work displacement** (Work +1.18 pt at N=12, −0.76 pt at N=48 at the recorded
+config), so re-calibrating would have been a magnitude knob pulled for nothing (§4.4). The
+contract is now **liveness + gate exclusivity (≥99% of wins quiet-window; measured 100%) +
+boundedness (≤12%, sized between the calibrated 9.20% and the over-drive coefficient 3.0's
+13.30%)**, and both halves were **proven to trip** (coefficient 0 → liveness; 5.0 → bound).
+Behaviour is unchanged — goldens byte-identical. Recorded debt: **3–76% of Wander's wins are
+noise-decided** (mean 32%), an action-layer margin question. **i392 rows 3–5 are now unblocked.**
+
 Live queue, in order (evidence link per item):
 
 0. **DC-5 W0 — the named dead/inert surfaces (live now).** **i387 LANDED** (the utility is

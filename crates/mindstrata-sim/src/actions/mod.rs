@@ -48,8 +48,29 @@ const APPROACH_WANDER_BONUS: Fixed = Fixed::from_raw(500); // 0.05
 /// mean-loss 1.61, wins 0): at coef 2.0 the term is 0.58–0.96 — competitive
 /// with the 0.1–0.4 winning-utility band that holds when biological needs
 /// are quiet (the gate's condition), without reaching the 1.2+ wall of a
-/// pressed agent (and the gate excludes them anyway). The 0.5–3%-share
-/// target band (§4.2) is verified in vivo by `i351_wander_bands`.
+/// pressed agent (and the gate excludes them anyway).
+///
+/// **i351's "0.5–3% share" target band is RETIRED (i392b; `i392b_wander_band`).**
+/// It was an uncalibrated guess that had stopped being true without anyone
+/// noticing: `ENGINE_STATUS.md` §5's own i384 table already records Wander at
+/// **4.4% / 5.4%** of decisions, and no test asserted either claim — the i351
+/// instrument is a probe, so no gate ever re-measured it. Re-measured on the
+/// 12-seed family at 20K: **1.67–8.81%, mean 4.30%**. The band's stated purpose
+/// was a Work-displacement guard, and there is no displacement: seed 42 at the
+/// recorded config reads Work **33.88% vs 32.70%** (+1.18 pt) at N=12 and
+/// **29.34 vs 30.10** (−0.76 pt) at N=48.
+///
+/// The contract is now the three invariants that hold on every seed, pinned by
+/// `exploration_driver_is_live_gated_and_bounded_across_the_seed_family`:
+/// **liveness** (it reaches the deliberative layer on every seed), **gate
+/// exclusivity** (≥99% of wins inside the need-quietude window — measured 100%,
+/// i.e. exploration never outbids provisioning), and **boundedness** (≤12% — the
+/// calibrated family maxes at 9.20% and the over-drive coefficient 3.0 at
+/// 13.30%, so the guard sits between them and trips at the over-drive regime).
+/// The
+/// magnitude is recorded rather than asserted, because 3–76% of Wander's wins are
+/// decided within the decision-noise amplitude (systemic debt, §4.5).
+/// `i351_wander_bands` and `i392b_wander_band` both remain live instruments.
 const WANDER_NOVELTY_COEF: Fixed = Fixed::from_raw(20_000); // 2.0
 
 /// i356 (Idle revival): the recreation driver's coefficient — utility per

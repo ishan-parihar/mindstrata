@@ -120,14 +120,24 @@ Wander 4.4 / 5.4, Idle 1.2 / 0.4, Worship 1.1 / 0.3, Move 0.39 / 0.45.
 arbitrations, half is schedule, ~6–7% habit, and the crisis rungs (feud, veto, reflex)
 fire rarely by design. The deliberative surface is **wider than the pre-i347 numbers this
 table used to carry** (utility 32.8% → 41.1%), because `Wander`, `Idle` and `Move` — all
-dead or near-dead before i347/i351/i356 — now enter the arbitration. **One calibration caveat
-attaches to the `Wander` share (i392 row 2):** the i351 acceptance band for the exploration
-driver (`0.5–3%` of decisions at 20K) **no longer holds** — re-running i351's own instrument
-against the current tree reads **5.44% (seed 42) / 3.53% (seed 7)** at 20K, i.e. 1.2–1.8× the
-band's ceiling, because the action layer moved under the claim (i356/i387/i388/i389/i390) and
-nothing enforced it. That is recorded as the open root cause **i392b** rather than papered
-over: the band is repaired or the coefficient re-calibrated with the band as the contract,
-and a **test** (not a probe) goes behind the resulting claim. Two caveats worth
+dead or near-dead before i347/i351/i356 — now enter the arbitration. **The `Wander` share's
+old acceptance band was retired at i392b, and the driver now has a tested contract.** i351's
+"0.5–3% of decisions at 20K" was an uncalibrated guess that had stopped being true — the table
+above (*this* table, re-measured at i384) already carried Wander **4.4 / 5.4**, and nothing
+asserted the claim because i351's instrument is a probe, not a test. Re-measured on the
+**12-seed family** at i351's own config (**1.67–8.81%, mean 4.30%**, liveness 12/12), and the
+re-contract was decided by the test the band's rationale names: **no Work displacement**
+(seed 42 at i384's exact config: Work **33.88% vs 32.70%**, +1.18 pt at N=12; **29.34 vs
+30.10**, −0.76 pt at N=48), so a coefficient change would have been a magnitude knob pulled
+for nothing. The contract is now **liveness** (reaches the deliberative layer on every seed),
+**gate exclusivity** (≥99% of wins inside the need-quietude window — measured 100%, so
+exploration never outbids provisioning) and **boundedness** (≤12%, sized between the
+calibrated family max 9.20% and the over-drive coefficient 3.0's 13.30%), pinned by
+`exploration_driver_is_live_gated_and_bounded_across_the_seed_family` and **proven to trip**
+on both halves. The magnitude is recorded rather than asserted: **3–76% of Wander's wins are
+decided within the decision-noise amplitude** (mean 32%), which is recorded debt on the action
+layer's margin, not something a threshold fixes. Behaviour unchanged — the coefficient is
+untouched and both goldens stay byte-identical. Two caveats worth
 stating plainly: `Socialize` is now reached by **both** layers — i387 decomposed the
 arbitration bucket by bucket and i388 wired the two channels it lacked (the relational
 urgency family: `Attachment\|Care\|Romance → Socialize`, `Belonging → Socialize\|Worship`;

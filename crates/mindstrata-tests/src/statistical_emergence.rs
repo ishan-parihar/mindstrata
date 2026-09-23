@@ -261,4 +261,112 @@ mod tests {
             "at least one seed should form factions (got {counts:?})"
         );
     }
+
+    /// i392b: the exploration driver's contract, **re-contracted from a measured
+    /// family** — the retired claim was "Wander share in the 0.5–3% of decisions
+    /// band at 20K" (i351's acceptance reading), and it had quietly stopped being
+    /// true: `ENGINE_STATUS.md` §5's own i384 table records Wander at **4.4% /
+    /// 5.4%** while the code comment still asserted the band, and *nothing
+    /// asserted either*. Seven probes interpolate the law; no test did.
+    ///
+    /// Why the magnitude is **not** what gets pinned (§4.10): a band tight enough
+    /// to discriminate the share re-creates the knife-edge pin that made the old
+    /// claim unenforceable. The census measures **3–76% of Wander's wins decided
+    /// within the decision-noise amplitude** (`i392b_wander_band` leg D), so the
+    /// magnitude is recorded — 1.63–9.20% across the family, mean ≈4.5% — while
+    /// the *invariants* are asserted. Rationale for the re-contract over a
+    /// re-calibration: the band's own stated purpose is a Work-displacement
+    /// guard, and Work does not move — seed 42 at i384's exact config reads
+    /// **33.88% vs the recorded 32.70%** (+1.18 pt) at N=12 and **29.34 vs 30.10**
+    /// (−0.76 pt) at N=48. Nothing is being displaced, so the coefficient is
+    /// still at a defensible operating point and only the claim was stale.
+    ///
+    /// The three pinned invariants, each measured on all six seeds:
+    ///   1. **liveness** — the driver reaches the deliberative layer on every
+    ///      seed (a driver that stops winning is the dead-producer class, §2.3);
+    ///   2. **gate exclusivity** — ≥99% of wins lie inside the need-quietude
+    ///      window, i.e. exploration never outbids provisioning (measured 100%,
+    ///      with the 1-point slack absorbing the two counters' ±1 instrumentation
+    ///      skew);
+    ///   3. **boundedness** — no seed runs away. The guard is **12%**, sized from
+    ///      the sweep rather than picked: the calibrated family maxes at **9.20%**
+    ///      (coefficient 2.0) and the over-drive coefficient i351 flagged
+    ///      (**3.0**) maxes at **13.30%** — 12% leaves the calibrated spread ~30%
+    ///      of headroom *and* trips at the over-drive regime. Both halves of this
+    ///      gate were proven to trip (coefficient 0 → the liveness assertion with
+    ///      "seed 1 produced 0 Wander selections"; coefficient 5.0 → the bound at
+    ///      15.31%), per the i170 subsystem-gate rule.
+    ///
+    /// The family spans the measured extremes (seed 44 min, seed 99 max) plus the
+    /// calibrated seed — a bound asserted on a friendly subset is a lucky-seed
+    /// pin (§4.1). One test case on purpose: the census sink is process-global
+    /// (see `sim::tests::census`), and this crate has no other census user.
+    #[test]
+    fn exploration_driver_is_live_gated_and_bounded_across_the_seed_family() {
+        use mindstrata_sim::sim::decision_census;
+        const FAMILY: [u64; 6] = [1, 7, 11, 42, 44, 99];
+        const TICKS: u64 = 10_000;
+        /// `ACTION_NAMES` index of `Wander`.
+        const WANDER: usize = 7;
+        /// `SOURCE_NAMES` index of `utility` — the only deliberating source.
+        const UTILITY: usize = 4;
+        const MAX_SHARE_PCT: f64 = 12.0;
+
+        let mut measured = Vec::new();
+        for seed in FAMILY {
+            let mut sim = Simulation::new(SimConfig {
+                seed,
+                max_ticks: TICKS,
+                world_width: 32,
+                world_height: 32,
+                num_agents: 12,
+                snapshot_interval: None,
+            });
+            sim.populate();
+            decision_census::reset();
+            decision_census::enable();
+            sim.run(TICKS);
+            decision_census::disable();
+            let r = decision_census::report();
+
+            let deliberated = r.cross[UTILITY][WANDER];
+            assert!(
+                deliberated > 0,
+                "i392b: the exploration driver must reach the deliberative layer on \
+                 every seed; seed {seed} produced 0 Wander selections in {TICKS} ticks"
+            );
+
+            // Gate exclusivity: a win outside the quiet window would mean
+            // exploration outbidding provisioning, which the driver's design
+            // forbids (it is gated on `max(hunger, thirst, fatigue) < 0.5`).
+            assert!(
+                r.quiet_wander.wins * 100 >= r.wander.wins * 99,
+                "i392b: exploration must stay inside the quiet window; seed {seed} won \
+                 {} arbitrations of which only {} were quiet-gated",
+                r.wander.wins,
+                r.quiet_wander.wins
+            );
+
+            let share = deliberate_share(r.total(), deliberated);
+            assert!(
+                share <= MAX_SHARE_PCT,
+                "i392b: Wander must not run away; seed {seed} spent {share:.2}% of \
+                 decisions wandering (guard {MAX_SHARE_PCT}%)"
+            );
+            measured.push(share);
+        }
+        // Recorded, not asserted: the family's spread is the measured band the
+        // retired claim used to guess at (i392b leg D).
+        let mean = measured.iter().sum::<f64>() / measured.len() as f64;
+        assert!(
+            (1.0..=12.0).contains(&mean),
+            "i392b: the measured mean share should track the probe's ≈4.5% \
+             (family {measured:?}, mean {mean:.2}%)"
+        );
+    }
+
+    /// Share of recorded decisions that were `Wander`, in percent.
+    fn deliberate_share(total: u64, wander_decisions: u64) -> f64 {
+        wander_decisions as f64 / total.max(1) as f64 * 100.0
+    }
 }
