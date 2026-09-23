@@ -523,9 +523,17 @@ Live queue, in order (evidence link per item):
    `chronic_pain_risk`, `sensory_acuity`, `puberty_age` are drawn, defaulted and blended, and
    read by nothing outside `genome.rs` (the 6th, `EmbodiedState.metabolic`, is the
    instrument's documented false-positive class: a consumer in the field's own file). One row
-   is a live affordance the engine already measures — `reproductive.rs:168` reads a hardcoded
-   `13.0` while `puberty_age` draws 11.0–15.0. Next: **i392** the dead-gene wiring act, then
-   **i393** the speech-act/kind migration. Carried forward from i388 as
+   is a live affordance the engine already measures — `reproductive.rs:168` read a hardcoded
+   `13.0` while `puberty_age` draws 11.0–15.0. **i392 row 1 LANDED**
+   (`evidence/i392_puberty_clock.md`): the clock now reads
+   `ReproductiveUpdateParams.puberty_age`, fed from the genome, with the retired constant as
+   the default so the wiring is midpoint-neutral by construction. Probe: gene spread
+   3.3–3.9 yr; **0 agent-ticks in age [10,16) over 240K + 987K agent-ticks** (founders ≥18,
+   the ramp opens at ~385 000 ticks) so the fix is invisible in every corpus — and both
+   goldens are byte-identical, 0 re-anchors. Live at the clock: a 12-year-old reads
+   `Early`/0.1428 on gene 11.0, `Prepubescent` on 15.0, and identical to pre-fix on 13.0.
+   Rows 2–5 of the act (`sensory_acuity`, `aggression_threshold`, `novelty_seeking`,
+   `chronic_pain_risk`) open. Then **i393** the speech-act/kind migration. Carried forward from i388 as
    measured-but-unexplained: action duration rose 4.31 → 5.40 ticks and the 2K relationship
    stages shifted shallower (`Unnoticed` 20 → 26, `Friend` 8 → 5) — W2 must decide whether
    contact falls when the drive is served *before* the sparse-store question is re-opened.

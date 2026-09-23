@@ -497,6 +497,9 @@ impl EmbodiedState {
                 stress_suppression: params.reproduction_stress_suppression,
                 age_decline_rate: params.reproduction_age_decline_rate,
                 gestation_rate_mult: params.reproduction_gestation_rate,
+                // i392: the heritable puberty onset, wired where the constant was.
+                puberty_age: self.genome.fertility_predispositions.puberty_age,
+                ..reproductive::ReproductiveUpdateParams::default()
             },
         );
 

@@ -44,6 +44,16 @@ pub struct ReproductiveUpdateParams {
     pub age_decline_rate: Fixed,
     /// Gestation rate multiplier (higher = faster pregnancy). Range: 0.5–2.0, default 1.0.
     pub gestation_rate_mult: Fixed,
+    /// i392: the age at which puberty begins — the heritable
+    /// `genome.fertility_predispositions.puberty_age` (drawn U(11.0..15.0), midpoint
+    /// 13.0). The default is the **midpoint**, which is exactly the constant this
+    /// clock read before the gene was wired (§4.6: a gene-shaped law must be
+    /// midpoint-neutral, so the population the old constant described sees no
+    /// change and only carriers at the tails move).
+    pub puberty_age: Fixed,
+    /// The age at which puberty completes (the maturity end of the ramp).
+    /// Not genome-shaped yet; recorded rather than invented.
+    pub maturity_age: Fixed,
 }
 
 impl Default for ReproductiveUpdateParams {
@@ -52,6 +62,8 @@ impl Default for ReproductiveUpdateParams {
             stress_suppression: Fixed::from_f64(0.3),
             age_decline_rate: Fixed::from_f64(0.03),
             gestation_rate_mult: Fixed::from_f64(1.0),
+            puberty_age: Fixed::from_f64(13.0),
+            maturity_age: Fixed::from_f64(18.0),
         }
     }
 }
@@ -164,9 +176,15 @@ impl ReproductiveState {
         nutrition: Fixed,
         params: ReproductiveUpdateParams,
     ) {
-        // Puberty progression based on age
-        let puberty_age = Fixed::from_f64(13.0);
-        let maturity_age = Fixed::from_f64(18.0);
+        // Puberty progression based on age.
+        //
+        // i392: this used to be a village-wide `Fixed::from_f64(13.0)` — a constant
+        // standing in for a value the engine already measures per agent
+        // (`genome.fertility_predispositions.puberty_age`), which is why the gene
+        // was inert (i391's census). It now comes from the params, and the caller
+        // feeds it the genome.
+        let puberty_age = params.puberty_age;
+        let maturity_age = params.maturity_age;
 
         if age_years < puberty_age {
             self.puberty_stage = PubertyStage::Prepubescent;
@@ -335,6 +353,61 @@ mod tests {
         );
         assert_eq!(r.sexual_maturity, Fixed::ONE);
         assert_eq!(r.puberty_stage, PubertyStage::Complete);
+    }
+
+    /// i392: the maturity curve is driven by `puberty_age`, and the value the
+    /// caller feeds it (`genome.fertility_predispositions.puberty_age`) is what
+    /// moves the onset — a 12-year-old is mid-puberty on the early gene and
+    /// pre-pubescent on the late one.
+    #[test]
+    fn puberty_onset_follows_the_params_gene() {
+        let maturity_at = |age: f64, puberty_age: f64| {
+            let mut r = ReproductiveState::default();
+            r.tick_update(
+                Fixed::from_f64(age),
+                Fixed::ONE,
+                Fixed::ZERO,
+                Fixed::ZERO,
+                Fixed::ONE,
+                ReproductiveUpdateParams {
+                    puberty_age: Fixed::from_f64(puberty_age),
+                    ..ReproductiveUpdateParams::default()
+                },
+            );
+            (r.sexual_maturity, r.puberty_stage)
+        };
+
+        let (early_maturity, early_stage) = maturity_at(12.0, 11.0);
+        let (late_maturity, late_stage) = maturity_at(12.0, 15.0);
+        assert!(
+            early_maturity > Fixed::ZERO,
+            "the early gene has begun puberty"
+        );
+        assert_ne!(early_stage, PubertyStage::Prepubescent);
+        assert_eq!(late_maturity, Fixed::ZERO, "the late gene has not");
+        assert_eq!(late_stage, PubertyStage::Prepubescent);
+    }
+
+    /// §4.6 midpoint neutrality: the constant this clock used to read (13.0) is
+    /// exactly the midpoint of the gene's 11.0–15.0 draw, so the population the
+    /// old constant described is unaffected — only the tails move.
+    #[test]
+    fn the_default_puberty_age_is_the_gene_midpoint() {
+        assert_eq!(
+            ReproductiveUpdateParams::default().puberty_age,
+            Fixed::from_f64(13.0),
+            "default must stay the pre-i392 constant"
+        );
+        let mut r = ReproductiveState::default();
+        r.tick_update(
+            Fixed::from_f64(12.9),
+            Fixed::ONE,
+            Fixed::ZERO,
+            Fixed::ZERO,
+            Fixed::ONE,
+            ReproductiveUpdateParams::default(),
+        );
+        assert_eq!(r.puberty_stage, PubertyStage::Prepubescent);
     }
 
     #[test]

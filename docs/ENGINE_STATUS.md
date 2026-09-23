@@ -231,15 +231,20 @@ institutional effects (treasury accumulating with no holder to spend it, legitim
 are unmeasured. It would have blocked the inter-community layer's offices (W3).
 
 
-**Dead genes (i391, NEW — five confirmed, i392 scheduled):** `aggression_threshold`,
-`novelty_seeking`, `chronic_pain_risk`, `sensory_acuity` and `puberty_age` are drawn at
+**Dead genes (i391 census; i392 row 1 CLOSED, rows 2–5 open):** `aggression_threshold`,
+`novelty_seeking`, `chronic_pain_risk`, `sensory_acuity` and `puberty_age` were drawn at
 founder creation, defaulted and blended at `inherit`, and **read by nothing outside
-`genome.rs`** — heritable trait variation that changes no behaviour. `puberty_age` is the
-worst of them because its consumer already exists: `reproductive.rs:168` reads a village-wide
-hardcoded `13.0` while the gene draws 11.0–15.0. The other four are candidates for the §4.6
-midpoint-neutral wiring or for deletion. The instrument (`scripts/field_census.py`, doctrine
-§5) is recorded for re-use; it found six suspects and one is the documented false-positive
-class (an aggregate consumed by its own file).
+`genome.rs`** — heritable trait variation that changed no behaviour. **`puberty_age` is wired
+(i392):** the reproductive clock reads `ReproductiveUpdateParams.puberty_age` from the genome,
+with the retired constant as the default (13.0 = the gene's midpoint, so the wiring is
+midpoint-neutral). Its measured scope is honest and narrow: **0 agent-ticks in age [10,16)
+over 240K + 987K agent-ticks** (founders ≥18, the ramp opens at ~385 000 ticks), so the fix
+is invisible in every corpus — both goldens byte-identical, 0 re-anchors — and its target is
+the next generation at long horizons. The other four are candidates for the same §4.6
+midpoint-neutral wiring or for deletion (`sensory_acuity` 0.2–0.8, `chronic_pain_risk`
+0.0–0.5 qualify only if the constants they shadow sit at those midpoints). The instrument
+(`scripts/field_census.py`, doctrine §5) is recorded for re-use; it found six suspects and one
+is the documented false-positive class (an aggregate consumed by its own file).
 
 The live iteration ledger is [`PLAN_DC5_DEVELOPMENT.md`](PLAN_DC5_DEVELOPMENT.md) §3;
 it is authoritative for *work*, this section is the summary.
