@@ -4,7 +4,7 @@ description: "Master project trajectory: layer map and milestone ladder. Updated
 type: Authority
 status: AUTHORITY
 scope: "project trajectory"
-reconciled_commit: cd4ac0a
+reconciled_commit: 998e9fd
 created: 2026-07-28
 ---
 

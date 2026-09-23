@@ -3,7 +3,7 @@ name: plan-dc3
 status: ACTIVE
 description: "Live work ledger. DC-3 closed at 4/4 legs; §9 carries the DC-4 execution ledger. §3.1 is the calibration-debt ledger. Authoritative for what work remains; ENGINE_STATUS.md is authoritative for engine truth."
 type: Plan
-reconciled_commit: cd4ac0a
+reconciled_commit: 998e9fd
 ---
 
 # Mindstrata — DC-3 Development Plan (Era V harvest → "the world scales")

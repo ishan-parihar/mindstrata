@@ -4,7 +4,7 @@ description: "AP3 inventory of existing mindstrata code the arc touches: symbols
 type: Reference-Index
 plan_id: AP3
 verified_at: "3705dc9 (Iteration 265)"
-reconciled_commit: cd4ac0a
+reconciled_commit: 998e9fd
 ---
 
 # refs — Sim Inventory (what exists today)
