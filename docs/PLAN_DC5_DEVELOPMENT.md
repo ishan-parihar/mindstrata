@@ -156,6 +156,15 @@ batched tightly.
 
 ## 4. Sequencing and dependencies
 
+> **Operator sequencing decision (2026-09-23): depth before scale.** The depth items
+> (**W5/W6** — endogenous tax, inheritance/charity, skill curve, fatigue differentiation,
+> generative innovation) are taken **ahead of** the scale items (**W3/W4** — inter-community
+> architecture, LOD/cap). W0/W1 (i392b, i393) are unaffected and stay first, since they are
+> in flight and i393 is the last structural inconsistency in the paired-store layer.
+> The **scope** question (one cycle owning both, vs the city path splitting into DC-6) is
+> *not* settled by this — see §5 item 3.
+
+
 ```
 W0 (i387→i392)  dead/inert surfaces  ── feeds the action layer for W2/W3 (i390 succession, i391 census DONE)
 W1 (i393→i395)  relationship unification  ── must precede W2 (contact changes the store)
