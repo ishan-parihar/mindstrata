@@ -4,7 +4,7 @@ description: "The authoritative current-state description of the mindstrata engi
 type: Authority
 status: AUTHORITY
 scope: "engine behaviour, architecture, realism, scale"
-reconciled_commit: 998e9fd
+reconciled_commit: 89693a4
 created: 2026-09-22
 owner: SIM + PROD (AP4 Studio)
 ---

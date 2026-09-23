@@ -3,7 +3,7 @@ name: plan-dc5
 status: ACTIVE
 description: "DC-5 implementation plan — depth closure and inter-community scale. Owns the gap taxonomy (G1–G8) derived from measured shallowness in the engine, the phase/iteration ladder that closes it, and the operator decisions it depends on. Authoritative for what remains after DC-4; ENGINE_STATUS.md stays authoritative for engine truth."
 type: Plan
-reconciled_commit: f1beca0
+reconciled_commit: 89693a4
 created: 2026-09-23
 ---
 
