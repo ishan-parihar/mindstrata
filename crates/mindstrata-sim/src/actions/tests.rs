@@ -1,6 +1,7 @@
 use super::{
-    apply_action_tick, compute_utility, idle_play_driver, noise_amplitude, select_action,
-    ActionKind, DecisionContext, APPROACH_WANDER_BONUS, IDLE_PLAY_COEF, PERSISTENCE_NOISE_FLOOR,
+    apply_action_tick, compute_utility, dominant_urgency_match, idle_play_driver, noise_amplitude,
+    select_action, ActionKind, DecisionContext, APPROACH_WANDER_BONUS, IDLE_PLAY_COEF,
+    PERSISTENCE_NOISE_FLOOR,
 };
 use crate::person::{BodyState, IdentityKind, IdentityState, NeedState, Personality, Temperament};
 use crate::psychology::decision_policy::DecisionPolicy;
@@ -1792,4 +1793,93 @@ fn polarity_bias_counts_only_recent_claims() {
         0,
         "claims older than the salience window contribute zero bias"
     );
+}
+
+/// i388: the relational family has a deliberative outlet — the i387
+/// decomposition measured `Attachment` dominant in 34.6% (calm village) /
+/// 24.6% (town) of arbitrations and `Belonging` in 5.5% / 3.6%, all of which
+/// fell through `_ => false` and received **no** urgency response. `Socialize`
+/// is the engine's only relational action; `Worship` carries `Belonging`'s
+/// communal half. The pin is the mapping itself (a pure helper), so it cannot
+/// rot behind a heavier integration harness.
+#[test]
+fn relational_motives_map_to_the_social_outlet() {
+    let socialize = ActionKind::Socialize.definition();
+    let worship = ActionKind::Worship.definition();
+    for motive in [
+        MotiveCategory::Attachment,
+        MotiveCategory::Care,
+        MotiveCategory::Romance,
+    ] {
+        assert!(
+            dominant_urgency_match(motive, &socialize),
+            "{motive:?} must reach the relational outlet"
+        );
+        assert!(
+            !dominant_urgency_match(motive, &worship),
+            "{motive:?} is dyadic — it must not be served by collective ritual"
+        );
+    }
+    assert!(
+        dominant_urgency_match(MotiveCategory::Belonging, &socialize)
+            && dominant_urgency_match(MotiveCategory::Belonging, &worship),
+        "Belonging is served by both the dyadic and the communal outlet"
+    );
+    // A relational dominance must not boost provisioning actions: the boost is
+    // a channel, not a general magnitude reordering (i380's lesson).
+    for kind in [
+        ActionKind::Work,
+        ActionKind::Trade,
+        ActionKind::Rest,
+        ActionKind::Idle,
+    ] {
+        assert!(
+            !dominant_urgency_match(MotiveCategory::Attachment, &kind.definition()),
+            "a relational dominance must not boost {kind:?}"
+        );
+    }
+}
+
+/// i388: the documented non-mappings stay non-mappings (the design statement in
+/// `dominant_urgency_match`), and the i351/i356 driver wirings stay live — the
+/// regression guard for the three closures of the dead-dominant-motive class.
+#[test]
+fn urgency_map_holds_its_documented_edges() {
+    let all = [
+        ActionKind::Eat,
+        ActionKind::Drink,
+        ActionKind::Rest,
+        ActionKind::Work,
+        ActionKind::Socialize,
+        ActionKind::Worship,
+        ActionKind::Trade,
+        ActionKind::Wander,
+        ActionKind::Idle,
+    ];
+    for motive in [
+        MotiveCategory::Safety,
+        MotiveCategory::Esteem,
+        MotiveCategory::Autonomy,
+        MotiveCategory::Competence,
+        MotiveCategory::Certainty,
+        MotiveCategory::Justice,
+        MotiveCategory::Recognition,
+        MotiveCategory::Warmth,
+        MotiveCategory::Health,
+    ] {
+        for kind in all {
+            assert!(
+                !dominant_urgency_match(motive, &kind.definition()),
+                "{motive:?} has no urgency channel by design, but matched {kind:?}"
+            );
+        }
+    }
+    assert!(dominant_urgency_match(
+        MotiveCategory::Novelty,
+        &ActionKind::Wander.definition()
+    ));
+    assert!(dominant_urgency_match(
+        MotiveCategory::Play,
+        &ActionKind::Idle.definition()
+    ));
 }

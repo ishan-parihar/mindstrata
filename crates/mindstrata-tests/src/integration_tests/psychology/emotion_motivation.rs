@@ -1078,8 +1078,17 @@ fn anger_driven_work_is_relative_to_the_population() {
         sim.run(400);
         let mut seen: Vec<usize> = Vec::new();
         for _ in 0..200 {
+            // i388: hold the vector for EVERY agent present, including any born
+            // inside the window. The original `levels[i]` indexed the held vector
+            // with the live population index and panicked (`len is 12 but the
+            // index is 12`) the moment the relational outlet re-paced the founder
+            // birth into this 600-tick window — a test-fragility bug, not a
+            // producer finding. A new agent takes the last member's level, so the
+            // uniform case stays uniform (0.30) and the spike case stays calm
+            // (0.05) with agent 5 alone spiking.
+            let fill = levels[levels.len() - 1];
             for (i, a) in sim.agents.iter_mut().enumerate() {
-                a.emotions.anger = Fixed::from_f64(levels[i]);
+                a.emotions.anger = Fixed::from_f64(*levels.get(i).unwrap_or(&fill));
             }
             sim.run(1);
             for i in anger_work_goals(&sim) {
@@ -1126,5 +1135,101 @@ fn anger_driven_work_is_relative_to_the_population() {
     assert!(
         emitted > 0,
         "the anger→Work emitter is dark in a collapse cascade — the producer is dead again"
+    );
+}
+
+/// i388: the relational band is RELATIVE — the same three properties the anger
+/// emitter (i383) is pinned by, on the social goal producers.
+///
+/// Measured before the fix (probe `i388_relational_outlet`): the three social
+/// producers carried absolute bars (0.7 need gate, 0.4 extraversion leg, 0.3 joy
+/// leg) while `needs.social` sits at p50 0.0054 / p90 0.017 / p99 0.032–0.039 —
+/// so **live Socialize goals were 0/15 and 0/50 agents across a 20K window**.
+/// After the fix (band = 2 × the population's own mean): utility-selected
+/// `Socialize` 0 → 109 of 20 121 arbitrations (village) and 0 → 88 of 96 154
+/// (town), live goals 1/12 and 9/51, at the same need equilibrium.
+///
+/// Held-need manipulation (the anger test's form): a uniformly RELATIVELY rich
+/// population emits for nobody (the bar rises with the crowd — the relative
+/// property), and one deprived agent in a satiated crowd emits for that agent
+/// alone. Both arms are necessary: the first fails if the band is absolute
+/// again (0.35 is every agent, and no absolute gate can be crossed by a held
+/// 0.35 agent while the crowd sits at 0.02), the second fails if the producers
+/// go dark (the i388-before measurement).
+#[test]
+fn relational_deprivation_reaches_the_goal_layer() {
+    use mindstrata_core::fixed::Fixed;
+    use mindstrata_sim::person::GoalKind;
+
+    let social_goal_agents = |sim: &mindstrata_sim::Simulation| -> Vec<usize> {
+        sim.agents
+            .iter()
+            .enumerate()
+            .filter(|(_, a)| a.goals.iter().any(|g| g.kind == GoalKind::Socialize))
+            .map(|(i, _)| i)
+            .collect()
+    };
+
+    let run_with_social = |levels: &[f64]| -> Vec<usize> {
+        let mut sim = mindstrata_sim::Simulation::new(mindstrata_sim::sim::SimConfig {
+            seed: 42,
+            max_ticks: 20_000,
+            world_width: 16,
+            world_height: 16,
+            num_agents: levels.len() as u32,
+            snapshot_interval: None,
+        });
+        sim.populate();
+        sim.run(400);
+        let mut seen: Vec<usize> = Vec::new();
+        for _ in 0..200 {
+            // i388: hold for every agent present (a founder birth inside the
+            // window must not index past the held vector — the fragility the
+            // anger test hit).
+            let fill = levels[levels.len() - 1];
+            for (i, a) in sim.agents.iter_mut().enumerate() {
+                a.needs.social = Fixed::from_f64(*levels.get(i).unwrap_or(&fill));
+            }
+            sim.run(1);
+            for i in social_goal_agents(&sim) {
+                if !seen.contains(&i) {
+                    seen.push(i);
+                }
+            }
+        }
+        seen.sort_unstable();
+        seen
+    };
+
+    // (1) ANOMALY, NOT MAGNITUDE: one agent at 0.05 in a satiated crowd — far
+    // below every legacy absolute bar (0.3 joy leg / 0.4 identity leg / 0.7 need
+    // gate) yet anomalous against the crowd's own ~0.002 mean. It must emit, and
+    // alone. This arm CANNOT pass under an absolute gate, which is what makes it
+    // the relativeness proof.
+    //
+    // Note there is deliberately no "uniformly deprived ⇒ nobody emits" arm
+    // here (the anger pin has one): `needs.social` is RELIEVED by the actions a
+    // tick takes, so holding the whole population at one value is not a uniform
+    // state by the time the goal pass reads it — the agents the routine failed to
+    // relieve ARE anomalous, and a measured attempt emitted for exactly one such
+    // agent (index 6). That is the band working, not a defect.
+    let mut tiny = vec![0.002f64; 12];
+    tiny[5] = 0.05;
+    let anomalous = run_with_social(&tiny);
+    assert_eq!(
+        anomalous,
+        vec![5],
+        "a below-every-absolute-bar anomaly must still reach the goal layer (got {anomalous:?})"
+    );
+
+    // (2) one deprived agent (5 at 0.35) in a satiated crowd (0.02): the crowd's
+    // mean puts the band at ~0.095, so agent 5 clears it and the crowd does not.
+    let mut levels = vec![0.02f64; 12];
+    levels[5] = 0.35;
+    let deprived = run_with_social(&levels);
+    assert_eq!(
+        deprived,
+        vec![5],
+        "only the anomalously deprived agent may carry a Socialize goal (got {deprived:?})"
     );
 }

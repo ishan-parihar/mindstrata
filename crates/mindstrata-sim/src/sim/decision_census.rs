@@ -47,6 +47,59 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use crate::actions::ActionKind;
+use crate::psychology::MotiveCategory;
+
+/// i387: number of motivation categories tracked in the dominance histogram.
+pub const MOTIVE_COUNT: usize = 19;
+
+/// i387: names, indexed by [`motive_index`].
+pub const MOTIVE_NAMES: [&str; MOTIVE_COUNT] = [
+    "Hunger",
+    "Thirst",
+    "Sleep",
+    "Warmth",
+    "Health",
+    "Safety",
+    "Attachment",
+    "Belonging",
+    "Esteem",
+    "Autonomy",
+    "Competence",
+    "Meaning",
+    "Certainty",
+    "Novelty",
+    "Play",
+    "Care",
+    "Romance",
+    "Justice",
+    "Recognition",
+];
+
+/// i387: the honest index of a motivation category (the histogram's slot).
+#[must_use]
+pub fn motive_index(m: MotiveCategory) -> usize {
+    match m {
+        MotiveCategory::Hunger => 0,
+        MotiveCategory::Thirst => 1,
+        MotiveCategory::Sleep => 2,
+        MotiveCategory::Warmth => 3,
+        MotiveCategory::Health => 4,
+        MotiveCategory::Safety => 5,
+        MotiveCategory::Attachment => 6,
+        MotiveCategory::Belonging => 7,
+        MotiveCategory::Esteem => 8,
+        MotiveCategory::Autonomy => 9,
+        MotiveCategory::Competence => 10,
+        MotiveCategory::Meaning => 11,
+        MotiveCategory::Certainty => 12,
+        MotiveCategory::Novelty => 13,
+        MotiveCategory::Play => 14,
+        MotiveCategory::Care => 15,
+        MotiveCategory::Romance => 16,
+        MotiveCategory::Justice => 17,
+        MotiveCategory::Recognition => 18,
+    }
+}
 
 /// Number of selection sources tracked (see the `SRC_*` constants).
 pub const SOURCE_COUNT: usize = 7;
@@ -90,6 +143,64 @@ pub const SRC_VETO: usize = 6;
 /// The utility gap below which the per-candidate jitter (±0.05) could have
 /// flipped the decision on its own.
 pub const NOISE_AMPLITUDE: f64 = 0.05;
+
+/// i387: number of utility term buckets a decomposition records.
+pub const UTILITY_TERM_COUNT: usize = 14;
+
+/// i387: human-readable bucket names, indexed by the `UT_*` constants.
+///
+/// The buckets are the *decision-relevant families* of the utility formula,
+/// not one entry per line of arithmetic: i380 proved `Socialize` loses the
+/// argmax and refuted two single-knob repairs, so the question this ledger
+/// answers is **which family of terms decides the winner** — and which family
+/// a given candidate is missing entirely.
+pub const UTILITY_TERM_NAMES: [&str; UTILITY_TERM_COUNT] = [
+    "need",
+    "urgency",
+    "prospective",
+    "identity",
+    "norm",
+    "trade",
+    "cost",
+    "learned",
+    "explore",
+    "driver",
+    "goal",
+    "policy",
+    "affectx",
+    "context",
+];
+
+/// i387: need-relief block (hunger/thirst/fatigue/social/meaning).
+pub const UT_NEED: usize = 0;
+/// i387: §8.1.5 dominant-need urgency boost.
+pub const UT_URGENCY: usize = 1;
+/// i387: §8.1.16/§8.1.12 dread + hope + planning-confidence nudges.
+pub const UT_PROSPECTIVE: usize = 2;
+/// i387: identity-congruence affinity.
+pub const UT_IDENTITY: usize = 3;
+/// i387: normative component (pressure × conformity).
+pub const UT_NORM: usize = 4;
+/// i387: §13.3 trade coin bonus (affordability-gated).
+pub const UT_TRADE: usize = 5;
+/// i387: energy cost (a penalty).
+pub const UT_COST: usize = 6;
+/// i387: §9.2 RL action values.
+pub const UT_LEARNED: usize = 7;
+/// i387: §8.1.6 jitter + approach/withdrawal exploration bonus.
+pub const UT_EXPLORE: usize = 8;
+/// i387: i351/i356 revival drivers (Wander novelty, Idle recreation).
+pub const UT_DRIVER: usize = 9;
+/// i387: active-goal alignment bonus.
+pub const UT_GOAL: usize = 10;
+/// i387: §8.1.20 DecisionPolicy modifiers (emotional, moral, habit).
+pub const UT_POLICY: usize = 11;
+/// i387: affective/state modulations (ActiveTension social bias, somatic
+/// penalty, sleep-debt withdrawal, mood nudge).
+pub const UT_AFFECTX: usize = 12;
+/// i387: situational nudges (season, age, institution work bonus,
+/// development/pathology).
+pub const UT_CONTEXT: usize = 13;
 
 /// Map an action kind to its census slot.
 #[must_use]
@@ -164,6 +275,24 @@ struct Census {
     /// need-relief term of their own: `Wander` (A8) and `Idle`.
     wander: GapStats,
     idle: GapStats,
+    // i387: per-bucket utility sums for the winner, the `Socialize`
+    // candidate, and the runner-up (the best non-winner). Sums, not samples,
+    // so the ledger is O(1) in memory while still naming the family that
+    // decides the arbitration.
+    terms_samples: u64,
+    /// i387: which motivation category dominated at each arbitration — the
+    /// drive the utility leg was asked to serve. A category that never appears
+    /// here cannot be "missing a relief channel"; one that appears often with
+    /// no mapped action is a dead producer.
+    dominant_counts: [u64; MOTIVE_COUNT],
+    /// i387: sum/max of the dominant pressure, so a dominance share can be
+    /// weighted by how hard the drive was actually pressing.
+    dominant_pressure_sum: f64,
+    dominant_pressure_max: f64,
+    terms_winner: [f64; UTILITY_TERM_COUNT],
+    terms_socialize: [f64; UTILITY_TERM_COUNT],
+    terms_runner: [f64; UTILITY_TERM_COUNT],
+    socialize_gap: GapStats,
     // i351 quiet-window split: the A8 exploration driver only competes when
     // the need-quietude gate is open, so the wall it must clear is the
     // quiet-window winner — not the all-decisions winner (whose mass rides
@@ -316,6 +445,48 @@ pub fn record_utility_sample(
     }
 }
 
+/// i387: record one arbitration's per-bucket decomposition.
+///
+/// `winner`, `socialize` and `runner_up` are the bucket vectors of the argmax,
+/// the `Socialize` candidate, and the best non-winning candidate respectively;
+/// `socialize_gap` is `winner_total − socialize_total`. Read-only bookkeeping:
+/// the buckets are values the selection loop has already computed, so an
+/// instrumented run stays byte-identical to an uninstrumented one.
+pub fn record_utility_terms(
+    winner: &[f64; UTILITY_TERM_COUNT],
+    socialize: &[f64; UTILITY_TERM_COUNT],
+    runner_up: &[f64; UTILITY_TERM_COUNT],
+    socialize_gap: f64,
+) {
+    if !enabled() {
+        return;
+    }
+    if let Ok(mut sink) = sink().lock() {
+        sink.terms_samples += 1;
+        for i in 0..UTILITY_TERM_COUNT {
+            sink.terms_winner[i] += winner[i];
+            sink.terms_socialize[i] += socialize[i];
+            sink.terms_runner[i] += runner_up[i];
+        }
+        sink.socialize_gap
+            .observe(socialize_gap <= 0.0, socialize_gap);
+    }
+}
+
+/// i387: record the dominant motivation at one arbitration.
+pub fn record_dominant(need: MotiveCategory, pressure: f64) {
+    if !enabled() {
+        return;
+    }
+    if let Ok(mut sink) = sink().lock() {
+        sink.dominant_counts[motive_index(need)] += 1;
+        sink.dominant_pressure_sum += pressure;
+        if pressure > sink.dominant_pressure_max {
+            sink.dominant_pressure_max = pressure;
+        }
+    }
+}
+
 /// Cap on the per-sample sweep pairs (instrumentation memory bound).
 const QUIET_PAIR_CAP: usize = 200_000;
 
@@ -395,6 +566,22 @@ pub struct Report {
     pub idle: GapStats,
     /// Arbitrations where the need-quietude gate was open.
     pub quiet_samples: u64,
+    /// i387: arbitrations carrying a per-bucket decomposition.
+    pub terms_samples: u64,
+    /// i387: dominant motivation per arbitration (`MOTIVE_NAMES` order).
+    pub dominant_counts: [u64; MOTIVE_COUNT],
+    /// i387: sum/max of the dominant pressure across arbitrations.
+    pub dominant_pressure_sum: f64,
+    /// i387: max dominant pressure seen.
+    pub dominant_pressure_max: f64,
+    /// i387: summed bucket contributions for the winner.
+    pub terms_winner: [f64; UTILITY_TERM_COUNT],
+    /// i387: summed bucket contributions for the `Socialize` candidate.
+    pub terms_socialize: [f64; UTILITY_TERM_COUNT],
+    /// i387: summed bucket contributions for the runner-up.
+    pub terms_runner: [f64; UTILITY_TERM_COUNT],
+    /// i387: distance from the winner for the `Socialize` candidate.
+    pub socialize_gap: GapStats,
     /// Quiet-window `Wander` gap stats (the driver's actual arena).
     pub quiet_wander: GapStats,
     /// Sum/Max of the winner's absolute utility at quiet windows.
@@ -423,6 +610,14 @@ pub fn report() -> Report {
             utility_samples: 0,
             wander: GapStats::default(),
             idle: GapStats::default(),
+            terms_samples: 0,
+            dominant_counts: [0; MOTIVE_COUNT],
+            dominant_pressure_sum: 0.0,
+            dominant_pressure_max: 0.0,
+            terms_winner: [0.0; UTILITY_TERM_COUNT],
+            terms_socialize: [0.0; UTILITY_TERM_COUNT],
+            terms_runner: [0.0; UTILITY_TERM_COUNT],
+            socialize_gap: GapStats::default(),
             quiet_samples: 0,
             quiet_wander: GapStats::default(),
             quiet_winner_sum: 0.0,
@@ -437,6 +632,14 @@ pub fn report() -> Report {
         utility_samples: sink.utility_samples,
         wander: sink.wander,
         idle: sink.idle,
+        terms_samples: sink.terms_samples,
+        dominant_counts: sink.dominant_counts,
+        dominant_pressure_sum: sink.dominant_pressure_sum,
+        dominant_pressure_max: sink.dominant_pressure_max,
+        terms_winner: sink.terms_winner,
+        terms_socialize: sink.terms_socialize,
+        terms_runner: sink.terms_runner,
+        socialize_gap: sink.socialize_gap,
         quiet_samples: sink.quiet_samples,
         quiet_wander: sink.quiet_wander,
         quiet_winner_sum: sink.quiet_winner_sum,

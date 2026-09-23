@@ -91,6 +91,14 @@ These rules exist because we repeatedly paid for violating them:
 5. **Knife-edge flags are debt.** When a pin sits on an unstable equilibrium (epidemic R0≈1
    flipping TRANSIENT↔ENDEMIC nine times), record it as systemic debt in the ledger rather
    than flip-flopping pins forever.
+   **Corollary (i388): a MAX over one seed's stochastic path is a knife-edge by
+   construction.** Three pins broke this way in one iteration — a pain maximum, a Help
+   count, and a revolution count — each of which had been re-anchored by seed-shopping
+   before. Preferred forms, in order: (a) the mechanism invariant over a small family
+   (`warm > cold` on ≥2 of 3 seeds, aggregate ≥5%), (b) reachability over a family
+   ("at least one seed reaches the band" + per-seed liveness), (c) a per-seed route pin
+   instead of a seed family. When a family member dies, **re-discover the family by sweep**
+   — never widen the bar to keep the old members.
 6. **Organic vs realism-preserving constants (i373 audit).** A constant is
    *realism-preserving* when the hard number IS the modelled natural law (physiology,
    mutation noise, the cognitive ontology, solver damping) or a performance envelope —
@@ -476,6 +484,22 @@ the per-agent mean-folds (stranger-diluted, i350), and `Wander` (zero relief —
 matrix scan (the marriage pass was O(N³) every tick).
 
 Live queue, in order (evidence link per item):
+
+0. **DC-5 W0 — the named dead/inert surfaces (live now).** **i387 LANDED** (the utility is
+   a labelled bucket vector + the census records winner/runner-up/`Socialize` vectors per
+   arbitration — the measurement that decides the action layer's fate); **i388 LANDED**
+   (`evidence/i388_relational_outlet.md`: the relational urgency family + the
+   population-relative social band, which took utility-selected `Socialize` 0 → 109/20 121
+   and live goals 0 → 9/51, with both goldens, 7 snapshots and three pins re-anchored by
+   measurement — the pain veto band re-contracted to a family reachability invariant, the
+   revolution family rediscovered as `{5, 42, 12345}`, the tenderness Help pin moved to a
+   family mechanism at ≥5%). Next in W0: **i389** the directive channel (office-holders
+   emit bounded `GoalSource::Command` goals, or the channel is deleted with the i372
+   rationale), **i390** the write-only field sweep, then **i391** the speech-act/kind
+   migration. Carried forward from i388 as measured-but-unexplained: action duration rose
+   4.31 → 5.40 ticks and the 2K relationship stages shifted shallower (`Unnoticed` 20 → 26,
+   `Friend` 8 → 5) — W2 must decide whether contact falls when the drive is served
+   *before* the sparse-store question is re-opened.
 
 1. **The v1→v2 relationship migration (charter DECIDED: finish it subsystem by
    subsystem)** — **i369 landed the first reader migration** (comfort/soothing reads the

@@ -42,6 +42,14 @@ fn main() {
         let mut combats = 0u64;
         let mut max_shock = 0.0_f64;
         let mut min_blood = 1.0_f64;
+        // i388: the i314 exertion-veto band (pain ≥ 0.9) is a MAX statistic on a
+        // stochastic violence path, so it is measured over the whole seed family
+        // and reported per seed — the single-seed pin it replaced (`conflict.rs`
+        // seed 42) went knife-edge the moment the relational outlet re-timed the
+        // fights (max pain 0.7805).
+        let mut max_pain = 0.0_f64;
+        let mut seeds_at_veto = 0u64;
+        let mut best_seed = (0u64, 0.0_f64);
         let mut crossed = [0u64; CANDIDATES.len()];
         let mut agent_ticks = 0u64;
 
@@ -59,10 +67,14 @@ fn main() {
                 .iter()
                 .map(|a| a.embodied.injury.to_f64())
                 .collect();
+            let mut seed_max_pain = 0.0_f64;
             for _ in 0..ticks {
                 sim.tick();
                 for (i, a) in sim.agents.iter().enumerate() {
                     let inj = a.embodied.injury.to_f64();
+                    let pain = a.embodied.nervous.pain.effective_pain().to_f64();
+                    seed_max_pain = seed_max_pain.max(pain);
+                    max_pain = max_pain.max(pain);
                     let delta = inj - prev.get(i).copied().unwrap_or(0.0);
                     if delta > 0.0 {
                         let wound = delta + HEAL_PER_TICK;
@@ -83,6 +95,12 @@ fn main() {
                 }
                 prev.resize(sim.agents.len(), 0.0);
             }
+            if seed_max_pain >= 0.9 {
+                seeds_at_veto += 1;
+            }
+            if seed_max_pain > best_seed.1 {
+                best_seed = (seed, seed_max_pain);
+            }
             // i327 note: `recent_events` is a BOUNDED window now, so these
             // counts are window-limited at long horizons (the state-based
             // figures below — max wound, shock, threshold crossings — are
@@ -102,6 +120,12 @@ fn main() {
         println!("  conflict mix (bounded window): Violence {injuries} | Combat {combats}");
         println!("  wounds recorded {wounds} | max single wound {max_wound:.4} | max injury {max_injury:.4}");
         println!("  cardiovascular: max shock {max_shock:.5} | min blood-vol {min_blood:.4}");
+        println!(
+            "  i314 veto band (pain ≥ 0.9): family max {max_pain:.4} | seeds reaching it {seeds_at_veto}/{} | best seed {} at {:.4}",
+            SEEDS.len(),
+            best_seed.0,
+            best_seed.1
+        );
         for (ci, t) in CANDIDATES.iter().enumerate() {
             println!(
                 "  threshold {t:.2}: agent-ticks above = {} ({:.4}% of {agent_ticks})",

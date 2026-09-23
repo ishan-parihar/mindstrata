@@ -10,6 +10,10 @@ use crate::person::{
 use crate::psychology::neural_like::ActionValues;
 use crate::psychology::DecisionPolicy;
 use crate::psychology::MotiveCategory;
+use crate::sim::decision_census::{
+    UTILITY_TERM_COUNT, UT_AFFECTX, UT_CONTEXT, UT_COST, UT_DRIVER, UT_EXPLORE, UT_GOAL,
+    UT_IDENTITY, UT_LEARNED, UT_NEED, UT_NORM, UT_POLICY, UT_PROSPECTIVE, UT_TRADE, UT_URGENCY,
+};
 use mindstrata_core::fixed::Fixed;
 use mindstrata_core::rng::{RngStream, RngStreams};
 use rand::Rng;
@@ -557,9 +561,90 @@ fn identity_affinity(action: ActionKind, identity: &IdentityState) -> Fixed {
 ///
 /// Resource scarcity modifier: when grain/water stocks are low,
 /// Eat/Drink get higher utility to create economic pressure.
-/// Identity-congruent actions get higher utility.
-/// Norm-compliant actions get bonus; antisocial actions get penalty.
+/// i387: the utility formula's contributions, bucketed by decision-relevant
+/// family (names live in `sim::decision_census::UTILITY_TERM_NAMES`).
+///
+/// This is the single source of truth for the arithmetic: [`compute_utility`]
+/// returns the sum of these buckets, and the census reads them to answer
+/// **which family decides an arbitration** (i380 established that `Socialize`
+/// never wins; i387 asks which terms it is missing). `Fixed` addition is exact
+/// integer addition, so bucketing cannot change a sum — the split is
+/// byte-identical by construction, not by hope.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct UtilityTerms {
+    /// One value per `UT_*` bucket.
+    pub terms: [Fixed; UTILITY_TERM_COUNT],
+}
+
+impl UtilityTerms {
+    /// Add `value` to bucket `index` (a no-op for an out-of-range index).
+    pub fn add(&mut self, index: usize, value: Fixed) {
+        if let Some(slot) = self.terms.get_mut(index) {
+            *slot += value;
+        }
+    }
+
+    /// The total utility — the sum over buckets.
+    #[must_use]
+    pub fn total(&self) -> Fixed {
+        self.terms.iter().fold(Fixed::ZERO, |acc, &v| acc + v)
+    }
+
+    /// The buckets as f64 (the census ledger is f64-domain; only probes read it).
+    #[must_use]
+    pub fn to_f64_array(&self) -> [f64; UTILITY_TERM_COUNT] {
+        std::array::from_fn(|i| self.terms[i].to_f64())
+    }
+}
+
+/// §8.1.5 (Iteration 96): does this candidate RELIEVE the agent's dominant
+/// motive — i.e. does it receive the urgency boost scaled by the motive's
+/// pressure? Extracted as a pure helper (the `development_pathology_nudge`
+/// pattern) so the mapping is unit-pinnable without a `DecisionContext`.
+///
+/// The contract is one line: **a motive that can WIN the argmax must have a
+/// response, or it is dead state** (§4.3). Three closures of that contract are
+/// recorded here — `Novelty` → `Wander` (i351), `Play` → `Idle` (i356), and the
+/// relational family → the social outlet (i388: 34.6% of arbitrations in a calm
+/// village are `Attachment`-dominant and none of them reached a deliberative
+/// response before). Abstract motives with no relief channel (`Safety`,
+/// `Esteem`, `Autonomy`, `Competence`, `Certainty`, `Justice`, `Recognition`,
+/// `Warmth`, `Health`) return `false` by design: their response is the emotion
+/// modifier / withdrawal bias, not a fixation bonus.
+#[must_use]
+pub fn dominant_urgency_match(dominant_need: MotiveCategory, action: &ActionDef) -> bool {
+    match dominant_need {
+        MotiveCategory::Hunger => action.hunger_relief > Fixed::ZERO,
+        MotiveCategory::Thirst => action.thirst_relief > Fixed::ZERO,
+        MotiveCategory::Sleep => action.fatigue_relief > Fixed::ZERO,
+        MotiveCategory::Meaning => action.bonus_meaning_relief > Fixed::ZERO,
+        // i351 (A8 closure): `MotiveCategory::Novelty` competes in
+        // `update_dominant` but had no relief mapping — a dead dominant
+        // motive (§4.3): it could WIN the argmax and nothing responded.
+        // The exploration driver is its response.
+        MotiveCategory::Novelty => action.kind == ActionKind::Wander,
+        // i356: `Play` had the same defect (competed, no relief). `Idle`
+        // is its response — same wiring as `Novelty → Wander`.
+        MotiveCategory::Play => action.kind == ActionKind::Idle,
+        // i388: the relational family. `Socialize` is the engine's only
+        // relational outlet; `Worship` (collective ritual) carries the
+        // communal half of `Belonging`.
+        MotiveCategory::Belonging => {
+            matches!(action.kind, ActionKind::Socialize | ActionKind::Worship)
+        }
+        MotiveCategory::Attachment | MotiveCategory::Care | MotiveCategory::Romance => {
+            action.kind == ActionKind::Socialize
+        }
+        _ => false,
+    }
+}
+
+/// The legacy single-value entry point: the sum of [`compute_utility_terms`].
+///
+/// Kept as a thin wrapper so existing callers and probes keep their shape; the
+/// arithmetic is identical because `Fixed` addition is exact.
 #[expect(clippy::too_many_arguments)]
+#[must_use]
 pub fn compute_utility(
     action: &ActionDef,
     needs: &NeedState,
@@ -577,7 +662,49 @@ pub fn compute_utility(
     hope: Fixed,
     planning_confidence: Fixed,
 ) -> Fixed {
-    let mut utility = Fixed::ZERO;
+    compute_utility_terms(
+        action,
+        needs,
+        personality,
+        rng,
+        total_grain,
+        total_water,
+        identity,
+        norm_pressure,
+        coin,
+        action_values,
+        dominant_need,
+        dominant_pressure,
+        dread,
+        hope,
+        planning_confidence,
+    )
+    .total()
+}
+
+/// Identity-congruent actions get higher utility.
+/// Norm-compliant actions get bonus; antisocial actions get penalty.
+///
+/// i387: the bucketed implementation — see [`UtilityTerms`].
+#[expect(clippy::too_many_arguments)]
+pub fn compute_utility_terms(
+    action: &ActionDef,
+    needs: &NeedState,
+    personality: &Personality,
+    rng: &mut RngStreams,
+    total_grain: Fixed,
+    total_water: Fixed,
+    identity: &IdentityState,
+    norm_pressure: Fixed,
+    coin: Fixed,
+    action_values: ActionValues,
+    dominant_need: MotiveCategory,
+    dominant_pressure: Fixed,
+    dread: Fixed,
+    hope: Fixed,
+    planning_confidence: Fixed,
+) -> UtilityTerms {
+    let mut terms = UtilityTerms::default();
 
     // §9.1: Nonlinear need pressure — deficit^exponent * personality_modifier.
     // Impulsivity amplifies hunger/thirst pressure, conscientiousness dampens fatigue.
@@ -588,7 +715,7 @@ pub fn compute_utility(
         let mut hunger_util = hunger_pressure * action.hunger_relief * Fixed::from_f64(2.0);
         let scarcity = (Fixed::ONE - total_grain).clamp_01();
         hunger_util += scarcity * needs.hunger * Fixed::from_f64(0.5);
-        utility += hunger_util;
+        terms.add(UT_NEED, hunger_util);
     }
     if action.thirst_relief > Fixed::ZERO {
         let thirst_pressure = needs.thirst * needs.thirst * Fixed::from_f64(2.0);
@@ -597,38 +724,46 @@ pub fn compute_utility(
         let mut thirst_util = thirst_pressure * action.thirst_relief * Fixed::from_f64(2.5);
         let scarcity = (Fixed::ONE - total_water).clamp_01();
         thirst_util += scarcity * needs.thirst * Fixed::from_f64(0.5);
-        utility += thirst_util;
+        terms.add(UT_NEED, thirst_util);
     }
     if action.fatigue_relief > Fixed::ZERO {
         let fatigue_pressure = needs.fatigue
             * needs.fatigue
             * (Fixed::ONE - personality.conscientiousness * Fixed::from_f64(0.3));
-        utility += fatigue_pressure * action.fatigue_relief * Fixed::from_f64(1.5);
+        terms.add(
+            UT_NEED,
+            fatigue_pressure * action.fatigue_relief * Fixed::from_f64(1.5),
+        );
     }
-    // i380: MEASURED INERT — and deliberately NOT patched here. The decision
-    // census shows the utility leg selected `Socialize` **0 times at N=12 and 1
-    // at N=48** across 112 669 arbitrations while the daily routine carried all
-    // 12 645 selections, so this term never wins. But two candidate single-knob
-    // repairs were measured and BOTH FAIL to revive it (probe
-    // `i380_socialize_reachability`):
-    //   * a x6 gain in family with the 2.0/2.5/1.5 siblings moved the
-    //     utility-selected count 0 → 0 (village) / 1 → 2 of ~19 000;
-    //   * a 20x social-decay accrual (band p50 0.006→0.096, p95 0.021→0.292)
-    //     moved it to 9 of ~19 359.
-    // The blocking quantity is the arbitration bar, not this term's scale: the
-    // measured quiet-window winner utility is **0.692 mean / 1.702 max**, and
-    // even a genuinely lonely agent's term (0.29 x 0.3 x 0.5 x 6 = 0.26) cannot
-    // reach it. So the social candidate loses on the terms it does NOT have
-    // (goal-alignment bonus, dominant-need urgency, identity affinity, norm
-    // bonus) rather than on the one it does — the root cause is still open, and
-    // shipping a coefficient here would be a symptom fix with a comment that
-    // overstates its effect. Next step: extend the census to decompose the
-    // winner's utility per candidate, then size the repair against the real bar.
+    // i380: the term stands, measured BELOW the arbitration bar — kept, not
+    // patched, and now with the reason recorded (§4.5: a headroom gap that is
+    // understood is a note, not a debt). i387's per-bucket decomposition of
+    // 120 222 arbitrations (calm village+town) is the evidence:
+    //   * `Socialize` wins 0 (none within decision noise), mean loss 0.73–0.89;
+    //   * this term contributes **0.0015 / 0.0009** against the winner's need
+    //     bucket 0.209 / 0.265 — because `needs.social` itself sits at
+    //     p50 0.005 / p99 0.032 (the daily routine relieves it long before it
+    //     presses), not because the term is mis-scaled;
+    //   * the deficit lives in the buckets the candidate has no term for —
+    //     `urgency` 0.053/0.066, `trade` 0.109/0.188, `goal` 0.062/0.080 —
+    //     which i388 wired (the relational urgency family + the relative
+    //     relational goal band). Both were dark by construction: the absolute
+    //     social bars (0.7/0.4/0.3) sat above the channel's own p99.
+    // The utility leg still loses to pressure-driven winners (the bar is
+    // structural, i380), which is why i388's outlet is the goal+urgency
+    // channels and not a coefficient here: a gain large enough to cross a 0.7–
+    // 0.9 bar would not be a relational lean, it would be a reordering.
     if action.social_value > Fixed::ZERO {
-        utility += needs.social * action.social_value * personality.extraversion;
+        terms.add(
+            UT_NEED,
+            needs.social * action.social_value * personality.extraversion,
+        );
     }
     if action.bonus_meaning_relief > Fixed::ZERO {
-        utility += needs.meaning * action.bonus_meaning_relief * Fixed::from_f64(1.2);
+        terms.add(
+            UT_NEED,
+            needs.meaning * action.bonus_meaning_relief * Fixed::from_f64(1.2),
+        );
     }
 
     // §8.1.5 (Iteration 96): dominant-need urgency boost — the argmax of
@@ -641,25 +776,19 @@ pub fn compute_utility(
     // risk aversion) rather than a food-fixation bonus — the argmax
     // exclusivity withholds the urgency nudge rather than actively
     // suppressing need-seeking.
-    if dominant_pressure > Fixed::ZERO {
-        let urgent = match dominant_need {
-            MotiveCategory::Hunger => action.hunger_relief > Fixed::ZERO,
-            MotiveCategory::Thirst => action.thirst_relief > Fixed::ZERO,
-            MotiveCategory::Sleep => action.fatigue_relief > Fixed::ZERO,
-            MotiveCategory::Meaning => action.bonus_meaning_relief > Fixed::ZERO,
-            // i351 (A8 closure): `MotiveCategory::Novelty` competes in
-            // `update_dominant` but had no relief mapping — a dead dominant
-            // motive (§4.3): it could WIN the argmax and nothing responded.
-            // The exploration driver is its response.
-            MotiveCategory::Novelty => action.kind == ActionKind::Wander,
-            // i356: `Play` had the same defect (competed, no relief). `Idle`
-            // is its response — same wiring as `Novelty → Wander`.
-            MotiveCategory::Play => action.kind == ActionKind::Idle,
-            _ => false,
-        };
-        if urgent {
-            utility += dominant_pressure * Fixed::from_f64(0.4);
-        }
+    //
+    // i388: the RELATIONAL motives join the map — the i387 decomposition
+    // measured `Attachment` dominant in 34.6% (village) / 24.6% (town) of
+    // arbitrations and `Belonging` in 5.5% / 3.6%, i.e. **two fifths of the
+    // utility leg was asked to serve a drive the urgency channel had no arm
+    // for** (`_ => false`), the same dead-dominant-motive class i351 closed for
+    // `Novelty` and i356 for `Play`. `Socialize` is the engine's only relational
+    // outlet; `Worship` (collective ritual) carries the communal half. Their
+    // boost rides the sibling shape — `dominant_pressure × 0.4` — so a lonely
+    // agent's arbitration is steered by its attachment drive exactly as a
+    // hungry one's is by hunger.
+    if dominant_pressure > Fixed::ZERO && dominant_urgency_match(dominant_need, action) {
+        terms.add(UT_URGENCY, dominant_pressure * Fixed::from_f64(0.4));
     }
 
     // §8.1.16 (Iteration 103): precautionary provisioning — an agent who
@@ -673,10 +802,10 @@ pub fn compute_utility(
     if dread > Fixed::ZERO {
         match action.kind {
             ActionKind::Work | ActionKind::Trade => {
-                utility += dread * Fixed::from_f64(0.2);
+                terms.add(UT_PROSPECTIVE, dread * Fixed::from_f64(0.2));
             }
             ActionKind::Rest => {
-                utility -= dread * Fixed::from_f64(0.1);
+                terms.add(UT_PROSPECTIVE, -dread * Fixed::from_f64(0.1));
             }
             _ => {}
         }
@@ -696,10 +825,10 @@ pub fn compute_utility(
     if hope > Fixed::ZERO {
         match action.kind {
             ActionKind::Socialize | ActionKind::Worship => {
-                utility += hope * Fixed::from_f64(0.2);
+                terms.add(UT_PROSPECTIVE, hope * Fixed::from_f64(0.2));
             }
             ActionKind::Idle => {
-                utility -= hope * Fixed::from_f64(0.1);
+                terms.add(UT_PROSPECTIVE, -hope * Fixed::from_f64(0.1));
             }
             _ => {}
         }
@@ -720,17 +849,17 @@ pub fn compute_utility(
     if pc_shift != Fixed::ZERO {
         match action.kind {
             ActionKind::Work => {
-                utility += pc_shift * Fixed::from_f64(0.2);
+                terms.add(UT_PROSPECTIVE, pc_shift * Fixed::from_f64(0.2));
             }
             ActionKind::Idle => {
-                utility -= pc_shift * Fixed::from_f64(0.1);
+                terms.add(UT_PROSPECTIVE, -pc_shift * Fixed::from_f64(0.1));
             }
             _ => {}
         }
     }
 
     // Identity congruence bonus
-    utility += identity_affinity(action.kind, identity);
+    terms.add(UT_IDENTITY, identity_affinity(action.kind, identity));
 
     // Normative component: negative pressure = compliant (bonus for prosocial), positive = violating (bonus for antisocial)
     let normative = match action.kind {
@@ -745,7 +874,7 @@ pub fn compute_utility(
         ActionKind::Trade => -norm_pressure * personality.conformity * Fixed::from_f64(0.08),
         _ => Fixed::ZERO,
     };
-    utility += normative;
+    terms.add(UT_NORM, normative);
 
     // §13.3: Trade utility — agents trade when they have coin to spend and
     // needs are pressing. Previously this bonus was tiny (ambition*0.3 +
@@ -757,10 +886,10 @@ pub fn compute_utility(
         let coin_pressure = (needs.hunger + needs.thirst) * Fixed::from_f64(0.8);
         let coin_utility = personality.ambition * Fixed::from_f64(0.4);
         let need_pressure_bonus = coin_pressure * Fixed::from_f64(0.8);
-        utility += coin_utility + need_pressure_bonus;
+        terms.add(UT_TRADE, coin_utility + need_pressure_bonus);
     }
 
-    utility -= action.energy_cost * Fixed::from_f64(0.5);
+    terms.add(UT_COST, -(action.energy_cost * Fixed::from_f64(0.5)));
 
     // §9.2 (Iteration 94): RL action values feed selection — the agent's
     // learned valuation weights (EMA-updated from successful outcomes in
@@ -772,7 +901,10 @@ pub fn compute_utility(
     // baseline is a uniform 0.5 across candidates and the relative signal
     // (profiles matching what the agent learned to value) is what
     // differentiates them.
-    utility += action_values.learned_delta(action.kind.outcome_profile());
+    terms.add(
+        UT_LEARNED,
+        action_values.learned_delta(action.kind.outcome_profile()),
+    );
 
     // §8.1.6 (Iteration 162): temperament decision consumers — persistence
     // narrows the decision-noise amplitude and approach-withdrawal biases
@@ -795,15 +927,15 @@ pub fn compute_utility(
     let noise_roll: f64 = rng
         .get_mut(RngStream::Behavior)
         .random_range(-amplitude..amplitude);
-    utility += Fixed::from_f64(noise_roll);
+    terms.add(UT_EXPLORE, Fixed::from_f64(noise_roll));
 
     // Approach/withdrawal: an approach-biased agent explores more, a
     // withdrawal-biased one wanders less.
     if action.kind == ActionKind::Wander && approach_dev != Fixed::ZERO {
-        utility += approach_dev * APPROACH_WANDER_BONUS;
+        terms.add(UT_EXPLORE, approach_dev * APPROACH_WANDER_BONUS);
     }
 
-    utility
+    terms
 }
 
 /// i356 (Idle revival): the pure recreation-driver term for `Idle` —
@@ -887,10 +1019,19 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
     // sizing — see `sim::decision_census`.
     let mut wander_utility: Option<Fixed> = None;
     let mut idle_utility: Option<Fixed> = None;
+    // i387: decomposition bookkeeping. `census_on` is a single relaxed
+    // atomic load per decision, and every branch below is gated on it, so a
+    // normal run pays one predictable branch and copies nothing.
+    let census_on = crate::sim::decision_census::enabled();
+    let mut best_terms = UtilityTerms::default();
+    let mut runner_terms = UtilityTerms::default();
+    let mut runner_utility = Fixed::MIN;
+    let mut socialize_terms = UtilityTerms::default();
+    let mut socialize_utility = Fixed::MIN;
 
     for kind in &candidates {
         let def = kind.definition();
-        let mut utility = compute_utility(
+        let mut terms = compute_utility_terms(
             &def,
             ctx.needs,
             ctx.personality,
@@ -933,7 +1074,7 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
         // exactly the pre-i351 utility. Deterministic (pure utility term,
         // no RNG).
         if *kind == ActionKind::Wander && ctx.novelty_pressure > Fixed::ZERO && ctx.needs_quiet {
-            utility += ctx.novelty_pressure * WANDER_NOVELTY_COEF;
+            terms.add(UT_DRIVER, ctx.novelty_pressure * WANDER_NOVELTY_COEF);
         }
 
         // i356 (Idle revival): the recreation driver. `Idle` was the last
@@ -951,7 +1092,10 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
         // ratchet. Zero-at-zero: play pressure 0 or gate closed → exactly
         // the pre-i356 utility. Deterministic (pure utility term, no RNG).
         if *kind == ActionKind::Idle {
-            utility += idle_play_driver(ctx.play_pressure, ctx.needs_quiet);
+            terms.add(
+                UT_DRIVER,
+                idle_play_driver(ctx.play_pressure, ctx.needs_quiet),
+            );
         }
 
         for goal in ctx.active_goals {
@@ -965,7 +1109,7 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
                     | (ActionKind::Worship, GoalKind::Worship)
             );
             if goal_aligned {
-                utility += goal.priority * Fixed::from_f64(0.5);
+                terms.add(UT_GOAL, goal.priority * Fixed::from_f64(0.5));
             }
         }
 
@@ -1030,7 +1174,10 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
                         && c.created_tick >= now
                 })
                 .count();
-            utility += Fixed::from_f64(0.01 * active_tension_count as f64) * def.social_value;
+            terms.add(
+                UT_AFFECTX,
+                Fixed::from_f64(0.01 * active_tension_count as f64) * def.social_value,
+            );
         }
         // Habit modifier: routine actions get a boost under stress
         let is_routine = matches!(
@@ -1042,21 +1189,21 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
                 | ActionKind::Worship
         );
         let habit = ctx.decision_policy.habit_modifier(is_routine, ctx.stress);
-        utility += emo + moral + habit;
+        terms.add(UT_POLICY, emo + moral + habit);
 
         // Iteration 247 (Arc B — interoception): the somatic marker
         // biases risky actions DOWN — a body in distress votes against
         // gambles (Wander is the classified risky action). Zero for
         // default interoceptors, so calm worlds are byte-identical.
         if is_risky && ctx.somatic_marker > Fixed::ZERO {
-            utility -= ctx.somatic_marker * Fixed::from_f64(0.1);
+            terms.add(UT_AFFECTX, -(ctx.somatic_marker * Fixed::from_f64(0.1)));
         }
 
         // Iteration 248 (Arc B): sleep-debt withdrawal — social actions
         // lose utility as unpaid sleep accumulates. Zero below the
         // deprivation threshold, so rested agents are byte-identical.
         if is_social && ctx.social_withdrawal > Fixed::ZERO {
-            utility -= ctx.social_withdrawal * Fixed::from_f64(0.08);
+            terms.add(UT_AFFECTX, -(ctx.social_withdrawal * Fixed::from_f64(0.08)));
         }
 
         // Iteration 232: mood drift — positive mood boosts social/
@@ -1070,7 +1217,7 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
         } else {
             Fixed::ZERO
         };
-        utility += mood_nudge;
+        terms.add(UT_AFFECTX, mood_nudge);
 
         // Iteration 233: seasonal behavioral modulation.
         // Winter boosts social/worship (+0.02), summer boosts work (+0.02).
@@ -1098,7 +1245,7 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
             }
             _ => Fixed::ZERO, // Spring/Autumn: neutral
         };
-        utility += season_nudge;
+        terms.add(UT_CONTEXT, season_nudge);
 
         // WP-J (Iteration 280): institution-membership work bonus — a
         // functioning institution (positive morale) makes provisioning
@@ -1106,7 +1253,7 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
         // economic-systems collective band. Zero below the band-III gate
         // (all pinned horizons), so calm worlds are byte-identical.
         if ctx.institution_work_bonus > Fixed::ZERO && matches!(kind, ActionKind::Work) {
-            utility += ctx.institution_work_bonus;
+            terms.add(UT_CONTEXT, ctx.institution_work_bonus);
         }
 
         // Iteration 236: age-related behavioral modulation.
@@ -1133,7 +1280,7 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
             }
             _ => Fixed::ZERO, // Other stages: neutral
         };
-        utility += age_nudge;
+        terms.add(UT_CONTEXT, age_nudge);
 
         // AP3 DC-1 (tasks 3.4/3.5): development gating — fulfillment thresholds
         // via `needs` band map (docs/balance/needs-bands.md) + pathology
@@ -1141,7 +1288,11 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
         // neutral pathology ⇒ 0, so goldens stay byte-identical until a
         // catalyst actually steps pathology (FR-023).
         let dev_nudge = development_pathology_nudge(*kind, &ctx.development.pathology);
-        utility += dev_nudge;
+        terms.add(UT_CONTEXT, dev_nudge);
+
+        // i387: the arbitration compares bucket sums, which `Fixed`'s exact
+        // addition makes identical to the legacy running total.
+        let utility = terms.total();
 
         if matches!(kind, ActionKind::Wander) {
             wander_utility = Some(utility);
@@ -1149,9 +1300,27 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
             idle_utility = Some(utility);
         }
 
+        if census_on {
+            if *kind == ActionKind::Socialize {
+                socialize_terms = terms;
+                socialize_utility = utility;
+            }
+            // The runner-up is the best candidate that does NOT win: it is
+            // the bar the loser had to clear, so a per-bucket comparison
+            // against it separates "missing term" from "too small a term".
+            if utility > best_utility {
+                runner_terms = best_terms;
+                runner_utility = best_utility;
+            } else if utility > runner_utility {
+                runner_terms = terms;
+                runner_utility = utility;
+            }
+        }
+
         if utility > best_utility {
             best_utility = utility;
             best_action = *kind;
+            best_terms = terms;
         }
     }
 
@@ -1198,6 +1367,26 @@ pub fn select_action(ctx: &DecisionContext<'_>, rng: &mut RngStreams) -> ActionK
             crate::sim::decision_census::action_index(best_action),
             ctx.novelty_pressure.to_f64(),
             ctx.play_pressure.to_f64(),
+        );
+    }
+
+    // i387: the per-bucket ledger — which family of terms decides the
+    // arbitration, and which family `Socialize` is missing. Read-only (the
+    // buckets are already computed), so an instrumented run stays
+    // byte-identical to an uninstrumented one.
+    if census_on {
+        // i388 input: which drive was asking. A social-family category that
+        // dominates here while no action maps to it is a dead producer, not a
+        // small coefficient (the i351 `Novelty` / i356 `Play` class).
+        crate::sim::decision_census::record_dominant(
+            ctx.dominant_need,
+            ctx.dominant_pressure.to_f64(),
+        );
+        crate::sim::decision_census::record_utility_terms(
+            &best_terms.to_f64_array(),
+            &socialize_terms.to_f64_array(),
+            &runner_terms.to_f64_array(),
+            (best_utility - socialize_utility).to_f64(),
         );
     }
 

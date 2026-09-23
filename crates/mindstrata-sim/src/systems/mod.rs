@@ -183,6 +183,52 @@ impl GoalGates {
     }
 }
 
+/// i388: the multiple of the population's own **mean social deficit** at which an
+/// agent reads as relationally DEPRIVED rather than ordinarily unsated.
+///
+/// The three social producers below all shipped with absolute bars (0.7 need gate,
+/// 0.3 joy leg, 0.4 identity leg) that sit **above the channel's own distribution**:
+/// the i388 probe measured `needs.social` at p50 0.0054 / p90 0.017 / p99 0.032–0.039
+/// / mean 0.008 across village and town, because the daily routine relieves the
+/// deficit before it can grow. So all three producers were dark by construction
+/// ("live Socialize goals: 0/15 agents, 0/50 agents") — the same absolute-bar-on-a-
+/// relative-scale defect i382 closed for faction legitimacy and i383 for the anger
+/// arms, three times over in one channel.
+///
+/// The reference is the population's own mean, exactly the i383 `mean_anger` form:
+/// self-normalizing, so a satiated village sets a low bar (a genuinely deprived
+/// agent still acts) and a lonely one raises it (only the anomaly above the crowd
+/// passes). Ratio 2.0 is the probe's measured choice — the ratio sweep over the
+/// same two worlds (share of agent-ticks opening the band): ×1.25 = 27.7–30.6%,
+/// **×2 = 10.5–12.1%**, ×3 = 4.8–5.2%, ×5 = 0.9–1.5%. ×2 sits just above the
+/// routine's own social share (~5% of decisions), so the goal layer adds an outlet
+/// for the deprived without spamming a goal onto every agent (§4.10: a band that
+/// opens for everyone discriminates nothing — the mirror of the defect it fixes).
+const RELATIONAL_DEPRIVATION_RATIO: Fixed = Fixed::from_int(2);
+
+/// i388: the retain bar as a share of the create bar, so a goal the band just
+/// created is not dropped the next tick.
+///
+/// The sibling rows keep their canon shape (retain 0.3 / create 0.7 = 3/7 ≈ 0.43);
+/// this is the same relation expressed on the relative band, rounded to a
+/// Fixed-exact 0.43. Without it the `GoalKind::Socialize` retain arm — still
+/// reading the absolute `gates.retain` (0.3) — would delete every goal the new
+/// band creates, a create-then-drop cycle (§4.3 dead producer with a live gate).
+const RELATIONAL_RETAIN_SHARE: Fixed = Fixed::from_raw(4300); // 0.43
+
+/// i388: the population's own mean social deficit this tick — the reference the
+/// relational bands read (the `mean_anger` form, §6 hoisted out of the agent loop).
+pub(crate) fn mean_social(needs: &[NeedState]) -> Fixed {
+    if needs.is_empty() {
+        return Fixed::ZERO;
+    }
+    let sum: Fixed = needs
+        .iter()
+        .map(|n| n.social)
+        .fold(Fixed::ZERO, |a, b| a + b);
+    sum / Fixed::from_int(needs.len() as i64)
+}
+
 /// Generate goals based on need pressure, emotional state, and identity.
 /// §24: Goals now carry source tracking and support emotional/identity modulation.
 /// §3.4: Emotional goal modulation — anger, fear, and joy drive goal generation.
@@ -200,6 +246,12 @@ pub fn system_goal_generation(
     // emitter reads (hoisted; §6). See `emotion_regulation::mean_anger`.
     let anger_shock_bar = crate::psychology::emotion_regulation::mean_anger(emotions)
         * crate::psychology::emotion_regulation::EMOTION_SHOCK_RATIO;
+    // i388: the relational bands — population-relative (see
+    // `RELATIONAL_DEPRIVATION_RATIO`), scaled by the same row-2 difficulty lever
+    // the canon gates ride (`goal_gate_scale`), so the socialize row keeps its
+    // "act earlier / tolerate longer" semantics on the relative scale.
+    let social_bar = mean_social(needs) * RELATIONAL_DEPRIVATION_RATIO * params.goal_gate_scale;
+    let social_retain_bar = social_bar * RELATIONAL_RETAIN_SHARE;
     for (i, (need, agent_goals)) in needs.iter().zip(goals.iter_mut()).enumerate() {
         // ── Goal decay: reduce priority of old goals over time ──
         // §24: Goals that aren't addressed gradually lose priority.
@@ -233,7 +285,11 @@ pub fn system_goal_generation(
                 crate::person::GoalKind::Drink => need.thirst > threshold,
                 crate::person::GoalKind::Rest => need.fatigue > threshold,
                 crate::person::GoalKind::Work => true,
-                crate::person::GoalKind::Socialize => need.social > threshold,
+                // i388: the relational retain arm reads the relative band (the
+                // peers keep the canon gate): a goal created at `social_bar` must
+                // survive the next tick's retain pass or the band accomplishes
+                // nothing.
+                crate::person::GoalKind::Socialize => need.social > social_retain_bar,
                 crate::person::GoalKind::Worship => need.meaning > threshold,
                 crate::person::GoalKind::SeekSafety => true,
             }
@@ -247,11 +303,12 @@ pub fn system_goal_generation(
             (crate::person::GoalKind::Eat, need.hunger, gates.eat),
             (crate::person::GoalKind::Drink, need.thirst, gates.drink),
             (crate::person::GoalKind::Rest, need.fatigue, gates.rest),
-            (
-                crate::person::GoalKind::Socialize,
-                need.social,
-                gates.socialize,
-            ),
+            // i388: the social band is population-relative (the peers stay
+            // absolute — their needs DO reach their gates): see
+            // `RELATIONAL_DEPRIVATION_RATIO` for the measurement and the ratio
+            // sweep. `gates.socialize` remains the row's canon anchor (asserted by
+            // `sim/tests/psychology.rs`); the band itself rides `goal_gate_scale`.
+            (crate::person::GoalKind::Socialize, need.social, social_bar),
             (
                 crate::person::GoalKind::Worship,
                 need.meaning,
@@ -328,7 +385,9 @@ pub fn system_goal_generation(
             }
 
             // High joy → Socialize goal
-            if emo.joy > Fixed::from_f64(0.5) && need.social > Fixed::from_f64(0.3) {
+            // i388: the joy leg's need arm is the relational band (was an absolute
+            // 0.3, above the channel's p99 of 0.032–0.039 — dark).
+            if emo.joy > Fixed::from_f64(0.5) && need.social > social_bar {
                 let joy_prio = emo.joy * Fixed::from_f64(0.4);
                 if let Some(existing) = agent_goals
                     .iter_mut()
@@ -391,8 +450,9 @@ pub fn system_goal_generation(
                 }
             }
             // Extraverted agents generate Socialize goals more readily
-            if personality.extraversion > Fixed::from_f64(0.6) && need.social > Fixed::from_f64(0.4)
-            {
+            // i388: the extraversion leg's need arm is the relational band (was an
+            // absolute 0.4 — dark for the same reason).
+            if personality.extraversion > Fixed::from_f64(0.6) && need.social > social_bar {
                 let id_priority = personality.extraversion * Fixed::from_f64(0.3);
                 if let Some(existing) = agent_goals
                     .iter_mut()
