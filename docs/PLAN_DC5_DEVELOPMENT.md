@@ -91,87 +91,92 @@ batched tightly.
 | **i388** | **DONE** (`i388_relational_outlet.md`) — revivable, and the channel was the problem: the relational urgency family (`Attachment\|Care\|Romance → Socialize`, `Belonging → Socialize\|Worship`) + the population-relative goal band (`2 × mean_social × goal_gate_scale`, retain at ×0.43) | `i388_relational_outlet` (reach + ratio sweep, pre/post census) | channel live: `Socialize` urgency 0.0000 → **0.0865**, utility-selected `Socialize` **0 → 109** (village) / **0 → 88** (town), live goals 0 → 1/12 and 9/51. **Exit criterion re-contracted**: utility share measured **0.54% (village) / 0.09% (town)** against the pre-measurement guess of ≥1% — a 1% share needs a band wide enough to stop discriminating (§4.10), and the winner's bar is 0.73–0.96 pressure-driven. The pinned invariant is *the drive reaches the deliberative layers*, not a share |
 | **i389** | **DONE** (`i389_command_channel.md`) — authority was nominal; `systems/decree.rs` gives the council a bounded, legitimacy-scaled ask (`GoalSource::Decree`: a directive that DECAYS, unlike the operator's durable `Command`), crisis-keyed (`famine`/hunger → Work, `panic`/fear → Worship) and capped at the four nearest villagers | `i389_command_channel` (producer census + per-tick crisis duty cycles, pre/post) | **calm 0.00% (0 selections, and the calm golden is byte-identical)** ✓, **collapse 0.05%** (30 selections, 181 decree agent-ticks) ✓. The pestilence leg measures **0.00% for a measured reason, not a dark producer**: its panic duty cycle is **90.69%** and its Elder seat is **EMPTY** — after a pestilence the council has no office holder and nothing appoints a successor. Succession is recorded as the next root cause (one per iteration); the producer's conditional liveness is pinned with the seat filled |
 | **i390** | **DONE** (`i390_office_succession.md`) — the lifecycle gap i389 exposed: `handle_agent_death` nulls every office its holder held and nothing ever refilled it, so the pestilence council had **no office holder at all** (authority structurally absent while members/treasury/legitimacy survived). `systems/succession.rs` fills vacant seats from the living membership on a 50-tick cadence, by the institution's own criterion (`status_v2.effective_status()`, ties on `AgentId`, no RNG stream) | `i390_office_succession` (vacancy share + candidate-pool share + directive share, pass enabled vs disabled) | pre-fix pestilence Elder seat **100.00% vacant with a pool present 100% of the time**, directive **0.0000%**; post-fix **0.00% / 0.00% / 0.00%** and directive **0.0654%** while **calm stays 0.0000%** (authority still silent when nothing is wrong) ✓ — **both goldens byte-identical** (no office-holder death in either golden window). Orphaned vacancies (no members) counted at 0 and left vacant: recruitment is a separate root cause |
-| **i391** [M] | Write-only genome/person fields are a recurring class (i313 injury, i124 emotion-context, i307 habit gate) and only `sensory_acuity` is currently known | `i391_dead_field_sweep`: field-level write/read census across `Genome`, `EmbodiedState`, `BodyState`, `DevelopmentFieldState` | every writer-only field is either wired or deleted; the sweep script is recorded for re-use |
+| **i391** [M] | **DONE** (`i391_dead_field_sweep.md`) — the recurring write-only class (i313 injury, i124 emotion-context, i307 habit gate) is now found by census. `scripts/field_census.py` counts writes/literals/reads per field and treats a read inside the field's OWN file as plumbing, so the instrument's key is the **cross-module read** | `scripts/field_census.py --file <defs> [--sites]` | **6 suspects, 5 confirmed dead genes**: `aggression_threshold`, `novelty_seeking`, `chronic_pain_risk`, `sensory_acuity`, `puberty_age` — each drawn at `random()`, defaulted, blended at `inherit`, and read by nothing outside `genome.rs`; the 6th (`EmbodiedState.metabolic`) is the instrument's documented false-positive class (a consumer in its own file). The remaining 53 fields have consumer reads — the class is five genes, not systemic rot. Script recorded for re-use ✓ |
+| **i392** | The five dead genes are **false affordances**: the engine carries heritable trait variation that changes no behaviour (and the H5 distribution debt is measured over inert draws). Each is a behavioural change, so each gets its own probe inside one act | per-gene probes; `puberty_age` first (its consumer **already exists and was hardcoded over the gene** — `reproductive.rs:168` reads a village-wide `13.0` while the gene draws 11.0–15.0) | every row wired midpoint-neutrally (§4.6) or deleted; birth timing / violence / perception paths re-anchored with attribution; no inert gene left |
 
 ### W1 — Finish the relationship unification (G2)
 | iter | root cause | probe | exit criterion |
 |---|---|---|---|
-| **i392** | The v1 **writer** gain schedule (`+0.02…+0.10`/act, ~10× the dyadic gain) is the last divergence source; i384 measured that the speech-act effect model must move in the same commit | `i392_speech_act_store` — per-act deltas from both stores on the same interactions | speech-act model + `RelationshipKind` ladder read/write the dyadic store; v1 gain deleted; divergence ≤ the dyadic store's own noise |
-| **i393** | Three consumers still read the legacy row (`norms_impl`, `household`, `births_deaths`) — each has its own divergence stake and its own probe (i369/i384 method) | one probe per consumer, re-using the i384 read-source-delta metric | each consumer's read-source delta ≤1%; re-anchors attributed per §4.2 |
-| **i394** | With every reader and writer migrated, the v1 matrix + its daily sync pass are pure redundancy | `i394_v1_retirement`: run with the matrix frozen/removed, compare full-run digests | the v1 matrix is deleted (or reduced to a documented projection), the sync pass removed, goldens re-anchored **once** under custody with mechanism evidence |
+| **i393** | The v1 **writer** gain schedule (`+0.02…+0.10`/act, ~10× the dyadic gain) is the last divergence source; i384 measured that the speech-act effect model must move in the same commit | `i393_speech_act_store` — per-act deltas from both stores on the same interactions | speech-act model + `RelationshipKind` ladder read/write the dyadic store; v1 gain deleted; divergence ≤ the dyadic store's own noise |
+| **i394** | Three consumers still read the legacy row (`norms_impl`, `household`, `births_deaths`) — each has its own divergence stake and its own probe (i369/i384 method) | one probe per consumer, re-using the i384 read-source-delta metric | each consumer's read-source delta ≤1%; re-anchors attributed per §4.2 |
+| **i395** | With every reader and writer migrated, the v1 matrix + its daily sync pass are pure redundancy | `i395_v1_retirement`: run with the matrix frozen/removed, compare full-run digests | the v1 matrix is deleted (or reduced to a documented projection), the sync pass removed, goldens re-anchored **once** under custody with mechanism evidence |
 
 ### W2 — Space, contact, locomotion (G3)
 | iter | root cause | probe | exit criterion |
 |---|---|---|---|
-| **i395** | Locomotion is one step per decision and reachable only through feud approach; §6 names it as the second weakness of the agent layer | `i395_locomotion_cadence` — decision-cadence vs movement rate; contact-graph effect of multi-tile stepping (pathing to a target, returning home) | `Move` is a first-class driver with a measured share; contact breadth rises without breaking the calibrated village (goldens byte-identical at N≤48 or re-anchored with evidence) |
-| **i396** | Relationships form from **co-residency**, not encounter: contact is a proxy for sharing a home cell | `i396_encounter_contact` — encounter-driven tie formation (radius-gated, off-home) vs today; re-run i350's saturation metric at a **behavioural** horizon (≥40K), not short windows | touched-R at 40K is materially below the 73.7% co-residency saturation **and** the tie graph still reproduces kinship/courtship/marriage liveness |
-| **i397** | Clan count is fixed at 3 regardless of settlement structure (i323) | `i397_clan_formation` — clans derived from settlement proximity + founding kin cores, fission on feud, merge on attrition | clan count varies with N and geography across a ≥12-seed family, with clan enmity/feud channels still live |
-| **i398** | World area is decorative below N≈144 (i344) — **operator decision A9 outstanding** | `i398_density_sweep` — the density law at the test matrix {12, 48, 144, 256}, measured as *fidelity* (contact breadth, max co-location) with the perf delta reported honestly | density law adopted (or explicitly rejected) with a coordinated re-anchor sweep of the contact-derived pins |
+| **i396** | Locomotion is one step per decision and reachable only through feud approach; §6 names it as the second weakness of the agent layer | `i396_locomotion_cadence` — decision-cadence vs movement rate; contact-graph effect of multi-tile stepping (pathing to a target, returning home) | `Move` is a first-class driver with a measured share; contact breadth rises without breaking the calibrated village (goldens byte-identical at N≤48 or re-anchored with evidence) |
+| **i397** | Relationships form from **co-residency**, not encounter: contact is a proxy for sharing a home cell | `i397_encounter_contact` — encounter-driven tie formation (radius-gated, off-home) vs today; re-run i350's saturation metric at a **behavioural** horizon (≥40K), not short windows | touched-R at 40K is materially below the 73.7% co-residency saturation **and** the tie graph still reproduces kinship/courtship/marriage liveness |
+| **i398** | Clan count is fixed at 3 regardless of settlement structure (i323) | `i398_clan_formation` — clans derived from settlement proximity + founding kin cores, fission on feud, merge on attrition | clan count varies with N and geography across a ≥12-seed family, with clan enmity/feud channels still live |
+| **i399** | World area is decorative below N≈144 (i344) — **operator decision A9 outstanding** | `i399_density_sweep` — the density law at the test matrix {12, 48, 144, 256}, measured as *fidelity* (contact breadth, max co-location) with the perf delta reported honestly | density law adopted (or explicitly rejected) with a coordinated re-anchor sweep of the contact-derived pins |
 
 ### W3 — Inter-community architecture (G4 + G5) — the country path
 | iter | root cause | probe | exit criterion |
 |---|---|---|---|
-| **i399** | Diplomacy is an off-map abstraction of three fixed names; the on-map polity graph (i297/i298/i360) is not the diplomacy graph | `i399_polity_diplomacy` — derive neighbors from actual polities (distance, shared trade/kinship history), relations updated by real cross-polity events; off-map names retained only as an explicit "outside world" fallback | every on-map polity has relations derived from world state; `raids`/`caravans` counters move from real inter-polity events; N=192/256 runs show ≥2 polities with distinct relation trajectories |
-| **i400** | Raids and caravans still conjure/remove grain from an abstraction; a real settlement's loss must be another's gain | `i400_on_map_trade_conflict`: grain transferred between settlement stores, militia (`military.readiness`) tied to the raided polity, war/peace states between polities | conservation holds (Σgrain before/after within the transfer's bookkeeping), `military` roster/musters scale with the raiding polity, journal entries name the actual settlement |
-| **i401** | No hierarchical layer: polities have holons but no relations, no federation, no regional council | `i401_regional_polity`: second-order holon over polities (regional legitimacy, treaty/federation state), regional aggregation of memes/technology | a run at N=256 produces measurable regional-vs-local divergence (a meme or norm adopted regionally but not locally, or vice versa) with liveness pins |
-| **i402** [M] | Demography at town scale is unmeasured against settlement dynamics (fission/migration exist but their settlement-level effect is not) | `i402_settlement_demography`: does fission actually occur? migration between settlements? measure N=256 over 100K | a settlement-level demographic verdict with numbers, feeding i403 |
+| **i400** | Diplomacy is an off-map abstraction of three fixed names; the on-map polity graph (i297/i298/i360) is not the diplomacy graph | `i400_polity_diplomacy` — derive neighbors from actual polities (distance, shared trade/kinship history), relations updated by real cross-polity events; off-map names retained only as an explicit "outside world" fallback | every on-map polity has relations derived from world state; `raids`/`caravans` counters move from real inter-polity events; N=192/256 runs show ≥2 polities with distinct relation trajectories |
+| **i401** | Raids and caravans still conjure/remove grain from an abstraction; a real settlement's loss must be another's gain | `i401_on_map_trade_conflict`: grain transferred between settlement stores, militia (`military.readiness`) tied to the raided polity, war/peace states between polities | conservation holds (Σgrain before/after within the transfer's bookkeeping), `military` roster/musters scale with the raiding polity, journal entries name the actual settlement |
+| **i402** | No hierarchical layer: polities have holons but no relations, no federation, no regional council | `i402_regional_polity`: second-order holon over polities (regional legitimacy, treaty/federation state), regional aggregation of memes/technology | a run at N=256 produces measurable regional-vs-local divergence (a meme or norm adopted regionally but not locally, or vice versa) with liveness pins |
+| **i403** [M] | Demography at town scale is unmeasured against settlement dynamics (fission/migration exist but their settlement-level effect is not) | `i403_settlement_demography`: does fission actually occur? migration between settlements? measure N=256 over 100K | a settlement-level demographic verdict with numbers, feeding i404 |
 
 ### W4 — Scale architecture (G6)
 | iter | root cause | probe | exit criterion |
 |---|---|---|---|
-| **i403** | cognitive (21.3%) + memory (17.8%) = 39% of the N=192 tick, and i334's perception gate only covered the memory pass | `i403_cognitive_gate`: the same perception/edge gating applied to the cognitive pass's row sweep (11.3% of tick by itself), plus a §17.3 dirty-window pacing probe | tick cost at N=192 down materially (recorded number, not a vibe) **and** behaviour re-anchored only where the gate legitimately changes perception (a *behavioural* change, probed) |
-| **i404** | The LOD tier is a crisis modulator, not a scale lever: Background is dark in calm towns and never carries work | `i404_living_background`: a background population that actually acts (budgeted cognition + social presence + coarse actions) rather than being dark | at N=192/256, Background carries a measured share of agent-ticks in **calm** worlds with per-agent budget caps; behaviour at N≤48 unchanged |
-| **i405** | `MAX_POPULATION = 256` is a perf envelope, not a law — and H5's founder-shape debt unlocks only at larger N | `i405_cap_envelope`: re-baseline the envelope with i404's tier live, at 384/512 | cap raise adopted (charter) with a measured envelope, or recorded as not-yet |
-| **i406** [M] | City/planet architecture has never been prototyped; the Ω(N²) relationship floor is confirmed but the *partitioned* alternative is not measured | `i406_partition_spike`: a prototype in which cross-settlement state is explicit and sparse (per-settlement tick slices, no global dense matrix), measured against the same N | a documented verdict: partition feasible / not, with the numbers that decide it — a spike, never a half-landed refactor |
+| **i404** | cognitive (21.3%) + memory (17.8%) = 39% of the N=192 tick, and i334's perception gate only covered the memory pass | `i404_cognitive_gate`: the same perception/edge gating applied to the cognitive pass's row sweep (11.3% of tick by itself), plus a §17.3 dirty-window pacing probe | tick cost at N=192 down materially (recorded number, not a vibe) **and** behaviour re-anchored only where the gate legitimately changes perception (a *behavioural* change, probed) |
+| **i405** | The LOD tier is a crisis modulator, not a scale lever: Background is dark in calm towns and never carries work | `i405_living_background`: a background population that actually acts (budgeted cognition + social presence + coarse actions) rather than being dark | at N=192/256, Background carries a measured share of agent-ticks in **calm** worlds with per-agent budget caps; behaviour at N≤48 unchanged |
+| **i406** | `MAX_POPULATION = 256` is a perf envelope, not a law — and H5's founder-shape debt unlocks only at larger N | `i406_cap_envelope`: re-baseline the envelope with i405's tier live, at 384/512 | cap raise adopted (charter) with a measured envelope, or recorded as not-yet |
+| **i407** [M] | City/planet architecture has never been prototyped; the Ω(N²) relationship floor is confirmed but the *partitioned* alternative is not measured | `i407_partition_spike`: a prototype in which cross-settlement state is explicit and sparse (per-settlement tick slices, no global dense matrix), measured against the same N | a documented verdict: partition feasible / not, with the numbers that decide it — a spike, never a half-landed refactor |
 
 ### W5 — Economy and demography counter-forces (G7 partial)
 | iter | root cause | probe | exit criterion |
 |---|---|---|---|
-| **i407** | Tax rate is a hardcoded policy stance; the council has legitimacy and treasury state but no fiscal policy | `i407_endogenous_tax`: rate set from fiscal need (treasury vs expected outlay, famine/war pressure) — **i377's constraint: not coupled to legitimacy** | rate varies with treasury/famine state across a ≥12-seed family; wealth pins re-anchored with the i365 Gini band as the contract |
-| **i408** | Wealth concentration has weak counter-forces: inheritance/charity/redistribution absence is the audit's E6 residual | `i408_inheritance_charity`: wealth-at-death splitting, charity/redistribution norms, measured Gini trajectory to 100K | Gini does not drift monotonically upward; the counter-forces are attributable (per-mechanism delta) |
-| **i409** | Founder-shape realism is the oldest recorded debt, blocked on "larger N + coordinated re-anchor sweep" — i405 is that unlock | `i409_founder_shape`: shaped founder draws at the raised N with the full re-anchor sweep (13 liveness pins were the Iter-263 casualty) | shaped draws land with **zero** liveness regressions at the new N, or the debt is re-recorded with the new evidence |
+| **i408** | Tax rate is a hardcoded policy stance; the council has legitimacy and treasury state but no fiscal policy | `i408_endogenous_tax`: rate set from fiscal need (treasury vs expected outlay, famine/war pressure) — **i377's constraint: not coupled to legitimacy** | rate varies with treasury/famine state across a ≥12-seed family; wealth pins re-anchored with the i365 Gini band as the contract |
+| **i409** | Wealth concentration has weak counter-forces: inheritance/charity/redistribution absence is the audit's E6 residual | `i409_inheritance_charity`: wealth-at-death splitting, charity/redistribution norms, measured Gini trajectory to 100K | Gini does not drift monotonically upward; the counter-forces are attributable (per-mechanism delta) |
+| **i410** | Founder-shape realism is the oldest recorded debt, blocked on "larger N + coordinated re-anchor sweep" — i406 is that unlock | `i410_founder_shape`: shaped founder draws at the raised N with the full re-anchor sweep (13 liveness pins were the Iter-263 casualty) | shaped draws land with **zero** liveness regressions at the new N, or the debt is re-recorded with the new evidence |
 
 ### W6 — Thin deep layers (G7)
 | iter | root cause | probe | exit criterion |
 |---|---|---|---|
-| **i410** | Skill curve saturates (E8: farming 1.00, trading 0.00) — the last measured state is 2026-08-22 | `i410_skill_curve`: re-measure the distribution; add diminishing returns at the top and gradient at the bottom, with decay pressure | no skill pinned population-wide; distribution has an interior mode; skill-gated work/innovation channels remain live |
-| **i411** | Fatigue is a village-wide synchronized phase (i321) — individual workload differentiation is lost | `i411_fatigue_differentiation`: per-agent workload weighting of the circadian/work cycle | within-seed fatigue dispersion rises with measured per-agent workload; bounds (no ceiling approach) preserved |
-| **i412** | Innovation is present but not generative (tier-2 chains rare; technology tree depth 0–1 in most runs) | `i412_innovation_ratchet`: measure tier-2/3 chain firing naturally; make discovery depend on practice/teaching accumulation (skills feed technology) | tier-2 innovations fire in a majority of ≥12-seed 100K runs, attributable to measured practice accumulation |
-| **i413** | Vendor-blocked trio (realms ontology, resonance matrix, cult-liveliness) + the audit's ritual post-formation residual | `i413_vendor_gate`: one probe measuring what each blocked channel would unlock, and whether a seedable fallback exists | each blocked item is either unblocked by a vendored/seedable substitute or re-parked with a date-stamped reason |
+| **i411** | Skill curve saturates (E8: farming 1.00, trading 0.00) — the last measured state is 2026-08-22 | `i411_skill_curve`: re-measure the distribution; add diminishing returns at the top and gradient at the bottom, with decay pressure | no skill pinned population-wide; distribution has an interior mode; skill-gated work/innovation channels remain live |
+| **i412** | Fatigue is a village-wide synchronized phase (i321) — individual workload differentiation is lost | `i412_fatigue_differentiation`: per-agent workload weighting of the circadian/work cycle | within-seed fatigue dispersion rises with measured per-agent workload; bounds (no ceiling approach) preserved |
+| **i413** | Innovation is present but not generative (tier-2 chains rare; technology tree depth 0–1 in most runs) | `i413_innovation_ratchet`: measure tier-2/3 chain firing naturally; make discovery depend on practice/teaching accumulation (skills feed technology) | tier-2 innovations fire in a majority of ≥12-seed 100K runs, attributable to measured practice accumulation |
+| **i414** | Vendor-blocked trio (realms ontology, resonance matrix, cult-liveliness) + the audit's ritual post-formation residual | `i414_vendor_gate`: one probe measuring what each blocked channel would unlock, and whether a seedable fallback exists | each blocked item is either unblocked by a vendored/seedable substitute or re-parked with a date-stamped reason |
 
 ### W7 — Verification and observability (G8)
 | iter | root cause | probe | exit criterion |
 |---|---|---|---|
-| **i414** | Citation drift is unchecked by the gate (i386 found 5 classes with `doc_index.py` green) | extend `scripts/doc_index.py` with a **citation check** (every `*.md|rs|py|sh` token in a governed doc must resolve from the repo root, the doc's directory, or a basename index; exit non-zero on a true ghost) | the gate fails on a planted ghost citation (the check is proven to trip, per the i170 subsystem-gate lesson) |
-| **i415** | Longitudinal observability is partial: lineage/tail metrics landed at i251 with chart scaffolding, but the operator-facing longitudinal view is unfinished | `i415_charts`: finish the TUI longitudinal charts (population, stress, Gini, belief ecology, lineage) from cached metrics | charts render deterministically from a capture; zero mechanical effect (read-only pin) |
-| **i416** | No standing perf envelope above N=96, and the per-pass profile is probe-only | `i416_envelope`: standing warn-only envelopes at 144/192/256 + a profile readout surfaced through the CLI | `scripts/gate` reports the envelope at the town tiers; a regression at N=192 is visible without running the probe by hand |
+| **i415** | Citation drift is unchecked by the gate (i386 found 5 classes with `doc_index.py` green) | extend `scripts/doc_index.py` with a **citation check** (every `*.md|rs|py|sh` token in a governed doc must resolve from the repo root, the doc's directory, or a basename index; exit non-zero on a true ghost) | the gate fails on a planted ghost citation (the check is proven to trip, per the i170 subsystem-gate lesson) |
+| **i416** | Longitudinal observability is partial: lineage/tail metrics landed at i251 with chart scaffolding, but the operator-facing longitudinal view is unfinished | `i416_charts`: finish the TUI longitudinal charts (population, stress, Gini, belief ecology, lineage) from cached metrics | charts render deterministically from a capture; zero mechanical effect (read-only pin) |
+| **i417** | No standing perf envelope above N=96, and the per-pass profile is probe-only | `i417_envelope`: standing warn-only envelopes at 144/192/256 + a profile readout surfaced through the CLI | `scripts/gate` reports the envelope at the town tiers; a regression at N=192 is visible without running the probe by hand |
 
 ---
 
 ## 4. Sequencing and dependencies
 
 ```
-W0 (i387→i391)  dead/inert surfaces  ── feeds the action layer for W2/W3 (i390 succession DONE)
-W1 (i392→i394)  relationship unification  ── must precede W2 (contact changes the store)
-W2 (i395→i398)  space/contact  ── must precede W3 (diplomacy needs a settlement graph)
-      i398 (A9) is an OPERATOR GATE: W2's clan/contact items can land either way,
-      but the density decision should be taken before i399 measures a polity graph
-W3 (i399→i402)  inter-community layer  ── the country path; i401 needs i399/i400 landed
-W4 (i403→i406)  scale architecture  ── i403/i404 unblock i405 (cap) which unblocks i409 (H5)
-W5 (i407→i409)  economy/demography  ── i407/i408 independent; i409 depends on i405
-W6 (i410→i413)  thin layers  ── independent; the cheapest realism-yield per iteration
-W7 (i414→i416)  verification  ── i414 is independent and can land any time (recommended early)
+W0 (i387→i392)  dead/inert surfaces  ── feeds the action layer for W2/W3 (i390 succession, i391 census DONE)
+W1 (i393→i395)  relationship unification  ── must precede W2 (contact changes the store)
+W2 (i396→i399)  space/contact  ── must precede W3 (diplomacy needs a settlement graph)
+      i399 (A9) is an OPERATOR GATE: W2's clan/contact items can land either way,
+      but the density decision should be taken before i400 measures a polity graph
+W3 (i400→i403)  inter-community layer  ── the country path; i402 needs i400/i401 landed
+W4 (i404→i407)  scale architecture  ── i404/i405 unblock i406 (cap) which unblocks i410 (H5)
+W5 (i408→i410)  economy/demography  ── i408/i409 independent; i410 depends on i406
+W6 (i411→i414)  thin layers  ── independent; the cheapest realism-yield per iteration
+W7 (i415→i417)  verification  ── i415 is independent and can land any time (recommended early)
 ```
 
 **First arc status: i387 → i388 → i389 → i390 all DONE.** The next items are **i391**
-(the write-only field sweep) and **i392** (the speech-act / `RelationshipKind` migration).
+(the dead-gene wiring act i391's census scheduled) and **i393** (the speech-act /
+`RelationshipKind` migration).
 Rationale as planned, with one insertion: i387 was a *measurement* that decided the action
 layer's fate; i388/i389 closed two surfaces a probe had already named (a Class-D inert term
 and a nominal authority channel); **i390 was the lifecycle item i389 exposed** — an office
 holder who dies is never replaced, so the pestilence leg's authority was structurally absent
 while its crisis ran at a 90.69% duty cycle, and succession blocks the inter-community
-layer's offices as much as it blocked the directive channel. i391 now sweeps the
-write-only-field class that has produced four separate dead-leg bugs, and i392 starts the
+layer's offices as much as it blocked the directive channel. i391 swept the write-only-field
+class (`scripts/field_census.py`: five dead genes, one documented false-positive class) and
+found that the **consumer of one of them already exists** — `puberty_age` is drawn, inherited
+and blended while `reproductive.rs` reads a village-wide `13.0` — so the sweep scheduled
+**i392** as the wiring act, which now owns the five inert genes. i393 starts the
 migration whose reader-side is already half-done. Together they remove the last known false
 affordances below the social layer — after which W2/W3 can measure space and inter-community
 behaviour on a clean action surface.
@@ -182,10 +187,10 @@ behaviour on a clean action surface.
 
 1. **A9 — fixed 32×32 vs constant density.** i344 measured it as a *fidelity* policy (max
    co-location 19→4, contacted share halved), not throughput. Adopting it changes calibrated
-   village structure, so it is a charter call. **Needed before i398.**
-2. **Cap raise (`MAX_POPULATION` 256 → 384/512).** Needed for H5's unlock (i409) and for any
-   city-path claim. Requires a measured envelope (i404/i405) and a golden/harness review.
-   **Needed before i405.**
+   village structure, so it is a charter call. **Needed before i399.**
+2. **Cap raise (`MAX_POPULATION` 256 → 384/512).** Needed for H5's unlock (i410) and for any
+   city-path claim. Requires a measured envelope (i405/i406) and a golden/harness review.
+   **Needed before i406.**
 3. **Does DC-5 own depth *and* scale, or should the city path be split out?** This plan
    proposes one cycle ("depth closure and inter-community scale") because the two are coupled:
    the inter-community layer (W3) is what makes town scale meaningful, and the LOD/cap work
@@ -204,12 +209,12 @@ behaviour on a clean action surface.
 ## 6. Non-goals (explicit)
 
 - **No magnitude-knob compensation** (§4.4 / i279). Ever.
-- **No piecemeal founder-shape change**: it lands only with i405's larger N and the full
+- **No piecemeal founder-shape change**: it lands only with i406's larger N and the full
   coordinated sweep (§5 of AGENTS; Iter-263's 13 broken liveness pins are the receipt).
-- **No sparse relationship store** as a perf fix: demoted by i326/i338/i344/i350. i396 is the
+- **No sparse relationship store** as a perf fix: demoted by i326/i338/i344/i350. i397 is the
   *behavioural* question (do encounters, not co-residency, form ties), not a cache.
 - **No `VecDeque` event conversion**: trigger is jitter-free ticks only (i354).
-- **No planet-scale distributed execution**: i406 is a spike with a verdict, nothing more.
+- **No planet-scale distributed execution**: i407 is a spike with a verdict, nothing more.
 - **No dead-code deletion without a probe**: a surface is deleted only when its absence is
   measured (i372's rule), never by grep alone.
 

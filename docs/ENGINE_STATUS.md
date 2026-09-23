@@ -231,7 +231,17 @@ institutional effects (treasury accumulating with no holder to spend it, legitim
 are unmeasured. It would have blocked the inter-community layer's offices (W3).
 
 
-The live iteration ledger is [`PLAN_DC3_DEVELOPMENT.md`](PLAN_DC3_DEVELOPMENT.md) §3;
+**Dead genes (i391, NEW — five confirmed, i392 scheduled):** `aggression_threshold`,
+`novelty_seeking`, `chronic_pain_risk`, `sensory_acuity` and `puberty_age` are drawn at
+founder creation, defaulted and blended at `inherit`, and **read by nothing outside
+`genome.rs`** — heritable trait variation that changes no behaviour. `puberty_age` is the
+worst of them because its consumer already exists: `reproductive.rs:168` reads a village-wide
+hardcoded `13.0` while the gene draws 11.0–15.0. The other four are candidates for the §4.6
+midpoint-neutral wiring or for deletion. The instrument (`scripts/field_census.py`, doctrine
+§5) is recorded for re-use; it found six suspects and one is the documented false-positive
+class (an aggregate consumed by its own file).
+
+The live iteration ledger is [`PLAN_DC5_DEVELOPMENT.md`](PLAN_DC5_DEVELOPMENT.md) §3;
 it is authoritative for *work*, this section is the summary.
 
 1. **v1→v2 relationship migration (charter DECIDED: finish it subsystem by subsystem)** — i353 measured per-pair divergence (90% of pairs >0.01 at N=48/20K). **i369 landed the first migration:** the comfort/soothing path now reads the dyadic v2 store (three-way runnable pin; collapse golden one birth flipped 13→12, in-contract). Remaining readers queued: norms_impl, household, births_deaths; marriage pass REFUTED (i353); the cognitive mean-reversion writer landed (i376). **i384 migrated the economy trade pair (read + write)** — the last self-contained v1 pair — after its probe measured the divergence at 6–40× the population average on exactly the pairs that trade (v1 0.9174/0.8068/0.7892 vs v2 0.8242/0.7036/0.6551) and a 2.8–4.0% price error on the busiest dyads; post-migration the read-source delta is 0.34–0.52%, traded-pair v2 trust sits at 0.93–0.98, and `trade_price_reads_the_dyadic_store_and_writes_it` guards the store choice. The remaining v1 writers' gain schedule (speech-act model + `RelationshipKind` ladder) is the next migration commit.

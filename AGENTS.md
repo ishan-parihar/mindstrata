@@ -255,6 +255,16 @@ These rules exist because we repeatedly paid for violating them:
   a coordinated re-anchor sweep across all extreme-driven producers. Recorded as
   systemic debt — do not attempt piecemeal.
 
+- **Dead fields are found by census, not by hunt (i391)**: `python3
+  scripts/field_census.py --file <defs> --sites` counts writes / constructor literals /
+  reads per field and treats a read inside the field's OWN file as plumbing, so only a
+  **cross-module** read counts as a consumer. Run it before adding a trait/behaviour gene
+  (five genes shipped dead this way: `aggression_threshold`, `novelty_seeking`,
+  `chronic_pain_risk`, `sensory_acuity`, `puberty_age`), and before claiming a genome-wide
+  distribution result — trait variance over inert draws is a false affordance. Suspect rows
+  are pointers, not verdicts: an aggregate whose consumer lives in its own file is the
+  documented false-positive class.
+
 ## 6. Rust Craft Standards (rust-best-practices handbook)
 
 Based on Apollo GraphQL's [Rust Best Practices Handbook]
@@ -505,8 +515,17 @@ Live queue, in order (evidence link per item):
    disabled: Elder seat **100.00% vacant with a candidate pool present 100% of the time**,
    directive 0.0000%; after: **0.00% vacancy**, directive **0.0654%**, **calm 0.0000%**
    (authority still silent when nothing is wrong) — and **both goldens byte-identical**,
-   since neither golden window contains an office-holder death. Next: **i391** the write-only
-   field sweep, then **i392** the speech-act/kind migration. Carried forward from i388 as
+   since neither golden window contains an office-holder death. **i391 LANDED**
+   (`evidence/i391_dead_field_sweep.md`, measurement): `scripts/field_census.py` sweeps every
+   field for writes/literals/reads and counts only a **cross-module** read as a consumer, so
+   plumbing (constructor/`Default`/`random`/`inherit`/blend) no longer masks the class. Six
+   suspects, **five confirmed dead genes** — `aggression_threshold`, `novelty_seeking`,
+   `chronic_pain_risk`, `sensory_acuity`, `puberty_age` are drawn, defaulted and blended, and
+   read by nothing outside `genome.rs` (the 6th, `EmbodiedState.metabolic`, is the
+   instrument's documented false-positive class: a consumer in the field's own file). One row
+   is a live affordance the engine already measures — `reproductive.rs:168` reads a hardcoded
+   `13.0` while `puberty_age` draws 11.0–15.0. Next: **i392** the dead-gene wiring act, then
+   **i393** the speech-act/kind migration. Carried forward from i388 as
    measured-but-unexplained: action duration rose 4.31 → 5.40 ticks and the 2K relationship
    stages shifted shallower (`Unnoticed` 20 → 26, `Friend` 8 → 5) — W2 must decide whether
    contact falls when the drive is served *before* the sparse-store question is re-opened.
