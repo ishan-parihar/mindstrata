@@ -134,9 +134,16 @@ pressure-driven, and `Socialize`'s own term is small because `needs.social` is (
 above 0.35, directing its four nearest villagers with priority `legitimacy × 0.8` as a
 `GoalSource::Decree` that **decays** (the operator's `GoalSource::Command` is still the
 durable one). Measured: calm **0.00%** (calm golden byte-identical), collapse **0.05%**
-(30 selections). The pestilence leg is a measured **office VACANCY** — panic active
-90.69% of ticks, Elder seat empty: after a pestilence the council has no holder and
-nothing appoints a successor, so **succession is the next root cause**.
+(30 selections). The pestilence leg was a measured **office VACANCY** — panic active
+90.69% of ticks, Elder seat empty — and **i390 closed it**: `systems/succession.rs` fills
+vacant seats from the living membership on a 50-tick cadence, by the institution's own
+criterion (`status_v2.effective_status()`, ties on `AgentId`, no RNG stream). Pre-fix the
+Elder seat was **100.00% vacant with a candidate pool present 100% of the time** (directive
+0.0000%); post-fix vacancy is **0.00%** in all three worlds and the pestilence directive
+share rises to **0.0654%** while **calm stays 0.0000%** (authority still silent when nothing
+is wrong). Both goldens byte-identical — neither golden window contains an office-holder
+death. Orphaned vacancies (a roster with no living member) are counted and left vacant:
+recruitment is a separate root cause.
 `Move`'s single producer is the §19.5.G feud approach, and its shipped gate
 (`FEUD_APPROACH_ANGER = 0.02` + the hunger/thirst guard, branch ABOVE routine since i347)
 opens on **0.0887% (N=12) / 0.1085% (N=48)** of agent-ticks over the full 20K window —
@@ -214,9 +221,15 @@ structural, and hierarchical polities are only a seed).
 
 ## 9. Calibration debt (the honest ledger)
 
-**Office vacancy (i389, NEW):** the Elder seat is not refilled when its holder dies
-(pestilence leg: seat empty, panic active 90.69% of the window, authority share 0.00%).
-Blocks the directive channel in mortality worlds and, downstream, i399/i400's polity layer.
+**Office vacancy (i389 → CLOSED i390):** the Elder seat was never refilled when its holder
+died, so the authority channel was structurally dark in mortality worlds. `systems/succession.rs`
+now fills vacant seats from the living membership (measured: pestilence vacancy 100.00% →
+**0.00%**, directive share 0.0000% → **0.0654%**, calm still 0.0000%; both goldens
+byte-identical). **Residual (recorded, not fixed):** an institution whose members have ALL
+died stays vacant — that is recruitment, a different mechanism — and the long-vacancy
+institutional effects (treasury accumulating with no holder to spend it, legitimacy drift)
+are unmeasured. It would have blocked the inter-community layer's offices (W3).
+
 
 The live iteration ledger is [`PLAN_DC3_DEVELOPMENT.md`](PLAN_DC3_DEVELOPMENT.md) §3;
 it is authoritative for *work*, this section is the summary.

@@ -497,15 +497,19 @@ Live queue, in order (evidence link per item):
    council now speaks — `systems/decree.rs`, a bounded legitimacy-scaled ask shipped as
    `GoalSource::Decree`, a directive that DECAYS where the operator's `Command` is durable;
    calm 0.00% with the calm golden byte-identical, collapse 0.05%, collapse golden
-   re-anchored at agent_count 12 → 12). **i389 also exposed the next root cause: the Elder
-   seat is never refilled after a death** — the pestilence leg's 0.00% is a vacancy
-   (panic active 90.69% of the window, no office holder), not a dark producer. Next: that
-   **office succession** (it blocks the authority channel in mortality worlds and the
-   political layer in W3), **i390** the write-only field sweep, then **i391** the
-   speech-act/kind migration. Carried forward from i388 as measured-but-unexplained: action duration rose
-   4.31 → 5.40 ticks and the 2K relationship stages shifted shallower (`Unnoticed` 20 → 26,
-   `Friend` 8 → 5) — W2 must decide whether contact falls when the drive is served
-   *before* the sparse-store question is re-opened.
+   re-anchored at agent_count 12 → 12). **i390 LANDED** (`evidence/i390_office_succession.md`:
+   the lifecycle gap i389 exposed — with the seat filled the pestilence authority channel was
+   live, so the vacancy *was* the root cause. `systems/succession.rs` fills vacant seats from
+   the living membership on a 50-tick cadence by the institution's own criterion
+   (`status_v2.effective_status()`, ties on `AgentId`, no RNG stream). Measured with the pass
+   disabled: Elder seat **100.00% vacant with a candidate pool present 100% of the time**,
+   directive 0.0000%; after: **0.00% vacancy**, directive **0.0654%**, **calm 0.0000%**
+   (authority still silent when nothing is wrong) — and **both goldens byte-identical**,
+   since neither golden window contains an office-holder death. Next: **i391** the write-only
+   field sweep, then **i392** the speech-act/kind migration. Carried forward from i388 as
+   measured-but-unexplained: action duration rose 4.31 → 5.40 ticks and the 2K relationship
+   stages shifted shallower (`Unnoticed` 20 → 26, `Friend` 8 → 5) — W2 must decide whether
+   contact falls when the drive is served *before* the sparse-store question is re-opened.
 
 1. **The v1→v2 relationship migration (charter DECIDED: finish it subsystem by
    subsystem)** — **i369 landed the first reader migration** (comfort/soothing reads the

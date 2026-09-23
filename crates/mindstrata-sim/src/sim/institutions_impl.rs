@@ -185,6 +185,25 @@ impl Simulation {
                 );
             }
 
+            // ── i390: office succession ─────────────────────────────────
+            // The step the death path never took: `handle_agent_death` vacates
+            // every office its holder held (`role.holder = None`) and nothing
+            // refilled it, so a pestilence left the Elder seat empty for the
+            // whole window (probe `i390_office_succession`: 100% vacant with a
+            // candidate pool present 100% of the time) and i389's authority
+            // channel stayed dark in that world while its crisis ran at a 90.7%
+            // duty cycle. Appointments run BEFORE the decree pass so a council
+            // that regains a holder can speak in the same tick.
+            // Measured pre-fix (probe `i390_office_succession`, this wiring
+            // disabled): the pestilence window reads Elder seat **100.00%**
+            // vacant with a candidate pool present 100% of the time, directive
+            // share 0.0000%. Post-fix: 0.00% vacancy, 0.0654% directive.
+            let _ = crate::systems::succession::system_office_succession(
+                tick_u64,
+                &self.agents,
+                std::slice::from_mut(institution),
+            );
+
             // ── i389: the council's decree channel ──────────────────────
             // The producer the directive layer never had (probe
             // `i389_command_channel`: `command` 0.00% of selections and 0
