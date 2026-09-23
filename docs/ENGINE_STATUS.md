@@ -4,7 +4,7 @@ description: "The authoritative current-state description of the mindstrata engi
 type: Authority
 status: AUTHORITY
 scope: "engine behaviour, architecture, realism, scale"
-reconciled_commit: da4108f
+reconciled_commit: af146e3
 created: 2026-09-22
 owner: SIM + PROD (AP4 Studio)
 ---
@@ -25,13 +25,13 @@ owner: SIM + PROD (AP4 Studio)
 |---|---|---|
 | Format | `cargo fmt --all --check` | clean |
 | Lints | `cargo clippy --workspace --quiet` | 0 warnings |
-| Full suite | `cargo test -p mindstrata-tests --lib --release` | **310 passed / 0 failed / 1 ignored** |
-| Sim unit | `cargo test -p mindstrata-sim --lib --release` | **295 / 295** |
-| Golden replay | `scripts/gate` | 5/5 byte-identical |
+| Full suite | `cargo test -p mindstrata-tests --lib --release` | **312 passed / 0 failed / 1 ignored** |
+| Sim unit | `cargo test -p mindstrata-sim --lib --release` | **301 / 301** |
+| Golden replay | `scripts/gate` | 5/5 (both baselines re-anchored at i384, then byte-identical) |
 | Probe law | `scripts/bench_index.py --strict` | 0 violations |
 
-**Scale of the artefact:** 13 crates · ~139,800 LOC · 1,665 test functions · 186 probes
-· 137 evidence docs · 36 RON spec files · ~890 commits.
+**Scale of the artefact:** 13 crates · ~146,300 LOC · 1,683 test functions · 217 probes
+· 166 evidence docs · 36 RON spec files · ~925 commits.
 
 ## 2. Architecture
 
@@ -92,27 +92,43 @@ supply/demand endogenously; a black market activates under scarcity.
 
 ## 5. How agents operate (measured)
 
-Instrument: `sim::decision_census` (opt-in, inert when disabled). A decision is taken on
-action completion (mean action duration **5.61 ticks**), so **~18% of agent-ticks are
-decisions**.
+Instrument: `sim::decision_census` (opt-in, inert when disabled — verified identical
+run folds with the census on and off). **Re-measured at i384**, probe
+`i346_decision_census`, seed 42, 32×32, 20 000 ticks after a 500-tick warm-up:
+
+| | N=12 | N=48 |
+|---|---|---|
+| decisions as share of agent-ticks | 23.2% | 20.8% |
+| mean action duration | 4.31 ticks | 4.81 ticks |
 
 | Deciding layer | N=12 | N=48 |
 |---|---|---|
-| Routine | **59.2%** | **54.4%** |
-| Utility AI (deliberative) | **32.8%** | **38.1%** |
-| Habit | 7.8% | 7.5% |
-| Feud approach | 0.55% | 0.37% |
-| Pain veto | 0.17% | 0.04% |
-| Reflex | 0.08% | 0.08% |
+| Routine | **52.4%** | **52.2%** |
+| Utility AI (deliberative) | **41.1%** | **40.2%** |
+| Habit | 5.7% | 7.0% |
+| Feud approach | 0.39% | 0.45% |
+| Pain veto | 0.30% | 0.10% |
+| Reflex | 0.06% | 0.08% |
 | Command channel | 0% | 0% |
 
-Action distribution (N=12, 20K): Work 39.7%, Rest 20.5%, Trade 15.0%, Eat 8.3%,
-Drink 8.1%, Socialize 6.8%, Worship 1.7%, Wander 5.4%.
+Action distribution (share of decisions, N=12 / N=48): Work 32.7 / 30.1, Trade 20.5 /
+24.3, Rest 17.9 / 16.9, Eat 10.4 / 10.6, Drink 6.6 / 6.4, Socialize 4.9 / 5.1,
+Wander 4.4 / 5.4, Idle 1.2 / 0.4, Worship 1.1 / 0.3, Move 0.39 / 0.45.
 
-**Reading:** agency is *layered* and mostly *not* deliberative — about a third of
-choices are genuine utility arbitrations; the rest is schedule and habit. That is
-plausible for a pre-modern villager, but it means the "rational actor" surface is
-smaller than the module count suggests.
+**Reading:** agency is *layered* — two fifths of choices are genuine utility
+arbitrations, half is schedule, ~6–7% habit, and the crisis rungs (feud, veto, reflex)
+fire rarely by design. The deliberative surface is **wider than the pre-i347 numbers this
+table used to carry** (utility 32.8% → 41.1%), because `Wander`, `Idle` and `Move` — all
+dead or near-dead before i347/i351/i356 — now enter the arbitration. Two caveats worth
+stating plainly: `Socialize` is **still reached only by routine** (0 utility selections in
+112 669 arbitrations, i380 — the utility term loses the argmax on the bonuses it lacks,
+not on its own scale), and `Command` is a structurally unreachable channel (no shipped
+generator emits `GoalSource::Command`: a deliberate, documented no-op, not a dead wire).
+`Move`'s single producer is the §19.5.G feud approach, and its shipped gate
+(`FEUD_APPROACH_ANGER = 0.02` + the hunger/thirst guard, branch ABOVE routine since i347)
+opens on **0.0887% (N=12) / 0.1085% (N=48)** of agent-ticks over the full 20K window —
+the probe leg that reported 0.0000% was measuring the retired `0.4` bar over a 2K window
+and has been corrected.
 
 ## 6. Realism verdicts (dimension by dimension)
 

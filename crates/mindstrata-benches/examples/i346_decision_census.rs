@@ -176,6 +176,19 @@ fn inertness_leg(n: u32) {
     );
 }
 
+/// The shipped `FEUD_APPROACH_ANGER` gate (`pass_action.rs`, i347 re-contract).
+///
+/// **This copy rotted once and the line it printed lied.** The leg used to
+/// measure `anger > 0.4` — the PRE-i347 absolute gate — so it reported the
+/// §19.5.G branch opening on **0.0000%** of agent-ticks at N=12 and N=48 while
+/// the same run's census rows showed `feud` firing 218/901 decisions and `Move`
+/// appearing 0.39–0.45% of the time. A gate measurement must name the constant
+/// it measures and the iteration that set it; if the shipped gate moves again,
+/// move this with it (or read it from the crate — the census pin
+/// `census_records_decisions_without_changing_them` is what catches a real
+/// divergence, not this copy).
+const SHIPPED_FEUD_ANGER: f64 = 0.02;
+
 /// `Move` has exactly one producer in the whole selection chain — the §19.5.G
 /// feud-approach branch — so the branch's own preconditions decide whether the
 /// action is reachable *by construction*.
@@ -185,13 +198,23 @@ fn feud_leg(n: u32) {
     let mut feud_ticks = 0u64;
     let mut angry_ticks = 0u64;
     let mut both_ticks = 0u64;
+    let mut eligible_ticks = 0u64;
     let mut max_feuds = 0usize;
     let mut max_anger = 0.0f64;
-    for _ in 0..2_000 {
+    // The window is this leg's own sampling horizon, and a 2K window is NOT
+    // enough to see a phase-clustered gate: the 20K census run below records
+    // `feud → Move` firing 218 (N=12) / 901 (N=48) times, while the first 2K
+    // ticks contain none of them — feuds need violence to escalate first, and
+    // the intersection with an acute anger spike is a tail of a tail. Sample
+    // the full 20K so the leg's verdict matches the census it exists to
+    // explain (an earlier 2K version reported 0.0000% and read as "the branch
+    // is dead" while `Move` was firing).
+    for _ in 0..20_000 {
         sim.run(1);
         for a in &sim.agents {
             let feuding = !a.feuds.is_empty();
-            let angry = a.emotions.anger.to_f64() > 0.4;
+            let angry = a.emotions.anger.to_f64() > SHIPPED_FEUD_ANGER;
+            let needs_clear = a.needs.hunger.to_f64() < 0.85 && a.needs.thirst.to_f64() < 0.85;
             if feuding {
                 feud_ticks += 1;
             }
@@ -201,16 +224,20 @@ fn feud_leg(n: u32) {
             if feuding && angry {
                 both_ticks += 1;
             }
+            if feuding && angry && needs_clear {
+                eligible_ticks += 1;
+            }
             max_feuds = max_feuds.max(a.feuds.len());
             max_anger = max_anger.max(a.emotions.anger.to_f64());
         }
     }
-    let n_ticks = (2_000.0 * sim.agents.len().max(1) as f64) as u64;
+    let n_ticks = (20_000.0 * sim.agents.len().max(1) as f64) as u64;
     println!(
-        "  N={n}: non-empty feuds {feud_ticks}/{n_ticks} agent-ticks ({:.3}%), anger>0.4 {angry_ticks} ({:.3}%), BOTH (the §19.5.G gate) {both_ticks} ({:.4}%), max feuds {max_feuds}, max anger {max_anger:.4}",
+        "  N={n}: non-empty feuds {feud_ticks}/{n_ticks} agent-ticks ({:.3}%), anger>{SHIPPED_FEUD_ANGER} {angry_ticks} ({:.3}%), BOTH {both_ticks} ({:.4}%), + needs guard (the shipped §19.5.G gate, i347) {eligible_ticks} ({:.4}%), max feuds {max_feuds}, max anger {max_anger:.4}",
         feud_ticks as f64 / n_ticks as f64 * 100.0,
         angry_ticks as f64 / n_ticks as f64 * 100.0,
         both_ticks as f64 / n_ticks as f64 * 100.0,
+        eligible_ticks as f64 / n_ticks as f64 * 100.0,
     );
 }
 
