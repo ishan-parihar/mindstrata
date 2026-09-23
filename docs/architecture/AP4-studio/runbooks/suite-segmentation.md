@@ -3,6 +3,15 @@
 Owner: QA. Maps each standing test family to the contract it guards; flags orphans.
 Status: **AUDITED 2026-08-29, suite 307/0/1 green (final_suite.log 198s).**
 
+> **Count reconciliation (i386, 2026-09-23, `cd4ac0a`):** the *family map below is still
+> accurate* — every file it names exists and owns the same contract — but the totals have
+> moved since the audit: `mindstrata-tests` now lists **313** tests (**312 passed / 0 failed
+> / 1 ignored**, the ignored one being the long-horizon trace harness), and the workspace
+> carries **1 683** `#[test]` functions. Per-crate unit counts at this commit: social 397,
+> tests 313, sim 301, psych 223, person 121, development 83, institutions 68, tui 61,
+> world 60, core 35, render 15, cli 6. `ENGINE_STATUS.md` §1 owns the signature; the
+> orphan scan (`0 orphans`) was not re-run here and remains the 2026-08-29 verdict.
+
 ## Method
 
 File-level segmentation (the `integration_tests/` namespace mirrors the

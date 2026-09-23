@@ -197,6 +197,20 @@ These rules exist because we repeatedly paid for violating them:
    rather than a rescale (i373 filed the v1 interaction gains as Class 3a; i384's honest
    fix at the economy site was deleting the v1 write, since rescaling a writer queued for
    deletion buys nothing) — read the consumers before choosing.
+14. **A governing doc's citations are part of its contract (i386).** When an extraction or
+   migration moves a file, every doc that named it gets re-pointed **in the same commit** —
+   `FROZEN` freezes the *rule*, never the path. Corollary: before trusting a ledger row's
+   claim about **where** a value landed, open the file it names. The i386 sweep found three
+   drift classes across the governing set while `scripts/doc_index.py` — which checks
+   *structure*, not citations — reported OK: ghost citations (`IC-2-observability.md`,
+   `IC-7-ui-telemetry.md` never existed under those names), moved files
+   (`sim/pass_health.rs` → `systems/health.rs`, `psychology/lore.rs` →
+   `development/lore.rs`), and the expensive one — **a doc asserting a value was NOT landed
+   while the code had shipped it as a difficulty band under another name**
+   (`PATHOLOGY_GROWTH_*` was never created; `PROD_QUADRANT_PARAMS` +
+   `SimParameters::pathology_*_scale` is the real surface). A stale "not landed" is worse
+   than a stale line number: it invites rebuilding live behavior, and it hides a shipped
+   lever from anyone planning the next sweep.
 
 ## 5. Known Systemic Hazards
 
@@ -366,18 +380,21 @@ crates/
                             #     appraisal, decay, health, development, genesis,
                             #     trade_diffusion, institutions_multiplier (+INVENTORY.md)
     sim/decision_census.rs  #   action-selection instrument (opt-in, inert by default)
-    sim/{population,api}.rs #   constructors/seeding; command channel
-    sim/*_impl.rs + {household,economy,births_deaths,marriage,clans,
-      cults_noosphere,memory_ops,norms_impl,social_cluster,...}.rs
-                            #   impl-Simulation domain glue (detangle target)
+    sim/{population,api}.rs #   constructors/seeding; the public read API
+    sim/{household,economy,births_deaths,marriage,clans,education,
+      cults_noosphere,memory_ops,norms_impl,social_cluster,chronicle,
+      assets,catalyst_observers}.rs + {factions,institutions,diplomacy,
+      legal}_impl.rs + snapshot_metrics.rs
+                            #   impl-Simulation domain glue (~26 files; detangle target)
     actions/{mod,tests}.rs  #   action-selection engine (sits above domains)
+  # crate-root infrastructure (not under sim/):
     {routines,scheduler,snapshot,scenario,spec_lint,agent_tier,
-     provenance,population_cap,mods,assets}.rs  # infra
+     provenance,population_cap,mods}.rs
     legacy shims in lib.rs preserve pre-extraction crate:: paths
   mindstrata-tests/         # integration_tests/{biology,psychology,social,culture,
                             #   governance,economy,legal,infra}/ + snapshots/golden
   mindstrata-tui/           # {lib,render,session,assets_view,scene}.rs
-  mindstrata-cli/ mindstrata-render/ mindstrata-benches/  # entry points, 186 probes
+  mindstrata-cli/ mindstrata-render/ mindstrata-benches/  # entry points, 217 probes
 ```
 
 DAG (cargo-enforced): `core ← person ← psych ← {social, institutions, world}`;
@@ -491,7 +508,41 @@ Live queue, in order (evidence link per item):
    `trade_price_reads_the_dyadic_store_and_writes_it` pin guards the migration. **Remaining
    readers: norms_impl, household, births_deaths** (each behavioural, each with its own
    probe); the speech-act/v1-kind-ladder move is a separate commit. Doctrine gained §4.13
-   (check the manipulation, not just the response). **The panic-channel item is CLOSED as diagnosed (i378):** the
+   (check the manipulation, not just the response).
+
+   **i385 then reconciled the documentation surface itself, and the reconciliation paid for
+   its own iteration.** `ENGINE_STATUS.md` §1 was 15K LOC / 30 probes / two suite counts
+   stale and §5 still carried pre-i347 decision numbers; both are re-measured (see
+   `ENGINE_STATUS.md` §1/§5) and `reconciled_commit` advanced. The substantive find: the
+   **deliberative surface is 41.1% of decisions, not the documented 32.8%**, because
+   `Wander`/`Idle`/`Move` — each dead or near-dead before i347/i351/i356 — now win
+   arbitrations. And a probe was lying about its own engine: the i346 census feud leg
+   measured the **retired** `anger > 0.4` bar (reporting 0.0000%) while the same run recorded
+   `Move` firing 218/901 times; it now measures the shipped gate (`0.02` + needs guard) over
+   the full window and agrees with the census. §5 also states two caveats that were only
+   implied before: `Socialize` is **routine-only** (0 utility selections in 112 669
+   arbitrations, i380 — the open root cause is now i386's winner-decomposition census) and
+   the `Command` channel is structurally unreachable (no shipped generator — a deliberate
+   no-op, not a dead wire).
+
+   **i386 then swept the governing document set for citation drift** — the reconciliation
+   that i385's own §1/§5 re-measurement implied. Five REFERENCE docs and the balance canon
+   were carrying it: two ghost contract filenames in the interlock map
+   (`IC-2-observability.md`, `IC-7-ui-telemetry.md`), the two pass files still named by
+   their pre-extraction paths in the determinism law (`pass_health.rs` →
+   `systems/health.rs`; `pass_biology.rs` → `systems/biology.rs`), `lore.rs` still credited
+   to the psych crate after the ladder moved it to `development` (and its symbol to :100),
+   and two balance docs asserting the `mindstrata-development` crate, its `canon.rs` and its
+   markers **did not exist** while the crate, the constants and 27 code-side marker sites
+   have been shipping since WP-0B. The pathology entry was the expensive one: the row-3
+   lever is **fully live** (i304 growth/decay, i315 ceiling, measured 12-seed families) but
+   its spec said "draft, values not landed" and named `PATHOLOGY_*` constants that were
+   never created — the real surface is `PROD_QUADRANT_PARAMS` +
+   `SimParameters::pathology_{growth,decay,ceiling}_scale`. Doctrine gained §4.14 (**a
+   governing doc's citations are part of its contract**), and `canon-inventory.md` is now a
+   status ledger with per-row landing verdicts instead of a forward-guess.
+
+   **The panic-channel item is CLOSED as diagnosed (i378):** the
    firing-density move was not a dead producer — the trigger is an ABSOLUTE threshold
    sitting inside its own input distribution (firing legs clear by 2.5–9.4%, one swept
    seed missing by 0.5%), i.e. §4.5 knife-edge debt. Both panic tests now hold a fixed

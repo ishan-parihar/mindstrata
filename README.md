@@ -9,11 +9,11 @@
 > **A deterministic, emergent human-society simulation** — a small medieval settlement where every person carries a full psychological mind, biological needs, social relationships, moral values, and institutional memberships. History emerges from first principles, not scripted events. **But it is far more than a "society sim":** beneath the village lies a complete cognitive-science stack — embodied bodies, nervous systems, appraisal-based emotion, belief systems, and noospheric fields — built to be *deepened* by three architecture plans (AP1 → AP2 → AP3) into a multi-scale civilization simulation.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/ishan-parihar/mindstrata/ci.yml?style=flat-square)](https://github.com/ishan-parihar/mindstrata/actions)
-![LOC](https://img.shields.io/badge/LOC-139.8K-informational?style=flat-square)
+![LOC](https://img.shields.io/badge/LOC-146.3K-informational?style=flat-square)
 <img src="https://img.shields.io/badge/Status-Active-brightgreen" alt="Status">
 [![CI](https://github.com/ishan-parihar/mindstrata/actions/workflows/ci.yml/badge.svg)](https://github.com/ishan-parihar/mindstrata/actions/workflows/ci.yml)
 [![Rust](https://img.shields.io/badge/rust-1.98+-blue?style=flat-square)](https://www.rust-lang.org)
-[![Tests](https://img.shields.io/badge/tests-1665%20passing-brightgreen?style=flat-square)](#)
+[![Tests](https://img.shields.io/badge/tests-1683%20passing-brightgreen?style=flat-square)](#)
 [![License](https://img.shields.io/badge/license-MIT-purple?style=flat-square)](LICENSE)
 
 ---
@@ -34,7 +34,7 @@ Agents are not omniscient. Each knows only its body, needs, emotions, memories, 
 
 - **Emergent history** — outcomes arise from locally bounded minds and material constraints, never global variables
 - **Deterministic replay** — byte-identical runs from `seed + scenario + input log`; emergent behavior is debugger-accessible
-- **Full cognitive pipeline per agent** — needs → emotions → appraisal → decisions → social consequences, across 425 Rust source files in 13 crates
+- **Full cognitive pipeline per agent** — needs → emotions → appraisal → decisions → social consequences, across 456 Rust source files in 13 crates
 - **Simulation-first, GUI-later** — the TUI is a debug instrument; the simulation runs headless
 
 The design sits between **The Sims** (individual psychology), **Cities: Skylines** (settlements/economy), and **Dwarf Fortress** (deep emergence) — with the differentiator that *every* agent has a complete cognitive pipeline.
@@ -101,7 +101,7 @@ Mindstrata is designed to be *deepened*, not just extended. Three architecture p
 
 The founding plan: a data-oriented, emergent social-psychological-systemic simulation where every human-scale node has psychological, behavioral, relational, and systemic substrates. TUI as debug instrument, simulation first.
 
-### AP2 (~99% complete) — the agent as an embodied cognitive node
+### AP2 (implemented) — the agent as an embodied cognitive node
 
 The human-scale deepening plan. The target:
 
@@ -119,33 +119,49 @@ Genome → Organs/Hormones/Body → Nervous System/Arousal/Pain/Interoception
 
 Biology modulates psychology but never replaces it; psychology is *predictive*, not just reactive; relationships are first-class systems; culture is an emergent field; and cognition runs at configurable level-of-detail.
 
-### AP3 (planned) — world expansion, PESTLE development, cellular decay
+### AP3 (Eras I–V landed) — world expansion, PESTLE development, cellular decay
 
 The multi-scale plan: transform a single settlement into a civilization simulation where biology, decay, environment, economy, politics, law, science, religion, military conflict, infrastructure, culture, and noospheric meaning evolve together across villages, cities, nations, planets, and eventually galactic-scale abstractions — while macro-history still emerges from locally bounded agents, never global flags.
+
+**Where the implementation actually stands:** the attractor-field engine (pathology quadrants, catalyst observation, collective holons, per-polity genesis, cross-polity trade diffusion) is live through Era V, and the village→multi-settlement town path is measured (N=256 at ~170 tps, 3–4 settlements per run). City/country/planet scale is **not** implemented — the Ω(N²) relationship floor is structural. See `docs/ENGINE_STATUS.md` §8 for the envelope table and §6 for the per-dimension realism verdicts.
 
 ## Workspace Layout
 
 ```
 mindstrata/
-├── crates/
-│   ├── mindstrata-core     # simulation substrate implementations
-│   ├── mindstrata-sim      # orchestration & determinism harness
-│   ├── mindstrata-cli      # headless runner, agent inspector, CSV metrics
-│   ├── mindstrata-tui      # TUI debug instrument
-│   ├── mindstrata-tests    # golden replays, property & emergence tests
-│   └── mindstrata-benches  # criterion regression harness
+├── crates/                              # 13 crates; DAG enforced by cargo
+│   ├── mindstrata-core         # kernel: fixed-point math, RNG streams, ids, events
+│   ├── mindstrata-person       # leaf: person aggregate + biology/ + health
+│   ├── mindstrata-psych        # leaf: psychology/ + appraisal + memory/attention/journal
+│   ├── mindstrata-institutions # leaf: institutions/legal/diplomacy/military/theology/norms/factions
+│   ├── mindstrata-social       # leaf: social/ culture/ noosphere/ + gossip/conflict
+│   ├── mindstrata-world        # leaf: world/world_gen/ecology/market/logistics/demography
+│   ├── mindstrata-development  # AP3 attractor-field engine, catalyst observation, canon
+│   ├── mindstrata-sim          # orchestration: tick pipeline, passes, systems, actions
+│   ├── mindstrata-tui          # TUI debug instrument
+│   ├── mindstrata-cli          # headless runner, agent inspector, CSV metrics
+│   ├── mindstrata-render       # deterministic 2D pixel rendering (PNG maps)
+│   ├── mindstrata-tests        # integration, golden replay, property & emergence suites
+│   └── mindstrata-benches      # criterion benches + the per-iteration probes
 ├── docs/
-│   ├── architecture/       # AP2.md — the substrate architecture
-│   ├── MINDSTRATA_CURRENT_STATE.md
-│   └── REMAINING_WORK_REPORT.md
-├── specs/                  # data-driven specifications (RON)
-├── golden/  golden-runs/   # deterministic replay fixtures & recorded runs
-└── tasks/
+│   ├── ENGINE_STATUS.md             # authoritative current engine truth
+│   ├── ROADMAP.md                   # trajectory; PLAN_DC3_DEVELOPMENT.md = live ledger
+│   ├── DOCUMENTATION.md             # which doc owns which scope (read before trusting one)
+│   └── architecture/                # AP2.md (implemented), AP3-afa/ (Eras I–V), AP4-studio/
+├── specs/                               # data-driven specifications (RON)
+├── golden/                              # deterministic replay fixtures
+└── scripts/                             # gate, doc index, probe/bench law
 ```
+
+The dependency direction is cargo-enforced: `core ← person ← psych ← {social, institutions,
+world} ← sim ← {tui, cli, render, tests, benches}`, with `development` consumed by `sim` and
+`tests`. Historical state docs (`docs/MINDSTRATA_CURRENT_STATE.md`,
+`docs/REMAINING_WORK_REPORT.md`) are kept but **SUPERSEDED** — `ENGINE_STATUS.md` is the
+authority.
 
 ## Testing & Determinism
 
-- **1,238 automated tests** — 914 sim + 281 tests-crate (property/golden/statistical/scale/comparison/behavioral-delta/long-horizon) + 11 tui + 3 cli + 9 render + 20 core; deterministic replay from any seed
+- **1,683 automated tests** (`#[test]` functions across the workspace) — 397 social + 313 tests-crate (property/golden/statistical/scale/comparison/behavioral-delta/long-horizon) + 301 sim + 223 psych + 121 person + 83 development + 68 institutions + 61 tui + 60 world + 35 core + 15 render + 6 cli; deterministic replay from any seed. The pre-push gate (`scripts/gate --full`) runs the release suite plus the golden baselines
 - Tick-loop throughput regression gate enforced in CI (`crates/mindstrata-benches`)
 - `unsafe_code = "forbid"` workspace-wide — the simulation must be memory-safe and deterministic
 

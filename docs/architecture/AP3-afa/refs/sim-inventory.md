@@ -4,9 +4,17 @@ description: "AP3 inventory of existing mindstrata code the arc touches: symbols
 type: Reference-Index
 plan_id: AP3
 verified_at: "3705dc9 (Iteration 265)"
+reconciled_commit: cd4ac0a
 ---
 
 # refs — Sim Inventory (what exists today)
+
+> **Citation re-check (i386, 2026-09-23, `cd4ac0a`):** the *paths* below survived the crate
+> ladder and the Arc-D pass extraction — every crate/file named here exists. The
+> `symbol (:line)` anchors were verified at i265 and drift with ordinary edits, so treat
+> them as pointers into the named file, not as facts. Two structural corrections are
+> folded in below (the pass count and the development pass's home). For what the engine
+> *does* today, `docs/ENGINE_STATUS.md` is authoritative and this index defers to it.
 
 ## Motivation (ray/needs signal source)
 
@@ -45,8 +53,11 @@ verified_at: "3705dc9 (Iteration 265)"
 ## Sim orchestration
 
 - `crates/mindstrata-sim/src/sim/mod.rs` — Simulation struct, AgentBundle
-- `crates/mindstrata-sim/src/sim/core.rs` — tick pipeline order; six verbatim passes;
-  pass_development.rs appends after them (WP-F ⓦ window)
+- `crates/mindstrata-sim/src/sim/core.rs` — tick pipeline order **and the per-pass
+  profiler**; five verbatim passes remain in `sim/` (`pass_{action,ecology,scenario,
+  social,weather}.rs`) and the rest were extracted into `crates/mindstrata-sim/src/
+  systems/` (`biology, cognitive, appraisal, decay, health, development, genesis,
+  trade_diffusion, institutions_multiplier`) — there was never a `pass_development.rs`
 - `AgentBundle` lives in sim/mod.rs; psyche-side DevelopmentField placement per WP-E
 
 ## Tests & probes conventions

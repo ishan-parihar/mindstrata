@@ -107,6 +107,7 @@ are their own referee).
 | CA-6 | Fixed-4 truncation disease             | §5            | CRITICAL |
 | CA-7 | mem::take write-back discipline        | §5            | CRITICAL |
 | CA-8 | RNG append-only stream order           | §5            | HIGH     |
+| CA-9 | Manipulation liveness (test bug ≠ drift)| §4.13         | HIGH     |
 
 ---
 
@@ -370,6 +371,38 @@ byte-alignment across range widths.
 
 **Pass criteria.** Diff shows tail-appends only, or each exception carries sweep-backed
 re-anchor evidence; parity tests green; goldens byte-identical for structural commits.
+
+**Severity.** HIGH.
+
+---
+
+## CA-9 — Manipulation liveness (a five-times-re-anchored pin is a suspect EXPERIMENT)
+
+**Statement.** A pin whose assertion compares a trial against a control must show that the
+manipulation still *binds* at the measurement horizon. A control pair that has silently
+become the same world measures trajectory noise, and no re-seeding, re-banding or
+re-contracting of the response will make it stable. (AGENTS.md §4.13, added at i384.)
+
+**Detection.**
+1. *Manipulation check (dynamic, mandatory in every trial/control probe):* report the share
+   of the family in which the manipulated state actually moved. i384's instance: a grain
+   set point applied once at t=0 was refilled by production before the 5000-tick sample, so
+   **starvation raised mean hunger on 1 of 12 seeds** while the pin's "differential"
+   flipped sign in five consecutive re-anchors (42 → 99 → 20 → 11 → 99 → 22, then a
+   6-seed re-contract). Holding the set point every tick moved the same contract to
+   **6/6 manipulation, 5/6 direction, best magnitude +0.0995**.
+2. *Churn corroboration:* combine with CA-1's anchor-churn counters — >2 distinct anchors
+   for one pin in 10 iterations is the smell; CA-9 is the diagnosis.
+
+**Pass criteria.**
+- A majority of the family shows the manipulated state moved in the expected direction
+  (the manipulation check is quoted in the probe output, not asserted in prose).
+- Only then is any claim about the *response* (direction, band, magnitude) admissible;
+  otherwise the disposition is "test bug: revive the producer" per AGENTS §2.3.
+- Probes that name a SHIPPED constant must name the iteration that set it, so a later
+  re-contract of the gate cannot leave the instrument measuring a retired threshold
+  (i385's disposition: the i346 census feud leg measured the pre-i347 `anger > 0.4` bar —
+  reporting 0.0000% while the same run recorded 218/901 `Move` selections).
 
 **Severity.** HIGH.
 

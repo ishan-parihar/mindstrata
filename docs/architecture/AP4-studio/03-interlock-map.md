@@ -12,12 +12,12 @@ plan_id: AP4
 | # | Provider → Consumer | Contract surface | IC file |
 |---|---|---|---|
 | IC-1 | SIM → STORY | catalyst vocabulary (`CatalystEvent` variants, line tags) | contracts/IC-1-catalysts.md |
-| IC-2 | STORY → CLIENT | annals/trace event schema + stage_lines export format | contracts/IC-2-observability.md |
+| IC-2 | STORY → CLIENT | annals/trace event schema + stage_lines export format | contracts/IC-2-annals.md |
 | IC-3 | PLATFORM → all | crate DAG, determinism contract (f64 shadows, quantize-once, RNG stream rules), save schema versioning | contracts/IC-3-determinism.md |
 | IC-4 | TOOLS → QA+SIM+STORY | probe harness conventions, bench naming, metrics emission | contracts/IC-4-probes.md |
 | IC-5 | DESIGN → SIM/STORY | canon parameter schema (CALIBRATION-PENDING markers → measured values w/ evidence) | contracts/IC-5-canon.md |
 | IC-6 | QA → PROD | gate definitions per milestone (the UM-N table is QA-authored) | contracts/IC-6-gates.md |
-| IC-7 | CLIENT → DESIGN | UI telemetry for balance review (what the player can see/affect) | contracts/IC-7-ui-telemetry.md |
+| IC-7 | CLIENT → DESIGN | UI telemetry for balance review (what the player can see/affect) | contracts/IC-7-modding.md |
 | IC-8 | PLATFORM → CLIENT | render data budget (what TUI/client may read per frame without sim coupling) | contracts/IC-8-render-budget.md |
 
 Contract file = templates/INTERLOCK.md filled: purpose, exact types/schemas, version,

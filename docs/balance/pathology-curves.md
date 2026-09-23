@@ -1,4 +1,4 @@
-# Pathology Intensity Curves (v1.0 — spec draft)
+# Pathology Intensity Curves (v1.0 — LANDED, i304/i315)
 
 Owner: DESIGN → STORY/SIM implementation (FR-024, FR-031, WP-C operator). Companion to
 canon-inventory row 2 and `needs-bands.md`. Theory grounding: ratified 4-fold model
@@ -6,13 +6,22 @@ canon-inventory row 2 and `needs-bands.md`. Theory grounding: ratified 4-fold mo
 03-substrate.md` §5 + `docs/architecture/AP3-afa/04-waves.md` WP-C definition; vault source
 `KosmOS/_Ontology/pathologies.md` + per-cell `pathology:` frontmatter in `vendor/afa/cells/`
 is the ontology source-of-record (vendored sha `868b2239` per `vendor/afa/PROVENANCE.md`).
-All numeric parameters are CANON constants — they become `crates/mindstrata-development/
-canon.rs` entries and change only via IC-5 change-orders with probe evidence (AGENTS.md §4).
+Numeric parameters change only via IC-5 change-orders with probe evidence (AGENTS.md §4).
+**Landing-site correction (i386, 2026-09-23):** they did *not* land as `canon.rs`
+constants. The spec's per-quadrant growth/decay/ceiling values live as the canon
+`PROD_QUADRANT_PARAMS` array in `crates/mindstrata-sim/src/systems/development.rs`
+(Standard band), exposed through three `SimParameters` multipliers
+(`pathology_growth_scale` / `pathology_decay_scale` / `pathology_ceiling_scale`) — the same
+pattern `canon-inventory.md` row 2 records. `mindstrata-development/src/canon.rs` holds
+development-*crate* constants (field quantum, neutral value, stage count), not these curves.
 
-Status: **CALIBRATION-PENDING(AP3) — spec frozen, values not landed.** Engine placeholder
-`OperatorParams::pending()` (`growth 0.05 / decay 0.02 / ceiling 1.0`) remains in tree until
-`i<iter>_pathology_signature` probes supply measured trajectories. No sim-side pathology
-behavior is live yet beyond the zero-at-zero identity pass (tasks 3.2–3.3).
+Status: **LANDED (i304 + i315) — spec frozen and values live.** Growth and decay bands
+shipped at i304 (`0.5×`/`1.2×` resilient … `1.8×`/`0.7×` brittle), the ceiling band at i315
+(`0.85×`/`1.0×`/`1.15×`), each measured in isolation and as a family at 12 seeds.
+`OperatorParams::pending()` (`growth 0.05 / decay 0.02 / ceiling 1.0`) survives only as the
+development crate's construction/test default — the sim resolves
+`pathology_params(&SimParameters)` **once per tick**, so no run consumes the placeholder.
+Evidence: `i304_pathology_bands`, `i315_pathology_ceiling`, `difficulty-levers.md` row 3.
 
 ## Engine mapping (shape, not values)
 
@@ -65,7 +74,7 @@ table below as the **onset trigger** row.
 
 ## Common calibration discipline
 
-- All four rows land via `crates/mindstrata-development/canon.rs` as `PATHOLOGY_GROWTH_*`, `PATHOLOGY_DECAY_*`, `PATHOLOGY_CEILING_*` constants, each annotated `// CALIBRATION-PENDING(AP3): measured <value> via i<iter>_… on <seed>`.
+- All four rows live in the `PROD_QUADRANT_PARAMS` canon array (`crates/mindstrata-sim/src/systems/development.rs`), reached at runtime only through `pathology_params(&SimParameters)` — the per-axis scale multipliers are the IC-5 surface, so a band change is a change-order against `SimParameters`, not against a `PATHOLOGY_*` constant (none such exists; the names in this line's earlier revision were aspirational).
 - Re-anchor comments follow AGENTS.md §4.2 form: measured value, old band, mechanism (`"dark-addiction plateau 0.62 pushed Work suppression −0.05 via pathology_dark 0.62·0.08"`).
 - Zero-at-zero discriminant required: neutral founders stay neutral under empty catalyst windows (existing pins `liveness_moves_on_real_catalysts`, `tick_is_deterministic`); pathology movement is the *only* allowed drift at fixed seeds once probes activate.
 

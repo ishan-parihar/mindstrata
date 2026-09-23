@@ -29,6 +29,26 @@ without all six green; QA holds rejection power without product code.
 Gate scripts live in `scripts/` and are co-signed by TOOLS for custody
 transfer; changing a threshold mid-cycle is a `CO-` against this IC.
 
+> **Citation reconciliation (i386, 2026-09-23) — the six families and their pass rules
+> are unchanged.** Two rows name artifacts that were never shipped under those names;
+> the shipped mechanism is recorded here so the contract cannot send a department
+> looking for a missing file.
+>
+> - **G2** — there is no `scripts/golden_replay.sh`. Golden custody is executed by
+>   `scripts/gate` (quick: `cargo test -p mindstrata-tests --lib --release golden_replay`;
+>   full: the release suite + both baselines, 5/5 byte-identical) and the hash registry
+>   lives in `runbooks/golden-replay-custody.md` as stated.
+> - **G4** — there is no `scripts/playthrough_smoke.sh`, `keybind_cheatsheet.md` or
+>   `dossier_flow.md`. The playability bar is carried today by
+>   `docs/balance/pacing-model.md` (the 10K/50K/100K table), the long probes it cites
+>   (`p5_100k_probe.rs`), `scripts/run_scenario.sh`, and the TUI `--annals` lane smoke;
+>   dossier polish history is in `runbooks/dossier-polish-19-22.md`. A real smoke script
+>   is an open obligation, not a shipped gate.
+> - **G1's suite count** is a point-in-time reading (307/0 at freeze): the current
+>   measured signature is **312 passed / 0 failed / 1 ignored** (interaction/i384) and
+>   **301/301** in `mindstrata-sim` — `ENGINE_STATUS.md` §1 owns these numbers; the pass
+>   rule (green release suite + custody-reviewed snapshots) is what is frozen.
+
 ## Guarantees
 
 * Every gate is mechanically checkable by `scripts/gate` or a named runner —

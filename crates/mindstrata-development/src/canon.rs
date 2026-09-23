@@ -1,9 +1,15 @@
 //! Hand-written canon constants — the calibration surface.
 //!
 //! Every constant here is `CALIBRATION-PENDING(AP3)` until a probe measures it
-//! and an IC-5 change-order lands the value (AGENTS.md §4.2 form). The single
-//! obvious placeholder value keeps consumers compiling inert; nothing in sim
-//! reads these yet, so goldens are untouched by construction.
+//! and an IC-5 change-order lands the value (AGENTS.md §4.2 form).
+//!
+//! **These are READ** (i386 correction — the previous note claimed nothing in sim
+//! consumed them): `FIELD_UPTAKE_QUANTUM_F64` gates field admission in
+//! `lambda.rs:56` and `STAGE_COUNT` sets the collective-field ceiling in
+//! `collective.rs:191`, both of which the sim drives every tick — so changing a
+//! value here is a behavioural change that must be probed and golden-checked, not
+//! a compile-time placeholder swap. `canon-inventory.md` tracks each constant's
+//! landing status.
 
 /// Development-field uptake quantum: f64 shadow accumulations quantize into
 /// the field exactly once per tick at this resolution.

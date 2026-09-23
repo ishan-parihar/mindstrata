@@ -3,6 +3,16 @@
 Owner: PLATFORM co-signed QA. Feeds IC-8 and gate scripts (FR-006, FR-043).
 Status: **DRAFT — measured basis from `i270_perf_snapshot` on 2026-08-29.**
 
+> **STALE BASIS (reconciled at i385, 2026-09-23).** The numbers below are a *historical*
+> measurement: they pre-date the i330–i352 scan removals (the O(N³) marriage walk, the
+> per-entity relationship scans, the pass detangles) and the i332/i340/i345/i359 envelope
+> re-baselines, so they are now pessimistic by roughly **3×** at N=48 (860 tps recorded
+> there vs **~2,470 tps** measured at i359 on the same 32×32 world). The **authoritative**
+> perf numbers live in `ENGINE_STATUS.md` §8 (density-law envelope table) and the binding
+> budget rules live in `charters/DC3-P0-perf-budget.md`; `scripts/gate` reads its warn-only
+> envelopes from there, not from this table. Keep this file for the *shape* of the budget
+> checks and the snapshot-byte model, and treat every `mean_tps` figure here as history.
+
 ## Measured basis
 
 Harness: `cargo run --release -p mindstrata-benches --example i270_perf_snapshot`

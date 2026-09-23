@@ -4,7 +4,15 @@ Owner: DESIGN → consumed by SIM gating (WP-G1, FR-027). Companion to canon-inv
 row 1. Theory grounding: `docs/architecture/AP3-afa/03-substrate.md` §6 + vault `needs` line
 matrix (`needs` line kind `system`, collective-system quadrant) + KosmOS ladder rungs
 1–4 (survival→belonging→achievement→self-transcendence→self-transcendence collective).
-Frozen at 2.18; values CALIBRATION-PENDING(AP3) until probe-measured per FR-027.
+Frozen at 2.18.
+
+**Status (re-swept i386, 2026-09-23):** the *band surface* is LANDED — decay half i303,
+threshold half i305 (`SimParameters.goal_gate_scale` → `systems::GoalGates`, resolved once
+per tick), with the meaning-channel saturation root-caused at i306. The *target ranges in
+the table below* are only as current as each row's own status note: rows carrying a
+MEASURED/`DONE` marker are closed, and the survival/belonging/meaning ranges remain
+CALIBRATION-PENDING on purpose — i305 measured the channels occupying a lower range than
+the spec proposed, so the empirical values were kept rather than moved to the bands.
 
 ## Evidence
 

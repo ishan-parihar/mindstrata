@@ -31,7 +31,7 @@ owner: SIM + PROD (AP4 Studio)
 | Probe law | `scripts/bench_index.py --strict` | 0 violations |
 
 **Scale of the artefact:** 13 crates · ~146,300 LOC · 1,683 test functions · 217 probes
-· 166 evidence docs · 36 RON spec files · ~925 commits.
+· 167 evidence docs · 36 RON spec files · ~925 commits.
 
 ## 2. Architecture
 
@@ -242,4 +242,7 @@ and the LOD tier being **dark in calm towns** (i367: Background 0.0 % of agent-t
 - Any doc that contradicts this one is stale: either fix it or mark it `SUPERSEDED` and
   point it here (see [`DOCUMENTATION.md`](DOCUMENTATION.md) for the taxonomy).
 - `scripts/doc_index.py` (wired into `scripts/gate`) fails the build if this document is
-  unlisted or its `reconciled_commit` does not resolve in git.
+  unlisted or its `reconciled_commit` does not resolve in git. It checks **structure, not
+  citations** — a `file:line` here is a pointer, not a contract: re-point it whenever the
+  file moves (AGENTS.md §4.14), and verify a "not landed" claim by opening the file before
+  planning work off it (i386 found two balance docs reporting live levers as unlanded).

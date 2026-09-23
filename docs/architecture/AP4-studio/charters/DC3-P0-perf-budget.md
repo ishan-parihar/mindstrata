@@ -2,6 +2,16 @@
 
 **Status:** RATIFIED (i283 session) · **Baseline:** i274 probe, re-measured post-i281 (`i274_scale_diet_probe --perf`, release, 2000 ticks, seed 42, world 32×32)
 
+> **Reconciliation note (i385, 2026-09-23).** DC-3 is closed, so this is a historical
+> charter — but **its budget RULES (§2) remain in force** and the gate still enforces them
+> (N=12 ≤150 µs/tick; N=96 ≤6 500 µs/tick). What moved is the measured basis: the §1 table
+> (122 / 1 088 / 5 961 µs/tick at N=12/48/96) pre-dates the i330–i352 scan removals and the
+> envelope re-baselines, and the same 32×32 world now measures **405 µs/tick at N=48** and
+> **5 805 µs/tick at N=256** (i359, density world law) — i.e. the N=96 budget of 6 500 now
+> covers the full `MAX_POPULATION = 256` cap. Current numbers: `ENGINE_STATUS.md` §8. §4's
+> `VecDeque` deferral stands (i354 refuted the horizon trigger; jitter is the only remaining
+> one) and §3's recent-claims-index trigger (>250K ticks) is unchanged.
+
 ## 1. Measured baseline (fresh, post-i280/i281/i282)
 
 | N | µs/tick | tps | vs i274 (102/928/5696) |

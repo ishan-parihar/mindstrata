@@ -35,7 +35,7 @@ id: CO-YYYY-NNN        # e.g. CO-2026-001
 date: 2026-08-29
 author: DESIGN
 affected_canon: docs/balance/needs-bands.md#fulfillment-thresholds
-code_site: crates/mindstrata-psych/src/motivation.rs:42
+code_site: crates/mindstrata-psych/src/psychology/motivation.rs:42
 old_band: "[0.40, 0.55] at seed 42, 4K ticks (liveness pin)"
 measured_value: "0.33 at seed 42, 4K ticks (probe i271_… raw 0.33)"
 mechanism: "health-sync restoration lifted contempt to 0.073 (Iter-247 class)"

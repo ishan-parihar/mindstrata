@@ -106,7 +106,7 @@ Draw-site inventory across sim + social + world crates (verified by grep at audi
 |---|---|
 | `World` | `crates/mindstrata-world/src/world_gen.rs:25` only (init-time generation) |
 | `Behavior` | actions/mod.rs:647; core.rs:309–310 (spatial wander pair); memory_ops.rs:211 (rehearse); norms_impl.rs:176; pass_scenario.rs:133,188; social_cluster.rs:405 |
-| `Social` | core.rs:457,542; clans.rs:436; marriage.rs:141; legal_impl.rs:121; births_deaths.rs:413; pass_health.rs:125,174,182; social_cluster.rs:259,332,644,719,744,815; norms_impl.rs:56; **mindstrata-social** social/interaction.rs:192,222,548 (reached from tick via pass_social.rs:202–213 handing `ctx.rng` to `system_social_interactions`) |
+| `Social` | core.rs:457,542; clans.rs:436; marriage.rs:141; legal_impl.rs:121; births_deaths.rs:413; systems/health.rs:126,175,183 (was `pass_health.rs`); social_cluster.rs:259,332,644,719,744,815; norms_impl.rs:56; **mindstrata-social** social/interaction.rs:192,222,548 (reached from tick via pass_social.rs:202–213 handing `ctx.rng` to `system_social_interactions`) |
 | `Economy` | diplomacy_impl.rs:24 |
 | `Ecology` | pass_weather.rs:23 (season advance) |
 | `Narrative` | institutions_impl.rs:934 |
@@ -130,7 +130,8 @@ plus the birth-path child RNG, all replay-stable by construction:
 New-site rule remains: append at the target stream's end with an order/count comment;
 census above is the baseline any future append is measured against.
 
-Pass purity spot-check: `tick_biology_pass` (`sim/pass_biology.rs:6–192`) contains zero
+Pass purity spot-check: `tick_biology_pass` (`systems/biology.rs:10–197`, was
+`sim/pass_biology.rs` before the Arc-D pass extraction) contains zero
 RNG draws — pure function of bodies/needs/emotions/weather/params. The remaining passes
 consume `ctx.rng` strictly at their fixed position in the core.rs sequence (:171–270),
 which preserves byte-identical replay.
@@ -149,3 +150,4 @@ No ordering violations found at audit time.
 | 1.0.0-draft | initial from AP3 doctrine §2 + AGENTS.md §5 | P0 pending |
 | 1.0.0-draft | grounding evidence added: Fixed API, thermal shadow precedent, RNG law sites, mem::take trap narrative; enforcement checklist; owners SIM+PLATFORM | P0 pending |
 | 1.0.0 | RNG draw-site census (six streams, four ad-hoc ChaCha exceptions + birth-path isolation, biology-pass purity pin), pass-purity audit complete → ratified for DC-1 at the P0 window; frozen against groundwork c071a3e, ratifying commit sha stamped on top | P0 window |
+| 1.0.1 | **Citation reconciliation (i386, 2026-09-23) — the LAW is unchanged.** The two pass files named in the census moved in the Arc-D extraction: `sim/pass_health.rs` → `systems/health.rs` (its three `Social` draws now at :126/:175/:183) and `sim/pass_biology.rs:6–192` → `systems/biology.rs:10–197`. The stream set, the stream-per-subsystem rule, the four ad-hoc ChaCha exceptions and the biology-pass purity pin were re-verified at this commit and stand as ratified. Line anchors inside unchanged files drift with unrelated edits — treat `file:line` here as a pointer, never as the contract. | SIM + PLATFORM (doc-currency pass) |

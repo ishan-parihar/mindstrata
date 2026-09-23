@@ -4,7 +4,7 @@ description: "The documentation authority map and index. Defines which document 
 type: Authority
 status: AUTHORITY
 scope: "documentation governance"
-reconciled_commit: adc5985
+reconciled_commit: cd4ac0a
 created: 2026-09-22
 owner: PROD (AP4 Studio)
 ---
@@ -62,11 +62,11 @@ column prevents.
 ## 3. Directory conventions (auto-classified)
 
 Everything under these directories is **HISTORICAL/REFERENCE by construction** and is not
-listed individually below (243 files):
+listed individually below (178 files):
 
 | Directory | Auto-status | Reason |
 |---|---|---|
-| `docs/**/evidence/**` | HISTORICAL | iteration evidence logs (137 docs) |
+| `docs/**/evidence/**` | HISTORICAL | iteration evidence logs (166 docs) |
 | `docs/architecture/archive/**` | HISTORICAL | completed architecture plans |
 | `docs/architecture/AP3-afa/waves/**` | HISTORICAL | completed AP3 wave briefs |
 | `docs/knowledge-base/**` | REFERENCE | theory notes, not status |
@@ -82,7 +82,16 @@ Everything else must be listed in §6 with an explicit status.
    doc **in the same commit**. A behaviour change that invalidates a ledger row is not done
    until the row moves.
 3. **A new doc must be classified** in §6 in the commit that adds it — the gate enforces this.
-4. **When a doc is replaced**, set its status to SUPERSEDED and add a banner:
+4. **Citations are part of the contract** (i386, AGENTS.md §4.14). A doc that names a file,
+   a symbol anchor, or an artifact must be re-pointed **in the commit that moves it** —
+   `FROZEN` freezes the rule, never the path. The `doc_index.py` gate checks *structure*
+   (classified, no ghosts, marker resolves) and **cannot** see citation drift: it will pass
+   a doc that cites a file which never existed, or that says a value is "not landed" after
+   the code shipped it under a different name. Treat every such claim as a probe to run
+   before you plan work off it. The i386 sweep (2026-09-23) is the worked example: 2 ghost
+   contract filenames, 2 moved pass files, 1 crate-moved symbol, and 2 balance docs
+   reporting live levers as unlanded.
+5. **When a doc is replaced**, set its status to SUPERSEDED and add a banner:
    ```
    > **SUPERSEDED (YYYY-MM-DD, iNNN):** replaced by `path/to/replacement.md`. Kept for history.
    ```

@@ -35,7 +35,9 @@ Begin at your ladder's first incomplete phase.
 |---|---|---|
 | 1 | **PLATFORM**, **QA**, **TOOLS** | their early outputs (IC-3 determinism law, IC-6 gates, IC-4 probes) unblock everyone; no dependencies on others |
 | 2 | **SIM**, **CLIENT** | need IC-3 frozen (PLATFORM wave-1 phase 1–3); CLIENT also reads IC-8 draft |
-| 3 | **STORY** | AP3 Era I is deliberately SERIAL inside STORY (freeze discipline: WP-A → B/C/D). Other departments run wide while STORY runs deep. Dispatches as one agent walking iters 266–272 per PLAN_AP3_EXECUTION.md |
+| 3 | **STORY** | AP3 Era I is deliberately SERIAL inside STORY (freeze discipline: WP-A → B/C/D). Other departments run wide while STORY runs deep. Dispatched as one agent walking iters 266–272 per the AP3 wave schedule
+(`docs/architecture/AP3-afa/04-waves.md`; AP3 is complete — this row is retained as the
+DC-1-era dispatch record) |
 | 4 | **DESIGN** | needs first beat artifacts from SIM/STORY to have anything to calibrate; starts with inventory phases which only need code reading — may join wave 2 if operator wants earlier |
 
 Max concurrent: 6 (all but DESIGN) without conflict; territories are disjoint by ledger.
