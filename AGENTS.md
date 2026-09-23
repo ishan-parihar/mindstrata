@@ -219,6 +219,23 @@ These rules exist because we repeatedly paid for violating them:
    `SimParameters::pathology_*_scale` is the real surface). A stale "not landed" is worse
    than a stale line number: it invites rebuilding live behavior, and it hides a shipped
    lever from anyone planning the next sweep.
+15. **Measure a consumer's RESPONSE ELASTICITY before choosing it for a heritable trait
+   (i392).** Midpoint neutrality (§4.6) is necessary and **not sufficient**: `novelty_seeking`
+   → the exploration driver was wired exactly midpoint-neutrally (the gene-pinned-0.5 control
+   reproduced the stored golden metric_hash **byte for byte**, so §4.6 was *proven*, not
+   asserted), the channel was live and monotone under an A/B with one number pinned, and the
+   population-mean multiplier stayed within ±5% of 1.0 — and it was still the wrong place to
+   put the trait. The driver's response to its own coefficient is **elasticity ≈ 4**
+   (coefficient 1.92 → 2.16 buys 1 853 → 3 256 Wander wins; the gene's full range is a 4.1×
+   spread), so *aggregate* neutrality hid *per-agent* redistribution: the top carrier's
+   coefficient rose to 2.29 while the rest fell, and the world's **revolution liveness family
+   collapsed to 1 of 3 seeds** plus 2 goldens and 5 snapshots. **Rule:** before wiring a
+   heritable trait onto a knob, probe the knob's response curve across the trait's range and
+   require it to be *proportional*; an elastic surface turns a trait difference into a
+   population-level lottery over the founder draw, and a rejection recorded with those numbers
+   is a landing (i380/i392 precedent), not a failure. Corollary: re-anchoring is not a licence
+   — a **liveness** producer going dark (§2.3) is never re-pinned to accept zero, whatever the
+   golden diff says.
 
 ## 5. Known Systemic Hazards
 
@@ -532,8 +549,23 @@ Live queue, in order (evidence link per item):
    the ramp opens at ~385 000 ticks) so the fix is invisible in every corpus — and both
    goldens are byte-identical, 0 re-anchors. Live at the clock: a 12-year-old reads
    `Early`/0.1428 on gene 11.0, `Prepubescent` on 15.0, and identical to pre-fix on 13.0.
-   Rows 2–5 of the act (`sensory_acuity`, `aggression_threshold`, `novelty_seeking`,
-   `chronic_pain_risk`) open. Then **i393** the speech-act/kind migration. Carried forward from i388 as
+   **i392 row 2 MEASURED AND REJECTED** (`evidence/i392_novelty_driver.md`): the plan's
+   named consumer for `novelty_seeking` was the i351 `Wander` driver, and the wiring was
+   built, measured and reverted — live and monotone under a pinned-gene A/B (132 → 2 464 →
+   3 927 Wander decisions), **§4.6 proven at machine precision** (the gene-pinned-0.5 control
+   reproduces the stored golden `metric_hash` `0xb2a1be3b18fbb46d` byte for byte, and the
+   natural-gene divergence starts at tick 657 for agent 0 alone, gene 0.8381), and still
+   wrong: the surface is **elastic (≈4)**, so aggregate neutrality (±5% mean multiplier) hid
+   per-agent redistribution and the **revolution liveness family fell to 1 of 3 seeds** — a
+   dead producer, which §2.3 forbids re-pinning, so the candidate was reverted rather than
+   re-anchored. Row 2 also produced the act's **precondition (i392b)**: the driver's own
+   acceptance band is stale — `i351_wander_bands` reads **5.44% / 3.53%** of decisions at 20K
+   against i351's documented **0.5–3%** target, and *nothing pins it* (the instrument is a
+   probe, not a test), so no gate ever re-measured the claim the coefficient was chosen for.
+   i392b re-contracts or re-calibrates that band with a test behind it; rows 3–5
+   (`sensory_acuity`, `aggression_threshold`, `chronic_pain_risk`) wait for it, and each must
+   clear both gates — the shadowed constant sits at the gene's midpoint **and** the response
+   is proportional (new rule §4.15). Then **i393** the speech-act/kind migration. Carried forward from i388 as
    measured-but-unexplained: action duration rose 4.31 → 5.40 ticks and the 2K relationship
    stages shifted shallower (`Unnoticed` 20 → 26, `Friend` 8 → 5) — W2 must decide whether
    contact falls when the drive is served *before* the sparse-store question is re-opened.

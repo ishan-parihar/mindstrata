@@ -119,7 +119,14 @@ Wander 4.4 / 5.4, Idle 1.2 / 0.4, Worship 1.1 / 0.3, Move 0.39 / 0.45.
 arbitrations, half is schedule, ~6–7% habit, and the crisis rungs (feud, veto, reflex)
 fire rarely by design. The deliberative surface is **wider than the pre-i347 numbers this
 table used to carry** (utility 32.8% → 41.1%), because `Wander`, `Idle` and `Move` — all
-dead or near-dead before i347/i351/i356 — now enter the arbitration. Two caveats worth
+dead or near-dead before i347/i351/i356 — now enter the arbitration. **One calibration caveat
+attaches to the `Wander` share (i392 row 2):** the i351 acceptance band for the exploration
+driver (`0.5–3%` of decisions at 20K) **no longer holds** — re-running i351's own instrument
+against the current tree reads **5.44% (seed 42) / 3.53% (seed 7)** at 20K, i.e. 1.2–1.8× the
+band's ceiling, because the action layer moved under the claim (i356/i387/i388/i389/i390) and
+nothing enforced it. That is recorded as the open root cause **i392b** rather than papered
+over: the band is repaired or the coefficient re-calibrated with the band as the contract,
+and a **test** (not a probe) goes behind the resulting claim. Two caveats worth
 stating plainly: `Socialize` is now reached by **both** layers — i387 decomposed the
 arbitration bucket by bucket and i388 wired the two channels it lacked (the relational
 urgency family: `Attachment\|Care\|Romance → Socialize`, `Belonging → Socialize\|Worship`;
@@ -231,20 +238,33 @@ institutional effects (treasury accumulating with no holder to spend it, legitim
 are unmeasured. It would have blocked the inter-community layer's offices (W3).
 
 
-**Dead genes (i391 census; i392 row 1 CLOSED, rows 2–5 open):** `aggression_threshold`,
-`novelty_seeking`, `chronic_pain_risk`, `sensory_acuity` and `puberty_age` were drawn at
-founder creation, defaulted and blended at `inherit`, and **read by nothing outside
-`genome.rs`** — heritable trait variation that changed no behaviour. **`puberty_age` is wired
-(i392):** the reproductive clock reads `ReproductiveUpdateParams.puberty_age` from the genome,
-with the retired constant as the default (13.0 = the gene's midpoint, so the wiring is
-midpoint-neutral). Its measured scope is honest and narrow: **0 agent-ticks in age [10,16)
-over 240K + 987K agent-ticks** (founders ≥18, the ramp opens at ~385 000 ticks), so the fix
-is invisible in every corpus — both goldens byte-identical, 0 re-anchors — and its target is
-the next generation at long horizons. The other four are candidates for the same §4.6
-midpoint-neutral wiring or for deletion (`sensory_acuity` 0.2–0.8, `chronic_pain_risk`
-0.0–0.5 qualify only if the constants they shadow sit at those midpoints). The instrument
-(`scripts/field_census.py`, doctrine §5) is recorded for re-use; it found six suspects and one
-is the documented false-positive class (an aggregate consumed by its own file).
+**Dead genes (i391 census; i392 row 1 CLOSED, row 2 REJECTED, rows 3–5 blocked):**
+`aggression_threshold`, `novelty_seeking`, `chronic_pain_risk`, `sensory_acuity` and
+`puberty_age` were drawn at founder creation, defaulted and blended at `inherit`, and **read by
+nothing outside `genome.rs`** — heritable trait variation that changed no behaviour.
+**`puberty_age` is wired (i392 row 1):** the reproductive clock reads
+`ReproductiveUpdateParams.puberty_age` from the genome, with the retired constant as the
+default (13.0 = the gene's midpoint, so the wiring is midpoint-neutral). Its measured scope is
+honest and narrow: **0 agent-ticks in age [10,16) over 240K + 987K agent-ticks** (founders
+≥18, the ramp opens at ~385 000 ticks), so the fix is invisible in every corpus — both goldens
+byte-identical, 0 re-anchors — and its target is the next generation at long horizons.
+**`novelty_seeking` was measured against its named consumer and rejected (i392 row 2):** the
+wiring onto the i351 exploration driver was live and monotone (pinned-gene A/B 132 → 2 464 →
+3 927 Wander decisions) and midpoint neutrality was **proven at machine precision** (the
+gene-pinned-0.5 control reproduced the stored golden `metric_hash` `0xb2a1be3b18fbb46d` byte
+for byte; the natural-gene divergence began at tick 657 for agent 0 alone), but the surface's
+response is **elastic (≈4)** — so aggregate neutrality hid per-agent redistribution, and the
+**revolution liveness family fell to 1 of 3 seeds** (a dead producer, which §2.3 forbids
+re-pinning). The candidate was reverted, not re-anchored. The rejection exposed the act's
+**precondition (i392b, new)**: the exploration driver's own acceptance band is stale —
+`i351_wander_bands` reads **5.44% (s42) / 3.53% (s7)** of decisions at 20K against the
+documented **0.5–3%** target, and *no test pins it* (the instrument is a probe), so the claim
+the coefficient was chosen for has drifted unenforced. Rows 3–5 wait for that band to be
+re-contracted or re-calibrated, and each must clear both gates: the shadowed constant sits at
+the gene's midpoint **and** the response to that constant is proportional (doctrine §4.15).
+The instrument (`scripts/field_census.py`, doctrine §5) is recorded for re-use; it found six
+suspects and one is the documented false-positive class (an aggregate consumed by its own
+file).
 
 The live iteration ledger is [`PLAN_DC5_DEVELOPMENT.md`](PLAN_DC5_DEVELOPMENT.md) §3;
 it is authoritative for *work*, this section is the summary.
