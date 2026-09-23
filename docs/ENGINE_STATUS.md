@@ -178,7 +178,7 @@ and has been corrected.
 | **Innovation** | present, thin | §19.5.I work-driven discovery, knowledge diffusion (5 types), teaching, meme mutation, education, taboo-damped learning. Gap: not generative; skill saturation was audit finding E8. |
 | **Thought processes** | strong | theory of mind, prospection/imagination, 12-proposition belief system, capacity-limited memory (8 kinds), narrative identity with scripts. |
 | **Feelings** | strong | 22 discrete emotions, 12 regulation strategies, hedonic setpoint drift. E1 dysphoria plateau dead (i259); valence graded. |
-| **Heredity / evolution** | real (Arc A) | genome blending, quantitative-genetics personality, surnames, moral/ideology/sacred transmission. Parent–child **r=0.81**, sibling **r=0.92**. Gap: `aggression_threshold` genome field has no consumer (`novelty_seeking`, `sensory_acuity` deliberately inert — measured-and-rejected, records in `i392_novelty_driver.md` / `i394_sensory_acuity.md`). |
+| **Heredity / evolution** | real (Arc A) | genome blending, quantitative-genetics personality, surnames, moral/ideology/sacred transmission. Parent–child **r=0.81**, sibling **r=0.92**. Gap: of the five inert genome fields the i391 census found, two are now wired (`puberty_age`, `chronic_pain_risk`) and three are deliberately inert after measurement (`novelty_seeking`, `sensory_acuity`, `aggression_threshold` — records in `i392_novelty_driver.md`, `i394_sensory_acuity.md`, `i395_aggression_threshold.md`). |
 | **Body–mind coupling** | real (Arc B) | interoception into decisions, Whitehall status→stress→health, sleep-debt withdrawal, injury→pain→blood-loss→shock (i313), immune clearance (i311). |
 | **Culture / collective** | real (Era III–V) | emergent memes, rumours, rituals, collective memory, moral panics, legitimacy, echo chambers, per-polity genesis. |
 | **World interaction** | good | 8 needs drive resource ops against a finite world; seasons, spoilage, disease, market pricing. **World area is decorative below N≈144** (i344) — most contact is co-residency. |
@@ -275,7 +275,7 @@ institutional effects (treasury accumulating with no holder to spend it, legitim
 are unmeasured. It would have blocked the inter-community layer's offices (W3).
 
 
-**Dead genes (i391 census; rows 1 and 3 CLOSED, rows 2 and 4 REJECTED, row 5 open):**
+**Dead genes (i391 census; act i392 CLOSED — 2 wired, 3 rejected with records):**
 `aggression_threshold`, `novelty_seeking`, `chronic_pain_risk`, `sensory_acuity` and
 `puberty_age` were drawn at founder creation, defaulted and blended at `inherit`, and **read by
 nothing outside `genome.rs`** — heritable trait variation that changed no behaviour.
@@ -285,6 +285,28 @@ default (13.0 = the gene's midpoint, so the wiring is midpoint-neutral). Its mea
 honest and narrow: **0 agent-ticks in age [10,16) over 240K + 987K agent-ticks** (founders
 ≥18, the ramp opens at ~385 000 ticks), so the fix is invisible in every corpus — both goldens
 byte-identical, 0 re-anchors — and its target is the next generation at long horizons.
+**`aggression_threshold` was measured against the escalation gate and rejected (i392 row 5):**
+the last inert gene, and the only row whose locus the probe *confirmed* before wiring. Legs
+A–C found the `should_escalate` gate live and load-bearing (4–7 of 12 agents per seed already
+above the 1.2 threshold on `dominance + risk_tolerance` alone; per-agent ceilings δ\* mean
+0.18–0.24) with a genuinely **smooth** response surface — the pool share the shifted gate
+admits runs 41 → 37 → 31 → 11 → 6 across the gene range, the gradient shape rows 2 and 4
+lacked. The law `threshold = 1.2 × (1 + (gene − 0.55) × 1.5)`, anchored at the `U(0.2,0.9)`
+draw midpoint, was wired and `clans.rs` re-parameterised — and the pre-registered checklist
+failed on **four independent families**: revolution liveness `[(5,0,1,0),(42,0,2,0),(12345,1,3,1)]`
+(seed 5 fires **zero** in 70K), fear-contagion presence **10/12** (band 11–12), prediction-error
+**3/6** (needs a majority), and founding `kinship_penalty` **0.5 ≠ 0** (seed 43) — plus **both
+goldens and 7 snapshots**. The same nine tests pass on the reverted tree, so attribution is
+exact rather than assumed. **The row's real output is structural:** every coupling that survives
+the golden gate in this engine is *dormant in the calibrated window* (the repeated
+`identity at zero` device — norm resistance before tick 4320, obligation at the 0.5 anchor,
+calm-world emotion channels). A gene drawn at founder time cannot use that device, because every
+agent deviates at tick 0, which is exactly why rows 1 and 3 could land (their consumers sit
+*inside* dormant states: the puberty ramp opens at ~385K ticks, severe injury never occurs) and
+rows 2, 4 and 5 could not. Recorded upgrade path, a design-act candidate rather than debt:
+route the modulation through a state that is zero at tick 0
+(`norm_resistance("no-violence") > 0`) so dormancy is structural, then re-run the same
+checklist. Reverted; the trait stays deliberately inert (`i395_aggression_threshold.md`).
 **`sensory_acuity` was measured against its class-consistent consumer and rejected (i392 row 4):**
 the census-named consumer (the i334 perception radius) is an integer staircase — disqualified
 before probing. The attention system's hardcoded `salience_bias = 0.5` (numerically the gene
@@ -318,9 +340,11 @@ re-pinning). The candidate was reverted, not re-anchored. The rejection exposed 
 **precondition (i392b, new)**: the exploration driver's own acceptance band is stale —
 `i351_wander_bands` reads **5.44% (s42) / 3.53% (s7)** of decisions at 20K against the
 documented **0.5–3%** target, and *no test pins it* (the instrument is a probe), so the claim
-the coefficient was chosen for has drifted unenforced. Rows 3–5 wait for that band to be
-re-contracted or re-calibrated, and each must clear both gates: the shadowed constant sits at
-the gene's midpoint **and** the response to that constant is proportional (doctrine §4.15).
+the coefficient was chosen for has drifted unenforced. i392b then re-contracted that band (measured 1.67–8.81% over
+the 12-seed family; no displacement, so magnitude recorded and liveness + gate exclusivity +
+≤12% pinned by test), and rows 3–5 followed: each had to clear both gates — the shadowed
+constant sits at the gene's midpoint **and** the response to that constant is proportional
+(doctrine §4.15) — with the golden gate as the third and hardest arbiter.
 The instrument (`scripts/field_census.py`, doctrine §5) is recorded for re-use; it found six
 suspects and one is the documented false-positive class (an aggregate consumed by its own
 file).

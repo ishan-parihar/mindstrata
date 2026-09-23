@@ -249,6 +249,24 @@ These rules exist because we repeatedly paid for violating them:
 - **Midpoint neutrality**: when coupling a genome/state multiplier into existing math, shape
   it so the multiplier = 1.0 at the population midpoint (gene 0.5), or golden/snapshots
   shift for everyone, not just carriers.
+- **Calibrated-window dormancy is the golden gate's real condition (i392, all five rows).**
+  Midpoint neutrality is about the *population*; the golden gate is about the *window*. Every
+  coupling in this engine that passes `gate --full` byte-identically does so because it is
+  **dormant throughout the calibrated horizon** — the repeated `identity at zero` device:
+  norm resistance is zero before the first monthly ritual (tick 4320), obligation is 1.0 at
+  the 0.5 anchor, humiliation/contempt/despair are never produced in calm worlds, the puberty
+  ramp opens at ~385K ticks, severe injury never occurs in any corpus. A trait **drawn at
+  founder time** cannot use that device — every agent deviates at tick 0 — which is exactly
+  why `puberty_age` (row 1) and `chronic_pain_risk` (row 3) landed while `novelty_seeking`
+  (row 2), `sensory_acuity` (row 4) and `aggression_threshold` (row 5) were all rejected:
+  row 5's locus was *proven* live and *proven* smooth (pool share 41 → 37 → 31 → 11 → 6,
+  the gradient rows 2/4 lacked), and it still broke four independent families (revolution
+  1/3, fear-contagion 10/12, prediction-error 3/6, founding kinship 0.5 ≠ 0) plus both
+  goldens. **Rule:** before wiring, name the state that makes the coupling zero at tick 0
+  and verify it is zero for the whole calibrated horizon; if the only such state does not
+  exist, the coupling needs one (route the expression through a tick-0-zero state such as
+  `norm_resistance > 0`) or the row is a rejection with a record — re-engineering the
+  goldens is not the fallback.
 - **RNG stream discipline**: birth-path constructors consume draws in field order;
   `Personality::inherit` consumes exactly one draw per trait to preserve alignment.
   Different range widths consume different byte counts — count-alignment ≠ byte-alignment.
@@ -534,7 +552,8 @@ contract is now **liveness + gate exclusivity (≥99% of wins quiet-window; meas
 boundedness (≤12%, sized between the calibrated 9.20% and the over-drive coefficient 3.0's
 13.30%)**, and both halves were **proven to trip** (coefficient 0 → liveness; 5.0 → bound).
 Behaviour is unchanged — goldens byte-identical. Recorded debt: **3–76% of Wander's wins are
-noise-decided** (mean 32%), an action-layer margin question. **i392 rows 3–5 are now unblocked.**
+noise-decided** (mean 32%), an action-layer margin question. **i392 rows 3–5 then ran and the
+act is CLOSED**: row 3 landed, rows 4 and 5 rejected with records — see the W0 entry below.
 
 Live queue, in order (evidence link per item):
 
@@ -588,10 +607,24 @@ Live queue, in order (evidence link per item):
    acceptance band is stale — `i351_wander_bands` reads **5.44% / 3.53%** of decisions at 20K
    against i351's documented **0.5–3%** target, and *nothing pins it* (the instrument is a
    probe, not a test), so no gate ever re-measured the claim the coefficient was chosen for.
-   i392b re-contracts or re-calibrates that band with a test behind it; rows 3–5
-   (`sensory_acuity`, `aggression_threshold`, `chronic_pain_risk`) wait for it, and each must
-   clear both gates — the shadowed constant sits at the gene's midpoint **and** the response
-   is proportional (new rule §4.15). Then **i393** the speech-act/kind migration. Carried forward from i388 as
+   **i392b then re-contracted that band** (measured 1.67–8.81%, mean 4.30% over the 12-seed
+   family at i351's own config, against a documented 0.5–3% that the doc's own i384 table had
+   already breached; no displacement — Work +1.18/−0.76 pt — so magnitude recorded and
+   liveness + gate exclusivity + ≤12% pinned by a test that was proven to trip).
+   **Rows 3–5 then ran on that unblocked ground, and act i392 is CLOSED:** row 3
+   (`chronic_pain_risk`) LANDED (`evidence/i393_chronic_pain_gene.md` — band closed in all
+   five calibrated corpora over 2.29 M agent-ticks *by construction*, response exactly
+   linear, anchored at the draw midpoint 0.25 so no +8% cohort drift); row 4
+   (`sensory_acuity`) MEASURED AND REJECTED (`evidence/i394_sensory_acuity.md` — encode
+   threshold inside the draw range, 13× occupancy spread, revolution 1/3); row 5
+   (`aggression_threshold`) MEASURED AND REJECTED (`evidence/i395_aggression_threshold.md` —
+   the locus was *confirmed* live and smooth, 41 → 37 → 31 → 11 → 6 across the gene range,
+   and it still broke four independent families plus both goldens); and that fifth row
+   produced the missing half of the doctrine as **§5 calibrated-window dormancy** — the
+   golden gate is a *window* condition, so a founder-time gene on a tick-0-live gate cannot
+   pass, its recorded upgrade path being a tick-0-zero state to route the expression through.
+   **Five inert genes in, no inert gene left unwired-by-accident: two wired, three
+   deliberately inert with records.** Then **i393** the speech-act/kind migration. Carried forward from i388 as
    measured-but-unexplained: action duration rose 4.31 → 5.40 ticks and the 2K relationship
    stages shifted shallower (`Unnoticed` 20 → 26, `Friend` 8 → 5) — W2 must decide whether
    contact falls when the drive is served *before* the sparse-store question is re-opened.
