@@ -207,8 +207,16 @@ inter-community behaviour on a clean action surface.
 ## 5. Operator decisions this plan depends on
 
 1. **A9 — fixed 32×32 vs constant density.** i344 measured it as a *fidelity* policy (max
-   co-location 19→4, contacted share halved), not throughput. Adopting it changes calibrated
-   village structure, so it is a charter call. **Needed before i399.**
+   co-location 19→4, contacted share halved), not throughput (**+5.6% cost at N=192** —
+   refuted as a perf lever). **Corrected premise (i392 row 2 re-read of i344):** the earlier
+   "adopting it changes calibrated village structure" was wrong — the law
+   `side(N) = max(16, ceil(√(21.333·N)))` is *anchored on the simulator's own calibrated
+   points* (N=12 in 16×16 and N=48 in 32×32 both give 21.33 cells/agent), so it reproduces
+   both **exactly** and the calibrated corpora are untouched by construction; the change bites
+   only at N ≥ 96 (max co-location 19 → 4, near-pair share 11.3% → 4.7%, mean partners/agent
+   22.1 → 10.2, contacted α 1.276 → 0.866). The re-anchor cost is therefore confined to the
+   scale tiers' contact-derived pins, not the village. Still a charter call — it changes what
+   the *town* is. **Needed before i399.**
 2. **Cap raise (`MAX_POPULATION` 256 → 384/512).** Needed for H5's unlock (i410) and for any
    city-path claim. Requires a measured envelope (i405/i406) and a golden/harness review.
    **Needed before i406.**
