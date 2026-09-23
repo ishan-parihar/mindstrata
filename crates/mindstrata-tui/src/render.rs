@@ -1310,6 +1310,10 @@ pub fn render_psychology_inspector(
                 GoalSource::Identity => "identity",
                 GoalSource::Emotion => "emotion",
                 GoalSource::Command => "command",
+                // i389: the settlement's own authority (council decree) — shown
+                // distinctly so an operator can tell a decree from their own
+                // directive in the goal inspector.
+                GoalSource::Decree => "decree",
             };
             out.push_str(&format!(
                 "  {:?}  priority={:.2}  source={}\n",

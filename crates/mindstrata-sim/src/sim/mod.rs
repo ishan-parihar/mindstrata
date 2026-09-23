@@ -170,9 +170,12 @@ pub(super) fn life_chapter_crossed(before: u32, after: u32) -> bool {
 fn command_goal_action(goals: &[Goal], needs: &NeedState) -> Option<(ActionKind, GoalKind)> {
     // `max_by_key` returns the *last* maximum on ties, so a same-priority
     // repeat directive wins — the most recent command takes precedence.
+    // i389: a `Decree` is a directive too (the settlement's authority asked);
+    // it differs only in that it DECAYS, so a forgotten decree stops steering
+    // while an operator's order does not.
     let command = goals
         .iter()
-        .filter(|g| g.source == GoalSource::Command)
+        .filter(|g| matches!(g.source, GoalSource::Command | GoalSource::Decree))
         .max_by_key(|g| g.priority.to_raw())?;
     let (action, blocked) = match command.kind {
         GoalKind::Eat => (

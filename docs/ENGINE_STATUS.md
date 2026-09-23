@@ -128,8 +128,15 @@ utility-selected `Socialize` from **0 → 109 / 20 121** (village) and **0 → 8
 (town) with the urgency bucket 0.0000 → 0.0865 and live goals 0 → 1/12 and 9/51 — share
 **0.54% / 0.09%**, which is *measurement*, not a target: the winner's bar is 0.73–0.96
 pressure-driven, and `Socialize`'s own term is small because `needs.social` is (p50 0.005)
-— and `Command` is a structurally unreachable channel (no shipped
-generator emits `GoalSource::Command`: a deliberate, documented no-op, not a dead wire).
+— and the **directive channel is no longer nominal (i389)**: the council now speaks
+(`systems/decree.rs`) — on a 250-tick cadence, when a crisis duty cycle holds
+(famine/mean hunger > 0.6 → `Work`; panic/mean fear > 0.5 → `Worship`) and its mandate is
+above 0.35, directing its four nearest villagers with priority `legitimacy × 0.8` as a
+`GoalSource::Decree` that **decays** (the operator's `GoalSource::Command` is still the
+durable one). Measured: calm **0.00%** (calm golden byte-identical), collapse **0.05%**
+(30 selections). The pestilence leg is a measured **office VACANCY** — panic active
+90.69% of ticks, Elder seat empty: after a pestilence the council has no holder and
+nothing appoints a successor, so **succession is the next root cause**.
 `Move`'s single producer is the §19.5.G feud approach, and its shipped gate
 (`FEUD_APPROACH_ANGER = 0.02` + the hunger/thirst guard, branch ABOVE routine since i347)
 opens on **0.0887% (N=12) / 0.1085% (N=48)** of agent-ticks over the full 20K window —
@@ -206,6 +213,10 @@ beyond that is the city/country/planet architecture (the Ω(N²) relationship fl
 structural, and hierarchical polities are only a seed).
 
 ## 9. Calibration debt (the honest ledger)
+
+**Office vacancy (i389, NEW):** the Elder seat is not refilled when its holder dies
+(pestilence leg: seat empty, panic active 90.69% of the window, authority share 0.00%).
+Blocks the directive channel in mortality worlds and, downstream, i399/i400's polity layer.
 
 The live iteration ledger is [`PLAN_DC3_DEVELOPMENT.md`](PLAN_DC3_DEVELOPMENT.md) §3;
 it is authoritative for *work*, this section is the summary.

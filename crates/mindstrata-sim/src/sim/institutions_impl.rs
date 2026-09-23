@@ -185,6 +185,26 @@ impl Simulation {
                 );
             }
 
+            // ── i389: the council's decree channel ──────────────────────
+            // The producer the directive layer never had (probe
+            // `i389_command_channel`: `command` 0.00% of selections and 0
+            // directive holders in calm, collapse AND pestilence). Placed here,
+            // next to the other council-only actions, because legitimacy was
+            // derived just above and the crisis flags are the sim's own state.
+            // The system is a no-op off-cadence, without a mandate, without an
+            // `Elder`, and in any calm tick (`systems/decree.rs`).
+            if institution.kind == institutions::InstitutionKind::Council {
+                let famine_open = tick_u64 < self.famine_until;
+                let panic_active = !self.moral_panic_registry.panics.is_empty();
+                let _ = crate::systems::decree::system_council_decrees(
+                    tick_u64,
+                    &mut self.agents,
+                    std::slice::from_ref(&*institution),
+                    famine_open,
+                    panic_active,
+                );
+            }
+
             // §19.5.C: Record active policy effects (check name first to avoid borrow conflict)
             let has_fine_theft = institution
                 .active_policies

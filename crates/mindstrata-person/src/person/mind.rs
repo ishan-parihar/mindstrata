@@ -86,7 +86,18 @@ pub enum GoalSource {
     Emotion,
     /// §5 (Iteration 155): An external directive — the interactive TUI's
     /// command channel injected this goal between ticks.
+    ///
+    /// EXEMPT from goal decay: an operator's order persists until it is acted on
+    /// or replaced.
     Command,
+    /// i389: the settlement's own authority asked. A `Decree` is a directive in
+    /// every behavioural respect (`command_goal_action` steers selection from it,
+    /// and acting on it consumes it) but it is **not exempt from decay** — the
+    /// council re-issues on its cadence while the crisis lasts, so a forgotten
+    /// decree fades in ~800 ticks instead of steering the village forever. This
+    /// is the distinction an in-sim authority needs and the operator channel
+    /// does not: authority is a repeated ask, not a standing order.
+    Decree,
 }
 
 /// Goal priority and source.

@@ -89,7 +89,7 @@ batched tightly.
 |---|---|---|---|
 | **i387** [M] | **DONE** (`i387_utility_decomposition.md`) | the utility is a labelled bucket vector + the census records winner/runner-up/`Socialize` per arbitration | named the missing channels: `urgency`, `goal`, `trade`, `driver` at 0.000 on the social candidate while `policy` (its own big term) was already 0.31 vs the winner's 0.38; `Attachment`+`Belonging` = 40.1% of dominances |
 | **i388** | **DONE** (`i388_relational_outlet.md`) — revivable, and the channel was the problem: the relational urgency family (`Attachment\|Care\|Romance → Socialize`, `Belonging → Socialize\|Worship`) + the population-relative goal band (`2 × mean_social × goal_gate_scale`, retain at ×0.43) | `i388_relational_outlet` (reach + ratio sweep, pre/post census) | channel live: `Socialize` urgency 0.0000 → **0.0865**, utility-selected `Socialize` **0 → 109** (village) / **0 → 88** (town), live goals 0 → 1/12 and 9/51. **Exit criterion re-contracted**: utility share measured **0.54% (village) / 0.09% (town)** against the pre-measurement guess of ≥1% — a 1% share needs a band wide enough to stop discriminating (§4.10), and the winner's bar is 0.73–0.96 pressure-driven. The pinned invariant is *the drive reaches the deliberative layers*, not a share |
-| **i389** | Authority is nominal: offices exist (`Elder`, `Guard Captain`), the directive API exists, **nothing in the sim issues a command** | `i389_command_channel` (producer census + liveness): have office-holders emit bounded `GoalSource::Command` goals (decree: muster / festival / work-drive), gated by legitimacy and office tenure | Command share > 0 in every crisis leg **and** 0 in calm (a legitimate authority that is not decorative); or the channel is deleted with the i372 rationale |
+| **i389** | **DONE** (`i389_command_channel.md`) — authority was nominal; `systems/decree.rs` gives the council a bounded, legitimacy-scaled ask (`GoalSource::Decree`: a directive that DECAYS, unlike the operator's durable `Command`), crisis-keyed (`famine`/hunger → Work, `panic`/fear → Worship) and capped at the four nearest villagers | `i389_command_channel` (producer census + per-tick crisis duty cycles, pre/post) | **calm 0.00% (0 selections, and the calm golden is byte-identical)** ✓, **collapse 0.05%** (30 selections, 181 decree agent-ticks) ✓. The pestilence leg measures **0.00% for a measured reason, not a dark producer**: its panic duty cycle is **90.69%** and its Elder seat is **EMPTY** — after a pestilence the council has no office holder and nothing appoints a successor. Succession is recorded as the next root cause (one per iteration); the producer's conditional liveness is pinned with the seat filled |
 | **i390** [M] | Write-only genome/person fields are a recurring class (i313 injury, i124 emotion-context, i307 habit gate) and only `sensory_acuity` is currently known | `i390_dead_field_sweep`: field-level write/read census across `Genome`, `EmbodiedState`, `BodyState`, `DevelopmentFieldState` | every writer-only field is either wired or deleted; the sweep script is recorded for re-use |
 
 ### W1 — Finish the relationship unification (G2)
@@ -162,8 +162,10 @@ W6 (i409→i412)  thin layers  ── independent; the cheapest realism-yield pe
 W7 (i413→i415)  verification  ── i413 is independent and can land any time (recommended early)
 ```
 
-**Recommended first arc (the next five iterations, in order):** **i387 → i388 → i389 → i390
-→ i391**. Rationale: i387 is a *measurement* that decides the action layer's fate; i388/i389
+**Recommended first arc (the next five iterations, in order):** **i387 → i388 → i389
+(DONE) → i390 → i391**, plus the new **office-succession** item i389 exposed (an Elder
+who dies is never replaced — the pestilence leg's authority is structurally absent, and
+succession blocks i399/i400's polity layer as much as it blocks this one). Rationale: i387 is a *measurement* that decides the action layer's fate; i388/i389
 close two surfaces a probe has already named (a Class-D inert term and a nominal authority
 channel); i390 sweeps the write-only-field class that has produced four separate dead-leg
 bugs; i391 starts the migration whose reader-side is already half-done. All five are

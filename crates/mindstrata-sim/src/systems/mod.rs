@@ -53,6 +53,7 @@ pub(crate) mod appraisal;
 pub(crate) mod biology;
 pub(crate) mod cognitive;
 pub(crate) mod decay;
+pub mod decree;
 pub mod development;
 pub mod genesis;
 pub(crate) mod health;

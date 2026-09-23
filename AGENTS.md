@@ -493,10 +493,16 @@ Live queue, in order (evidence link per item):
    and live goals 0 → 9/51, with both goldens, 7 snapshots and three pins re-anchored by
    measurement — the pain veto band re-contracted to a family reachability invariant, the
    revolution family rediscovered as `{5, 42, 12345}`, the tenderness Help pin moved to a
-   family mechanism at ≥5%). Next in W0: **i389** the directive channel (office-holders
-   emit bounded `GoalSource::Command` goals, or the channel is deleted with the i372
-   rationale), **i390** the write-only field sweep, then **i391** the speech-act/kind
-   migration. Carried forward from i388 as measured-but-unexplained: action duration rose
+   family mechanism at ≥5%). **i389 LANDED** (`evidence/i389_command_channel.md`: the
+   council now speaks — `systems/decree.rs`, a bounded legitimacy-scaled ask shipped as
+   `GoalSource::Decree`, a directive that DECAYS where the operator's `Command` is durable;
+   calm 0.00% with the calm golden byte-identical, collapse 0.05%, collapse golden
+   re-anchored at agent_count 12 → 12). **i389 also exposed the next root cause: the Elder
+   seat is never refilled after a death** — the pestilence leg's 0.00% is a vacancy
+   (panic active 90.69% of the window, no office holder), not a dark producer. Next: that
+   **office succession** (it blocks the authority channel in mortality worlds and the
+   political layer in W3), **i390** the write-only field sweep, then **i391** the
+   speech-act/kind migration. Carried forward from i388 as measured-but-unexplained: action duration rose
    4.31 → 5.40 ticks and the 2K relationship stages shifted shallower (`Unnoticed` 20 → 26,
    `Friend` 8 → 5) — W2 must decide whether contact falls when the drive is served
    *before* the sparse-store question is re-opened.

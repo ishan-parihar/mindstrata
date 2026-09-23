@@ -385,7 +385,13 @@ impl Simulation {
                     // (never in a calibrated window), so this branch is
                     // a structural no-op everywhere calibrated and draws
                     // zero RNG.
-                    goals[i].retain(|g| !(g.source == GoalSource::Command && g.kind == cmd_kind));
+                    // i389: a `Decree` is consumed the same way — acting on the
+                    // authority's ask IS the satisfaction (the council re-issues
+                    // on its cadence while the crisis lasts).
+                    goals[i].retain(|g| {
+                        !(matches!(g.source, GoalSource::Command | GoalSource::Decree)
+                            && g.kind == cmd_kind)
+                    });
                     (cmd_action, SRC_COMMAND)
                 } else if !agents[i].feuds.is_empty()
                     && emotions[i].anger > FEUD_APPROACH_ANGER

@@ -203,3 +203,88 @@ fn clear_commands_removes_all_directives() {
     );
     assert!(!sim.clear_commands(6), "out-of-range clear returns false");
 }
+
+/// i389: the settlement's own authority speaks through the SAME consumption path
+/// as the operator's — `command_goal_action` accepts a `Decree` directive, and
+/// `system_goal_generation` does NOT exempt it from decay (that is the whole
+/// distinction: an operator's order stands until acted on, a decree fades).
+#[test]
+fn decree_is_a_directive_that_decays() {
+    let needs = NeedState::default();
+    let decree = |priority: Fixed| Goal {
+        kind: GoalKind::Work,
+        priority,
+        commitment: priority,
+        created_tick: 0,
+        source: GoalSource::Decree,
+    };
+    assert_eq!(
+        command_goal_action(&[decree(Fixed::from_f64(0.6))], &needs),
+        Some((ActionKind::Work, GoalKind::Work)),
+        "a decree steers selection exactly as an operator directive does"
+    );
+    // The behaviour at the decayed end is the point: a stale decree still steers
+    // only while its priority survives the goal pass's retain arm (priority ≤ 0
+    // removes it before selection), so authority is a repeated ask rather than a
+    // standing order.
+    let stale = decree(Fixed::ZERO);
+    assert!(
+        command_goal_action(&[stale], &needs).is_some(),
+        "consumption is priority-agnostic; the RETAIN arm is what expires a decree"
+    );
+}
+
+/// i389: the producer's conditional liveness, isolated from the office vacancy
+/// the pestilence leg exposed (the Elder seat was EMPTY for the whole window
+/// there — `i389_command_channel` — so the pestilence census measures a vacancy,
+/// not a dark producer). Here the office is filled and the crisis is singular:
+/// a frightened population draws a decree within one cadence; a calm one never
+/// draws one.
+#[test]
+fn council_decrees_are_issued_in_crisis_and_never_in_calm() {
+    use crate::systems::decree::DECREE_CADENCE_TICKS;
+
+    let run_with_fear = |fear: f64| -> usize {
+        let mut sim = build_sim(6);
+        // The office must be filled for authority to exist at all; a fresh
+        // village appoints its council seats at populate, and the determinism
+        // here does not depend on which agent holds it.
+        let council = sim
+            .institutions
+            .iter_mut()
+            .find(|i| i.kind == crate::institutions::InstitutionKind::Council)
+            .expect("council exists");
+        if council.get_role_holder("Elder").is_none() {
+            council.assign_role("Elder", mindstrata_core::AgentId::new(0));
+        }
+        let mut decrees = 0usize;
+        for _ in 0..=DECREE_CADENCE_TICKS {
+            for a in sim.agents.iter_mut() {
+                a.emotions.fear = Fixed::from_f64(fear);
+            }
+            sim.run(1);
+            decrees += sim
+                .agents
+                .iter()
+                .map(|a| {
+                    a.goals
+                        .iter()
+                        .filter(|g| g.source == GoalSource::Decree)
+                        .count()
+                })
+                .sum::<usize>();
+        }
+        decrees
+    };
+
+    let crisis = run_with_fear(0.9);
+    assert!(
+        crisis > 0,
+        "a frightened village must draw a decree from its council (got {crisis} decree agent-ticks)"
+    );
+    let calm = run_with_fear(0.05);
+    assert_eq!(
+        calm, 0,
+        "authority must not speak in a calm village (got {calm} decree agent-ticks)"
+    );
+}
