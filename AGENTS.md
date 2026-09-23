@@ -455,7 +455,13 @@ Live queue, in order (evidence link per item):
    0.5). Remaining readers: economy, norms_impl, household, births_deaths — each
    behavioural with its own probe. Marriage pass REFUTED (i353). **Queued next from i376's
    evidence:** v1's interaction gains remain ~10× v2's (`record_positive` ×0.02), leaving
-   a +0.06–0.08 offset. **The panic-channel item is CLOSED as diagnosed (i378):** the
+   a +0.06–0.08 offset — **re-measured as i384's open item**: at 50K/N=48 the offset is
+   v1.mean 0.681–0.708 vs v2.mean 0.630–0.656 with 17–25% of pairs >0.05 apart, because the
+   legacy row both gains ~50× faster per act and never decays within the day (v2 decays
+   0.0002/tick). It is a **subsystem migration, not a coefficient**: the speech-act effect
+   model documents its base deltas as the EXACT magnitudes `process_interaction` applies
+   (guarded by `model_sign_matches_applied_deltas`), and the v1 `RelationshipKind` ladder
+   rides on the same movement — both must move to the dyadic store in the same commit. **The panic-channel item is CLOSED as diagnosed (i378):** the
    firing-density move was not a dead producer — the trigger is an ABSOLUTE threshold
    sitting inside its own input distribution (firing legs clear by 2.5–9.4%, one swept
    seed missing by 0.5%), i.e. §4.5 knife-edge debt. Both panic tests now hold a fixed
