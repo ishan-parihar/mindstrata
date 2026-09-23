@@ -14,9 +14,9 @@ use mindstrata_sim::agent_tier::AgentTier;
 use mindstrata_sim::scenario::Scenario;
 use mindstrata_sim::sim::{SimConfig, Simulation};
 
-fn density_side(n: u32) -> u32 {
-    ((21.333_f64 * n as f64).sqrt().ceil() as u32).max(16)
-}
+// i392: the i344 density world law is single-sourced in the world generator
+// (`world_side_for_population`) — do not re-implement it.
+use mindstrata_sim::world_gen::world_side_for_population as density_side;
 
 /// Share of agent-ticks spent in each tier over `ticks`.
 fn tier_shares(mut sim: Simulation, ticks: u64) -> (f64, f64, f64) {

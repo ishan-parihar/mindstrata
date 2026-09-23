@@ -510,6 +510,19 @@ the per-agent mean-folds (stranger-diluted, i350), and `Wander` (zero relief —
 `Fixed::from_raw` unit bug the census caught, i351). i352 closed the last per-tick dense-
 matrix scan (the marriage pass was O(N³) every tick).
 
+**Uncommitted-once-verified — i392 + A9:** `i392` row 2 landed as a **measured rejection**
+(`evidence/i392_novelty_driver.md` — the `novelty_seeking` → exploration-driver wiring was
+live, monotone and midpoint-neutral *at machine precision*, and still reverted because the
+surface is elastic (≈4) and the revolution liveness family fell to 1 of 3 seeds; the
+rejection exposed **i392b**, the driver's stale 5.44%/3.53%-vs-0.5–3% band with no test behind
+it). **A9 is DECIDED and landed** (`evidence/a9_density_policy.md`): the constant-density
+world law is the **interim** area policy, **single-sourced** in the world generator after
+seven stale copies, anchored so the calibrated corpora cannot move, and recorded with the
+**first-principles path that retires it** (carrying capacity → causal space → encounter-driven
+contact → fission) in `PLAN_DC5_DEVELOPMENT.md` §4. Two corrections this pair of iterations
+insists on: a consumer's **response elasticity** is part of its suitability (§4.15), and the
+`max co-location 19 → 4` fix was **A11's (i345)**, not A9's.
+
 Live queue, in order (evidence link per item):
 
 0. **DC-5 W0 — the named dead/inert surfaces (live now).** **i387 LANDED** (the utility is

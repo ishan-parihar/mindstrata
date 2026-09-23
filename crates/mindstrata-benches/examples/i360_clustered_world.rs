@@ -23,11 +23,9 @@
 
 use mindstrata_sim::sim::{SimConfig, Simulation};
 
-/// i344 density world law.
-fn density_side(n: u32) -> u32 {
-    let s = (21.333_f64 * n as f64).sqrt().ceil() as u32;
-    s.max(16)
-}
+// i392: the i344 density world law is single-sourced in the world generator
+// (`world_side_for_population`) — do not re-implement it.
+use mindstrata_sim::world_gen::world_side_for_population as density_side;
 
 fn build(n: u32, seed: u64, side: u32, ticks: u64) -> Simulation {
     let mut sim = Simulation::new(SimConfig {

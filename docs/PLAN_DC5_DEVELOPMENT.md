@@ -163,6 +163,30 @@ batched tightly.
 > in flight and i393 is the last structural inconsistency in the paired-store layer.
 > The **scope** question (one cycle owning both, vs the city path splitting into DC-6) is
 > *not* settled by this — see §5 item 3.
+>
+> **A9 is DECIDED and landed (2026-09-23): the constant-density law is the interim
+> world-area policy** (`world_side_for_population`, now single-sourced in the world
+> generator; evidence `a9_density_policy.md`). It affects **only N ≥ 96** — the law is
+> anchored on the engine's own two calibrated points, so the village and the N=48 tier are
+> byte-identical under either policy. **The organic target it is interim *for*, in dependency
+> order** (keep this in view through W2/W3 — it is why i396/i397 matter and what finally
+> retires the law):
+>
+> 1. **population is an output bounded by carrying capacity** — the ecology should set what
+>    the world supports, and growth should *feel* it (crowding, disease, conflict over space,
+>    out-migration) instead of hitting `MAX_POPULATION`;
+> 2. **space is causal** — travel costs time and energy, so distance to well/farm/market/
+>    temple defines a villager's real daily reach (i396);
+> 3. **contact comes from encounters, not assignment** — ties form where activity puts people
+>    together, not because two agents share a home cell (i397);
+> 4. **density is a pressure with both ends wired** — `crowding` already feeds infection
+>    exposure, and the axis extends to stress, housing quality and conflict over space, then to
+>    the demographic response: **fission**, a settlement past local capacity founding a new
+>    site, which makes the settlement-size distribution emergent instead of
+>    `cluster_count_for(houses)`.
+>
+> End state: `side(N)` **disappears** — the question becomes how many agents the world
+> supports, not how big to make the world for a chosen N.
 
 
 ```
@@ -206,9 +230,14 @@ inter-community behaviour on a clean action surface.
 
 ## 5. Operator decisions this plan depends on
 
-1. **A9 — fixed 32×32 vs constant density.** i344 measured it as a *fidelity* policy (max
-   co-location 19→4, contacted share halved), not throughput (**+5.6% cost at N=192** —
-   refuted as a perf lever). **Corrected premise (i392 row 2 re-read of i344):** the earlier
+1. **A9 — fixed 32×32 vs constant density. DECIDED (2026-09-23): ADOPTED as the interim
+   world-area policy** (`world_side_for_population`, single-sourced in the world generator
+   after seven stale copies; evidence `a9_density_policy.md`). i344 measured it as a
+   *fidelity* policy — **contact dilution** (near-pair share 11.3% → 4.7%, mean partners/agent
+   22.1 → 10.2, contacted α 1.276 → 0.866) — not throughput (**+5.6% cost at N=192**; refuted
+   as a perf lever). **Correction to the earlier note here: the `max co-location 19 → 4`
+   result is A11's (i345's area packing), not A9's** — the two are complementary, not
+   redundant. **Corrected premise (i392 row 2 re-read of i344):** the earlier
    "adopting it changes calibrated village structure" was wrong — the law
    `side(N) = max(16, ceil(√(21.333·N)))` is *anchored on the simulator's own calibrated
    points* (N=12 in 16×16 and N=48 in 32×32 both give 21.33 cells/agent), so it reproduces

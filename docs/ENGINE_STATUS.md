@@ -201,6 +201,32 @@ housing spread i340/i345, the i352 scan removal, and i356 — re-measured at i35
 | 192 | 64 | **3,239.4** | ~310 | **fits, 50% headroom** |
 | 256 | 74 | **5,805.2** | ~170 | **fits** (demographic cap) |
 
+**World-area policy (A9 — DECIDED 2026-09-23, LANDED):** the world's area follows the
+population at the engine's own calibrated density —
+`world_side_for_population(n) = max(16, ceil(√(21.333·n)))`, **single-sourced in the world
+generator** (`mindstrata-world::world_gen`, beside `houses_for_population` /
+`cluster_count_for` / `MAX_RING_HOUSE_COUNT`) after seven stale copies across six probes and a
+sim test; `SimConfig::for_population(…)` is the caller-side entry point. Because the law is
+**anchored on the engine's own two calibrated points** (N=12 in 16×16 and N=48 in 32×32 *both*
+give 21.33 cells/agent), it reproduces both **exactly** — the calibrated corpora are
+byte-identical under either policy, and it bites only at N ≥ 96.
+
+| | fixed 32×32 | density law |
+|---|---|---|
+| near-pair share (≤5 tiles), N=192 | 11.3% | **4.7%** |
+| contacted-row share | 11.5% | **5.3%** |
+| mean partners/agent | 22.1 | **10.2** |
+| contacted α (144→192) | 1.276 | **0.866** |
+| µs/tick, N=96 / 144 / 192 | — | **+9.1% / −2.3% / +5.6%** |
+
+**Attribution correction (i392):** the `max co-location 19 → 4` result belongs to **A11**
+(i345's spacing-aware area packing, one house per tile), not to A9 — i344 measured the 19 in
+the **ring** world and queued A11 as a separate item. A9's own contribution is **contact
+dilution** (the table above), and the two items are complementary. **Interim, not organic:**
+this is still an input keyed on a chosen population; the target that retires it (carrying
+capacity, causal space, encounter-driven contact, fission) is recorded in
+`PLAN_DC5_DEVELOPMENT.md` §4 and `evidence/a9_density_policy.md` §5.
+
 `ENVELOPE_EXPANDED_2_7X` — the N=96 charter budget covers **N=256**. Liveness holds at
 the cap (i359: N=256 health 0.777, hunger 0.045, zero-coin 0, all partnered). Hard
 demographic cap: `MAX_POPULATION = 256`. World size is operator-set via `SimConfig`

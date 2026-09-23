@@ -382,7 +382,7 @@ fn clustered_world_forms_multiple_settlements_at_town_scale() {
     // (doctrine §4.1 — the i338/i350 lesson).
     for seed in [42u64, 7, 1, 99] {
         for n in [192u32, 256] {
-            let side = (21.333_f64 * n as f64).sqrt().ceil() as u32;
+            let side = crate::world_gen::world_side_for_population(n);
             let cfg = || SimConfig {
                 seed,
                 max_ticks: 1,

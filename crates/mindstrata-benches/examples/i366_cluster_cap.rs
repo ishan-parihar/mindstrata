@@ -13,9 +13,9 @@ use mindstrata_sim::sim::{SimConfig, Simulation};
 use mindstrata_sim::world::SiteKind;
 use mindstrata_sim::world_gen::{cluster_count_for, houses_for_population};
 
-fn density_side(n: u32) -> u32 {
-    ((21.333_f64 * n as f64).sqrt().ceil() as u32).max(16)
-}
+// i392: the i344 density world law is single-sourced in the world generator
+// (`world_side_for_population`) — do not re-implement it.
+use mindstrata_sim::world_gen::world_side_for_population as density_side;
 
 fn main() {
     println!("i366 — cluster-cap reachability (MAX_POPULATION = 256)\n");

@@ -88,6 +88,63 @@ fn place_site(world: &mut World, x: i32, y: i32, site: Site) -> bool {
     }
 }
 
+/// i344 (A9): the simulator's own calibrated spatial density — 16×16 for 12
+/// agents and 32×32 for 48 agents **both** give 21.33 cells/agent, so the two
+/// scales the engine was tuned at agree on one number.
+pub const CELLS_PER_AGENT: f64 = 256.0 / 12.0;
+
+/// i344 (A9): the smallest world side the density law will emit.
+///
+/// The 16×16 floor is the **N=12 calibrated point itself** (256 cells / 12
+/// agents = 21.33), so the law reproduces the smallest calibrated world exactly
+/// rather than approximating it — which is what makes every calibrated corpus
+/// byte-identical under this policy.
+pub const MIN_WORLD_SIDE: u32 = 16;
+
+/// i344 (A9, DECIDED i392): the world side for a population at the calibrated
+/// density — the interim world-area policy for any run that does not pin its
+/// own size.
+///
+/// **Why a law.** i340/i344/i345 closed the *housing* half of the crowding
+/// story (one house per ~4 villagers at a declared `House.capacity` of 4), and
+/// i344 measured what remained: in the charter's **fixed** 32×32 world the
+/// contact graph **re-saturates past N≈144** — contacted α 2.654, i.e. the
+/// best-connected villager has met everyone, while a world at constant density
+/// measures α **0.866**. Space is decorative, so ties form by co-residency and
+/// proximity rather than by encounter.
+///
+/// **This does not fix capacity — A11 did.** i345's area packing is what took
+/// max co-location `19 → 4` at N=192 (the ring had been silently stack-piling
+/// agents on collided tiles against `SiteType::House.capacity`). The density
+/// law's own measured effect is **contact dilution**: near-pair share
+/// 11.3% → 4.7%, contacted-row share 11.5% → 5.3%, mean partners/agent
+/// 22.1 → 10.2, contacted α 1.276 → 0.866. Its cost is **+5.6% µs/tick at
+/// N=192** (measured +9.1%, −2.3%, +5.6% at N=96/144/192) — i344's verdict is
+/// that world area is a **fidelity** lever, never a throughput one, because the
+/// interaction store is the complete row set `N(N−1)` and a bigger world leaves
+/// it untouched.
+///
+/// **Anchored, so the calibrated corpus cannot move.** The law is derived from
+/// the simulator's own two calibrated points rather than invented: N=12 in 16×16
+/// and N=48 in 32×32 *both* give 21.33 cells/agent, so
+/// `world_side_for_population(12) == 16` and `world_side_for_population(48) ==
+/// 32` **exactly**, and every window below the N≈96 tier is byte-identical
+/// under either policy.
+///
+/// **Interim, not organic — and this is the point to keep in view.** This is
+/// still an *input* keyed on a chosen population: it says "the world is this big
+/// for this many agents", when the emergent form is the inverse — a fixed
+/// physical area whose **population** is what varies, bounded by the ecology's
+/// carrying capacity, with crowding as a live pressure (stress, infection,
+/// conflict over space) and settlement **fission** as the demographic response.
+/// That end state retires this function rather than replacing its constant. The
+/// increments toward it are recorded in `docs/PLAN_DC5_DEVELOPMENT.md` §4
+/// (encounter-driven contact i397, travel cost, carrying capacity, fission).
+pub fn world_side_for_population(agents: u32) -> u32 {
+    let side = (CELLS_PER_AGENT * f64::from(agents)).sqrt().ceil() as u32;
+    side.max(MIN_WORLD_SIDE)
+}
+
 /// i339/i340: the village's baseline house count. Historically a hardcoded
 /// `for i in 0..8` — and i338 measured that this makes every N live on exactly
 /// 8 cells, which is what pins the relationship store at Ω(N²).
@@ -570,5 +627,49 @@ mod tests {
 
         let total_food = world.total_food();
         assert!(total_food > Fixed::ZERO);
+    }
+
+    /// i344 (A9): the density law reproduces the simulator's own two calibrated
+    /// points **exactly** — that anchoring is the whole reason the policy can be
+    /// adopted without touching a calibrated corpus, so it is pinned rather than
+    /// assumed.
+    #[test]
+    fn world_side_law_reproduces_both_calibrated_points() {
+        assert_eq!(world_side_for_population(12), 16, "N=12 village is 16x16");
+        assert_eq!(world_side_for_population(48), 32, "N=48 town tier is 32x32");
+        // Both are 21.33 cells/agent: the law's premise, checked at the source.
+        let cells = |n: u32| f64::from(world_side_for_population(n)).powi(2) / f64::from(n);
+        assert!((cells(12) - CELLS_PER_AGENT).abs() < 1.0);
+        assert!((cells(48) - CELLS_PER_AGENT).abs() < 1.0);
+    }
+
+    /// The law is monotone in the population and never dips below the smallest
+    /// calibrated world — a floor that would otherwise silently shrink a
+    /// populated map.
+    #[test]
+    fn world_side_law_is_monotone_and_floored() {
+        let mut previous = 0;
+        for n in 1..=512u32 {
+            let side = world_side_for_population(n);
+            assert!(
+                side >= MIN_WORLD_SIDE,
+                "side {side} below the floor at N={n}"
+            );
+            assert!(
+                side >= previous,
+                "side must not shrink: N={n} gave {side} after {previous}"
+            );
+            previous = side;
+        }
+        // The 256-agent cap sits inside the law's range, and the density stays
+        // near the calibrated 21.33 rather than drifting (a 74-side world is
+        // 5 476 cells / 256 agents = 21.4).
+        let capped = world_side_for_population(256);
+        assert_eq!(capped, 74);
+        let density = f64::from(capped).powi(2) / 256.0;
+        assert!(
+            (density - CELLS_PER_AGENT).abs() < 1.0,
+            "density {density} should track the calibrated {CELLS_PER_AGENT}"
+        );
     }
 }

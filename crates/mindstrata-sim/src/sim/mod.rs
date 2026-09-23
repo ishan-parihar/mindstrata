@@ -378,6 +378,44 @@ impl Default for SimConfig {
     }
 }
 
+impl SimConfig {
+    /// i344 (A9, DECIDED i392): a configuration whose **world area follows the
+    /// population** at the simulator's own calibrated density
+    /// ([`crate::world_gen::world_side_for_population`], 21.33 cells/agent).
+    ///
+    /// This is the interim world-area policy for scale work: a caller that does
+    /// not pin a size asks for "a world sized for this many villagers", and the
+    /// law reproduces both calibrated points exactly (`N=12 → 16×16`,
+    /// `N=48 → 32×32`), so no calibrated corpus moves under it. What it changes
+    /// is only what a *town* is: contact stops saturating (α 1.276 → 0.866) and
+    /// the world's area becomes load-bearing instead of decorative below the
+    /// N≈96 tier.
+    ///
+    /// Six probes had grown their own copy of this law before it was
+    /// single-sourced here (i392); use this rather than a local formula so the
+    /// policy has one definition. The organic replacement — a fixed physical
+    /// area whose *population* varies under carrying capacity — retires the law
+    /// rather than its constant; see the function's docs and
+    /// `docs/PLAN_DC5_DEVELOPMENT.md` §4.
+    #[must_use]
+    pub fn for_population(
+        seed: u64,
+        max_ticks: u64,
+        num_agents: u32,
+        snapshot_interval: Option<u64>,
+    ) -> Self {
+        let side = crate::world_gen::world_side_for_population(num_agents);
+        Self {
+            seed,
+            max_ticks,
+            world_width: side,
+            world_height: side,
+            num_agents,
+            snapshot_interval,
+        }
+    }
+}
+
 /// §6: Agent's spatial position in the world grid.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Position {

@@ -33,16 +33,12 @@ const SEED: u64 = 42;
 const WARMUP: u64 = 50;
 const TICKS: u64 = 300;
 
-/// The simulator's own calibrated density: 16×16 for 12 agents = 32×32 for 48
-/// agents = 21.33 cells/agent. Held constant above N=48.
-const CELLS_PER_AGENT: f64 = 256.0 / 12.0;
-
-/// The constant-density world side for a population. Reproduces **both**
-/// calibrated points exactly (N=12 → 16, N=48 → 32) and grows from there.
-fn side_for_population(n: u32) -> u32 {
-    let side = (CELLS_PER_AGENT * f64::from(n)).sqrt().ceil() as u32;
-    side.max(16)
-}
+// i392: the law this probe measured is now **the** world-area policy and lives
+// in the world generator (`world_side_for_population`, anchored on the two
+// calibrated points). Do not re-implement it here.
+use mindstrata_sim::world_gen::{
+    world_side_for_population as side_for_population, CELLS_PER_AGENT,
+};
 
 struct Row {
     n: u32,
