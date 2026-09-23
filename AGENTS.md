@@ -181,6 +181,22 @@ These rules exist because we repeatedly paid for violating them:
    Corollary (the same iteration): the audit's class can be **split across arms of one
    predicate** — `anger > 0.5` was dead while `fear > 0.5` beside it was live, so fix the arm
    that is dark and leave the one that discriminates (§4.10).
+13. **Check the MANIPULATION is live before re-pinning the RESPONSE (i384).** A pin that has
+   been re-anchored over and over is usually not measuring a fragile producer — it is
+   measuring a dead experiment. `neural_like_prediction_error_folds_are_live_and_directional`
+   had been re-seeded five times (42 → 99 → 20 → 11 → 99 → 22, then re-contracted to a 6-seed
+   majority) because its "differential" flipped sign every era. The real cause: grain was
+   zeroed once at t=0, production/foraging refilled it, and by the 5000-tick sample the two
+   arms were the same world — **starvation raised mean hunger on 1 of 12 seeds**, so the
+   measured deltas (1/6 wins, best +0.0220; widened family 4/12 = chance) were trajectory
+   noise. Holding the set point every tick (reviving the producer, §2.3) made the contract
+   land with real margin (hunger 6/6, wins 5/6, best +0.0995). Rule: for any pin over a
+   trial/control pair, first report the **manipulation check** — the share of the family in
+   which the independent variable actually moved — and treat a majority-miss as a test bug,
+   not a calibration result. Corollary: a gain-mismatch flag can be a **migration** flag
+   rather than a rescale (i373 filed the v1 interaction gains as Class 3a; i384's honest
+   fix at the economy site was deleting the v1 write, since rescaling a writer queued for
+   deletion buys nothing) — read the consumers before choosing.
 
 ## 5. Known Systemic Hazards
 
@@ -461,7 +477,21 @@ Live queue, in order (evidence link per item):
    0.0002/tick). It is a **subsystem migration, not a coefficient**: the speech-act effect
    model documents its base deltas as the EXACT magnitudes `process_interaction` applies
    (guarded by `model_sign_matches_applied_deltas`), and the v1 `RelationshipKind` ladder
-   rides on the same movement — both must move to the dyadic store in the same commit. **The panic-channel item is CLOSED as diagnosed (i378):** the
+   rides on the same movement — both must move to the dyadic store in the same commit.
+   **The first landing of the WRITER side is in (i384, `evidence/i384_economy_trade_store.md`):**
+   the §13.3 trade price's trust read and the §19.5.J trade-trust write both moved to the
+   dyadic store — the last self-contained v1 read+write pair. The probe sized the stake
+   first: the two stores sat **+0.09…+0.13 apart on exactly the pairs that trade** (6–40×
+   the population-wide offset) because this site was itself a v1 writer at a flat +0.02/act,
+   **2× the dyadic +0.0100**, so the buyer paid 2.8–4.0% under the price its own trust
+   warranted. After: read-source delta **2.84–4.03% → 0.34–0.52%**, traded-pair v2 trust
+   rose to 0.93–0.98 (the write is live), trades +1.4…2.8%, Gini +0.02…+0.05. Both goldens
+   re-anchored (agent_count 12 → 12), 4 snapshots accepted, the faction census went 12 → 14
+   formations, three pins re-anchored on their own sweeps, and the new
+   `trade_price_reads_the_dyadic_store_and_writes_it` pin guards the migration. **Remaining
+   readers: norms_impl, household, births_deaths** (each behavioural, each with its own
+   probe); the speech-act/v1-kind-ladder move is a separate commit. Doctrine gained §4.13
+   (check the manipulation, not just the response). **The panic-channel item is CLOSED as diagnosed (i378):** the
    firing-density move was not a dead producer — the trigger is an ABSOLUTE threshold
    sitting inside its own input distribution (firing legs clear by 2.5–9.4%, one swept
    seed missing by 0.5%), i.e. §4.5 knife-edge debt. Both panic tests now hold a fixed

@@ -325,14 +325,18 @@ impl Simulation {
                         .accessible_farm_with_grain_amount(agent_id, &self.institutions, quantity)
                         .or_else(|| self.world.farm_with_grain_amount(quantity));
                     if let (Some(seller), Some(farm_idx)) = (seller_info, farm_idx) {
-                        // i331: O(1) dense-lookup read (first-match semantics,
-                        // with the linear scan kept as `rel_pos`' stale-lookup
-                        // fallback) instead of an O(R) matrix scan per trade —
-                        // the same scan class removed from the social and belief
-                        // passes this iteration.
+                        // i384: the price reads the **dyadic** store. The probe
+                        // measured the two stores +0.09…+0.13 apart on exactly
+                        // the pairs that trade (village 0.9174 v1 vs 0.8242 v2;
+                        // town 0.8068 vs 0.7036) — far wider than the +0.016…
+                        // +0.002 population-wide offset, because this site was
+                        // itself one of the v1 writers and its flat +0.02/act is
+                        // 2× the dyadic gain. The read now sees the store the
+                        // rest of the relationship layer reads; the probe sized
+                        // the consequence at 2.8–4.0% higher prices (mean 3.3%).
                         let trust = self
-                            .rel_pos(*agent_idx, seller)
-                            .map_or(Fixed::from_f64(0.5), |p| self.relationships[p].trust);
+                            .relationship_v2_between(*agent_idx, seller)
+                            .map_or(Fixed::from_f64(0.5), |r| r.trust);
                         // §13.3: Execute trade — buyer pays coin, seller's farm provides grain
                         let base_price = self.market.price(GRAIN_RESOURCE_ID);
                         // Trust discount: high trust → lower price
@@ -400,33 +404,55 @@ impl Simulation {
                                 );
                                 // §19.5.J: Record relationship trace — trade builds trust
                                 //
-                                // i331: O(1) dense-lookup position (first-match
-                                // semantics, with the linear scan kept as `rel_pos`'
-                                // revalidating fallback) instead of an O(R) matrix
-                                // scan per trade — the last of the per-entity
-                                // relationship scans removed this iteration.
-                                let trade_rel_pos = self.rel_pos(*agent_idx, seller);
-                                if let Some(rel) = trade_rel_pos.map(|p| &mut self.relationships[p])
-                                {
-                                    let old_trust = rel.trust;
-                                    rel.trust = (rel.trust + Fixed::from_f64(0.02)).clamp_01();
-                                    self.provenance.record_relationship(
-                                        crate::provenance::RelationshipTrace {
-                                            from: AgentId::new(*agent_idx as u64),
-                                            to: AgentId::new(seller as u64),
-                                            tick: tick_u64,
-                                            cause: "trade".into(),
-                                            old_trust,
-                                            new_trust: rel.trust,
-                                            old_affection: rel.affection,
-                                            new_affection: rel.affection,
-                                            description: format!(
-                                                "Trade built trust ({} -> {})",
-                                                old_trust.to_f64(),
-                                                rel.trust.to_f64()
-                                            ),
-                                        },
-                                    );
+                                // i384: the write migrated to the dyadic store in
+                                // the same commit as the read above — this site was
+                                // the last self-contained read+write pair on the
+                                // legacy matrix. The dyadic schedule is now the
+                                // contract: one completed trade is one positive act
+                                // (`record_positive(1.0)`), which builds the whole
+                                // dyadic state — trust +0.0100 at the default 0.5
+                                // volatility, plus affection, gratitude, intimacy,
+                                // commitment and a resentment damp — where the
+                                // legacy write carried a bare +0.0200 trust. The
+                                // gain per act halves (0.0200 → 0.0100); the
+                                // probe's price effect (+3.3%) is the dominant
+                                // behavioural delta, and `interaction_count` now
+                                // advances per trade (it feeds the §10.2 stage
+                                // ladder), both recorded in the evidence doc.
+                                //
+                                // The `agent_idx != seller` guard: a buyer whose
+                                // own farm supplies the grain has no dyadic row,
+                                // and `relationship_v2_pos` requires `a != b`. The
+                                // legacy `rel_pos` returned `None` for that case
+                                // (no self-edge exists), so this preserves it.
+                                if *agent_idx != seller {
+                                    let trade_v2_pos =
+                                        Self::relationship_v2_pos(*agent_idx, seller);
+                                    if let Some(rel) = self.agents[*agent_idx]
+                                        .relationship_v2s
+                                        .get_mut(trade_v2_pos)
+                                    {
+                                        let old_trust = rel.trust;
+                                        let old_affection = rel.affection;
+                                        rel.record_positive(tick_u64, Fixed::ONE);
+                                        self.provenance.record_relationship(
+                                            crate::provenance::RelationshipTrace {
+                                                from: AgentId::new(*agent_idx as u64),
+                                                to: AgentId::new(seller as u64),
+                                                tick: tick_u64,
+                                                cause: "trade".into(),
+                                                old_trust,
+                                                new_trust: rel.trust,
+                                                old_affection,
+                                                new_affection: rel.affection,
+                                                description: format!(
+                                                    "Trade built trust ({} -> {})",
+                                                    old_trust.to_f64(),
+                                                    rel.trust.to_f64()
+                                                ),
+                                            },
+                                        );
+                                    }
                                 }
                                 true
                             } else {

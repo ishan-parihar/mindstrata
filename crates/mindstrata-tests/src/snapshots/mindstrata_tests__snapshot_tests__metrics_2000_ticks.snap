@@ -8,7 +8,7 @@ Metrics2000 {
     avg_fatigue: 0.40529166666666666,
     avg_stress: 0.2982666666666667,
     avg_health: 0.7975249999999999,
-    avg_relationship_trust: 0.6911621212121212,
+    avg_relationship_trust: 0.6946045454545454,
     polarization_index: 0.0471,
     agent_count: 12.0,
     household_count: 12.0,

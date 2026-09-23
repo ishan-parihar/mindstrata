@@ -247,78 +247,32 @@ fn neural_like_prediction_error_folds_are_live_and_directional() {
     // ── Belief fold differential (abundant vs scarcity @5000) ────────
     // Scarcity → more failed attempts → bigger surprises → more emotional
     // reinforcement on belief updates → higher mean confidence.
-    // P5 re-audit re-anchor (AP2 §10.2 V2-dimension liveness): the
-    // interaction-wired V2 trust re-paces the belief stream and seed 42's
-    // differential collapses (+0.007). A 10-seed sweep finds seed 99 with
-    // the healthiest margin (probe-pinned: abundant 0.347 vs scarcity
-    // 0.410, delta +0.063 — seed 46 also qualifies at +0.059); the leg
-    // re-anchors on seed 99.
-    // Iteration 187 re-anchor (consumer wirings): the seasonal Cold/Fever
-    // draws + circadian/arousal folds re-pace the belief stream and seed
-    // 99's differential collapses to +0.009. A 33-seed sweep finds seed
-    // 20 with the healthiest margin above the threshold (probe-pinned:
-    // abundant 0.268 vs scarcity 0.355, delta +0.087 — nearly double the
-    // runner-up seed 3's +0.049, and the sweep's cleanest differential);
-    // the leg re-anchors on seed 20.
-    // Iteration 190 re-anchor (hydration): seed 20's differential
-    // collapses to +0.005. The 33-seed sweep finds seed 11 with the
-    // healthiest margin (probe-pinned: abundant 0.237 vs scarcity 0.311,
-    // delta +0.075 — seed 7's +0.060 is the runner-up); the leg
-    // re-anchors on seed 11.
-    // Iteration 203 re-anchor (aspirational-engagement hope channel):
-    // the Socialize/Worship shift re-paces the belief stream and seed
-    // 11's differential collapses to +0.002 (probe-pinned). A 4-seed
-    // sweep finds seed 99 with the healthiest margin (probe-pinned:
-    // abundant 0.2174 vs scarcity 0.2598, delta +0.0423 — well above
-    // the 0.02 threshold, the sweep's only qualifying differential);
-    // the leg re-anchors on seed 99.
-    // Iteration 204 re-anchor (planning-confidence calibration): seed
-    // 99's differential collapses to +0.007 (below the 0.02 pin). The
-    // 9-seed sweep pins seed 22 as the cleanest anchor (probe-pinned:
-    // abundant 0.226 vs scarcity 0.258, delta +0.032 — above the
-    // threshold, the sweep's only qualifying differential); the leg
-    // re-anchors on seed 22.
-    let mut abundant = Simulation::new(SimConfig {
-        seed: 22,
-        max_ticks: 5000,
-        world_width: 16,
-        world_height: 16,
-        num_agents: 12,
-        snapshot_interval: None,
-    });
-    abundant.populate();
-    for site in &mut abundant.world.sites {
-        for stock in &mut site.inventory {
-            if stock.resource_id == 1 {
-                stock.quantity = Fixed::from_f64(500.0);
-            }
-        }
-    }
-    abundant.run(5000);
-    let abundant_conf: f64 = abundant
-        .agents
-        .iter()
-        .filter(|a| !a.beliefs.is_empty())
-        .map(|a| {
-            a.beliefs.iter().map(|b| b.confidence.to_f64()).sum::<f64>() / a.beliefs.len() as f64
-        })
-        .sum::<f64>()
-        / abundant
-            .agents
-            .iter()
-            .filter(|a| !a.beliefs.is_empty())
-            .count()
-            .max(1) as f64;
-
-    // Iteration 243 re-contract (AGENTS.md §4.5 — third knife-edge in this
-    // test, retired): single-seed pins decay every era (99 -> 22 -> now
-    // INVERTED on 22). Probe table @5000 (abundant/scarcity confidence
-    // delta): seed 22 −0.026, seed 20 +0.006, seed 46 +0.024, seed 99
-    // +0.030, seed 42 −0.003, seed 13 +0.004 — directionality holds on 4/6
-    // seeds with real magnitude on two. The honest contract is a
-    // majority-differential over a fixed seed set: scarcity must win on a
-    // majority of worlds AND show ≥ +0.02 magnitude somewhere.
-    let arm = |seed: u64, resource1: f64| -> f64 {
+    //
+    // Re-anchor lineage: this leg was pinned to a single seed five times
+    // (42 → 99 → 20 → 11 → 99 → 22) and then re-contracted to a 6-seed
+    // majority by i243/i256 — the classic single-seed-pin decay. i384's
+    // sweep (`i384_pe_fold_sweep`) found the REAL fault, and it was not the
+    // seeds: **the manipulation was inert**. Grain was zeroed once at t=0,
+    // production/foraging refilled it, and by the 5000-tick measurement the
+    // two arms were statistically the same world — starvation raised mean
+    // hunger on only **1 of 12 seeds**. The measured "differential" was
+    // therefore trajectory noise (pinned set: wins 1/6, best +0.0220;
+    // widened 12-seed family 4/12 — chance), which is why its sign flipped
+    // every era.
+    //
+    // The fix is to revive the producer, not to re-pin the assertion
+    // (§2.3/§4.1): the grain stock is now HELD at its set point for every
+    // tick of the window. With the independent variable actually live the
+    // contract holds strongly — probe @5000: hunger higher under scarcity on
+    // **6/6** seeds (Δhunger +0.0029…+0.0348) and scarcity wins **5/6** with
+    // best Δconf **+0.0995** (seed 46 +0.0063, seeds 20/42/99/13 +0.0240…
+    // +0.0995, seed 22 −0.0247). The pin is re-contracted to the two
+    // invariants this measures: the manipulation must bite (a majority of
+    // seeds show higher hunger) and the channel must respond directionally
+    // (a majority of seeds, with real magnitude somewhere).
+    // One arm, with the grain set point **held for every tick** — dropping the
+    // hold is what made the instrument inert (see the probe note above).
+    let arm = |seed: u64, resource1: f64| -> (f64, f64) {
         let mut sim = Simulation::new(SimConfig {
             seed,
             max_ticks: 5000,
@@ -328,15 +282,28 @@ fn neural_like_prediction_error_folds_are_live_and_directional() {
             snapshot_interval: None,
         });
         sim.populate();
-        for site in &mut sim.world.sites {
-            for stock in &mut site.inventory {
-                if stock.resource_id == 1 {
-                    stock.quantity = Fixed::from_f64(resource1);
+        let hold = |sim: &mut Simulation, q: f64| {
+            for site in &mut sim.world.sites {
+                for stock in &mut site.inventory {
+                    if stock.resource_id == 1 {
+                        stock.quantity = Fixed::from_f64(q);
+                    }
                 }
             }
+        };
+        hold(&mut sim, resource1);
+        for _ in 0..5000 {
+            sim.run(1);
+            hold(&mut sim, resource1);
         }
-        sim.run(5000);
-        let conf: f64 = sim
+        let hunger = sim
+            .agents
+            .iter()
+            .map(|a| a.needs.hunger.to_f64())
+            .sum::<f64>()
+            / sim.agents.len() as f64;
+        let with_beliefs = sim.agents.iter().filter(|a| !a.beliefs.is_empty()).count();
+        let conf = sim
             .agents
             .iter()
             .filter(|a| !a.beliefs.is_empty())
@@ -345,28 +312,37 @@ fn neural_like_prediction_error_folds_are_live_and_directional() {
                     / a.beliefs.len() as f64
             })
             .sum::<f64>()
-            / sim
-                .agents
-                .iter()
-                .filter(|a| !a.beliefs.is_empty())
-                .count()
-                .max(1) as f64;
-        conf
+            / with_beliefs.max(1) as f64;
+        (hunger, conf)
     };
+
+    let seeds = [22u64, 20, 46, 99, 42, 13];
+    let mut hungrier = 0usize;
     let mut wins = 0usize;
     let mut best_delta = 0.0f64;
-    for seed in [22u64, 20, 46, 99, 42, 13] {
-        let delta = arm(seed, 0.0) - arm(seed, 500.0);
+    for seed in seeds {
+        let (h_starve, c_starve) = arm(seed, 0.0);
+        let (h_feed, c_feed) = arm(seed, 500.0);
+        if h_starve > h_feed {
+            hungrier += 1;
+        }
+        let delta = c_starve - c_feed;
         if delta > 0.0 {
             wins += 1;
         }
         best_delta = best_delta.max(delta);
     }
+
+    // (1) the manipulation bites — otherwise the differential measures noise,
+    // which is exactly how this leg lost its direction five times.
     assert!(
-        // Iteration 256 re-pin (Phase-5 world variance): interaction
-        // volumes re-paced again — probe: wins 2/6, best delta 0.0113.
-        // Plurality-with-margin: wins >= 2 AND best delta >= 0.01.
-        wins >= 2 && best_delta >= 0.01,
+        hungrier >= 4,
+        "holding grain at 0 must raise hunger on a majority of seeds \
+         (hungrier {hungrier}/6) — an inert manipulation cannot test the channel"
+    );
+    // (2) the channel is live and directional.
+    assert!(
+        wins >= 4 && best_delta >= 0.02,
         "scarcity belief reinforcement must beat abundance on a majority of \
          seeds with real magnitude somewhere (wins {wins}/6, best delta {best_delta:.4})"
     );

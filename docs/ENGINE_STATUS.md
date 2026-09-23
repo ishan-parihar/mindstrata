@@ -120,7 +120,7 @@ smaller than the module count suggests.
 |---|---|---|
 | **Agency** | moderate–good | 5-deep decision chain, bounded rationality under stress, intention commitment, inhibition. Gap: ~59% routine. |
 | **Communion / attachment** | good | relationship_v2 20+ dims; attachment styles; tenderness→helping, loneliness→social-seeking, gratitude→help wired. |
-| **Relationships** | good, one caveat | courtship→marriage→household→clan pipeline live; witness locality fixed (i349). **Caveat:** two relationship stores (legacy v1 matrix + honest v2) diverge materially — 63% of pairs >0.01 (i352). |
+| **Relationships** | good, one caveat | courtship→marriage→household→clan pipeline live; witness locality fixed (i349). **Caveat:** two relationship stores (legacy v1 matrix + honest v2) still coexist — 63% of pairs >0.01 (i352) — though the sites measured as consequential are migrating one per iteration (comfort i369, the v1 *writer* i376, the economy trade read+write pair i384); remaining readers: `norms_impl`, `household`, `births_deaths`. |
 | **Innovation** | present, thin | §19.5.I work-driven discovery, knowledge diffusion (5 types), teaching, meme mutation, education, taboo-damped learning. Gap: not generative; skill saturation was audit finding E8. |
 | **Thought processes** | strong | theory of mind, prospection/imagination, 12-proposition belief system, capacity-limited memory (8 kinds), narrative identity with scripts. |
 | **Feelings** | strong | 22 discrete emotions, 12 regulation strategies, hedonic setpoint drift. E1 dysphoria plateau dead (i259); valence graded. |
@@ -188,7 +188,7 @@ structural, and hierarchical polities are only a seed).
 The live iteration ledger is [`PLAN_DC3_DEVELOPMENT.md`](PLAN_DC3_DEVELOPMENT.md) §3;
 it is authoritative for *work*, this section is the summary.
 
-1. **v1→v2 relationship migration (charter DECIDED: finish it subsystem by subsystem)** — i353 measured per-pair divergence (90% of pairs >0.01 at N=48/20K). **i369 landed the first migration:** the comfort/soothing path now reads the dyadic v2 store (three-way runnable pin; collapse golden one birth flipped 13→12, in-contract). Remaining readers queued: economy, norms_impl, household, births_deaths; marriage pass REFUTED (i353); the cognitive mean-reversion writer queued first among writers (a divergence *source*).
+1. **v1→v2 relationship migration (charter DECIDED: finish it subsystem by subsystem)** — i353 measured per-pair divergence (90% of pairs >0.01 at N=48/20K). **i369 landed the first migration:** the comfort/soothing path now reads the dyadic v2 store (three-way runnable pin; collapse golden one birth flipped 13→12, in-contract). Remaining readers queued: norms_impl, household, births_deaths; marriage pass REFUTED (i353); the cognitive mean-reversion writer landed (i376). **i384 migrated the economy trade pair (read + write)** — the last self-contained v1 pair — after its probe measured the divergence at 6–40× the population average on exactly the pairs that trade (v1 0.9174/0.8068/0.7892 vs v2 0.8242/0.7036/0.6551) and a 2.8–4.0% price error on the busiest dyads; post-migration the read-source delta is 0.34–0.52%, traded-pair v2 trust sits at 0.93–0.98, and `trade_price_reads_the_dyadic_store_and_writes_it` guards the store choice. The remaining v1 writers' gain schedule (speech-act model + `RelationshipKind` ladder) is the next migration commit.
 2. **A9 — world area at constant density** — a charter/fidelity decision (co-location 19→4), not throughput.
 3. **§17 tier-gate residual — RESOLVED (i372): the dead predicates are DELETED.** `runs_full_biology()`/`runs_action_selection()` had zero call sites (i316), the whole gate payoff was ≈5% (i328), and the Background tier is dark in calm towns (i367). The *cognitive* rungs stay wired and real.
 4. **Per-edge pass pacing** — ~58% of the tick; remaining reduction is behavioural (§17.3 dirty-window pacing).
@@ -202,17 +202,20 @@ H5 founder-variance shaping (needs larger N + coordinated sweep).
 **Vendor-blocked:** realms.md ontology, resonance attestation, cult-liveliness regime.
 
 **Systemic debt register:** epidemic R0≈1 fragility (structurally mitigated), fatigue as a
-village-wide synchronized phase, the dual-store split (the v1 trust *saturation* half is
-RESOLVED by i376 — the row converges onto the dyadic store; the residual is that v1's
-interaction gains stay ~10× v2's, `record_positive` ×0.02, leaving a +0.06–0.08 offset),
-the moral-panic trigger being an **absolute threshold on a moving distribution** (i378: probe
-`i378_panic_threshold_headroom` measured every firing leg clearing the bar by only 2.5–9.4%
-with a swept seed missing by 0.5% — §4.5's knife-edge class, the epidemic R0≈1 case). The
-pin fragility is now structural: both panic tests hold a fixed 10-seed crisis family and
-discover its firing members, so a pacing shift moves which member carries the downstream
-legs instead of renaming the family (i343/i351/i376 each renamed). The principled organic
-redesign — a RELATIVE/anomaly-based trigger against the population's own charge baseline —
-is queued with the headroom table as its sizing evidence,
+village-wide synchronized phase, the dual-store split (both halves are now closed at the sites measured: i376 converged the
+v1 row onto the dyadic store, and **i384 migrated the economy trade read+write pair** — the
+last self-contained v1 pair — where the two stores sat +0.09…+0.13 apart on exactly the
+pairs that trade, 6–40× the population-wide offset, so trade now reads and writes one
+store and its price no longer discounts by a stale scalar; the residual is the v1
+interaction-gain schedule itself (+0.02…+0.10/act, ~10× the dyadic gain) whose removal is a
+subsystem migration — the speech-act effect model and the v1 `RelationshipKind` ladder must
+move together — plus the three remaining readers `norms_impl`, `household`,
+`births_deaths`),
+the moral-panic trigger's knife-edge (i378 sized it, **i381 resolved it** with the
+RELATIVE/anomaly form — `avg_charge ≥ max(population_baseline × 1.25, 0.47) AND
+panic_ratio ≥ 0.30` — and its pin fragility is structural too: both panic tests hold a
+fixed 10-seed family and discover its firing members, so a pacing shift moves which member
+carries the downstream legs instead of renaming the family),
 the proportional council dividend's residual hoard (RESOLVED by i370 — offices, not rosters: the hoard equilibrium is bounded by the 3-member tax base; i374's legitimacy coupling additionally makes a resented council spend more),
 and the LOD tier being **dark in calm towns** (i367: Background 0.0 % of agent-ticks at N≥96 calm, 7.5–13.9 % under crisis — a crisis modulator, not a scale lever).
 

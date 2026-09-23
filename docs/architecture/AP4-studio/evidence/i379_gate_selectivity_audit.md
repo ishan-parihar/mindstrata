@@ -122,3 +122,30 @@ fixity is what makes the emergent behaviour above them meaningful.
 
 No code changed. Suite state carried: sim **300/300**, integration **310/0/1**. Probe:
 `i379_gate_selectivity` (four legs, runnable, cited above).
+
+---
+
+## Refresh after i384 — two corrections to this audit's method and its gain-class row
+
+**1. A gain-mismatch flag can be a MIGRATION flag, not a rescale.** This audit filed the v1
+interaction gains (+0.02…+0.10/act, `marriage.rs` +0.2, `economy.rs` +0.02) under
+"make organic / rescale". i384 probed the economy site specifically and found the honest
+repair is not a coefficient at all: the write should be **deleted** (the site is queued for
+the v1→v2 migration) and its read re-pointed at the dyadic store. The two gains agreed to
+2× only because that site's flat +0.02 happens to sit near `record_positive`'s +0.0100;
+the interaction schedule's `social_reciprocal_factor`/kind-ladder route is ~10× apart and
+*is* a migration. **Rule:** before rescaling a writer, check whether it is scheduled for
+deletion — rescaling a queued-for-deletion producer buys nothing and adds a calibration
+sweep to the deletion's own sweep.
+
+**2. The audit ladder gains a fourth question: is the MANIPULATION live?** This audit's
+method (gate-open share over a distribution × context grid) answers "does this gate ever
+open". i384 hit a case one level up: a *test's* independent variable had stopped binding,
+and every re-pin of its response for five iterations measured noise. The fourth question is
+asked about the experiment, not the gate: **report the manipulation check — the share of the
+family in which the manipulated state actually moved — before re-pinning anything about the
+response.** (Ladder so far: `const` census → store-equilibrium probe → gate selectivity →
+manipulation liveness.)
+
+Both corrections are recorded in doctrine (§4.13) with the i384 evidence doc
+(`i384_economy_trade_store.md`).

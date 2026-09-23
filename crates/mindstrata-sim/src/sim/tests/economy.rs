@@ -197,3 +197,66 @@ fn apprenticeship_no_teacher_transfers_nothing() {
         "student must not learn without a teacher"
     );
 }
+
+/// i384: the trade price's trust read AND the trade's trust write both live on
+/// the dyadic store now — this site was the last self-contained read+write pair
+/// on the legacy v1 `relationships` matrix.
+///
+/// Probe (`i384_economy_trade_store`, 3 worlds × 20K): the two stores were
+/// **+0.09…+0.13 apart on exactly the pairs that trade** (village 0.9174 v1 vs
+/// 0.8242 v2; town 0.8068 vs 0.7036) because this site was itself a v1 writer
+/// at a flat +0.02/act — 2× the dyadic gain — so the buyer paid 2.8…4.0% below
+/// the price its own trust warranted. After the migration the same traded pairs
+/// agree to −0.006…−0.009 and the read-source delta is 0.34…0.52%.
+#[test]
+fn trade_price_reads_the_dyadic_store_and_writes_it() {
+    let config = SimConfig {
+        seed: 42,
+        max_ticks: 100,
+        world_width: 16,
+        world_height: 16,
+        num_agents: 12,
+        snapshot_interval: None,
+    };
+    let mut sim = Simulation::new(config);
+    sim.populate();
+    sim.rebuild_rel_lookup();
+
+    // A pair whose v1 and v2 trust deliberately disagree (the divergence the
+    // migration removed at this site: v1 used to be the HIGHER one).
+    let p = sim.rel_pos(0, 1).expect("pair (0,1) row exists");
+    let v1_trust = sim.relationships[p].trust;
+    let q = Simulation::relationship_v2_pos(0, 1);
+    sim.agents[0].relationship_v2s[q].trust = Fixed::from_f64(0.1);
+
+    // The trade price's read expression, verbatim (`economy.rs`).
+    let price_trust = sim
+        .relationship_v2_between(0, 1)
+        .map_or(Fixed::from_f64(0.5), |r| r.trust);
+    assert_eq!(
+        price_trust,
+        Fixed::from_f64(0.1),
+        "the trade price must read the dyadic store (0.1), not the v1 matrix"
+    );
+    assert_ne!(
+        v1_trust, price_trust,
+        "v1 must be a distinct store — the gap this migration closed"
+    );
+
+    // The write expression, verbatim: one completed trade is one positive act.
+    let before_trust = sim.agents[0].relationship_v2s[q].trust;
+    let before_affection = sim.agents[0].relationship_v2s[q].affection;
+    let before_count = sim.agents[0].relationship_v2s[q].interaction_count;
+    sim.agents[0].relationship_v2s[q].record_positive(1, Fixed::ONE);
+    let after = &sim.agents[0].relationship_v2s[q];
+    // Default volatility is 0.5, so trust gains 0.5 × 0.02 = 0.0100 and the
+    // full dyadic state moves (affection/commitment/intimacy), unlike the
+    // scalar +0.02 the legacy write carried.
+    assert_eq!(after.trust - before_trust, Fixed::from_f64(0.01));
+    assert!(after.affection > before_affection);
+    assert_eq!(after.interaction_count, before_count + 1);
+    assert_eq!(
+        sim.relationships[p].trust, v1_trust,
+        "the trade write must no longer touch the v1 matrix"
+    );
+}
