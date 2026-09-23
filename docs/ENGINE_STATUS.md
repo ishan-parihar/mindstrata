@@ -178,7 +178,7 @@ and has been corrected.
 | **Innovation** | present, thin | §19.5.I work-driven discovery, knowledge diffusion (5 types), teaching, meme mutation, education, taboo-damped learning. Gap: not generative; skill saturation was audit finding E8. |
 | **Thought processes** | strong | theory of mind, prospection/imagination, 12-proposition belief system, capacity-limited memory (8 kinds), narrative identity with scripts. |
 | **Feelings** | strong | 22 discrete emotions, 12 regulation strategies, hedonic setpoint drift. E1 dysphoria plateau dead (i259); valence graded. |
-| **Heredity / evolution** | real (Arc A) | genome blending, quantitative-genetics personality, surnames, moral/ideology/sacred transmission. Parent–child **r=0.81**, sibling **r=0.92**. Gap: `sensory_acuity` and `aggression_threshold` genome fields have no consumer (`novelty_seeking` deliberately inert — measured-and-rejected). |
+| **Heredity / evolution** | real (Arc A) | genome blending, quantitative-genetics personality, surnames, moral/ideology/sacred transmission. Parent–child **r=0.81**, sibling **r=0.92**. Gap: `aggression_threshold` genome field has no consumer (`novelty_seeking`, `sensory_acuity` deliberately inert — measured-and-rejected, records in `i392_novelty_driver.md` / `i394_sensory_acuity.md`). |
 | **Body–mind coupling** | real (Arc B) | interoception into decisions, Whitehall status→stress→health, sleep-debt withdrawal, injury→pain→blood-loss→shock (i313), immune clearance (i311). |
 | **Culture / collective** | real (Era III–V) | emergent memes, rumours, rituals, collective memory, moral panics, legitimacy, echo chambers, per-polity genesis. |
 | **World interaction** | good | 8 needs drive resource ops against a finite world; seasons, spoilage, disease, market pricing. **World area is decorative below N≈144** (i344) — most contact is co-residency. |
@@ -275,7 +275,7 @@ institutional effects (treasury accumulating with no holder to spend it, legitim
 are unmeasured. It would have blocked the inter-community layer's offices (W3).
 
 
-**Dead genes (i391 census; rows 1 and 3 CLOSED, row 2 REJECTED, rows 4–5 open):**
+**Dead genes (i391 census; rows 1 and 3 CLOSED, rows 2 and 4 REJECTED, row 5 open):**
 `aggression_threshold`, `novelty_seeking`, `chronic_pain_risk`, `sensory_acuity` and
 `puberty_age` were drawn at founder creation, defaulted and blended at `inherit`, and **read by
 nothing outside `genome.rs`** — heritable trait variation that changed no behaviour.
@@ -285,6 +285,16 @@ default (13.0 = the gene's midpoint, so the wiring is midpoint-neutral). Its mea
 honest and narrow: **0 agent-ticks in age [10,16) over 240K + 987K agent-ticks** (founders
 ≥18, the ramp opens at ~385 000 ticks), so the fix is invisible in every corpus — both goldens
 byte-identical, 0 re-anchors — and its target is the next generation at long horizons.
+**`sensory_acuity` was measured against its class-consistent consumer and rejected (i392 row 4):**
+the census-named consumer (the i334 perception radius) is an integer staircase — disqualified
+before probing. The attention system's hardcoded `salience_bias = 0.5` (numerically the gene
+draw's mean, U(0.2,0.8) → 0.5) was wired and probed instead: the anchor was exact (pinned-0.5
+reproduced both goldens byte for byte), but the **encode threshold (0.2) sits inside the
+gene's draw range** — fresh own-help salience ≈ 0.216 rides the band edge, so memory occupancy
+spread 13× across the gene range (a threshold lottery, not a gradient), and the revolution
+liveness family collapsed to 1/3 via shared Behavior-stream re-timing. Reverted per the row-2
+precedent (`i394_sensory_acuity.md`); the trait stays deliberately inert until a consumer
+exists with no acceptance band inside the draw range.
 **`chronic_pain_risk` is wired (i392 row 3, `i393_chronic_pain_gene.md`):** it now scales
 the skeletal accumulation law through `SkeletalUpdateParams` (the row-1 params-struct
 pattern). Both §4.15 gates cleared: the band it governs is **closed in every calibrated
