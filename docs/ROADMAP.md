@@ -51,7 +51,8 @@ NOW  ──► DC-4 ──► UM-4 vertical slice ──► AA alpha
 
 **Where we are:** construction is complete through DC-3 and DC-4's game layer. The engine is
 a deep *village*-scale simulator that stretches to a multi-settlement town — **N=256 at
-~170 tps, N=192 at ~310 tps** (measured i359; the hard cap is `MAX_POPULATION = 256`), with
+~170 tps, N=192 at ~310 tps** (i359-era readings; **re-measured 2026-09-24 — HEAD reads
+materially slower at town scale, attribution open, see `ENGINE_STATUS.md` §8**), with
 3–4 settlements and per-polity holons in one run; it is **not yet** a city/country/planet
 simulator (the Ω(N²) relationship floor is structural — see `ENGINE_STATUS.md` §8). The
 remaining work is a measured calibration queue (`PLAN_DC3_DEVELOPMENT.md` §3) plus the

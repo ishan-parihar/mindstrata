@@ -51,6 +51,7 @@ premises, and any iteration that moves one must move this file (§ENGINE_STATUS 
 | Skill curve | farming pinned 1.00 population-wide, trading 0.00 (audit E8) — **last measured 2026-08-22, needs re-probe** | `AUDIT_2026-08-22` E8 |
 | Fatigue | village-wide synchronized phase; within-seed mean swings 0.05↔0.41 | i321 |
 | Wealth | Gini 0.647 → 0.611 (council dividend); endogenous tax not started; i377 constraint: **do not** couple rate to legitimacy | i363, i373 #2, i377 |
+| Town-tier throughput (2026-09-24 re-measure) | **drifted, attribution open**: HEAD reads 5.2–12.2k µs/tick at N=192 across one day's runs (host swings ±30–40% same-binary); the i359-era binary read below HEAD at every interleaved position (1.73×/1.54× paired, n=2, load-order confounded); N=12 at parity; audit exonerated (Δ3.5% adjacent pair) | `ENGINE_STATUS.md` §8 re-measurement block |
 | Founder shape | uniform draws **load-bearing at N=12**; shaping needs larger N + coordinated sweep | AGENTS §5 (Iter-263) |
 | Doc enforcement | `doc_index.py` checks structure, **not citations** (i386 found 5 drift classes green-lighted) | i386 |
 
@@ -247,12 +248,18 @@ explicit. Each row is one iteration and carries its own probe; nothing here is a
 | **i420** | **Partition spike [M]** — prototype explicit sparse cross-settlement state against the Ω(N²) floor; a verdict, never a half-landed refactor | W4 | i418 |
 | **i421** | **Citation check in the gate** — `doc_index.py` verifies every `*.md|rs|py|sh` token in a governed doc resolves; proven to trip on a planted ghost | W7 | — |
 | **i422** | **TUI longitudinal charts** — finish the i251 scaffolding (population, stress, Gini, belief ecology, lineage) | W7 | — |
-| **i423** | **Standing perf envelope** at 144/192/256 + a CLI profile readout, so a regression is visible without running a probe by hand | W7 | — |
+| **i423** | **Standing perf envelope** at 144/192/256 + a CLI profile readout, so a regression is visible without running a probe by hand. **2026-09-24 drift evidence (§1 table): the envelope must PIN LOAD** — idle-only host, repeated reps, interleaved arms — before any town-tier number is contractual; the N=192 drift (attribution open) is this row's first input and the gate's N=12/96 rungs are structurally blind to it | W7 | — |
 
 **Cheap wins available at any time:** i406, i407, i409, i410, i411, i421, i422, i423 (no
 dependencies). **The two structural walls** are i403/i404 (contact and capacity — they retire
 both the density law and the co-residency proxy) and i419/i420 (throughput and partition — they
 decide whether a city is reachable at all).
+
+**Infrastructure queue pointer (plan-rust-craft C5, 2026-09-24):** the sim-glue detangle
+queue that AGENTS.md §7 carries now has a **measured complexity inventory**: 193 functions
+≥10 cyclomatic complexity, worst `tick_kinship_household_daily` at cc 130 (full table:
+`docs/PLAN_RUST_CRAFT_AUDIT.md` F9). Any `*_impl` detangle iteration should pull its targets
+from F9 rather than by hunt.
 
 **First arc status: i387 → i388 → i389 → i390 → i391 → i392 CLOSED (rows 1 and 3 DONE; rows 2,
 4 and 5 rejected with records), precondition i392b DONE. All five inert genes are settled —

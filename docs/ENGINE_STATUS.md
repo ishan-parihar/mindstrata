@@ -25,15 +25,16 @@ owner: SIM + PROD (AP4 Studio)
 |---|---|---|
 | Format | `cargo fmt --all --check` | clean |
 | Lints | `cargo clippy --workspace --all-targets --locked -- -D warnings` | exit 0 (C1 closed the `--all-targets` gap; the old `--quiet` form never linted test-cfg or the 217 bench examples) |
-| Full suite | `cargo test -p mindstrata-tests --lib --release` | **314 passed / 0 failed / 1 ignored** |
+| Full suite | `cargo test -p mindstrata-tests --lib --release` | **311 passed / 0 failed / 1 ignored** (was 314; plan-rust-craft C2 deleted `tests/comparison.rs`, a `#[cfg(test)]` module with zero importers — its 3 self-tests are the documented delta) |
 | Sim unit | `cargo test -p mindstrata-sim --lib --release` | **310 / 310** |
 | Golden replay | `scripts/gate --full` | GREEN (both baselines regenerated at i399 — the marriage closed-loop migration; see §5 candidate 1) |
 | Probe law | `scripts/bench_index.py --strict` | 0 violations |
-| Doc structure | `scripts/doc_index.py` | 71 governed docs classified, 0 ghosts |
+| Doc structure | `scripts/doc_index.py` | 72 governed docs classified, 0 ghosts (71 → 72: `PLAN_RUST_CRAFT_AUDIT.md` classified HISTORICAL at closure) |
 
-**Scale of the artefact (recounted at plan-rust-craft C1):** 13 crates · 473 `.rs` ·
-~151,300 LOC · 1,700 test functions · 231 tracked probes (C1 deleted the dead
-`i286_norm_proposal_census`) · 183 evidence docs · 36 RON spec files · 958 commits.
+**Scale of the artefact (recounted 2026-09-24, post plan-rust-craft C2/C3 + the i401
+rejection record):** 13 crates · 472 `.rs` · ~151,000 LOC · 1,697 test functions · 232
+tracked probes (231 after C1's i286 deletion, +1: `i401_attachment_mechanism`) · 184
+evidence docs · 36 RON spec files · 964 commits.
 
 ## 2. Architecture
 
@@ -212,13 +213,58 @@ housing spread i340/i345, the i352 scan removal, and i356 — re-measured at i35
 | 192 | 64 | **3,239.4** | ~310 | **fits, 50% headroom** |
 | 256 | 74 | **5,805.2** | ~170 | **fits** (demographic cap) |
 
+> **Re-measured 2026-09-24 — the table above describes i359-era code.** A fresh `i359_town_scale`
+> leg A on HEAD reads **748.8 / 2,075.3 / 4,448.4 / 7,723.9 / 18,807.5 µs/tick** at
+> N=48/96/144/192/256 — **1.85×–3.24× the table, ratio growing with N**, while N=12 stays
+> at parity (113–129 µs/tick against the 150 budget, all day). See the re-measurement note
+> below before using these figures.
+
+**Scale-envelope re-measurement (2026-09-24 — OPEN ATTRIBUTION).** HEAD read **5.2–12.2k
+µs/tick at N=192** across this day's runs, a range that wide because this host swings
+**±30–40% for the same binary within minutes** (one binary read 7,736 → 10,410 in
+back-to-back reps; the gate's own N=96 rung read 1,578.8 then 1,870.4 in consecutive
+full-gate runs). The recorded facts:
+
+1. **Exonerated: the rust-craft audit.** Interleaved same-minute runs of post-C1
+   (`d557f2c`) vs HEAD read **10,410 vs 10,770 (Δ3.5%)** at the time-adjacent pair; the
+   production diff between them is attribute-only plus `total_cmp` ×2, and neither tree
+   carries `[profile]` overrides — the earlier 8.3k-vs-11.9k "gap" was thermal ordering,
+   not code.
+2. **Measured, not proven: the i359-era binary reads below HEAD at every paired position**
+   — interleaved `558538d` vs HEAD: **5,178 vs 8,987**, then **7,916 vs 12,154** (paired
+   ratios 1.73× / 1.54×, n=2) — but both arms climbed +34–53% through the interleave, so
+   the ratio is load-order confounded and the arc-vs-host split at N=192 is **unproven**.
+   Prime suspect (hypothesis, not measurement): the i360→i401 arc's pair-proportional
+   work — i376's daily store sync, i399's dyadic sparse-map reads replacing dense-matrix
+   reads inside the O(N²) passes. Only the whole-tick line is citable from the era
+   interleave (the pass lists were discarded by the probe pipeline); the audit pair's pass
+   *shares* are stable against the recorded profile, so no single pass is the shape of it.
+   The named disambiguation: the load-pinned per-pass A/B (`558538d` vs HEAD).
+3. **Unaffected: correctness and the charter budgets.** Goldens byte-identical, suite
+   311/0/1, sweep 12/12, `scripts/gate --full` exit 0; N=96 reads 1,578.8–2,075.3 µs/tick
+   against 6,500 (**68% headroom**) and N=12 reads 113.4–128.6 against 150 — at parity
+   with every prior day. The drift is superlinear in N and invisible to the gate's rungs,
+   which is exactly the hole the i423 standing-envelope item exists to close.
+
+**Consequence:** N=256 throughput reads **~53 tps** worst-observed (~18.8 ms/tick under
+mediocre conditions) — treat **town-tier throughput as re-measuring, not settled**. The
+`i423` envelope now carries a requirement its original row lacked: **pin load** (idle-only
+host, repeated reps, interleaved arms) before any town-tier number is contractual, and this
+drift is that row's first input.
+
 **Spot-checked live at i400** (`i295_perf_budget_gate`, the gate's own two rungs): N=12 reads
 **111.8 / 116.1 / 117.7 µs/tick** across three runs against the 150 golden budget (stable,
 inside the ±8% charter noise), and N=96 reads **1 293.5 / 1 613.3 / 1 627.8** against the
 6 500 Phase-1 target. The N=96 spread is **±25% run-to-run on this host**, i.e. four times
 the charter's ±8% assumption — the budgets are warn-only for exactly this reason, and any
 per-tier comparison (including the i359 table above) needs a same-session A/B rather than a
-number read off a loaded host.
+number read off a loaded host. **The i270 quick floor is the sharpest instance of the same
+hazard (re-measured 2026-09-24):** on an idle host HEAD reads **7553 / 8447 / 8082 tps
+against the 8000 floor** (2 of 3 clear), while inside `scripts/gate` — immediately after the
+render-probe build — it read **6546**; the C1-era A/B read **6365 vs 6396** (Δ<1%, both arms
+loaded), which rules out a code regression. The floor sits inside this host's variance band:
+it fails on load, not on code, and needs the same-session A/B before any failure is treated
+as real.
 
 **World-area policy (A9 — DECIDED 2026-09-23, LANDED):** the world's area follows the
 population at the engine's own calibrated density —
