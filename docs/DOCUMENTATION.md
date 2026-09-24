@@ -4,7 +4,7 @@ description: "The documentation authority map and index. Defines which document 
 type: Authority
 status: AUTHORITY
 scope: "documentation governance"
-reconciled_commit: 90c1d63
+reconciled_commit: fb3da07
 created: 2026-09-22
 owner: PROD (AP4 Studio)
 ---

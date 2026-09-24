@@ -4,7 +4,7 @@ description: "AP4 Studio Scaffold — departmental operating model for scaling m
 type: Architecture-Plan
 plan_id: AP4
 status: Active
-reconciled_commit: 90c1d63
+reconciled_commit: fb3da07
 created: 2026-08-25
 composes_with: AP3-afa (technical arc lives INSIDE department backlogs)
 cycle_model: "DC-N = Phase 0 contract-freeze → N×10–30 departmental phases w/ beats → UM-N unify gate → retro → DC-(N+1)"
