@@ -91,6 +91,23 @@ gate at 4–5% per kyr against a 0.0002/tick decay. The latch lives in the
    constant) — decided by the post-deletion measurement, not by the saturated
    numbers above. If the operator prefers a different form (anomaly multiples,
    dyadic-stage-driven), that decision lands with i403's probe, not silently.
+   Three design constraints, recorded so the i403 probe answers them before
+   anything is wired: **(a) horizon-stability** — leg D shows below-gate pairs
+   cross 0.7 at 4–5%/kyr, so the high-affection share is strongly
+   horizon-dependent and a gate quantile-matched at 20K will under-fire at
+   50–100K; measure the share at a second horizon (with v1's for comparison)
+   and prefer a rate/relative rule over a single-horizon quantile if the gap
+   grows. **(b) the denominator** — leg C's 98–99% share was measured over
+   *event-linked* pairs (they already interacted in the window), but
+   `choose_interaction` runs at candidate time, including first-contact pairs
+   whose v2 affection is still genesis-level (~U(0.2,0.6), verified dense at
+   genesis — population.rs pushes every ordered pair, so the v2 seed copy is
+   correct); a cohort quantile over all dyadic pairs is a different population
+   than leg C matched, so the share it preserves will not be the measured 98%.
+   Decide all-pairs vs contacted-so-far vs per-source-agent from the
+   post-deletion probe. **(c) per-tick cost** — a population quantile every
+   interaction decision must be sized on the N=96 budget rung (i423 records
+   the gate is structurally blind at 192; do not add an O(N²)-per-tick scan).
 5. **The kind mix's loss of discrimination is the measured open question**
    this leaves behind: Gossip/Teach/Trade are 0.3–1.5% of the mix because
    nothing ever comes back below the gate. Whether that mix SHOULD

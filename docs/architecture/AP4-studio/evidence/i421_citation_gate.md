@@ -43,8 +43,10 @@ deletion. Each such citation is curated in-script as a **(doc, token,
 line-anchor)** triple — a regex matched against the citing LINE, so the
 exemption is **line-scoped**: a future occurrence of the same token elsewhere
 in the doc still fails the gate (a doc-wide key would have exempted it
-forever). 21 anchored entries today, each with its reason in the comment;
-anything not anchored must resolve *now*. The i421 ledger row itself was
+forever). 25 anchored entries today, each with its reason in the comment;
+anything not anchored must resolve *now*. (Count note: the repair commit
+message said 24; the correct count is 25 — the file is the truth.) The i421
+ledger row itself was
 caught by its own gate while landing (it quoted the tokens it curates as bare
 text) — reworded to describe rather than re-cite, which is the correct fix,
 not a new exemption.
