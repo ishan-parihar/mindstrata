@@ -115,7 +115,6 @@ fn run_ab(seed: u64, ticks: u64, forced_stage: Option<f64>) -> AbResult {
     }
 }
 
-#[allow(dead_code)]
 struct AbResult {
     mean_stage: f64,
     mean_morale: f64,

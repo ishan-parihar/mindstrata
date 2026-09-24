@@ -1160,7 +1160,10 @@ pub fn render_psychology_inspector(
     // ── Identity State ──
     out.push_str("── §22: Identity State ──\n\n");
     for identity in &agent.identity.identities {
-        #[allow(unreachable_patterns)]
+        #[expect(
+            unreachable_patterns,
+            reason = "IdentityKind is exactly Farmer/Parent/Believer; a 4th variant makes this expectation unfulfilled and forces the TUI row to grow"
+        )]
         let kind_str = match identity.kind {
             IdentityKind::Farmer => "Farmer",
             IdentityKind::Parent => "Parent",

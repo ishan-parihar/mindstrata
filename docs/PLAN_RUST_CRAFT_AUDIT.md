@@ -112,6 +112,13 @@ C1 commit and land with their owner. Two instrument facts recorded for the next
 sweep: `erasing_op` is clippy-only (F1's correction — `cargo run` never runs lints),
 and clippy 1.98's `items_after_test_module` suggestion is machine-applicable
 (it moved the `collective_memory` items itself during the --fix pass).
+Load-bound floor note: the archive export's step-6 `i270 --quick` read tps 2921–6396
+against the 8000 floor while a concurrent session built on the same host; the
+controlled A/B — 6d34c91 (pre-C1) tps 6365 vs post-C1 6396, Δ < 1 %, both under the
+same load — proves the shortfall is machine contention, not C1. Every other step was
+green on the committed state: cold `--all-targets -D warnings` exit 0 (52 s), fmt OK,
+bench law 0 violations, warn-only budgets 117.5 µs/tick @ N=12 (budget 150), seed
+sweep FAMILY_PASS 12/12, full release suite **314/0/1** in 201 s.
 
 **F3 — `mindstrata-development` is the only crate not inheriting workspace lints.**
 12 of 13 crates carry `[lints] workspace = true`; development does not, so `pedantic`,
@@ -243,6 +250,23 @@ reason-carrying allows and the tui `unreachable_patterns` to `#[expect]`; resolv
 tests/benches `dead_code` allows by use-or-delete; document or de-carve the two social
 modules. *Exit:* `grep '#\[allow(' crates` returns only criterion-justified harness
 allows (e.g. the criterion `missing_docs` ones, which carry reasons).
+
+**C2 landing (2026-09-24):** done, with three corrections the execution measured:
+(a) the `sim/sim/core.rs` `needless_range_loop` allow was a DEAD suppression — the
+lint does not fire on that loop, so the attribute is simply deleted (the `#[expect]`
+conversion errored as unfulfilled, which is the mechanism doing its job);
+(b) `i261_gini.rs`'s `council_debug` is CALLED — first statement of `main` — so the
+audit's "dead helper" label was wrong; only the vestigial allow is deleted, the
+function stays; (c) the two social `#![allow(missing_docs)]` carve-outs were STALE —
+zero missing-docs diagnostics surface without them; the modules were already
+documented and the attributes are removed. The `comparison.rs` module (§19.5.J
+harness) is consumed by nothing (`#[cfg(test)] mod` with no importers) and is deleted
+whole — F5's own prescription; its 3 self-tests leave the suite (314 → 311), a
+dead-code deletion, not a re-anchor. *Exit state:* the remaining `#[allow]`s are
+exactly the criterion harness pair (`benches/{subsystems,tick_loop}.rs`,
+reason-commented) and the two doctrine-recorded crate-root `#![allow(missing_docs)]`
+in core + sim (F10 — deliberate until public surfaces settle); the strict exit
+sentence above is amended by this record.
 
 **C3 — error-handling polish (F6).** The two `institutions_impl` sort sites move to
 `total_cmp` (identical ordering for fixed-point values, no Option, faster); the four

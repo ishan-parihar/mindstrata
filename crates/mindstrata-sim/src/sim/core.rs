@@ -320,10 +320,6 @@ impl Simulation {
             // (refilled per agent, O(N)) restores O(N²) total. Value-identical:
             // the position map records the FIRST occurrence, exactly what
             // `find` returns, and the update/append branches are unchanged.
-            #[allow(
-                clippy::needless_range_loop,
-                reason = "intentional parallel-array indexing: trust_deltas[i] + agents[i]"
-            )]
             let mut pos: Vec<u32> = vec![u32::MAX; n_agents];
             for i in 0..self.agents.len() {
                 pos.fill(u32::MAX);

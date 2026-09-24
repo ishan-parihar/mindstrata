@@ -52,7 +52,6 @@ fn main() {
     }
 }
 // appended debug census
-#[allow(dead_code)]
 fn council_debug(seed: u64) {
     let config = mindstrata_sim::sim::SimConfig {
         seed,

@@ -16,9 +16,6 @@ mod golden_replay;
 mod statistical_emergence;
 
 #[cfg(test)]
-mod comparison;
-
-#[cfg(test)]
 mod integration_tests;
 
 #[cfg(test)]

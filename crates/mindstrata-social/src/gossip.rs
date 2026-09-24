@@ -1,5 +1,3 @@
-#![allow(missing_docs)]
-
 //! Gossip propagation system — §11.2, §13.5 of the architecture spec.
 //!
 //! Gossip should mutate information:

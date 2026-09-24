@@ -61,7 +61,7 @@ impl DevelopmentFieldState {
     /// §5, matching `Personality::inherit`). Pathology resets to neutral
     /// at birth — it is experiential, not inherited. Deterministic for a
     /// given `(mother, father, rng)` tuple.
-    #[allow(
+    #[expect(
         clippy::manual_midpoint,
         reason = "midpoint via *0.5 keeps f64 precision explicit"
     )]
