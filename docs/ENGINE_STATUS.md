@@ -243,11 +243,14 @@ per-run exit codes, identical instrument per arm) resolves it:
    dyadic reads remain candidate hypotheses only; this protocol cannot decide them, and
    no single-iteration regression claim is citable from it.
 3. **The spike state is the real open finding.** 2-of-3 head runs spiked, 0-of-3 old
-   runs; n=3 cannot decide host-environmental vs code-triggered, but the state's
-   existence is proven and its signature matches every drift reading taken to date.
-   **i423 must record spike-state frequency and trigger conditions, not just quiet-state
-   medians** — a median-only envelope certifies a machine that is fine on average and
-   unusable for a third of runs.
+   runs — **with an ordering caveat**: the fixed O,H pair order always ran head second,
+   and head is the longer arm, so head systematically inherits the state old's run left
+   behind; the arm asymmetry is a hypothesis for i423 to test with a balanced/randomized
+   order, not a finding about HEAD's code. n=3 cannot decide host-environmental vs
+   code-triggered either way, but the state's existence is proven and its signature
+   matches every drift reading taken to date. **i423 must record spike-state frequency
+   and trigger conditions, not just quiet-state medians** — a median-only envelope
+   certifies a machine that is fine on average and unusable for a third of runs.
 4. **Unaffected: correctness and the charter budgets.** Goldens byte-identical, suite
    311/0/1, `scripts/gate --full` exit 0; N=12 reads 113.4–128.6 µs/tick against 150 — at
    parity with every prior day. The recorded i359-era table itself reads 5–13% below

@@ -51,10 +51,11 @@ NOW  ──► DC-4 ──► UM-4 vertical slice ──► AA alpha
 
 **Where we are:** construction is complete through DC-3 and DC-4's game layer. The engine is
 a deep *village*-scale simulator that stretches to a multi-settlement town — **N=256 at
-~140–145 tps quiet-state** (2026-09-25 load-pinned A/B: the 09-24 "materially slower"
-finding was reclassified **host-state spikes, not code** — quiet-state paired positions
-read 1.00–1.17× the i359-era arm; the spike state cuts town tiers to ~45–55 tps in a
-third of observed runs and is i423's first-class target — see `ENGINE_STATUS.md` §8), with
+~140–145 tps and N=192 at ~255–260 tps quiet-state** (2026-09-25 load-pinned A/B: the
+09-24 "materially slower" finding was reclassified **host-state spikes, not code** —
+quiet-state paired positions read 1.00–1.17× the i359-era arm; the spike state cuts town
+tiers to ~45–55 tps in a third of observed runs and is i423's first-class target — see
+`ENGINE_STATUS.md` §8), with
 3–4 settlements and per-polity holons in one run; it is **not yet** a city/country/planet
 simulator (the Ω(N²) relationship floor is structural — see `ENGINE_STATUS.md` §8). The
 remaining work is a measured calibration queue (`PLAN_DC3_DEVELOPMENT.md` §3) plus the

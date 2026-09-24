@@ -42,17 +42,22 @@ instrument code), interleave **O,H,O,H,O,H**, same window, min-of-3 leg A
    any named delta. Candidates for its share (i376's daily sync pass, i399's
    dyadic reads in O(N²) passes) remain hypotheses only; this protocol cannot
    and does not decide them.
-3. **The spike state is the real open finding.** Head-arm runs entered a
-   sustained 2–3.6× state twice in three runs (N=96 in r1; the whole N≥192
-   tail in r3); the old arm never did (spread ≤3% at every size). With n=3
-   this cannot decide whether the state is host-environmental (thermal,
-   background, cgroup) or code-triggered (longer wall → deeper memory
-   pressure on the pair-proportional work) — but its **existence is proven**,
-   its signature matches every "drift" reading taken to date, and the old
-   arm's immunity shows the protocol can see it. **i423 must record
-   spike-state frequency and trigger conditions, not just quiet-state
-   medians** — a median-only envelope will certify a machine that is fine on
-   average and unusable for a third of runs.
+3. **The spike state is the real open finding — with an ordering caveat
+   attached.** Head-arm runs entered a sustained 2–3.6× state twice in three
+   runs (N=96 in r1; the whole N≥192 tail in r3); the old arm never did
+   (spread ≤3% at every size). **Protocol limitation:** the fixed O,H pair
+   order always ran head second in its pair, and head is the slower/longer
+   arm — so head systematically inherits whatever state old's run just left
+   (thermal, page cache, allocator), and the arm asymmetry may be ORDERING,
+   not arm. The 2-of-3 vs 0-of-3 count is a **hypothesis for i423 to test
+   with a balanced/randomized order**, not a finding about HEAD. What this
+   protocol does prove: the spike state EXISTS (regardless of which arm
+   triggers it), its signature matches every "drift" reading taken to date,
+   and quiet-state readings are 1.00–1.17× paired. With n=3 it cannot decide
+   host-environmental vs code-triggered either way. **i423 must record
+   spike-state frequency and trigger conditions (with a balanced run order),
+   not just quiet-state medians** — a median-only envelope will certify a
+   machine that is fine on average and unusable for a third of runs.
 4. **The recorded i359-era table remains approximately valid at quiet
    state**: today's old arm itself reads 5–13% above its own recorded table
    (446.9 vs 405.3 @48 … 6093.5–6582.9 vs 5805.2 @256) — a day/context band
