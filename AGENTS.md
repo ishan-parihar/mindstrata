@@ -648,7 +648,17 @@ Live queue, in order (evidence link per item):
    first, then delete the v1 application *with* `bonding_rate`/`conflict_escalation_rate`
    re-hosted on the dyadic magnitude (both default to `Fixed::ONE`, so the re-host is
    value-neutral and their liveness pins stay honest), then the folds. Full map in
-   `evidence/i393_speech_act_store.md` §6. Carried forward from i388 as
+   `evidence/i393_speech_act_store.md` §6. **The sweep's first landing (i398,`
+   `evidence/i398_norms_store.md`): the `norms_impl` belief-evidence reader now reads the
+   dyadic store — provably inert (goldens byte-identical, 314/0/1; the stores agree at every
+   pinned horizon, the consumer is linear toward equilibrium, evidence is symmetric). The
+   same iteration moved the file's three v1 WRITERS and reverted them with the mechanism
+   understood: the v1 damage write was TRANSIENT (i376's daily sync erases it within a day),
+   so on v2 the same −0.3 is persistent and re-arms the Iter-185 low-trust→threat spiral its
+   0.12 rate was calibrated against — measured one extra death by 10K, `peer_status` 0.2255,
+   fear-contagion presence 9/12, a pinned conception slid. **A transient write being made
+   persistent is a MAGNITUDE change, not a store change** — re-size for persistence first
+   (violence-family sweep), then move. Carried forward from i388 as
    measured-but-unexplained: action duration rose 4.31 → 5.40 ticks and the 2K relationship
    stages shifted shallower (`Unnoticed` 20 → 26, `Friend` 8 → 5) — W2 must decide whether
    contact falls when the drive is served *before* the sparse-store question is re-opened.

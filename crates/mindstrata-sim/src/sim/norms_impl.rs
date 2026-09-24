@@ -214,6 +214,17 @@ impl Simulation {
                                         .conflict
                                         .record_conflict(ConflictKind::Violence, &self.params);
                                     // Reduce trust and affection between the two
+                                    // i398: this write STAYS on v1 for now, and that
+                                    // is a measured decision, not an oversight: moved
+                                    // to the dyadic store the −0.3 becomes PERSISTENT
+                                    // (i376's daily sync no longer erases it), which
+                                    // re-arms the Iter-185 low-trust→threat death
+                                    // spiral the 0.12 rate was calibrated against —
+                                    // measured: one extra death by 10K, fear-contagion
+                                    // presence 9/12, peer_status 0.2255. The magnitude
+                                    // must be re-sized FOR PERSISTENCE first (a
+                                    // violence-family sweep of its own, recorded in
+                                    // `evidence/i398_norms_store.md` §3).
                                     // §19.5.J: Record relationship trace for provenance
                                     if let Some(rel) = self
                                         .relationships
@@ -444,6 +455,8 @@ impl Simulation {
 
                 let punishment = self.norms.check_violation(1, from_id, tick_u64);
                 if punishment > Fixed::ZERO {
+                    // i398: stays on v1 with the violence write above — same
+                    // persistence-vs-magnitude argument.
                     if let Some(rel) = self
                         .relationships
                         .iter_mut()
@@ -1025,9 +1038,18 @@ impl Simulation {
                     // matching element (what `find` returned) and falls back to
                     // the linear scan itself if the lookup is stale, so the
                     // read is unchanged.
-                    let trust = self
-                        .rel_pos(from_idx, to_idx)
-                        .map_or(Fixed::from_f64(0.5), |p| self.relationships[p].trust);
+                    // i398: the belief-evidence channel reads the DYADIC store
+                    // (the i398 probe: |v1−v2| at the read pair is 0.012 mean
+                    // / 0.61 max at N=12 — the reader was consuming a different
+                    // number per tick; and 88–4790 evidence sign flips per
+                    // 2K-tick window came from reading the mid-day row, whose
+                    // level the i376 sync resets daily anyway). The fallback
+                    // keeps the 0.5 stranger prior for pairs with no dyadic row.
+                    let trust = self.agents[from_idx]
+                        .relationship_v2s
+                        .get(Self::relationship_v2_pos(from_idx, to_idx))
+                        .filter(|r| r.to == *to)
+                        .map_or(Fixed::from_f64(0.5), |r| r.trust);
 
                     let evidence_strength = trust - Fixed::from_f64(0.5);
                     let source_trust = Fixed::from_f64(0.6);
