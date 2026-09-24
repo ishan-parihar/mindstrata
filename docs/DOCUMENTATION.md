@@ -122,7 +122,7 @@ missing. There is no `--write`: classification is a judgement, not a generation.
 | `docs/REMAINING_WORK_REPORT.md` | SUPERSEDED | → `ENGINE_STATUS.md` + `PLAN_DC3_DEVELOPMENT.md` (Iter-134-era) |
 | `docs/PLAN_DC3_DEVELOPMENT.md` | ACTIVE | DC-3 ledger (closed) + the DC-4 execution ledger; §3 calibration debt |
 | `docs/PLAN_DC5_DEVELOPMENT.md` | ACTIVE | **the live plan** — DC-5 gap taxonomy G1–G8 + the iteration ladder (i387+) |
-| `docs/PLAN_RUST_CRAFT_AUDIT.md` | ACTIVE | rust-craft audit (2026-09-24) + fix ladder C1–C5; owns the `--all-targets` clippy inventory, the broken i286 census probe, and the gate-closure iteration |
+| `docs/PLAN_RUST_CRAFT_AUDIT.md` | HISTORICAL | rust-craft audit (2026-09-24) CLOSED — C1 flipped the gate to `--all-targets --locked -- -D warnings` and cleared the 339-site backlog; C2 suppression hygiene; C3 `total_cmp`; C4 both RoT groups rejected as test-fixture DAMP (recorded); C5 complexity numbers queued |
 | `docs/PLAN_DC2_DEVELOPMENT.md` | HISTORICAL | DC-2 complete (WP-H3 closed i286) |
 | `docs/PLAN_BIO_PSYCH_DEEPENING.md` | HISTORICAL | Arcs A–D complete (program close i259) |
 | `docs/PLAN_SCALING_FOUNDATION.md` | HISTORICAL | crate ladder S1–S3 landed; remaining infra tracked in PLAN_DC3 |

@@ -1,6 +1,6 @@
 ---
 name: plan-rust-craft
-status: ACTIVE
+status: HISTORICAL
 description: "Rust-craft audit (2026-09-24) against the rust-best-practices handbook, plus its fix ladder (C1-C5). Owns the measured clippy --all-targets inventory, the broken i286 census probe, the lint-inheritance hole in mindstrata-development, and the gate-closure iteration. Owns no engine behaviour (that is PLAN_DC5); every item here is craft, tooling, or citation integrity."
 type: Plan
 reconciled_commit: d557f2c
@@ -271,14 +271,33 @@ sentence above is amended by this record.
 **C3 — error-handling polish (F6).** The two `institutions_impl` sort sites move to
 `total_cmp` (identical ordering for fixed-point values, no Option, faster); the four
 conformant `expect`s stay. *Exit:* zero `unwrap()` in production sort paths; gate green.
+**C3 landing (2026-09-24):** landed — `:415` → `sort_by(f64::total_cmp)` (canonical path
+form) and the tuple sort at `:433` → `total_cmp` closure. Proof: full tests-crate
+release suite **311/0/1** with goldens byte-identical; `clippy --all-targets -D
+warnings` exit 0. Production `sort_by(partial_cmp().unwrap())` count: zero.
 
 **C4 — Rule-of-Three extractions (F8), pure refactor only.** Confirm the two candidate
 groups are one decision each, extract, prove **byte-identical golden replay**. If
 reading shows they are coincidental duplication, record the rejection here instead
 (§1.8 — a recorded rejection is a landing).
+**C4 landing (2026-09-24): both groups REJECTED as coincidental — recorded, per the
+§1.8 rule this plan cites.** Reading both: (1) the 71-line trio is `make_personality()`
+— three `#[cfg(test)]` fixtures each constructing an all-0.5 `Personality` in
+`conflict.rs`/`gossip.rs`/`epistemic.rs`'s own test modules; (2) the 54-line group is
+`make_snapshot_with_active_group()` — a `GroupCandidate` test fixture in `snapshot.rs`'s
+test module vs the same literal ×5 in `group_formation.rs`'s tests, **cross-crate**.
+Both are test-fixture DAMP duplication (the class F8 already exempts for probes):
+extraction would couple independent test modules — across crates, for group 2 — to one
+fixture, and the shared fixture forks the moment one domain's tests want a different
+profile: the wrong abstraction. No code changed; the analyzer pointers are retired.
 
 **C5 — complexity debt joins the existing queue (F9).** `household.rs` splits under the
 §7 procedure when its iteration comes; this plan adds only the measured numbers.
+**C5 landing (2026-09-24):** the measured numbers live in F9 (193 fns ≥ 10 cc; worst
+`tick_kinship_household_daily` cc 130) and the detangle queue is owned by AGENTS.md §7
++ PLAN_DC5_DEVELOPMENT.md; the PLAN_DC5 row addition itself is deferred to the next doc
+reconciliation (PLAN_DC5 is mid-flight in the concurrent session's staging). **The
+ladder C1–C5 is complete; this plan is closed.**
 
 ---
 
