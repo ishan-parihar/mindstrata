@@ -213,44 +213,52 @@ housing spread i340/i345, the i352 scan removal, and i356 — re-measured at i35
 | 192 | 64 | **3,239.4** | ~310 | **fits, 50% headroom** |
 | 256 | 74 | **5,805.2** | ~170 | **fits** (demographic cap) |
 
-> **Re-measured 2026-09-24 — the table above describes i359-era code.** A fresh `i359_town_scale`
-> leg A on HEAD reads **748.8 / 2,075.3 / 4,448.4 / 7,723.9 / 18,807.5 µs/tick** at
-> N=48/96/144/192/256 — **1.85×–3.24× the table, ratio growing with N**, while N=12 stays
-> at parity (113–129 µs/tick against the 150 budget, all day). See the re-measurement note
-> below before using these figures.
+> **Re-measured 2026-09-24, attribution RESOLVED 2026-09-25 — the table above describes
+> i359-era code, and yesterday's fresh readings were spike-state samples.** The 2026-09-24
+> fresh `i359_town_scale` leg A read 748.8 / 2,075.3 / 4,448.4 / 7,723.9 / 18,807.5 µs/tick
+> at N=48/96/144/192/256; the 2026-09-25 load-pinned interleave (3 reps/arm) shows those
+> readings sit inside a **host spike state** the head arm enters 2-of-3 runs (7,270 @192 /
+> 21,990 @256 today) — while quiet-state paired positions read **1.00–1.17×** the i359-era
+> arm (mean ≈1.08). See the re-measurement note below.
 
-**Scale-envelope re-measurement (2026-09-24 — OPEN ATTRIBUTION).** HEAD read **5.2–12.2k
-µs/tick at N=192** across this day's runs, a range that wide because this host swings
-**±30–40% for the same binary within minutes** (one binary read 7,736 → 10,410 in
-back-to-back reps; the gate's own N=96 rung read 1,578.8 then 1,870.4 in consecutive
-full-gate runs). The recorded facts:
+**Scale-envelope re-measurement (2026-09-24; RESOLVED 2026-09-25 —
+`evidence/i423_ab_town_scale_attribution.md`).** The 09-24 runs read 5.2–12.2k µs/tick
+at N=192 and were recorded with attribution OPEN because both interleaved arms climbed
++34–53% through the protocol. The 09-25 protocol (idle host, O,H,O,H,O,H, 3 reps/arm,
+per-run exit codes, identical instrument per arm) resolves it:
 
-1. **Exonerated: the rust-craft audit.** Interleaved same-minute runs of post-C1
-   (`d557f2c`) vs HEAD read **10,410 vs 10,770 (Δ3.5%)** at the time-adjacent pair; the
-   production diff between them is attribute-only plus `total_cmp` ×2, and neither tree
-   carries `[profile]` overrides — the earlier 8.3k-vs-11.9k "gap" was thermal ordering,
-   not code.
-2. **Measured, not proven: the i359-era binary reads below HEAD at every paired position**
-   — interleaved `558538d` vs HEAD: **5,178 vs 8,987**, then **7,916 vs 12,154** (paired
-   ratios 1.73× / 1.54×, n=2) — but both arms climbed +34–53% through the interleave, so
-   the ratio is load-order confounded and the arc-vs-host split at N=192 is **unproven**.
-   Prime suspect (hypothesis, not measurement): the i360→i401 arc's pair-proportional
-   work — i376's daily store sync, i399's dyadic sparse-map reads replacing dense-matrix
-   reads inside the O(N²) passes. Only the whole-tick line is citable from the era
-   interleave (the pass lists were discarded by the probe pipeline); the audit pair's pass
-   *shares* are stable against the recorded profile, so no single pass is the shape of it.
-   The named disambiguation: the load-pinned per-pass A/B (`558538d` vs HEAD).
-3. **Unaffected: correctness and the charter budgets.** Goldens byte-identical, suite
-   311/0/1, sweep 12/12, `scripts/gate --full` exit 0; N=96 reads 1,578.8–2,075.3 µs/tick
-   against 6,500 (**68% headroom**) and N=12 reads 113.4–128.6 against 150 — at parity
-   with every prior day. The drift is superlinear in N and invisible to the gate's rungs,
-   which is exactly the hole the i423 standing-envelope item exists to close.
+1. **The drift is host-state spikes, not code.** Every uncontaminated paired position
+   reads head/old = **1.00–1.17** (mean ≈1.08 at N=144/192/256; N=48 ≈1.02–1.06). The
+   head arm entered a sustained 2–3.6× spike state in runs 1 and 3 (N=96 → 1,900 in r1;
+   N=192/256 → 7,270/21,990 in r3) — the exact state yesterday's 4,448/7,724/18,808
+   readings were sampled from. The old arm never spiked (spread ≤3% at every size).
+   Yesterday's 1.85×–3.24× "drift ratios" were spike-state samples presented as
+   quiet-state ones — the failure mode the load-pinned protocol was written to exclude.
+2. **A residual ~5–17% town-tier delta IS arc-owned but not attributable to any single
+   iteration:** the arms differ by ~40 iterations *and the i360 world-law change* (old =
+   one settlement; HEAD = clustered 3–4-polity world — the same N runs a structurally
+   different workload, inside leg A's cost from tick 1). The rust-craft audit is
+   separately exonerated (09-24: post-C1 `d557f2c` vs HEAD interleaved **10,410 vs
+   10,770, Δ3.5%**; attribute-only diff). i376's daily sync and i399's
+   dyadic reads remain candidate hypotheses only; this protocol cannot decide them, and
+   no single-iteration regression claim is citable from it.
+3. **The spike state is the real open finding.** 2-of-3 head runs spiked, 0-of-3 old
+   runs; n=3 cannot decide host-environmental vs code-triggered, but the state's
+   existence is proven and its signature matches every drift reading taken to date.
+   **i423 must record spike-state frequency and trigger conditions, not just quiet-state
+   medians** — a median-only envelope certifies a machine that is fine on average and
+   unusable for a third of runs.
+4. **Unaffected: correctness and the charter budgets.** Goldens byte-identical, suite
+   311/0/1, `scripts/gate --full` exit 0; N=12 reads 113.4–128.6 µs/tick against 150 — at
+   parity with every prior day. The recorded i359-era table itself reads 5–13% below
+   today's quiet-state re-run of the SAME old binary — a ±10% day/context band the same
+   magnitude as the arc delta; quoting the table to ±10% at quiet state is defensible.
 
-**Consequence:** N=256 throughput reads **~53 tps** worst-observed (~18.8 ms/tick under
-mediocre conditions) — treat **town-tier throughput as re-measuring, not settled**. The
-`i423` envelope now carries a requirement its original row lacked: **pin load** (idle-only
-host, repeated reps, interleaved arms) before any town-tier number is contractual, and this
-drift is that row's first input.
+**Consequence:** quiet-state N=256 throughput is **~140–145 tps** (6.9–7.1 ms/tick);
+the spike state cuts it to ~45–55 tps in a third of observed runs. Treat town-tier
+throughput as **conditional on host state** until i423's envelope records the spike
+frequency — the row's load-pinning requirement stands, now with the spike state as
+its first-class target.
 
 **Spot-checked live at i400** (`i295_perf_budget_gate`, the gate's own two rungs): N=12 reads
 **111.8 / 116.1 / 117.7 µs/tick** across three runs against the 150 golden budget (stable,
