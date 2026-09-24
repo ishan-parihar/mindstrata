@@ -101,6 +101,18 @@ Re-measured at C1 step 0 (§0): 339 sites / 147 files on the in-flight tree — 
 vs the audit count is the migration's own new in-flight code, which lands with its
 warnings, not with C1.
 
+**C1 landing (2026-09-24):** cleared to zero. `cargo clippy --workspace --all-targets
+--locked -- -D warnings` exits 0 — **0 warnings, 0 errors across every target** (warm
+run 39 s; the C1 commit is additionally verified cold on a clean `git archive`
+export, §5). The 339 sites resolved as: 105 machine fixes (`cargo clippy --fix`),
+the rest hand-cleared in a six-slice sweep plus mop-up; the 4 in-flight sites named
+in §0 were resolved inside the migration's own working tree — its two still-dirty
+files (`core/src/parameters.rs`, `sim/src/sim/tests/mod.rs`) are excluded from the
+C1 commit and land with their owner. Two instrument facts recorded for the next
+sweep: `erasing_op` is clippy-only (F1's correction — `cargo run` never runs lints),
+and clippy 1.98's `items_after_test_module` suggestion is machine-applicable
+(it moved the `collective_memory` items itself during the --fix pass).
+
 **F3 — `mindstrata-development` is the only crate not inheriting workspace lints.**
 12 of 13 crates carry `[lints] workspace = true`; development does not, so `pedantic`,
 `redundant_clone`, `needless_collect`, `large_enum_variant` never run on it. Measured
