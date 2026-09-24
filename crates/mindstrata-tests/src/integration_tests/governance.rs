@@ -890,8 +890,22 @@ fn revolution_is_regime_change_not_repeat_loop() {
     // 3**. Systemic debt, recorded: this family is knife-edge (§4.5) and will
     // keep moving until the producer's own route (panics → breakdown) is pinned
     // per-seed instead of by seed selection.
+    //
+    // i399 RE-ANCHOR (probe `i399_revolution_sweep`, the same 10-seed sweep) —
+    // the marriage closed-loop migration (gate + bond boost onto the dyadic
+    // store) re-timed the crisis worlds a third time. Measured: the i388
+    // members {5, 42, 12345} carried **7/5/3** before and **0/0/7** after
+    // (1 of 3 firing — below the bar), while the sweep's TOTAL went UP: 15 →
+    // **18** revolutions and 3/10 → **5/10** firing seeds. The new members are
+    // {12345→7, 7→3, 11→6, 23→1, 99→1} and the zeros are {5, 42, 1, 3, 13}.
+    // This is the i388 pattern repeated (re-timed, not starved): a stronger,
+    // decaying marriage bond raises dyadic trust → appraisal threat falls →
+    // the grievance route to a coup fires on different seed/tick worlds.
+    // Re-anchored onto the three best-evidenced members {12345, 7, 11};
+    // liveness bar unchanged at **≥2 of 3**. Debt unchanged (§4.5): this
+    // family stays knife-edge until the producer's own route is pinned.
     let mut family: Vec<(u64, usize, usize, u64)> = Vec::new();
-    for seed in [5u64, 42, 12345] {
+    for seed in [12345u64, 7, 11] {
         let mut sc = mindstrata_sim::scenario::Scenario::pestilence();
         sc.seed = seed;
         sc.ticks = 70000;

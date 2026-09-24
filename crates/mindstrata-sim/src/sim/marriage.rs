@@ -66,9 +66,20 @@ impl Simulation {
                         continue;
                     }
                     // Check relationship affection (i352: O(1) via rel_pos)
-                    let affection = self
-                        .rel_pos(i, j)
-                        .map_or(Fixed::ZERO, |p| self.relationships[p].affection);
+                    // i399: reads the DYADIC store — marriage formation is a
+                    // closed loop in v1 (gate reads v1, boost writes v1, v1
+                    // affection has no other reader and no decay), so the
+                    // loop migrates wholesale per the i384 rule. The i399
+                    // probe measured the divergence this inherits: |v1−v2|
+                    // affection mean 0.043/0.081, max 0.59/0.88, sign-flips
+                    // 8186/142623 samples (N=12/48, 20K ticks). v2 is a
+                    // complete per-agent list seeded from v1 at populate, so
+                    // every pair has a row; the stranger prior (0.3) replaces
+                    // the v1 fallback.
+                    let affection = self.agents[i]
+                        .relationship_v2s
+                        .get(Self::relationship_v2_pos(i, j))
+                        .map_or(Fixed::from_f64(0.3), |r| r.affection);
                     // Architecture-plan-2 §10.4: Compute attraction score.
                     // Personality compatibility (agreeableness similarity), physical proximity,
                     // and social approval feed into the AttractionModel.
@@ -95,10 +106,12 @@ impl Simulation {
                     // Marriage probability: attraction * health * trust
                     let health = (self.agents[i].body.health + self.agents[j].body.health)
                         * Fixed::from_f64(0.5);
-                    // i352: O(1) via rel_pos (was a second O(R) matrix scan)
-                    let trust = self
-                        .rel_pos(i, j)
-                        .map_or(Fixed::ZERO, |p| self.relationships[p].trust);
+                    // i399: dyadic trust (i376 syncs v1→v2 daily, so the
+                    // mid-day drift this inherits is small: mean 0.008/0.019).
+                    let trust = self.agents[i]
+                        .relationship_v2s
+                        .get(Self::relationship_v2_pos(i, j))
+                        .map_or(Fixed::from_f64(0.4), |r| r.trust);
                     // Marriage probability: attraction * health * trust, scaled to a
                     // daily cadence. Previously the 0.001 scalar made the effective
                     // chance ~1e-4/pair/day — a 12-agent village needed ~20K ticks
@@ -250,49 +263,30 @@ impl Simulation {
                 // adults hold no kin edges, so default runs see only inert
                 // Spouse ties — the golden baseline stays byte-identical.
                 self.kinship_graph.add_marital_links(a, b, tick_u64);
-                // Marriage boosts trust and affection
+                // Marriage boosts trust and affection — i399: onto the DYADIC
+                // store. The v1 boost was a closed loop (no reader, no decay);
+                // here it feeds the Sternberg/decay machinery and differentiates
+                // bonds (probe B: v1 pinned married affection at 0.937 vs v2
+                // 0.878 at 20K). The provenance trace still reports the same
+                // deltas; v1 rows are left untouched and converge via i376.
                 // §19.5.J: Record marriage relationship traces
-                if let Some(rel) = self
-                    .relationships
-                    .iter_mut()
-                    .find(|r| r.from == AgentId::new(a as u64) && r.to == AgentId::new(b as u64))
-                {
+                for (fa, fb) in [(a, b), (b, a)] {
+                    let (from, to) = (AgentId::new(fa as u64), AgentId::new(fb as u64));
+                    let pos = Self::relationship_v2_pos(fa, fb);
+                    let Some(rel) = self.agents[fa].relationship_v2s.get_mut(pos) else {
+                        continue;
+                    };
+                    if rel.to != to {
+                        continue;
+                    }
                     let old_trust = rel.trust;
                     let old_affection = rel.affection;
                     rel.trust = (rel.trust + Fixed::from_f64(0.2)).clamp_01();
                     rel.affection = (rel.affection + Fixed::from_f64(0.3)).clamp_01();
                     self.provenance
                         .record_relationship(crate::provenance::RelationshipTrace {
-                            from: AgentId::new(a as u64),
-                            to: AgentId::new(b as u64),
-                            tick: tick_u64,
-                            cause: "marriage".into(),
-                            old_trust,
-                            new_trust: rel.trust,
-                            old_affection,
-                            new_affection: rel.affection,
-                            description: format!(
-                                "Marriage bond formed (trust {} -> {}, affection {} -> {})",
-                                old_trust.to_f64(),
-                                rel.trust.to_f64(),
-                                old_affection.to_f64(),
-                                rel.affection.to_f64()
-                            ),
-                        });
-                }
-                if let Some(rel) = self
-                    .relationships
-                    .iter_mut()
-                    .find(|r| r.from == AgentId::new(b as u64) && r.to == AgentId::new(a as u64))
-                {
-                    let old_trust = rel.trust;
-                    let old_affection = rel.affection;
-                    rel.trust = (rel.trust + Fixed::from_f64(0.2)).clamp_01();
-                    rel.affection = (rel.affection + Fixed::from_f64(0.3)).clamp_01();
-                    self.provenance
-                        .record_relationship(crate::provenance::RelationshipTrace {
-                            from: AgentId::new(b as u64),
-                            to: AgentId::new(a as u64),
+                            from,
+                            to,
                             tick: tick_u64,
                             cause: "marriage".into(),
                             old_trust,
@@ -439,12 +433,13 @@ impl Simulation {
             if a >= n || b >= n {
                 continue;
             }
-            // Dependence = trust from a's perspective of b (the same v1
-            // relationship layer the marriage pass uses).
-            let trust = self
-                .relationships
-                .iter()
-                .find(|r| r.from == AgentId::new(a as u64) && r.to == AgentId::new(b as u64))
+            // Dependence = trust from a's perspective of b.
+            // i399: reads the DYADIC store (same closed-loop reasoning as the
+            // formation gate; the i376 sync keeps the inherited drift small).
+            let trust = self.agents[a]
+                .relationship_v2s
+                .get(Self::relationship_v2_pos(a, b))
+                .filter(|r| r.to == AgentId::new(b as u64))
                 .map_or(Fixed::ZERO, |r| r.trust);
             // Appraised jealousy already folds attachment anxiety, status
             // threat and fear of abandonment into one emotion (appraisal.rs).

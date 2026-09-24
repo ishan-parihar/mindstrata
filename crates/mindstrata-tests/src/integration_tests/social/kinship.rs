@@ -202,6 +202,14 @@ fn marriage_forges_spouse_and_inlaw_kinship() {
     // through an interaction-minted trust record). Re-enforcing the fixture
     // keeps the test honest about what it verifies: the marriage → kinship
     // WRITING mechanics when exactly one pair is eligible.
+    // i399: the gate reads the DYADIC store, so the fixture pins BOTH stores.
+    // The v1-only pin stopped suppressing the other pairs when the gate moved:
+    // v2 keeps its populate-time trust and, decisively, its affection (i376
+    // syncs trust only, so v2 affection is never overwritten) — every other
+    // pair stayed eligible and agent 0 paired with agent 1 on the first pass,
+    // which is why this test hung for >300 s (the `steps < 900` window ran to
+    // exhaustion instead of firing on step 1). Same v1 pin as before, plus the
+    // mirrored v2 pin on the store the formation gate actually reads.
     let pin_eligibility = |sim: &mut Simulation| {
         sim.agents[0].body.health = Fixed::ONE;
         sim.agents[6].body.health = Fixed::ONE;
@@ -214,6 +222,23 @@ fn marriage_forges_spouse_and_inlaw_kinship() {
             } else {
                 r.trust = Fixed::ZERO;
                 r.affection = Fixed::ZERO;
+            }
+        }
+        // v2 slot of target b inside agent a's list: b when b < a, else b - 1.
+        for a in 0..12usize {
+            for b in 0..12usize {
+                if a == b {
+                    continue;
+                }
+                let slot = if b < a { b } else { b - 1 };
+                let r = &mut sim.agents[a].relationship_v2s[slot];
+                if (a, b) == (0, 6) || (a, b) == (6, 0) {
+                    r.trust = Fixed::ONE;
+                    r.affection = Fixed::ONE;
+                } else {
+                    r.trust = Fixed::ZERO;
+                    r.affection = Fixed::ZERO;
+                }
             }
         }
     };

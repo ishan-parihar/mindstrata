@@ -648,7 +648,9 @@ Live queue, in order (evidence link per item):
    first, then delete the v1 application *with* `bonding_rate`/`conflict_escalation_rate`
    re-hosted on the dyadic magnitude (both default to `Fixed::ONE`, so the re-host is
    value-neutral and their liveness pins stay honest), then the folds. Full map in
-   `evidence/i393_speech_act_store.md` §6. **The sweep's first landing (i398,`
+   `evidence/i393_speech_act_store.md` §6. **Landed since (see the item below): i398's reader
+   (inert) and i399's marriage closed loop (behavioural, re-baselined).**
+   **The sweep's first landing (i398,`
    `evidence/i398_norms_store.md`): the `norms_impl` belief-evidence reader now reads the
    dyadic store — provably inert (goldens byte-identical, 314/0/1; the stores agree at every
    pinned horizon, the consumer is linear toward equilibrium, evidence is symmetric). The
@@ -698,6 +700,22 @@ Live queue, in order (evidence link per item):
    readers: norms_impl, household, births_deaths** (each behavioural, each with its own
    probe); the speech-act/v1-kind-ladder move is a separate commit. Doctrine gained §4.13
    (check the manipulation, not just the response).
+
+   **The reader-first sweep has now made its first two landings, and they came out
+   OPPOSITE.** i398's `norms_impl` **reader** was provably inert (goldens byte-identical —
+   the stores agree at every pinned horizon) and its **writers** were reverted with the
+   mechanism understood (a transient v1 write made persistent is a magnitude change).
+   i399's `marriage.rs` was not a reader at all but a **closed loop inside the ghost
+   store** — gate reads v1, boost writes v1, and v1 `affection` has no other reader and no
+   decay — so it migrated read+write together per i384 and is **behavioural**: 7 snapshots
+   + both goldens re-baselined (trust and quality rise, the stage distribution deepens to
+   `Confidant`, 10K stress rises rather than saturating — the bond is now counted), and the
+   revolution family re-anchored only after its 10-seed sweep proved the producer **not
+   starved** (total 15 → **18**, 3/10 → **5/10** firing seeds). It also exposed a class
+   hazard: **a fixture that pins only the store the pass no longer reads fails silently as
+   a HANG**, not a diff — `marriage_forges_spouse_and_inlaw_kinship` ran its 900-step
+   window to exhaustion (>300 s) because v2's unsynced affection kept every other pair
+   eligible. Grep for v1-only pins before migrating the next reader.
 
    **i385 then reconciled the documentation surface itself, and the reconciliation paid for
    its own iteration.** `ENGINE_STATUS.md` §1 was 15K LOC / 30 probes / two suite counts

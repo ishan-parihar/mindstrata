@@ -3,15 +3,15 @@ source: crates/mindstrata-tests/src/snapshot_tests.rs
 expression: stage_counts
 ---
 {
-    "Acquaintance": 19,
-    "Ally": 45,
-    "CloseFriend": 2,
-    "Disliked": 1,
+    "Acquaintance": 16,
+    "Ally": 47,
+    "CloseFriend": 1,
+    "Confidant": 1,
     "ElderJunior": 3,
-    "Familiar": 17,
-    "Friend": 5,
-    "Neighbor": 7,
+    "Familiar": 24,
+    "Friend": 4,
+    "Neighbor": 3,
     "Noticed": 1,
-    "PatronClient": 6,
-    "Unnoticed": 26,
+    "PatronClient": 8,
+    "Unnoticed": 24,
 }
