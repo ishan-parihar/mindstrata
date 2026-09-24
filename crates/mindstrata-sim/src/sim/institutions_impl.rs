@@ -412,7 +412,11 @@ impl Simulation {
                         // median at even count averages the middle pair).
                         let mut sorted_coins: Vec<f64> =
                             coins.iter().map(|(_, c)| c.to_f64()).collect();
-                        sorted_coins.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                        // F6/C3: total_cmp — fixed-point values are never NaN, so the
+                        // ordering is identical to the old partial_cmp().unwrap()
+                        // form, without the unwrap (the audit's infallible-but-
+                        // wrong-idiom flag).
+                        sorted_coins.sort_by(f64::total_cmp);
                         let mid = sorted_coins.len() / 2;
                         let median = if sorted_coins.len() % 2 == 1 {
                             sorted_coins[mid]
@@ -430,7 +434,8 @@ impl Simulation {
                             // cycle so relief equalizes without draining
                             // the council's operating capacity (and the
                             // legitimacy trajectory it feeds).
-                            coins.sort_by(|a, b| a.1.to_f64().partial_cmp(&b.1.to_f64()).unwrap());
+                            // F6/C3: same total_cmp swap — see the sort above.
+                            coins.sort_by(|a, b| a.1.to_f64().total_cmp(&b.1.to_f64()));
                             let mut cycle_budget = ((institution.treasury - reserve)
                                 .max(Fixed::ZERO))
                                 * Fixed::from_f64(0.25);
