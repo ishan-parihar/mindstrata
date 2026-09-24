@@ -448,11 +448,18 @@ interaction *kind* from the **v1** trust/affection pair, and the v1 write being 
 RATCHET, so the kind mix (Comfort vs Gossip) was calibrated against it; deleting the write
 shifts the kind mix toward Gossip, `on_reunion` recovers more distress, and the attachment
 coupling measured 2–7× quieter across three seeds (one seed under its liveness floor). The
-`social_cluster` reads are separately un-landable (they kill the conception producer even
-bundled). The live item is therefore i402 — the **kind schedule** read with a kind-mix probe
-and a re-derivation of its 0.2/0.7 gates — before the writer deletion (i403) and the folds),
-the moral-panic trigger's knife-edge (i378 sized it, **i381 resolved it** with the
-RELATIVE/anomaly form — `avg_charge ≥ max(population_baseline × 1.25, 0.47) AND
+ `social_cluster` reads are separately un-landable (they kill the conception producer even
+ bundled). **i402 then ran (2026-09-25, `evidence/i402_kind_schedule.md`)**: the ratchet is
+ real in sign (v1−v2 affection +0.002…+0.033) but the surface is **saturated on both stores**
+ (contacted-pair affection v1 p50 = 1.0000, v2 p50 = 0.9986–0.9997) — `affection > 0.70`
+ opens for 98–99% of interactions on BOTH, branch flips 0.0–3.5%, and the gate itself is
+ the §4.10 defect (AGENTS §4.16). The read move + the gate redesign (relative/cohort
+ candidate) are folded into i403's single commit, re-derived against the post-deletion
+ surface. The live item is therefore **i403 — the writer deletion with the rate re-host,
+ the `affection` sync leg, the folded kind-schedule read move, and the redesigned gate, in
+ one commit** — then the folds),
+ the moral-panic trigger's knife-edge (i378 sized it, **i381 resolved it** with the
+ RELATIVE/anomaly form — `avg_charge ≥ max(population_baseline × 1.25, 0.47) AND
 panic_ratio ≥ 0.30` — and its pin fragility is structural too: both panic tests hold a
 fixed 10-seed family and discover its firing members, so a pacing shift moves which member
 carries the downstream legs instead of renaming the family),

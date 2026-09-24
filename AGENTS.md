@@ -228,8 +228,8 @@ These rules exist because we repeatedly paid for violating them:
    (i392).** Midpoint neutrality (§4.6) is necessary and **not sufficient**: `novelty_seeking`
    → the exploration driver was wired exactly midpoint-neutrally (the gene-pinned-0.5 control
    reproduced the stored golden metric_hash **byte for byte**, so §4.6 was *proven*, not
-   asserted), the channel was live and monotone under an A/B with one number pinned, and the
-   population-mean multiplier stayed within ±5% of 1.0 — and it was still the wrong place to
+   asserted), the channel was live and monotone under an A/B with one number pinned, and
+   the population-mean multiplier stayed within ±5% of 1.0 — and it was still the wrong place to
    put the trait. The driver's response to its own coefficient is **elasticity ≈ 4**
    (coefficient 1.92 → 2.16 buys 1 853 → 3 256 Wander wins; the gene's full range is a 4.1×
    spread), so *aggregate* neutrality hid *per-agent* redistribution: the top carrier's
@@ -241,6 +241,21 @@ These rules exist because we repeatedly paid for violating them:
    is a landing (i380/i392 precedent), not a failure. Corollary: re-anchoring is not a licence
    — a **liveness** producer going dark (§2.3) is never re-pinned to accept zero, whatever the
    golden diff says.
+16. **Measure the TARGET store's distribution before migrating a reader onto it (i402).**
+   The i402 plan row scheduled `choose_interaction`'s v1 trust/affection pair to migrate to
+   the dyadic store with a re-derivation of its 0.2/0.7 gates; the kind-mix probe refuted
+   the premise: the signal is **saturated at the ceiling on BOTH stores** (contacted-pair
+   affection v1 p50 = 1.0000, v2 p50 = 0.9986–0.9997), the ratchet is real in sign
+   (v1−v2 +0.002…+0.033) and irrelevant to branch selection (0.0–3.5% flips), and the
+   "matching quantile" for a 98.5% high-affection share read 0.34/0.45/0.70 across three
+   seeds — not a re-derivation, a re-coding of the saturation (quantile-matching a point
+   mass just moves where the same 98.5% fires). **Rules:** (a) before any reader migration or
+   gate re-derivation, measure the target surface's distribution — if p50 ≈ the ceiling, the
+   gate is already vacuous (§4.10's class) and the fix is write-side or a relative/cohort
+   gate form, never a re-anchored constant; (b) a migration performed on a saturated surface
+   re-anchors goldens to buy nothing — fold it into the commit that re-shapes the surface
+   (i402's read move lands inside i403's writer deletion) and re-derive once against the
+   whole new surface (the i400 rule, applied forward).
 
 ## 5. Known Systemic Hazards
 
@@ -759,10 +774,16 @@ Live queue, in order (evidence link per item):
    orthogonal (27/48 with and without); and the `social_reciprocal_factor` retirement
    is coupled to the deletion and cannot precede it. **Doctrine nugget: a reader whose
    calibration rode a write's ratchet is not a reader — it is a producer's calibration
-   surface; migrate it with a kind-mix probe, never a band widening.** Next: **i402,
-   the interaction-kind schedule on the dyadic store** (kind-mix probe, then the read
-   move plus a re-derivation of the 0.2/0.7 gates in one commit), then the writer
-   deletion (i403) with the rate re-host and the `affection` sync leg.
+   surface; migrate it with a kind-mix probe, never a band widening.** **i402
+   ran (2026-09-25, `evidence/i402_kind_schedule.md`)**: the ratchet is real in
+   sign (v1−v2 affection +0.002…+0.033) but the surface is **saturated on both
+   stores** — contacted-pair affection p50 = 1.0000 (v1) / 0.9986–0.9997 (v2), so
+   `affection > 0.70` opens for 98–99% of interactions and the read choice moves
+   0–3.5% of branch selections; the gate is the §4.10 defect, and the read move
+   + the gate redesign (relative/cohort candidate) are folded into i403's
+   single commit, re-derived against the post-deletion surface. Next: **i403 —
+   the writer deletion with the rate re-host, the `affection` sync leg, the
+   folded kind-schedule read move, and the redesigned gate, in one commit.**
 
    **i385 then reconciled the documentation surface itself, and the reconciliation paid for
    its own iteration.** `ENGINE_STATUS.md` §1 was 15K LOC / 30 probes / two suite counts
