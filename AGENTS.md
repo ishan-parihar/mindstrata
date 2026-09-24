@@ -395,14 +395,14 @@ by parallel agents or reviewed precisely. The pattern established by the sim.rs 
 
 ### How to split (proven procedure)
 
-1. **One domain per module**: `sim/family.rs` (marriage/birth/kinship), `sim/economy.rs`,
-   `sim/norms_impl.rs`… name by domain, not by layer.
+1. **One domain per module**: `sim/household.rs` (household/family glue),
+   `sim/economy.rs`, `sim/norms_impl.rs`… name by domain, not by layer.
 2. **The struct stays in `mod.rs`** (`Simulation`, `AgentBundle`): state definitions live
    at the root; behavior lives in domain modules as `impl Simulation` blocks using
    `pub(super)` visibility for internal steps.
 3. **Move code verbatim** — a split is a pure refactor proven by **byte-identical golden**
    runs and an unchanged suite. Never mix behavioral changes into a split commit.
-4. **Tests follow their subject**: `sim/tests.rs` for unit-level, per-domain test modules
+4. **Tests follow their subject**: `sim/tests/mod.rs` for unit-level, per-domain test modules
    in `integration_tests/{economy,governance,psychology,social,…}/`. Namespaced paths make
    failure triage instant.
 5. **Wildcards are transitional**: `use super::*` in fresh impl modules is tolerated

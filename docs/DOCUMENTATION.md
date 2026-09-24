@@ -82,15 +82,16 @@ Everything else must be listed in §6 with an explicit status.
    doc **in the same commit**. A behaviour change that invalidates a ledger row is not done
    until the row moves.
 3. **A new doc must be classified** in §6 in the commit that adds it — the gate enforces this.
-4. **Citations are part of the contract** (i386, AGENTS.md §4.14). A doc that names a file,
-   a symbol anchor, or an artifact must be re-pointed **in the commit that moves it** —
-   `FROZEN` freezes the rule, never the path. The `doc_index.py` gate checks *structure*
-   (classified, no ghosts, marker resolves) and **cannot** see citation drift: it will pass
-   a doc that cites a file which never existed, or that says a value is "not landed" after
-   the code shipped it under a different name. Treat every such claim as a probe to run
-   before you plan work off it. The i386 sweep (2026-09-23) is the worked example: 2 ghost
-   contract filenames, 2 moved pass files, 1 crate-moved symbol, and 2 balance docs
-   reporting live levers as unlanded.
+ 4. **Citations are part of the contract** (i386, AGENTS.md §4.14). A doc that names a file,
+    a symbol anchor, or an artifact must be re-pointed **in the commit that moves it** —
+    `FROZEN` freezes the rule, never the path. Since i421 (2026-09-24) the `doc_index.py`
+    gate checks citations too: every `*.md|rs|py|sh` token cited in an AUTHORITY/ACTIVE
+    doc must resolve (resolution ladder and curated historical/vendor exceptions live in
+    the script header). Before i421 the gate checked only *structure* — a doc citing a
+    file that never existed, or reporting a live lever as "not landed", passed green;
+    the i386 sweep (2026-09-23) is the worked example: 2 ghost contract filenames, 2
+    moved pass files, 1 crate-moved symbol, and 2 balance docs reporting live levers as
+    unlanded. Treat every unverified claim as a probe to run before you plan work off it.
 5. **When a doc is replaced**, set its status to SUPERSEDED and add a banner:
    ```
    > **SUPERSEDED (YYYY-MM-DD, iNNN):** replaced by `path/to/replacement.md`. Kept for history.
@@ -102,7 +103,10 @@ Everything else must be listed in §6 with an explicit status.
 
 - a non-exempt doc under `docs/` or a root `*.md` is **not** listed in §6 (unclassified drift);
 - a listed path **does not exist** (ghost entry);
-- an AUTHORITY/ACTIVE doc under `docs/` lacks a `reconciled_commit:` that resolves in git.
+- an AUTHORITY/ACTIVE doc under `docs/` lacks a `reconciled_commit:` that resolves in git;
+- a `*.md|rs|py|sh` token cited in an AUTHORITY/ACTIVE doc does not resolve through the
+  ladder in the script header — unless it is one of the curated historical/vendor
+  citations (`HISTORICAL_CITES`, each with its mechanism) (i421).
 
 Run it directly with `python3 scripts/doc_index.py --check`; add `--list` to print what is
 missing. There is no `--write`: classification is a judgement, not a generation.
