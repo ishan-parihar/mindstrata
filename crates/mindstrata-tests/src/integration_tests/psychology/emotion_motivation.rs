@@ -499,7 +499,7 @@ fn motivation_emotional_context_is_live() {
     // + heredity re-paced the emotion equilibrium. Channel remains
     // strongly live vs the 0.0000 dead-channel; floor relaxes to 0.30.
     // Fourth relaxation of this pin — stabilization belongs on the Arc-B
-    /// ledger, not another chase.
+    // ledger, not another chase.
     // Iteration-363 re-pin (council surplus dividend — the corrected
     // wealth-tail fix; probe `i363_reanchor` leg B, seed 42/5000): the
     // redistribution drains the council hoard, lowering `wealth_inequality`

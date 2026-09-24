@@ -137,8 +137,8 @@ fn social_status_counts_matches_per_agent_fold() {
     sim.run(500);
     let n = sim.agents.len();
     let counts = super::memory_ops::social_status_counts(sim.relationships(), n);
-    for i in 0..n {
-        assert_eq!(counts[i], naive(sim.relationships(), i), "agent {i}");
+    for (i, count) in counts.iter().enumerate() {
+        assert_eq!(*count, naive(sim.relationships(), i), "agent {i}");
     }
 
     // Synthetic: duplicate pairs keep both rows in the total; an out-of-range
@@ -295,7 +295,7 @@ fn housing_scales_with_population_and_keeps_small_villages_historical() {
             .count();
         assert_eq!(houses, expected, "N={n}: house sites generated");
         let mut per_site = std::collections::BTreeMap::new();
-        for a in sim.agents.iter() {
+        for a in &sim.agents {
             if let Some(site) = a.home_site {
                 *per_site.entry(site).or_insert(0usize) += 1;
             }

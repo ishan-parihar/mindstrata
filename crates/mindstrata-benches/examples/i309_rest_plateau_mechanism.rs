@@ -89,6 +89,9 @@ fn goal_bonus(kind: K, goals: &[mindstrata_sim::person::Goal]) -> f64 {
     bonus
 }
 
+/// Per-candidate ledger rows: (action, core, goal, emotional, moral, habit).
+type LedgerRows = Vec<(String, f64, f64, f64, f64, f64)>;
+
 /// The full pass-level ledger. `with_omitted_terms = false` reproduces i308's
 /// ledger (core + goal + emotional), which did NOT match the sim.
 fn ledger_winner(
@@ -98,7 +101,7 @@ fn ledger_winner(
     grain: Fixed,
     water: Fixed,
     with_omitted_terms: bool,
-) -> (String, Vec<(String, f64, f64, f64, f64, f64)>) {
+) -> (String, LedgerRows) {
     let a = &sim.agents[id];
     let cands = [
         K::Eat,
@@ -112,7 +115,7 @@ fn ledger_winner(
         K::Idle,
     ];
     let stress = a.emotions.fear + a.emotions.anger;
-    let mut rows: Vec<(String, f64, f64, f64, f64, f64)> = Vec::new();
+    let mut rows: LedgerRows = Vec::new();
     for kind in cands {
         let def = kind.definition();
         let core = compute_utility(

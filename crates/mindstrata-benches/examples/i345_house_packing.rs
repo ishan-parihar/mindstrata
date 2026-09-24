@@ -41,7 +41,7 @@ struct Row {
 
 fn house_tiles(sim: &Simulation, world: u32) -> Vec<(i32, i32)> {
     let mut out = Vec::new();
-    for site in sim.world.sites.iter() {
+    for site in &sim.world.sites {
         if !matches!(site.kind, mindstrata_sim::world::SiteKind::House) {
             continue;
         }
@@ -73,7 +73,7 @@ fn measure(n: u32, world: u32) -> Row {
 
     let tiles = house_tiles(&sim, world);
     let mut per_tile: BTreeMap<(i32, i32), u32> = BTreeMap::new();
-    for t in tiles.iter() {
+    for t in &tiles {
         *per_tile.entry(*t).or_insert(0) += 1;
     }
     let mut min_gap = i32::MAX;
@@ -94,7 +94,7 @@ fn measure(n: u32, world: u32) -> Row {
 
     let rels = sim.relationships();
     let mut out_deg: BTreeMap<u64, u32> = BTreeMap::new();
-    for r in rels.iter() {
+    for r in rels {
         if r.interaction_count > 0 {
             *out_deg.entry(r.from.as_u64()).or_insert(0) += 1;
         }
@@ -108,7 +108,7 @@ fn measure(n: u32, world: u32) -> Row {
         .map(|a| (a.position.x, a.position.y))
         .collect();
     let mut by_cell: BTreeMap<(i32, i32), u32> = BTreeMap::new();
-    for p in pos.iter() {
+    for p in &pos {
         *by_cell.entry(*p).or_insert(0) += 1;
     }
     let mut near = 0u32;

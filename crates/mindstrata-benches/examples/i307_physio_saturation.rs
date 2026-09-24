@@ -127,7 +127,7 @@ fn main() {
                 // per agent — the site list is small but this keeps it cheap).
                 let mut any_water = false;
                 let mut accessible_water = 0usize;
-                for site in sim.world.sites.iter() {
+                for site in &sim.world.sites {
                     let holds = site
                         .inventory
                         .iter()
@@ -393,8 +393,7 @@ fn main() {
         let mut census: Vec<_> = census.into_iter().collect();
         census.sort_by_key(|(_, c)| std::cmp::Reverse(*c));
         println!(
-            "  thirst: longest run above reflex {longest_thirst} ticks | final {:.4}",
-            prev_thirst
+            "  thirst: longest run above reflex {longest_thirst} ticks | final {prev_thirst:.4}"
         );
         println!(
             "  drink ticks {drink} | relief landed {drink_land} | rest ticks {rest} | fatigue relief landed {rest_land}"
@@ -445,7 +444,7 @@ fn main() {
         let mut reflex_zone = 0u64;
         for _ in 0..50_000u64 {
             sim.tick();
-            for a in sim.agents.iter() {
+            for a in &sim.agents {
                 agent_ticks += 1;
                 match a.current_action {
                     ActionKind::Eat => sums[0] += 1.0,
@@ -559,7 +558,7 @@ fn main() {
         let mut both_high = 0u64;
         for _ in 0..ticks {
             sim.tick();
-            for a in sim.agents.iter() {
+            for a in &sim.agents {
                 agent_ticks += 1;
                 match a.current_action {
                     ActionKind::Drink => drink += 1,
@@ -607,7 +606,7 @@ fn main() {
             both_high as f64 / n
         );
         let (mut t, mut h, mut f, mut hp) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
-        for a in sim.agents.iter() {
+        for a in &sim.agents {
             t += a.needs.thirst.to_f64();
             h += a.needs.hunger.to_f64();
             f += a.needs.fatigue.to_f64();

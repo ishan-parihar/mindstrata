@@ -37,7 +37,7 @@ fn main() {
         let mut min_blood = Fixed::ONE;
         for _ in 0..horizon {
             sim.tick();
-            for a in sim.agents.iter() {
+            for a in &sim.agents {
                 max_injury = max_injury.max(a.embodied.injury);
                 max_pain = max_pain.max(a.embodied.nervous.pain.effective_pain());
                 min_blood = min_blood.min(a.embodied.cardiovascular.blood_volume);
@@ -78,7 +78,7 @@ fn main() {
         for _ in 0..horizon {
             sim.tick();
             agent_ticks += sim.agents.len() as u64;
-            for a in sim.agents.iter() {
+            for a in &sim.agents {
                 let p = a.embodied.nervous.pain.effective_pain().to_f64();
                 for (i, &t) in thresholds.iter().enumerate() {
                     if p >= t {

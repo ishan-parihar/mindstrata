@@ -121,10 +121,6 @@ fn config(seed: u64, ticks: u64) -> SimConfig {
 struct Family {
     /// Per-agent-tick presence rate of each tracked goal kind.
     goal_rate: Vec<(&'static str, f64)>,
-    /// Per-agent-tick rate at which each need channel sits above its CANON gate
-    /// (the pre-i305 gate — kept as the reference line so the table is
-    /// comparable across bands).
-    above_gate: [f64; 5],
     /// Mean final deficits, in the channel order above.
     deficits: [f64; 5],
     alive_seeds: usize,
@@ -149,21 +145,22 @@ fn percentile(sorted: &[f64], q: f64) -> f64 {
 }
 
 fn measure(profile: DifficultyProfile, ticks: u64) -> Family {
-    measure_params(SimParameters::with_difficulty(profile), ticks)
+    measure_params(&SimParameters::with_difficulty(profile), ticks)
 }
 
 /// Measure with the ROW-2 DECAY RATES pinned at canon and only the gate scale
 /// moved — the isolating experiment for the threshold half (row 2's other half
 /// would otherwise mask its direction; see the module doc).
 fn measure_gates_only(scale: f64, ticks: u64) -> Family {
-    let mut p = SimParameters::default();
-    p.goal_gate_scale = mindstrata_core::fixed::Fixed::from_f64(scale);
-    measure_params(p, ticks)
+    let p = SimParameters {
+        goal_gate_scale: mindstrata_core::fixed::Fixed::from_f64(scale),
+        ..SimParameters::default()
+    };
+    measure_params(&p, ticks)
 }
 
-fn measure_params(params: SimParameters, ticks: u64) -> Family {
+fn measure_params(params: &SimParameters, ticks: u64) -> Family {
     let mut goal_counts = vec![0u64; TRACKED_GOALS.len()];
-    let mut above = [0u64; 5];
     let mut deficits = [0.0f64; 5];
     let mut alive_seeds = 0usize;
     let mut agent_ticks = 0u64;
@@ -171,7 +168,7 @@ fn measure_params(params: SimParameters, ticks: u64) -> Family {
 
     for &seed in &SEEDS {
         let mut sim = Simulation::new(config(seed, ticks));
-        sim.params = params;
+        sim.params = *params;
         sim.populate();
         for _ in 0..ticks {
             sim.tick();
@@ -186,9 +183,6 @@ fn measure_params(params: SimParameters, ticks: u64) -> Family {
                 ];
                 for (i, v) in needs.iter().enumerate() {
                     samples[i].push(*v);
-                    if *v > CHANNELS[i].1 {
-                        above[i] += 1;
-                    }
                 }
                 for (i, kind) in TRACKED_GOALS.iter().enumerate() {
                     if a.goals.iter().any(|g| g.kind == *kind) {
@@ -219,7 +213,6 @@ fn measure_params(params: SimParameters, ticks: u64) -> Family {
             .enumerate()
             .map(|(i, k)| (goal_name(*k), goal_counts[i] as f64 / denom))
             .collect(),
-        above_gate: above.map(|c| c as f64 / denom),
         deficits: deficits.map(|d| d / family_n),
         alive_seeds,
         agent_ticks,
@@ -354,21 +347,20 @@ fn main() {
             "    {:<9} {:>7} {:>7} {:>7} {:>7} {:>7} {:>10}  {:<9} {:>7}",
             "channel", "p50", "p75", "p90", "p99", "max", "above_gate", "canon", "state"
         );
-        for i in 0..5 {
-            let mut s = canon.samples[i].clone();
+        for (samples, channel) in canon.samples.iter().zip(CHANNELS) {
+            let mut s = samples.clone();
             s.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            let above =
-                s.iter().filter(|v| **v > CHANNELS[i].1).count() as f64 / s.len().max(1) as f64;
+            let above = s.iter().filter(|v| **v > channel.1).count() as f64 / s.len().max(1) as f64;
             println!(
                 "    {:<9} {:>7.4} {:>7.4} {:>7.4} {:>7.4} {:>7.4} {:>10.4}  {:<9} {:>7}",
-                CHANNELS[i].0,
+                channel.0,
                 percentile(&s, 0.50),
                 percentile(&s, 0.75),
                 percentile(&s, 0.90),
                 percentile(&s, 0.99),
                 s.last().copied().unwrap_or(0.0),
                 above,
-                format!("{:.2}", CHANNELS[i].1),
+                format!("{:.2}", channel.1),
                 if above == 0.0 { "DEAD" } else { "live" }
             );
         }
@@ -434,7 +426,7 @@ fn main() {
             "  {:<10} {:>8} {:>8} {:>8} {:>9} {:>9} {:>11}        (per-agent-tick rates)",
             "band", "Eat", "Drink", "Rest", "Socialize", "Worship", "need-driven"
         );
-        for (name, profile) in bands.iter() {
+        for (name, profile) in &bands {
             let f = measure(*profile, ticks);
             print_band(name, &f);
             if f.alive_seeds != SEEDS.len() {

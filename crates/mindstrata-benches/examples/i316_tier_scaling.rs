@@ -34,7 +34,7 @@ fn main() {
             let mut focal = 0u32;
             let mut secondary = 0u32;
             let mut background = 0u32;
-            for a in sim.agents.iter() {
+            for a in &sim.agents {
                 match a.agent_tier.tier {
                     AgentTier::Focal => focal += 1,
                     AgentTier::Secondary => secondary += 1,
@@ -65,7 +65,7 @@ fn main() {
         let mut min_importance = f64::INFINITY;
         for _ in 0..10_000 {
             sim.tick();
-            for a in sim.agents.iter() {
+            for a in &sim.agents {
                 if a.agent_tier.tier == AgentTier::Background {
                     ever_background += 1;
                 }

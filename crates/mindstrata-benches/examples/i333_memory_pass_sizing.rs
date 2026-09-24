@@ -75,7 +75,7 @@ fn run(n: u32, warmup: u64, window: u64) -> Row {
         let before = sim.event_count();
         sim.run(1);
         let after = sim.event_count();
-        let delta = (after - before) as usize;
+        let delta = after - before;
         let recent = sim.recent_events(delta);
         events += delta as u64;
         ticks += 1;

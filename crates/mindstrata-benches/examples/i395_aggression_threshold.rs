@@ -72,7 +72,6 @@ fn village(n: u32, seed: u64, ticks: u64) -> Simulation {
         world_height: 16,
         num_agents: n,
         snapshot_interval: None,
-        ..SimConfig::default()
     });
     sim.populate();
     sim
@@ -125,7 +124,7 @@ fn main() {
             .map(|a| a.personality.dominance.to_f64() + a.personality.risk_tolerance.to_f64())
             .collect();
         let mean = scores.iter().sum::<f64>() / scores.len() as f64;
-        let max = scores.iter().cloned().fold(0.0, f64::max);
+        let max = scores.iter().copied().fold(0.0, f64::max);
         let above = scores.iter().filter(|s| **s > BASE_THRESHOLD).count();
         println!(
             "  s{seed:<6} threats {t:>4}  violence {v:>3}  score mean {mean:.3} max {max:.3}  agents already > 1.2: {above}/12"

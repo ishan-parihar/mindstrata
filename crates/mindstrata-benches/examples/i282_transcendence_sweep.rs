@@ -19,7 +19,7 @@
 
 use mindstrata_sim::sim::{SimConfig, Simulation};
 
-fn stats(v: &mut Vec<f64>) -> (f64, f64, f64) {
+fn stats(v: &mut [f64]) -> (f64, f64, f64) {
     v.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let n = v.len();
     let median = v[n / 2];
@@ -60,8 +60,7 @@ fn main() {
                 .iter()
                 .zip(mindstrata_development::collective::CollectiveField::line_slugs())
                 .find(|(_, s)| s.slug() == "governance")
-                .map(|(l, _)| l.stage)
-                .unwrap_or(0.0);
+                .map_or(0.0, |(l, _)| l.stage);
         }
         let mean_med = med_all.iter().sum::<f64>() / med_all.len() as f64;
         println!(

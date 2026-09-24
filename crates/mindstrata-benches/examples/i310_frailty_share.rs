@@ -58,7 +58,7 @@ impl Sample {
 
 fn sample(sim: &Simulation) -> Sample {
     let mut s = Sample::default();
-    for a in sim.agents.iter() {
+    for a in &sim.agents {
         s.agents += 1;
         let health = a.body.health.to_f64();
         if health >= HEALTH_GATE {

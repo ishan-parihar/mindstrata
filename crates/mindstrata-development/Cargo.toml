@@ -7,5 +7,8 @@ edition.workspace = true
 mindstrata-core = { path = "../mindstrata-core" }
 serde = { workspace = true }
 
-[lints.rust]
-missing_docs = "deny"
+[lints]
+workspace = true
+# `missing_docs = "deny"` lives in src/lib.rs (`#![deny(missing_docs)]`) like the
+# other leaf crates; inheriting `[lints] workspace = true` restores the workspace
+# clippy set (pedantic, redundant_clone, …) that only this crate was missing.

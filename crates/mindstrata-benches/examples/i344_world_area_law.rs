@@ -13,8 +13,7 @@
 //!   1. **Spatial density** — cells per agent, near-pair share, max co-located.
 //!   2. **Contact volume** — Σ `interaction_count` (cumulative pair contacts),
 //!      per-agent volume, contacted-row share, mean partners.
-//!   3. **Tick cost** — µs/tick and its local log-log exponent, plus the
-//!      interaction-driven pass marks (`social_pass`, `appraisal`).
+//!   3. **Tick cost** — µs/tick and its local log-log exponent.
 //!   4. **Liveness** — population, avg health, avg stress (does a bigger world
 //!      starve or isolate the village?).
 //!
@@ -47,12 +46,9 @@ struct Row {
     rows: usize,
     contacted: usize,
     mean_deg: f64,
-    max_deg: u32,
     near_share: f64,
     volume: u64,
     max_co: u32,
-    social_us: f64,
-    appraisal_us: f64,
 }
 
 fn measure(n: u32, world: u32) -> Row {
@@ -66,25 +62,15 @@ fn measure(n: u32, world: u32) -> Row {
     });
     sim.populate();
     sim.run(WARMUP);
-    Simulation::pass_profile_reset();
     let t0 = Instant::now();
     sim.run(TICKS);
     let us_per_tick = t0.elapsed().as_secs_f64() * 1e6 / TICKS as f64;
-
-    let marks = Simulation::pass_profile_totals();
-    let mark_us = |name: &str| -> f64 {
-        marks
-            .iter()
-            .filter(|(m, _, _)| *m == name)
-            .map(|(_, ns, _)| *ns as f64 / TICKS as f64 / 1000.0)
-            .sum()
-    };
 
     let rels = sim.relationships();
     let rows = rels.len();
     let mut out_deg: BTreeMap<u64, u32> = BTreeMap::new();
     let mut volume = 0u64;
-    for r in rels.iter() {
+    for r in rels {
         volume += u64::from(r.interaction_count);
         if r.interaction_count > 0 {
             *out_deg.entry(r.from.as_u64()).or_insert(0) += 1;
@@ -92,7 +78,6 @@ fn measure(n: u32, world: u32) -> Row {
     }
     let contacted = out_deg.values().map(|d| *d as u64).sum::<u64>() as usize;
     let mean_deg = out_deg.values().map(|d| f64::from(*d)).sum::<f64>() / f64::from(n);
-    let max_deg = out_deg.values().copied().max().unwrap_or(0);
 
     let pos: Vec<(i32, i32)> = sim
         .agents
@@ -100,7 +85,7 @@ fn measure(n: u32, world: u32) -> Row {
         .map(|a| (a.position.x, a.position.y))
         .collect();
     let mut by_cell: BTreeMap<(i32, i32), u32> = BTreeMap::new();
-    for p in pos.iter() {
+    for p in &pos {
         *by_cell.entry(*p).or_insert(0) += 1;
     }
     let mut near = 0u32;
@@ -124,12 +109,9 @@ fn measure(n: u32, world: u32) -> Row {
         rows,
         contacted,
         mean_deg,
-        max_deg,
         near_share: f64::from(near) / f64::from(tot.max(1)) * 100.0,
         volume,
         max_co: by_cell.values().copied().max().unwrap_or(0),
-        social_us: mark_us("social_pass"),
-        appraisal_us: mark_us("appraisal"),
     }
 }
 
@@ -202,7 +184,7 @@ fn housing_geometry(n: u32, world: u32) -> (usize, usize, i32, f64, u32) {
     sim.populate();
     let mut cells: BTreeMap<(i32, i32), u32> = BTreeMap::new();
     let mut positions: Vec<(i32, i32)> = Vec::new();
-    for site in sim.world.sites.iter() {
+    for site in &sim.world.sites {
         if matches!(site.kind, mindstrata_sim::world::SiteKind::House) {
             // Recover the placement from the site's tile: scan once per site.
             for y in 0..world as i32 {
@@ -350,8 +332,7 @@ fn main() {
         for world in [32u32, side_for_population(*n)] {
             let (houses, cells, min_gap, near, per_cell) = housing_geometry(*n, world);
             println!(
-                "{:>5} {:>6} {:>8} {:>10} {:>10} {:>11.1}% {:>10}",
-                n, world, houses, cells, min_gap, near, per_cell
+                "{n:>5} {world:>6} {houses:>8} {cells:>10} {min_gap:>10} {near:>11.1}% {per_cell:>10}"
             );
         }
     }

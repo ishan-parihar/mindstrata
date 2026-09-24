@@ -1,3 +1,5 @@
+//! Probe: run 20K Addiction steps from `OperatorParams::pending()` for each
+//! candidate pressure and report the resulting intensity (seeking ≈0.49).
 use mindstrata_development::dynamics::{Metabolism, OperatorParams, QuadrantState};
 fn main() {
     // pending() = g=0.05, d=0.02, c=1.0. Find pressure p such that

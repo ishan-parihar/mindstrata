@@ -305,14 +305,13 @@ mod tests {
 
     fn fixture_history() -> Vec<MetricsSnapshot> {
         (0..5)
-            .map(|i| {
-                let mut m = MetricsSnapshot::default();
-                m.family_count = i + 1;
-                m.avg_joy = 0.2 + i as f64 * 0.1;
-                m.agent_count = 12 + i;
-                m.total_grain = 10.0 * i as f64;
-                m.tick = i * 100;
-                m
+            .map(|i| MetricsSnapshot {
+                family_count: i + 1,
+                avg_joy: 0.2 + i as f64 * 0.1,
+                agent_count: 12 + i,
+                total_grain: 10.0 * i as f64,
+                tick: i * 100,
+                ..Default::default()
             })
             .collect()
     }
@@ -340,9 +339,11 @@ mod tests {
         // Gaps: empty history still renders sentinel via the same lane contract.
         assert!(emotion_lane(&[], 10).contains("(no history)"));
         // Single-point fixture — no panic, deterministic.
-        let mut one = MetricsSnapshot::default();
-        one.avg_joy = 0.5;
-        let out_one = emotion_lane(&[one.clone()], 10);
+        let one = MetricsSnapshot {
+            avg_joy: 0.5,
+            ..Default::default()
+        };
+        let out_one = emotion_lane(std::slice::from_ref(&one), 10);
         assert!(out_one.contains("joy"));
         assert_eq!(out_one, emotion_lane(&[one], 10));
     }

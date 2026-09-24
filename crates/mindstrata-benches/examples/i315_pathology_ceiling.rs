@@ -45,8 +45,10 @@ struct SeedState {
 
 /// Run one seed with ONLY the ceiling scale changed (growth/decay = canon).
 fn seed_state(ceiling_scale: f64, seed: u64) -> SeedState {
-    let mut params = SimParameters::default();
-    params.pathology_ceiling_scale = mindstrata_core::fixed::Fixed::from_f64(ceiling_scale);
+    let params = SimParameters {
+        pathology_ceiling_scale: mindstrata_core::fixed::Fixed::from_f64(ceiling_scale),
+        ..Default::default()
+    };
     let mut sim = Simulation::new(config(seed));
     sim.params = params;
     sim.populate();

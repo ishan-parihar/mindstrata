@@ -45,10 +45,15 @@ state, no re-summarizing, no clarifying questions.
   golden baselines (quick) or the whole release suite (full). The pre-commit hook covers
   only fmt+clippy; the release suite + goldens are enforced at push time. Behavioral
   iterations run `--full`. No exceptions, no reminders.
-- **Known gate gap (recorded debt, i349/i351 ledger):** the clippy step does not pass
-  `--all-targets`, so test-cfg code in crates other than the one being built can hide
-  warnings. Closing it requires clearing the ~14 existing `mindstrata-tests` test-cfg
-  warnings first — its own tooling iteration, not a drive-by.
+- **Gate clippy is `--all-targets --locked -- -D warnings` (closed by plan-rust-craft
+  C1, 2026-09-24):** the recorded i349/i351 gap — clippy without `--all-targets`, so
+  test-cfg code outside the built crate and the 217 bench examples were never linted,
+  with the verdict grepped from output instead of the exit code — is closed: the gate
+  step and the versioned pre-commit hook (`scripts/githooks/pre-commit`) now lint every
+  target and fail on the compiler's exit code. The ~340-warning backlog the gap had
+  been hiding was cleared in the same iteration (`docs/PLAN_RUST_CRAFT_AUDIT.md`); a
+  unit that fails is never cached, so the verdict re-surfaces on every run regardless
+  of cache warmth.
 - **Test-population policy (charter, i368): the perf budget is a CEILING, not a test mandate.**
   The DC-3 P0 budget (122/1088/5961 µs/tick @ N=12/48/96) bounds *cost*; it does not
   dictate which N a test runs at. Every test and probe picks **the smallest N that

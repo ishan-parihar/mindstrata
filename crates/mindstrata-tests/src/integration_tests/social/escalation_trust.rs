@@ -268,29 +268,17 @@ fn social_trust_pacifies_escalation_end_to_end() {
     // interactions, aggregated over the seed set.
     {
         let seeds = [2u64, 8, 18, 46];
-        let interaction_count = |sim: &mindstrata_sim::Simulation| -> usize {
-            sim.recent_events(10_000_000)
-                .iter()
-                .filter(|e| matches!(e, SimEvent::InteractionOccurred { .. }))
-                .count()
-        };
         let mut control_v = 0usize;
-        let mut trusting_v = 0usize;
-        let mut control_i = 0usize;
-        let mut trusting_i = 0usize;
         for seed in seeds {
             let mut control = mindstrata_sim::Simulation::new(make_config(seed, 2000));
             control.populate();
             control.run(2000);
             control_v += violence_count(&control);
-            control_i += interaction_count(&control);
 
             let mut trusting = mindstrata_sim::Simulation::new(make_config(seed, 2000));
             trusting.populate();
             inject_trust(&mut trusting, Fixed::from_f64(0.9));
             trusting.run(2000);
-            trusting_v += violence_count(&trusting);
-            trusting_i += interaction_count(&trusting);
         }
         // Iteration 253 note: even the per-interaction RATE inverts under
         // synthetic 0.9-injection (trusting worlds socialize into

@@ -61,7 +61,7 @@ fn main() {
             target,
             pregnant,
             births.len(),
-            births.iter().copied().max().map_or(0, |v| v),
+            births.iter().copied().max().unwrap_or(0),
             marriage_children
         );
     }

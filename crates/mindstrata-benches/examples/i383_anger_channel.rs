@@ -127,7 +127,7 @@ fn run(label: &str, scenario: Option<Scenario>, seed: u64, ticks: u64, w: u32, h
         let mut fear_any = false;
         let mut work_any = false;
         let mut tick_anger: Vec<f64> = Vec::with_capacity(sim.agents.len());
-        for a in sim.agents.iter() {
+        for a in &sim.agents {
             let anger = a.emotions.anger.to_f64();
             let fear = a.emotions.fear.to_f64();
             let hunger = a.needs.hunger.to_f64();
@@ -159,7 +159,7 @@ fn run(label: &str, scenario: Option<Scenario>, seed: u64, ticks: u64, w: u32, h
             if anger > 0.5 && hunger < 0.8 {
                 work_any = true;
             }
-            for g in a.goals.iter() {
+            for g in &a.goals {
                 match (g.source, g.kind) {
                     (
                         mindstrata_sim::person::GoalSource::Emotion,
@@ -264,7 +264,7 @@ fn run(label: &str, scenario: Option<Scenario>, seed: u64, ticks: u64, w: u32, h
         st.resentment_sum / n,
         st.anger_sum / st.resentment_sum.max(1e-9)
     );
-    println!("  per-AGENT open share  (absolute vs candidate)",);
+    println!("  per-AGENT open share  (absolute vs candidate)");
     println!(
         "    fear:  >0.5 {:>6.2}%   vs  >1.25*trauma {:>6.2}%",
         100.0 * st.fear_abs_agents as f64 / n,

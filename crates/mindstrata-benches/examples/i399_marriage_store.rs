@@ -40,7 +40,6 @@ fn village(n: u32, seed: u64) -> Simulation {
         world_height: 16,
         num_agents: n,
         snapshot_interval: None,
-        ..SimConfig::default()
     });
     sim.populate();
     sim
@@ -107,9 +106,9 @@ fn main() {
         println!(
             "  A  eligible-pair samples {samples}  |v1−v2| affection mean {:.4} max {:.4}  trust mean {:.4} max {:.4}  affection sign-flips {aff_flips}",
             mean(&aff_div),
-            aff_div.iter().cloned().fold(0.0_f64, f64::max),
+            aff_div.iter().copied().fold(0.0_f64, f64::max),
             mean(&trust_div),
-            trust_div.iter().cloned().fold(0.0_f64, f64::max),
+            trust_div.iter().copied().fold(0.0_f64, f64::max),
         );
 
         // ── B — the write sink: marriages formed + end-state bond levels ──
@@ -146,7 +145,7 @@ fn main() {
         println!(
             "  B  marriages formed {}  first-formation ticks {:?}  married-pair end affection v1 mean {:.3}  v2 mean {:.3}",
             marriages.len(),
-            &marriages
+            marriages
                 .iter()
                 .map(|(_, _, t)| *t)
                 .take(12)

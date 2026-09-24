@@ -538,7 +538,7 @@ mod tests {
     fn world_without_sites_or_agents_is_plain_terrain() {
         let world = World::new(1, 1);
         let img = render_world_rgba(&world, &[], DEFAULT_CELL_PIXELS);
-        for px in img.rgba.chunks_exact(4) {
+        for px in img.rgba.as_chunks::<4>().0 {
             assert_eq!([px[0], px[1], px[2]], terrain_color(Terrain::Grassland));
             assert_eq!(px[3], 255, "all pixels must be opaque");
         }

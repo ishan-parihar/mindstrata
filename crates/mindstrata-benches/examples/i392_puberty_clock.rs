@@ -12,12 +12,12 @@
 //! This probe measures four things:
 //!   1. the founder distribution of the gene (variation really exists),
 //!   2. **the age band the gene governs** — agent-ticks with age in [11, 15) over a
-//!    20 000-tick corpus, which is what decides whether wiring it can move a
-//!    calibrated window at all,
+//!      20 000-tick corpus, which is what decides whether wiring it can move a
+//!      calibrated window at all,
 //!   3. the live per-agent manipulation check: three agents aged 12.0 with the gene set
-//!    to the early tail (11.0), the late tail (15.0) and the retired constant (13.0),
-//!    ticked, and their maturity compared; the 13.0 agent is the pre-fix control, so
-//!    midpoint neutrality is *measured* rather than asserted,
+//!      to the early tail (11.0), the late tail (15.0) and the retired constant (13.0),
+//!      ticked, and their maturity compared; the 13.0 agent is the pre-fix control, so
+//!      midpoint neutrality is *measured* rather than asserted,
 //!   4. the population's age distribution, for context on (2).
 //!
 //! Run: `cargo run --release -p mindstrata-benches --example i392_puberty_clock`

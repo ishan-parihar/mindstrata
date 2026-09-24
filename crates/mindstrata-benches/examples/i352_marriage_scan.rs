@@ -75,7 +75,7 @@ fn divergence_leg() {
             let mut daf: Vec<f64> = Vec::new();
             let mut material = 0usize;
             let mut pairs = 0usize;
-            for r in sim.relationships.iter() {
+            for r in &sim.relationships {
                 let from = r.from.as_u64() as usize;
                 let to = r.to.as_u64() as usize;
                 if from >= n || to >= n || from == to {

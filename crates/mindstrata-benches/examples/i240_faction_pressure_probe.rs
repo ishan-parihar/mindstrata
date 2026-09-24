@@ -44,7 +44,9 @@ fn main() {
         sim.run(1000);
         t += 1000;
         let fine = std::env::var("I240_FINE").is_ok();
-        if (!fine && t % 5000 != 0 && t != horizon) || (fine && t > 15_000 && t % 5000 != 0) {
+        if (!fine && !t.is_multiple_of(5000) && t != horizon)
+            || (fine && t > 15_000 && !t.is_multiple_of(5000))
+        {
             continue;
         }
         let v1 = sim

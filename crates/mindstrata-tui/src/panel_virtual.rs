@@ -38,10 +38,9 @@ mod tests {
 
     fn hist(n: usize) -> Vec<MetricsSnapshot> {
         (0..n)
-            .map(|i| {
-                let mut m = MetricsSnapshot::default();
-                m.tick = (i * 100) as u64;
-                m
+            .map(|i| MetricsSnapshot {
+                tick: (i * 100) as u64,
+                ..Default::default()
             })
             .collect()
     }

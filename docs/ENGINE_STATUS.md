@@ -24,7 +24,7 @@ owner: SIM + PROD (AP4 Studio)
 | Gate | Command | Result |
 |---|---|---|
 | Format | `cargo fmt --all --check` | clean |
-| Lints | `cargo clippy --workspace --quiet` | 0 warnings |
+| Lints | `cargo clippy --workspace --all-targets --locked -- -D warnings` | exit 0 (C1 closed the `--all-targets` gap; the old `--quiet` form never linted test-cfg or the 217 bench examples) |
 | Full suite | `cargo test -p mindstrata-tests --lib --release` | **314 passed / 0 failed / 1 ignored** |
 | Sim unit | `cargo test -p mindstrata-sim --lib --release` | **310 / 310** |
 | Golden replay | `scripts/gate --full` | GREEN (both baselines regenerated at i399 — the marriage closed-loop migration; see §5 candidate 1) |

@@ -40,7 +40,7 @@ fn census_at(n: u32, world: u32, ticks: u64) -> (usize, usize, f64, u32) {
     let total = rels.len();
     let touched = rels.iter().filter(|r| r.interaction_count > 0).count();
     let mut out_deg: std::collections::BTreeMap<u64, u32> = std::collections::BTreeMap::new();
-    for r in rels.iter() {
+    for r in rels {
         if r.interaction_count > 0 {
             *out_deg.entry(r.from.as_u64()).or_insert(0) += 1;
         }
@@ -126,7 +126,7 @@ fn mobility_leg() {
                 }
             }
         }
-        let counts: Vec<usize> = seen.iter().map(|s| s.len()).collect();
+        let counts: Vec<usize> = seen.iter().map(std::collections::HashSet::len).collect();
         let cells = (w * w) as f64;
         let mean = counts.iter().sum::<usize>() as f64 / counts.len().max(1) as f64;
         let min = counts.iter().copied().min().unwrap_or(0);
@@ -178,7 +178,7 @@ fn main() {
             // (deaths/births move the high-water mark), so key by id.
             let mut out_deg: std::collections::BTreeMap<u64, u32> =
                 std::collections::BTreeMap::new();
-            for r in rels.iter() {
+            for r in rels {
                 if r.interaction_count > 0 {
                     *out_deg.entry(r.from.as_u64()).or_insert(0) += 1;
                 }

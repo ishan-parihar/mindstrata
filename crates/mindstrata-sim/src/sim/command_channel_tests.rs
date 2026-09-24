@@ -259,7 +259,7 @@ fn council_decrees_are_issued_in_crisis_and_never_in_calm() {
         }
         let mut decrees = 0usize;
         for _ in 0..=DECREE_CADENCE_TICKS {
-            for a in sim.agents.iter_mut() {
+            for a in &mut sim.agents {
                 a.emotions.fear = Fixed::from_f64(fear);
             }
             sim.run(1);

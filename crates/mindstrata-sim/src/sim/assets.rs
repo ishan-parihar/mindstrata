@@ -264,7 +264,7 @@ mod tests {
             "stage_lines canon export rides the polity asset"
         );
         // Culture: memes may be empty at tick 0 — the section exists.
-        assert!(doc.meta.polities == 1);
+        assert_eq!(doc.meta.polities, 1);
     }
 
     /// i322 additive field: agent placement rides the document (index order,

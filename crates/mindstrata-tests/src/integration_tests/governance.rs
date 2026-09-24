@@ -929,7 +929,9 @@ fn revolution_is_regime_change_not_repeat_loop() {
                 .find(|i| i.kind == InstitutionKind::Council)
                 .expect("council should exist");
             if elder_at_start.is_none() {
-                elder_at_start = council.get_role_holder("Elder").map(|a| a.as_u64());
+                elder_at_start = council
+                    .get_role_holder("Elder")
+                    .map(mindstrata_core::EntityId::as_u64);
             }
             peak_council = peak_council.max(council.members.len());
         }
@@ -951,7 +953,7 @@ fn revolution_is_regime_change_not_repeat_loop() {
             .iter()
             .find(|i| i.kind == InstitutionKind::Council)
             .and_then(|c| c.get_role_holder("Elder"))
-            .map(|a| a.as_u64());
+            .map(mindstrata_core::EntityId::as_u64);
         family.push((
             seed,
             rev_count,
@@ -1837,8 +1839,7 @@ fn collective_fear_amplifies_panic_legitimacy_damage_end_to_end() {
         panic_family
             .iter()
             .find(|(seed, _)| *seed == replay_seed)
-            .map(|(_, p)| *p)
-            .unwrap_or(0),
+            .map_or(0, |(_, p)| *p),
         panics2,
         "panic counts must be seed-deterministic"
     );

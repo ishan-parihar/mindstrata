@@ -591,7 +591,7 @@ fn executive_function_planning_confidence_tracks_ef_depth() {
         let formula = (0.5 - a.emotions.fear.to_f64() * 0.2
             + a.personality.ambition.to_f64() * 0.2)
             .clamp(0.0, 1.0);
-        let expected = (formula + ef) * 0.5;
+        let expected = f64::midpoint(formula, ef);
         // Iteration 97 recalibration: the blend is budget-gated (skips on
         // can_prospect() exhaustion), so an agent whose last successful update
         // used older fear/ambition can lag live values by up to ~0.005 — the

@@ -27,7 +27,6 @@ struct Row {
     mean_distress: f64,
     traces_per_agent: f64,
     budget_mean: f64,
-    budget_exhausted: f64,
 }
 
 fn calm(seed: u64, ticks: u64) -> Row {
@@ -41,7 +40,7 @@ fn calm(seed: u64, ticks: u64) -> Row {
     });
     sim.populate();
     sim.run(ticks);
-    collect(sim, format!("calm s{seed}"))
+    collect(&sim, format!("calm s{seed}"))
 }
 
 fn pestilence(seed: u64, ticks: u64) -> Row {
@@ -51,11 +50,11 @@ fn pestilence(seed: u64, ticks: u64) -> Row {
     let mut sim = Simulation::from_scenario(sc);
     sim.populate();
     sim.run(ticks);
-    collect(sim, format!("pest s{seed}"))
+    collect(&sim, format!("pest s{seed}"))
 }
 
-fn collect(sim: Simulation, label: String) -> Row {
-    let n = sim.agents.len().max(1) as f64;
+fn collect(sim: &Simulation, label: String) -> Row {
+    let agent_count = sim.agents.len().max(1) as f64;
     let mut max_charge = 0.0f64;
     let mut charge_sum = 0.0f64;
     let mut charge_n = 0.0f64;
@@ -64,32 +63,35 @@ fn collect(sim: Simulation, label: String) -> Row {
     let mut distress = 0.0f64;
     let mut traces = 0.0f64;
     let mut budget = 0.0f64;
-    let mut exhausted = 0.0f64;
-    for a in &sim.agents {
-        for b in a.beliefs.iter().filter(|b| b.proposition_id <= 1) {
-            let c = b.emotional_charge.to_f64();
-            max_charge = max_charge.max(c);
-            charge_sum += c;
+    for agent in &sim.agents {
+        for belief in agent
+            .beliefs
+            .iter()
+            .filter(|belief| belief.proposition_id <= 1)
+        {
+            let charge = belief.emotional_charge.to_f64();
+            max_charge = max_charge.max(charge);
+            charge_sum += charge;
             charge_n += 1.0;
         }
-        let f = a.emotions.fear.to_f64();
-        let g = a.emotions.anger.to_f64();
-        let v = a.affect.valence.to_f64();
-        fear += f;
-        anger += g;
-        distress += (0.6 * f + 0.4 * (-v).max(0.0) + 0.2 * g).clamp(0.0, 1.0);
-        traces += a.memory.count() as f64;
-        let b = a.agent_tier.budget_tracker.remaining_memory_operations() as f64;
-        budget += b;
-        if b <= 0.0 {
-            exhausted += 1.0;
-        }
+        let fear_val = agent.emotions.fear.to_f64();
+        let anger_val = agent.emotions.anger.to_f64();
+        let valence = agent.affect.valence.to_f64();
+        fear += fear_val;
+        anger += anger_val;
+        distress += (0.6 * fear_val + 0.4 * (-valence).max(0.0) + 0.2 * anger_val).clamp(0.0, 1.0);
+        traces += agent.memory.count() as f64;
+        let remaining_budget = agent
+            .agent_tier
+            .budget_tracker
+            .remaining_memory_operations() as f64;
+        budget += remaining_budget;
     }
     let max_intensity = sim
         .moral_panic_registry
         .panics
         .iter()
-        .map(|p| p.intensity.to_f64())
+        .map(|panic_ev| panic_ev.intensity.to_f64())
         .fold(0.0f64, f64::max);
     Row {
         label,
@@ -98,12 +100,11 @@ fn collect(sim: Simulation, label: String) -> Row {
         max_intensity,
         max_charge,
         mean_charge: charge_sum / charge_n.max(1.0),
-        mean_fear: fear / n,
-        mean_anger: anger / n,
-        mean_distress: distress / n,
-        traces_per_agent: traces / n,
-        budget_mean: budget / n,
-        budget_exhausted: exhausted / n,
+        mean_fear: fear / agent_count,
+        mean_anger: anger / agent_count,
+        mean_distress: distress / agent_count,
+        traces_per_agent: traces / agent_count,
+        budget_mean: budget / agent_count,
     }
 }
 

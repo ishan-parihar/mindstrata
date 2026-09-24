@@ -54,7 +54,6 @@ fn village(n: u32, seed: u64, ticks: u64) -> Simulation {
         world_height: 16,
         num_agents: n,
         snapshot_interval: None,
-        ..SimConfig::default()
     });
     sim.populate();
     sim
@@ -120,11 +119,11 @@ fn main() {
         println!(
             "  A  events {n_ev}   |v1−v2| trust mean {:.4} max {:.4}   evidence |E| v1 {:.4} → v2 {:.4}   |ΔE| mean {:.4} max {:.4}   sign flips {flips}",
             mean(&div),
-            div.iter().cloned().fold(0.0, f64::max),
+            div.iter().copied().fold(0.0, f64::max),
             mean(&ev1),
             mean(&ev2),
             mean(&dv),
-            dv.iter().cloned().fold(0.0, f64::max),
+            dv.iter().copied().fold(0.0, f64::max),
         );
 
         // ── B — the writer stakes ─────────────────────────────────────────

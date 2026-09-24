@@ -41,11 +41,12 @@ mod tests {
     use super::*;
 
     fn snap(tick: u64, agents: u64, grain: f64) -> MetricsSnapshot {
-        let mut m = MetricsSnapshot::default();
-        m.tick = tick;
-        m.agent_count = agents;
-        m.total_grain = grain;
-        m
+        MetricsSnapshot {
+            tick,
+            agent_count: agents,
+            total_grain: grain,
+            ..Default::default()
+        }
     }
 
     #[test]

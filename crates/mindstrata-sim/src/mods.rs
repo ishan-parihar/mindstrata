@@ -567,7 +567,9 @@ mod tests {
             norms: Vec::new(),
         };
         // Exactly 4 public fields; any new one breaks IC-7 v1.0.0.
-        let _fields = (&pack.manifest, &pack.scenario, &pack.knowledge, &pack.norms);
+        // (plain `_` so the field-presence check stays without tripping
+        // `no_effect_underscore_binding`)
+        let _ = (&pack.manifest, &pack.scenario, &pack.knowledge, &pack.norms);
     }
 
     #[test]

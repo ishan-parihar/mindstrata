@@ -609,7 +609,7 @@ fn violence_records_injury_on_the_substrate() {
     let mut min_blood = Fixed::ONE;
     for _ in 0..20_000 {
         sim.tick();
-        for a in sim.agents.iter() {
+        for a in &sim.agents {
             max_injury = max_injury.max(a.embodied.injury);
             max_pain = max_pain.max(a.embodied.nervous.pain.effective_pain());
             min_blood = min_blood.min(a.embodied.cardiovascular.blood_volume);
@@ -667,7 +667,7 @@ fn violence_records_injury_on_the_substrate() {
         let mut seed_max_pain = Fixed::ZERO;
         for _ in 0..20_000 {
             sim.tick();
-            for a in sim.agents.iter() {
+            for a in &sim.agents {
                 seed_max_pain = seed_max_pain.max(a.embodied.nervous.pain.effective_pain());
             }
         }

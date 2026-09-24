@@ -77,14 +77,11 @@ fn main() {
     let f = &sim.collective_field;
     println!(
         "field_after: max_press={:.4} max_fulfillment={:.4}",
-        f.lines
-            .iter()
-            .map(|l| l.press)
-            .fold(0.0_f64, |a, b| a.max(b)),
+        f.lines.iter().map(|l| l.press).fold(0.0_f64, f64::max),
         f.lines
             .iter()
             .map(|l| l.fulfillment)
-            .fold(0.0_f64, |a, b| a.max(b))
+            .fold(0.0_f64, f64::max)
     );
     let _ = CatalystKind::Bond; // silence unused if mapping changes
 }

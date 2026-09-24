@@ -109,15 +109,13 @@ fn main() {
                     if mindstrata_development::polarity::is_active_tension(
                         &agent.polarity_claims[i],
                         &agent.polarity_claims[j],
-                    ) {
-                        if mindstrata_development::polarity::reconcile_subtle(
-                            &agent.polarity_claims[i],
-                            &agent.polarity_claims[j],
-                        )
-                        .is_some()
-                        {
-                            seed_subtle += 1;
-                        }
+                    ) && mindstrata_development::polarity::reconcile_subtle(
+                        &agent.polarity_claims[i],
+                        &agent.polarity_claims[j],
+                    )
+                    .is_some()
+                    {
+                        seed_subtle += 1;
                     }
                 }
             }

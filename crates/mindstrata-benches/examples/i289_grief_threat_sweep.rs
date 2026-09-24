@@ -64,7 +64,7 @@ fn run(name: &str, seed: u64, ticks: u64) {
     sim.populate();
     sim.run(ticks);
 
-    let events = sim.recent_events(sim.event_count() as usize).to_vec();
+    let events = sim.recent_events(sim.event_count()).to_vec();
     let deaths = events
         .iter()
         .filter(|e| matches!(e, SimEvent::AgentDied { .. }))
@@ -91,14 +91,14 @@ fn run(name: &str, seed: u64, ticks: u64) {
         .sum::<f64>()
         / sim.agents.len().max(1) as f64;
     let gm = (
-        grief_mag.iter().cloned().sum::<f64>() / grief_mag.len().max(1) as f64,
-        grief_mag.iter().cloned().fold(f64::INFINITY, f64::min),
-        grief_mag.iter().cloned().fold(0.0_f64, f64::max),
+        grief_mag.iter().copied().sum::<f64>() / grief_mag.len().max(1) as f64,
+        grief_mag.iter().copied().fold(f64::INFINITY, f64::min),
+        grief_mag.iter().copied().fold(0.0_f64, f64::max),
     );
     let tm = (
-        threat_mag.iter().cloned().sum::<f64>() / threat_mag.len().max(1) as f64,
-        threat_mag.iter().cloned().fold(f64::INFINITY, f64::min),
-        threat_mag.iter().cloned().fold(0.0_f64, f64::max),
+        threat_mag.iter().copied().sum::<f64>() / threat_mag.len().max(1) as f64,
+        threat_mag.iter().copied().fold(f64::INFINITY, f64::min),
+        threat_mag.iter().copied().fold(0.0_f64, f64::max),
     );
     println!(
         "{name:>10} seed={seed} t={ticks:>5}: deaths={deaths} griefs={griefs} \
@@ -121,7 +121,8 @@ fn main() {
             run("pestilence", seed, ticks);
         }
     }
-    for seed in [42_u64] {
+    {
+        let seed = 42_u64;
         run("collapse", seed, 4_320);
     }
 }

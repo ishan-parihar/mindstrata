@@ -286,13 +286,16 @@ mod tests {
     /// **0.1656**; `Combat` (0.5) fires 0 times. The old threshold `0.3` sat
     /// above the entire reachable range, so the cardiovascular chain was dead
     /// state. Guard the boundary: a common scuffle stays dry, a serious
-    /// beating bleeds.
+    /// beating bleeds. The boundary itself is enforced at COMPILE time
+    /// (`const _` below — clippy::assertions_on_constants' prescribed form):
+    /// raise the threshold past the measured max and the build fails.
+    const _: () = assert!(
+        BLOOD_LOSS_INJURY_THRESHOLD < 0.1656,
+        "BLOOD_LOSS_INJURY_THRESHOLD must stay below the measured max single wound 0.1656 (i319)"
+    );
+
     #[test]
     fn blood_loss_threshold_admits_a_serious_wound_but_not_a_scuffle() {
-        assert!(
-            BLOOD_LOSS_INJURY_THRESHOLD < 0.1656,
-            "threshold {BLOOD_LOSS_INJURY_THRESHOLD} must be reachable by the measured max single wound 0.1656"
-        );
         // A serious wound (just under the measured 0.1656 max) bleeds.
         let mut serious = CardiovascularState::default();
         serious.tick_update(

@@ -30,8 +30,8 @@ fn main() {
                 sim.tick();
                 if sim.agents.len() > ever_background.len() {
                     let added = sim.agents.len() - ever_background.len();
-                    ever_background.extend(std::iter::repeat(false).take(added));
-                    last.extend(std::iter::repeat(AgentTier::Secondary).take(added));
+                    ever_background.extend(std::iter::repeat_n(false, added));
+                    last.extend(std::iter::repeat_n(AgentTier::Secondary, added));
                 }
                 for (i, a) in sim.agents.iter().enumerate() {
                     // Diagnostic: agents below the shipped entry gate (0.22) —

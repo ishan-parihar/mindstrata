@@ -26,7 +26,7 @@ fn stat_for(sim: &Simulation, accessor: fn(&AgentBundle) -> f64) -> (f64, f64) {
     if vals.is_empty() {
         return (0.0, 0.0);
     }
-    let max = vals.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let max = vals.iter().copied().fold(f64::NEG_INFINITY, f64::max);
     let mean = vals.iter().sum::<f64>() / vals.len() as f64;
     (mean, max)
 }

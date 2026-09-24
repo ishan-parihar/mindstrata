@@ -54,13 +54,20 @@ struct Report {
     destitute: usize,
 }
 
-fn run_world(label: &str, seed: u64, ticks: u64, w: u32, h: u32, n: u32) -> Report {
+fn run_world(
+    label: &str,
+    seed: u64,
+    ticks: u64,
+    width: u32,
+    height: u32,
+    agent_count: u32,
+) -> Report {
     let mut sim = Simulation::new(SimConfig {
         seed,
         max_ticks: ticks,
-        world_width: w,
-        world_height: h,
-        num_agents: n,
+        world_width: width,
+        world_height: height,
+        num_agents: agent_count,
         snapshot_interval: None,
     });
     sim.populate();
@@ -96,24 +103,28 @@ fn run_world(label: &str, seed: u64, ticks: u64, w: u32, h: u32, n: u32) -> Repo
             if *good != mindstrata_core::id::ResourceId::new(GRAIN_RESOURCE_ID) {
                 continue;
             }
-            let b = buyer.as_u64() as usize;
-            let s = seller.as_u64() as usize;
+            let buyer_idx = buyer.as_u64() as usize;
+            let seller_idx = seller.as_u64() as usize;
             // v1 read, first-occurrence semantics (the same element `rel_pos`
             // resolves) — the probe cannot call the crate-private accessor.
-            let v1 = sim
+            let v1_trade_trust = sim
                 .relationships
                 .iter()
-                .find(|r| r.from.as_u64() as usize == b && r.to.as_u64() as usize == s)
-                .map_or(0.5, |r| r.trust.to_f64());
-            let v2 = sim
-                .relationship_v2_between(b, s)
-                .map_or(0.5, |r| r.trust.to_f64());
+                .find(|rel| {
+                    rel.from.as_u64() as usize == buyer_idx
+                        && rel.to.as_u64() as usize == seller_idx
+                })
+                .map_or(0.5, |rel| rel.trust.to_f64());
+            let v2_trade_trust = sim
+                .relationship_v2_between(buyer_idx, seller_idx)
+                .map_or(0.5, |rel| rel.trust.to_f64());
             trades += 1;
             price_sum += price.to_f64();
             qty_sum += quantity.to_f64();
-            v1_sum += v1;
-            v2_sum += v2;
-            mod_delta_sum += (price_modifier(v1) - price_modifier(v2)).abs();
+            v1_sum += v1_trade_trust;
+            v2_sum += v2_trade_trust;
+            mod_delta_sum +=
+                (price_modifier(v1_trade_trust) - price_modifier(v2_trade_trust)).abs();
         }
     }
 
@@ -122,35 +133,35 @@ fn run_world(label: &str, seed: u64, ticks: u64, w: u32, h: u32, n: u32) -> Repo
     let mut pop_v2 = 0.0;
     let mut pop_pairs = 0usize;
     let mut pop_ge_05 = 0.0;
-    for r in &sim.relationships {
-        let f = r.from.as_u64() as usize;
-        let t = r.to.as_u64() as usize;
-        let Some(v2) = sim.relationship_v2_between(f, t) else {
+    for rel in &sim.relationships {
+        let from_idx = rel.from.as_u64() as usize;
+        let to_idx = rel.to.as_u64() as usize;
+        let Some(v2_pair_trust) = sim.relationship_v2_between(from_idx, to_idx) else {
             continue;
         };
-        let a = r.trust.to_f64();
-        let b = v2.trust.to_f64();
-        pop_v1 += a;
-        pop_v2 += b;
+        let v1_pair_trust = rel.trust.to_f64();
+        let v2_trust = v2_pair_trust.trust.to_f64();
+        pop_v1 += v1_pair_trust;
+        pop_v2 += v2_trust;
         pop_pairs += 1;
-        if (a - b).abs() >= 0.05 {
+        if (v1_pair_trust - v2_trust).abs() >= 0.05 {
             pop_ge_05 += 1.0;
         }
     }
 
     let coins: Vec<f64> = sim.agents.iter().map(|a| a.wealth.coin.to_f64()).collect();
     let min_coin = coins.iter().copied().fold(f64::INFINITY, f64::min);
-    let destitute = coins.iter().filter(|c| **c < 1.0).count();
+    let destitute = coins.iter().filter(|coin| **coin < 1.0).count();
 
-    let d = trades.max(1) as f64;
+    let trade_norm = trades.max(1) as f64;
     Report {
         label: label.to_string(),
         trades,
-        mean_price: price_sum / d,
-        mean_qty: qty_sum / d,
-        trade_v1: v1_sum / d,
-        trade_v2: v2_sum / d,
-        trade_mod_delta: mod_delta_sum / d,
+        mean_price: price_sum / trade_norm,
+        mean_qty: qty_sum / trade_norm,
+        trade_v1: v1_sum / trade_norm,
+        trade_v2: v2_sum / trade_norm,
+        trade_mod_delta: mod_delta_sum / trade_norm,
         pop_v1: pop_v1 / pop_pairs.max(1) as f64,
         pop_v2: pop_v2 / pop_pairs.max(1) as f64,
         pop_pairs,

@@ -42,12 +42,12 @@ fn run(sc: Scenario, label: &str) {
     let mut deaths_cum = 0usize;
     for h in [5_000u64, 10_000, 20_000] {
         let before = sim
-            .recent_events(sim.event_count() as usize)
+            .recent_events(sim.event_count())
             .iter()
             .filter(|e| matches!(e, mindstrata_core::event::SimEvent::MourningObserved { .. }))
             .count();
         let deaths_before = sim
-            .recent_events(sim.event_count() as usize)
+            .recent_events(sim.event_count())
             .iter()
             .filter(|e| matches!(e, mindstrata_core::event::SimEvent::AgentDied { .. }))
             .count();
@@ -55,12 +55,12 @@ fn run(sc: Scenario, label: &str) {
         // The event journal is bounded — count per-window deltas since the
         // journal may have trimmed, accumulating our own census.
         let now = sim
-            .recent_events(sim.event_count() as usize)
+            .recent_events(sim.event_count())
             .iter()
             .filter(|e| matches!(e, mindstrata_core::event::SimEvent::MourningObserved { .. }))
             .count();
         let deaths_now = sim
-            .recent_events(sim.event_count() as usize)
+            .recent_events(sim.event_count())
             .iter()
             .filter(|e| matches!(e, mindstrata_core::event::SimEvent::AgentDied { .. }))
             .count();

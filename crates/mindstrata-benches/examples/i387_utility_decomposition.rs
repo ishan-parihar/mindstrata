@@ -39,7 +39,7 @@ enum World {
     Pestilence,
 }
 
-fn build(w: u32, h: u32, n: u32, seed: u64, ticks: u64, world: World) -> Simulation {
+fn build(w: u32, h: u32, n: u32, seed: u64, ticks: u64, world: &World) -> Simulation {
     match world {
         World::Calm => Simulation::new(SimConfig {
             seed,
@@ -62,8 +62,8 @@ fn build(w: u32, h: u32, n: u32, seed: u64, ticks: u64, world: World) -> Simulat
     }
 }
 
-fn leg(label: &str, w: u32, h: u32, n: u32, seed: u64, world: World) {
-    let mut sim = build(w, h, n, seed, WARMUP + WINDOW, world);
+fn leg(label: &str, width: u32, height: u32, agents: u32, seed: u64, world: &World) {
+    let mut sim = build(width, height, agents, seed, WARMUP + WINDOW, world);
     sim.populate();
     sim.run(WARMUP);
 
@@ -75,7 +75,7 @@ fn leg(label: &str, w: u32, h: u32, n: u32, seed: u64, world: World) {
 
     let samples = r.terms_samples.max(1) as f64;
     let arbitrations = r.utility_samples.max(1) as f64;
-    println!("══ {label} (N={n}, seed {seed}) ══");
+    println!("══ {label} (N={agents}, seed {seed}) ══");
     println!(
         "arbitrations {} · decomposed {} · Socialize gap: wins {} (within noise {}), \
 mean loss {:.4}, max {:.4}",
@@ -96,22 +96,27 @@ mean loss {:.4}, max {:.4}",
         .map(|i| r.terms_winner[i].max(0.0))
         .sum::<f64>()
         .max(1e-9);
-    for i in 0..UTILITY_TERM_COUNT {
-        let w = r.terms_winner[i] / samples;
-        let run = r.terms_runner[i] / samples;
-        let s = r.terms_socialize[i] / samples;
-        let share = if r.terms_winner[i] > 0.0 {
-            r.terms_winner[i] / winner_pos
+    for (((name, winner), runner), socialize) in UTILITY_TERM_NAMES
+        .iter()
+        .zip(&r.terms_winner)
+        .zip(&r.terms_runner)
+        .zip(&r.terms_socialize)
+    {
+        let winner = *winner / samples;
+        let runner_up = *runner / samples;
+        let socialize = *socialize / samples;
+        let share = if winner > 0.0 {
+            winner / winner_pos
         } else {
             0.0
         };
         println!(
             "{:>12} {:>10.4} {:>10.4} {:>10.4} {:>10.4} {:>9.1}%",
-            UTILITY_TERM_NAMES[i],
-            w,
-            run,
-            s,
-            w - s,
+            name,
+            winner,
+            runner_up,
+            socialize,
+            winner - socialize,
             share * 100.0
         );
     }
@@ -126,7 +131,7 @@ mean loss {:.4}, max {:.4}",
             .filter(|&(_, c)| c > 0)
             .collect();
         rows.sort_by_key(|&(_, c)| std::cmp::Reverse(c));
-        println!("dominant motive ({} sampled):", total);
+        println!("dominant motive ({total} sampled):");
         for (i, c) in rows.iter().take(10) {
             println!(
                 "    {:>14} {:>9} {:>6.2}%",
@@ -147,9 +152,9 @@ mean loss {:.4}, max {:.4}",
 fn main() {
     println!("i387 — utility decomposition (buckets as defined in decision_census)");
     println!("warmup {WARMUP}, window {WINDOW}\n");
-    leg("calm village", 32, 32, 12, 42, World::Calm);
-    leg("calm village", 32, 32, 48, 42, World::Calm);
-    leg("calm village", 32, 32, 48, 7, World::Calm);
-    leg("collapse town", 46, 46, 48, 42, World::Collapse);
-    leg("pestilence town", 46, 46, 48, 7, World::Pestilence);
+    leg("calm village", 32, 32, 12, 42, &World::Calm);
+    leg("calm village", 32, 32, 48, 42, &World::Calm);
+    leg("calm village", 32, 32, 48, 7, &World::Calm);
+    leg("collapse town", 46, 46, 48, 42, &World::Collapse);
+    leg("pestilence town", 46, 46, 48, 7, &World::Pestilence);
 }

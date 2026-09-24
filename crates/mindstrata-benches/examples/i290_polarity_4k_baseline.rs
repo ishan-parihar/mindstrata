@@ -38,7 +38,7 @@ fn run_sim(seed: u64, ticks: u64) -> (f64, f64) {
             }
         }
     }
-    let avg_claims = if agent_count > 0 {
+    let _avg_claims = if agent_count > 0 {
         claim_sum as f64 / agent_count as f64
     } else {
         0.0

@@ -27,7 +27,7 @@ fn run(label: &str, force_stage: bool) {
     let mut sim = Simulation::from_scenario(sc);
     sim.populate();
     if force_stage {
-        for line in sim.collective_field.lines.iter_mut() {
+        for line in &mut sim.collective_field.lines {
             line.stage = 6.0;
         }
     }

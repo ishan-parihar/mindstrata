@@ -1,5 +1,5 @@
 //! Iteration 253 — affect distribution census.
-fn pct(vals: &mut Vec<f64>, q: f64) -> f64 {
+fn pct(vals: &mut [f64], q: f64) -> f64 {
     if vals.is_empty() {
         return 0.0;
     }

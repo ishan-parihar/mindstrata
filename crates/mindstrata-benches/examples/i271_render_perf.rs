@@ -17,13 +17,12 @@ use mindstrata_tui::{
 
 fn fixture_history(n: usize) -> Vec<MetricsSnapshot> {
     (0..n)
-        .map(|t| {
-            let mut m = MetricsSnapshot::default();
-            m.tick = (t * 10) as u64;
-            m.avg_stress = (t as f64 / n as f64).sin().abs();
-            m.avg_health = 1.0 - t as f64 / n as f64 * 0.2;
-            m.family_count = (t / 20) as u64;
-            m
+        .map(|t| MetricsSnapshot {
+            tick: (t * 10) as u64,
+            avg_stress: (t as f64 / n as f64).sin().abs(),
+            avg_health: 1.0 - t as f64 / n as f64 * 0.2,
+            family_count: (t / 20) as u64,
+            ..Default::default()
         })
         .collect()
 }
@@ -39,10 +38,7 @@ fn time_render<F: Fn() -> String>(label: &str, f: F, iters: usize) {
     }
     let elapsed = start.elapsed().as_secs_f64();
     let per_frame_us = elapsed * 1e6 / iters as f64;
-    println!(
-        "{} iters={} per_frame_us={:.1} total_bytes={}",
-        label, iters, per_frame_us, total_bytes
-    );
+    println!("{label} iters={iters} per_frame_us={per_frame_us:.1} total_bytes={total_bytes}");
 }
 
 fn main() {
@@ -74,10 +70,7 @@ fn main() {
         faction_count: 0,
     };
 
-    println!(
-        "render_hot_path perf (release, iters={} unless noted)",
-        iters
-    );
+    println!("render_hot_path perf (release, iters={iters} unless noted)");
     time_render(
         "metric_charts_2k",
         || render_metric_charts(&history_2k),
@@ -170,8 +163,7 @@ fn main() {
         };
         if heavy_us > 1000.0 {
             eprintln!(
-                "perf_budget_violation: metric_charts_10k_heavy {:.1}us > 1000us (IC-8)",
-                heavy_us
+                "perf_budget_violation: metric_charts_10k_heavy {heavy_us:.1}us > 1000us (IC-8)"
             );
             std::process::exit(1);
         }

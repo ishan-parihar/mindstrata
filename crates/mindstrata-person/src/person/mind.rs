@@ -548,7 +548,7 @@ mod moral_inherit_tests {
     use super::MoralValues;
     use crate::person::FIRST_NAMES;
     use mindstrata_core::fixed::Fixed;
-    use rand::{Rng, SeedableRng};
+    use rand::SeedableRng;
 
     #[test]
     fn values_transmit_vertically() {

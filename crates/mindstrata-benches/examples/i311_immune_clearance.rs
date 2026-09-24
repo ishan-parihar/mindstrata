@@ -53,7 +53,7 @@ struct Immune {
 
 fn scan(sim: &Simulation) -> Immune {
     let mut s = Immune::default();
-    for a in sim.agents.iter() {
+    for a in &sim.agents {
         s.agents += 1;
         let inf = a.embodied.immune.infection_load.to_f64();
         let res = a.embodied.immune.resistance.to_f64();
@@ -199,7 +199,7 @@ fn main() {
             sim.tick();
             ticks += 1;
             let mut any = false;
-            for a in sim.agents.iter() {
+            for a in &sim.agents {
                 let inf = a.embodied.immune.infection_load.to_f64();
                 peak = peak.max(inf);
                 if inf > 0.05 {

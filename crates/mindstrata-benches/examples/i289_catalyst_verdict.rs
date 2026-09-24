@@ -25,7 +25,7 @@ fn run(seed: u64, ticks: u64) {
     let mut sim = Simulation::from_scenario(sc);
     sim.populate();
     sim.run(ticks);
-    let events = sim.recent_events(sim.event_count() as usize);
+    let events = sim.recent_events(sim.event_count());
     let griefs = events
         .iter()
         .filter(|e| matches!(e, SimEvent::GriefStruck { .. }))

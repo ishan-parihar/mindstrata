@@ -198,27 +198,33 @@ Each iteration is one root cause, ends in `scripts/gate --full` green, and cites
 re-measured numbers here. Structural-only changes must produce **byte-identical
 goldens**.
 
-**C1 — gate closure (the AGENTS.md §3 queued tooling iteration).**
-1. *Step 0:* re-measure `cargo clippy --workspace --all-targets` after the i393
-   migration lands; refresh F2's counts here.
-2. Resolve F1: default is **delete** `i286_norm_proposal_census.rs` (its reachability
-   verdict was superseded by vivo + i288 + i292) and amend
-   `evidence/i286_norm_proposals.md:33`'s instrument list in the same commit (§4.14).
-   Alternative, if the operator wants the census for the record: repair the consensus
-   expression to the distinct-holder count its own comment describes, run it once,
-   reconcile the evidence numbers honestly.
-3. Add `[lints] workspace = true` to `mindstrata-development` (F3; measured 0 new
-   warnings — verify post-migration).
-4. Clear the 66 `(lib test)` warnings (F2) — cfg(test)-only surface, zero production
-   behaviour; goldens byte-identical by construction, suite must not move.
-5. Clear the 273 example warnings (F2) — mechanical, mostly `cargo clippy --fix`;
-   probe measurement behaviour must not change.
-6. Flip the gate step (F2+F4) to `cargo clippy --workspace --all-targets --locked --
-   -D warnings` (exit code, not grep; update the pre-commit hook in the same commit);
-   amend the AGENTS.md §3 known-gap paragraph (the gap closes; the "~14" number moves
-   out of the doctrine).
-*Exit:* `--all-targets` clippy exits 0 cold and warm; gate green; goldens byte-identical;
-suite count unchanged from the pre-C1 baseline.
+**C1 — gate closure (the AGENTS.md §3 queued tooling iteration). — LANDED 2026-09-24.**
+1. *Step 0:* re-measured `cargo clippy --workspace --all-targets` (339 sites / 147 files,
+   4 owned by the in-flight i401 migration — see §0); F2's counts refreshed there.
+2. F1 resolved by **deletion**: `i286_norm_proposal_census.rs` removed (verdict
+   superseded by vivo + i288 + i292; sibling `i286_diag` already went the same way),
+   with `evidence/i286_norm_proposals.md`'s instrument list annotated (§4.14). Note the
+   correction recorded in §0: plain rustc accepted the `erasing_op` expression, so the
+   census *did* run and its numbers were honestly attributed — the deletion is on
+   dead-code grounds, not citation-integrity grounds.
+3. `[lints] workspace = true` added to `mindstrata-development` (F3; measured 0 new
+   warnings post-migration, as simulated).
+4. The `(lib test)` warnings cleared — cfg(test)-only surface, zero production
+   behaviour.
+5. The example warnings cleared — mechanical (`explicit_iter_loop`,
+   `cloned_instead_of_copied`, `uninlined_format_args`, `field_reassign_with_default`,
+   `doc_lazy_continuation`, …), probe measurement behaviour unchanged. One
+   machine-applied `--fix` needed hand-repair: `i387_utility_decomposition` had its
+   `*winner` deref left behind after the fix hoisted the value into a local (E0614) —
+   exactly the hazard of landing an auto-fix without an exit-code gate, and the reason
+   step 6 is the point of the iteration.
+6. Gate step + versioned pre-commit hook flipped to `cargo clippy --workspace
+   --all-targets --locked -- -D warnings` (exit code, not grep-on-output), and the
+   AGENTS.md §3 known-gap paragraph amended to the closed form.
+*Exit:* measured — `cargo clippy --workspace --all-targets --locked -- -D warnings`
+**exits 0** on the C1 tree (verified cold and warm); gate green; goldens byte-identical
+(structural-only: no production-code behaviour changed, every fixed site is cfg(test),
+a probe example, or a doc comment).
 
 **C2 — suppression hygiene (F5).** Delete the redundant `Fixed` allow; convert the two
 reason-carrying allows and the tui `unreachable_patterns` to `#[expect]`; resolve the

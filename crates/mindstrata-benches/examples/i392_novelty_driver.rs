@@ -78,7 +78,7 @@ fn calm(n: u32, seed: u64) -> Simulation {
 /// Pin every agent's gene to one value — the same world with one dial moved.
 fn pinned(n: u32, seed: u64, gene: f64) -> Simulation {
     let mut sim = calm(n, seed);
-    for a in sim.agents.iter_mut() {
+    for a in &mut sim.agents {
         a.embodied.genome.trait_predispositions.novelty_seeking = Fixed::from_f64(gene);
     }
     sim
@@ -211,7 +211,7 @@ fn leg_b(n: u32, seed: u64) {
         pinned(n, seed, 0.5),
     );
     let high = census_of("gene pinned 0.9 (seeker, coef 2.32)", pinned(n, seed, 0.9));
-    let d = |a: &Reading, b: &Reading| (b.wander_decisions as i64 - a.wander_decisions as i64);
+    let d = |a: &Reading, b: &Reading| b.wander_decisions as i64 - a.wander_decisions as i64;
     println!(
         "DELTA  Wander by deliberation: 0.1→0.5 {:+} · 0.5→0.9 {:+} · monotone {}",
         d(&low, &control),
@@ -309,7 +309,7 @@ fn leg_e() {
     }
 
     let mut control = scenario(12, 42);
-    for a in control.agents.iter_mut() {
+    for a in &mut control.agents {
         a.embodied.genome.trait_predispositions.novelty_seeking = Fixed::from_f64(0.5);
     }
     let mut natural = scenario(12, 42);

@@ -75,20 +75,18 @@ fn main() {
                     reg.iter()
                         .map(|f| f.supplies)
                         .min()
-                        .map(|s| s.to_f64())
-                        .unwrap_or(f64::NAN),
+                        .map_or(f64::NAN, mindstrata_core::fixed::Fixed::to_f64),
                     reg.iter()
                         .map(|f| f.cohesion)
                         .min()
-                        .map(|c| c.to_f64())
-                        .unwrap_or(f64::NAN),
+                        .map_or(f64::NAN, mindstrata_core::fixed::Fixed::to_f64),
                 );
                 break; // the test breaks here
             }
         }
         let (at_first_len, non_secure, min_supply, min_cohesion) = at_first;
         // All three clauses the integration test asserts at the sample instant.
-        let cohesion_ok = min_cohesion <= 0.9 && min_cohesion >= 0.0;
+        let cohesion_ok = (0.0..=0.9).contains(&min_cohesion);
         let ok =
             first_live.is_some() && style_ok && cohesion_ok && (non_secure > 0 || min_supply < 0.7);
         if ok {
@@ -96,9 +94,7 @@ fn main() {
         }
         println!(
             "  {seed:<6} {:>12} {:>10} {:>12} {:>10.4} {:>10.4} {:>6} {:>8}",
-            first_live
-                .map(|t| t.to_string())
-                .unwrap_or_else(|| "none".to_string()),
+            first_live.map_or_else(|| "none".to_string(), |t| t.to_string()),
             at_first_len,
             non_secure,
             min_supply,

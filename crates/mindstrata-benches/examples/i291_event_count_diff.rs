@@ -1,3 +1,6 @@
+//! i291 — sanity probe: cumulative event counts at different horizons and
+//! agent counts, printed for eyeballing growth scaling.
+
 use mindstrata_sim::sim::SimConfig;
 use mindstrata_sim::Simulation;
 fn main() {

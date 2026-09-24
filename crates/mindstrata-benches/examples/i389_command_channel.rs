@@ -29,7 +29,7 @@ enum World {
     Pestilence,
 }
 
-fn build(world: World, seed: u64) -> Simulation {
+fn build(world: &World, seed: u64) -> Simulation {
     let mut sim = match world {
         World::Calm => Simulation::new(SimConfig {
             seed,
@@ -56,7 +56,7 @@ fn build(world: World, seed: u64) -> Simulation {
     sim
 }
 
-fn run(label: &str, world: World, seed: u64) {
+fn run(label: &str, world: &World, seed: u64) {
     let mut sim = build(world, seed);
     sim.run(WARMUP);
     decision_census::reset();
@@ -122,7 +122,7 @@ fn run(label: &str, world: World, seed: u64) {
         .institutions
         .iter()
         .find(|i| i.kind == mindstrata_sim::institutions::InstitutionKind::Council);
-    let legitimacy = council.map(|c| c.legitimacy.to_f64()).unwrap_or(f64::NAN);
+    let legitimacy = council.map_or(f64::NAN, |c| c.legitimacy.to_f64());
     let panics = sim.moral_panic_registry.panics.len();
     let n = sim.agents.len().max(1) as f64;
     let mean_hunger = sim
@@ -166,7 +166,7 @@ fn run(label: &str, world: World, seed: u64) {
 
 fn main() {
     println!("i389 — the directive channel (producer census, warmup {WARMUP}, window {WINDOW})\n");
-    run("calm village", World::Calm, 42);
-    run("collapse", World::Collapse, 42);
-    run("pestilence", World::Pestilence, 7);
+    run("calm village", &World::Calm, 42);
+    run("collapse", &World::Collapse, 42);
+    run("pestilence", &World::Pestilence, 7);
 }

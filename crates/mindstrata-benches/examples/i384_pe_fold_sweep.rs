@@ -144,7 +144,6 @@ fn main() {
     );
     let mut pinned_wins = 0usize;
     let mut pinned_best = 0.0f64;
-    let mut wide_wins = 0usize;
     let mut wide_best = 0.0f64;
     // Leg 2 — the per-agent coupling: does the fold reinforce harder for the
     // agents that got hungrier? (The population mean dilutes that signal over
@@ -162,9 +161,6 @@ fn main() {
                 pinned_wins += 1;
             }
             pinned_best = pinned_best.max(delta);
-        }
-        if delta > 0.0 {
-            wide_wins += 1;
         }
         wide_best = wide_best.max(delta);
 

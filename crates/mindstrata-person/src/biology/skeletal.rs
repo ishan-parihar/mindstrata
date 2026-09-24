@@ -342,8 +342,10 @@ mod tests {
         let risk = Fixed::from_f64(0.2);
         let mut values = Vec::new();
         for gene in [0.0f64, 0.25, 0.5] {
-            let mut s = SkeletalState::default();
-            s.fracture_risk = risk;
+            let mut s = SkeletalState {
+                fracture_risk: risk,
+                ..Default::default()
+            };
             for _ in 0..500 {
                 // injury below the 0.5 threshold leaves fracture_risk alone.
                 s.tick_update(

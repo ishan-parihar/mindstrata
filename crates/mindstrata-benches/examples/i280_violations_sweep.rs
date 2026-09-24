@@ -6,7 +6,7 @@
 use mindstrata_sim::sim::{SimConfig, Simulation};
 
 fn violations(sim: &Simulation) -> usize {
-    sim.recent_events(sim.event_count() as usize)
+    sim.recent_events(sim.event_count())
         .iter()
         .filter(|e| matches!(e, mindstrata_core::event::SimEvent::NormViolated { .. }))
         .count()

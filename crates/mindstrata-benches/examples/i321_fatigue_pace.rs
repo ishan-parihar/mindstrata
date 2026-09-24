@@ -60,7 +60,7 @@ struct Dist {
     debt_max: f64,
 }
 
-fn summarize(vals: &mut Vec<Sample>) -> Dist {
+fn summarize(vals: &mut [Sample]) -> Dist {
     vals.sort_by(|a, b| a.fatigue.partial_cmp(&b.fatigue).unwrap());
     let n = vals.len();
     if n == 0 {
@@ -108,7 +108,7 @@ fn measure(ticks: u64) -> (Dist, Vec<f64>) {
     let mut per_seed_p90 = Vec::new();
     for &seed in &SEEDS {
         let mut sim = Simulation::new(config(seed, ticks));
-        sim.params = params.clone();
+        sim.params = params;
         sim.populate();
         sim.run(ticks);
         if sim.agents.is_empty() {
@@ -136,7 +136,7 @@ fn measure(ticks: u64) -> (Dist, Vec<f64>) {
 fn in_run_trajectory(seed: u64, total: u64, step: u64) {
     let params = SimParameters::default();
     let mut sim = Simulation::new(config(seed, total));
-    sim.params = params.clone();
+    sim.params = params;
     sim.populate();
     println!("\n--- in-run trajectory (seed {seed}, every {step} ticks) ---");
     let mut done = 0;
@@ -203,10 +203,10 @@ fn main() {
             100.0 * d.at_zero as f64 / d.n.max(1) as f64,
             d.sd / d.mean.max(1e-9),
         );
-        let lo = per_seed_p90.iter().cloned().fold(f64::INFINITY, f64::min);
+        let lo = per_seed_p90.iter().copied().fold(f64::INFINITY, f64::min);
         let hi = per_seed_p90
             .iter()
-            .cloned()
+            .copied()
             .fold(f64::NEG_INFINITY, f64::max);
         println!(
             "  per-seed p90: lo={lo:.4} hi={hi:.4} spread={:.4}",
@@ -222,14 +222,11 @@ fn main() {
     let grown = shares.last().copied().unwrap_or(0.0) > shares[0] + 0.05;
     println!(
         "\n  high-tail share by horizon: {:?}",
-        shares
-            .iter()
-            .map(|s| format!("{:.3}", s))
-            .collect::<Vec<_>>()
+        shares.iter().map(|s| format!("{s:.3}")).collect::<Vec<_>>()
     );
     println!(
         "  p90 by horizon:            {:?}",
-        p90s.iter().map(|s| format!("{:.3}", s)).collect::<Vec<_>>()
+        p90s.iter().map(|s| format!("{s:.3}")).collect::<Vec<_>>()
     );
     // i307's residual ("p90 still 0.359 @50K") is dispositioned by what the
     // in-run trajectory shows: the village swings between a synchronized-rested

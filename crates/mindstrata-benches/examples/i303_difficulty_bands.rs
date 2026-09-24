@@ -71,11 +71,13 @@ fn config(seed: u64) -> SimConfig {
     }
 }
 
+type DigestRow = (i64, i64, i64, i64, i64, i64, i64, i64, i32, i32, String);
+
 /// Deterministic end-state digest: needs + body + action + position per agent,
 /// plus the total event count. Dense enough that any behavioral divergence
 /// between two runs shows up (aggregate means can cancel; this cannot).
 fn state_digest(sim: &Simulation) -> String {
-    let rows: Vec<(i64, i64, i64, i64, i64, i64, i64, i64, i32, i32, String)> = sim
+    let rows: Vec<DigestRow> = sim
         .agents
         .iter()
         .map(|a| {

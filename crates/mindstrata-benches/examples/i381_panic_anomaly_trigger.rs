@@ -62,7 +62,7 @@ fn sample(scenario: Scenario, seed: u64, label: &str, calm: bool) -> Vec<Series>
         .collect();
     for _ in 0..TICKS {
         sim.tick();
-        for s in series.iter_mut() {
+        for s in &mut series {
             let charges: Vec<f64> = sim
                 .agents
                 .iter()
@@ -90,11 +90,9 @@ fn old_law(series: &Series) -> usize {
     let mut count = 0usize;
     let mut last: Option<usize> = None;
     for (i, (avg, ratio)) in series.points.iter().enumerate() {
-        if *avg >= 0.55 && *ratio >= RATIO_LEG {
-            if last.is_none_or(|l| i - l >= COOLDOWN as usize) {
-                count += 1;
-                last = Some(i);
-            }
+        if *avg >= 0.55 && *ratio >= RATIO_LEG && last.is_none_or(|l| i - l >= COOLDOWN as usize) {
+            count += 1;
+            last = Some(i);
         }
     }
     count
@@ -142,6 +140,10 @@ fn anomaly_law(
     }
     (count, best_margin, anomalous_ticks)
 }
+
+/// One synthetic shape row: (label, per-tick `(avg_charge, panic_ratio)`
+/// series, old-law floor, old-law ratio multiplier).
+type ShapeRow = (&'static str, Vec<(f64, f64)>, f64, f64);
 
 fn main() {
     println!("i381 — sizing the relative/anomaly panic trigger (crisis @{TICKS}, calm @{TICKS})");
@@ -298,7 +300,7 @@ fn main() {
                 println!(
                     "{floor:>7.2} {ratio_mult:>6.2} {tau:>6.0} {fired:>6}/10 {calm_panics:>8} {:>9} {crisis_margin:>10.3} {:>16}",
                     calm_worlds.join(" "),
-                    seeds.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(",")
+                    seeds.iter().map(std::string::ToString::to_string).collect::<Vec<_>>().join(",")
                 );
                 rows.push((
                     floor,
@@ -356,24 +358,24 @@ fn main() {
     // handle — a population that *lives* above the bar, and one that drifts up to
     // it. Both are synthetic so the property is unambiguous.
     println!("\n== synthetic shapes: the anomaly arm's own job ==");
-    let shapes: Vec<(&str, Vec<(f64, f64)>, f64, f64)> = vec![
+    let shapes: Vec<ShapeRow> = vec![
         // (label, series, floor, mult) — floor/mult columns below are the pre-i381 law.
-        ("flat 0.20 (quiet)", flat(vec![0.20], 20_000), 0.47, 1.25),
+        ("flat 0.20 (quiet)", flat(&[0.20], 20_000), 0.47, 1.25),
         (
             "flat 0.40 (warm, below floor)",
-            flat(vec![0.40], 20_000),
+            flat(&[0.40], 20_000),
             0.47,
             1.25,
         ),
         (
             "flat 0.65 (sustained, above floor)",
-            flat(vec![0.65], 20_000),
+            flat(&[0.65], 20_000),
             0.47,
             1.25,
         ),
         (
             "0.20 → 0.65 step at 5K",
-            step(vec![0.20, 0.65], 5_000),
+            step(&[0.20, 0.65], 5_000),
             0.47,
             1.25,
         ),
@@ -405,14 +407,14 @@ fn main() {
 }
 
 /// A flat population at `levels[0]` for `ticks`, with a charged share matching it.
-fn flat(levels: Vec<f64>, ticks: usize) -> Vec<(f64, f64)> {
+fn flat(levels: &[f64], ticks: usize) -> Vec<(f64, f64)> {
     let level = levels[0];
     let ratio = if level > 0.4 { 0.5 } else { 0.0 };
     (0..ticks).map(|_| (level, ratio)).collect()
 }
 
 /// A population that steps to `levels[1]` after `run_in` ticks at `levels[0]`.
-fn step(levels: Vec<f64>, run_in: usize) -> Vec<(f64, f64)> {
+fn step(levels: &[f64], run_in: usize) -> Vec<(f64, f64)> {
     (0..20_000)
         .map(|i| {
             let level = if i < run_in { levels[0] } else { levels[1] };

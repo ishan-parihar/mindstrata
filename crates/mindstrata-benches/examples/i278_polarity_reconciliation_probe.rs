@@ -64,58 +64,58 @@ fn main() {
     let mut no_reconcile = 0usize;
 
     // (Material, Symbolic) on Event → reconcilable
-    let a = ThreeRealmClaim::new(
+    let material_event_claim = ThreeRealmClaim::new(
         CausalDomain::Material,
         GrossReferent::Event,
         SubtleClaim::Fact,
         LineId::new("cognitive").expect("cognitive line"),
     );
-    let mut a = a;
-    a.polarity = PolarityState::ActiveTension;
-    let mut b = ThreeRealmClaim::new(
+    let mut material_event_claim = material_event_claim;
+    material_event_claim.polarity = PolarityState::ActiveTension;
+    let mut symbolic_event_claim = ThreeRealmClaim::new(
         CausalDomain::Symbolic,
         GrossReferent::Event,
         SubtleClaim::Value,
         LineId::new("cognitive").expect("cognitive line"),
     );
-    b.polarity = PolarityState::ActiveTension;
-    match reconcile_claims(&a, &b) {
+    symbolic_event_claim.polarity = PolarityState::ActiveTension;
+    match reconcile_claims(&material_event_claim, &symbolic_event_claim) {
         Some(_) => reconciled += 1,
         None => no_reconcile += 1,
     }
-    if is_active_tension(&a, &b) {
+    if is_active_tension(&material_event_claim, &symbolic_event_claim) {
         active_tension += 1;
     }
 
     // (Material, Material) on Event → not reconcilable
-    let mut c = ThreeRealmClaim::new(
+    let mut material_first_claim = ThreeRealmClaim::new(
         CausalDomain::Material,
         GrossReferent::Event,
         SubtleClaim::Fact,
         LineId::new("cognitive").expect("cognitive line"),
     );
-    c.polarity = PolarityState::ActiveTension;
-    let mut d = ThreeRealmClaim::new(
+    material_first_claim.polarity = PolarityState::ActiveTension;
+    let mut material_second_claim = ThreeRealmClaim::new(
         CausalDomain::Material,
         GrossReferent::Event,
         SubtleClaim::Value,
         LineId::new("cognitive").expect("cognitive line"),
     );
-    d.polarity = PolarityState::ActiveTension;
-    match reconcile_claims(&c, &d) {
+    material_second_claim.polarity = PolarityState::ActiveTension;
+    match reconcile_claims(&material_first_claim, &material_second_claim) {
         Some(_) => reconciled += 1,
         None => no_reconcile += 1,
     }
 
     // Undiscovered claim → no reconcile
-    let e = ThreeRealmClaim::new(
+    let undiscovered_claim = ThreeRealmClaim::new(
         CausalDomain::Material,
         GrossReferent::Event,
         SubtleClaim::Fact,
         LineId::new("cognitive").expect("cognitive line"),
     );
-    let f = b;
-    match reconcile_claims(&e, &f) {
+    let symbolic_moved_claim = symbolic_event_claim;
+    match reconcile_claims(&undiscovered_claim, &symbolic_moved_claim) {
         Some(_) => reconciled += 1,
         None => no_reconcile += 1,
     }

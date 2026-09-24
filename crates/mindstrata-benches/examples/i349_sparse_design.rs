@@ -63,13 +63,13 @@ fn main() {
         let mut top3_stranger = 0usize;
         let mut per_from_exact: std::collections::HashMap<u64, Vec<(f64, bool)>> =
             std::collections::HashMap::new();
-        for r in rels.iter() {
+        for r in rels {
             per_from_exact
                 .entry(r.from.as_u64())
                 .or_default()
                 .push((r.trust.to_f64(), r.interaction_count > 0));
         }
-        for (_, pairs) in &per_from_exact {
+        for pairs in per_from_exact.values() {
             let mut sorted = pairs.clone();
             sorted.sort_by(|a, b| b.0.total_cmp(&a.0));
             for (t, contacted_flag) in sorted.iter().take(3) {
@@ -83,7 +83,7 @@ fn main() {
 
         // ── Leg 2: appraisal mean-trust delta ──
         let mut deltas: Vec<f64> = Vec::new();
-        for (_, pairs) in &per_from_exact {
+        for pairs in per_from_exact.values() {
             if pairs.is_empty() {
                 continue;
             }
@@ -123,7 +123,7 @@ fn main() {
         // ── Leg 4: trust distributions ──
         let mut contacted_trusts: Vec<f64> = Vec::new();
         let mut stranger_trusts: Vec<f64> = Vec::new();
-        for r in rels.iter() {
+        for r in rels {
             if r.interaction_count > 0 {
                 contacted_trusts.push(r.trust.to_f64());
             } else {
@@ -175,7 +175,7 @@ fn main() {
         // populate band entirely.
         let mut touched = 0usize;
         let mut saturated = 0usize; // trust == 1.0, no direct interaction (witness ratchet)
-        for r in rels.iter() {
+        for r in rels {
             if r.interaction_count > 0 || r.last_interaction_tick > 0 {
                 touched += 1;
             }

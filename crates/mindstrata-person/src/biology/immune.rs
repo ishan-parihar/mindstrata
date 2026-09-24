@@ -429,9 +429,8 @@ mod immunity_tests {
         let step = Fixed::from_f64(0.0005);
         assert!(step > Fixed::ZERO, "decay step quantized to zero");
         let full = Fixed::ONE;
-        assert_eq!(
+        assert!(
             Fixed::from_f64(full.to_f64() - step.to_f64()) < full,
-            true,
             "one decay day must strictly reduce full immunity"
         );
     }

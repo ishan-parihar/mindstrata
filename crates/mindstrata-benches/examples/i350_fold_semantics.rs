@@ -65,7 +65,6 @@ fn fold_deltas(sim: &Simulation) -> Vec<FoldDelta> {
         let mut live_min = 1.0f64;
         let mut live_quality = 0.0f64;
         let mut live_count = 0usize;
-        let mut live_oblig = 0.0f64;
         for rv2 in &agent.relationship_v2s {
             let t = rv2.trust.to_f64();
             let q = rv2.quality().to_f64();
@@ -77,7 +76,6 @@ fn fold_deltas(sim: &Simulation) -> Vec<FoldDelta> {
                 live_sum += t;
                 live_min = live_min.min(t);
                 live_quality += q;
-                live_oblig += rv2.obligation.to_f64();
                 live_count += 1;
             }
         }

@@ -81,9 +81,9 @@ fn main() {
     let mut per_polity = [0usize; 2];
     let mut host_rosters: Vec<(String, Vec<usize>)> = Vec::new();
     for m in &sim.meme_registry.memes {
-        for ns in 0..2 {
+        for (ns, slot) in per_polity.iter_mut().enumerate() {
             if m.description.contains(&format!("[genesis:p{ns}:")) {
-                per_polity[ns] += 1;
+                *slot += 1;
             }
         }
         if m.description.contains("[genesis:p") {

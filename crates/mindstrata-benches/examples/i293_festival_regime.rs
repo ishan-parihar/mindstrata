@@ -69,16 +69,13 @@ fn run(seed: u64, attendance: Option<f64>) {
         while sim.current_tick().as_u64() < h {
             sim.tick();
             if let Some(a) = attendance {
-                if sim.current_tick().as_u64() % 12 == 0 {
+                if sim.current_tick().as_u64().is_multiple_of(12) {
                     festival_step(&mut sim.collective_field, a);
                 }
             }
         }
         let (n, buckets) = census(&sim);
-        println!(
-            "seed {seed} att={:?} @{h:>5}: generated={n:>2} buckets={buckets:?}",
-            attendance
-        );
+        println!("seed {seed} att={attendance:?} @{h:>5}: generated={n:>2} buckets={buckets:?}");
     }
 }
 
@@ -95,7 +92,7 @@ fn run_collect(seed: u64, attendance: Option<f64>) -> std::collections::HashSet<
     while sim.current_tick().as_u64() < 20_000 {
         sim.tick();
         if let Some(a) = attendance {
-            if sim.current_tick().as_u64() % 12 == 0 {
+            if sim.current_tick().as_u64().is_multiple_of(12) {
                 festival_step(&mut sim.collective_field, a);
             }
         }
@@ -133,7 +130,7 @@ fn run_varied(seed: u64) -> std::collections::HashSet<String> {
     let mut lcg = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15).wrapping_add(1);
     while sim.current_tick().as_u64() < 20_000 {
         sim.tick();
-        if sim.current_tick().as_u64() % 12 == 0 {
+        if sim.current_tick().as_u64().is_multiple_of(12) {
             lcg = lcg
                 .wrapping_mul(6_364_136_223_846_793_005)
                 .wrapping_add(1_442_695_040_888_963_407);

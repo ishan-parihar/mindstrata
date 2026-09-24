@@ -44,8 +44,8 @@ fn main() {
     sim.agents[0].age = Fixed::from_f64(30.0);
     sim.agents[6].age = Fixed::from_f64(30.0);
     for r in &mut sim.relationships {
-        if (r.from == AgentId0() && r.to == AgentId6())
-            || (r.from == AgentId6() && r.to == AgentId0())
+        if (r.from == agent_id0() && r.to == agent_id6())
+            || (r.from == agent_id6() && r.to == agent_id0())
         {
             r.trust = Fixed::ONE;
             r.affection = Fixed::ONE;
@@ -59,16 +59,15 @@ fn main() {
     while steps < 900 {
         sim.run(144);
         steps += 1;
-        if steps % 100 != 0 {
+        if !steps.is_multiple_of(100) {
             continue;
         }
         let rel01 = sim
             .relationships
             .iter()
             .find(|r| r.from.as_u64() == 6 && r.to.as_u64() == 0);
-        let (trust, affection) = rel01
-            .map(|r| (r.trust.to_f64(), r.affection.to_f64()))
-            .unwrap_or((-1.0, -1.0));
+        let (trust, affection) =
+            rel01.map_or((-1.0, -1.0), |r| (r.trust.to_f64(), r.affection.to_f64()));
         println!(
             "step={steps:>3} t={:>6} trust={trust:.3} aff={affection:.3} h0={:.2} h6={:.2} \
              age0={:.0} partner0={:?} feuds0={} feuds6={} homes {:?}/{:?}",
@@ -85,9 +84,9 @@ fn main() {
     }
 }
 
-fn AgentId0() -> mindstrata_core::id::AgentId {
+fn agent_id0() -> mindstrata_core::id::AgentId {
     mindstrata_core::id::AgentId::new(0)
 }
-fn AgentId6() -> mindstrata_core::id::AgentId {
+fn agent_id6() -> mindstrata_core::id::AgentId {
     mindstrata_core::id::AgentId::new(6)
 }

@@ -20,7 +20,7 @@ fn run(forced: bool) {
     let mut sim = Simulation::new(config);
     sim.populate();
     if forced {
-        for line in sim.collective_field.lines.iter_mut() {
+        for line in &mut sim.collective_field.lines {
             line.stage = 12.0;
         }
     }
@@ -53,7 +53,7 @@ fn run(forced: bool) {
     );
 
     let violations = sim
-        .recent_events(sim.event_count() as usize)
+        .recent_events(sim.event_count())
         .iter()
         .filter(|e| matches!(e, mindstrata_core::event::SimEvent::NormViolated { .. }))
         .count();

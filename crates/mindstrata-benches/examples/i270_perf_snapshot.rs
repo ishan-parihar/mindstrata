@@ -44,17 +44,13 @@ fn main() {
         for &seed in &seeds {
             let (elapsed, tps) = measure(n, horizon, seed);
             tps_vals.push(tps);
-            println!(
-                "n={} horizon={} seed={} elapsed_s={:.3} tps={:.0}",
-                n, horizon, seed, elapsed, tps
-            );
+            println!("n={n} horizon={horizon} seed={seed} elapsed_s={elapsed:.3} tps={tps:.0}");
         }
         let mean = tps_vals.iter().sum::<f64>() / tps_vals.len() as f64;
-        let min = tps_vals.iter().cloned().fold(f64::INFINITY, f64::min);
-        let max = tps_vals.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let min = tps_vals.iter().copied().fold(f64::INFINITY, f64::min);
+        let max = tps_vals.iter().copied().fold(f64::NEG_INFINITY, f64::max);
         println!(
-            "summary n={} horizon={} mean_tps={:.0} min_tps={:.0} max_tps={:.0}",
-            n, horizon, mean, min, max
+            "summary n={n} horizon={horizon} mean_tps={mean:.0} min_tps={min:.0} max_tps={max:.0}"
         );
         if quick && tps_vals[0] < 8000.0 {
             eprintln!("perf_budget_violation: tps {:.0} < floor 8000", tps_vals[0]);

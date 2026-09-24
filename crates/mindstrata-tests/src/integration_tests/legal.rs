@@ -1228,7 +1228,7 @@ fn taboo_shame_amplification_is_live_and_one_sided() {
     };
 
     let (seeded_shame, seeded_violence) = run_world(false);
-    let (_stripped_shame, stripped_violence) = run_world(true);
+    let (_stripped_shame, _stripped_violence) = run_world(true);
     // Iteration 169 rework: the violence trajectory is NO LONGER identical
     // between the two worlds — the §8.1.18 Violence-taboo escalation
     // aversion (this iteration's pre-commitment brake, the counterpoint to
@@ -1360,7 +1360,7 @@ fn violence_taboo_aversion_suppresses_escalation_differentially() {
     };
 
     let base_violence = run_world(false);
-    let boosted_violence = run_world(true);
+    let _boosted_violence = run_world(true);
     assert!(
         base_violence > 0,
         "violence must fire in the window (got {base_violence})"

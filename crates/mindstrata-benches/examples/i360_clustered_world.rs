@@ -78,7 +78,7 @@ fn main() {
         let mut sim = build(n, 42, side, 10_000);
         sim.auto_partition_polities(8);
         let polities = sim.polity_members.len();
-        let members: Vec<usize> = sim.polity_members.iter().map(|p| p.len()).collect();
+        let members: Vec<usize> = sim.polity_members.iter().map(std::vec::Vec::len).collect();
         sim.run(10_000);
         let ms = sim.metrics_snapshot();
         let zero_coin = sim
@@ -90,9 +90,12 @@ fn main() {
         // namespace by the Era IV genesis pass (i158 tag convention).
         let mut per_polity = vec![0usize; polities];
         for meme in &sim.meme_registry.memes {
-            for k in 0..polities {
-                if meme.description.contains(&format!("[genesis:p{k}:")) {
-                    per_polity[k] += 1;
+            for (polity_idx, slot) in per_polity.iter_mut().enumerate() {
+                if meme
+                    .description
+                    .contains(&format!("[genesis:p{polity_idx}:"))
+                {
+                    *slot += 1;
                 }
             }
         }

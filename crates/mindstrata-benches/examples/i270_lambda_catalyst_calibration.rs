@@ -81,8 +81,8 @@ fn main() {
     println!("catalyst census over {seeds:?} × 2000 ticks (12 agents):");
     for (k, mags) in &by_kind {
         let mean = mags.iter().sum::<f64>() / mags.len().max(1) as f64;
-        let min = mags.iter().cloned().fold(f64::INFINITY, f64::min);
-        let max = mags.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let min = mags.iter().copied().fold(f64::INFINITY, f64::min);
+        let max = mags.iter().copied().fold(f64::NEG_INFINITY, f64::max);
         println!(
             "  {k:>14}: n={:>4}  mean={mean:.3}  min={min:.3}  max={max:.3}",
             mags.len()

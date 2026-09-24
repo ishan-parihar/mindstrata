@@ -79,8 +79,8 @@ fn main() {
         );
     }
     let mean = ginis.iter().sum::<f64>() / ginis.len() as f64;
-    let max = ginis.iter().cloned().fold(f64::MIN, f64::max);
-    let max_hoard = hoards.iter().cloned().fold(f64::MIN, f64::max);
+    let max = ginis.iter().copied().fold(f64::MIN, f64::max);
+    let max_hoard = hoards.iter().copied().fold(f64::MIN, f64::max);
     println!(
         "\nband: gini mean {mean:.4}  max {max:.4}  (pre-fix plateau ~0.647–0.652)  max council hoard {max_hoard:.0}"
     );

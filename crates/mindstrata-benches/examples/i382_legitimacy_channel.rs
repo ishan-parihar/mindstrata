@@ -240,7 +240,7 @@ fn report(label: &str, scenario: Option<Scenario>, seed: u64, ticks: u64, w: u32
     );
     println!(
         "  shipped pressure  max {:.3}   ticks >= arm {:.2}   at 10K {}",
-        s.pressure.iter().cloned().fold(0.0f64, f64::max),
+        s.pressure.iter().copied().fold(0.0f64, f64::max),
         100.0 * above_arm as f64 / len,
         if s.legitimacy.len() > 10_000 {
             format!("{:.3}", s.pressure[9_999])
@@ -310,8 +310,8 @@ fn report(label: &str, scenario: Option<Scenario>, seed: u64, ticks: u64, w: u32
             }
             in_dip = open;
         }
-        let bmin = s.baseline.iter().cloned().fold(f64::INFINITY, f64::min);
-        let bmax = s.baseline.iter().cloned().fold(0.0f64, f64::max);
+        let bmin = s.baseline.iter().copied().fold(f64::INFINITY, f64::min);
+        let bmax = s.baseline.iter().copied().fold(0.0f64, f64::max);
         println!(
             "  SHIPPED i382  mandate baseline {:.3}–{:.3}  collapse arm opens {:>6.2}%  episodes {episodes}  deficit {deficit_units:.4}",
             bmin,

@@ -39,7 +39,7 @@ enum World {
     Pestilence,
 }
 
-fn build(world: World, seed: u64) -> Simulation {
+fn build(world: &World, seed: u64) -> Simulation {
     let mut sim = match world {
         World::Calm => Simulation::new(SimConfig {
             seed,
@@ -66,7 +66,7 @@ fn build(world: World, seed: u64) -> Simulation {
     sim
 }
 
-fn run(label: &str, world: World, seed: u64) {
+fn run(label: &str, world: &World, seed: u64) {
     let mut sim = build(world, seed);
     sim.run(WARMUP);
     decision_census::reset();
@@ -94,8 +94,7 @@ fn run(label: &str, world: World, seed: u64) {
                     .roles
                     .iter()
                     .find(|r| r.name == "Elder")
-                    .map(|r| r.holder.is_none())
-                    .unwrap_or(false);
+                    .is_some_and(|r| r.holder.is_none());
                 if elder {
                     elder_vacant = true;
                     if !inst.members.is_empty() {
@@ -150,7 +149,7 @@ fn run(label: &str, world: World, seed: u64) {
 
 fn main() {
     println!("i390 — office succession (warmup {WARMUP}, window {WINDOW})\n");
-    run("calm village", World::Calm, 42);
-    run("collapse", World::Collapse, 42);
-    run("pestilence", World::Pestilence, 7);
+    run("calm village", &World::Calm, 42);
+    run("collapse", &World::Collapse, 42);
+    run("pestilence", &World::Pestilence, 7);
 }

@@ -392,7 +392,7 @@ mod tests {
         let parent_a = Genome::random(&mut rand::rngs::StdRng::seed_from_u64(11));
         let parent_b = Genome::random(&mut rand::rngs::StdRng::seed_from_u64(22));
         let stranger = Genome::random(&mut rand::rngs::StdRng::seed_from_u64(33));
-        let mid = |x: f64, y: f64| (x + y) * 0.5;
+        let mid = |x: f64, y: f64| f64::midpoint(x, y);
         let mut child_dist = 0.0f64;
         let mut stranger_dist = 0.0f64;
         for seed in 100u64..140 {

@@ -43,7 +43,7 @@ fn main() {
         } else {
             let mut sum = 0.0;
             let mut k = 0;
-            for a in s.agents.iter() {
+            for a in &s.agents {
                 for b in a.beliefs.iter().take(2) {
                     sum += b.emotional_charge.to_f64();
                     k += 1;

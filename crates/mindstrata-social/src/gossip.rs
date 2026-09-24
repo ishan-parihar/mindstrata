@@ -983,11 +983,11 @@ mod tests {
         high_charge.emotional_charge = Fixed::from_f64(0.7);
         let low_charge = make_belief(1, 0.5); // default emotional_charge = 0.3
 
-        let b1 = vec![high_charge];
-        let b2 = vec![low_charge.clone()];
-        let b3 = vec![low_charge.clone()];
-        let b4 = vec![low_charge.clone()];
-        let b5 = vec![low_charge];
+        let b1 = [high_charge];
+        let b2 = [low_charge.clone()];
+        let b3 = [low_charge.clone()];
+        let b4 = [low_charge.clone()];
+        let b5 = [low_charge];
         let beliefs: Vec<&[Belief]> = vec![&b1[..], &b2[..], &b3[..], &b4[..], &b5[..]];
 
         let result = detect_moral_panic(&beliefs, 1, Fixed::ZERO);

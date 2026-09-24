@@ -1,3 +1,5 @@
+//! i292 — metric-hash fingerprints: hashes each scenario's metric snapshot (riverford, collapse) for regression comparison.
+
 use mindstrata_sim::scenario::Scenario;
 use mindstrata_sim::sim::SimConfig;
 use mindstrata_sim::Simulation;

@@ -135,7 +135,7 @@ fn calm_per_seed(n: u32, ticks: u64) {
     }
 }
 
-fn crisis(label: &str, scenario: Scenario, ticks: u64, st: &mut AngerStats) {
+fn crisis(label: &str, scenario: &Scenario, ticks: u64, st: &mut AngerStats) {
     for seed in SEEDS {
         let mut sc = scenario.clone();
         sc.seed = seed;
@@ -166,7 +166,7 @@ fn main() {
         ("drought", Scenario::drought()),
     ] {
         let mut st = AngerStats::default();
-        crisis(label, sc, 4_320, &mut st);
+        crisis(label, &sc, 4_320, &mut st);
         st.report(&format!("{label} N=12 @4320"));
     }
 }

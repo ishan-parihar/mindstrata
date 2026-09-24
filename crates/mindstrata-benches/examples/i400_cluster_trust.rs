@@ -33,7 +33,6 @@ fn village(n: u32, seed: u64) -> Simulation {
         world_height: 16,
         num_agents: n,
         snapshot_interval: None,
-        ..SimConfig::default()
     });
     sim.populate();
     sim

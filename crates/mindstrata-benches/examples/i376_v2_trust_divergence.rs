@@ -22,7 +22,7 @@ use mindstrata_core::id::AgentId;
 use mindstrata_sim::sim::{SimConfig, Simulation};
 use std::collections::HashMap;
 
-fn pct(v: &mut Vec<f64>, p: f64) -> f64 {
+fn pct(v: &mut [f64], p: f64) -> f64 {
     if v.is_empty() {
         return f64::NAN;
     }
@@ -42,13 +42,11 @@ struct Stats {
     v1_mean: f64,
     v1_p95: f64,
     v1_pin95: f64,
-    v1_pin99: f64,
     v1_discriminating: f64,
     v2_mean: f64,
     v2_p95: f64,
     v2_pin95: f64,
     div_mean: f64,
-    div_p50: f64,
     div_p95: f64,
     div_gt05: f64,
     pairs: usize,
@@ -62,8 +60,8 @@ fn measure(sim: &Simulation) -> Stats {
     let mut v2_trusts: Vec<f64> = Vec::new();
     let mut v1_trusts: Vec<f64> = Vec::new();
     let mut divs: Vec<f64> = Vec::new();
-    for a in sim.agents.iter() {
-        for rv2 in a.relationship_v2s.iter() {
+    for a in &sim.agents {
+        for rv2 in &a.relationship_v2s {
             let t2 = rv2.trust.to_f64();
             v2_trusts.push(t2);
             if let Some(t1) = v1.get(&(rv2.from.as_u64(), rv2.to.as_u64())) {
@@ -94,13 +92,11 @@ fn measure(sim: &Simulation) -> Stats {
         v1_mean: mean(&v1_trusts),
         v1_p95: pct(&mut v1s, 0.95),
         v1_pin95: pin(&v1_trusts, 0.95),
-        v1_pin99: pin(&v1_trusts, 0.99),
         v1_discriminating: discriminating(&v1_trusts),
         v2_mean: mean(&v2_trusts),
         v2_p95: pct(&mut v2s, 0.95),
         v2_pin95: pin(&v2_trusts, 0.95),
         div_mean: mean(&divs),
-        div_p50: pct(&mut d, 0.50),
         div_p95: pct(&mut d, 0.95),
         div_gt05: if divs.is_empty() {
             f64::NAN

@@ -1085,8 +1085,10 @@ mod tests {
     /// pattern every Snapshot field addition has used since v8.
     #[test]
     fn legacy_params_json_defaults_to_standard_band() {
-        let mut p = SimParameters::default();
-        p.difficulty = DifficultyProfile::Harsh;
+        let p = SimParameters {
+            difficulty: DifficultyProfile::Harsh,
+            ..Default::default()
+        };
         let json = serde_json::to_string(&p).unwrap();
         // Simulate pre-i303 bytes: strip the difficulty key.
         let mut v: serde_json::Value = serde_json::from_str(&json).unwrap();

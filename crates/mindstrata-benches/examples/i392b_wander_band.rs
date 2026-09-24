@@ -215,7 +215,7 @@ fn leg_c() {
     println!("══ C — horizon sensitivity (N=12, {WORLD}×{WORLD}) ══");
     println!("seed   @2K     @10K    @20K");
     for seed in [7u64, 42] {
-        let mut row = format!("{:>4} ", seed);
+        let mut row = format!("{seed:>4} ");
         for ticks in [2_000u64, 10_000, TICKS] {
             let r = measure(seed, 12, ticks);
             row.push_str(&format!("  {:>5.2}%", r.share));

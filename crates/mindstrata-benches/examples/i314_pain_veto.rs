@@ -23,10 +23,10 @@ struct PainStats {
 
 impl PainStats {
     fn observe(&mut self, sim: &Simulation, tick: u64) {
-        for a in sim.agents.iter() {
+        for a in &sim.agents {
             let p = a.embodied.nervous.pain.effective_pain().to_f64();
             self.agent_ticks += 1;
-            if tick % 20 == 0 {
+            if tick.is_multiple_of(20) {
                 self.samples.push(p);
             }
             for (i, t) in [0.5, 0.7, 0.9].iter().enumerate() {

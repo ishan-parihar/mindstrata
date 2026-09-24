@@ -56,7 +56,7 @@ fn run_ab(seed: u64, ticks: u64, forced_stage: Option<f64>) -> AbResult {
     sim.populate();
     let idx = wpj_indexes(&sim);
     assert_eq!(idx.len(), 2, "both WP-J input lines must resolve");
-    let norm_violated;
+
     let mut last_metrics = (0.0_f64, 0_u64, 0_u64);
     for _ in 0..ticks {
         if let Some(stage) = forced_stage {
@@ -73,8 +73,8 @@ fn run_ab(seed: u64, ticks: u64, forced_stage: Option<f64>) -> AbResult {
         sim.tick();
     }
     // Event census over the full run window (pub read-side accessor).
-    norm_violated = sim
-        .recent_events(sim.event_count() as usize)
+    let norm_violated = sim
+        .recent_events(sim.event_count())
         .iter()
         .filter(|e| matches!(e, SimEvent::NormViolated { .. }))
         .count() as u64;

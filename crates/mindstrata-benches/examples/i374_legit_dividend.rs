@@ -47,11 +47,6 @@ fn gini(xs: &mut [f64]) -> f64 {
     (2.0 * weighted) / (n * sum) - (n + 1.0) / n
 }
 
-/// The share law under test. `k = 0.0` degenerates to the constant law at s0.
-fn share_law(k: f64, s0: f64, legitimacy: f64) -> f64 {
-    (s0 + k * (1.0 - legitimacy)).clamp(0.05, 0.95)
-}
-
 fn run(seed: u64, ticks: u64, k: f64, s0: f64) -> (f64, f64, f64, f64, f64) {
     let mut sim = Simulation::new(SimConfig {
         seed,
@@ -67,9 +62,9 @@ fn run(seed: u64, ticks: u64, k: f64, s0: f64) -> (f64, f64, f64, f64, f64) {
 
     let mut mean_legit = 0.0f64;
     let mut samples = 0.0f64;
-    for _t in 0..ticks {
+    for t in 0..ticks {
         sim.tick();
-        if _t % 100 == 0 {
+        if t % 100 == 0 {
             if let Some(c) = sim
                 .institutions
                 .iter()
@@ -86,17 +81,15 @@ fn run(seed: u64, ticks: u64, k: f64, s0: f64) -> (f64, f64, f64, f64, f64) {
         .institutions
         .iter()
         .find(|i| i.kind == InstitutionKind::Council)
-        .map(|c| c.treasury.to_f64())
-        .unwrap_or(0.0);
+        .map_or(0.0, |c| c.treasury.to_f64());
     let mut coins: Vec<f64> = sim.agents.iter().map(|a| a.wealth.coin.to_f64()).collect();
     let g = gini(&mut coins);
-    let min_coin = coins.iter().cloned().fold(f64::INFINITY, f64::min);
+    let min_coin = coins.iter().copied().fold(f64::INFINITY, f64::min);
     let legitimacy = sim
         .institutions
         .iter()
         .find(|i| i.kind == InstitutionKind::Council)
-        .map(|c| c.legitimacy.to_f64())
-        .unwrap_or(0.0);
+        .map_or(0.0, |c| c.legitimacy.to_f64());
     (g, treasury, min_coin, legitimacy, mean_legit)
 }
 

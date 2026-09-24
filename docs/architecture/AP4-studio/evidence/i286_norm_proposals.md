@@ -30,7 +30,10 @@ genesis call, reading the claim state the polarity pass just advanced:
 
 ## The in-vivo verdict (the probe reshaped the design)
 
-`i286_norm_proposal_census` + `i286_diag` (deleted after use) + `i286_norm_proposal_vivo`:
+`i286_norm_proposal_census` (deleted after use — retired again at plan-rust-craft C1,
+whose all-targets clippy gate the dead probe cannot pass; the numbers below were
+produced via `cargo run`, which does not run clippy lints) + `i286_diag` (deleted
+after use) + `i286_norm_proposal_vivo`:
 
 - Value/Norm syntheses are **structurally unreachable in vivo**:
   reconciliation needs two different subtle claims on one slot, and the only

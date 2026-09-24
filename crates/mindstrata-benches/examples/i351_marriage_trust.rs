@@ -1,7 +1,6 @@
 //! i351 — the trust input to the marriage gate: distribution of
 //! `relationships.trust` (the v1 matrix the marriage block reads) at 0/5000
 //! ticks, to size why the 0.0002 low-rate run no longer marries on seed 42.
-use mindstrata_core::fixed::Fixed;
 use mindstrata_sim::sim::{SimConfig, Simulation};
 
 fn main() {

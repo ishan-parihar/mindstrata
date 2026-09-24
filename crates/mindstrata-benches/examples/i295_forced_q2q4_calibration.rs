@@ -7,7 +7,7 @@ use mindstrata_development::dynamics::{Metabolism, OperatorParams, QuadrantState
 fn trajectory(steps: &[(Metabolism, f64)], label: &str) {
     let p = OperatorParams::pending();
     let mut q = QuadrantState::neutral();
-    println!("--- {} (pending g=0.05 d=0.02 c=1.0) ---", label);
+    println!("--- {label} (pending g=0.05 d=0.02 c=1.0) ---");
     for (i, (met, pressure)) in steps.iter().enumerate() {
         q = q.step(*met, *pressure, &p);
         if i < 5 || i % 500 == 0 || i == steps.len() - 1 {

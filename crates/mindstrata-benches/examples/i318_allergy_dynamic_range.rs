@@ -50,7 +50,7 @@ struct Dist {
     alive: usize,
 }
 
-fn summarize(vals: &mut Vec<f64>, ceiling: f64) -> Dist {
+fn summarize(vals: &mut [f64], ceiling: f64) -> Dist {
     vals.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let n = vals.len();
     if n == 0 {
@@ -90,7 +90,7 @@ fn measure(ticks: u64) -> HorizonStats {
     let mut per_seed_q2 = Vec::new();
     for &seed in &SEEDS {
         let mut sim = Simulation::new(config(seed, ticks));
-        sim.params = params.clone();
+        sim.params = params;
         sim.populate();
         sim.run(ticks);
         if sim.agents.is_empty() {
@@ -172,7 +172,7 @@ fn main() {
         let spread = s
             .per_seed_q2_mean
             .iter()
-            .cloned()
+            .copied()
             .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| {
                 (lo.min(v), hi.max(v))
             });

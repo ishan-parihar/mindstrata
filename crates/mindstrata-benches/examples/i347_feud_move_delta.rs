@@ -87,8 +87,11 @@ fn anatomy() {
                 cells[i].insert((a.position.x, a.position.y));
             }
         }
-        let mean_cells =
-            cells.iter().map(|c| c.len()).sum::<usize>() as f64 / cells.len().max(1) as f64;
+        let mean_cells = cells
+            .iter()
+            .map(std::collections::HashSet::len)
+            .sum::<usize>() as f64
+            / cells.len().max(1) as f64;
 
         let mut near = 0usize;
         let mut pairs = 0usize;

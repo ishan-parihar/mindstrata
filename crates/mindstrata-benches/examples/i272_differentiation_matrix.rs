@@ -109,12 +109,9 @@ fn main() {
     let cnt0 = assignments.iter().filter(|&&a| a == 0).count();
     let cnt1 = assignments.len() - cnt0;
     let inter = euclid(&c0, &c1);
-    println!(
-        "clusters: c0_size={} c1_size={} inter_centroid={:.4}",
-        cnt0, cnt1, inter
-    );
-    println!("centroid c0: {:?}", c0);
-    println!("centroid c1: {:?}", c1);
+    println!("clusters: c0_size={cnt0} c1_size={cnt1} inter_centroid={inter:.4}");
+    println!("centroid c0: {c0:?}");
+    println!("centroid c1: {c1:?}");
     for (idx, (seed, _)) in snapshots.iter().enumerate() {
         println!(" seed {} -> cluster {}", seed, assignments[idx]);
     }
@@ -133,8 +130,8 @@ fn main() {
 
     // Also report trait variance spread as the founder-budget health check.
     let trait_vars: Vec<f64> = snapshots.iter().map(|(_, m)| m.trait_variance).collect();
-    let tv_min = trait_vars.iter().cloned().fold(f64::INFINITY, f64::min);
-    let tv_max = trait_vars.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let tv_min = trait_vars.iter().copied().fold(f64::INFINITY, f64::min);
+    let tv_max = trait_vars.iter().copied().fold(f64::NEG_INFINITY, f64::max);
     let tv_mean = trait_vars.iter().sum::<f64>() / trait_vars.len() as f64;
     println!(
         "trait_variance spread: min={:.4} max={:.4} mean={:.4} range={:.4}",

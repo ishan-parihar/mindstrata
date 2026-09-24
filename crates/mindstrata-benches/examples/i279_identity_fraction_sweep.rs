@@ -17,7 +17,7 @@
 
 use mindstrata_core::conflict::ConflictKind;
 use mindstrata_core::event::SimEvent;
-use mindstrata_development::collective::{bucket_for_line, CollectiveBucket, CollectiveField};
+use mindstrata_development::collective::{bucket_for_line, CollectiveField};
 use mindstrata_sim::sim::{SimConfig, Simulation};
 
 /// Genesis gate from WP-I band I: stage >= 2.0 unlocks foundational content.

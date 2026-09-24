@@ -93,8 +93,8 @@ fn census_leg(n: u32) {
 
     println!("\n-- final action (share of decisions, and which source produced it) --");
     println!(
-        "{:>10} {:>12} {:>8}   {}",
-        "action", "decisions", "share", "top source"
+        "{:>10} {:>12} {:>8}   top source",
+        "action", "decisions", "share"
     );
     for (a, name) in ACTION_NAMES.iter().enumerate() {
         let mut best = (0usize, 0u64);

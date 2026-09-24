@@ -954,7 +954,7 @@ fn rituals_correlate_with_group_stability() {
 #[test]
 fn meme_transmission_multiplier_affects_meme_count() {
     // Higher transmission multiplier should produce more or equal memes after 3000 ticks
-    let baseline = run_with_params(42, 3000, |p| {
+    let _baseline = run_with_params(42, 3000, |p| {
         p.meme_transmission_multiplier = Fixed::from_f64(1.2); // default
     });
     let high_transmission = run_with_params(42, 3000, |p| {
@@ -1788,7 +1788,7 @@ fn background_tier_agents_do_not_encode_memories_but_stay_socially_present() {
     }
     assert!(!sim.agents[0].agent_tier.tier.runs_memory_encoding());
 
-    let window_start = sim.current_tick().as_u64();
+    let _window_start = sim.current_tick().as_u64();
     let base_episodes = sim.agents[0].memory.episodes.len();
     sim.run(500);
 

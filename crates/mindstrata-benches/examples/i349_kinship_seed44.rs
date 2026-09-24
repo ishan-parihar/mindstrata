@@ -18,7 +18,7 @@ fn main() {
             sim.tick();
         }
         let births = sim
-            .recent_events(sim.event_count() as usize)
+            .recent_events(sim.event_count())
             .iter()
             .filter(|e| matches!(e, mindstrata_core::event::SimEvent::ChildBorn { .. }))
             .count();

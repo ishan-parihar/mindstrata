@@ -38,7 +38,7 @@ fn main() {
         let total_lines = mindstrata_development::collective::COLLECTIVE_LINE_COUNT;
         let mut max_press = 0.0_f64;
         let mut nonzero_lines = 0;
-        for l in field.lines.iter() {
+        for l in &field.lines {
             if l.press > max_press {
                 max_press = l.press;
             }

@@ -69,7 +69,7 @@ fn main() {
             } else {
                 "sat"
             };
-            println!("seed={seed} need={:?} value={v:.4} band={band}", cat);
+            println!("seed={seed} need={cat:?} value={v:.4} band={band}");
         }
     }
 }

@@ -129,6 +129,8 @@ fn density_leg() {
         }
     );
 }
+type PassRows = Vec<(u32, f64, Vec<(&'static str, f64)>)>;
+
 fn main() {
     // Safety: set before ANY sim reads it. `pass_profile_tick` caches the parsed
     // value in a `OnceLock`, so it must be set before the first sim in the
@@ -143,7 +145,7 @@ fn main() {
         "each pass value is the MEAN ns/tick over the window (accumulated, not a single sample)\n"
     );
 
-    let mut rows: Vec<(u32, f64, Vec<(&'static str, f64)>)> = Vec::new();
+    let mut rows: PassRows = Vec::new();
     for n in NS {
         let (us, passes) = measure(n);
         let (edges, events_per_tick) = structure(n);

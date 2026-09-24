@@ -273,11 +273,11 @@ fn main() {
             // The dominant action is the decisive clue: a meaning-pinned
             // agent that spends its life in a physiological reflex is starved
             // of the meaning reflex by REFLEX ORDER, not by the routine.
-            let (dom_label, dom_share) = action_share[i]
-                .iter()
-                .max_by_key(|(_, c)| **c)
-                .map(|(l, c)| (l.clone(), *c as f64 / d))
-                .unwrap_or_else(|| ("-none-".to_string(), 0.0));
+            let (dom_label, dom_share) =
+                action_share[i].iter().max_by_key(|(_, c)| **c).map_or_else(
+                    || ("-none-".to_string(), 0.0),
+                    |(l, c)| (l.clone(), *c as f64 / d),
+                );
             println!(
                 "  {i:<3} {meaning:>9.4} {:>9.5} {:>9.5} {:>9.5}  dom {dom_label} {dom_share:.3} | routine {routine_action:?} {routine_strength:.2} | vitals h{:.2} t{:.2} f{:.2} hp{:.2} | inflow {}× tot {:.2} max {:.3}",
                 worship_ticks[i] as f64 / d,
@@ -353,10 +353,7 @@ fn main() {
             log.len().min(40),
             log.len()
         );
-        println!(
-            "  {:<8} {:>8} {:>8}  {}",
-            "tick", "before", "after", "action"
-        );
+        println!("  {:<8} {:>8} {:>8}  action", "tick", "before", "after");
         for (t, before, after, action) in log.iter().take(40) {
             println!("  {t:<8} {before:>8.4} {after:>8.4}  {action}");
         }
@@ -371,7 +368,7 @@ fn main() {
     let mut window_samples = 0u64;
     for t in 1..=ticks {
         sim.tick();
-        for agent in sim.agents.iter() {
+        for agent in &sim.agents {
             window_mean += agent.needs.meaning.to_f64();
             if agent.current_action == ActionKind::Worship {
                 window_duty += 1.0;

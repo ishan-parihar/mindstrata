@@ -15,7 +15,7 @@
 //!    and which institutions/sites were live then — i.e., what would
 //!    referent-grounded generation have produced?
 
-use mindstrata_development::collective::{bucket_for_line, CollectiveBucket, CollectiveField};
+use mindstrata_development::collective::{bucket_for_line, CollectiveField};
 use mindstrata_sim::sim::{SimConfig, Simulation};
 
 fn per_bucket_max_stage(field: &CollectiveField) -> [f64; 4] {
@@ -61,13 +61,13 @@ fn main() {
         .map(|i| format!("{:?}/{}", i.kind, i.name))
         .collect();
     println!("INSTITUTIONS ({}):", inst.len());
-    for i in inst.iter() {
+    for i in &inst {
         println!("  {i}");
     }
 
     // Part 2 — do seeded memes cite gross entities?
     println!("SEEDED MEMES:");
-    for m in sim.meme_registry.memes.iter() {
+    for m in &sim.meme_registry.memes {
         println!("  [{:?}]: {}", m.content_type, m.description);
     }
 
@@ -86,7 +86,7 @@ fn main() {
         .map(|m| &m.description)
         .collect();
     println!("GENESIS MEMES ({}):", genesis.len());
-    for g in genesis.iter() {
+    for g in &genesis {
         println!("  {g}");
     }
     let inst_now = sim.institutions.len();

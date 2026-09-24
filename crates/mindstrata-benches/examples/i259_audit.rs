@@ -11,7 +11,7 @@ use mindstrata_core::fixed::Fixed;
 use mindstrata_sim::sim::SimConfig;
 use mindstrata_sim::Simulation;
 
-fn pct(vals: &mut Vec<f64>, q: f64) -> f64 {
+fn pct(vals: &mut [f64], q: f64) -> f64 {
     if vals.is_empty() {
         return 0.0;
     }
@@ -58,17 +58,6 @@ fn constitution_mean(a: &mindstrata_sim::sim::AgentBundle) -> f64 {
         / 5.0
 }
 
-/// Mean of the big-five personality vector.
-fn big5_mean(a: &mindstrata_sim::sim::AgentBundle) -> f64 {
-    let p = &a.personality;
-    (p.openness.to_f64()
-        + p.conscientiousness.to_f64()
-        + p.extraversion.to_f64()
-        + p.agreeableness.to_f64()
-        + p.neuroticism.to_f64())
-        / 5.0
-}
-
 fn main() {
     println!("=== [1] Phase-2 affect equilibrium (calm worlds, 5000 ticks) ===");
     let mut valence_medians = Vec::new();
@@ -101,11 +90,11 @@ fn main() {
     }
     let vmax = valence_medians
         .iter()
-        .cloned()
+        .copied()
         .fold(f64::NEG_INFINITY, f64::max);
     let vmin = valence_medians
         .iter()
-        .cloned()
+        .copied()
         .fold(f64::INFINITY, f64::min);
     let spread = vmax - vmin;
     println!(
@@ -258,8 +247,8 @@ fn main() {
             .iter()
             .map(|a| a.interoception.corrected_felt_hunger(raw).to_f64())
             .collect();
-        let mn = felt.iter().cloned().fold(f64::MAX, f64::min);
-        let mx = felt.iter().cloned().fold(f64::MIN, f64::max);
+        let mn = felt.iter().copied().fold(f64::MAX, f64::min);
+        let mx = felt.iter().copied().fold(f64::MIN, f64::max);
         println!(
             "  same raw hunger 0.80 -> felt range [{mn:.3}, {mx:.3}] (spread {:.3})",
             mx - mn
@@ -290,8 +279,8 @@ fn main() {
             means.push(mean);
             println!("  seed {seed}: mean tile fertility {mean:.4}");
         }
-        let spread = means.iter().cloned().fold(f64::MIN, f64::max)
-            - means.iter().cloned().fold(f64::MAX, f64::min);
+        let spread = means.iter().copied().fold(f64::MIN, f64::max)
+            - means.iter().copied().fold(f64::MAX, f64::min);
         println!(
             "  CONTRACT seeds differ (spread > 0.01): {spread:.4} -> {}",
             spread > 0.01

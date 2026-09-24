@@ -71,7 +71,7 @@ fn main() {
     println!("\nleg B — census at 20K (the wall Wander must climb):");
     mindstrata_sim::sim::decision_census::enable();
     mindstrata_sim::sim::decision_census::reset();
-    let sim = run(42, 12, 20_000);
+    let _sim = run(42, 12, 20_000);
     let report = mindstrata_sim::sim::decision_census::report();
     println!(
         "  decisions {} · utility samples {} · Wander: wins {} within-noise {} mean-loss {:.4} max {:.4}",

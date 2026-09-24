@@ -19,7 +19,7 @@
 use mindstrata_development::line::LineId;
 use mindstrata_development::polarity::{GrossReferent, PolarityState};
 use mindstrata_sim::scenario::Scenario;
-use mindstrata_sim::sim::{SimConfig, Simulation};
+use mindstrata_sim::sim::Simulation;
 
 fn census(sim: &Simulation) -> (usize, usize, usize, usize) {
     let cog = LineId::new("cognitive").expect("registered");

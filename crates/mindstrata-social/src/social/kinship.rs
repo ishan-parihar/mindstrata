@@ -448,12 +448,12 @@ mod tests {
         let n = 6;
         for a in 0..n {
             let batched = g.transitive_coefficients(a, n);
-            for b in 0..n {
+            for (b, batched_coeff) in batched.iter().enumerate() {
                 if a == b {
                     continue;
                 }
                 assert_eq!(
-                    batched[b],
+                    *batched_coeff,
                     g.transitive_coefficient(a, b),
                     "batched coefficient disagrees for a={a} b={b}"
                 );

@@ -41,7 +41,7 @@ fn main() {
         println!(
             "N={n} side={side}: {} polities, members {:?}",
             polities.len(),
-            polities.iter().map(|p| p.len()).collect::<Vec<_>>()
+            polities.iter().map(std::vec::Vec::len).collect::<Vec<_>>()
         );
 
         sim.run(20_000);

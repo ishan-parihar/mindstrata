@@ -16,10 +16,7 @@ fn main() -> Result<(), String> {
         .get(1)
         .ok_or("usage: i267_metrics_jsonl <out.jsonl> [ticks=2000]")?
         .clone();
-    let ticks: u64 = args
-        .get(2)
-        .map(|s| s.parse().unwrap_or(2000))
-        .unwrap_or(2000);
+    let ticks: u64 = args.get(2).map_or(2000, |s| s.parse().unwrap_or(2000));
 
     let config = SimConfig {
         seed: 42,

@@ -487,7 +487,7 @@ mod tests {
                 None
             }
         };
-        let section = render_lore_section_tinted(&[c.clone()], 8, Some(&resolve));
+        let section = render_lore_section_tinted(&[c], 8, Some(&resolve));
         assert!(
             section.contains("Indigo-Ray (6th-Turq) tint"),
             "live line tints through the lens\n{section}"

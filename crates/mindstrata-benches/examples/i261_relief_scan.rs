@@ -25,7 +25,7 @@ fn main() {
     for seed in [42u64, 7, 13, 5] {
         match first_relief(seed, 20_000) {
             Some((tick, n)) => {
-                println!("seed {seed}: first relief @ tick {tick}, total payouts {n}")
+                println!("seed {seed}: first relief @ tick {tick}, total payouts {n}");
             }
             None => println!("seed {seed}: NO relief fired in 20K ticks"),
         }

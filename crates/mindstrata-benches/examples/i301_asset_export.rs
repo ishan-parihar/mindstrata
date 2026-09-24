@@ -50,15 +50,17 @@ fn main() {
     let version = doc["schema_version"].as_u64().unwrap_or(0);
     let ticks = doc["meta"]["ticks"].as_u64().unwrap_or(0);
     let agents = doc["meta"]["agents"].as_u64().unwrap_or(0);
-    let sites = doc["world"]["sites"].as_array().map_or(0, |s| s.len());
+    let sites = doc["world"]["sites"]
+        .as_array()
+        .map_or(0, std::vec::Vec::len);
     println!("2. ROUND-TRIP: schema v{version}, ticks {ticks}, agents {agents}, sites {sites}");
 
     // ── 3. Polity + culture payload.
-    let polities = doc["polities"].as_array().map_or(0, |p| p.len());
+    let polities = doc["polities"].as_array().map_or(0, std::vec::Vec::len);
     let stage_lines_p0 = doc["polities"][0]["stage_lines"]
         .as_array()
-        .map_or(0, |s| s.len());
-    let culture = doc["culture"].as_array().map_or(0, |c| c.len());
+        .map_or(0, std::vec::Vec::len);
+    let culture = doc["culture"].as_array().map_or(0, std::vec::Vec::len);
     let hosted: Vec<&serde_json::Value> = doc["culture"]
         .as_array()
         .map(|c| {
@@ -67,7 +69,7 @@ fn main() {
                 .collect()
         })
         .unwrap_or_default();
-    let annals_len = doc["annals"].as_str().map_or(0, |s| s.len());
+    let annals_len = doc["annals"].as_str().map_or(0, str::len);
     println!();
     println!("3. PAYLOAD:");
     println!("   polities: {polities} (p0 stage_lines: {stage_lines_p0})");

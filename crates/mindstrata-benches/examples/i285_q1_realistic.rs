@@ -1,3 +1,5 @@
+//! Probe: sweep Addiction-operator pressure/growth/decay/ceiling combinations
+//! to find the params whose 20K-step intensity lands nearest 0.49.
 use mindstrata_development::dynamics::{Metabolism, OperatorParams, QuadrantState};
 fn main() {
     let pressures = [0.008_f64, 0.01, 0.05, 0.5, 1.0];

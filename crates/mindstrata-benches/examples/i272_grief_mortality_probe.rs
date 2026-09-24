@@ -62,7 +62,7 @@ fn main() {
         let mut alt_moved = 0usize;
         let mut max_identity_line = 0.0f64;
         let line_count = mindstrata_development::line::all_lines().count();
-        for a in sim.agents.iter() {
+        for a in &sim.agents {
             let alts = &a.development.altitudes;
             if alts.len() == line_count {
                 let sum: f64 = alts.iter().sum();

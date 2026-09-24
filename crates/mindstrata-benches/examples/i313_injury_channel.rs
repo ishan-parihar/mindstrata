@@ -37,7 +37,7 @@ impl Axes {
     }
 
     fn observe(&mut self, sim: &Simulation) {
-        for a in sim.agents.iter() {
+        for a in &sim.agents {
             let e = &a.embodied;
             self.max_injury = self.max_injury.max(e.injury.to_f64());
             self.max_pain = self.max_pain.max(e.nervous.pain.effective_pain().to_f64());
@@ -48,15 +48,6 @@ impl Axes {
                 .min(e.cardiovascular.blood_volume.to_f64());
             self.max_sickness = self.max_sickness.max(e.immune.sickness_level().to_f64());
         }
-    }
-
-    fn merge(&mut self, o: &Axes) {
-        self.max_injury = self.max_injury.max(o.max_injury);
-        self.max_pain = self.max_pain.max(o.max_pain);
-        self.max_chronic_pain = self.max_chronic_pain.max(o.max_chronic_pain);
-        self.max_shock = self.max_shock.max(o.max_shock);
-        self.min_blood_volume = self.min_blood_volume.min(o.min_blood_volume);
-        self.max_sickness = self.max_sickness.max(o.max_sickness);
     }
 
     fn report(&self, label: &str, violations: u64) {

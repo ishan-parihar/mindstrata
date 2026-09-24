@@ -224,10 +224,11 @@ mod tests {
         assert!(empty.contains("No metric history yet"));
         let mut history = Vec::new();
         for t in 0..10u64 {
-            let mut m = MetricsSnapshot::default();
-            m.tick = t * 100;
-            m.avg_stress = t as f64 / 10.0;
-            history.push(m);
+            history.push(MetricsSnapshot {
+                tick: t * 100,
+                avg_stress: t as f64 / 10.0,
+                ..Default::default()
+            });
         }
         let rendered = render_metric_charts(&history);
         assert!(rendered.contains("Village Trends"));
@@ -242,13 +243,12 @@ mod tests {
     /// flat other metrics, tick stride 100.
     fn fixture_history(n: usize) -> Vec<mindstrata_sim::sim::MetricsSnapshot> {
         (0..n)
-            .map(|t| {
-                let mut m = mindstrata_sim::sim::MetricsSnapshot::default();
-                m.tick = (t * 100) as u64;
-                m.avg_stress = t as f64 / n.max(1) as f64;
-                m.avg_health = 1.0 - t as f64 / n.max(1) as f64;
-                m.family_count = (t / 10) as u64;
-                m
+            .map(|t| mindstrata_sim::sim::MetricsSnapshot {
+                tick: (t * 100) as u64,
+                avg_stress: t as f64 / n.max(1) as f64,
+                avg_health: 1.0 - t as f64 / n.max(1) as f64,
+                family_count: (t / 10) as u64,
+                ..Default::default()
             })
             .collect()
     }
@@ -712,11 +712,11 @@ mod tests {
             "help must show ↓"
         );
         assert!(
-            help.contains("/k") || help.contains("k"),
+            help.contains("/k") || help.contains('k'),
             "help must show k"
         );
         assert!(
-            help.contains("/j") || help.contains("j"),
+            help.contains("/j") || help.contains('j'),
             "help must show j"
         );
     }

@@ -292,10 +292,10 @@ fn main() {
     println!("    standard > resilient:    {standard_gt_resilient}");
     println!("    brittle > resilient:     {brittle_gt_resilient}");
     println!("  per-seed Q1 (resilient | standard | brittle):");
-    for i in 0..SEEDS.len() {
+    for (i, seed) in SEEDS.iter().enumerate() {
         println!(
             "    seed {:>6}: {:.4} | {:.4} | {:.4}",
-            SEEDS[i], resilient.states[i].q1, standard.states[i].q1, brittle.states[i].q1
+            seed, resilient.states[i].q1, standard.states[i].q1, brittle.states[i].q1
         );
     }
 

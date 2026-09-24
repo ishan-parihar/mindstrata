@@ -11,9 +11,13 @@ FULL=0
 echo "[gate 1/3] fmt --check"
 cargo fmt --all --check
 
-echo "[gate 2/3] clippy --workspace"
-cargo clippy --workspace --quiet 2>&1 | grep -E "^warning|^error" && {
-    echo "CLIPPY NOT CLEAN"; exit 1; } || true
+echo "[gate 2/3] clippy --workspace --all-targets -D warnings"
+# plan-rust-craft C1: --all-targets — the old step never linted test-cfg code
+# outside the built crate, the 217 bench examples, or the (lib test) targets
+# (340+ hidden warnings + a dead probe shipped that way). The exit code
+# replaces the old grep-on-output form, which also swallowed a cargo crash
+# via its trailing `|| true`.
+cargo clippy --workspace --all-targets --locked -- -D warnings
 
 echo "[gate 2.5/3] bench naming law (IC-4)"
 python3 scripts/bench_index.py --strict 2>&1 | tail -5

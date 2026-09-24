@@ -57,7 +57,7 @@ fn event_count(m: &MetricsSnapshot) -> f64 {
 fn conflict_delta(seed: u64) -> (f64, f64) {
     let base = sim(seed, 3000, |_| {});
     let treated = sim(seed, 3000, |p| {
-        p.conflict_escalation_chance = Fixed::from_f64(0.9)
+        p.conflict_escalation_chance = Fixed::from_f64(0.9);
     });
     let b = event_count(&base.metrics_snapshot());
     let t = event_count(&treated.metrics_snapshot());
@@ -71,7 +71,7 @@ fn scen_conflict_delta(sc: &Scenario, seed: u64) -> (f64, f64) {
     let mut sc_t = sc.clone();
     sc_t.seed = seed;
     let treated = scen(&mut sc_t, 3000, |p| {
-        p.conflict_escalation_chance = Fixed::from_f64(0.9)
+        p.conflict_escalation_chance = Fixed::from_f64(0.9);
     });
     let b = event_count(&base.metrics_snapshot());
     let t = event_count(&treated.metrics_snapshot());
@@ -155,7 +155,7 @@ fn main() {
         println!("=== dormant-consumer vanilla leg (seed 42, 5000 ticks, appraisal_fear_coping_multiplier 2.0) ===");
         let base = sim(42, 5000, |_| {});
         let treated = sim(42, 5000, |p| {
-            p.appraisal_fear_coping_multiplier = Fixed::from_f64(2.0)
+            p.appraisal_fear_coping_multiplier = Fixed::from_f64(2.0);
         });
         let mb = base.metrics_snapshot();
         let mt = treated.metrics_snapshot();

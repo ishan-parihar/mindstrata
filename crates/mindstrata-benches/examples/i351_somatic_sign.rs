@@ -58,13 +58,13 @@ fn main() {
     for &seed in &seeds {
         let (emb_c, emb_a) = run(seed, 0.9);
         let (det_c, det_a) = run(seed, 0.1);
-        let sign = if emb_c < det_c {
-            embodied_fewer += 1;
-            "embodied<detached"
-        } else if emb_c == det_c {
-            "equal"
-        } else {
-            "embodied>detached"
+        let sign = match emb_c.cmp(&det_c) {
+            std::cmp::Ordering::Less => {
+                embodied_fewer += 1;
+                "embodied<detached"
+            }
+            std::cmp::Ordering::Equal => "equal",
+            std::cmp::Ordering::Greater => "embodied>detached",
         };
         println!(
             "seed {seed:>3}: conflicts {emb_c:>4} vs {det_c:>4} ({sign:>18}) · arousal {emb_a:.4} vs {det_a:.4}"

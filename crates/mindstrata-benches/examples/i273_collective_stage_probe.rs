@@ -46,7 +46,7 @@ fn dump(field: &CollectiveField, label: &str) {
             fills.push(line.fulfillment);
             if line.stage > max_stage {
                 max_stage = line.stage;
-                max_line = slugs.get(idx).map(|s| s.slug()).unwrap_or("?");
+                max_line = slugs.get(idx).map_or("?", |s| s.slug());
             }
         }
         println!(

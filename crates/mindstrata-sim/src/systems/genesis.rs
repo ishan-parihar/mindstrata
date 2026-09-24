@@ -733,14 +733,17 @@ mod tests {
 
     // ── Iter-297 (UM-3 leg 1): territory-anchored per-polity genesis ──────
 
-    /// Two spatially separated clusters (polities A at x≈2, B at x≈12) with
-    /// communal sites near each cluster plus a centered shared site.
-    fn partitioned_world() -> (
+    // (institutions, sites, house positions, site owner-index)
+    type PartitionedWorld = (
         Vec<Institution>,
         Vec<Site>,
         Vec<(i32, i32)>,
         Vec<Option<usize>>,
-    ) {
+    );
+
+    /// Two spatially separated clusters (polities A at x≈2, B at x≈12) with
+    /// communal sites near each cluster plus a centered shared site.
+    fn partitioned_world() -> PartitionedWorld {
         use mindstrata_core::id::EntityId;
         use mindstrata_institutions::institutions::InstitutionKind;
         let sites = vec![

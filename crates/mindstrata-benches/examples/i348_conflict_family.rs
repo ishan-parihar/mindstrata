@@ -30,7 +30,7 @@ fn run(seed: u64, ticks: u64, escalate: bool) -> u64 {
     for _ in 0..ticks {
         sim.tick();
     }
-    sim.metrics_snapshot().event_count as u64
+    sim.metrics_snapshot().event_count
 }
 
 fn main() {

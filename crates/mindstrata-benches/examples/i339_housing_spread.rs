@@ -55,7 +55,7 @@ fn measure(n: u32, world: u32, houses: Option<u32>, ticks: u64) -> Leg {
     let total = rels.len();
     let touched = rels.iter().filter(|r| r.interaction_count > 0).count();
     let mut out_deg: BTreeMap<u64, u32> = BTreeMap::new();
-    for r in rels.iter() {
+    for r in rels {
         if r.interaction_count > 0 {
             *out_deg.entry(r.from.as_u64()).or_insert(0) += 1;
         }
@@ -69,7 +69,7 @@ fn measure(n: u32, world: u32, houses: Option<u32>, ticks: u64) -> Leg {
         .iter()
         .map(|a| (a.position.x, a.position.y))
         .collect();
-    for p in pos.iter() {
+    for p in &pos {
         *by_cell.entry(*p).or_insert(0) += 1;
     }
     let mut near = 0u32;

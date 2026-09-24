@@ -21,7 +21,6 @@ fn main() {
             world_height: 16,
             num_agents: 12,
             snapshot_interval: None,
-            ..SimConfig::default()
         };
         let mut sim = Simulation::new(config);
         sim.populate();

@@ -111,7 +111,7 @@ fn run(seed: u64, ticks: u64, regime: &str) {
     sim.populate();
     sim.run(ticks);
 
-    let events = sim.recent_events(sim.event_count() as usize);
+    let events = sim.recent_events(sim.event_count());
     let violations = events
         .iter()
         .filter(|e| matches!(e, SimEvent::NormViolated { .. }))
@@ -151,11 +151,7 @@ fn run(seed: u64, ticks: u64, regime: &str) {
     };
     let owned = sim.world.sites.iter().filter(|s| s.owner.is_some()).count();
     let total_sites = sim.world.sites.len();
-    let hunger = sim
-        .metric_history
-        .last()
-        .map(|m| m.avg_hunger)
-        .unwrap_or(0.0);
+    let hunger = sim.metric_history.last().map_or(0.0, |m| m.avg_hunger);
     println!(
         "regime={regime:<7} seed={seed} viol={violations} detected={detected} \
          strength={mean_strength:.3} resistance={mean_resistance:.3} \
@@ -180,7 +176,7 @@ fn main() {
         sim.populate();
         sim.run(horizon);
         let violence = sim
-            .recent_events(sim.event_count() as usize)
+            .recent_events(sim.event_count())
             .iter()
             .filter(|e| {
                 matches!(
@@ -193,7 +189,7 @@ fn main() {
             })
             .count();
         let conflicts = sim
-            .recent_events(sim.event_count() as usize)
+            .recent_events(sim.event_count())
             .iter()
             .filter(|e| matches!(e, SimEvent::ConflictOccurred { .. }))
             .count();

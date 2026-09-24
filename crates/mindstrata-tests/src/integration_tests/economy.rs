@@ -1264,14 +1264,13 @@ fn storage_overflow_bleeds_excess_grain_back_to_capacity() {
 #[test]
 fn council_poor_relief_channel_is_live() {
     let sim = run_sim(13, 6000);
-    let reliefs: Vec<_> = sim
+    let relief_fired = sim
         .provenance()
         .institutional_for("council")
         .into_iter()
-        .filter(|t| t.decision_kind == "poor_relief")
-        .collect();
+        .any(|t| t.decision_kind == "poor_relief");
     assert!(
-        !reliefs.is_empty(),
+        relief_fired,
         "council poor relief never fired by tick 6000 — the E6 redistribution \
          counterforce went dead"
     );

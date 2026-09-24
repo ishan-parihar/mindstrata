@@ -43,7 +43,7 @@ fn main() {
     for seed in [42u64, 7, 13] {
         let (g5k, _, _) = census(seed, 5000);
         let (g10k, _, _) = census(seed, 10_000);
-        let (g20k, d20k, m20k) = census(seed, 20_000);
+        let (g20k, d20k, _m20k) = census(seed, 20_000);
         let (g50k, d50k, m50k) = census(seed, 50_000);
         println!(
             "seed {seed}: gini 5K={g5k:.3} 10K={g10k:.3} 20K={g20k:.3} 50K={g50k:.3} | \

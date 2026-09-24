@@ -130,7 +130,7 @@ pub fn archetype_for_claim(claim: &ThreeRealmClaim) -> LoreArchetype {
 mod tests {
     use super::*;
     use crate::line::LineId;
-    use crate::polarity::{PolarityState, ThreeRealmClaim};
+    use crate::polarity::ThreeRealmClaim;
 
     fn lid(slug: &'static str) -> LineId {
         LineId::new(slug).expect("registered")
@@ -227,7 +227,7 @@ mod tests {
     #[test]
     fn archetype_slug_roundtrips_via_id() {
         for &a in &LoreArchetype::all() {
-            assert_eq!(a.slug().len() > 2, true);
+            assert!(a.slug().len() > 2);
             assert!(a.id() < 8);
         }
     }

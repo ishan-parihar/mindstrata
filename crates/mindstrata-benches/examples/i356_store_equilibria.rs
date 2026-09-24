@@ -69,7 +69,7 @@ fn main() {
             let mut v2a: Vec<f64> = Vec::new();
             let mut v2_dead = 0usize;
             let mut v2_total = 0usize;
-            for r in sim.relationships().iter() {
+            for r in sim.relationships() {
                 let from = r.from.as_u64() as usize;
                 let to = r.to.as_u64() as usize;
                 if to >= n as usize {

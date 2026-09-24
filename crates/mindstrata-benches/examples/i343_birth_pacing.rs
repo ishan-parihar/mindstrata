@@ -41,7 +41,7 @@ fn main() {
         partnered
     );
     println!("\nbirth ticks ({} total):", births.len());
-    println!("  {:?}", births);
+    println!("  {births:?}");
     let by = |limit: u64| births.iter().filter(|t| **t <= limit).count();
     for h in [50_000u64, 100_000, 150_000, 175_000, 200_000, 250_000] {
         println!("  by {:>7}: {:>3} births", h, by(h));

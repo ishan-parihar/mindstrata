@@ -262,7 +262,7 @@ fn grief_routes_to_surviving_mourner_not_replacement() {
     // The deaths pass captured the grief target; the flush in the owning
     // pass emits GriefStruck. Handle the flush here (the test calls the
     // deaths pass directly, outside the social-cluster loop).
-    let grief_batch: Vec<(usize, u64)> = sim.pending_grief_targets.drain(..).collect();
+    let grief_batch: Vec<(usize, u64)> = std::mem::take(&mut sim.pending_grief_targets);
     assert!(
         grief_batch.iter().any(|(m, _)| *m == 0),
         "mourner 0 must be captured as a grief target"
@@ -654,7 +654,7 @@ fn norm_proposal_fires_on_majority_synthesis_past_band_gate() {
     use mindstrata_development::polarity::{GrossReferent, PolarityState, SubtleClaim};
     let mut sim = make_sim(42);
     // Force the Safety band-III gate.
-    for line in sim.collective_field.lines.iter_mut() {
+    for line in &mut sim.collective_field.lines {
         line.stage = 4.5;
     }
     // 7 of 12 agents (majority) engage the (Event, cognitive) slot: one
@@ -714,7 +714,7 @@ fn norm_proposal_fires_on_majority_synthesis_past_band_gate() {
 fn norm_proposal_is_band_gated_below_stage_four() {
     use mindstrata_development::polarity::{GrossReferent, PolarityState, SubtleClaim};
     let mut sim = make_sim(42);
-    for line in sim.collective_field.lines.iter_mut() {
+    for line in &mut sim.collective_field.lines {
         line.stage = 3.9; // just below the gate
     }
     let cog = mindstrata_development::line::LineId::new("cognitive").expect("registered");
@@ -744,7 +744,7 @@ fn norm_proposal_is_band_gated_below_stage_four() {
 fn norm_proposal_skips_fact_syntheses() {
     use mindstrata_development::polarity::{GrossReferent, PolarityState, SubtleClaim};
     let mut sim = make_sim(42);
-    for line in sim.collective_field.lines.iter_mut() {
+    for line in &mut sim.collective_field.lines {
         line.stage = 4.5;
     }
     let cog = mindstrata_development::line::LineId::new("cognitive").expect("registered");
@@ -791,7 +791,7 @@ fn norm_violated_event_drives_transgression_catalyst_pathways() {
     };
 
     // Catalyst-level: NormViolated → Transgression, magnitude 0.5, subject = violator.
-    let cats = collect_catalysts(&[ev.clone()]);
+    let cats = collect_catalysts(std::slice::from_ref(&ev));
     assert_eq!(cats.len(), 1, "exactly one per-subject catalyst");
     let (subject, kind, mag, major) = cats[0];
     assert_eq!(subject, AgentId::new(3));
@@ -807,12 +807,12 @@ fn norm_violated_event_drives_transgression_catalyst_pathways() {
     let mut sim = make_sim(42);
     // One catalyst tick vs one absence tick, identical starting state.
     let q2_start = sim.agents[3].development.pathology.dark_allergy.intensity;
-    let mut with_ev = [ev.clone()];
-    system_development(&mut sim.agents, &mut with_ev);
+    let with_ev = [ev];
+    system_development(&mut sim.agents, &with_ev);
     let q2_after_real = sim.agents[3].development.pathology.dark_allergy.intensity;
-    let mut absence = Vec::new();
+    let absence = Vec::new();
     let mut sim2 = make_sim(42);
-    system_development(&mut sim2.agents, &mut absence);
+    system_development(&mut sim2.agents, &absence);
     let q2_after_absence = sim2.agents[3].development.pathology.dark_allergy.intensity;
     assert!(
         q2_after_real > q2_after_absence + 0.001,
@@ -899,7 +899,7 @@ fn norm_proposal_cap_binds_above_and_passes_below_majority_breadth() {
         Vec<mindstrata_development::polarity::ThreeRealmClaim>,
     ) {
         let mut sim = make_sim(42);
-        for line in sim.collective_field.lines.iter_mut() {
+        for line in &mut sim.collective_field.lines {
             line.stage = 4.5;
         }
         let cog = mindstrata_development::line::LineId::new("cognitive").expect("registered");
@@ -951,7 +951,7 @@ fn norm_proposal_cap_binds_above_and_passes_below_majority_breadth() {
 /// so any drift here is a partition bug, not a calibration drift.
 #[test]
 fn polity_partition_matches_solo_population() {
-    use crate::systems::development::{collect_catalysts, system_polity_collective_field_step};
+    use crate::systems::development::system_polity_collective_field_step;
     use mindstrata_core::clock::Tick;
     use mindstrata_core::event::SimEvent;
     use mindstrata_core::id::AgentId;

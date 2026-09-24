@@ -27,10 +27,10 @@ fn main() {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(20_000);
-    let seeds: Vec<u64> = std::env::var("I370_SEEDS")
-        .ok()
-        .map(|s| s.split(',').filter_map(|t| t.trim().parse().ok()).collect())
-        .unwrap_or_else(|| vec![7, 23, 42, 55, 99, 123]);
+    let seeds: Vec<u64> = std::env::var("I370_SEEDS").ok().map_or_else(
+        || vec![7, 23, 42, 55, 99, 123],
+        |s| s.split(',').filter_map(|t| t.trim().parse().ok()).collect(),
+    );
 
     println!("== i370: council membership probe (N=48, 46x46, horizon {horizon}) ==");
     for seed in seeds {
@@ -48,8 +48,7 @@ fn main() {
             .institutions
             .iter()
             .find(|i| i.kind == InstitutionKind::Council)
-            .map(|c| c.members.len())
-            .unwrap_or(0);
+            .map_or(0, |c| c.members.len());
 
         let mut max_members = council_at_populate;
         let mut final_members = council_at_populate;
@@ -81,8 +80,7 @@ fn main() {
             .institutions
             .iter()
             .find(|i| i.kind == InstitutionKind::Council)
-            .map(|c| c.treasury.to_f64())
-            .unwrap_or(0.0);
+            .map_or(0.0, |c| c.treasury.to_f64());
 
         println!(
             "seed {seed:>3}: populate={council_at_populate} max={max_members} final={final_members} revolutions={revolutions} treasury={treasury:.1}{}",

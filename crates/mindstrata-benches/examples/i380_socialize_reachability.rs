@@ -23,15 +23,15 @@
 use mindstrata_sim::sim::decision_census;
 use mindstrata_sim::sim::{SimConfig, Simulation};
 
-fn leg(label: &str, w: u32, h: u32, n: u32, ticks: u64, social_decay: f64) {
+fn leg(label: &str, width: u32, height: u32, agent_count: u32, ticks: u64, social_decay: f64) {
     decision_census::enable();
     decision_census::reset();
     let mut sim = Simulation::new(SimConfig {
         seed: 42,
         max_ticks: ticks,
-        world_width: w,
-        world_height: h,
-        num_agents: n,
+        world_width: width,
+        world_height: height,
+        num_agents: agent_count,
         snapshot_interval: None,
     });
     sim.params.social_decay_rate = mindstrata_core::fixed::Fixed::from_f64(social_decay);
@@ -43,56 +43,59 @@ fn leg(label: &str, w: u32, h: u32, n: u32, ticks: u64, social_decay: f64) {
     while done < ticks {
         sim.run(step);
         done += step;
-        for a in sim.agents.iter() {
-            social_samples.push(a.needs.social.to_f64());
+        for agent in &sim.agents {
+            social_samples.push(agent.needs.social.to_f64());
         }
     }
     let report = decision_census::report();
     decision_census::disable();
 
-    social_samples.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    let q = |p: f64| social_samples[(((social_samples.len() - 1) as f64) * p).round() as usize];
+    social_samples
+        .sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
+    let quantile =
+        |frac: f64| social_samples[(((social_samples.len() - 1) as f64) * frac).round() as usize];
 
     let total = report.total();
     println!("══ {label} ══  ({total} decisions)");
     println!(
         "  needs.social band: p50 {:.4}  p95 {:.4}  max {:.4}",
-        q(0.50),
-        q(0.95),
+        quantile(0.50),
+        quantile(0.95),
         social_samples[social_samples.len() - 1]
     );
     let _ = social_decay;
     println!("  decisions by source:");
-    for (si, name) in decision_census::SOURCE_NAMES.iter().enumerate() {
-        let c = report.sources[si];
-        if c > 0 {
+    for (src_idx, name) in decision_census::SOURCE_NAMES.iter().enumerate() {
+        let count = report.sources[src_idx];
+        if count > 0 {
             println!(
-                "    {name:<9} {c:>8}  {:>6.2}%",
-                100.0 * c as f64 / total as f64
+                "    {name:<9} {count:>8}  {:>6.2}%",
+                100.0 * count as f64 / total as f64
             );
         }
     }
     println!("  decisions by action:");
     let mut order: Vec<usize> = (0..decision_census::ACTION_COUNT).collect();
-    order.sort_by_key(|i| std::cmp::Reverse(report.actions[*i]));
-    for ai in order {
-        let c = report.actions[ai];
-        if c == 0 {
+    order.sort_by_key(|act| std::cmp::Reverse(report.actions[*act]));
+    for act_idx in order {
+        let count = report.actions[act_idx];
+        if count == 0 {
             continue;
         }
         println!(
-            "    {:<10} {c:>8}  {:>6.2}%",
-            decision_census::ACTION_NAMES[ai],
-            100.0 * c as f64 / total as f64
+            "    {:<10} {count:>8}  {:>6.2}%",
+            decision_census::ACTION_NAMES[act_idx],
+            100.0 * count as f64 / total as f64
         );
     }
     // The Socialize row, decomposed by source — the whole question.
-    let si = decision_census::action_index(mindstrata_sim::actions::ActionKind::Socialize);
+    let socialize_idx =
+        decision_census::action_index(mindstrata_sim::actions::ActionKind::Socialize);
     println!("  Socialize by source:");
     for (src, name) in decision_census::SOURCE_NAMES.iter().enumerate() {
-        let c = report.cross[src][si];
-        if c > 0 {
-            println!("    {name:<9} {c:>8}");
+        let count = report.cross[src][socialize_idx];
+        if count > 0 {
+            println!("    {name:<9} {count:>8}");
         }
     }
     println!(
@@ -107,8 +110,8 @@ fn leg(label: &str, w: u32, h: u32, n: u32, ticks: u64, social_decay: f64) {
             "  quiet-window winner utility: mean {:.5}  max {:.5}   (social term at p50 {:.5}, p95 {:.5})",
             report.quiet_winner_sum / report.quiet_samples as f64,
             report.quiet_winner_max,
-            q(0.50) * 0.3 * 0.5,
-            q(0.95) * 0.3 * 0.5
+            quantile(0.50) * 0.3 * 0.5,
+            quantile(0.95) * 0.3 * 0.5
         );
     }
     println!();

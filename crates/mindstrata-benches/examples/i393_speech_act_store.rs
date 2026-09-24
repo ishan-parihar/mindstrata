@@ -174,9 +174,9 @@ fn divergence(sim: &Simulation) -> (f64, f64, f64, f64) {
     }
     (
         mean(&t),
-        t.iter().cloned().fold(0.0, f64::max),
+        t.iter().copied().fold(0.0, f64::max),
         mean(&f),
-        f.iter().cloned().fold(0.0, f64::max),
+        f.iter().copied().fold(0.0, f64::max),
     )
 }
 
@@ -188,7 +188,6 @@ fn village(n: u32, seed: u64, ticks: u64) -> Simulation {
         world_height: 16,
         num_agents: n,
         snapshot_interval: None,
-        ..SimConfig::default()
     });
     sim.populate();
     sim
@@ -257,7 +256,7 @@ fn main() {
         println!(
             "  B  contacted pairs {contacted}   |v1−v2| mean {:.4} max {:.4}   >0.05: {over} ({:.0}%)",
             mean(&div),
-            div.iter().cloned().fold(0.0, f64::max),
+            div.iter().copied().fold(0.0, f64::max),
             100.0 * over as f64 / div.len().max(1) as f64
         );
         println!(

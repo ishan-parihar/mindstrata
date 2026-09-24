@@ -40,7 +40,7 @@ fn main() {
     while t < horizon {
         sim.run(1000);
         t += 1000;
-        if t % 5000 != 0 && t != horizon {
+        if !t.is_multiple_of(5000) && t != horizon {
             continue;
         }
         let belief_refs: Vec<&Vec<mindstrata_sim::person::Belief>> =
