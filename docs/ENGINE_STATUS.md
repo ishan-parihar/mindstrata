@@ -4,7 +4,7 @@ description: "The authoritative current-state description of the mindstrata engi
 type: Authority
 status: AUTHORITY
 scope: "engine behaviour, architecture, realism, scale"
-reconciled_commit: fb3da07
+reconciled_commit: d557f2c
 created: 2026-09-22
 owner: SIM + PROD (AP4 Studio)
 ---
@@ -31,8 +31,9 @@ owner: SIM + PROD (AP4 Studio)
 | Probe law | `scripts/bench_index.py --strict` | 0 violations |
 | Doc structure | `scripts/doc_index.py` | 71 governed docs classified, 0 ghosts |
 
-**Scale of the artefact (recounted at i400):** 13 crates · 473 `.rs` · ~151,400 LOC ·
-1,700 test functions · 232 probes · 183 evidence docs · 36 RON spec files · 954 commits.
+**Scale of the artefact (recounted at plan-rust-craft C1):** 13 crates · 473 `.rs` ·
+~151,300 LOC · 1,700 test functions · 231 tracked probes (C1 deleted the dead
+`i286_norm_proposal_census`) · 183 evidence docs · 36 RON spec files · 958 commits.
 
 ## 2. Architecture
 

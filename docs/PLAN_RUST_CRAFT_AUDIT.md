@@ -3,7 +3,7 @@ name: plan-rust-craft
 status: ACTIVE
 description: "Rust-craft audit (2026-09-24) against the rust-best-practices handbook, plus its fix ladder (C1-C5). Owns the measured clippy --all-targets inventory, the broken i286 census probe, the lint-inheritance hole in mindstrata-development, and the gate-closure iteration. Owns no engine behaviour (that is PLAN_DC5); every item here is craft, tooling, or citation integrity."
 type: Plan
-reconciled_commit: 6d34c91
+reconciled_commit: d557f2c
 created: 2026-09-24
 ---
 
