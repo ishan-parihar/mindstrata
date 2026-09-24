@@ -717,6 +717,22 @@ Live queue, in order (evidence link per item):
    window to exhaustion (>300 s) because v2's unsynced affection kept every other pair
    eligible. Grep for v1-only pins before migrating the next reader.
 
+   **The sweep's third item was MEASURED AND REVERTED (i400,
+   `evidence/i400_cluster_trust.md`)** — the last two in-file v1 trust readers
+   (`social_cluster.rs`: §8.1.9 ToM pair trust, §19.5.I knowledge-diffusion
+   `source_trust`). It had the cleanest shape a reader migration can have (zero
+   fallback misses on either store, mean |v1−v2| 0.0096/0.0195) **and** an unbounded
+   tail (max 0.70/1.00) sitting on a live band edge — `infer_intent` is Friendly only
+   above trust 0.5. The suite: 304/10/1 in 211 s vs 314/0/1 in 165 s reverted, with
+   the two failures that decide it being **deliberate dormancy contracts**
+   ("the lifecycle must stay dormant within the 500-tick window", "no pregnancy may
+   exist in the golden window") — a design state, not a chaos family, so §4.1 forbids
+   widening it for a ~0.01-mean accuracy change on a soft consumer. **The consequence
+   for the sequence is sharper than i393 §6: once a band edge is involved, the readers
+   and the interaction-gain deletion must move in ONE commit**, so the dormancy
+   windows and the acceptance floor are re-derived once against the whole new trust
+   surface rather than perturbed three separate times.
+
    **i385 then reconciled the documentation surface itself, and the reconciliation paid for
    its own iteration.** `ENGINE_STATUS.md` §1 was 15K LOC / 30 probes / two suite counts
    stale and §5 still carried pre-i347 decision numbers; both are re-measured (see

@@ -560,6 +560,11 @@ fn knowledge_acquisition_desacralizes_sacred_values() {
     {
         r.trust = Fixed::from_f64(0.9); // acceptance = 0.9*0.5 + openness*0.5 > 0.5
     }
+    // i400 reverted the dyadic read at this gate (see `social_cluster.rs` and
+    // `evidence/i400_cluster_trust.md`): the v1 pin above is sufficient again.
+    // NOTE for whoever retries it — with the dyadic read this fixture needs the
+    // matching v2 pin too, because acceptance 0.4*0.5 + openness*0.5 falls
+    // under the 0.5 floor (measured: "gossip must transfer the knowledge item").
     sim.agents[1].cognitive.executive_capacity = Fixed::from_f64(0.9);
     // A mid-sacredness value (should erode) and a maximally sacred value
     // (must stay inert — resistance gate inside attempt_desacred).

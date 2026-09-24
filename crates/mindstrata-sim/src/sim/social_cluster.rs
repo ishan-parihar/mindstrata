@@ -591,6 +591,25 @@ impl Simulation {
 
                 // §8.1.9: Theory of Mind update
                 // §17.2: Gate social inference budget — ToM is the most expensive per-interaction op.
+                // i400 MEASURED AND REVERTED (`evidence/i400_cluster_trust.md`).
+                // Moving these two reads (and the §19.5.I `source_trust` below)
+                // to the dyadic store was built and run: the probe sized it as
+                // a small-mean change (|v1−v2| mean 0.0096/0.0195 at N=12/48,
+                // zero fallback misses on either store) *but* with an
+                // unbounded tail (max 0.70/1.00) on a live band edge —
+                // `infer_intent` is Friendly only above trust 0.5 and 0.8–1.8%
+                // of sampled pairs straddle it. The suite answered for it:
+                // **both goldens, 6 snapshots, and TWO deliberate dormancy
+                // contracts** (`pregnancy_state_refactor_keeps_lifecycle_dormant`
+                // — "Lars became pregnant — the lifecycle must stay dormant
+                // within the 500-tick window"; `conception_pregnancy_...` —
+                // "no pregnancy may exist in the golden window" found 1), plus
+                // a 132–158 s → 211 s suite slowdown. Reverted on the doctrine
+                // that a ~0.01-mean accuracy change is not worth violating two
+                // design contracts; the reads stay on v1. Re-attempt only
+                // together with the i393 §6 writer deletion, where the whole
+                // trust path moves at once and the dormancy windows are
+                // re-derived (not widened) in the same sweep.
                 let trust_from_to = self
                     .rel_pos(from_idx, to_idx)
                     .map_or(Fixed::from_f64(0.5), |p| self.relationships[p].trust);
@@ -868,6 +887,9 @@ impl Simulation {
                 if fi >= self.agents.len() || ti >= self.agents.len() {
                     continue;
                 }
+                // i400: trying the dyadic store HERE broke
+                // `knowledge_acquisition_desacralizes_sacred_values` through
+                // the 0.5 acceptance floor (see the revert note above).
                 let source_trust = self
                     .rel_pos(fi, ti)
                     .map_or(Fixed::from_f64(0.5), |p| self.relationships[p].trust);
