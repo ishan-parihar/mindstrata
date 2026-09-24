@@ -39,9 +39,15 @@ legitimately name a nonexistent path *as history*: AGENTS §4.14 cites i386's
 ghosts and moved files as the drift class it fixed; the PLAN_DC3 i386 row quotes
 what it re-pointed; `realms.md`/`rays.md` are vendor-blocked external vault
 artifacts; ENGINE_STATUS §1 records rust-craft C2's `tests/comparison.rs`
-deletion. Each such (doc, token) pair is curated in-script with its mechanism —
-23 entries today. A new entry needs its reason in the comment; anything not
-curated must resolve *now*.
+deletion. Each such citation is curated in-script as a **(doc, token,
+line-anchor)** triple — a regex matched against the citing LINE, so the
+exemption is **line-scoped**: a future occurrence of the same token elsewhere
+in the doc still fails the gate (a doc-wide key would have exempted it
+forever). 21 anchored entries today, each with its reason in the comment;
+anything not anchored must resolve *now*. The i421 ledger row itself was
+caught by its own gate while landing (it quoted the tokens it curates as bare
+text) — reworded to describe rather than re-cite, which is the correct fix,
+not a new exemption.
 
 ## Findings on the live tree
 
@@ -68,7 +74,11 @@ CITATION: docs/ENGINE_STATUS.md cites `scripts/definitely_missing.sh` — no suc
 ```
 
 After revert: `doc_index: OK — 72 governed docs all classified … 0 ghosts`,
-exit 0. Both halves proven live.
+exit 0. Both halves proven live — **and made repeatable**: `doc_index.py
+--selftest` re-runs the ghost trip, all four resolution conventions, the
+word-boundary extractor rule, and the line-scoped exemption (same token on a
+different line must fail) as pure-function checks, wired into `scripts/gate`
+next to `--check`.
 
 ## Note on concurrent work
 

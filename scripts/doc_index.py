@@ -68,45 +68,51 @@ MARKER_RE = re.compile(r"reconciled_commit:\s*([0-9a-f]{7,40}|pending)")
 # ACTIVE per §6, including root docs) must resolve. Historical citations — a
 # token a governing doc names AS a past ghost/retired path while describing
 # drift (AGENTS.md §4.14 names i386's ghosts and moved files as the drift class
-# it fixed) — are curated here, one entry per frozen historical record, with the
-# mechanism named. Anything not in this set must resolve now.
-HISTORICAL_CITES: set[tuple[str, str]] = {
-    # i386's ghost interlock contracts, cited as ghosts that never existed (AGENTS §4.14,
-    # and the PLAN_DC3 i386 ledger row that records the same sweep).
-    ("AGENTS.md", "IC-2-observability.md"),
-    ("AGENTS.md", "IC-7-ui-telemetry.md"),
-    ("docs/PLAN_DC3_DEVELOPMENT.md", "IC-2-observability.md"),
-    ("docs/PLAN_DC3_DEVELOPMENT.md", "contracts/IC-2-observability.md"),
-    ("docs/PLAN_DC3_DEVELOPMENT.md", "IC-7-ui-telemetry.md"),
-    # i386's moved-file examples, cited as retired pre-extraction paths (AGENTS §3/§4.14
-    # bare + path forms; the PLAN_DC3 i386 row quoting what it re-pointed).
-    ("AGENTS.md", "sim/pass_health.rs"),
-    ("AGENTS.md", "sim/pass_biology.rs"),
-    ("AGENTS.md", "pass_health.rs"),
-    ("AGENTS.md", "pass_biology.rs"),
-    ("AGENTS.md", "psychology/lore.rs"),
-    ("docs/PLAN_DC3_DEVELOPMENT.md", "sim/pass_health.rs"),
-    ("docs/PLAN_DC3_DEVELOPMENT.md", "sim/pass_biology.rs"),
+# it fixed) — are curated here as (doc, token, line-anchor): the anchor is a
+# regex matched against the citing LINE, so the exemption is line-scoped —
+# a future occurrence of the same token elsewhere in the doc still fails the
+# gate (a doc-wide key would have exempted it forever). Anything not anchored
+# here must resolve now.
+HISTORICAL_CITES: tuple[tuple[str, str, str], ...] = (
+    # i386's ghost interlock contracts, cited as ghosts that never existed
+    # (AGENTS §4.14; the PLAN_DC3 i386 ledger row recording the same sweep).
+    ("AGENTS.md", "IC-2-observability.md", "ghost citations"),
+    ("AGENTS.md", "IC-7-ui-telemetry.md", "ghost citations"),
+    ("AGENTS.md", "IC-2-observability.md", "never existed under those names"),
+    ("AGENTS.md", "IC-7-ui-telemetry.md", "never existed under those names"),
+    ("AGENTS.md", "IC-2-observability.md", "two pass files still named"),
+    ("AGENTS.md", "IC-7-ui-telemetry.md", "two pass files still named"),
+    ("docs/PLAN_DC3_DEVELOPMENT.md", "IC-2-observability.md", "shipped files are"),
+    ("docs/PLAN_DC3_DEVELOPMENT.md", "contracts/IC-2-observability.md", "shipped files are"),
+    ("docs/PLAN_DC3_DEVELOPMENT.md", "IC-7-ui-telemetry.md", "shipped files are"),
+    # i386's moved-file examples, cited as retired pre-extraction paths (AGENTS
+    # §3 bare + path forms; the PLAN_DC3 i386 row quoting what it re-pointed).
+    ("AGENTS.md", "sim/pass_health.rs", "`systems/health.rs`"),
+    ("AGENTS.md", "psychology/lore.rs", "`systems/health.rs`"),
+    ("AGENTS.md", "pass_health.rs", "pre-extraction paths"),
+    ("AGENTS.md", "pass_biology.rs", "`systems/biology.rs`"),
+    ("docs/PLAN_DC3_DEVELOPMENT.md", "sim/pass_health.rs", "determinism law cited"),
+    ("docs/PLAN_DC3_DEVELOPMENT.md", "sim/pass_biology.rs", "determinism law cited"),
     # AGENTS §7 names the historical "sim.rs split" — the god-file is deliberately gone.
-    ("AGENTS.md", "sim.rs"),
-    # Vendor-blocked external vault artifacts, cited as the unblock-pending items they are
-    # (AGENTS §8, ENGINE_STATUS vendor block, PLAN_DC3 §2/§6, i291 row: "until rays.md vendors").
-    ("AGENTS.md", "realms.md"),
-    ("docs/ENGINE_STATUS.md", "realms.md"),
-    ("docs/PLAN_DC3_DEVELOPMENT.md", "realms.md"),
-    ("docs/PLAN_DC3_DEVELOPMENT.md", "rays.md"),
-    # The i421 ledger row quotes the tokens it curates (same records, cited as records).
-    ("docs/PLAN_DC5_DEVELOPMENT.md", "realms.md"),
-    ("docs/PLAN_DC5_DEVELOPMENT.md", "rays.md"),
-    ("docs/PLAN_DC5_DEVELOPMENT.md", "tests/comparison.rs"),
+    ("AGENTS.md", "sim.rs", "pattern established by"),
+    # Vendor-blocked external vault artifacts, cited as the unblock-pending items
+    # they are (AGENTS §8, ENGINE_STATUS vendor block, PLAN_DC3 §2/§6, i291 row).
+    # One regex anchor covers PLAN_DC3's three vendor mentions.
+    ("AGENTS.md", "realms.md", "vendor-blocked era items"),
+    ("docs/ENGINE_STATUS.md", "realms.md", "Vendor-blocked"),
+    ("docs/PLAN_DC3_DEVELOPMENT.md", "realms.md", "[Vv]endor"),
+    ("docs/PLAN_DC3_DEVELOPMENT.md", "rays.md", "until rays.md"),
     # rust-craft C2's documented deletion, cited as the suite-count delta (ENGINE_STATUS §1).
-    ("docs/ENGINE_STATUS.md", "tests/comparison.rs"),
+    ("docs/ENGINE_STATUS.md", "tests/comparison.rs", "C2 deleted"),
     # The PLAN_DC3 i386 row names the never-shipped artifacts it swept (G2/G4 rows).
-    ("docs/PLAN_DC3_DEVELOPMENT.md", "scripts/golden_replay.sh"),
-    ("docs/PLAN_DC3_DEVELOPMENT.md", "scripts/playthrough_smoke.sh"),
-    ("docs/PLAN_DC3_DEVELOPMENT.md", "keybind_cheatsheet.md"),
-    ("docs/PLAN_DC3_DEVELOPMENT.md", "dossier_flow.md"),
-}
+    ("docs/PLAN_DC3_DEVELOPMENT.md", "scripts/golden_replay.sh", "never shipped"),
+    ("docs/PLAN_DC3_DEVELOPMENT.md", "scripts/playthrough_smoke.sh", "never shipped"),
+    ("docs/PLAN_DC3_DEVELOPMENT.md", "keybind_cheatsheet.md", "never shipped"),
+    ("docs/PLAN_DC3_DEVELOPMENT.md", "dossier_flow.md", "never shipped"),
+)
+HISTORICAL_CITE_RES = tuple(
+    (doc, tok, re.compile(anchor)) for doc, tok, anchor in HISTORICAL_CITES
+)
 
 # Cited-token shape: backtick-quoted or path/bare-name, one of the four
 # gate-relevant extensions. URLs, absolute paths, ~-paths and globs are not
@@ -121,6 +127,14 @@ AP4_STUDIO = REPO / "docs" / "architecture" / "AP4-studio"
 def exempt(rel: str) -> bool:
     norm = os.sep + rel.replace("/", os.sep)
     return any(part in norm for part in EXEMPT_DIR_PARTS)
+
+
+def is_historical(doc: str, tok: str, line: str) -> bool:
+    """True if this (doc, token, line) triple is a curated historical citation."""
+    return any(
+        d == doc and t == tok and pat.search(line)
+        for d, t, pat in HISTORICAL_CITE_RES
+    )
 
 
 def iter_docs() -> list[str]:
@@ -238,9 +252,9 @@ def marker_resolves(rel: str) -> tuple[bool, str]:
     return True, ""
 
 
-def iter_cited_tokens(rel: str) -> list[str]:
-    """Every citation-shaped token in a doc, outside fenced code blocks."""
-    out: list[str] = []
+def iter_cited_tokens(rel: str) -> list[tuple[str, str]]:
+    """(line, token) pairs for every citation-shaped token in a doc, outside code fences."""
+    out: list[tuple[str, str]] = []
     in_fence = False
     for line in (REPO / rel).read_text(encoding="utf-8").splitlines():
         if FENCE_RE.match(line.strip()):
@@ -252,11 +266,65 @@ def iter_cited_tokens(rel: str) -> list[str]:
             tok = m.group(1)
             if tok.startswith(("~", "/")) or "*" in tok:
                 continue  # external, absolute, glob — not resolvable repo citations
-            out.append(tok)
+            out.append((line, tok))
+    return out
+
+
+def selftest() -> int:
+    """Repeatable regression check for the citation gate (i421): the resolver
+    rejects ghosts and accepts each convention, the extractor's word boundary
+    rejects symbol-prefixes, and the historical exemption is line-scoped — the
+    same token on a different line must fail. Runs in the gate; the original
+    proof was a one-off plant."""
+    checks: list[tuple[str, bool]] = [
+        ("ghost basename fails",
+         not citation_resolves("i999_planted_ghost.md", "docs/ENGINE_STATUS.md", {"AGENTS.md"})),
+        ("ghost repo path fails",
+         not citation_resolves("scripts/definitely_missing.sh", "docs/ENGINE_STATUS.md", set())),
+        ("tracked bare basename resolves",
+         citation_resolves("doc_index.py", "AGENTS.md", {"doc_index.py"})),
+        ("evidence shorthand resolves",
+         citation_resolves("evidence/i386_doc_citation_sweep.md", "docs/ENGINE_STATUS.md", set())),
+        ("crate-relative resolves",
+         citation_resolves("sim/core.rs", "AGENTS.md", set())),
+        ("symbol prefix does not extract",
+         all(t != "cardiovascular.sh"
+             for _, t in iter_cited_tokens_text(["`cardiovascular.shock_risk` fires"]))),
+        ("real token extracts",
+         any(t == "doc_index.py"
+             for _, t in iter_cited_tokens_text(["run `doc_index.py` first"]))),
+        ("anchored history exempts its line",
+         is_historical("AGENTS.md", "sim.rs",
+                      "the pattern established by the sim.rs split")),
+        ("anchor is line-scoped (other line fails)",
+         not is_historical("AGENTS.md", "sim.rs",
+                          "the orchestrator now lives in `sim.rs`")),
+        ("vendor anchor covers parked lines",
+         is_historical("docs/PLAN_DC3_DEVELOPMENT.md", "realms.md",
+                      "Vendor-blocked items stay parked (realms.md, resonance).")),
+    ]
+    bad = [name for name, ok in checks if not ok]
+    if bad:
+        print(f"doc_index selftest: FAIL — {', '.join(bad)}")
+        return 1
+    print(f"doc_index selftest: OK — {len(checks)} checks")
+    return 0
+
+
+def iter_cited_tokens_text(lines: list[str]) -> list[tuple[str, str]]:
+    """Extract (line, token) pairs from in-memory lines (selftest helper)."""
+    out: list[tuple[str, str]] = []
+    for line in lines:
+        for m in CITE_TOKEN_RE.finditer(URL_RE.sub("", line)):
+            tok = m.group(1)
+            if not tok.startswith(("~", "/")) and "*" not in tok:
+                out.append((line, tok))
     return out
 
 
 def main() -> int:
+    if "--selftest" in sys.argv:
+        return selftest()
     list_only = "--list" in sys.argv
     indexed = parse_index()
     governed = iter_docs()
@@ -290,8 +358,8 @@ def main() -> int:
     for path in sorted(p for p, s in indexed.items() if s in FRESH_STATUSES):
         if not (REPO / path).is_file():
             continue  # already reported as a ghost above
-        for tok in iter_cited_tokens(path):
-            if (path, tok) in HISTORICAL_CITES:
+        for line, tok in iter_cited_tokens(path):
+            if is_historical(path, tok, line):
                 continue
             if not citation_resolves(tok, path, basenames):
                 failures.append(

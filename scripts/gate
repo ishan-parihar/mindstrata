@@ -29,6 +29,7 @@ python3 scripts/bench_index.py --strict
 # pointer / current-state doc from silently diverging from the code again.
 echo "[gate 2.5b/3] documentation authority map"
 python3 scripts/doc_index.py --check
+python3 scripts/doc_index.py --selftest
 
 # DC3-P0 §5.1 (i295): golden-budget envelopes as WARN-ONLY drift visibility —
 # N=12 ≤150 µs/tick (golden-suite wall budget), N=96 ≤6500 (Phase-1 target).
