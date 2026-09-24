@@ -31,8 +31,8 @@ owner: SIM + PROD (AP4 Studio)
 | Probe law | `scripts/bench_index.py --strict` | 0 violations |
 | Doc structure | `scripts/doc_index.py` | 71 governed docs classified, 0 ghosts |
 
-**Scale of the artefact:** 13 crates · 464 `.rs` · ~148,900 LOC · 1,695 test functions
-· 223 probes · 174 evidence docs · 36 RON spec files · 937 commits.
+**Scale of the artefact (recounted at i400):** 13 crates · 473 `.rs` · ~151,400 LOC ·
+1,700 test functions · 232 probes · 183 evidence docs · 36 RON spec files · 954 commits.
 
 ## 2. Architecture
 
@@ -174,7 +174,7 @@ and has been corrected.
 |---|---|---|
 | **Agency** | moderate–good | 5-deep decision chain, bounded rationality under stress, intention commitment, inhibition. Gap: ~59% routine. |
 | **Communion / attachment** | good | relationship_v2 20+ dims; attachment styles; tenderness→helping, loneliness→social-seeking, gratitude→help wired. |
-| **Relationships** | good, one caveat | courtship→marriage→household→clan pipeline live; witness locality fixed (i349). **Caveat:** two relationship stores (legacy v1 matrix + honest v2) still coexist — 63% of pairs >0.01 (i352) — though the sites measured as consequential are migrating one per iteration (comfort i369, the v1 *writer* i376, the economy trade read+write pair i384); remaining readers: `norms_impl`, `household`, `births_deaths`. |
+| **Relationships** | good, one caveat | courtship→marriage→household→clan pipeline live; witness locality fixed (i349); and **the marriage bond is now real to the model** (i399 — the boost lands on the dyadic store, so the Sternberg/decay machinery finally sees it; probe: married-pair affection was pinned flat at 0.937 on the ghost store vs a decayed, differentiated 0.878 dyadically). **Caveat:** two relationship stores (legacy v1 matrix + honest v2) still coexist — 63% of pairs >0.01 (i352). Migrated so far: comfort (i369), the v1 *writer* (i376), the economy trade read+write pair (i384), the `norms_impl` belief reader (i398), the marriage closed loop (i399). **Still on v1: the interaction-gain application itself, `social_cluster`'s ToM + knowledge-diffusion trust (i400 measured, reverted), the `memory_ops` status fold, and the `legal_impl`/`marriage` writers.** |
 | **Innovation** | present, thin | §19.5.I work-driven discovery, knowledge diffusion (5 types), teaching, meme mutation, education, taboo-damped learning. Gap: not generative; skill saturation was audit finding E8. |
 | **Thought processes** | strong | theory of mind, prospection/imagination, 12-proposition belief system, capacity-limited memory (8 kinds), narrative identity with scripts. |
 | **Feelings** | strong | 22 discrete emotions, 12 regulation strategies, hedonic setpoint drift. E1 dysphoria plateau dead (i259); valence graded. |
@@ -210,6 +210,14 @@ housing spread i340/i345, the i352 scan removal, and i356 — re-measured at i35
 | 144 | 56 | 1,856.0 | ~540 | **fits** |
 | 192 | 64 | **3,239.4** | ~310 | **fits, 50% headroom** |
 | 256 | 74 | **5,805.2** | ~170 | **fits** (demographic cap) |
+
+**Spot-checked live at i400** (`i295_perf_budget_gate`, the gate's own two rungs): N=12 reads
+**111.8 / 116.1 / 117.7 µs/tick** across three runs against the 150 golden budget (stable,
+inside the ±8% charter noise), and N=96 reads **1 293.5 / 1 613.3 / 1 627.8** against the
+6 500 Phase-1 target. The N=96 spread is **±25% run-to-run on this host**, i.e. four times
+the charter's ±8% assumption — the budgets are warn-only for exactly this reason, and any
+per-tier comparison (including the i359 table above) needs a same-session A/B rather than a
+number read off a loaded host.
 
 **World-area policy (A9 — DECIDED 2026-09-23, LANDED):** the world's area follows the
 population at the engine's own calibrated density —
@@ -372,15 +380,20 @@ village-wide synchronized phase, the revolution-liveness family (knife-edge: thr
 re-anchors by discovery across three pacing changes — the fix is a per-seed route pin,
 not another sweep), deliberative sociality vs encounter volume (i388 measured action
 duration 4.31 → 5.40 ticks and a shallower 2K relationship-stage distribution — W2 must
-decide whether contact falls when the drive is served), the dual-store split (both halves are now closed at the sites measured: i376 converged the
-v1 row onto the dyadic store, and **i384 migrated the economy trade read+write pair** — the
-last self-contained v1 pair — where the two stores sat +0.09…+0.13 apart on exactly the
-pairs that trade, 6–40× the population-wide offset, so trade now reads and writes one
-store and its price no longer discounts by a stale scalar; the residual is the v1
-interaction-gain schedule itself (+0.02…+0.10/act, ~10× the dyadic gain) whose removal is a
-subsystem migration — the speech-act effect model and the v1 `RelationshipKind` ladder must
-move together — plus the three remaining readers `norms_impl`, `household`,
-`births_deaths`),
+decide whether contact falls when the drive is served), the dual-store split (five landings so far: i369 comfort, i376 the v1 row converged onto the
+dyadic store, i384 the economy trade read+write pair — where the stores sat +0.09…+0.13
+apart on exactly the pairs that trade, 6–40× the population-wide offset — i398 the
+`norms_impl` belief reader (zero-blast), and i399 the marriage closed loop (behavioural: both
+goldens + 7 snapshots re-baselined, the revolution family re-anchored on a sweep that proved
+the producer not starved). The `household` and `births_deaths` passes turned out to already
+read the dyadic store, so the pre-2026 queue over-counted them. The residual is the v1
+interaction-gain schedule itself (+0.02…+0.10/act, ~10× the dyadic gain; the §19.5.G
+`RelationshipKind` ladder already retired at i393) plus `social_cluster`'s ToM/knowledge
+trust (i400: measured with a zero-miss, 0.01-mean shape but an unbounded tail on a live 0.5
+band edge, reverted) and the `memory_ops` `trust > 0.6` status fold. **Revised sequencing
+(i400): with a band edge involved the remaining readers and the gain deletion must move in
+ONE commit**, so the dormancy windows and the 0.5 acceptance floor are re-derived once
+against the whole new trust surface),
 the moral-panic trigger's knife-edge (i378 sized it, **i381 resolved it** with the
 RELATIVE/anomaly form — `avg_charge ≥ max(population_baseline × 1.25, 0.47) AND
 panic_ratio ≥ 0.30` — and its pin fragility is structural too: both panic tests hold a

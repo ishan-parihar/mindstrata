@@ -111,8 +111,9 @@ batched tightly.
 | **i398** | **READER LANDED ZERO-BLAST; WRITERS MEASURED AND DEFERRED** (`i398_norms_store.md`) — the reader-first sweep's first item. The `norms_impl` belief-evidence channel (`rel_pos` → `trust − 0.5`) now reads the dyadic store: **goldens byte-identical, 314/0/1** — provably inert, not luckily (the probe shows the stores agree at every pinned horizon ≤0.017 after the early pre-boundary spike of 0.082; the belief consumer is linear toward equilibrium; evidence is symmetric around 0). The file's three v1 writers (violence −0.3/−0.2 ×2 directions, punishment −0.15×p) were moved and **reverted with the mechanism understood**: the v1 write was transient (i376's daily sync erases it within a day) so on v2 the same −0.3 is PERSISTENT, re-arming the Iter-185 low-trust→threat spiral — measured: one extra death by 10K (13→12), `peer_status` 0.2255 (floor 0.3), fear-contagion presence 9/12, a pinned conception slid. **Doctrine nugget: a transient write made persistent is a magnitude change, not a store change.** The write stays on v1 with the finding recorded at the site; the magnitude gets re-sized for persistence by a violence-family sweep (i273 family + the death-spiral horizon) before the move | `i398_norms_store` legs A–B + three suite runs | reader landed; writers deferred with a named next iteration |
 | **i393** | **PROBE LANDED + INERT HALF LANDED; MIGRATION IS ORDER-CONSTRAINED** (`i393_speech_act_store.md`) — this iteration retired the write-only §19.5.G ladder (both goldens byte-identical, 314/0/1, i.e. proven zero-blast by the reader census) and ran the migration itself **twice, in two shapes, both reverted with measurements**: (1) writer-deleted-first → **299/15/1 in 656 s** (5× slowdown; `revolution` + `attachment` ×2 + `bonding_rate` + belief/memory liveness pins red), because every v1 reader is calibrated against the ~0.9 level the deleted writer produced and §2.3 forbids re-pinning a producer that goes dark; the decisive insight is that **`bonding_rate`/`conflict_escalation_rate` are `Fixed::ONE` defaults whose only consumer was that write**, so the repair is to re-host them on the dyadic application (value-neutral at defaults), never a re-anchor. (2) folds-moved-only → **301/13/1 in 143 s** (normal speed, 4 behavioural pins of 4 different kinds: a `contagion_delta` **Fixed-4 truncation** hazard the move exposed, a kin-**labelling** correctness break, a `peer_status` band edge, and a §4.13 manipulation failure). **Corrected sequence: readers first (norms_impl, household, births_deaths, marriage/attachment), then delete the v1 application WITH the rate re-hosting, then the folds.** Original probe findings stand (below) |
 | **i393 · probe** | **PROBE LANDED; DELIVERABLE CORRECTED TWICE** (`i393_speech_act_store.md`) — the v1 writer gain schedule (`+0.02…+0.10`/act, 3–10× the dyadic gain) is the last divergence source, and the probe sized it: **the divergence is a mid-day phenomenon** (trust agrees to 0.0009–0.0039 on a daily boundary and rebuilds to 0.169 mean at +72 ticks — leg A's first draft tried `Δtrust/Δacts` and could not work, because i376's sync dominates a v1 row's movement); **affection is never synced at all** (0.187 mean / max 1.000 at 50K, unbounded in horizon); and the three-regime projection picks the shape — importing the v1 deltas (regimes 2/3) raises dyadic saturation 50% → 61% at 50K, i.e. it re-imports the exact condition i376 diagnosed as v1's failure, so **regime 1 (delete the gain, keep the dyadic schedule)**. Two census findings correct the plan: **`Relationship.kind` has NO production reader** (write-only §19.5.G ladder — the i391 dead-field class; retire it, don't migrate it; `RelationshipV2.stage` is the live replacement) and **deleting the interaction gain does not make v1 derived** (`legal_impl` −0.2 and `marriage` +0.2/+0.3 keep writing it, above the deleted gain's magnitude) | `i393_speech_act_store` legs A–D | contract: delete the interaction gain, re-point the speech-act model's `base_delta` doc+guard at the schedule actually applied, retire the write-only ladder and pin `stage` liveness instead, then re-anchor trust-gated pins with attribution. **The `legal_impl`/`marriage` v1 writers are deliberately out of scope** (separate behavioural moves, §2.1) and **`affection` must not be left unsynced** |
-| **i394** | Three consumers still read the legacy row (`norms_impl`, `household`, `births_deaths`) — each has its own divergence stake and its own probe (i369/i384 method) | one probe per consumer, re-using the i384 read-source-delta metric | each consumer's read-source delta ≤1%; re-anchors attributed per §4.2 |
+| **i394** | The remaining legacy-row readers — **the queue over-counted this list**: `household` and `births_deaths` already read the dyadic store, so the real set is `social_cluster`'s ToM + knowledge-diffusion trust and the `memory_ops` `trust > 0.6` status fold | one probe per consumer, re-using the i384 read-source-delta metric **plus a band-edge leg** (i400 found the divergence tail lands on the 0.5 `infer_intent` / acceptance verdict) | each consumer's read-source delta ≤1% **and** its band-edge straddle share measured; re-anchors attributed per §4.2 |
 | **i395** | With every reader and writer migrated, the v1 matrix + its daily sync pass are pure redundancy | `i395_v1_retirement`: run with the matrix frozen/removed, compare full-run digests | the v1 matrix is deleted (or reduced to a documented projection), the sync pass removed, goldens re-anchored **once** under custody with mechanism evidence |
+| **i401 (LIVE)** | **i400's finding reshaped the close-out:** the band-edge readers cannot be moved one at a time without perturbing the dormancy windows and the 0.5 acceptance floor three separate times | `i401_bundled_closeout`: move the remaining v1 readers **and** delete the interaction-gain application **in one commit**, with `bonding_rate`/`conflict_escalation_rate` re-hosted on the dyadic magnitude (value-neutral at `Fixed::ONE`), `affection` added to the i376 daily sync, the Fixed-4 `contagion_delta` truncation fixed first | one commit; the dormancy windows and the acceptance floor re-derived once against the whole new trust surface; every re-anchor carries its §4.2 mechanism line |
 
 ### W2 — Space, contact, locomotion (G3)
 | iter | root cause | probe | exit criterion |
@@ -198,17 +199,57 @@ batched tightly.
 
 
 ```
-W0 (i387→i392)  dead/inert surfaces  ── feeds the action layer for W2/W3 (i390 succession, i391 census DONE)
-W1 (i393→i395)  relationship unification  ── must precede W2 (contact changes the store)
-W2 (i396→i399)  space/contact  ── must precede W3 (diplomacy needs a settlement graph)
-      i399 (A9) is an OPERATOR GATE: W2's clan/contact items can land either way,
-      but the density decision should be taken before i400 measures a polity graph
-W3 (i400→i403)  inter-community layer  ── the country path; i402 needs i400/i401 landed
-W4 (i404→i407)  scale architecture  ── i404/i405 unblock i406 (cap) which unblocks i410 (H5)
-W5 (i408→i410)  economy/demography  ── i408/i409 independent; i410 depends on i406
-W6 (i411→i414)  thin layers  ── independent; the cheapest realism-yield per iteration
-W7 (i415→i417)  verification  ── i415 is independent and can land any time (recommended early)
+W0 (i387→i392)  dead/inert surfaces  ── CLOSED (DONE; i390 succession, i391 census)
+W1 (i393→i401)  relationship unification  ── IN FLIGHT; five landings, close-out at i401
+W2             space/contact  ── must precede W3 (diplomacy needs a settlement graph)
+W3             inter-community layer  ── the country path; needs W2's settlement graph
+W4             scale architecture  ── the tier work unblocks the cap which unblocks founder shape
+W5             economy/demography counter-forces  ── founder-shape row depends on the cap raise
+W6             thin layers  ── independent; the cheapest realism-yield per iteration
+W7             verification  ── the citation check is independent and can land any time
 ```
+
+> **Iteration-number drift, resolved (i400):** the per-arc tables below were drafted with
+> ordinal labels (W2 started at "i396", W3 at "i400" …) but real iterations consumed
+> i393–i401 on the W1 close-out, so those labels no longer identify iterations. **§4.1 below is
+> the authoritative schedule and numbering from i401 onward**; the arc tables are kept as arc
+> *definitions* (root cause, probe, exit criterion) and their i-labels are draft ordinals.
+
+### 4.1 Live queue at i400 — the recommended order
+
+Sequenced by the operator's standing **depth-before-scale** decision, with dependencies made
+explicit. Each row is one iteration and carries its own probe; nothing here is a batch.
+
+| # | item | arc | depends on |
+|---|---|---|---|
+| **i401** | **Bundled close-out of the dual-store split** — the remaining v1 readers + the interaction-gain deletion + the `bonding_rate`/`conflict_escalation_rate` re-hosting + `affection` into the daily sync, in ONE commit | W1 | i400's band-edge finding (done) |
+| **i402** | **Locomotion cadence** — `Move` reaches the deliberative layer only via the feud approach (share 0.0887%); measure decision cadence vs movement and whether contact breadth rises | W2 | — |
+| **i403** | **Encounter-driven tie formation** — ties today form from co-residency, not encounter; re-measure the i350 saturation metric at a behavioural horizon (≥40K) | W2 | i402 (contact volume must be a *measured* quantity first) |
+| **i404** | **Carrying capacity + fission** — population becomes an output: crowding → stress/housing/conflict, and a settlement past local capacity founds a new site | W2 | i403 |
+| **i405** | **Retire A9** — with capacity and fission causal, `world_side_for_population` disappears; the question becomes how many agents the world supports | W2, W4 | i404 |
+| **i406** | **Skill curve** (E8: farming pinned at 1.00, trading at 0.00) — diminishing returns at the top, gradient at the bottom, decay pressure | W6 | — |
+| **i407** | **Fatigue differentiation** — the village-wide synchronized phase loses per-agent workload signal | W6 | — |
+| **i408** | **Generative innovation** — make discovery depend on practice/teaching accumulation so tier-2 chains fire naturally | W6 | i406 (skills feed technology) |
+| **i409** | **Vendor gate** — realms ontology, resonance matrix, cult-liveliness: unblock via a seedable substitute or re-park with a date-stamped reason | W6 | — |
+| **i410** | **Endogenous tax policy** — the council sets its own rate from fiscal need (not legitimacy, per i377's constraint) | W5 | — |
+| **i411** | **Inheritance + charity** — the audit's E6 residual; measure Gini to 100K and attribute each counter-force | W5 | — |
+| **i412** | **Living background tier** — the LOD Background is dark in calm towns; make it carry a budgeted share of work | W4 | — |
+| **i413** | **Cap envelope at 384/512** — re-baseline with i412 live, then adopt or record | W4 | i412 |
+| **i414** | **Founder-shape realism (H5)** — shaped draws at the raised N with the full re-anchor sweep; this is the item the Iter-263 casualty blocks | W5 | i413 (larger N) |
+| **i415** | **Polity diplomacy from world state** — derive neighbours from actual polities; off-map names only as an "outside world" fallback | W3 | i403/i404 (a real settlement graph) |
+| **i416** | **On-map trade and conflict** — grain conserved between settlement stores; militia tied to the raided polity | W3 | i415 |
+| **i417** | **Settlement demography verdict [M]** — does fission occur, does migration move people between settlements (N=256 × 100K)? | W3 | i404 |
+| **i418** | **Regional second-order holon** — regional legitimacy/treaty state; regional-vs-local meme divergence | W3 | i415, i416 |
+| **i419** | **Cognitive pass perception gate** — the i334 gate covered memory only; cognitive + memory are ~39% of the N=192 tick | W4 | — |
+| **i420** | **Partition spike [M]** — prototype explicit sparse cross-settlement state against the Ω(N²) floor; a verdict, never a half-landed refactor | W4 | i418 |
+| **i421** | **Citation check in the gate** — `doc_index.py` verifies every `*.md|rs|py|sh` token in a governed doc resolves; proven to trip on a planted ghost | W7 | — |
+| **i422** | **TUI longitudinal charts** — finish the i251 scaffolding (population, stress, Gini, belief ecology, lineage) | W7 | — |
+| **i423** | **Standing perf envelope** at 144/192/256 + a CLI profile readout, so a regression is visible without running a probe by hand | W7 | — |
+
+**Cheap wins available at any time:** i406, i407, i409, i410, i411, i421, i422, i423 (no
+dependencies). **The two structural walls** are i403/i404 (contact and capacity — they retire
+both the density law and the co-residency proxy) and i419/i420 (throughput and partition — they
+decide whether a city is reachable at all).
 
 **First arc status: i387 → i388 → i389 → i390 → i391 → i392 CLOSED (rows 1 and 3 DONE; rows 2,
 4 and 5 rejected with records), precondition i392b DONE. All five inert genes are settled —

@@ -498,8 +498,10 @@ Crate-extraction discipline (the procedure that produced the ladder):
 
 - **`docs/ENGINE_STATUS.md`** — current engine truth (behaviour, realism, measured scale).
 - **`docs/PLAN_DC5_DEVELOPMENT.md`** — **the live plan** (DC-5): the measured gap taxonomy
-  G1–G8, the iteration ladder (i387+) with a probe and an exit criterion per item, its
-  dependencies, and the operator decisions it depends on.
+  G1–G8, the iteration ladder with a probe and an exit criterion per item, its dependencies,
+  and the operator decisions it depends on. **§4.1 is the authoritative schedule from i401**
+  (the per-arc tables' i-labels are draft ordinals — real iterations i393–i400 were consumed
+  by the W1 `v1→v2` close-out, so the two no longer line up).
 - **`docs/PLAN_DC3_DEVELOPMENT.md`** — the DC-3 ledger (closed) + the DC-4 execution ledger
   and the §3 calibration-debt history.
 - **`docs/DOCUMENTATION.md`** — which doc owns which scope, and the status of every doc.
