@@ -261,7 +261,8 @@ per-tier comparison (including the i359 table above) needs a same-session A/B ra
 number read off a loaded host. **The i270 quick floor is the sharpest instance of the same
 hazard (re-measured 2026-09-24):** on an idle host HEAD reads **7553 / 8447 / 8082 tps
 against the 8000 floor** (2 of 3 clear), while inside `scripts/gate` — immediately after the
-render-probe build — it read **6546**; the C1-era A/B read **6365 vs 6396** (Δ<1%, both arms
+render-probe build — it read **6546 on the loaded run and 8677 on the idle re-run**: the floor
+tracks host load, not the gate context; the C1-era A/B read **6365 vs 6396** (Δ<1%, both arms
 loaded), which rules out a code regression. The floor sits inside this host's variance band:
 it fails on load, not on code, and needs the same-session A/B before any failure is treated
 as real.
