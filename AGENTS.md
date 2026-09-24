@@ -740,6 +740,30 @@ Live queue, in order (evidence link per item):
    windows and the acceptance floor are re-derived once against the whole new trust
    surface rather than perturbed three separate times.
 
+   **The bundled close-out then ran and was MEASURED AND REVERTED (i401,
+   `evidence/i401_bundled_closeout.md`)** — writer deletion + rate re-host + the
+   `affection` sync leg + the `memory_ops` fold move + the parameter retirement +
+   the i400-bundled `social_cluster` reads, in one commit: **304/16/1 in 656 s**.
+   Decomposed by backing single pieces out, which is where the value was: the
+   `social_cluster` read move ALONE kills the conception producer (zero pregnancies
+   in 2 000 accelerated seed-46 ticks; the pin PASSES with only that file reverted),
+   so i400's revert is now proven under the bundle it asked for; the writer deletion
+   ALONE quiets the attachment coupling on all three seeds (nonzero partnered
+   distress 38/29/43 → **15/10/13**, means → 0.0022/0.0022/**0.0016**, under the
+   0.002 liveness floor) with the cause **one hop upstream** — `choose_interaction`
+   gates the interaction *kind* on the v1 trust/affection pair, and the deleted write
+   was a **ratchet** (v1 only converged toward v2, never down), so it parked pairs in
+   the 0.7+ Comfort branch and *out* of the Gossip branch that fires `on_reunion`;
+   co-residency is ruled out (co-resident couples FELL 10 → 4 and mean partner
+   distance ROSE 14.75 → 15.42 while distress fell); the `memory_ops` fold move is
+   orthogonal (27/48 with and without); and the `social_reciprocal_factor` retirement
+   is coupled to the deletion and cannot precede it. **Doctrine nugget: a reader whose
+   calibration rode a write's ratchet is not a reader — it is a producer's calibration
+   surface; migrate it with a kind-mix probe, never a band widening.** Next: **i402,
+   the interaction-kind schedule on the dyadic store** (kind-mix probe, then the read
+   move plus a re-derivation of the 0.2/0.7 gates in one commit), then the writer
+   deletion (i403) with the rate re-host and the `affection` sync leg.
+
    **i385 then reconciled the documentation surface itself, and the reconciliation paid for
    its own iteration.** `ENGINE_STATUS.md` §1 was 15K LOC / 30 probes / two suite counts
    stale and §5 still carried pre-i347 decision numbers; both are re-measured (see

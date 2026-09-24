@@ -175,7 +175,7 @@ and has been corrected.
 |---|---|---|
 | **Agency** | moderate–good | 5-deep decision chain, bounded rationality under stress, intention commitment, inhibition. Gap: ~59% routine. |
 | **Communion / attachment** | good | relationship_v2 20+ dims; attachment styles; tenderness→helping, loneliness→social-seeking, gratitude→help wired. |
-| **Relationships** | good, one caveat | courtship→marriage→household→clan pipeline live; witness locality fixed (i349); and **the marriage bond is now real to the model** (i399 — the boost lands on the dyadic store, so the Sternberg/decay machinery finally sees it; probe: married-pair affection was pinned flat at 0.937 on the ghost store vs a decayed, differentiated 0.878 dyadically). **Caveat:** two relationship stores (legacy v1 matrix + honest v2) still coexist — 63% of pairs >0.01 (i352). Migrated so far: comfort (i369), the v1 *writer* (i376), the economy trade read+write pair (i384), the `norms_impl` belief reader (i398), the marriage closed loop (i399). **Still on v1: the interaction-gain application itself, `social_cluster`'s ToM + knowledge-diffusion trust (i400 measured, reverted), the `memory_ops` status fold, and the `legal_impl`/`marriage` writers.** |
+| **Relationships** | good, one caveat | courtship→marriage→household→clan pipeline live; witness locality fixed (i349); and **the marriage bond is now real to the model** (i399 — the boost lands on the dyadic store, so the Sternberg/decay machinery finally sees it; probe: married-pair affection was pinned flat at 0.937 on the ghost store vs a decayed, differentiated 0.878 dyadically). **Caveat:** two relationship stores (legacy v1 matrix + honest v2) still coexist — 63% of pairs >0.01 (i352). Migrated so far: comfort (i369), the v1 *writer* (i376), the economy trade read+write pair (i384), the `norms_impl` belief reader (i398), the marriage closed loop (i399). **Still on v1: the interaction-gain application itself, the interaction-KIND schedule (`choose_interaction`'s trust/affection pair — the strongest v1 consumer left, see below), `social_cluster`'s ToM + knowledge-diffusion trust (i400/i401 measured, reverted), the `memory_ops` status fold, and the `legal_impl`/`marriage` writers.** The bundled close-out (i401) was built and **measured as a rejection**: 304/16/1, and its two root findings are producer findings — the `social_cluster` read move kills the conception producer outright (zero pregnancies in 2 000 accelerated seed-46 ticks, PASSES with only that file reverted), and the v1 write deletion quiets the attachment coupling on all three seeds (nonzero partnered distress 38/29/43 → 15/10/13; means → 0.0022/0.0022/0.0016, under the 0.002 liveness floor) because `choose_interaction` gates the interaction *kind* on the v1 pair and the deleted write was a **ratchet** that parked pairs in the 0.7+ Comfort branch and out of the Gossip branch (`on_reunion`). Co-residency is ruled out (co-resident couples fell 10 → 4 while distress fell). Next: i402, the kind schedule read with a kind-mix probe (`evidence/i401_bundled_closeout.md`). |
 | **Innovation** | present, thin | §19.5.I work-driven discovery, knowledge diffusion (5 types), teaching, meme mutation, education, taboo-damped learning. Gap: not generative; skill saturation was audit finding E8. |
 | **Thought processes** | strong | theory of mind, prospection/imagination, 12-proposition belief system, capacity-limited memory (8 kinds), narrative identity with scripts. |
 | **Feelings** | strong | 22 discrete emotions, 12 regulation strategies, hedonic setpoint drift. E1 dysphoria plateau dead (i259); valence graded. |
@@ -394,7 +394,16 @@ trust (i400: measured with a zero-miss, 0.01-mean shape but an unbounded tail on
 band edge, reverted) and the `memory_ops` `trust > 0.6` status fold. **Revised sequencing
 (i400): with a band edge involved the remaining readers and the gain deletion must move in
 ONE commit**, so the dormancy windows and the 0.5 acceptance floor are re-derived once
-against the whole new trust surface),
+against the whole new trust surface. **That bundle then ran and was reverted too (i401,
+`evidence/i401_bundled_closeout.md`: 304/16/1), and its decomposition moved the target a
+third time** — the missing consumer was never in the list: `choose_interaction` decides the
+interaction *kind* from the **v1** trust/affection pair, and the v1 write being deleted was a
+RATCHET, so the kind mix (Comfort vs Gossip) was calibrated against it; deleting the write
+shifts the kind mix toward Gossip, `on_reunion` recovers more distress, and the attachment
+coupling measured 2–7× quieter across three seeds (one seed under its liveness floor). The
+`social_cluster` reads are separately un-landable (they kill the conception producer even
+bundled). The live item is therefore i402 — the **kind schedule** read with a kind-mix probe
+and a re-derivation of its 0.2/0.7 gates — before the writer deletion (i403) and the folds),
 the moral-panic trigger's knife-edge (i378 sized it, **i381 resolved it** with the
 RELATIVE/anomaly form — `avg_charge ≥ max(population_baseline × 1.25, 0.47) AND
 panic_ratio ≥ 0.30` — and its pin fragility is structural too: both panic tests hold a
