@@ -111,13 +111,16 @@ working frame, at the ecology scale.
 
 ## §6 The re-attempt's preconditions (the next W1 arc)
 
-1. **First question:** is the charge deficit FORMATION-TIME (the early
-   world's belief ecology, built while v2 trust was still climbing from
-   genesis ≈ 0.4 at the ratchet's 10×-slower pace, persists forever) or
-   STEADY-STATE? Probe: belief counts/confidence by formation tick on both
-   surfaces. The answer decides whether the fix is the early-world ramp
-   (e.g. the founding belief channels' trust floors re-sized to the honest
-   surface) or the steady-state charge law.
+1. **First question — ANSWERED (i426, `evidence/i426_belief_formation_surface.md`):**
+   **formation-time**, with a smaller steady-state residual. The founding
+   belief ecology forms in [0,5 000) while the v2-reading diffusion gate
+   clears 49–67% of contacted pairs (v1: 94–97%); v2 climbs to 81–94% by
+   18K. The v1 bar mass is spawn-draw lottery (`trust = U(0.3,0.7)` dense
+   matrix at populate), v2 starts at its stranger prior and earns — absolute
+   `> 0.5` bars are a different contract on each store. Also found:
+   `cultural.openness` is an unwired constant 0.5 (diffusion acceptance ≡
+   ToM band in production; separate iteration's defect), and the panic
+   charge law is NOT trust-gated (distress-driven) — refuted as a channel.
 2. **The belief-channel re-derivation** precedes the deletion re-attempt:
    knowledge-diffusion acceptance floor, ToM Friendly band, gossip
    confidence, and the panic charge law re-derived against the honest
