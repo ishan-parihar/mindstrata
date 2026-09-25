@@ -52,10 +52,12 @@ keeps its i349-calibrated transient semantics on v1.
   off, 10 seeds): total collapsed **18 → 2** (i388: 15, i399: 18), firing
   seeds 3-of-10 → **1-of-10** (seed 11 only). By the probe's own criterion
   this is a STARVED PRODUCER, and §2.3 forbids re-anchoring onto `{11}`.
-- **Contagion fix exonerated by A/B**: the 10-seed sweep is byte-identical
-  with and without the `contagion_delta` f64 fix (total 2, seed 11 only,
-  both arms) — the sub-quantum band never occurs in the crisis corpora
-  (stress there is 0.2–0.8, far above the 5e-5 floor). The fix lands alone
+- **Contagion fix exonerated by A/B**: the 10-seed sweep reports
+  **identical per-seed revolution counts with and without** the
+  `contagion_delta` f64 fix (total 2, seed 11 only, both arms) — the fix does
+  not move the revolution route; this is *consistent with* the sub-quantum
+  band not occurring in the crisis corpora (stress there is 0.2–0.8, far
+  above the 5e-5 floor), and the band is a calm-world concern. The fix lands alone
   (§5).
 - **Panic route** (`i381_blast_radius`): panics 0 on 9 of 10 seeds; seed 11
   fires 2 panics → 2 coups (the panic→coup coupling is intact — the input
@@ -71,30 +73,35 @@ keeps its i349-calibrated transient semantics on v1.
   belief-ecology surface whose noospheric conviction halved
   (0.4860 → 0.2150 in the confident-belief pin).
 
-**Attribution:** the honest dyadic trust surface (which the deletion makes
-v1 a daily projection of) sits ~0.1–0.3 below the ratcheted v1 the belief
-channels were calibrated on — knowledge-diffusion acceptance
-(`trust×0.5 + openness×0.5` vs the 0.5 floor), ToM Friendly (> 0.5 band),
-gossip confidence, and the panic charge all read the lower surface, thinning
-the founding belief ecology and the per-proposition charge mass. The
-panic/belief/revolution route's calibration rode the ratchet (i401's
-producer's-calibration-surface class, now measured at the ecology scale).
+**Attribution (the measured part):** v1 converged onto the dyadic surface
+(the probe read v1 ≈ v2: flips 0.0–2.7% on contacted pairs), the calm/crisis
+charge distributions overlap, and the belief ecology's conviction halved.
+**The per-channel mechanism (re-attempt hypotheses, not yet measured
+individually):** the knowledge-diffusion acceptance floor
+(`trust×0.5 + openness×0.5` vs 0.5), the ToM Friendly band (> 0.5), gossip
+confidence, and the panic charge law are the candidate trust-gated channels
+whose calibration may have ridden the ratcheted v1 surface — the re-attempt
+must measure each channel's input distribution on both surfaces before
+any constant moves. The producer's-calibration-surface class (i401) is the
+working frame, at the ecology scale.
 
 ## §5 What lands from this arc
 
-1. **This record + the stash** — the full arc (writer deletion, read moves,
+1. **This record + the stashes** — the full arc (writer deletion, read moves,
    degree re-point, credibility move, test re-contracts) preserved in
-   `git stash` ("i403 measured rejection"), the re-attempt's starting map.
+   **`stash@{1}`** (`"i403 measured rejection: full arc preserved …"`),
+   the re-attempt's starting map.
 2. **AGENTS §4.17** — the bookkeeping-consumer rule (the one durable lesson
    the suite taught at the structural level).
-3. **The `contagion_delta` f64 fix is DEFERRED WITH THE ARC** (separate
-   stash entry): exonerated on the crisis corpora by a byte-identical A/B
-   sweep, but measured to move BOTH engine goldens + 3 calm snapshots
-   (307/4 on the contagion-only tree) — the sub-quantum band fires in calm
-   worlds and that blast radius deserves its own calm-band probe (how many
-   fear ticks sit below stress 0.002, the accumulated per-day delta) before
-   a custody re-baseline. NOT landed in this commit: it ships no behavioral
-   change.
+3. **The `contagion_delta` f64 fix is DEFERRED WITH THE ARC**
+   (**`stash@{0}`**, `"i403 companion: contagion_delta f64 fix …"`):
+   exonerated on the crisis corpora by identical per-seed revolution counts
+   in both A/B arms, but measured to move BOTH engine goldens + 3 calm
+   snapshots (307/4 on the contagion-only tree) — the sub-quantum band fires
+   in calm worlds and that blast radius deserves its own calm-band probe (how
+   many fear ticks sit below stress 0.002, the accumulated per-day delta)
+   before a custody re-baseline. NOT landed in this commit: it ships no
+   behavioral change.
 
 ## §6 The re-attempt's preconditions (the next W1 arc)
 
