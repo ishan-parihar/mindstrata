@@ -233,12 +233,35 @@ pub struct RelationalFields {
 }
 
 impl RelationalFields {
-    /// §10.1.1 (Iteration 107): the fear-contagion contribution of the
-    /// sensory field's perceived ambient stress ("expression"). Identity at
-    /// zero stress (no stressed neighbors → no contagion), monotone in both
-    /// arguments, deterministic (no RNG).
+    /// i425: the product is computed in f64 and quantized once — `Fixed::mul`
+    /// floors at SCALE=10_000, and the default `rate` (0.05) truncated every
+    /// product from `perceived_stress < 0.002` (one output quantum 1e-4 ÷
+    /// rate) to exactly zero (the §5 Fixed-4 truncation disease): the whole
+    /// low-stress range was silent. The contract (`(stress × rate).clamp_01()`,
+    /// identity-at-zero, monotone) is unchanged. MEASURED, both A/B arms
+    /// (`i425_contagion_calm_band`, `evidence/i425_contagion_f64.md`): the
+    /// per-fold old-vs-new difference is ≤ 1 quantum per agent — the repaired
+    /// sub-quantum band `[0.001, 0.002)` (old==0 && new>0) fires on 0–1 of 72
+    /// agent-days per calm seed, while `from_f64`'s round-to-nearest vs
+    /// `Fixed::mul`'s floor gains +1 quantum on another 30–53 (the dominant
+    /// per-fold class). End-state visibility is PHASE-DEPENDENT: a horizon
+    /// ending ON a fold tick (collapse, 4320 = 30×144) carries the difference
+    /// into its end state (avg_fear 0.294131 → 0.294154, +2.3 quanta; the
+    /// collapse golden's `metric_hash` re-baselined under custody — its only
+    /// moved field), while horizons ending mid-window re-align within ~7 ticks
+    /// of the last fold and reproduce the pre-fix end state exactly (all
+    /// three calm 1000-tick seeds identical across arms; riverford golden
+    /// bit-identical). 2 calm snapshots moved +1 quantum avg_stress; the 10K
+    /// snapshot's memory-kind stock redistributed at a constant 789 traces
+    /// (quantum-margin eviction tie-breaks; see the evidence doc for the full
+    /// chain). Crisis corpora: the outcome is measured insensitive —
+    /// identical per-seed revolution counts in both A/B arms — and the
+    /// measured fold-boundary census (collapse, 374 agent-days: mean stress
+    /// 0.1770, min 0.0000, 103/374 products < 20 quanta) shows the ≤1-quantum
+    /// class fires in crisis worlds too; the crisis engine's decisions do
+    /// not sit on sub-quantum fear margins.
     pub fn contagion_delta(perceived_stress: Fixed, rate: Fixed) -> Fixed {
-        (perceived_stress * rate).clamp_01()
+        Fixed::from_f64(perceived_stress.to_f64() * rate.to_f64()).clamp_01()
     }
 
     /// §10.1.1 (Iteration 107): the full daily contagion apply-step —

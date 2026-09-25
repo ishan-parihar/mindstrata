@@ -474,8 +474,10 @@ coupling measured 2–7× quieter across three seeds (one seed under its livenes
  conviction halved. Three recorded findings: the degree-freeze bug
  (`contacted_degrees` counted the deleted v1 bookkeeping — AGENTS §4.17), the
  witness re-host reverted by measurement (i398 class), and the contagion f64
- fix exonerated on crisis corpora but deferred with its own calm-world probe
- (moves both goldens + 3 snapshots). The arc is preserved in `git stash`.
+ fix **landed separately as i425 with custody** (`evidence/i425_contagion_f64.md`:
+ only the collapse golden moved, +2.3 quanta avg_fear from a fold firing inside
+ its final tick; riverford reproduces bit-for-bit; 311/0/1). The rejected
+ arc is preserved in `git stash`.
  The live item is therefore **the belief-charge route's own arc — probe the
  per-proposition charge producer on both surfaces (formation-time vs
  steady-state deficit), re-derive the belief channels' trust gates against

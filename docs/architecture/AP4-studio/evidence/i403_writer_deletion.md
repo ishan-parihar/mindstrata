@@ -55,11 +55,13 @@ keeps its i349-calibrated transient semantics on v1.
 - **Contagion fix exonerated by A/B**: the 10-seed sweep reports
   **identical per-seed revolution counts with and without** the
   `contagion_delta` f64 fix (total 2, seed 11 only, both arms) — the fix does
-  not move the revolution route; this is *consistent with* the sub-quantum
-  band not occurring in the crisis corpora (stress there is 0.2–0.8, far
-   above the 5e-5 floor), and the band is a calm-world concern. The fix is
-   DEFERRED with the arc (§5): its calm-world golden/snapshot drift needs its
-   own calm-band probe before a custody re-baseline.
+  not move the revolution route; i425's fold-boundary census later measured
+  the crisis INPUT story as outcome-insensitivity, not input-absence (collapse
+  fold stress mean 0.1770, min 0.0000, 103/374 agent-days below 20 quanta —
+  the sub-quantum class fires in crisis worlds too). The fix is
+  LANDED SEPARATELY as **i425** (`evidence/i425_contagion_f64.md`) with the
+  custody re-baseline: only the collapse golden moved (+2.3 quanta avg_fear,
+  fold-on-final-tick phase alignment), riverford reproduces bit-for-bit.
 - **Panic route** (`i381_blast_radius`): panics 0 on 9 of 10 seeds; seed 11
   fires 2 panics → 2 coups (the panic→coup coupling is intact — the input
   died, not the gate).
@@ -94,15 +96,18 @@ working frame, at the ecology scale.
    the re-attempt's starting map.
 2. **AGENTS §4.17** — the bookkeeping-consumer rule (the one durable lesson
    the suite taught at the structural level).
-3. **The `contagion_delta` f64 fix is DEFERRED WITH THE ARC**
-   (**`stash@{0}`**, `"i403 companion: contagion_delta f64 fix …"`):
-   exonerated on the crisis corpora by identical per-seed revolution counts
-   in both A/B arms, but measured to move BOTH engine goldens + 3 calm
-   snapshots (307/4 on the contagion-only tree) — the sub-quantum band fires
-   in calm worlds and that blast radius deserves its own calm-band probe (how
-   many fear ticks sit below stress 0.002, the accumulated per-day delta)
-   before a custody re-baseline. NOT landed in this commit: it ships no
-   behavioral change.
+3. **The `contagion_delta` f64 fix — LANDED SEPARATELY as i425**
+    (was `stash@{0}`, `"i403 companion: contagion_delta f64 fix …"`;
+    `evidence/i425_contagion_f64.md`): exonerated on the crisis corpora by
+    identical per-seed revolution counts in both A/B arms, then measured by
+    its own calm-band probe and landed with custody — the 307/4 blast radius
+    resolved to the COLLAPSE golden only (+2.3 quanta avg_fear: its 4320-tick
+    horizon ends on a fold tick; riverford reproduces its baseline
+    bit-for-bit) plus 2 snapshots at +1 quantum avg_stress and the 10K
+    snapshot's memory-kind stock redistributed at a constant 789 traces
+    (quantum-margin eviction tie-breaks, the chain in the evidence doc). The
+    i403-era claim that it moved "both goldens" is corrected: only collapse.
+    Landed with the i425 commit; no behavioural pin moved.
 
 ## §6 The re-attempt's preconditions (the next W1 arc)
 

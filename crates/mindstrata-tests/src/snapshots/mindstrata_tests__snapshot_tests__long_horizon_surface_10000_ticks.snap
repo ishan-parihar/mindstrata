@@ -1,5 +1,6 @@
 ---
 source: crates/mindstrata-tests/src/snapshot_tests.rs
+assertion_line: 454
 expression: "LongHorizonSurface10000\n{\n    tick: ms.tick, agent_count: ms.agent_count, event_count: ms.event_count,\n    avg_stress: ms.avg_stress, avg_health: ms.avg_health,\n    avg_relationship_trust: ms.avg_relationship_trust,\n    avg_relationship_quality: ms.avg_relationship_quality, polarization_index:\n    ms.polarization_index, active_meme_count: ms.active_meme_count,\n    total_grain: ms.total_grain, total_water: ms.total_water,\n    total_memory_traces, memory_kind_distribution, total_internalized_norms,\n    avg_norm_strength, avg_physical_attraction, avg_personality_attraction,\n    avg_status_attraction, avg_moral_attraction, avg_familiarity,\n    avg_envy_cost, relationship_count, relationship_stage_distribution,\n    executed_ritual_count, latest_ritual_occurrence, institution_count,\n    faction_count,\n}"
 ---
 LongHorizonSurface10000 {
@@ -17,10 +18,10 @@ LongHorizonSurface10000 {
     total_memory_traces: 789,
     memory_kind_distribution: {
         "Cultural": 1,
-        "Emotional": 447,
-        "Episodic": 15,
+        "Emotional": 443,
+        "Episodic": 14,
         "Procedural": 3,
-        "Social": 309,
+        "Social": 314,
         "Traumatic": 14,
     },
     total_internalized_norms: 44,
