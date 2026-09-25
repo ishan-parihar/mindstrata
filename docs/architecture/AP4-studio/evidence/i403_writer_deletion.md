@@ -57,8 +57,9 @@ keeps its i349-calibrated transient semantics on v1.
   `contagion_delta` f64 fix (total 2, seed 11 only, both arms) — the fix does
   not move the revolution route; this is *consistent with* the sub-quantum
   band not occurring in the crisis corpora (stress there is 0.2–0.8, far
-  above the 5e-5 floor), and the band is a calm-world concern. The fix lands alone
-  (§5).
+   above the 5e-5 floor), and the band is a calm-world concern. The fix is
+   DEFERRED with the arc (§5): its calm-world golden/snapshot drift needs its
+   own calm-band probe before a custody re-baseline.
 - **Panic route** (`i381_blast_radius`): panics 0 on 9 of 10 seeds; seed 11
   fires 2 panics → 2 coups (the panic→coup coupling is intact — the input
   died, not the gate).
