@@ -465,11 +465,22 @@ coupling measured 2–7× quieter across three seeds (one seed under its livenes
  (contacted-pair affection v1 p50 = 1.0000, v2 p50 = 0.9986–0.9997) — `affection > 0.70`
  opens for 98–99% of interactions on BOTH, branch flips 0.0–3.5%, and the gate itself is
  the §4.10 defect (AGENTS §4.16). The read move + the gate redesign (relative/cohort
- candidate) are folded into i403's single commit, re-derived against the post-deletion
- surface. The live item is therefore **i403 — the writer deletion with the rate re-host,
- the `affection` sync leg, the folded kind-schedule read move, and the redesigned gate, in
- one commit** — then the folds),
- the moral-panic trigger's knife-edge (i378 sized it, **i381 resolved it** with the
+ candidate) are folded into i403's single commit, re-derived against the
+ post-deletion surface. **i403 then RAN and is a MEASURED REJECTION (2026-09-25,
+ `evidence/i403_writer_deletion.md`)**: the honest trust surface starves the
+ crisis engine — panics 0 on 9-of-10 pestilence seeds, the revolution family
+ 18 → 2, and the i381 calm/crisis charge gap COLLAPSED (calm peaks 0.49–0.51
+ against crisis peaks 0.54 — no re-sizable bar exists); the belief ecology's
+ conviction halved. Three recorded findings: the degree-freeze bug
+ (`contacted_degrees` counted the deleted v1 bookkeeping — AGENTS §4.17), the
+ witness re-host reverted by measurement (i398 class), and the contagion f64
+ fix exonerated on crisis corpora but deferred with its own calm-world probe
+ (moves both goldens + 3 snapshots). The arc is preserved in `git stash`.
+ The live item is therefore **the belief-charge route's own arc — probe the
+ per-proposition charge producer on both surfaces (formation-time vs
+ steady-state deficit), re-derive the belief channels' trust gates against
+ the honest surface, THEN re-attempt the stashed deletion.**
+ The moral-panic trigger's knife-edge (i378 sized it, **i381 resolved it** with the
  RELATIVE/anomaly form — `avg_charge ≥ max(population_baseline × 1.25, 0.47) AND
 panic_ratio ≥ 0.30` — and its pin fragility is structural too: both panic tests hold a
 fixed 10-seed family and discover its firing members, so a pacing shift moves which member

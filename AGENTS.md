@@ -256,6 +256,17 @@ These rules exist because we repeatedly paid for violating them:
    re-anchors goldens to buy nothing — fold it into the commit that re-shapes the surface
    (i402's read move lands inside i403's writer deletion) and re-derive once against the
    whole new surface (the i400 rule, applied forward).
+17. **A deleted write's *bookkeeping* is a consumer (i403).** Deleting the v1 interaction
+   writes froze `interaction_count`/`last_interaction_tick` — and `contacted_degrees()`
+   counted exactly that, so every agent's degree read 0, the tier-importance network
+   bonus collapsed, and the village mass-demoted to Background (Background agents are
+   excluded from the social pass) — a 35–65% interaction-volume collapse from tick 0,
+   killing courtship and meme producers while the kind mix looked healthy. **Rule:**
+   before deleting a write path, sweep every reader of ALL the fields it stamps — the
+   counters and ticks a value write updates are producers' lifelines, and a census
+   predicate is as much a consumer as the value itself. The fix class: re-point the
+   predicate at the surviving store's stamps (dyadic `interaction_count`, still written
+   by `record_*`), never at a frozen field.
 
 ## 5. Known Systemic Hazards
 
@@ -781,9 +792,18 @@ Live queue, in order (evidence link per item):
    `affection > 0.70` opens for 98–99% of interactions and the read choice moves
    0–3.5% of branch selections; the gate is the §4.10 defect, and the read move
    + the gate redesign (relative/cohort candidate) are folded into i403's
-   single commit, re-derived against the post-deletion surface. Next: **i403 —
-   the writer deletion with the rate re-host, the `affection` sync leg, the
-   folded kind-schedule read move, and the redesigned gate, in one commit.**
+   single commit, re-derived against the post-deletion surface. **i403 ran
+   (2026-09-25, `evidence/i403_writer_deletion.md`) and is a MEASURED
+   REJECTION**: the honest trust surface starves the crisis engine — panics 0
+   on 9-of-10 pestilence seeds, the revolution family 18 → 2, and the i381
+   calm/crisis charge gap COLLAPSED (the panic bar has no signal left to
+   size from). The arc is preserved in `git stash`; the re-attempt's
+   preconditions are recorded (belief-charge formation-vs-steady-state probe,
+   then the belief-channel re-derivation against the honest surface). AGENTS
+   §4.17 landed from the arc's structural finding (the degree-freeze bug).
+   Next: **the belief-charge route's own arc — probe the per-proposition
+   charge producer on both surfaces, re-derive the belief channels' trust
+   gates, then re-attempt the stashed deletion.**
 
    **i385 then reconciled the documentation surface itself, and the reconciliation paid for
    its own iteration.** `ENGINE_STATUS.md` §1 was 15K LOC / 30 probes / two suite counts
