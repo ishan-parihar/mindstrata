@@ -427,9 +427,9 @@ impl Simulation {
                 &mut self.tick_action_starts,
             );
             mark!("action");
-            // i330: the social pass's per-event trust reads use the dense
-            // lookup; build it once here (positions are stable for the pass —
-            // `system_social_interactions` takes a slice and cannot push).
+            // i330: the witness channel (v1, i403 scope decision) still uses
+            // the dense lookup; build once here (positions stable for the
+            // pass — the interaction pass takes slices and cannot push).
             Self::rebuild_rel_lookup_into(
                 &mut self.rel_lookup,
                 &self.relationships,
@@ -457,7 +457,7 @@ impl Simulation {
             // channels (the relationship-list length it used before is N−1 for
             // every agent, so it discriminated nothing — see the pass comments).
             let contacted_degrees =
-                crate::sim::memory_ops::contacted_degrees(&self.relationships, self.agents.len());
+                crate::sim::memory_ops::contacted_degrees(&self.agents, self.agents.len());
             Self::tick_appraisal_pass(
                 &mut ctx,
                 &mut self.agents,

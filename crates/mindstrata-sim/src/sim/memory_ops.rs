@@ -172,20 +172,28 @@ pub(crate) fn social_status_counts(
 /// anxiety term at exactly 0.000 for the whole village.
 ///
 /// Contacted degree is the honest count, it differentiates an isolate from the
-/// village's best-connected agent (probe: 0–28 across N=12–96), and it is the
-/// same quantity a sparse store must define (i341). Each row contributes to
-/// exactly its own `from` agent, so this is one O(R) pass — the i331 pattern for
+/// village's best-connected agent, and it is the same quantity a sparse store
+/// must define (i341).
+///
+/// i403: re-pointed from the legacy v1 matrix to the DYADIC rows — the v1
+/// `interaction_count` stamps died with the v1 interaction writes, so the
+/// old predicate read a frozen surface (every agent's degree → 0), collapsed
+/// `update_narrative_importance`'s network bonus, and mass-demoted the
+/// village to Background (the tier-mix pin caught it: "Background appeared
+/// at 6 agents", and the interaction volume fell 35–65% because demoted
+/// agents are excluded from the social pass). `RelationshipV2.interaction_count`
+/// is stamped by the same `record_positive/record_negative` path that now
+/// carries every per-act write, so the predicate measures the same thing it
+/// always did. One O(N²) pass over the per-agent rows — the i331 pattern for
 /// replacing per-agent matrix scans.
-pub(crate) fn contacted_degrees(
-    relationships: &[crate::person::Relationship],
-    n: usize,
-) -> Vec<u32> {
+pub(crate) fn contacted_degrees(agents: &[crate::sim::AgentBundle], n: usize) -> Vec<u32> {
     let mut degrees = vec![0u32; n];
-    for r in relationships {
-        let fi = r.from.as_u64() as usize;
-        if fi < n && r.interaction_count > 0 {
-            degrees[fi] += 1;
-        }
+    for (i, agent) in agents.iter().enumerate().take(n) {
+        degrees[i] = agent
+            .relationship_v2s
+            .iter()
+            .filter(|r| r.interaction_count > 0)
+            .count() as u32;
     }
     degrees
 }

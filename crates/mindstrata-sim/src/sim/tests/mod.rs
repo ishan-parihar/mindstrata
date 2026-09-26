@@ -189,14 +189,27 @@ fn contacted_degrees_counts_only_rows_with_interaction_state() {
     );
 
     // After a run some agents have contacts, some may not, and the sum over
-    // agents equals the number of touched rows exactly.
+    // agents equals the number of touched rows exactly. i403: the degree
+    // predicate reads RelationshipV2.interaction_count (the v1 stamps died
+    // with the v1 interaction writes — freezing them collapsed every degree
+    // to 0 and mass-demoted the village to Background), so the touched-row
+    // census counts the dyadic rows the record_* path stamps.
     sim.run(500);
     let degrees = sim.contacted_degrees();
+    assert!(
+        degrees.iter().any(|d| *d > 0),
+        "the dyadic record_* path must stamp contacts in a 500-tick run"
+    );
     let touched = sim
-        .relationships()
+        .agents
         .iter()
-        .filter(|r| r.interaction_count > 0)
-        .count();
+        .map(|a| {
+            a.relationship_v2s
+                .iter()
+                .filter(|r| r.interaction_count > 0)
+                .count()
+        })
+        .sum::<usize>();
     assert_eq!(
         degrees.iter().map(|d| *d as usize).sum::<usize>(),
         touched,

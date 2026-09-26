@@ -1031,6 +1031,17 @@ impl Simulation {
                 }
                 let target = v2.trust;
                 rel.trust = (rel.trust + (target - rel.trust) * coupling).clamp_01();
+                // i403: `affection` joins the convergence. With the v1
+                // interaction writes deleted, v1 affection has no per-act
+                // writer left (marriage/courtship write the dyadic rows);
+                // without this leg the field would freeze at its genesis
+                // value while every remaining v1 reader (the legal_impl
+                // and marriage writers, future reader migrations) sees a
+                // stale surface. Same law, same coupling, same endpoint
+                // validation as the trust leg above.
+                let target_aff = v2.affection;
+                rel.affection =
+                    (rel.affection + (target_aff - rel.affection) * coupling).clamp_01();
             }
         }
 

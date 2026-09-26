@@ -797,13 +797,17 @@ Live queue, in order (evidence link per item):
    REJECTION**: the honest trust surface starves the crisis engine — panics 0
    on 9-of-10 pestilence seeds, the revolution family 18 → 2, and the i381
    calm/crisis charge gap COLLAPSED (the panic bar has no signal left to
-   size from). The arc is preserved in `git stash`; the re-attempt's
-   preconditions are recorded (belief-charge formation-vs-steady-state probe,
-   then the belief-channel re-derivation against the honest surface). AGENTS
-   §4.17 landed from the arc's structural finding (the degree-freeze bug).
-   Next: **the belief-charge route's own arc — probe the per-proposition
-   charge producer on both surfaces, re-derive the belief channels' trust
-   gates, then re-attempt the stashed deletion.**
+    §4.17 landed from the arc's structural finding (the degree-freeze bug).
+    **Landed: the re-attempt shipped as i428** (`git stash` superseded).
+    The chain: i425 (contagion f64 custody), i426 (deficit is formation-time),
+    i427 (channels' gates are already 89–100% open on v2 at event scope —
+    i426's contacted-graph gap was a §4.12 scope artifact), then i428 applied
+    the arc minus the two read moves (kind schedule + social_cluster
+    ToM/§19.5.I — the measured conception/crisis kill) and the suite voted
+    297/14 → **311/0/1** with crisis liveness restored (17 revolutions on
+    6-of-10 seeds vs the rejected arc's 2; panics back on the pestilence
+    corpora). Remaining v1 sites (`legal_impl`/`marriage` writers, the
+    witness channel) move per their own behavioural iterations.
 
    **i385 then reconciled the documentation surface itself, and the reconciliation paid for
    its own iteration.** `ENGINE_STATUS.md` §1 was 15K LOC / 30 probes / two suite counts

@@ -1,16 +1,17 @@
 ---
 source: crates/mindstrata-tests/src/snapshot_tests.rs
+assertion_line: 208
 expression: inst_states
 ---
 [
     InstitutionSnapshot {
         name: "Village Council",
         kind: "Council",
-        legitimacy: 0.5858,
-        morale: 0.1709,
+        legitimacy: 0.5847,
+        morale: 0.193,
         unity: 1.0,
-        fear: 0.1255,
-        trust_in_leadership: 0.5815,
+        fear: 0.1258,
+        trust_in_leadership: 0.5804,
         member_count: 2,
     },
     InstitutionSnapshot {

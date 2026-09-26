@@ -19,7 +19,7 @@ impl Simulation {
     ///
     /// One O(R) pass; ordered by agent index.
     pub fn contacted_degrees(&self) -> Vec<u32> {
-        crate::sim::memory_ops::contacted_degrees(&self.relationships, self.agents.len())
+        crate::sim::memory_ops::contacted_degrees(&self.agents, self.agents.len())
     }
 
     /// i339/i340: override the house-site count used when `populate` generates

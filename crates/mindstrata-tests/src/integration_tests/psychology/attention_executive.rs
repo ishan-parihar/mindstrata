@@ -906,8 +906,19 @@ fn sensory_field_fear_contagion_is_live_and_sustains_fear() {
     // i351: the contribution is positive FOR PERCEIVING AGENTS — an agent
     // alone at the snapshot has perceived_stress 0 and contributes nothing
     // that day (correct locality semantics, not a dead fold).
+    // i428 scope floor (§4.12, measured by `i428_pin_reanchor_sweep` on this
+    // tree): the Fixed-4 quantization means the fold's contribution is ZERO
+    // whenever stress × rate < 5e-5 rounds to zero — i.e. for agents with
+    // perceived_stress < 0.001 the fold contributes nothing by construction
+    // (i425 measured the band [0.001, 0.002); below 0.001 even the f64 path
+    // quantizes to zero). Measured occupancy: 152 of 154 perceiving folds are
+    // above the floor, 2 below (min 0.00060), so the strictly-positive claim
+    // now carries the floor explicitly rather than depending on incidental
+    // stress levels staying above it.
+    let subquantum_floor = mindstrata_core::fixed::Fixed::from_f64(0.001);
+    let mut floor_seen = 0u32;
     for a in &sim.agents {
-        if a.relational_fields.perceived_stress > mindstrata_core::fixed::Fixed::ZERO {
+        if a.relational_fields.perceived_stress > subquantum_floor {
             assert!(
                 mindstrata_sim::social::relational_field::RelationalFields::contagion_delta(
                     a.relational_fields.perceived_stress,
@@ -915,10 +926,16 @@ fn sensory_field_fear_contagion_is_live_and_sustains_fear() {
                         mindstrata_sim::social::relational_field::FEAR_CONTAGION_RATE,
                     ),
                 ) > mindstrata_core::fixed::Fixed::ZERO,
-                "the daily contagion contribution must be strictly positive for perceiving agents"
+                "the daily contagion contribution must be strictly positive for agents perceiving above the quantization floor"
             );
+            floor_seen += 1;
         }
     }
+    let n_agents = sim.agents.len() as u32;
+    assert!(
+        floor_seen >= n_agents / 2,
+        "a village of perceivers must sit above the quantization floor (saw {floor_seen}/{n_agents})"
+    );
 
     // Behavioral floor: contagion sustains ambient fear against decay.
     let mean_fear: f64 = sim

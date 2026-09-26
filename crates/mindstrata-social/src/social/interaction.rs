@@ -24,28 +24,25 @@ pub struct Interaction {
 
 /// Process a social interaction between two agents.
 ///
-/// Updates their relationship and generates events.
+/// §5.1: the emitted deltas are scaled by `bonding_rate` (positive) and
+/// `conflict_escalation_rate` (negative) from `SimParameters`.
 ///
-/// §5.1: Trust and affection deltas are scaled by `bonding_rate` (positive)
-/// and `conflict_escalation_rate` (negative) from `SimParameters`.
+/// i403: the legacy-matrix store writes are DELETED — the per-act relationship
+/// write lives on the dyadic store (pass_social's speech-act block applies
+/// `RelationshipV2::record_positive/record_negative` with credibility-based
+/// magnitudes in BOTH directions, so the direct and the reciprocal channels
+/// both have a dyadic home). The §5.1 kind table below now feeds the
+/// `RelationshipChanged` PERCEPT only — attention intensity (|delta|), memory
+/// pair-lanes, salience — and the `model_sign_matches_applied_deltas` contract
+/// (speech_act.rs) still asserts these emitted deltas equal the grounded
+/// model's, so the percept keeps meaning what it always meant.
 pub fn process_interaction(
     interaction: &Interaction,
-    relationships: &mut [Relationship],
     events: &mut Vec<SimEvent>,
     tick: Tick,
     same_faction: bool,              // §5.4: in-group bias modifier
-    bonding_rate: Fixed,             // §5.1: from SimParameters
-    conflict_escalation_rate: Fixed, // §5.1: from SimParameters
-    params: &mindstrata_core::parameters::SimParameters,
-    // i330: dense `(from·n + to) → relationships position` index (row stride
-    // `num_agents`). The two `relationships.iter_mut().find(..)` below are
-    // O(R)=O(N²) each, run once per interaction — O(N³)/tick and, after the
-    // read-site fixes, the last supercubic term in the interaction engine
-    // (probe i330: `+interactions` local exponent ≈3.2 at N=192).
-    // Value-identical: first-occurrence lookup (what `find` returns) with a
-    // revalidating fallback to the linear scan.
-    rel_lookup: &[u32],
-    num_agents: usize,
+    bonding_rate: Fixed,             // §5.1: scales positive emitted deltas
+    conflict_escalation_rate: Fixed, // §5.1: scales negative emitted deltas
 ) {
     let (trust_delta, affection_delta) = match interaction.kind {
         InteractionKind::Talk => (
@@ -94,60 +91,15 @@ pub fn process_interaction(
         trust_delta // out-group: positive interactions are neutral (no bonus)
     };
 
-    let tick_u64 = tick.as_u64();
-    let is_positive = trust_delta > Fixed::ZERO;
-    let is_negative = trust_delta < Fixed::ZERO;
+    // i403: the two legacy-matrix write blocks (direct + reciprocal ×
+    // social_reciprocal_factor) are deleted here — the per-act store write
+    // lives on the dyadic path (the speech-act block writes BOTH the
+    // listener's and the speaker's rows, so the weaker reverse-direction
+    // update is carried with its own credibility weighting instead of a
+    // flat ×0.3).
 
-    // Update the relationship from → to
-    if let Some(p) = resolve_rel_pos(
-        relationships,
-        rel_lookup,
-        num_agents,
-        interaction.from,
-        interaction.to,
-    ) {
-        let rel = &mut relationships[p];
-        rel.trust = (rel.trust + trust_delta).clamp_01();
-        rel.affection = (rel.affection + affection_delta).clamp_01();
-        rel.last_interaction_tick = tick_u64;
-        rel.interaction_count += 1;
-        if is_positive {
-            rel.last_positive_tick = tick_u64;
-        }
-        if is_negative {
-            rel.last_negative_tick = tick_u64;
-        }
-        // i393: the §19.5.G kind ladder is RETIRED here — it was a write-only
-        // producer (`Relationship.kind` has no reader anywhere in the
-        // workspace outside tests and one bench, which uses it as a contact
-        // proxy). Its live replacement is `RelationshipV2.stage`, which the
-        // stage-distribution snapshot and `is_contacted` both read. The field
-        // stays at its construction value (Kin at birth, Stranger otherwise).
-    }
-
-    // Reciprocal relationship update (weaker)
-    if let Some(p) = resolve_rel_pos(
-        relationships,
-        rel_lookup,
-        num_agents,
-        interaction.to,
-        interaction.from,
-    ) {
-        let rel = &mut relationships[p];
-        rel.trust = (rel.trust + trust_delta * params.social_reciprocal_factor).clamp_01();
-        rel.affection =
-            (rel.affection + affection_delta * params.social_reciprocal_factor).clamp_01();
-        rel.last_interaction_tick = tick_u64;
-        rel.interaction_count += 1;
-        if is_positive {
-            rel.last_positive_tick = tick_u64;
-        }
-        if is_negative {
-            rel.last_negative_tick = tick_u64;
-        }
-    }
-
-    // Generate event
+    // Generate event — the speech-act block and memory_ops consume this;
+    // it is the interaction path's live producer signal.
     events.push(SimEvent::InteractionOccurred {
         from: interaction.from,
         to: interaction.to,
@@ -155,7 +107,10 @@ pub fn process_interaction(
         tick,
     });
 
-    // Generate relationship change event
+    // Generate relationship change event — post-i403 a PERCEPT record of the
+    // act's modeled significance (attention intensity, memory pair-lanes,
+    // salience), not a ledger update; the store deltas live on the dyadic
+    // write path.
     events.push(SimEvent::RelationshipChanged {
         from: interaction.from,
         to: interaction.to,
@@ -163,38 +118,6 @@ pub fn process_interaction(
         affection_delta,
         tick,
     });
-}
-
-/// i330: O(1) position of the `from → to` edge in `relationships`, via the
-/// dense caller-built lookup with a **revalidating fallback** to the linear
-/// scan (correct when the lookup is stale — the pass runs on a slice, so
-/// positions are stable, but a mid-tick population change can shift ids).
-/// Records first-occurrence semantics, matching `iter().find(..)` exactly.
-fn resolve_rel_pos(
-    relationships: &[Relationship],
-    rel_lookup: &[u32],
-    num_agents: usize,
-    from: AgentId,
-    to: AgentId,
-) -> Option<usize> {
-    let fi = from.as_u64() as usize;
-    let ti = to.as_u64() as usize;
-    if fi < num_agents && ti < num_agents {
-        if let Some(&p) = rel_lookup.get(fi * num_agents + ti) {
-            if p != u32::MAX {
-                let p = p as usize;
-                if relationships
-                    .get(p)
-                    .is_some_and(|r| r.from == from && r.to == to)
-                {
-                    return Some(p);
-                }
-            }
-        }
-    }
-    relationships
-        .iter()
-        .position(|r| r.from == from && r.to == to)
 }
 
 /// §2.4: Default perception radius — agents can only interact within this Manhattan distance.
@@ -420,10 +343,16 @@ pub fn choose_interaction(
 /// `O(R)` = `O(N²)` **per witness per interaction**, i.e. `O(I·N·R) ≈ O(N⁴)`
 /// per tick — the dominant term in the whole tick at N=192 (probe i330:
 /// `social_pass` local exponent ≈3.0). With the lookup each witness update is
-/// O(1) indexing. Value-identical: the lookup records the first occurrence of
-/// each pair, exactly the element `find` returns, and the caller falls back to
-/// the linear scan if the lookup is stale (population changed mid-pass).
-/// `relationships` is a slice here, so positions cannot move during the pass.
+/// i403 scope decision: the witness channel STAYS on the legacy v1 matrix.
+/// The plan row deletes the interaction direct+reciprocal writes (the
+/// ratchet); moving the ±0.02/0.03 witness deltas onto the dyadic rows was
+/// tried in this arc and REVERTED by measurement: the v1 bump was TRANSIENT
+/// (erased daily by the i376 convergence sync), so making it persistent on
+/// v2 is a MAGNITUDE change (the i398 class) — the +0.02/act inflow (most
+/// of the village witnesses most acts, i349 locality notwithstanding)
+/// pinned v2 trust at 1.0 and saturated the meme-transmission baseline
+/// (36 hosts at multiplier 1.2 AND 3.0). The channel keeps its i349-
+/// calibrated transient semantics on v1 until its own re-sized move.
 pub fn update_witnesses(
     interaction: &Interaction,
     relationships: &mut [Relationship],
@@ -435,19 +364,9 @@ pub fn update_witnesses(
     agent_positions: &[(i32, i32)],
     perception_radius: i32,
 ) {
-    // i349: witnesses must be able to PERCEIVE the act. The original loop
-    // treated every agent in the village as a witness of every interaction —
-    // no locality test — so `witness → helper` trust rose (+0.02 × bonding)
-    // and `witness → perpetrator` trust fell (−0.03 × escalation) village-wide
-    // per act. With ~1–2 interactions/tick the ratchet pinned ALL row trust at
-    // 1.000 within ~5K ticks (probe i349_sparse_design leg 5: 43–77% of
-    // NEVER-INTERACTED rows saturated; `interaction_count` stayed 0, so the
-    // saturation was invisible to the contacted-row census) — every downstream
-    // fold (top-3 social support, appraisal mean/min trust, patronage and
-    // peer-group trust gates) read a constant. The fix applies the SAME
-    // perception model `select_interaction_target` already uses (Manhattan
-    // distance from the act site): if you cannot see the interaction, it does
-    // not move your trust.
+    // i349: witnesses must be able to PERCEIVE the act (Manhattan distance
+    // from the act site) — the locality model that killed the village-wide
+    // trust ratchet.
     let (fx, fy) = agent_positions[interaction.from.as_u64() as usize];
     for (w, &(wx, wy)) in agent_positions.iter().enumerate().take(num_agents) {
         let witness = AgentId::new(w as u64);
@@ -473,25 +392,15 @@ pub fn update_witnesses(
             continue;
         }
 
-        // The witness always looks at `(witness → interaction.from)`.
-        let to_u = interaction.from.as_u64();
-        let known = rel_lookup
-            .get(w * num_agents + to_u as usize)
-            .copied()
-            .filter(|&p| p != u32::MAX)
-            .map(|p| p as usize);
-
-        let pos = known
-            .filter(|&p| {
-                relationships
-                    .get(p)
-                    .is_some_and(|r| r.from == witness && r.to == interaction.from)
-            })
-            .or_else(|| {
-                relationships
-                    .iter()
-                    .position(|r| r.from == witness && r.to == interaction.from)
-            });
+        // The witness always looks at `(witness → actor)` — hostile actors
+        // lose witness trust, helpful actors gain it.
+        let pos = resolve_rel_pos(
+            relationships,
+            rel_lookup,
+            num_agents,
+            witness,
+            interaction.from,
+        );
 
         match interaction.kind {
             // Negative interactions: witnesses reduce trust in perpetrator
@@ -516,6 +425,38 @@ pub fn update_witnesses(
             _ => {}
         }
     }
+}
+
+/// i330: O(1) position of the `from → to` edge in `relationships`, via the
+/// dense caller-built lookup with a **revalidating fallback** to the linear
+/// scan (correct when the lookup is stale — the pass runs on a slice, so
+/// positions are stable, but a mid-tick population change can shift ids).
+/// Records first-occurrence semantics, matching `iter().find(..)` exactly.
+fn resolve_rel_pos(
+    relationships: &[Relationship],
+    rel_lookup: &[u32],
+    num_agents: usize,
+    from: AgentId,
+    to: AgentId,
+) -> Option<usize> {
+    let fi = from.as_u64() as usize;
+    let ti = to.as_u64() as usize;
+    if fi < num_agents && ti < num_agents {
+        if let Some(&p) = rel_lookup.get(fi * num_agents + ti) {
+            if p != u32::MAX {
+                let p = p as usize;
+                if relationships
+                    .get(p)
+                    .is_some_and(|r| r.from == from && r.to == to)
+                {
+                    return Some(p);
+                }
+            }
+        }
+    }
+    relationships
+        .iter()
+        .position(|r| r.from == from && r.to == to)
 }
 
 /// Run the social interaction system for all agents.
@@ -550,20 +491,18 @@ pub fn system_social_interactions(
     )],
     agent_positions: &[(i32, i32)],    // §2.4: agent (x, y) positions
     same_faction_matrix: &[Vec<bool>], // §5.4: same_faction_matrix[i][j] = true if agents i,j share a faction
+    // i428: the kind schedule reads the legacy matrix again (the i403 read
+    // move's kind-mix shift was measured as the conviction-collapse cause at
+    // i427); the witness channel always stayed on legacy (scope decision,
+    // see update_witnesses). The v2 rows are not needed here at all.
     relationships: &mut [Relationship],
+    rel_lookup: &[u32],
     events: &mut Vec<SimEvent>,
     tick: Tick,
     rng: &mut RngStreams,
     bonding_rate: Fixed,             // §5.1: from SimParameters
     conflict_escalation_rate: Fixed, // §5.1: from SimParameters
     params: &mindstrata_core::parameters::SimParameters,
-    // i330: dense `(from·n + to) → relationships position` index. The three
-    // `relationships.iter().find(..)` scans below (trust, affection, and every
-    // witness update) were O(R)=O(N²) each, per interaction — O(N³)/O(N⁴) per
-    // tick and the dominant term in the tick at N=192. The lookup records the
-    // first occurrence of each pair, the element `find` returns; each site
-    // revalidates and falls back to the linear scan, so behavior is unchanged.
-    rel_lookup: &[u32],
 ) {
     let num_agents = agents.len();
 
@@ -640,8 +579,13 @@ pub fn system_social_interactions(
         ) {
             let target_id = agents[target_idx].0;
 
-            // Find existing relationship or create default (i330: O(1) via the
-            // dense lookup, with a revalidating fallback to the linear scan).
+            // i428: the kind schedule reads v1 again — i427's event-stream
+            // measurements show the trust bars are already 89–100% open on v2
+            // (the conviction collapse came from this read move's kind-mix
+            // shift), and i402 measured the schedule's input saturated on
+            // both stores — the real repair is re-deriving the 0.7/0.2
+            // thresholds against v2's event distribution, its own iteration.
+            // The i330 dense lookup is restored verbatim.
             let pair = rel_lookup
                 .get(i * num_agents + target_idx)
                 .copied()
@@ -686,7 +630,8 @@ pub fn system_social_interactions(
                 kind,
             };
 
-            // Update witnesses before processing the interaction
+            // Update witnesses before processing the interaction — the
+            // witness channel stays on v1 (i403 scope decision).
             update_witnesses(
                 &interaction,
                 relationships,
@@ -701,15 +646,11 @@ pub fn system_social_interactions(
 
             process_interaction(
                 &interaction,
-                relationships,
                 events,
                 tick,
                 same_faction,
                 bonding_rate,
                 conflict_escalation_rate,
-                params,
-                rel_lookup,
-                num_agents,
             );
         }
     }
@@ -718,159 +659,64 @@ pub fn system_social_interactions(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mindstrata_person::person::RelationshipKind;
 
-    /// i330: the dense `(from·n + to) → position` lookup must be behaviorally
-    /// identical to the linear `find` it replaces — for a populated lookup, for
-    /// the empty fallback, and for a stale lookup that points at the wrong pair.
-    /// Guards the O(N³)→O(N²) rewrite of `process_interaction` and
-    /// `update_witnesses` (probe i330: tick cost at N=192 −47%, local exponent
-    /// 2.87 → 2.42, goldens byte-identical).
+    /// i403: the v1 store writes are deleted; `process_interaction` now
+    /// emits the percept pair (InteractionOccurred + RelationshipChanged)
+    /// with the §5.1 model deltas. The old lookup/write tests are retired
+    /// with the code they pinned; these assert the surviving contract —
+    /// the emitted delta's sign and scaling, which the
+    /// `model_sign_matches_applied_deltas` guard in speech_act.rs pins to
+    /// the grounded model.
     #[test]
-    fn dense_relationship_lookup_matches_linear_scan() {
-        let mk_rel = |from: u64, to: u64, trust: f64| Relationship {
-            from: AgentId::new(from),
-            to: AgentId::new(to),
-            trust: Fixed::from_f64(trust),
-            affection: Fixed::from_f64(0.5),
-            respect: Fixed::ZERO,
-            fear: Fixed::ZERO,
-            obligation: Fixed::ZERO,
-            last_interaction_tick: 0,
-            kind: RelationshipKind::Stranger,
-            interaction_count: 0,
-            last_positive_tick: 0,
-            last_negative_tick: 0,
-        };
-
-        // (trust[0→1], affection[0→1], count[0→1], trust[1→0], counts of both)
-        let run = |lookup: &[u32]| -> (Fixed, Fixed, u32, Fixed, u32) {
-            let mut relationships = vec![mk_rel(0, 1, 0.4), mk_rel(1, 0, 0.6)];
-            let mut events = Vec::new();
-            process_interaction(
-                &Interaction {
-                    from: AgentId::new(0),
-                    to: AgentId::new(1),
-                    kind: InteractionKind::Help,
-                },
-                &mut relationships,
-                &mut events,
-                Tick::new(7),
-                false,
-                Fixed::ONE,
-                Fixed::ONE,
-                &mindstrata_core::parameters::SimParameters::default(),
-                lookup,
-                2,
-            );
-            (
-                relationships[0].trust,
-                relationships[0].affection,
-                relationships[0].interaction_count,
-                relationships[1].trust,
-                relationships[1].interaction_count,
-            )
-        };
-
-        // Row stride 2, first-occurrence positions — exactly what the sim builds.
-        let mut lookup = vec![u32::MAX; 4];
-        lookup[1] = 0; // (0→1) at position 0
-        lookup[2] = 1; // (1→0) at position 1
-
-        let fast = run(&lookup);
-        let scanned = run(&[]);
-        assert_eq!(fast, scanned, "populated lookup must match the linear scan");
-        assert!(fast.0 > Fixed::from_f64(0.4), "help must raise trust");
-
-        // Stale lookup: the stored position no longer holds this pair, so the
-        // site must revalidate and fall back rather than mutate the wrong row.
-        let stale = vec![u32::MAX, 1, 0, u32::MAX];
-        assert_eq!(
-            run(&stale),
-            scanned,
-            "stale lookup must fall back, not mis-apply"
-        );
-    }
-
-    #[test]
-    fn help_increases_trust() {
-        let mut relationships = vec![Relationship {
-            from: AgentId::new(0),
-            to: AgentId::new(1),
-            trust: Fixed::from_f64(0.5),
-            affection: Fixed::from_f64(0.3),
-            respect: Fixed::ZERO,
-            fear: Fixed::ZERO,
-            obligation: Fixed::ZERO,
-            last_interaction_tick: 0,
-            kind: mindstrata_person::person::RelationshipKind::Stranger,
-            interaction_count: 0,
-            last_positive_tick: 0,
-            last_negative_tick: 0,
-        }];
+    fn help_emits_positive_model_delta() {
         let mut events = Vec::new();
-
-        let interaction = Interaction {
-            from: AgentId::new(0),
-            to: AgentId::new(1),
-            kind: InteractionKind::Help,
-        };
-
         process_interaction(
-            &interaction,
-            &mut relationships,
+            &Interaction {
+                from: AgentId::new(0),
+                to: AgentId::new(1),
+                kind: InteractionKind::Help,
+            },
             &mut events,
             Tick::new(1),
             false,
-            Fixed::from_f64(0.05),
-            Fixed::from_f64(0.08),
-            &mindstrata_core::parameters::SimParameters::default(),
-            &[],
-            2,
+            Fixed::ONE,
+            Fixed::ONE,
         );
-
-        assert!(relationships[0].trust > Fixed::from_f64(0.5));
         assert!(!events.is_empty());
+        let delta = events.iter().find_map(|ev| match ev {
+            SimEvent::RelationshipChanged { trust_delta, .. } => Some(*trust_delta),
+            _ => None,
+        });
+        assert!(delta.is_some(), "RelationshipChanged must be emitted");
+        assert!(
+            delta.unwrap() > Fixed::ZERO,
+            "help's model delta is positive"
+        );
     }
 
     #[test]
-    fn threat_decreases_trust() {
-        let mut relationships = vec![Relationship {
-            from: AgentId::new(0),
-            to: AgentId::new(1),
-            trust: Fixed::from_f64(0.5),
-            affection: Fixed::from_f64(0.3),
-            respect: Fixed::ZERO,
-            fear: Fixed::ZERO,
-            obligation: Fixed::ZERO,
-            last_interaction_tick: 0,
-            kind: mindstrata_person::person::RelationshipKind::Stranger,
-            interaction_count: 0,
-            last_positive_tick: 0,
-            last_negative_tick: 0,
-        }];
+    fn threat_emits_negative_model_delta() {
         let mut events = Vec::new();
-
-        let interaction = Interaction {
-            from: AgentId::new(0),
-            to: AgentId::new(1),
-            kind: InteractionKind::Threaten,
-        };
-
         process_interaction(
-            &interaction,
-            &mut relationships,
+            &Interaction {
+                from: AgentId::new(0),
+                to: AgentId::new(1),
+                kind: InteractionKind::Threaten,
+            },
             &mut events,
             Tick::new(1),
             false,
-            Fixed::from_f64(0.05),
-            Fixed::from_f64(0.08),
-            &mindstrata_core::parameters::SimParameters::default(),
-            &[],
-            2,
+            Fixed::ONE,
+            Fixed::ONE,
         );
-
-        assert!(relationships[0].trust < Fixed::from_f64(0.5));
+        let delta = events.iter().find_map(|ev| match ev {
+            SimEvent::RelationshipChanged { trust_delta, .. } => Some(*trust_delta),
+            _ => None,
+        });
+        assert!(
+            delta.unwrap() < Fixed::ZERO,
+            "threat's model delta is negative"
+        );
     }
 
     /// §8.1.10 (Iteration 85): an agent who has internalized the no-violence
@@ -1330,13 +1176,13 @@ mod tests {
                     &positions,
                     &same_faction,
                     &mut relationships,
+                    &[],
                     &mut events,
                     Tick::new(1),
                     &mut rng,
                     params.bonding_rate,
                     params.conflict_escalation_rate,
                     &params,
-                    &[],
                 );
             }
             for ev in &events {
@@ -1434,13 +1280,13 @@ mod tests {
                     &positions,
                     &same_faction,
                     &mut relationships,
+                    &[],
                     &mut events,
                     Tick::new(1),
                     &mut rng,
                     params.bonding_rate,
                     params.conflict_escalation_rate,
                     &params,
-                    &[],
                 );
             }
             for ev in &events {
@@ -1550,13 +1396,13 @@ mod tests {
                     &positions,
                     &same_faction,
                     &mut relationships,
+                    &[],
                     &mut events,
                     Tick::new(1),
                     &mut rng,
                     params.bonding_rate,
                     params.conflict_escalation_rate,
                     &params,
-                    &[],
                 );
             }
             let bg_involved = events

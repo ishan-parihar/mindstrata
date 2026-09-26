@@ -477,11 +477,26 @@ coupling measured 2–7× quieter across three seeds (one seed under its livenes
  fix **landed separately as i425 with custody** (`evidence/i425_contagion_f64.md`:
  only the collapse golden moved, +2.3 quanta avg_fear from a fold firing inside
  its final tick; riverford reproduces bit-for-bit; 311/0/1). The rejected
- arc is preserved in `git stash`.
- The live item is therefore **the belief-charge route's own arc — probe the
- per-proposition charge producer on both surfaces (formation-time vs
- steady-state deficit), re-derive the belief channels' trust gates against
- the honest surface, THEN re-attempt the stashed deletion.**
+ arc is preserved in `git stash` (SUPERSEDED for wholesale application — the
+ kind-schedule and social_cluster read moves are the measured
+ conception/crisis kill — and RETAINED as the source for the unlanded
+ `legal_impl`/`marriage` writers and the witness channel, which move in
+ their own iterations).
+ **The re-attempt LANDED TRIMMED as i428** (`evidence/i428_writer_deletion_trimmed.md`):
+ the two precondition probes answered i403 §6 — i426 (the deficit is
+ formation-time, founding ecology built in [0,5K) while v2 gates clear
+ 49–67% of contacted pairs) and i427 (at the channels' event scope the trust
+ bars are already 89–100% open on v2 — the contacted-graph gap was a §4.12
+ scope artifact) — and the suite identified the two read moves (kind schedule
+ + social_cluster ToM/§19.5.I) as the conception/crisis kill. i428 ships the
+ writer deletion WITHOUT those two moves, with the degree re-point, the
+ credibility/fold/sync legs, and the witness channel staying on v1.
+ Crisis liveness restored (17 revolutions on 6-of-10 seeds — the rejected
+ full arc measured 2 total — and panics back on the pestilence corpora);
+ suite 297/14 → **311/0/1**. The remaining v1 sites (`legal_impl`/`marriage`
+ writers, the witness channel) each move in their own behavioural iteration;
+ the open W1 follow-up is the kind-schedule thresholds (the i402 saturated
+ 0.70/0.20 defect) and the `cultural.openness` dead field.
  The moral-panic trigger's knife-edge (i378 sized it, **i381 resolved it** with the
  RELATIVE/anomaly form — `avg_charge ≥ max(population_baseline × 1.25, 0.47) AND
 panic_ratio ≥ 0.30` — and its pin fragility is structural too: both panic tests hold a

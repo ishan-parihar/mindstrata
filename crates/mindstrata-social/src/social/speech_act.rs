@@ -521,7 +521,6 @@ mod tests {
         use crate::social::interaction::{process_interaction, Interaction};
         use mindstrata_core::clock::Tick;
         use mindstrata_core::event::SimEvent;
-        use mindstrata_person::person::Relationship;
 
         for kind in [
             InteractionKind::Talk,
@@ -533,20 +532,8 @@ mod tests {
             InteractionKind::Insult,
             InteractionKind::Teach,
         ] {
-            let mut rel = Relationship {
-                from: AgentId::new(0),
-                to: AgentId::new(1),
-                trust: Fixed::from_f64(0.5),
-                affection: Fixed::from_f64(0.3),
-                respect: Fixed::ZERO,
-                fear: Fixed::ZERO,
-                obligation: Fixed::ZERO,
-                last_interaction_tick: 0,
-                kind: mindstrata_person::person::RelationshipKind::Stranger,
-                interaction_count: 0,
-                last_positive_tick: 0,
-                last_negative_tick: 0,
-            };
+            // i403: process_interaction no longer writes any store — the
+            // contract pins the EMITTED delta's sign to the grounded model.
             let mut events = Vec::new();
             process_interaction(
                 &Interaction {
@@ -554,15 +541,11 @@ mod tests {
                     to: AgentId::new(1),
                     kind,
                 },
-                std::slice::from_mut(&mut rel),
                 &mut events,
                 Tick::new(1),
                 false,      // out-group: negative deltas get penalized, sign preserved
                 Fixed::ONE, // bonding_rate
                 Fixed::ONE, // conflict_escalation_rate
-                &mindstrata_core::parameters::SimParameters::default(),
-                &[], // no lookup: exercises the linear-scan fallback
-                2,
             );
             let applied = events
                 .iter()

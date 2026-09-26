@@ -112,8 +112,6 @@ pub struct SimParameters {
     pub appraisal_low_coping_threshold: Fixed,
 
     // ── Relational / Social ──────────────────────────────────
-    /// Reciprocal relationship update factor (0.3 = 30% of direct effect).
-    pub social_reciprocal_factor: Fixed,
     /// Low trust threshold — below this, agents threaten/avoid (0.2).
     pub social_low_trust_threshold: Fixed,
     /// High affection threshold — above this, agents comfort/help (0.7).
@@ -511,7 +509,6 @@ impl Default for SimParameters {
             appraisal_sadness_multiplier: Fixed::from_f64(0.7),
             appraisal_fear_coping_multiplier: Fixed::from_f64(0.5),
             appraisal_low_coping_threshold: Fixed::from_f64(0.3),
-            social_reciprocal_factor: Fixed::from_f64(0.3),
             social_low_trust_threshold: Fixed::from_f64(0.2),
             social_high_affection_threshold: Fixed::from_f64(0.7),
             social_openness_threshold: Fixed::from_f64(0.6),

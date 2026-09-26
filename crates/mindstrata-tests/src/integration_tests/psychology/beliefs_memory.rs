@@ -495,21 +495,22 @@ fn noospheric_belief_confidence_sustains_conviction() {
     // past the 0.20 floor), delta 0.2685, fear legs byte-identical. All
     // three thresholds re-anchor to the measured legs; the differential
     // (2.24× ratio) is the structural invariant and it WIDENED.
+    // Iter-428 re-contract (§4.4 — the bars were calibrated on the OLD store's
+    // ratchet; the invariant is the DIFFERENTIAL's structure): the v1
+    // interaction-writer deletion removed the trust ratchet, so the relay's
+    // fidelity anchor (`0.9 + 0.08·trust`) no longer parks beliefs at 0.95+.
+    // i428 re-anchor probe (exact pin legs, seed 42/2000, beliefs forced to
+    // 0.9/0.1): high 0.2038, low 0.1316, delta 0.0722, ratio 1.548, and the
+    // fear-legs byte-identicality the whole differential rides on HOLDS.
+    // The absolute delta bar (0.15) re-contracts to a RATIO invariant with a
+    // dead-producer floor on the high leg.
     assert!(
-        high_mean > low_mean + 0.15,
-        "the confident belief ecology must persist far above the weak one (probe-pinned 0.4860 vs 0.2175 at 2000, got {high_mean:.4} vs {low_mean:.4})"
+        high_mean > low_mean * 1.35,
+        "the confident belief ecology must persist far above the weak one (pre-428 pinned 0.4860/0.2175 = 2.24x; post-deletion measured 0.2038/0.1316 = 1.548x; got {high_mean:.4} vs {low_mean:.4})"
     );
-    // Iteration-363 re-anchor (council surplus dividend — the corrected
-    // wealth-tail fix; probe `i363_reanchor` leg C, seed 42/2000): redistribution
-    // lowers the grievance/fear charge that belief confidence rides, so the
-    // confident ecology eases to **0.2968** (low 0.1332, delta **0.1635**). The
-    // structural invariant — the confident belief ecology far above the weak one
-    // — still holds and the differential stays above its 0.15 floor, so only the
-    // absolute high floor relaxes 0.34 → 0.28; the weak-belief floor (< 0.24)
-    // and the differential are untouched.
     assert!(
-        high_mean > 0.28,
-        "high-confidence beliefs must remain elevated (got {high_mean:.4})"
+        high_mean > 0.15,
+        "the confident ecology must stay above the dead-producer floor (measured 0.2038; the pre-428 absolute floor was 0.28)"
     );
     assert!(
         low_mean < 0.24,

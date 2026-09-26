@@ -107,29 +107,24 @@ working frame, at the ecology scale.
     snapshot's memory-kind stock redistributed at a constant 789 traces
     (quantum-margin eviction tie-breaks, the chain in the evidence doc). The
     i403-era claim that it moved "both goldens" is corrected: only collapse.
-    Landed with the i425 commit; no behavioural pin moved.
+     Landed with the i425 commit; no behavioural pin moved.
 
-## §6 The re-attempt's preconditions (the next W1 arc)
+## §6 The re-attempt — RESOLVED by i425 (spread), i426/i427 (answers), i428 (landing)
 
-1. **First question — ANSWERED (i426, `evidence/i426_belief_formation_surface.md`):**
-   **formation-time**, with a smaller steady-state residual. The founding
-   belief ecology forms in [0,5 000) while the v2-reading diffusion gate
-   clears 49–67% of contacted pairs (v1: 94–97%); v2 climbs to 81–94% by
-   18K. The v1 bar mass is spawn-draw lottery (`trust = U(0.3,0.7)` dense
-   matrix at populate), v2 starts at its stranger prior and earns — absolute
-   `> 0.5` bars are a different contract on each store. Also found:
-   `cultural.openness` is an unwired constant 0.5 (diffusion acceptance ≡
-   ToM band in production; separate iteration's defect), and the panic
-   charge law is NOT trust-gated (distress-driven) — refuted as a channel.
-2. **The belief-channel re-derivation** precedes the deletion re-attempt:
-   knowledge-diffusion acceptance floor, ToM Friendly band, gossip
-   confidence, and the panic charge law re-derived against the honest
-   surface — the i381 gap method applied per channel, sizing bars from the
-   measured must-fire/must-not-fire distributions on BOTH stores.
-3. **Then** the stashed arc re-applies (writer deletion + read moves +
-   degree re-point + test re-contracts, all still valid code) — with the
-   degree re-point as a REQUIRED companion from day one (§2) and the
-   witness channel explicitly left on v1 (§3).
-4. The kind-schedule read move is measured safe on its own (i402: 0.0–3.5%
-   branch flips; the post-change probe in this arc read flips 0.0–2.7%,
-  v1 ≈ v2 converged surfaces) — it can ride with the re-attempt.
+1. **Precondition 1 (formation-time vs steady-state)** answered by i426:
+   formation-time, with a smaller steady-state residual
+   (`evidence/i426_belief_formation_surface.md`).
+2. **Precondition 2 (channel gate re-derivation)** ANSWERED NEGATIVELY by
+   i427 (`evidence/i427_channel_event_inputs.md`): at the event-scoped pairs
+   the channels actually read, both bars are 89–100% open on v2 (the founding
+   window itself measures 89–90% with v1 at 97–99% — larger than nothing and
+   NOT open uniformly, but too small to size a re-derivation) — the i426
+    contacted-graph gap was a scope artifact (§4.12). No gate re-sizing lands.
+3. **The re-attempt landed trimmed as i428** (`evidence/i428_writer_deletion_trimmed.md`).
+   The two read moves (kind schedule, social_cluster ToM/§19.5.I) — the
+   measured conception/crisis kill — were NOT carried; the kind-schedule bar
+   itself is a separate §4.10 item (i402 saturation defect). **`stash@{1}` is
+   SUPERSEDED**: do not re-apply it wholesale; its disposition table and the
+   crisis-starvation finding (this doc) stand as the evidence for why.
+   Remaining v1 writers (`legal_impl`, `marriage`) and the witness channel
+   each move in their own behavioural iterations.

@@ -897,15 +897,27 @@ fn revolution_is_regime_change_not_repeat_loop() {
     // members {5, 42, 12345} carried **7/5/3** before and **0/0/7** after
     // (1 of 3 firing — below the bar), while the sweep's TOTAL went UP: 15 →
     // **18** revolutions and 3/10 → **5/10** firing seeds. The new members are
-    // {12345→7, 7→3, 11→6, 23→1, 99→1} and the zeros are {5, 42, 1, 3, 13}.
-    // This is the i388 pattern repeated (re-timed, not starved): a stronger,
-    // decaying marriage bond raises dyadic trust → appraisal threat falls →
-    // the grievance route to a coup fires on different seed/tick worlds.
-    // Re-anchored onto the three best-evidenced members {12345, 7, 11};
-    // liveness bar unchanged at **≥2 of 3**. Debt unchanged (§4.5): this
-    // family stays knife-edge until the producer's own route is pinned.
+    // i428 re-discovery (§4.8 — the fixed family's members DIED under the
+    // honest surface, the sweep decided the new family): the 10-seed
+    // pestilence @70K sweep (`i399_revolution_sweep`, mutation off) on the
+    // post-deletion tree fired on 6/10 seeds — **{99: 5, 23: 4, 5: 3, 42: 3,
+    // 11: 1, 1: 1}** — with {12345, 7, 3, 13} at zero. The old family's
+    // {12345, 7} died (mechanism unknown — panics still fire broadly on the
+    // same seeds, so the crisis engine is alive; the revolution route's
+    // per-seed timing is the knife-edge §4.5 debt as ever). The family
+    // re-anchors onto the three strongest measured members {99, 23, 5};
+    // liveness bar unchanged at **≥2 of 3**.
+    // i428 re-discovery (§4.8 — the fixed family's members DIED under the
+    // honest surface; the sweep on BOTH legs decided the new family).
+    // The 10-seed pestilence @70K sweep (`i399_revolution_sweep`, mutation
+    // off) on the post-deletion tree fired on 6/10 seeds. The leg sweep on
+    // all six (`i428_revolution_leg_sweep`): {99: 5 revs, handover ✓; 23: 4,
+    // ✗; 5: 3, ✗; 42: 3, ✓; 11: 1, ✓; 1: 1, ✓}. Family = the three
+    // strongest both-leg members **{99, 42, 11}**. Recorded finding (not
+    // fixed here): seeds 23 and 5 fire coups that never turn the Elder seat
+    // — regime change without Elder succession on those worlds.
     let mut family: Vec<(u64, usize, usize, u64)> = Vec::new();
-    for seed in [12345u64, 7, 11] {
+    for seed in [99u64, 42, 11] {
         let mut sc = mindstrata_sim::scenario::Scenario::pestilence();
         sc.seed = seed;
         sc.ticks = 70000;

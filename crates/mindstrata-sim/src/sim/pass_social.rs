@@ -19,12 +19,9 @@ impl Simulation {
         relationships: &mut [crate::person::Relationship],
         institutions_reg: &[crate::institutions::Institution],
         norms_reg: &crate::norms::NormRegistry,
-        // i330: dense `(from·n + to) → relationships position` lookup, built by
-        // the caller from the pre-pass matrix. The per-speech-act credibility
-        // read below was a linear `relationships.iter().find(..)` per event —
-        // O(E·R) = O(N³) per tick and the largest single term in the tick at
-        // N=192 (probe i330). `system_social_interactions` takes a slice, so it
-        // cannot push: positions are stable for the whole pass.
+        // i330: dense `(from·n + to) → relationships position` lookup, built
+        // by the caller — the witness channel (v1, i403 scope decision) still
+        // consumes it.
         rel_lookup: &[u32],
     ) {
         // i330 sub-profile: split this pass into its halves (the interaction
@@ -220,18 +217,25 @@ impl Simulation {
                 }
             }
 
+            // i403: the interaction pass now owns the dyadic rows — disjoint
+            // mutable slices lent from `agents` (dense per-agent layout, each
+            // row skipping its owner). `agent_info` is already collected
+            // (all Copy fields), so no borrow conflicts. The pass reads them
+            // for the kind schedule and writes them for witness trust.
+            // i428: the kind schedule reads v1 again; the only consumer of
+            // the dyadic rows was that read, so the v2_rows arming is gone.
             social::system_social_interactions(
                 &agent_info,
                 &agent_positions,
                 &same_faction_matrix,
                 relationships,
+                rel_lookup,
                 ctx.events,
                 tick,
                 ctx.rng,
                 params.bonding_rate,
                 params.conflict_escalation_rate,
                 params,
-                rel_lookup,
             );
 
             mark!("  +interactions");
@@ -290,30 +294,32 @@ impl Simulation {
                     // Speaker's current trust in the listener — computed
                     // once, reused by both the courtship wiring below and
                     // the speech-act credibility.
+                    //
+                    // i403: this read moved from the legacy v1 matrix to the
+                    // speaker's own dyadic row IN THE SAME COMMIT as the v1
+                    // interaction-write deletion — otherwise its meaning
+                    // would silently drift from "v1 trust including this
+                    // tick's gain" to "yesterday's v2 projection" (the
+                    // daily sync makes v1 a projection of v2 once the
+                    // per-act v1 writes die). Note the one-act difference:
+                    // the dyadic row is read BEFORE this act's write, so this
+                    // is the speaker's STANDING trust — the semantically
+                    // intended quantity. Missing/drifted row → the same 0.5
+                    // fallback the v1 read used.
                     let credibility = {
                         let n_lk = agents.len();
                         let from_i = from_u as usize;
                         let to_i = to_u as usize;
-                        let pos = if from_i < n_lk && to_i < n_lk {
-                            rel_lookup.get(from_i * n_lk + to_i).copied()
+                        if from_i >= n_lk || to_i >= n_lk || from_i == to_i {
+                            Fixed::from_f64(0.5)
                         } else {
-                            None
-                        };
-                        let hit = pos
-                            .filter(|&p| p != u32::MAX)
-                            .and_then(|p| relationships.get(p as usize))
-                            .filter(|r| r.from.as_u64() == from_u && r.to.as_u64() == to_u);
-                        // Fallback keeps correctness if the lookup is stale
-                        // (e.g. a mid-tick population change).
-                        hit.map_or_else(
-                            || {
-                                relationships
-                                    .iter()
-                                    .find(|r| r.from.as_u64() == from_u && r.to.as_u64() == to_u)
-                                    .map_or(Fixed::from_f64(0.5), |r| r.trust)
-                            },
-                            |r| r.trust,
-                        )
+                            let pos = if to_i > from_i { to_i - 1 } else { to_i };
+                            agents[from_i]
+                                .relationship_v2s
+                                .get(pos)
+                                .filter(|r| r.to.as_u64() == to_u)
+                                .map_or(Fixed::from_f64(0.5), |r| r.trust)
+                        }
                     };
                     let kind_is_hostile = matches!(
                         kind,
@@ -379,10 +385,13 @@ impl Simulation {
                         log.remove(0);
                     }
                     // §8.1.11 (Iteration 95): apply the speech act's
-                    // relational effects — the trust/affection channels
-                    // are already live (`system_social_interactions`'
-                    // per-kind deltas equal the grounded `base_delta`
-                    // values, so applying them here would double-count);
+                    // relational effects. i403: the trust/affection channels
+                    // on the DYADIC store are the live per-act write
+                    // (`record_positive/record_negative` below); the legacy
+                    // v1 per-kind writes are deleted, and their §5.1 table
+                    // survives only as the RelationshipChanged PERCEPT's
+                    // per-kind deltas (i403: now the RelationshipChanged
+                    // PERCEPT's table — the v1 store writes are deleted);
                     // status/obligation/reputation were computed by
                     // `resolve_effect` but never applied anywhere. Pure
                     // deltas on existing state, no RNG — the replay
@@ -404,10 +413,24 @@ impl Simulation {
                         // flows through the designed channels: positive
                         // interactions build trust/affection/intimacy/
                         // commitment/gratitude + memory weights, hostile
-                        // ones erode them. These deltas are on the V2
-                        // array — independent of the legacy
-                        // `relationships` per-kind deltas, so nothing is
-                        // double-counted. Zero-RNG, deterministic.
+                        // ones erode them. i403: with the v1 writes
+                        // deleted, THIS is the per-act relationship
+                        // write — nothing is double-counted because the
+                        // legacy channel is gone. Zero-RNG, deterministic.
+                        // i403: the §5.1 rates are RE-HOSTED here — the
+                        // dyadic per-act magnitudes now scale with
+                        // `bonding_rate` (prosocial kinds) and
+                        // `conflict_escalation_rate` (hostile kinds), the
+                        // same knobs that used to scale the deleted v1
+                        // writes. Both default to 1.0, so this commit is
+                        // value-neutral at the defaults; the knobs stay
+                        // LIVE (the behavioral_delta pin on bonding_rate
+                        // now exercises this path).
+                        let rate_scale = if kind_is_hostile {
+                            params.conflict_escalation_rate
+                        } else {
+                            params.bonding_rate
+                        };
                         let magnitude = match kind {
                             mindstrata_core::event::InteractionKind::Help
                             | mindstrata_core::event::InteractionKind::Comfort => {
@@ -420,7 +443,7 @@ impl Simulation {
                             mindstrata_core::event::InteractionKind::Gossip
                             | mindstrata_core::event::InteractionKind::Talk => Fixed::from_f64(0.3),
                             _ => Fixed::from_f64(0.2),
-                        };
+                        } * rate_scale;
                         // Iteration 197: a fully-socialized agent (the §17
                         // developmental state — grows through childhood)
                         // registers interactions more strongly, so its
