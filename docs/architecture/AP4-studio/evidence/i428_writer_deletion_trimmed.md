@@ -10,7 +10,7 @@ gates are already open) — i403 §6 preconditions 1 and 2 both DISCHARGED.
 ## 1. What shipped
 
 The i403 measured rejection was re-assembled minus its two measured-poison
-pieces. The stashed arc (`stash@{1}`) applied onto the i425 tree, then two
+pieces. The stashed arc (git stash object `aa423ee0`) applied onto the i425 tree, then two
 specific reverts:
 
 1. **The kind-schedule read move** (`interaction.rs::system_social_interactions`)
@@ -38,7 +38,7 @@ its own reader).
 
 | step | suite | note |
 |---|---|---|
-| stash@{1} applied | — | applies cleanly on the i425 tree |
+| arc `aa423ee0` applied | — | applies cleanly on the i425 tree |
 | kind-schedule reverted to v1 | hang (conception pin) | the i399-class stale-fixture signal, traced below |
 | + social_cluster reads reverted to v1 | **297/14** (392 s) | dump: 2 goldens + 4 pins + 7 snapshots + = full failure set |
 
@@ -79,7 +79,7 @@ without its probe numbers in the diff.
 - §4.17 (degree freeze) held: the arc carries the v2-row re-point and its
   test companion.
 
-**`stash@{1}` is SUPERSEDED — DO NOT re-apply it wholesale.** Its two
+**The arc (`aa423ee0`, currently `stash@{0}`) is SUPERSEDED for wholesale application — DO NOT re-apply it; RETAINED as the source for the unlanded writers below.** Its two
 read-move pieces are the measured conception/crisis kill and are deliberately
 NOT in this landing. The remaining unlanded pieces (`legal_impl`/`marriage`
 writers, the witness channels) each need their own behavioural iteration.

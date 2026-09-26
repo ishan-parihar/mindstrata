@@ -92,12 +92,14 @@ working frame, at the ecology scale.
 
 1. **This record + the stashes** — the full arc (writer deletion, read moves,
    degree re-point, credibility move, test re-contracts) preserved in
-   **`stash@{1}`** (`"i403 measured rejection: full arc preserved …"`),
+   the full arc as stash object `aa423ee0` (currently `stash@{0}` —
+   retained as the source of the unlanded writers, NOT for wholesale apply) —
    the re-attempt's starting map.
 2. **AGENTS §4.17** — the bookkeeping-consumer rule (the one durable lesson
    the suite taught at the structural level).
 3. **The `contagion_delta` f64 fix — LANDED SEPARATELY as i425**
-    (was `stash@{0}`, `"i403 companion: contagion_delta f64 fix …"`;
+    (the companion stash, fully landed here and DROPPED from the stash
+    list; its name was the same-object alias) —
     `evidence/i425_contagion_f64.md`): exonerated on the crisis corpora by
     identical per-seed revolution counts in both A/B arms, then measured by
     its own calm-band probe and landed with custody — the 307/4 blast radius
@@ -123,7 +125,7 @@ working frame, at the ecology scale.
 3. **The re-attempt landed trimmed as i428** (`evidence/i428_writer_deletion_trimmed.md`).
    The two read moves (kind schedule, social_cluster ToM/§19.5.I) — the
    measured conception/crisis kill — were NOT carried; the kind-schedule bar
-   itself is a separate §4.10 item (i402 saturation defect). **`stash@{1}` is
+   itself is a separate §4.10 item (i402 saturation defect). **the full arc (`aa423ee0`) is
    SUPERSEDED**: do not re-apply it wholesale; its disposition table and the
    crisis-starvation finding (this doc) stand as the evidence for why.
    Remaining v1 writers (`legal_impl`, `marriage`) and the witness channel

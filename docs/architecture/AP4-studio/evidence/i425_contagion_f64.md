@@ -2,7 +2,7 @@
 
 **Iteration:** i425 · **Date:** 2026-09-25 · **Status:** LANDED (with custody re-baseline)
 **Probe:** `crates/mindstrata-benches/examples/i425_contagion_calm_band.rs`
-**Root cause class:** §5 Fixed-4 truncation disease (the i393 migration exposed it; the i403 arc preserved the fix in `stash@{0}`, exonerated it on the crisis corpora, and deferred it pending exactly this calm-band measurement)
+**Root cause class:** §5 Fixed-4 truncation disease (the i393 migration exposed it; the i403 arc preserved the fix in its companion stash, exonerated it on the crisis corpora, and deferred it pending exactly this calm-band measurement)
 
 ## 1. Root cause
 
@@ -126,7 +126,7 @@ Post-custody suite: **311/0/1** (goldens 5/5, snapshots green).
   the collapse golden moves**; riverford reproduces its stored baseline
   bit-for-bit (phase alignment, §2). The i403 evidence doc and the plan row are
   corrected in this commit.
-- The i403 stash entry `stash@{0}` is fully landed here; `stash@{1}` (the
+- The i403 companion stash is fully landed here (and has since been dropped); the full arc (stash object `aa423ee0`, currently stash@{0}) (the
   rejected arc) remains the re-attempt's preserved code.
 
 ## 5. Instruments

@@ -81,7 +81,7 @@ per channel they feed.)
    the 0.70 bar) is the piece that needs work — a re-derivation of the
    0.7/0.2 kindness THRESHOLDS on the honest surface — NOT the three belief
    channels' trust bars.
-3. **Precondition 2 simplifies accordingly**: `stash@{1}` re-application no
+3. **Precondition 2 simplifies accordingly**: `aa423ee0` re-application no
    longer needs distributional bar re-derivation for diffusion/ToM/gossip.
    The required companions are exactly (a) the degree re-point (i403), (b)
    the kind-schedule thresholds re-derived against v2's event distribution

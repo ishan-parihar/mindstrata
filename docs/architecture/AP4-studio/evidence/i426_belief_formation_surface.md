@@ -123,7 +123,7 @@ absolute:
   must-not-fire plateaus.
 - Option B (conservative): anchor the bar to the measured v2 prior curve
   (e.g. mean v2 trust on contacted pairs at that agent's own formation tick).
-- In both cases the i403 stashed arc (`stash@{1}`) re-applies AFTER the bars
+- In both cases the i403 stashed arc (`aa423ee0`) re-applies AFTER the bars
   are re-derived, with the degree re-point as required companion and the
   witness channel left on v1.
 
