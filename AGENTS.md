@@ -553,6 +553,18 @@ pipeline v0), and **DC-4** (difficulty-levers rows 2–3 live, pathology/goal-ga
 meaning/physiological reflex repairs, injury channel, pain-veto revival, TUI asset/scene
 viewers, and the scale program).
 
+**2026-09-27 pointer refresh (W1 arc closed, i425–i429):** the v1→v2 migration is at its
+end-state — the v1 interaction **writer is deleted** (i428, crisis liveness held: 17
+revolutions on 6-of-10 seeds, both goldens re-baselined, suite 311/0/1); the remaining v1
+writers are `legal_impl` (−0.2) and `marriage` (+0.2/+0.3) plus the witness channel, each
+queued as its own behavioural iteration (source stash object `aa423ee0`, do-not-reapply).
+**i429 measured the kind-schedule defect as write-side**: dyadic affection is a
+ratchet-to-ceiling store (prior 0.3, p50 0.945 by day 10, discriminating band [0.5,0.95)
+drained 34%→1.9% by 18K ticks) — the repair is the gain/decay law, never the 0.70 bar
+(§4.16). Also live in the queue: the `cultural.openness` dead field and the i423 standing
+perf envelope. See `evidence/i429_affection_saturation.md` and
+`docs/PLAN_DC5_DEVELOPMENT.md` §4.1 (authoritative schedule).
+
 The **dead-producer campaign** (i346–i351) then anatomized and revived the action layer
 with the `sim::decision_census`: `Move` (feud gate above reach + shadowed by routine,
 i347), the `Background` tier (entry gate below floor + a social clause starving factions,
