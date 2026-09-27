@@ -9,30 +9,33 @@
 - Stranger prior: `affection = 0.3` at row creation (`new`, :410).
 - Per positive act: `affection += magnitude × volatility × 0.015` (526-543), clamped to 1.
 - Per negative act: `affection -= magnitude × volatility × 0.02` (549-555).
-- Decay: TWO legs (`cognitive.rs:800-812` + `relationship_v2::decay`): every
-  row decays once on the daily boundary (0.0002 × 1 tick × 0.5 for affection
-  − a hypothetical ~0.0001/day), and **dirty** rows (any row written by an
-  interaction since the last boundary) decay EVERY tick while dirty — so a
-  pair talked to once that day also loses 0.0144/day to the dirty leg. Rows
-  never touched (contacted but cold) lose only the universal 0.0001/day —
-  the dormant drain is essentially off.
+- Decay: TWO legs (`cognitive.rs:800-812` + `relationship_v2::decay`), gated by
+  `is_active_this_tick` = dirty ∨ daily-boundary (`t % 144 == 0`): **every** row
+  decays once per day (−0.0001 affection/day — the cold drain, 144× weaker than
+  one act's gain, so a cold contacted pair effectively never cools: THE
+  ratchet), and dirty rows (written since the last boundary) decay EVERY tick
+  while dirty — a pair contacted that day also loses 0.0144/day to this leg.
+  i430's census measured the net: mean −0.00062/row-day across 14 537 row-days.
 
 Arithmetic consequence on a pair: 1 positive act/day → net ≈ +0.0004/day
-(creeps to 1.0 forever); 3+ acts/day → ~+0.03/day (ceiling in ~23 days ≈
-3 312 ticks). No headroom taper, no stalling term except the ceiling clamp,
-and a dormant drain too weak to pull any written pair back.
+(creeps to 1.0 forever); at the measured median frequency 41 acts/day →
+~+0.10/day (ceiling in ~7 days). No headroom taper, no stalling term except
+the ceiling clamp, and a cold drain too weak to pull any written pair back.
+The per-seed trajectory table and the four-writer mass census live in
+`evidence/i430_writer_census.md` (the per-act writer owns 92% of the mass).
 
 ## 2. Measured trajectory (both corpora)
 
 calm seeds {42, 7, 11} 16×16/N=12 riverford-class, 20K ticks, contacted-pair
-dyadic affection per 1440-tick bucket:
+dyadic affection (per-seed rows; i430 §5 carries the current table — every
+seed lands bimodal, band drained to 2–4% by 20K):
 
 | t | n pairs | p10 | p50 | p90 | ceiling share | discriminating band [0.5, 0.95) |
 |---|---|---|---|---|---|---|
-| 1440 | 71–87 | 0.41 | 0.74–0.95 | 1.0 | 20–61% | 34–44% |
+| 1440 | 71–87 | 0.41 | 0.74–0.95 | 1.0 | 20–61% | 34–44% (per-seed: 42: 33.8 / 7: 43.7 / 11: 58.8) |
 | 5760 | 96–102 | 0.54–0.83 | 0.99 | 1.0 | 42–50% | 13–18% |
-| 12960 | 104 | 0.98 | 0.99 | 1.0 | 32% | 5.8% |
-| 18720 | 104 | 0.985 | 0.995 | 1.0 | 35% | 1.9% |
+| 12960 | 104 | 0.98 | 0.99 | 1.0 | 32% | 5.8% (42) |
+| 18720 | 104 | 0.985 | 0.995 | 1.0 | 35% | 1.9% (42) |
 
 The discriminating band [0.5, 0.95) is a **transient birth canal**, not an
 equilibrium: pairs enter near the 0.3–0.5 prior, pass through the band in a
