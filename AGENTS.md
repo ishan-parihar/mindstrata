@@ -215,10 +215,10 @@ These rules exist because we repeatedly paid for violating them:
    `FROZEN` freezes the *rule*, never the path. Corollary: before trusting a ledger row's
    claim about **where** a value landed, open the file it names. The i386 sweep found three
    drift classes across the governing set while `scripts/doc_index.py` — which checks
-   *structure*, not citations — reported OK: ghost citations (`IC-2-observability.md`,
-   `IC-7-ui-telemetry.md` never existed under those names), moved files
-   (`sim/pass_health.rs` → `systems/health.rs`, `psychology/lore.rs` →
-   `development/lore.rs`), and the expensive one — **a doc asserting a value was NOT landed
+   *structure*, not citations — reported OK: ghost citations (two contract filenames,
+   that never existed under those names), moved files
+   (pass_health.rs → `systems/health.rs`, lore.rs (psych crate) →
+   `crates/mindstrata-development/src/lore.rs`), and the expensive one — **a doc asserting a value was NOT landed
    while the code had shipped it as a difficulty band under another name**
    (`PATHOLOGY_GROWTH_*` was never created; `PROD_QUADRANT_PARAMS` +
    `SimParameters::pathology_*_scale` is the real surface). A stale "not landed" is worse
@@ -839,9 +839,9 @@ Live queue, in order (evidence link per item):
    **i386 then swept the governing document set for citation drift** — the reconciliation
    that i385's own §1/§5 re-measurement implied. Five REFERENCE docs and the balance canon
    were carrying it: two ghost contract filenames in the interlock map
-   (`IC-2-observability.md`, `IC-7-ui-telemetry.md`), the two pass files still named by
-   their pre-extraction paths in the determinism law (`pass_health.rs` →
-   `systems/health.rs`; `pass_biology.rs` → `systems/biology.rs`), `lore.rs` still credited
+   (two ghost contract filenames), the two pass files still named by
+   their pre-extraction paths in the determinism law (pass_health.rs →
+   `systems/health.rs`; pass_biology.rs → `systems/biology.rs`), `lore.rs` still credited
    to the psych crate after the ladder moved it to `development` (and its symbol to :100),
    and two balance docs asserting the `mindstrata-development` crate, its `canon.rs` and its
    markers **did not exist** while the crate, the constants and 27 code-side marker sites
