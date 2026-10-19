@@ -170,6 +170,10 @@ cargo test --workspace
 cargo bench -p mindstrata-benches --no-run
 ```
 
+## Documentation
+
+Every doc in `docs/` is listed with the question it answers in [docs/PAGE-INDEX.md](docs/PAGE-INDEX.md).
+
 ## License
 
 MIT. See `LICENSE`.
