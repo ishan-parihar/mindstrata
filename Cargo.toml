@@ -112,3 +112,17 @@ image = { version = "0.25", default-features = false, features = ["png", "gif"] 
 # Testing
 insta = "1"
 criterion = { version = "0.5", features = ["html_reports"] }
+
+# Debug builds were 41.2 GiB (2026-09-29) — this manifest had no [profile.*]
+# section at all, so Cargo's default `debug = 2` (full debuginfo) applied to
+# every crate in the workspace on every rebuild. Matches the house convention
+# already used in agentic-harness/parent-projects/oh-my-pi.
+[profile.dev]
+debug = "line-tables-only"
+# Linux: split DWARF into .dwo files instead of packing it into every rlib.
+split-debuginfo = "unpacked"
+
+# Dependencies are never hand-debugged; this is where the bulk of the 41.2 GiB
+# lived (image, ratatui, wgpu/tokio, criterion, ...).
+[profile.dev.package."*"]
+debug = false

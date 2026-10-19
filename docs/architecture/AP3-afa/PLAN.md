@@ -38,7 +38,7 @@ and content is whatever the field metabolizes."* — synthesized from KosmOS `_O
 | You are… | Read |
 |---|---|
 | Any agent starting on AP3 | this file → [01-doctrine.md](01-doctrine.md) §1–§4 → your WP brief |
-| Implementing a work package | [waves/](waves/) index → your WP brief → [02-theory-map.md](02-theory-map.md) sections it cites → [03-substrate.md](03-substrate.md) for interfaces you consume |
+| Implementing a work package | [waves/](04-waves.md) index → your WP brief → [02-theory-map.md](02-theory-map.md) sections it cites → [03-substrate.md](03-substrate.md) for interfaces you consume |
 | Planning / re-planning iterations | [04-waves.md](04-waves.md) → [01-doctrine.md](01-doctrine.md) §5 (conflict protocol) |
 | Calibrating or re-anchoring pins | [01-doctrine.md](01-doctrine.md) §3 → AGENTS.md §4 → [03-substrate.md](03-substrate.md) §6 |
 | Looking up ontology sources | [refs/kosmos-index.md](refs/kosmos-index.md) |

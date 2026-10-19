@@ -119,7 +119,7 @@ missing. There is no `--write`: classification is a judgement, not a generation.
 | `README.md` | AUTHORITY | project entry point and public framing |
 | `docs/ROADMAP.md` | AUTHORITY | milestone ladder and layer map |
 | `CHANGELOG.md` | HISTORICAL | frozen at Iteration 214; superseded in practice by the git log and the ledgers |
-| `OPERATIONAL_AUDIT.md` | HISTORICAL | empirical audit snapshot, 2026-08-03; pre-dates most systems |
+| `docs/audit/2026-08-03-OPERATIONAL_AUDIT.md` | HISTORICAL | empirical audit snapshot, 2026-08-03; pre-dates most systems |
 | `docs/ENGINE_STATUS.md` | AUTHORITY | **current engine truth** — architecture, behaviour, realism, scale |
 | `docs/DOCUMENTATION.md` | AUTHORITY | this file; documentation governance |
 | `docs/MINDSTRATA_CURRENT_STATE.md` | SUPERSEDED | → `ENGINE_STATUS.md` (AP2-era state) |
