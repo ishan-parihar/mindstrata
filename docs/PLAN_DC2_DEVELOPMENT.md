@@ -1,5 +1,36 @@
 # Mindstrata — Exhaustive Development Audit + DC-2 Plan
 
+## Contents
+
+- [1. Live verification results (measured at audit time)](#1-live-verification-results-measured-at-audit-time)
+- [2. What has been completed effectively (evidence-backed)](#2-what-has-been-completed-effectively-evidence-backed)
+  - [2.1 The four architecture plans, in sequence](#21-the-four-architecture-plans-in-sequence)
+  - [2.2 Scale & structure program (all golden-proven byte-identical)](#22-scale-structure-program-all-golden-proven-byte-identical)
+  - [2.3 Calibration state at HEAD](#23-calibration-state-at-head)
+- [3. What remains — the honest calibration debt ledger](#3-what-remains-the-honest-calibration-debt-ledger)
+  - [3.1 IC-5 canon values (DESIGN debt, probe-gated)](#31-ic-5-canon-values-design-debt-probe-gated)
+  - [3.2 Blocked-inert layers (structural debt, one batch)](#32-blocked-inert-layers-structural-debt-one-batch)
+  - [3.3 Known systemic hazards (AGENTS.md §5, standing)](#33-known-systemic-hazards-agentsmd-5-standing)
+  - [3.4 Performance ponytails (non-blocking)](#34-performance-ponytails-non-blocking)
+- [4. DC-2 Development Plan](#4-dc-2-development-plan)
+  - [Iteration 266 (first DC-2 arc) — WP-I: activate the collective field](#iteration-266-first-dc-2-arc-wp-i-activate-the-collective-field)
+  - [Iteration 267 — i275 needs-band calibration sweep (unblocks DESIGN debt)](#iteration-267-i275-needs-band-calibration-sweep-unblocks-design-debt)
+  - [Iteration 268 — Q3 golden-addiction calibration + wiring](#iteration-268-q3-golden-addiction-calibration-wiring)
+  - [Iteration 269 — Era III content: first generated content in the annals](#iteration-269-era-iii-content-first-generated-content-in-the-annals)
+  - [Iteration 270+ — batch the structural ponytails + DC-2 continuation](#iteration-270-batch-the-structural-ponytails-dc-2-continuation)
+  - [Standing discipline (applies to every iteration above)](#standing-discipline-applies-to-every-iteration-above)
+  - [§4 EXECUTION LEDGER — DC-2 landed (2026-09-16)](#4-execution-ledger-dc-2-landed-2026-09-16)
+- [5. Summary assessment](#5-summary-assessment)
+- [6. DC-2 CONTINUATION PLAN — Era III completion → UM-2 gate (post-i274)](#6-dc-2-continuation-plan-era-iii-completion-um-2-gate-post-i274)
+  - [6.1 Live verification at audit time (2026-09-17)](#61-live-verification-at-audit-time-2026-09-17)
+  - [6.2 Where DC-2 actually stands (honest vs the UM-2 gate)](#62-where-dc-2-actually-stands-honest-vs-the-um-2-gate)
+  - [6.3 Iteration ladder (one root cause each, doctrine §2)](#63-iteration-ladder-one-root-cause-each-doctrine-2)
+  - [6.4 Standing discipline (unchanged)](#64-standing-discipline-unchanged)
+  - [§6 EXECUTION LEDGER — continuation arcs landed (2026-09-17, session 2)](#6-execution-ledger-continuation-arcs-landed-2026-09-17-session-2)
+  - [6.5 DC-2 REMAINING PLAN (2026-09-17, session 3 — post-i278 audit)](#65-dc-2-remaining-plan-2026-09-17-session-3-post-i278-audit)
+  - [6.6b Session-5 continuation (2026-09-18, post-i284)](#66b-session-5-continuation-2026-09-18-post-i284)
+  - [6.6 Known boundaries (not plannable until inputs land)](#66-known-boundaries-not-plannable-until-inputs-land)
+
 > **HISTORICAL / COMPLETE (2026-09-22):** DC-2 closed (WP-H3 landed at i286). This is the
 > DC-2-era audit and plan; its ledger was superseded by
 > [`PLAN_DC3_DEVELOPMENT.md`](PLAN_DC3_DEVELOPMENT.md) §7/§9. Kept for history.

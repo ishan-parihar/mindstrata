@@ -1,5 +1,28 @@
 # Runbook — Calibration Audit Checklist v2
 
+## Contents
+
+- [H6 (2026-08-29) — Psychological-need relief gate (DC-1 DESIGN 8-9, CLOSED)](#h6-2026-08-29-psychological-need-relief-gate-dc-1-design-8-9-closed)
+  - [Status: CLOSED (2026-08-29, post-CO-2026-002 + i279 verification)](#status-closed-2026-08-29-post-co-2026-002-i279-verification)
+  - [History](#history)
+  - [Why this matters (Iter-263 H5 lesson applied)](#why-this-matters-iter-263-h5-lesson-applied)
+  - [What was NOT done](#what-was-not-done)
+- [When it runs](#when-it-runs)
+- [Severity scale](#severity-scale)
+- [Rule index](#rule-index)
+- [DC-2 Era III prep (2026-08-30, STORY 13-14) — Polarity-bias safe-coefficient range](#dc-2-era-iii-prep-2026-08-30-story-13-14-polarity-bias-safe-coefficient-range)
+- [CA-1 — No lucky-seed re-pins](#ca-1-no-lucky-seed-re-pins)
+- [CA-2 — Dead-producer equilibrium probes](#ca-2-dead-producer-equilibrium-probes)
+- [CA-3 — Re-anchor comment completeness](#ca-3-re-anchor-comment-completeness)
+- [CA-4 — Knife-edge flags become debt entries](#ca-4-knife-edge-flags-become-debt-entries)
+- [CA-5 — Founder-variance budget](#ca-5-founder-variance-budget)
+- [CA-6 — Fixed-4 truncation disease](#ca-6-fixed-4-truncation-disease)
+- [CA-7 — mem::take write-back discipline](#ca-7-memtake-write-back-discipline)
+- [CA-8 — RNG append-only stream order](#ca-8-rng-append-only-stream-order)
+- [CA-9 — Manipulation liveness (a five-times-re-anchored pin is a suspect EXPERIMENT)](#ca-9-manipulation-liveness-a-five-times-re-anchored-pin-is-a-suspect-experiment)
+- [Seed-family sweep runner contract](#seed-family-sweep-runner-contract)
+- [Audit record](#audit-record)
+
 Owner: QA (producer probes co-owned with SIM). Supersedes the ad-hoc audit method in
 `docs/AUDIT_2026-08-22_EMERGENT_REALISM.md` for per-iteration gating; that doc remains
 the deep-audit methodology.

@@ -11,6 +11,19 @@ owner: SIM + PROD (AP4 Studio)
 
 # Mindstrata — Engine Status
 
+## Contents
+
+- [1. Verification baseline (measured, not cited)](#1-verification-baseline-measured-not-cited)
+- [2. Architecture](#2-architecture)
+- [3. Tick orchestration (the pipeline)](#3-tick-orchestration-the-pipeline)
+- [4. Subsystem depth — the ten substrates](#4-subsystem-depth-the-ten-substrates)
+- [5. How agents operate (measured)](#5-how-agents-operate-measured)
+- [6. Realism verdicts (dimension by dimension)](#6-realism-verdicts-dimension-by-dimension)
+- [7. Collective behaviour at scale](#7-collective-behaviour-at-scale)
+- [8. Scale ceiling (measured)](#8-scale-ceiling-measured)
+- [9. Calibration debt (the honest ledger)](#9-calibration-debt-the-honest-ledger)
+- [10. How to keep this document current](#10-how-to-keep-this-document-current)
+
 > **This is the single authoritative current-state document for the engine.**
 > If it disagrees with any other doc, this one wins and the other is stale —
 > report it and fix the other (see [`DOCUMENTATION.md`](DOCUMENTATION.md)).

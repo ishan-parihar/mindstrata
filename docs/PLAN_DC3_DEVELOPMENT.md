@@ -8,6 +8,25 @@ reconciled_commit: fb3da07
 
 # Mindstrata — DC-3 Development Plan (Era V harvest → "the world scales")
 
+## Contents
+
+- [1. Live verification at audit time (all measured, not cited)](#1-live-verification-at-audit-time-all-measured-not-cited)
+- [2. What is complete (evidence-backed, git-history arc AP1 → AP4)](#2-what-is-complete-evidence-backed-git-history-arc-ap1-ap4)
+- [3. The honest calibration-debt ledger (what is left)](#3-the-honest-calibration-debt-ledger-what-is-left)
+  - [3.1 Actionable (probe + sweep, no external blocker)](#31-actionable-probe-sweep-no-external-blocker)
+  - [3.2 Blocked at external inputs (recorded, not plannable until inputs land)](#32-blocked-at-external-inputs-recorded-not-plannable-until-inputs-land)
+  - [3.3 Deferred with recorded triggers (do NOT pull early)](#33-deferred-with-recorded-triggers-do-not-pull-early)
+  - [3.4 DC-3 checklist items still open (from the perf charter §5)](#34-dc-3-checklist-items-still-open-from-the-perf-charter-5)
+- [4. The iteration ladder (one root cause each, doctrine §2)](#4-the-iteration-ladder-one-root-cause-each-doctrine-2)
+- [5. Risk register](#5-risk-register)
+- [6. Summary](#6-summary)
+- [7. Execution ledger (updated as iterations land)](#7-execution-ledger-updated-as-iterations-land)
+- [8. 2026-09-19 audit + UM-3 continuation ladder (post-i296)](#8-2026-09-19-audit-um-3-continuation-ladder-post-i296)
+- [9. DC-3 UNIFY REVIEW (2026-09-19, i302) — VERDICT](#9-dc-3-unify-review-2026-09-19-i302-verdict)
+  - [What carries forward (recorded, honest)](#what-carries-forward-recorded-honest)
+  - [DC-4 entry (next arc)](#dc-4-entry-next-arc)
+    - [DC-4 execution ledger](#dc-4-execution-ledger)
+
 > **Status: DC-3 closed, DC-4 ledger complete through i385; the forward plan has moved.**
 > The **live plan is now [`PLAN_DC5_DEVELOPMENT.md`](PLAN_DC5_DEVELOPMENT.md)** (created
 > 2026-09-23, i387+): it carries the measured gap taxonomy G1–G8 and the iteration ladder.

@@ -1,5 +1,26 @@
 # i373 — the hardcodedness audit: what should become organic, what must stay a constant
 
+## Contents
+
+- [Class A — already organic (the design philosophy, working)](#class-a-already-organic-the-design-philosophy-working)
+- [Class B — ORGANIC CANDIDATES (queued, each sweep-carrying)](#class-b-organic-candidates-queued-each-sweep-carrying)
+- [Class C — REALISM-PRESERVING constants (keep hardcoded, with reasons)](#class-c-realism-preserving-constants-keep-hardcoded-with-reasons)
+- [Verification](#verification)
+- [Refresh (i377) — post i374 / i375 / i376](#refresh-i377-post-i374-i375-i376)
+  - [Class A additions (state-derived laws now live)](#class-a-additions-state-derived-laws-now-live)
+  - [Class B — remaining queue (unchanged order)](#class-b-remaining-queue-unchanged-order)
+  - [Class B newly found by i376's probe (the audit's second payoff)](#class-b-newly-found-by-i376s-probe-the-audits-second-payoff)
+  - [Class C — one promotion into, and one clarification](#class-c-one-promotion-into-and-one-clarification)
+  - [Method note](#method-note)
+- [Refresh (i378) — the panic threshold, and a knife-edge that no earlier class held](#refresh-i378-the-panic-threshold-and-a-knife-edge-that-no-earlier-class-held)
+  - [New Class B candidate — the panic trigger's threshold](#new-class-b-candidate-the-panic-triggers-threshold)
+  - [The class this reveals: a new category, not a Class C](#the-class-this-reveals-a-new-category-not-a-class-c)
+- [Refresh (i379) — the third method, and the four classes it settles](#refresh-i379-the-third-method-and-the-four-classes-it-settles)
+- [Refresh (i380) — the first Class-3 item is measured, and its two obvious repairs are refuted](#refresh-i380-the-first-class-3-item-is-measured-and-its-two-obvious-repairs-are-refuted)
+- [Refresh after i381 — the panic trigger's absolute threshold is gone (Class B → Class A)](#refresh-after-i381-the-panic-triggers-absolute-threshold-is-gone-class-b-class-a)
+- [Refresh after i382 — the faction legitimacy reference is organic (Class 4 → Class A)](#refresh-after-i382-the-faction-legitimacy-reference-is-organic-class-4-class-a)
+- [Refresh after i383 — the anger arms are relative; the fear arms were never defects](#refresh-after-i383-the-anger-arms-are-relative-the-fear-arms-were-never-defects)
+
 **Status:** LANDED (audit + doctrine) · **Method:** enumerated every `const` in the
 production crates (sim, world, person/biology, psych, institutions — 150+ sites), then
 classified each by one question: **is there a principled law that derives it from

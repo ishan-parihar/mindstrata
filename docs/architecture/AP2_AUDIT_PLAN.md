@@ -1,5 +1,39 @@
 # Mindstrata — AP2 Full-Depth Re-Audit Plan
 
+## Contents
+
+- [0. Audit Method, Verdicts, and Evidence](#0-audit-method-verdicts-and-evidence)
+  - [0.1 The "Write-Only Detector" (the project's central failure pattern)](#01-the-write-only-detector-the-projects-central-failure-pattern)
+  - [0.2 Verdict taxonomy](#02-verdict-taxonomy)
+  - [0.3 Evidence standard](#03-evidence-standard)
+  - [0.4 Severity scale](#04-severity-scale)
+- [1. The Audit Toolchain (verified working commands)](#1-the-audit-toolchain-verified-working-commands)
+  - [1.1 CLI inspectors (cargo run -q -p mindstrata-cli -- sim ...)](#11-cli-inspectors-cargo-run--q--p-mindstrata-cli----sim)
+  - [1.2 Probe examples (cargo run -p mindstrata-benches --example <name> --release)](#12-probe-examples-cargo-run--p-mindstrata-benches---example-name---release)
+  - [1.3 Test suites (cargo test -p mindstrata-tests <filter>)](#13-test-suites-cargo-test--p-mindstrata-tests-filter)
+  - [1.4 Interactive TUI (cargo run -p mindstrata-tui)](#14-interactive-tui-cargo-run--p-mindstrata-tui)
+  - [1.5 Sanity gates](#15-sanity-gates)
+- [2. Master Audit Map (AP2 § → module → wiring)](#2-master-audit-map-ap2-module-wiring)
+- [3. Audit Phases](#3-audit-phases)
+  - [Phase 1 — Baseline Integrity & Determinism Core](#phase-1-baseline-integrity-determinism-core)
+  - [Phase 2 — Biological Substrate (§7)](#phase-2-biological-substrate-7)
+  - [Phase 3 — Psychological Runtime (§8)](#phase-3-psychological-runtime-8)
+  - [Phase 4 — Cognitive Runtime & Neural-Like Mind (§9)](#phase-4-cognitive-runtime-neural-like-mind-9)
+  - [Phase 5 — Relational Systems (§10)](#phase-5-relational-systems-10)
+  - [Phase 6 — Power, Status & Hierarchy (§11)](#phase-6-power-status-hierarchy-11)
+  - [Phase 7 — Group Coherence & Communion (§12)](#phase-7-group-coherence-communion-12)
+  - [Phase 8 — Cultural & Noospheric Field (§13)](#phase-8-cultural-noospheric-field-13)
+  - [Phase 9 — Integration, Specs & Provenance (§14–§16)](#phase-9-integration-specs-provenance-1416)
+  - [Phase 10 — Performance, LOD & Scale (§17)](#phase-10-performance-lod-scale-17)
+  - [Phase 11 — Testing & Validation Strategy Audit (§18) — audit the audit](#phase-11-testing-validation-strategy-audit-18-audit-the-audit)
+  - [Phase 12 — Roadmap Acceptance Criteria (§19)](#phase-12-roadmap-acceptance-criteria-19)
+  - [Phase 13 — Emergent Realism Deep-Dive (§20 example scenario)](#phase-13-emergent-realism-deep-dive-20-example-scenario)
+  - [Phase 14 — Cross-Cutting Sweeps (final)](#phase-14-cross-cutting-sweeps-final)
+- [4. Findings Log Format](#4-findings-log-format)
+- [Phase N — <name> (date)](#phase-n-name-date)
+- [5. Recommended Execution Order](#5-recommended-execution-order)
+- [6. Known Pre-Existing Deltas to Re-Confirm (not to re-fix)](#6-known-pre-existing-deltas-to-re-confirm-not-to-re-fix)
+
 > **HISTORICAL:** the methodology for the AP2 re-audit (completed). Kept as the audit
 > method reference; not current state. Current truth: [`../ENGINE_STATUS.md`](../ENGINE_STATUS.md).
 

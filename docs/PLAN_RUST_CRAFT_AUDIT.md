@@ -9,6 +9,15 @@ created: 2026-09-24
 
 # Mindstrata — Rust craft audit & fix ladder (2026-09-24)
 
+## Contents
+
+- [0. Method & evidence base](#0-method-evidence-base)
+- [1. Per-chapter verdicts](#1-per-chapter-verdicts)
+- [2. Findings (measured, 2026-09-24)](#2-findings-measured-2026-09-24)
+- [3. The fix ladder (C1–C5)](#3-the-fix-ladder-c1c5)
+- [4. Explicit non-goals (each doctrine-anchored)](#4-explicit-non-goals-each-doctrine-anchored)
+- [5. Verification law](#5-verification-law)
+
 > **What this is.** A full-workspace audit against the rust-best-practices handbook
 > (9 chapters), every finding measured, turned into a doctrine-compliant fix ladder.
 > **What it is not.** Not an engine-behaviour plan (`PLAN_DC5_DEVELOPMENT.md` owns that)
