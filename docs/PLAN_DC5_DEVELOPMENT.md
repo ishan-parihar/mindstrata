@@ -27,6 +27,17 @@ created: 2026-09-23
 
 ---
 
+## Contents
+
+- [1. Evidence base (measured, not remembered)](#1-evidence-base-measured-not-remembered)
+- [2. The gap taxonomy (G1–G8)](#2-the-gap-taxonomy-g1g8)
+- [3. Workstreams](#3-workstreams)
+- [4. Sequencing and dependencies](#4-sequencing-and-dependencies)
+- [5. Operator decisions this plan depends on](#5-operator-decisions-this-plan-depends-on)
+- [6. Non-goals (explicit)](#6-non-goals-explicit)
+- [7. Exit criteria (the UM-5 gate, as this plan defines it)](#7-exit-criteria-the-um-5-gate-as-this-plan-defines-it)
+- [8. Standing discipline (unchanged, restated because it is the plan's spine)](#8-standing-discipline-unchanged-restated-because-it-is-the-plans-spine)
+
 ## 1. Evidence base (measured, not remembered)
 
 Everything below was re-verified at `f1beca0` for this plan; the numbers are the plan's

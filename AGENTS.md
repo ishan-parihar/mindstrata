@@ -100,7 +100,7 @@ These rules exist because we repeatedly paid for violating them:
    construction.** Three pins broke this way in one iteration — a pain maximum, a Help
    count, and a revolution count — each of which had been re-anchored by seed-shopping
    before. Preferred forms, in order: (a) the mechanism invariant over a small family
-   (`warm > cold` on ≥2 of 3 seeds, aggregate ≥5%), (b) reachability over a family
+   (`warm > cold` on ≥2 of 3 seeds, aggregate ≥5% [IN-SAMPLE] — measured in `docs/architecture/AP4-studio/evidence/i388_relational_outlet.md`), (b) reachability over a family
    ("at least one seed reaches the band" + per-seed liveness), (c) a per-seed route pin
    instead of a seed family. When a family member dies, **re-discover the family by sweep**
    — never widen the bar to keep the old members.
@@ -307,7 +307,7 @@ These rules exist because we repeatedly paid for violating them:
   channel, the `Background` entry gate below its reachable floor, and the witness channel
   had no locality test at all (village trust ratcheted to 1.000). **Rules:** probe the
   channel's *reachable distribution* before trusting any gate on it; and remember a 0.00%
-  share cannot distinguish "the branch never runs" from "it runs and loses" — instrument
+  share [IN-SAMPLE] (the dead-channel audits, e.g. `docs/architecture/AP4-studio/evidence/i388_relational_outlet.md`) cannot distinguish "the branch never runs" from "it runs and loses" — instrument
   the decision (`sim::decision_census`) before choosing a fix. Tests passing on a saturated
   or dead channel is the failure mode this class exists to catch.
 - **Founder variance IS the behavioral budget at small N (Iteration 263, audit
@@ -560,7 +560,7 @@ writers are `legal_impl` (−0.2) and `marriage` (+0.2/+0.3) plus the witness ch
 queued as its own behavioural iteration (source stash object `aa423ee0`, do-not-reapply).
 **i429 measured the kind-schedule defect as write-side**: dyadic affection is a
 ratchet-to-ceiling store (prior 0.3, p50 0.945 by day 10, discriminating band [0.5,0.95)
-drained 34%→1.9% by 18K ticks) — the repair is the gain/decay law, never the 0.70 bar
+drained 34%→1.9% by 18K ticks [IN-SAMPLE] — measured in `docs/architecture/AP4-studio/evidence/i429_affection_saturation.md`) — the repair is the gain/decay law, never the 0.70 bar
 (§4.16). Also live in the queue: the `cultural.openness` dead field and the i423 standing
 perf envelope. See `evidence/i429_affection_saturation.md` and
 `docs/PLAN_DC5_DEVELOPMENT.md` §4.1 (authoritative schedule).
